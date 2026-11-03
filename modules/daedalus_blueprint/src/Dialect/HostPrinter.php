@@ -27,7 +27,7 @@ use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
  * (DialectPrintNoteKind::Showing) saying what the door shows and where
  * that is edited, read from the spine's one answer for a join
  * (VerdictStamper::showing(), seen from the printed host as the canvas):
- * a door prints as a bare <pb-block plugin="daedalus_slot:{id}" />, and
+ * a door prints as a bare <d-block plugin="daedalus_slot:{id}" />, and
  * the document it shows by reference (a default blueprint, the page the
  * frame's main slot hosts, the section filling it) is no node of this
  * host's tree, so the grammar cannot spell it and the AI would otherwise
@@ -126,7 +126,7 @@ final class HostPrinter {
    *
    * "slot top (#uuid) shows blueprint 'Header' (edit: /blueprint/1)",
    * "slot main (#uuid) shows the page", "slot hero (#uuid) shows the
-   * <pb-slot name="hero"> section of 'Locked'", "slot aside (#uuid) shows
+   * <d-slot name="hero"> section of 'Locked'", "slot aside (#uuid) shows
    * nothing". The edit url rides only when the showing carries a portal
    * (the actor may update the shown blueprint): the spine names the host,
    * this surface derives the url, and a shown blueprint's editing surface
@@ -147,7 +147,7 @@ final class HostPrinter {
           : sprintf('%s shows the page %s', $subject, $label);
 
       case Showing::FILL:
-        return sprintf('%s shows the <pb-slot name="%s"> section of %s', $subject, $slot, $label);
+        return sprintf('%s shows the <d-slot name="%s"> section of %s', $subject, $slot, $label);
 
       default:
         return sprintf('%s shows nothing', $subject);

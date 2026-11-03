@@ -26,11 +26,16 @@
  * the model's step above the nearest plane ancestor (translations
  * compose under preserve-3d, so a per-element depth would stack
  * geometrically and a capped plane would float above its slab); the
- * outline in the muted selection stroke; a translucent surface so the
- * planes below read through; a soft shadow; and, when labeled, a
- * `::before` chip carrying the label. An unlifted plane (outside an
- * isolated lineage) gets the transition and a zero lift only, so it
- * lies flat on whatever it sits in and animates down and back.
+ * outline in the muted selection stroke; a soft shadow; and, when
+ * labeled, a `::before` chip carrying the label. A plane the host
+ * reports bare (its element paints no background of its own) also gets
+ * a translucent surface, so a transparent wrapper reads as a slab with
+ * the planes below showing through; a plane with its own background
+ * keeps it, since a section's color, a hero's photo or a button's fill
+ * is what makes the plane recognizable as the element it is. An
+ * unlifted plane (outside an isolated lineage) gets the transition and
+ * a zero lift only, so it lies flat on whatever it sits in and animates
+ * down and back.
  *
  * The chip asserts its own box: its block opens with `all: initial`
  * before any own line. A page may style the same element's `&::before`
@@ -226,10 +231,13 @@ const labelLines = (label) => [
  * @param {boolean} anchored
  *   Whether the element's computed position is static (the host's read),
  *   so the label needs `position: relative` to anchor.
+ * @param {boolean} bare
+ *   Whether the element paints no background of its own (the host's
+ *   read), so the plane needs the translucent surface to read as a slab.
  *
  * @return {string[]}
  */
-const planeLines = (plane, anchored) => {
+const planeLines = (plane, anchored, bare) => {
   const lines = [
     `transform: translateZ(calc(${plane.lift} * var(--daedalus-explode-gap))) !important;`,
     TRANSITION,
@@ -240,12 +248,13 @@ const planeLines = (plane, anchored) => {
   if (anchored) {
     lines.push('position: relative !important;');
   }
-  lines.push(
-    `outline: 1px solid ${MUTED} !important;`,
-    'outline-offset: -1px !important;',
-    'background-color: var(--daedalus-explode-surface, rgb(255 255 255 / 0.72)) !important;',
-    `box-shadow: ${SHADOW} !important;`,
-  );
+  lines.push(`outline: 1px solid ${MUTED} !important;`, 'outline-offset: -1px !important;');
+  if (bare) {
+    lines.push(
+      'background-color: var(--daedalus-explode-surface, rgb(255 255 255 / 0.72)) !important;',
+    );
+  }
+  lines.push(`box-shadow: ${SHADOW} !important;`);
   if (plane.labeled) {
     lines.push(...labelLines(plane.label));
   }
@@ -322,12 +331,15 @@ const paintRules = (addresses, paint) => {
  *   The selection paint: the primary key (app.Selection.getSelected()),
  *   the ordered set (getSelectedSet()) and the hovered key
  *   (getHovered()); each may be absent or null.
- * @param {{selectorFor?: ?Function, anchored?: Iterable<string>}} [tools]
+ * @param {{selectorFor?: ?Function, anchored?: Iterable<string>, bare?: Iterable<string>}} [tools]
  *   selectorFor: the registered part behavior's
  *   selectorFor(owner, selector, declarations), or null when no
  *   behavior is registered (part planes then print nothing).
- *   anchored: the element keys whose computed position is static (the
+ *   anchored: the plane addresses whose computed position is static (the
  *   host's read), given `position: relative` so their label anchors.
+ *   bare: the plane addresses whose elements paint no background of
+ *   their own (the host's read), given the translucent surface; every
+ *   other lifted plane keeps the background the page gave it.
  *
  * @return {string}
  *   The CSS text.
@@ -335,13 +347,17 @@ const paintRules = (addresses, paint) => {
 export const print = (planes, settings, paint = {}, tools = {}) => {
   const selectorFor = tools.selectorFor ?? null;
   const anchored = new Set(tools.anchored ?? []);
+  const bare = new Set(tools.bare ?? []);
   const rules = stageRules(settings);
   const addresses = new Set();
   for (const plane of planes) {
     addresses.add(plane.address);
     if (plane.tier === 'element') {
       rules.push(
-        rule(elementSelector(plane.address), planeLines(plane, anchored.has(plane.address))),
+        rule(
+          elementSelector(plane.address),
+          planeLines(plane, anchored.has(plane.address), bare.has(plane.address)),
+        ),
       );
       continue;
     }
@@ -351,7 +367,7 @@ export const print = (planes, settings, paint = {}, tools = {}) => {
     const printed = selectorFor(
       plane.owner,
       plane.selector,
-      planeLines(plane, anchored.has(plane.address)).join('\n    '),
+      planeLines(plane, anchored.has(plane.address), bare.has(plane.address)).join('\n    '),
     );
     if (printed !== null) {
       rules.push(printed);

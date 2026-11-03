@@ -29,20 +29,25 @@ use Drupal\daedalus_blueprint\Result\BlueprintWarning;
  * no home but a page, so `element` takes what the page language spells, a
  * printed uuid or a live data-alias, resolved here through the spine's
  * alias map for the batch's conversation before the provider sees it. A
- * gesture that names no element (a swatch minted from a value, a rename,
+ * gesture that names no element (a token minted from a value, a rename,
  * a removal) rides a page batch all the same: the page is where the
  * materials are used, and the batch's response is how the client learns
  * the mint (the materials delta).
  *
  * SIDE-EFFECT SEMANTICS, deliberate and documented: these operations write
- * a material ENTITY (never the batch's staged host, which a capture only
- * reads). Batch rollback restores the staged host but does not undo a
- * material written by an earlier operation in a failed batch: a material
- * is ordinary site-wide content, one admin-listing delete or revision
- * revert away, which is its reversibility net everywhere else too. Mints
- * stay immediate and site-wide by decision (another editor must see the
- * swatch), so undo never covers one; the delta channel makes every mint
- * visible in the palette at once and remove_material is the honest undo.
+ * a material ENTITY. The batch's staged host is only read, with one
+ * bookkeeping exception: a blueprint capture stamps the container it was
+ * saved or pushed from as that blueprint's first placement (the provider
+ * writes the stamp through the spine and names the element as a target,
+ * so the response re-renders it); that stamp is a staged host write like
+ * any operation's, rolled back with the batch and committed with it. Batch
+ * rollback restores the staged host but does not undo a material written
+ * by an earlier operation in a failed batch: a material is ordinary
+ * site-wide content, one admin-listing delete or revision revert away,
+ * which is its reversibility net everywhere else too. Mints stay immediate
+ * and site-wide by decision (another editor must see the token), so undo
+ * never covers one; the delta channel makes every mint visible in the
+ * palette at once and remove_material is the honest undo.
  *
  * The permission a verb needs is the kind's (the provider checks its own
  * grade); the origin a mint carries is the LANE's: the AI tools pass
@@ -184,12 +189,13 @@ final class MaterialGestureOperationHandler implements PageLanguageOperationsInt
     }
 
     // Capture warnings (styling the material's grammar cannot express) ride
-    // the batch's ordinary warning channel.
+    // the batch's ordinary warning channel; what the gesture wrote on the
+    // host (a capture's provenance stamp) rides the ordinary target channel.
     $warnings = array_map(
       static fn (string $warning) => new BlueprintWarning('element', self::CAPTURE_WARNING, $warning),
       $result->warnings,
     );
-    return BlueprintResult::success($host, $warnings);
+    return BlueprintResult::success($host, $warnings)->withTargets($result->targets);
   }
 
 }

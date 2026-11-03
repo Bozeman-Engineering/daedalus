@@ -16,7 +16,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests the one-box container's composed shapes and style delivery.
  *
  * A container is ONE element at every depth: the declaration's root forms
- * swap a real <section> (page band) for a plain <div> (nested, the depth
+ * swap a real <section> (a top-level section) for a plain <div> (nested, the depth
  * fact traveling from daedalus_layout's NestedSectionRenderArray into the
  * composed_container element), and the section's identity attributes ride
  * that same root — there is no inner part element and never was a second
@@ -25,7 +25,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * Styling addresses the root key ('') and the '::> *' children pseudo-part;
  * the printer's donut rules scope-limit at nested section and block
- * roots, so an outer band's styles never restyle a nested container's
+ * roots, so an outer section's styles never restyle a nested container's
  * identical markup. This locks the delivery half the printer round-trip
  * test cannot see: the emitted CSS and the composed markup on one page.
  */
@@ -46,6 +46,10 @@ class ContainerLayoutTest extends NestedStorageKernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
+    // Importing daedalus_stylish's config saves its settings, a law change
+    // that recompiles the variants file over these storages.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
     // Live renders only: no editing permission, demand-driven stamping.
@@ -93,7 +97,7 @@ class ContainerLayoutTest extends NestedStorageKernelTestBase {
   }
 
   /**
-   * One element per depth: <section> page band, <div> nested, no part.
+   * One element per depth: <section> top-level, <div> nested, no part.
    */
   public function testShapePerDepth(): void {
     // Root-key styles at both keys stamp both section roots (demand).
@@ -140,7 +144,7 @@ class ContainerLayoutTest extends NestedStorageKernelTestBase {
     $html = $this->renderEntity($entity);
 
     // Both root entries print scope-limited at nested section and block
-    // roots — the outer band's styles stop at the nested container's own
+    // roots — the outer section's styles stop at the nested container's own
     // root, which carries its own entry.
     foreach ([$root_uuid, $nested_uuid] as $uuid) {
       $this->assertStringContainsString(

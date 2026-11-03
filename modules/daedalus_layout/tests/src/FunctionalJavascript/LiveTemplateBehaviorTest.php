@@ -98,7 +98,7 @@ class LiveTemplateBehaviorTest extends WebDriverTestBase {
   /**
    * The template text block's text.
    */
-  private const TEMPLATE_TEXT = 'Template band text';
+  private const TEMPLATE_TEXT = 'Template section text';
 
   /**
    * {@inheritdoc}

@@ -13,7 +13,26 @@ import { createSlice } from '@reduxjs/toolkit';
  * attributed markup, so mirror and canvas are consistent by construction)
  * and is replaced wholesale by the blueprint half of every mutation
  * response. Nothing fetches on boot; the GET endpoint is explicit re-sync
- * only.
+ * only. `blueprint` is therefore always the server's LAST WORD: a reader
+ * holding it can tell committed truth from anything a gesture previews.
+ *
+ * draft is the open gesture's resolved markup, `null | {key, markup}`: a
+ * client-side sibling of the mirror, never a write INTO it. When an
+ * editor previews a composed edit (a text block's tag pick, a link typed
+ * into a text or image block) the element resolver's client twin computes
+ * the markup tree the data WILL render as, the canvas is morphed to it,
+ * and the same tree is drafted here for the one key being edited through
+ * the facade's draftMarkup door (markupDrafted). Readers never consume
+ * `blueprint` or `draft` directly: they read the EFFECTIVE tree
+ * (blueprint/effective-blueprint.js), the mirror with the draft's markup
+ * merged over the drafted node's `_element.markup`, so the page-elements
+ * panel, the styling inspector and every other mirror reader follow the
+ * gesture live instead of waiting one round trip. Every mirror
+ * replacement (blueprintBooted, blueprintReplaced) resets the draft to
+ * null: server truth supersedes the preview, whichever op produced it.
+ * No edit-session hook clears it; a cancel re-previews the committed
+ * shape through the same door, and a commit leaves the draft standing
+ * until its response lands, so nothing flickers back mid-flight.
  *
  * root is the identity envelope (entityType, entityId, uuid, label,
  * langcode, viewMode). It travels beside the blueprint because the
@@ -32,6 +51,7 @@ const blueprintSlice = createSlice({
     root: null,
     blueprint: null,
     verdict: null,
+    draft: null,
   },
   reducers: {
     blueprintBooted: (state, action) => {
@@ -39,6 +59,7 @@ const blueprintSlice = createSlice({
       state.root = root;
       state.blueprint = blueprint;
       state.verdict = verdict;
+      state.draft = null;
     },
     // Payload: {blueprint, verdict?}. A response without a verdict (an
     // older seam) leaves the one in place.
@@ -47,9 +68,24 @@ const blueprintSlice = createSlice({
       if (action.payload.verdict !== undefined) {
         state.verdict = action.payload.verdict;
       }
+      state.draft = null;
+    },
+    // Payload: {key, markup}. The open gesture's resolved markup for one
+    // selectable key; the next preview on any key overwrites it.
+    markupDrafted: (state, action) => {
+      const { key, markup } = action.payload;
+      state.draft = { key, markup };
+    },
+    draftCleared: (state) => {
+      state.draft = null;
     },
   },
 });
 
-export const { blueprintBooted, blueprintReplaced } = blueprintSlice.actions;
+export const {
+  blueprintBooted,
+  blueprintReplaced,
+  markupDrafted,
+  draftCleared,
+} = blueprintSlice.actions;
 export default blueprintSlice.reducer;

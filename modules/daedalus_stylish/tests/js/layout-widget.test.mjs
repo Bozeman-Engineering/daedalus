@@ -74,21 +74,21 @@ const test = (name, fn) => {
   }
 };
 
-const BAND = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const SECTION = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const CHILD_A = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const CHILD_B = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const BLOCK = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 
-const KEY = `container:${BAND}`;
+const KEY = `container:${SECTION}`;
 const KEY_A = `container:${CHILD_A}`;
 const KEY_B = `container:${CHILD_B}`;
 const KEY_BLOCK = `block:${BLOCK}`;
 
-/** A band holding a nested container (with a block), an empty container,
+/** A section holding a nested container (with a block), an empty container,
  *  and a block as a DIRECT child — all three column flavors. */
 const layout = [{
   kind: 'container',
-  uuid: BAND,
+  uuid: SECTION,
   layout_id: 'daedalus_stylish_container',
   children: [
     {
@@ -174,8 +174,8 @@ const scaledGuide = {
 
 test('containerChildren lists all three column flavors in order', () => {
   const blockChild = { kind: 'block', uuid: BLOCK, block_type: 'text' };
-  const tree = [{ kind: 'container', uuid: BAND, layout_id: 'daedalus_stylish_container', children: [...layout[0].children, blockChild] }];
-  assert.deepEqual(containerChildren(tree, BAND), [
+  const tree = [{ kind: 'container', uuid: SECTION, layout_id: 'daedalus_stylish_container', children: [...layout[0].children, blockChild] }];
+  assert.deepEqual(containerChildren(tree, SECTION), [
     { key: KEY_A, uuid: CHILD_A, kind: 'container', empty: false },
     { key: KEY_B, uuid: CHILD_B, kind: 'container', empty: true },
     { key: KEY_BLOCK, uuid: BLOCK, kind: 'block', empty: false },
@@ -191,21 +191,21 @@ test('containerChildren finds nested containers and refuses non-flows', () => {
   // ones included), named slots the positional grammar cannot address.
   const multiRegion = [{
     kind: 'container',
-    uuid: BAND,
+    uuid: SECTION,
     layout_id: 'two_col',
     children: [{ kind: 'region', region: 'first', children: [] }, { kind: 'region', region: 'second', children: [] }],
   }];
-  assert.equal(containerChildren(multiRegion, BAND), null);
+  assert.equal(containerChildren(multiRegion, SECTION), null);
 });
 
 test('parentContainerOf answers direct children only, with position', () => {
   assert.deepEqual(parentContainerOf(layout, KEY_B), {
-    key: KEY, uuid: BAND, index: 1, count: 2,
+    key: KEY, uuid: SECTION, index: 1, count: 2,
   });
   assert.deepEqual(parentContainerOf(layout, KEY_BLOCK), {
     key: KEY_A, uuid: CHILD_A, index: 0, count: 1,
   });
-  // A page band's parent is the entity — no row parent.
+  // A section's parent is the entity — no row parent.
   assert.equal(parentContainerOf(layout, KEY), null);
   assert.equal(parentContainerOf(layout, 'container:missing'), null);
 });
@@ -421,7 +421,7 @@ test('a minting preset is pure add_sections plus only the deviating grows', () =
   let n = 0;
   const uuids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
   const plan = presetPlan({
-    containerUuid: BAND,
+    containerUuid: SECTION,
     childKeys: [KEY_A],
     map: {},
     weights: [1, 2, 1],
@@ -429,8 +429,8 @@ test('a minting preset is pure add_sections plus only the deviating grows', () =
   });
   assert.deepEqual(plan.minted, uuids);
   assert.deepEqual(plan.operations, [
-    { op: 'add_section', uuid: uuids[0], location: { anchor: BAND, placement: 'inside' } },
-    { op: 'add_section', uuid: uuids[1], location: { anchor: BAND, placement: 'inside' } },
+    { op: 'add_section', uuid: uuids[0], location: { anchor: SECTION, placement: 'inside' } },
+    { op: 'add_section', uuid: uuids[1], location: { anchor: SECTION, placement: 'inside' } },
     { op: 'update_style', key: `container:${uuids[0]}`, properties: { 'flex-grow': '2' } },
   ]);
 });
@@ -441,7 +441,7 @@ test('an equal preset over dressed children unsets their grows', () => {
     [KEY_B]: { default: { 'flex-grow': '1.5' } },
   };
   const plan = presetPlan({
-    containerUuid: BAND,
+    containerUuid: SECTION,
     childKeys: [KEY_A, KEY_B],
     map,
     weights: [1, 1],
@@ -889,7 +889,7 @@ test('a root row reads its property\'s definition and the resolved constraints',
 
 test('under a write address the rows keep the container\'s vocabulary and judge the grant at the address', () => {
   // The container declaration grants the gap and both alignment axes
-  // with a closed gap scale; its `children` node (where the band's
+  // with a closed gap scale; its `children` node (where the section's
   // `> *` rule lands, style-guide.js land()) grants the flex-item
   // family and none of the three.
   const guide = {
@@ -902,9 +902,9 @@ test('under a write address the rows keep the container\'s vocabulary and judge 
       },
     },
   };
-  const tree = [{
+  const document = [{
     kind: 'container',
-    uuid: BAND,
+    uuid: SECTION,
     layout_id: 'daedalus_stylish_container',
     label: 'Welcome',
     _element: { name: 'Welcome', type: 'Section', markup: { tag: 'section', parts: {} } },
@@ -917,7 +917,7 @@ test('under a write address the rows keep the container\'s vocabulary and judge 
     }],
   }];
   const properties = ['gap', 'align-items', 'justify-content'];
-  // The child container selected, the band's children rule seated as
+  // The child container selected, the section's children rule seated as
   // the write address: the rows' VOCABULARY is still the selection's
   // (rootField over the selected key: a grant is a yes or no, not a
   // different scale) ...
@@ -929,8 +929,8 @@ test('under a write address the rows keep the container\'s vocabulary and judge 
   // ... while the GRANT is the address's landing's: the roster's read
   // (withheldAt, the judge the pipeline's `withheld` and the Advanced
   // roster use) withholds all three with the reason the disabled row
-  // wears as its title, the owner named from the tree.
-  const withheld = withheldAt({ guide, address, properties, tree });
+  // wears as its title, the owner named from the document.
+  const withheld = withheldAt({ guide, address, properties, document });
   assert.deepEqual(Object.keys(withheld), properties);
   assert.equal(
     withheld.gap,
@@ -940,16 +940,16 @@ test('under a write address the rows keep the container\'s vocabulary and judge 
     withheld['align-items'],
     'align-items is not allowed at "> *" on Welcome: the style guide does not grant it there. Choose this element alone to set it here.',
   );
-  // Without a tree the owner has no node to be named from: the generic word.
+  // Without a document the owner has no node to be named from: the generic word.
   assert.equal(
     withheldAt({ guide, address, properties: ['gap'] }).gap,
     'gap is not allowed at "> *" on the parent element: the style guide does not grant it there. Choose this element alone to set it here.',
   );
   // An address whose landing grants the rows' properties withholds
-  // nothing: a `> pb-container` type rule lands on the container kind's
+  // nothing: a `> d-container` type rule lands on the container kind's
   // own declaration, the same grant the selection reads.
   assert.deepEqual(
-    withheldAt({ guide, address: { key: KEY, selector: '> pb-container' }, properties, tree }),
+    withheldAt({ guide, address: { key: KEY, selector: '> d-container' }, properties, document }),
     {},
   );
 });
@@ -966,7 +966,7 @@ test('the Layout section owns gap exactly where it renders', () => {
   // container's gap story: the Layout section keeps the container's gap
   // while the children's rows style the children themselves.
   assert.equal(layoutOwnsGap(layout, `${KEY}::> *`), false);
-  assert.equal(layoutOwnsGap(layout, `${KEY}::> pb-text`), false);
+  assert.equal(layoutOwnsGap(layout, `${KEY}::> d-text`), false);
   assert.equal(layoutOwnsGap([], KEY), false);
 });
 
@@ -1130,7 +1130,7 @@ test('grows read through the cascade at the pose and write at it', () => {
   ]);
   // A preset carries the compound into its grow writes.
   const plan = presetPlan({
-    containerUuid: BAND,
+    containerUuid: SECTION,
     childKeys: [KEY_A, KEY_B],
     map,
     weights: [1, 2],
@@ -1186,14 +1186,14 @@ test('the posed gap is the layer stack at the pose; the write lands there', () =
 
 test('the + is a pure add_section', () => {
   const uuid = '33333333-3333-4333-8333-333333333333';
-  assert.deepEqual(addColumnPlan(BAND, () => uuid), {
-    operations: [{ op: 'add_section', uuid, location: { anchor: BAND, placement: 'inside' } }],
+  assert.deepEqual(addColumnPlan(SECTION, () => uuid), {
+    operations: [{ op: 'add_section', uuid, location: { anchor: SECTION, placement: 'inside' } }],
     minted: uuid,
   });
 });
 
 test('the minus removes the trailing child; empties are silent', () => {
-  const children = containerChildren(layout, BAND);
+  const children = containerChildren(layout, SECTION);
   const plan = removalPlan(children);
   assert.equal(plan.uuid, CHILD_B);
   assert.equal(plan.empty, true);

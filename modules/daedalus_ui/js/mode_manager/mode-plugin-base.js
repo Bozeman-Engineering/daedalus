@@ -100,28 +100,6 @@ export class ModePluginBase {
       : url.pathname.slice(1);
     return Drupal.url(`${relativePath}${url.search}`);
   };
-
-  static dialog = (settings) => {
-    const ajaxConfig = {
-      url: settings.url,
-      event: 'click',
-      progress: {
-        type: 'fullscreen',
-        message: settings.message ?? Drupal.t('Loading...'),
-      },
-      dialogType: 'dialog',
-      dialog: {
-        width: settings.width ?? 600,
-        height: 'auto',
-        target: 'layout-builder-modal',
-        autoResize: true,
-        modal: true,
-      },
-    };
-
-    const ajax = Drupal.Daedalus.ModePluginBase.ajax(ajaxConfig);
-    ajax.execute();
-  };
 }
 
 Drupal.Daedalus = Drupal.Daedalus || {};

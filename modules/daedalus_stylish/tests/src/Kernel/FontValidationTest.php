@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\daedalus_blueprint\Result\BlueprintError;
-use Drupal\daedalus_stylish\Exception\FontValidationException;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\FontFacesItem;
+use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
+use Drupal\daedalus_stylish\Exception\SkinMaterialValidationException;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinFontsItem;
 use Drupal\file\Entity\File;
 use Drupal\file\FileInterface;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -17,18 +19,20 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the font validation spine.
  *
- * One engine, two seams: FontValidator::validateFamily() (a name a
- * font-family stack can carry, never a generic family or a CSS keyword)
- * and validateFaces() (a non-empty list of faces, each a weight and a
- * style through FontFacesItem's one grammar and a typed source resolving
- * to a font file the lane admits, one face per weight and style). The
- * manager converges on it: a mint with a bad face throws the gesture
- * shape.
+ * One engine, three seams: FontValidator::validateFamily() (a name a
+ * font-family stack can carry, never a generic family or a CSS keyword),
+ * validateFaces() (a non-empty list of faces, each a weight and a style
+ * through SkinFontsItem's one grammar and a typed source resolving to a
+ * font file the lane admits, one face per weight and style) and
+ * validateFonts() over a skin's fonts section as worn (the name grammar,
+ * the record shape, one font per family). The skin material manager
+ * converges on it: a mint with a bad face throws the gesture shape.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
 class FontValidationTest extends KernelTestBase {
 
+  use DesignSystemActivationTrait;
   use UserCreationTrait;
 
   protected const UUID = '11111111-1111-1111-1111-111111111111';
@@ -42,6 +46,7 @@ class FontValidationTest extends KernelTestBase {
     'field',
     'file',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -65,8 +70,11 @@ class FontValidationTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('file');
     $this->installSchema('file', ['file_usage']);
-    $this->installEntitySchema('daedalus_font');
-    $this->installConfig(['daedalus_stylish']);
+    $this->installEntitySchema('daedalus_skin');
+    $this->installEntitySchema('daedalus_variant');
+    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_skin_material_usage']);
+    $this->installConfig(['daedalus_stylish', 'daedalus_blueprint']);
+    $this->setUpCurrentUser([], [], TRUE);
     $this->file = $this->container->get('daedalus_stylish.font_files')->fromBytes('inter.woff2', 'wOF2' . str_repeat("\0", 16));
   }
 
@@ -85,6 +93,13 @@ class FontValidationTest extends KernelTestBase {
    */
   protected function validateFamily(mixed $family): array {
     return $this->container->get('daedalus_stylish.font_validator')->validateFamily($family);
+  }
+
+  /**
+   * Validates a fonts section.
+   */
+  protected function validateFonts(array $fonts): array {
+    return $this->container->get('daedalus_stylish.font_validator')->validateFonts($fonts);
   }
 
   /**
@@ -157,26 +172,26 @@ class FontValidationTest extends KernelTestBase {
    * Weights and styles: one grammar for the validator and the store.
    */
   public function testWeightAndStyle(): void {
-    $this->assertSame('400', FontFacesItem::canonicalWeight(NULL));
-    $this->assertSame('400', FontFacesItem::canonicalWeight(400));
-    $this->assertSame('400', FontFacesItem::canonicalWeight(' 400.0 '));
-    $this->assertSame('400', FontFacesItem::canonicalWeight('Normal'));
-    $this->assertSame('700', FontFacesItem::canonicalWeight('bold'));
-    $this->assertSame('550.5', FontFacesItem::canonicalWeight(550.5));
-    $this->assertSame('100 900', FontFacesItem::canonicalWeight('100  900'));
-    $this->assertSame('1', FontFacesItem::canonicalWeight('1'));
-    $this->assertSame('1000', FontFacesItem::canonicalWeight('1000'));
+    $this->assertSame('400', SkinFontsItem::canonicalWeight(NULL));
+    $this->assertSame('400', SkinFontsItem::canonicalWeight(400));
+    $this->assertSame('400', SkinFontsItem::canonicalWeight(' 400.0 '));
+    $this->assertSame('400', SkinFontsItem::canonicalWeight('Normal'));
+    $this->assertSame('700', SkinFontsItem::canonicalWeight('bold'));
+    $this->assertSame('550.5', SkinFontsItem::canonicalWeight(550.5));
+    $this->assertSame('100 900', SkinFontsItem::canonicalWeight('100  900'));
+    $this->assertSame('1', SkinFontsItem::canonicalWeight('1'));
+    $this->assertSame('1000', SkinFontsItem::canonicalWeight('1000'));
     foreach (['0', '1001', '-100', 'heavy', '900 100', '100 500 900', '100px', ''] as $weight) {
-      $this->assertNull(FontFacesItem::canonicalWeight($weight), $weight);
+      $this->assertNull(SkinFontsItem::canonicalWeight($weight), $weight);
     }
-    $this->assertNull(FontFacesItem::canonicalWeight([400]));
+    $this->assertNull(SkinFontsItem::canonicalWeight([400]));
 
-    $this->assertSame('normal', FontFacesItem::canonicalStyle(NULL));
-    $this->assertSame('italic', FontFacesItem::canonicalStyle(' Italic '));
-    $this->assertSame('oblique', FontFacesItem::canonicalStyle('oblique'));
-    $this->assertNull(FontFacesItem::canonicalStyle('oblique 10deg'));
-    $this->assertNull(FontFacesItem::canonicalStyle('slanted'));
-    $this->assertNull(FontFacesItem::canonicalStyle(TRUE));
+    $this->assertSame('normal', SkinFontsItem::canonicalStyle(NULL));
+    $this->assertSame('italic', SkinFontsItem::canonicalStyle(' Italic '));
+    $this->assertSame('oblique', SkinFontsItem::canonicalStyle('oblique'));
+    $this->assertNull(SkinFontsItem::canonicalStyle('oblique 10deg'));
+    $this->assertNull(SkinFontsItem::canonicalStyle('slanted'));
+    $this->assertNull(SkinFontsItem::canonicalStyle(TRUE));
 
     $this->assertSingleError($this->validateFaces([$this->face(['weight' => 'heavy'])]), 'INVALID_FONT_WEIGHT', 'faces.0.weight');
     $this->assertSingleError($this->validateFaces([$this->face(['weight' => '900 100'])]), 'INVALID_FONT_WEIGHT', 'faces.0.weight');
@@ -220,45 +235,71 @@ class FontValidationTest extends KernelTestBase {
   }
 
   /**
+   * The fonts seam: names, records, the two grammars beneath, one family each.
+   */
+  public function testFonts(): void {
+    $codes = static fn (array $errors): array => array_combine(array_map(static fn ($e) => $e->getPath(), $errors), array_map(static fn ($e) => $e->getCode(), $errors));
+    $inter = SkinFontsItem::canonicalizeFont(['family' => 'Inter', 'faces' => [$this->face(['weight' => 'bold'])], 'description' => 'The body face.']);
+    $this->assertSame(['family' => 'Inter', 'faces' => [['weight' => '700', 'style' => 'normal', 'source' => ['file' => $this->file->uuid()]]], 'description' => 'The body face.', 'offered' => TRUE], $inter, 'A record canonicalizes: faces settle, the facts fill.');
+    $this->assertSame([], $this->validateFonts(['inter' => $inter]));
+
+    $this->assertSame(['Inter' => 'INVALID_FONT_NAME'], $codes($this->validateFonts(['Inter' => $inter])));
+    $this->assertSame(['inter' => 'INVALID_FONT_RECORD'], $codes($this->validateFonts(['inter' => 'Inter'])));
+    $this->assertSame(['inter' => 'INVALID_FONT_RECORD'], $codes($this->validateFonts(['inter' => ['family' => 'Inter']])), 'A record carries its faces.');
+    $this->assertSame(['inter' => 'INVALID_FONT_RECORD'], $codes($this->validateFonts(['inter' => $inter + ['label' => 'Inter']])), 'The record carries family, faces, description and offered and nothing else.');
+    $this->assertSame([
+      'inter.description' => 'INVALID_FONT_RECORD',
+      'inter.offered' => 'INVALID_FONT_RECORD',
+    ], $codes($this->validateFonts(['inter' => ['description' => 3, 'offered' => 'yes'] + $inter])));
+    $this->assertSame([
+      'inter.family' => 'INVALID_FONT_FAMILY',
+      'inter.faces.0.weight' => 'INVALID_FONT_WEIGHT',
+    ], $codes($this->validateFonts(['inter' => ['family' => 'serif', 'faces' => [$this->face(['weight' => 'heavy'])], 'description' => '', 'offered' => TRUE]])), 'The two grammars re-root under the name.');
+    // One font per family on a skin.
+    $this->assertSame(['inter_2.family' => 'DUPLICATE_FONT_FAMILY'], $codes($this->validateFonts(['inter' => $inter, 'inter_2' => $inter])));
+    $this->assertSame([], $this->validateFonts(['inter' => $inter, 'inter_tight' => ['family' => 'Inter Tight'] + $inter]));
+  }
+
+  /**
    * The manager converges on the spine: a mint throws the gesture shape.
    */
   public function testManagerConverges(): void {
-    $manager = $this->container->get('daedalus_stylish.font_manager');
+    $skin = DaedalusStylishSkin::create(['label' => 'Mine', 'machine_name' => 'mine', 'status' => 1]);
+    $skin->save();
+    $this->activateSkin($skin);
+    $manager = $this->container->get('daedalus_stylish.skin_material_manager');
     try {
-      $manager->mint('Inter', 'serif', [['weight' => 'heavy', 'source' => ['file' => $this->file->uuid()]]]);
+      $manager->mintFont($skin, 'inter', 'serif', [['weight' => 'heavy', 'source' => ['file' => $this->file->uuid()]]]);
       $this->fail('A bad mint saved.');
     }
-    catch (FontValidationException $e) {
+    catch (SkinMaterialValidationException $e) {
       $this->assertSame(['family', 'faces.0.weight'], array_map(static fn (BlueprintError $error) => $error->getPath(), $e->getErrors()));
     }
     try {
-      $manager->mint('', 'Inter', [$this->face()]);
-      $this->fail('A label-less mint saved.');
+      $manager->mintFont($skin, 'Inter', 'Inter', [$this->face()]);
+      $this->fail('A badly named mint saved.');
     }
-    catch (FontValidationException $e) {
-      $this->assertSame('MISSING_PARAMETER', $e->getErrors()[0]->getCode());
+    catch (SkinMaterialValidationException $e) {
+      $this->assertSame('INVALID_FONT_NAME', $e->getErrors()[0]->getCode());
       $this->assertSame('label', $e->getErrors()[0]->getPath());
     }
-    $font = $manager->mint('Inter', 'Inter', [$this->face(['weight' => 'bold'])], 'The body face.');
-    $this->assertSame([['weight' => '700', 'style' => 'normal', 'source' => ['file' => $this->file->uuid()]]], $font->getFaces());
+    $manager->mintFont($skin, 'inter', 'Inter', [$this->face(['weight' => 'bold'])], 'The body face.');
+    $this->assertSame([['weight' => '700', 'style' => 'normal', 'source' => ['file' => $this->file->uuid()]]], $skin->fonts()['inter']['faces']);
     try {
-      $manager->update($font);
+      $manager->updateFont($skin, 'inter');
       $this->fail('An empty update saved.');
     }
-    catch (FontValidationException $e) {
+    catch (SkinMaterialValidationException $e) {
       $this->assertSame('MISSING_PARAMETER', $e->getErrors()[0]->getCode());
     }
     try {
-      $manager->update($font, family: 'monospace');
+      $manager->updateFont($skin, 'inter', family: 'monospace');
       $this->fail('A generic family updated.');
     }
-    catch (FontValidationException $e) {
+    catch (SkinMaterialValidationException $e) {
       $this->assertSame('INVALID_FONT_FAMILY', $e->getErrors()[0]->getCode());
+      $this->assertSame('family', $e->getErrors()[0]->getPath());
     }
-    // A no-op update mints no revision.
-    $revision = (int) $font->getRevisionId();
-    $manager->update($font, description: 'The body face.');
-    $this->assertSame($revision, (int) $font->getRevisionId());
   }
 
 }

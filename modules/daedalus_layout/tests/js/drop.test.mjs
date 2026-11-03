@@ -120,8 +120,8 @@ test('a nested target composes without a new section, and blueprintOperations sp
   assert.equal(drop.placedKey, 'block:uuid-1');
   let n = 0;
   assert.deepEqual(
-    blueprintOperations(() => `u${(n += 1)}`, { location: { anchor: 'c', placement: 'after' } }, { blueprintId: 'band' }),
-    [{ op: 'place_blueprint', blueprint: 'band', uuid: 'u1', location: { anchor: 'c', placement: 'after' } }],
+    blueprintOperations(() => `u${(n += 1)}`, { location: { anchor: 'c', placement: 'after' } }, { blueprintId: 'section' }),
+    [{ op: 'place_blueprint', blueprint: 'section', uuid: 'u1', location: { anchor: 'c', placement: 'after' } }],
   );
 });
 

@@ -146,9 +146,6 @@ class FrameHostTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installSchema('layout_builder', ['inline_block_usage']);

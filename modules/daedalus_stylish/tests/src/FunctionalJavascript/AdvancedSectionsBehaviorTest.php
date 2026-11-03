@@ -157,7 +157,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   selection write that clears the target; and the row mounted with
  *   NO sheet, the advanced Sections outside a session passing none, so
  *   onWinner is never handed): with the block wearing an own padding
- *   and its section's `> pb-text` rule seated as the styling target
+ *   and its section's `> d-text` rule seated as the styling target
  *   (the chip lit at that address), the Padding row keeps the element's
  *   value with its mark titled "1rem from this element", a right-click
  *   offers "Edit on the element" and never the session's "Go to
@@ -1334,10 +1334,10 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
     // doorway and the dispatch; only a mounted row proves it reaches the
     // source and never a sheet.
     $this->commitStyle($block_c_key, 'padding', '1rem', '__styleErrorC');
-    $section_c_rule_key = "container:$section_c_uuid::> pb-text";
+    $section_c_rule_key = "container:$section_c_uuid::> d-text";
     $padding_row = 'document.querySelector(' . json_encode($padding_input) . ").closest('.daedalus-stylish-inspector__property')";
     $address_chip = '#daedalus_stylish_inspector .daedalus-stylish-inspector__address';
-    $session->executeScript("Drupal.Daedalus.Selection.address('container:$section_c_uuid', '> pb-text');");
+    $session->executeScript("Drupal.Daedalus.Selection.address('container:$section_c_uuid', '> d-text');");
     $this->assertJsCondition(
       "(() => { const chip = document.querySelector('$address_chip'); const input = document.querySelector(" . json_encode($padding_input) . "); const row = $padding_row;"
       . ' if (!chip || !input || !row || chip.dataset.daedalusStylishAddress !== ' . json_encode($section_c_rule_key) . ') { return false; }'
@@ -1345,7 +1345,7 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
       . " && input.value === '1'"
       . " && row.querySelector('.daedalus-stylish-inspector__mark')?.title === '1rem from this element'; })()",
       20000,
-      'Element doorway: with the section\'s `> pb-text` rule seated as the write address (the chip lit at its address, the selection and its bare-element subject unchanged) the Padding row keeps the element\'s own 1rem (olivero\'s open law renders the free field: the number in the input, rem on its select), its mark titled "1rem from this element": the own block sits above the address\'s editable layer and the origin is the element\'s.',
+      'Element doorway: with the section\'s `> d-text` rule seated as the write address (the chip lit at its address, the selection and its bare-element subject unchanged) the Padding row keeps the element\'s own 1rem (olivero\'s open law renders the free field: the number in the input, rem on its select), its mark titled "1rem from this element": the own block sits above the address\'s editable layer and the origin is the element\'s.',
     );
     $session->executeScript(
       "(() => { const row = $padding_row; const rect = row.getBoundingClientRect();"

@@ -61,6 +61,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
     'layout_builder',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -92,18 +93,15 @@ class LayoutWidgetBatchTest extends KernelTestBase {
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
     // The daedalus_stylish_layouts install syncs the shipped variants (the row
     // variant included, and the entrance family whose motion-* references
-    // a variant save mirrors into the animation usage table); the importer
+    // a variant save mirrors into the skin material usage table); the importer
     // switches to an administrative account, so give the switcher one.
-    $this->installSchema('daedalus_stylish', ['daedalus_animation_usage', 'daedalus_token_usage', 'daedalus_font_usage']);
+    $this->installSchema('daedalus_stylish', ['daedalus_skin_material_usage']);
     $this->setUpCurrentUser([], [], TRUE);
     \Drupal::service('module_installer')->install(['daedalus_stylish_layouts']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -171,7 +169,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
       ],
     ]);
 
-    // Birth default: a root band is born wearing container_site (width)
+    // Birth default: a root section is born wearing container_site (width)
     // only — no arrangement reference, which the widget reads as Stack.
     $this->assertSame(
       ['variants' => [['variant' => 'container_site', 'fragment' => '']]],
@@ -181,7 +179,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
     // Mode flip to Columns then back to Stack: ONE apply_variant, ONE
     // remove_variant, nothing per child, no other write — equal columns at
     // any count are the variant + the ::> * rule. The row reference composes
-    // with the band's birth default on the width axis.
+    // with the section's birth default on the width axis.
     $this->batch($entity, [
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
@@ -205,7 +203,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
 
-    // Preset with minting on a childless band (the widget's [1, 2, 1]
+    // Preset with minting on a childless section (the widget's [1, 2, 1]
     // chip): pure add_sections mint the columns, then the ONE deviating
     // grow keys on a uuid minted earlier in the same batch.
     $first = $uuid_service->generate();
@@ -298,7 +296,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
     $uuid_service = $this->container->get('uuid');
     $section_uuid = $uuid_service->generate();
     $key = "container:$section_uuid";
-    // A root band is born stacked (no arrangement reference at birth);
+    // A root section is born stacked (no arrangement reference at birth);
     // the alignment arc below is the stack story.
     $this->batch($entity, [
       [
@@ -377,7 +375,7 @@ class LayoutWidgetBatchTest extends KernelTestBase {
       ],
     ]);
 
-    // Removing a variant the entry does not wear fails loudly (the band
+    // Removing a variant the entry does not wear fails loudly (the section
     // is born wearing container_site and row; container_sm it is not).
     $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'remove_variant', 'key' => $key, 'variant' => 'container_sm'],

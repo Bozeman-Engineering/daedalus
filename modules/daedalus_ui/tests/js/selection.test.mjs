@@ -82,7 +82,7 @@ test('setSelected commits a single selection; setTarget seats the target under i
 });
 
 test('setTarget nulls a key other than the selected key: a facet names something ON the selection, an ancestor\'s rule is an address', () => {
-  const state = run(setSelected('A'), setTarget({ key: 'P', selector: '> pb-text' }));
+  const state = run(setSelected('A'), setTarget({ key: 'P', selector: '> d-text' }));
   assert.equal(state.selectedKey, 'A');
   assert.equal(state.target, null);
   // A standing facet is replaced by the null, not left in place: the
@@ -94,9 +94,9 @@ test('setTarget nulls a key other than the selected key: a facet names something
 test('setAddress seats the write address under the single selection, on the selection or an ancestor (the slice holds no tree; the facade judges ancestry)', () => {
   const own = run(setSelected('A'), setAddress({ key: 'A', selector: 'li' }));
   assert.deepEqual(own.address, { key: 'A', selector: 'li' });
-  const above = run(setSelected('A'), setAddress({ key: 'P', selector: '> pb-text' }));
+  const above = run(setSelected('A'), setAddress({ key: 'P', selector: '> d-text' }));
   assert.equal(above.selectedKey, 'A');
-  assert.deepEqual(above.address, { key: 'P', selector: '> pb-text' });
+  assert.deepEqual(above.address, { key: 'P', selector: '> d-text' });
   assert.equal(above.target, null, 'an address write leaves the facet alone');
 });
 
@@ -361,7 +361,7 @@ test('labelFor labels a placed part address from the index, and any other addres
   // An unplaced address (a tag tier, a chain) is its owner's other
   // name, never the key's kind.
   assert.equal(labelFor(index, selectorAddress('container:c', 'a')), 'Welcome');
-  assert.equal(labelFor(index, selectorAddress('container:c', '> pb-text .quote')), 'Welcome');
+  assert.equal(labelFor(index, selectorAddress('container:c', '> d-text .quote')), 'Welcome');
   assert.equal(labelFor(null, selectorAddress('block:u2:hero_banner', 'p')), 'Hero banner');
 });
 
@@ -498,7 +498,7 @@ test('a target the index does not place ends the trail as a target crumb after i
   // through an injected label seam.
   const words = (key, selector) => `every ${selector} of ${key}`;
   assert.deepEqual(labels(ancestryOf(ancestryIndex(), ON, TEXT, target(TEXT, 'a'), words)), ['Page', 'Container', 'Formatted text', `every a of ${TEXT}`]);
-  assert.deepEqual(labels(ancestryOf(ancestryIndex(), ON, TEXT, target(TEXT, '> pb-text .quote'))), ['Page', 'Container', 'Formatted text', '> pb-text .quote']);
+  assert.deepEqual(labels(ancestryOf(ancestryIndex(), ON, TEXT, target(TEXT, '> d-text .quote'))), ['Page', 'Container', 'Formatted text', '> d-text .quote']);
 });
 
 test('the trail reads the facet alone: a rule on an ancestor is a write address, never a crumb', () => {
@@ -695,7 +695,7 @@ test('a shell target climbs to its owner on the flip; a target still drawn stand
 });
 
 test('a target with no row in any view stands: a tag tier, a chain, the children selector', () => {
-  for (const selector of ['a', '> pb-text .quote', '> *']) {
+  for (const selector of ['a', '> d-text .quote', '> *']) {
     assert.equal(reseatAddress(ancestryIndex(), OFF, selection(IMAGE, selector)), null, selector);
     assert.equal(reseatAddress(ancestryIndex(), ON, selection(IMAGE, selector)), null, selector);
   }
@@ -708,7 +708,7 @@ test('the re-seat ignores the write address: it seats by the facet alone', () =>
   // An address on the container's rule stands through a flip with a bare
   // element or an unplaced facet (nothing to move), and does not stop the
   // shell facet's climb either.
-  const address = { key: 'container:s', selector: '> pb-image' };
+  const address = { key: 'container:s', selector: '> d-image' };
   assert.equal(reseatAddress(ancestryIndex(), OFF, { ...selection(IMAGE), address }), null);
   assert.equal(reseatAddress(ancestryIndex(), OFF, { ...selection(IMAGE, 'a'), address }), null);
   assert.equal(reseatAddress(ancestryIndex(), OFF, { ...selection(IMAGE, '.image-block-image'), address }), IMAGE);
@@ -771,7 +771,7 @@ test('containers speak the depth word the annotator minted, never the nesting th
   assert.equal(typeFor(index, 'container:inner'), 'Container');
   // The word is read, not computed from `parent`: a fixture that says
   // otherwise is believed, so no surface can drift from the server's rule.
-  assert.equal(typeFor(new Map([['container:x', { elementType: 'Band', kind: 'container', parent: 'container:y' }]]), 'container:x'), 'Band');
+  assert.equal(typeFor(new Map([['container:x', { elementType: 'Section', kind: 'container', parent: 'container:y' }]]), 'container:x'), 'Section');
 });
 
 test('entities and fields speak their delivered word too', () => {
@@ -835,7 +835,7 @@ test('facade target refuses any key but the selection, and needs a single select
   Selection.clear();
   assert.throws(() => Selection.target('A', '.icon'), TypeError);
   Selection.select('A');
-  assert.throws(() => Selection.target('P', '> pb-text'), /not the selected element/);
+  assert.throws(() => Selection.target('P', '> d-text'), /not the selected element/);
   assert.equal(Selection.getTarget(), null);
   Selection.selectSet(['A', 'B'], 'A');
   assert.throws(() => Selection.target('A', '.icon'), TypeError);
@@ -852,7 +852,7 @@ test('facade address seats the write address on the selection, refuses a key wit
   assert.deepEqual(Selection.getAddress(), { key: 'A', selector: 'li' });
   // No projection index has booted yet in this suite, so no other key
   // has ancestry: refused, and the standing address untouched.
-  assert.throws(() => Selection.address('P', '> pb-text'), /neither the selected element/);
+  assert.throws(() => Selection.address('P', '> d-text'), /neither the selected element/);
   assert.deepEqual(Selection.getAddress(), { key: 'A', selector: 'li' });
   // address(null) drops it; the facet and the selection stay.
   Selection.target('A', '.s-abc');
@@ -1004,8 +1004,8 @@ test('the facade seats any selector the grammar reads, canonicalized', () => {
   Selection.select('container:c');
   Selection.target('container:c', '>*');
   assert.deepEqual(Selection.getTarget(), { key: 'container:c', selector: '> *' });
-  Selection.target('container:c', ' > pb-text ');
-  assert.deepEqual(Selection.getTarget(), { key: 'container:c', selector: '> pb-text' });
+  Selection.target('container:c', ' > d-text ');
+  assert.deepEqual(Selection.getTarget(), { key: 'container:c', selector: '> d-text' });
   Selection.hover('container:c', 'p');
   assert.deepEqual(Selection.getHoveredSelector(), { key: 'container:c', selector: 'p' });
   Selection.hoverSelector('container:c', '.cls>*');
@@ -1017,7 +1017,7 @@ test('the facade refuses a selector outside the grammar instead of seating it', 
   Selection.clear();
   Selection.select('A');
   Selection.target('A', '.icon');
-  for (const bad of ['div > .loose', '.two.classes', 'a:hover', '*', '::p', '', null]) {
+  for (const bad of ['div > > .loose', '.two:has(:has(.classes))', 'a:hover()', '*', '::p', '', null]) {
     assert.throws(() => Selection.target('A', bad), TypeError);
     if (bad !== null) {
       assert.throws(() => Selection.hover('A', bad), TypeError);
@@ -1032,15 +1032,15 @@ test('the facade refuses a selector outside the grammar instead of seating it', 
 test('the facade canonicalizes an address selector and refuses one outside the grammar', () => {
   Selection.clear();
   Selection.select('A');
-  Selection.address('A', ' > pb-text ');
-  assert.deepEqual(Selection.getAddress(), { key: 'A', selector: '> pb-text' });
-  for (const bad of ['div > .loose', '.two.classes', 'a:hover', '*', '::p', '']) {
+  Selection.address('A', ' > d-text ');
+  assert.deepEqual(Selection.getAddress(), { key: 'A', selector: '> d-text' });
+  for (const bad of ['div > > .loose', '.two:has(:has(.classes))', 'a:hover()', '*', '::p', '']) {
     assert.throws(() => Selection.address('A', bad), TypeError);
   }
   // address('A') with no selector is not the drop (address(null) is): a
   // key without a rule is a caller bug.
   assert.throws(() => Selection.address('A'), TypeError);
-  assert.deepEqual(Selection.getAddress(), { key: 'A', selector: '> pb-text' });
+  assert.deepEqual(Selection.getAddress(), { key: 'A', selector: '> d-text' });
   Selection.clear();
 });
 
@@ -1096,7 +1096,7 @@ test('over a booted index, target() refuses an ancestor key and address() admits
   assert.equal(Selection.getSelected(), BLOCK_KEY);
   // The done-when: the facade's target() refuses an ancestor key, the
   // very shape the old one-target spine admitted for a rule on an ancestor.
-  assert.throws(() => Selection.target(SECTION_KEY, '> pb-text'), /not the selected element/);
+  assert.throws(() => Selection.target(SECTION_KEY, '> d-text'), /not the selected element/);
   assert.throws(() => Selection.target(ROOT_KEY, 'li'), /not the selected element/);
   assert.equal(Selection.getTarget(), null);
   // The address takes the ancestry check: the section and the root are
@@ -1105,10 +1105,10 @@ test('over a booted index, target() refuses an ancestor key and address() admits
   Selection.address(SECTION_KEY, 'li');
   assert.deepEqual(Selection.getAddress(), { key: SECTION_KEY, selector: 'li' });
   assert.deepEqual(Selection.getTarget(), { key: BLOCK_KEY, selector: '.s-abc' }, 'the rows stay the subject\'s');
-  Selection.address(ROOT_KEY, '> pb-text');
-  assert.deepEqual(Selection.getAddress(), { key: ROOT_KEY, selector: '> pb-text' });
+  Selection.address(ROOT_KEY, '> d-text');
+  assert.deepEqual(Selection.getAddress(), { key: ROOT_KEY, selector: '> d-text' });
   assert.throws(() => Selection.address(OTHER_KEY, 'li'), /neither the selected element/);
-  assert.deepEqual(Selection.getAddress(), { key: ROOT_KEY, selector: '> pb-text' }, 'a refused write leaves the standing address');
+  assert.deepEqual(Selection.getAddress(), { key: ROOT_KEY, selector: '> d-text' }, 'a refused write leaves the standing address');
   Selection.address(BLOCK_KEY, 'li');
   assert.deepEqual(Selection.getAddress(), { key: BLOCK_KEY, selector: 'li' });
   // One subscription delivers the address beside the facet.

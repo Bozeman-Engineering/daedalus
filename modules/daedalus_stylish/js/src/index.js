@@ -8,7 +8,8 @@ import { createCanvasHighlight } from './canvas-highlight.js';
 import { createCanvasPaint } from './canvas-paint.js';
 import { createForceState } from './force-state.js';
 import { uiMode } from './ui-mode.js';
-import { stopsFromConditions } from './canvas-stops.js';
+import { stopsFromConditions, literalStops } from './canvas-stops.js';
+import { literalClauses } from './editing-at.js';
 import { openPicker as openVariantPicker } from './apply-variant-hotkey.js';
 import { createVariantDoors, createVariantRowFacts } from './row-facts.js';
 import { registerCollapseHotkeys } from '../../../daedalus_ui/js/outline/collapse-hotkeys.js';
@@ -51,6 +52,24 @@ import './media-library.js';
     guide,
     drupalSettings.daedalusStylish?.mediaUrls ?? {},
   );
+  // A literal width clause in use on the selected element's rows (a
+  // typed `@container (min-width: 400px) and (max-width: 480px)`) is
+  // marked on the ruler while it is in use, through the facade's mark()
+  // lane (replaced whole on every selection or map change, so a row
+  // removed or a selection moved unmarks it); the queue above is the
+  // permanent vocabulary. Page-level like the force-state stamping, not
+  // the panel's: the ruler stands whether the in-page panel or a
+  // satellite carries the inspector.
+  const markLiteralBands = () => {
+    Drupal.Daedalus?.CanvasVector?.mark?.(
+      literalStops(
+        literalClauses(source.getStyleMap(), source.getSelected(), guide.conditions ?? {}),
+      ),
+    );
+  };
+  source.onSelectionChange(markLiteralBands);
+  source.onStyleMapChange(markLiteralBands);
+  markLiteralBands();
 
   // No pop-out URL (no derivable main entity on this route) means no
   // pop-out: the panel renders in-page only. The channel scope is the edit
@@ -168,14 +187,14 @@ import './media-library.js';
   // shared per-frame geometry tracker. Guarded — an older daedalus_ui
   // without the geometry seam just shows no bands.
   if (app.geometry?.createTracker) {
-    createCanvasHighlight({ app, source });
+    createCanvasHighlight({ app, source, guide });
     // The paint canvas: Outline Variant projected onto the page — outline
     // chrome per covered element in the shared focus treatment, plus the
     // matching row marks in the page elements panel (app.tree.setRowMarks
     // — one gesture, both halves), driven from the source's canvas-paint
     // state over client-side map refs (canvas-paint.js). Same geometry
     // seam, same guard.
-    createCanvasPaint({ app, source });
+    createCanvasPaint({ app, source, guide });
   }
 
   // The selection-scoped force state: the inspector's "Editing
@@ -183,8 +202,10 @@ import './media-library.js';
   // canvas markup, which the printers' pseudo-condition compile matches —
   // DevTools :hov without the real interaction. Leader-only, like the
   // highlight: satellite force-state intents land in the source, and the
-  // stamping subscribes there.
-  createForceState({ source });
+  // stamping subscribes there. The guide's condition table names the
+  // posable states, so a state qualifier on a rule's compound stamps
+  // the compound's targets (`li:hover > ul` poses on the `li`s).
+  createForceState({ source, guide });
 
   // The UI mode drives daedalus_ui's Show-menu markup toggle:
   // advanced and code flip the markup view on, basic flips it off (basic
@@ -306,21 +327,14 @@ import './media-library.js';
           popout={popout}
           guide={guide}
           variants={drupalSettings.daedalusStylish?.variants ?? {}}
-          swatches={drupalSettings.daedalusStylish?.swatches ?? {}}
-          tokens={drupalSettings.daedalusStylish?.tokens ?? {}}
-          animations={drupalSettings.daedalusStylish?.animations ?? {}}
-          fonts={drupalSettings.daedalusStylish?.fonts ?? {}}
+          skinMaterials={drupalSettings.daedalusStylish?.skinMaterials ?? {}}
           skin={drupalSettings.daedalusStylish?.skin ?? {}}
+          law={drupalSettings.daedalusStylish?.law ?? {}}
           previewWindow={
-            // The opener's {url, scope}, composed from the two settings
-            // the Edit mode attaches together (the preview route's URL and
-            // the session identity); the satellite host composes none.
-            drupalSettings.daedalusUi?.responsivePreview
-              ? {
-                  url: drupalSettings.daedalusUi.responsivePreview.url,
-                  scope: drupalSettings.daedalusUi.editSession.scope,
-                }
-              : null
+            // Available where the Edit mode attached the preview route
+            // (a route host); the opener itself is daedalus_ui's door,
+            // Drupal.Daedalus.openPreviewWindow. The satellite passes false.
+            Boolean(drupalSettings.daedalusUi?.responsivePreview?.url)
           }
         />,
         mount,

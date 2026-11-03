@@ -35,7 +35,8 @@ function hook_daedalus_blueprint_ai_tool_persisted(HostInterface $host, bool $is
 /**
  * Alters the list of entity types and bundles visible to the AI.
  *
- * The list starts from every fieldable entity type with bundles, filtered by
+ * The list starts from every fieldable entity type with bundles that is not
+ * internal (an internal type is never offered to the AI at all), filtered by
  * daedalus_blueprint_ai.settings (hidden_entity_types / hidden_bundles); this
  * alter runs last. Hiding here is ENFORCEMENT, not just presentation: every
  * AI tool refuses hidden types and bundles (read, create, schema, element

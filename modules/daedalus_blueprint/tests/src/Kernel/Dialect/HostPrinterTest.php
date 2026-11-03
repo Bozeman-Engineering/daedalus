@@ -26,7 +26,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * The AI's page print names each slot door and what it shows.
  *
- * A door prints as a bare <pb-block plugin="daedalus_slot:{id}" /> and
+ * A door prints as a bare <d-block plugin="daedalus_slot:{id}" /> and
  * the document behind it is no node of the printed host, so HostPrinter
  * reads the spine's showing (VerdictStamper::showing(), the printed host
  * as the canvas) and adds one note per door: what it shows and, for a
@@ -282,7 +282,7 @@ class HostPrinterTest extends BlueprintKernelTestBase {
     $this->assertStringStartsWith($notes . "\n\n", $reader, 'The notes head the text once, a blank line between.');
     $this->assertSame(1, substr_count($reader, 'Reading notes:'));
     $this->assertMatchesRegularExpression(
-      '/\n  <pb-block id="' . preg_quote($this->topDoor, '/') . '"( data-can="[^"]*")? plugin="daedalus_slot:top" \/>\n/',
+      '/\n  <d-block id="' . preg_quote($this->topDoor, '/') . '"( data-can="[^"]*")? plugin="daedalus_slot:top" \/>\n/',
       $print->text,
       'The door prints as the bare slot block it was: the grammar is unchanged.',
     );
@@ -296,7 +296,7 @@ class HostPrinterTest extends BlueprintKernelTestBase {
    * the admin) and the aside door nothing. On a locked page the template's
    * doors print inside the template's sections with the template as their
    * holder: a hero section of the page's own fills the hero door, so it
-   * shows that <pb-slot> section, and aside still shows nothing. An
+   * shows that <d-slot> section, and aside still shows nothing. An
    * actor who may not update the header is told what the door shows but
    * not where it is edited.
    */
@@ -318,10 +318,10 @@ class HostPrinterTest extends BlueprintKernelTestBase {
     $page = $this->host($this->createRevEntity(['name' => 'Locked', ContentHost::LAYOUT_FIELD => [$fill]]));
     $print = $this->print($page);
     $this->assertSame([
-      $this->heroDoor => sprintf("slot hero (#%s) shows the <pb-slot name=\"hero\"> section of 'Locked'", $this->heroDoor),
+      $this->heroDoor => sprintf("slot hero (#%s) shows the <d-slot name=\"hero\"> section of 'Locked'", $this->heroDoor),
       $this->asideDoor => sprintf('slot aside (#%s) shows nothing', $this->asideDoor),
     ], $this->doorNotes($print), "The template's doors are read with the template as holder; the page's fill is what the hero door shows.");
-    $this->assertMatchesRegularExpression('/\n<pb-slot id="[^"]*"[^>]* name="hero">\n/', $print->text, 'The fill prints as the slot section the note names.');
+    $this->assertMatchesRegularExpression('/\n<d-slot id="[^"]*"[^>]* name="hero">\n/', $print->text, 'The fill prints as the slot section the note names.');
 
     $unfilled = $this->host($this->createRevEntity(['name' => 'Plain']));
     $this->setUpCurrentUser([], ['administer entity_test content', 'configure any layout']);

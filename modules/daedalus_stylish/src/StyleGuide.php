@@ -10,6 +10,7 @@ use Drupal\daedalus_blueprint\DesignSystem\DesignSystemInterface;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
 use Drupal\daedalus_stylish\Exception\StyleGuideException;
+use Drupal\daedalus_stylish\Vocabulary\WideSelectors;
 
 /**
  * Daedalus Stylish's projection of the page builder declarations: the style guide.
@@ -61,7 +62,7 @@ use Drupal\daedalus_stylish\Exception\StyleGuideException;
  *   base tag or any part) may also carry a pseudo section, {pseudo:
  *   {before: {property_groups}, after: {property_groups}}}, declaring the
  *   element's two generated boxes ("{key}::&::before" on the element
- *   itself, "{key}::.part::after" on a part, "{key}::> pb-text::before"
+ *   itself, "{key}::.part::after" on a part, "{key}::> d-text::before"
  *   on the type's roster). Existence is universal (every element has
  *   both boxes in CSS; the box shows once its `content` is set), so the
  *   section declares VOCABULARY only: what may be styled there. Undeclared,
@@ -93,7 +94,7 @@ use Drupal\daedalus_stylish\Exception\StyleGuideException;
  *   at every placement depth, and no depth qualifier exists on grants.
  *   Placement curates OFFERS and BIRTH (the variant_axes and
  *   default_variants depth qualifiers below), never legality: a nested
- *   container and a page band validate one vocabulary, and an own write
+ *   container and a section validate one vocabulary, and an own write
  *   that masks a worn variant's declaration (padding over a width
  *   variant's padding-inline) is surfaced by the inspector's provenance,
  *   never prevented by withholding.
@@ -146,7 +147,7 @@ use Drupal\daedalus_stylish\Exception\StyleGuideException;
  *   the default then applies to TOP-LEVEL sections only while the axis itself
  *   stays offered at every depth — the default_variants dual of the
  *   variant_axes depth qualifier, for axes whose vocabulary is depth-blind but
- *   whose house default is page-band business (a page band born wearing a house
+ *   whose house default is section business (a section born wearing a house
  *   variant a nested container is not). The map form exists to carry the
  *   qualifier; an unqualified entry is spelled as the plain machine name. Maps
  *   merge per key across layers, so a theme can override one axis's default
@@ -175,7 +176,7 @@ use Drupal\daedalus_stylish\Exception\StyleGuideException;
  *   with the STYLE_PROPERTY_AXIS_OWNED warning, never an error, because
  *   placement and doctrine never enter legality). Depth is meaningful
  *   only on container-family declarations (the "container" kind and
- *   layouts), where it marks the axis as page-band business: root-only
+ *   layouts), where it marks the axis as section business: root-only
  *   axes are neither offered nor defaulted on NESTED containers, a NEW
  *   wearing at nested depth is refused (RootOnlyVariantChecker on the op
  *   spine, AXIS_NOT_TOP_LEVEL in the dialect), and the wear is a fact of
@@ -243,14 +244,17 @@ use Drupal\daedalus_stylish\Exception\StyleGuideException;
  *   namespaces (the spine's `instances:` lane) declare IDENTITY (the tags
  *   the minter mints, with their labels) and the groups their minted
  *   CLASS parts style; they never declare a tag's styleability. The tag
- *   vocabulary is CLOSED (BASE_TAGS): base defaults print the tag into a
- *   live selector on every page, so the legal tags are code, exactly
- *   like condition names — an undeclared-but-legal tag degrades to an
- *   empty declaration for skin defaults (grammar-checked-only on
- *   permissive sites, nothing stylable in strict) and is no tag-tier
- *   target at all (STYLE_TAG_NOT_DECLARED in every mode: the tier is
- *   declared spelling, never an open tag-selector lane); a tag outside
- *   the vocabulary is not a scope at all.
+ *   DECLARABLE vocabulary is closed (BASE_TAGS): base defaults print the
+ *   tag into a live selector on every page, so the tags a base section
+ *   may declare are code, exactly like condition names — an
+ *   undeclared-but-declarable tag degrades to an empty declaration for
+ *   skin defaults (grammar-checked-only on permissive sites, nothing
+ *   stylable in strict), and a tag outside BASE_TAGS is not a scope at
+ *   all. Which tag a SELECTOR may name is admission by enforcement mode,
+ *   not this list: a strict site refuses an undeclared tag-tier target
+ *   (STYLE_TAG_NOT_DECLARED), an open or guarded one admits any tag the
+ *   browser knows (the wide selector tier) grant-less, and a tag the
+ *   browser does not know is a typo everywhere (STYLE_SELECTOR_UNKNOWN).
  * - defaults: the declared defaults tier — the literal box facts the
  *   declaring markup needs (the image block's picture is a block box; its
  *   linked root shrink-wraps the picture; the composed container's root
@@ -345,22 +349,30 @@ class StyleGuide {
    *
    * The scalar shapes of the property machinery
    * (PropertyGroupBase::validateScalar()): dimension, number, color, a
-   * closed keyword vocabulary, and text for multi-part values no scalar
-   * shape models ("150ms ease"). A scale's shape is what every token
-   * minted on it validates against.
+   * closed keyword vocabulary, text for multi-part values no scalar
+   * shape models ("150ms ease"), and gradient for a named <image> (one or
+   * more comma-separated gradient functions or var() layers,
+   * PropertyGroupBase::validateGradient()). A scale's shape is what
+   * every token minted on it validates against.
    */
-  public const TOKEN_SHAPES = ['dimension', 'number', 'color', 'keyword', 'text'];
+  public const TOKEN_SHAPES = ['dimension', 'number', 'color', 'keyword', 'text', 'gradient'];
 
   /**
-   * The closed tag vocabulary of the base:{tag} scope family.
+   * The declared tag vocabulary: what a base section and base:{tag} may name.
    *
    * The prose-markup surface site defaults may style: text flow, links,
    * lists, quotations, code, figures, tables, and images — base.css
-   * territory. Closed because base defaults compile the tag into live
-   * selectors on every page: the legal tag set is code (like condition
-   * names), while which tags a site declares stylable (the site
-   * declaration's base section) and what values a skin supplies (the skin
-   * entity's defaults field) are the usual code/data split.
+   * territory. Closed for DECLARATIONS because base defaults compile the
+   * tag into live selectors on every page: the tags a site's base section
+   * may declare and a skin's base:{tag} defaults may key by are code, with
+   * a word each (BASE_TAG_LABELS), while which of them a site declares
+   * stylable and what values a skin supplies are the usual code/data
+   * split. It is NOT the law of which tag a selector may name: a tag
+   * compound ("{key}::nav") is admitted by enforcement mode like every
+   * other vocabulary (StyleMapValidator::resolveRoster(): strict refuses
+   * an undeclared tag, open and guarded admit any tag the browser knows,
+   * the wide selector tier in data/wide-selectors.json), grant-less where
+   * no base section declares it.
    */
   public const BASE_TAGS = [
     'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -422,24 +434,9 @@ class StyleGuide {
   ];
 
   /**
-   * The reserved variable prefix user swatches deliver under.
-   *
-   * Swatches (the palette's user half, daedalus_swatch entities) live
-   * OUTSIDE every declared token scale, in their own namespace:
-   * --swatch-{machine_name}. The reservation is what keeps the two
-   * vocabularies from ever colliding — validateTokenScales() refuses any
-   * scale whose effective prefix equals or hyphen-extends this one, so a
-   * var() reference resolves to a scale OR a swatch, never ambiguously to
-   * both. It is also what keeps strict-guide curation intact: a {scale: x}
-   * constrained property accepts only the scale's minted tokens, so
-   * minting a swatch never extends a scale-locked option set.
-   */
-  public const SWATCH_PREFIX = 'swatch';
-
-  /**
    * The reserved keyframes-name prefix site animations deliver under.
    *
-   * Animations (the motion material, daedalus_animation entities) are
+   * Animations (the motion material, the skin's animations section) are
    * referenced by a bare custom-ident, not through var(): a keyframes name
    * is an ident component of animation-name or the animation shorthand.
    * The prefix is what partitions them: motion-{machine_name} is never an
@@ -558,7 +555,16 @@ class StyleGuide {
     protected PropertyGroupPluginManager $propertyGroupManager,
     protected \Closure $styleMapValidator,
     protected \Closure $vocabularyRosters,
+    protected WideSelectors $wideSelectors,
   ) {}
+
+  /**
+   * The pseudo-elements with a vocabulary of their own.
+   *
+   * As the correctives name them; data/pseudo-vocabularies.json carries
+   * the vocabularies.
+   */
+  private const OWN_VOCABULARY_PSEUDOS = ['marker', 'placeholder', 'selection', 'first-letter', 'first-line'];
 
   /**
    * The open enforcement mode: the guide shapes offers, never writes.
@@ -590,7 +596,7 @@ class StyleGuide {
    *   undeclared stays open with recognition and grammar checks.
    * - strict: a closed world, only explicitly declared properties may be
    *   styled, and var() references in declared scale namespaces must name
-   *   minted tokens (published swatches for the swatch namespace).
+   *   minted tokens.
    *
    * Callers should ask the question they mean through propertiesClosed()
    * or constraintsAreLaw() rather than comparing mode strings.
@@ -1158,7 +1164,7 @@ class StyleGuide {
    * The depth qualifier's projection for placement-aware consumers: a
    * root-only axis is offered and defaulted for TOP-LEVEL sections only,
    * never for sections nested inside another section's region (a nested
-   * section is always constrained by its parent container, so page-band
+   * section is always constrained by its parent container, so section
    * axes like width have nothing to say there). This list is the SOURCE
    * of the depth stamps, never the consumers' read: DaedalusStylishMaterialsProvider
    * writes it as each variant record's applies.depth
@@ -1197,7 +1203,7 @@ class StyleGuide {
    * (axis => machine name) apply at every depth, depth-qualified entries
    * ({variant: name, depth: root}) resolve to no default for NESTED
    * sections — the axis stays offered there, only the house default is
-   * page-band business. Consumers get axis => machine name and never
+   * section business. Consumers get axis => machine name and never
    * re-parse the entry forms.
    *
    * Depth gates entries, not axes: a root-only AXIS (rootOnlyAxes()) is
@@ -1532,50 +1538,9 @@ class StyleGuide {
   }
 
   /**
-   * The CSS custom property a swatch delivers as: --swatch-{name}.
-   *
-   * The swatch counterpart of tokenVariable(), and like it the ONE
-   * derivation rule behind every swatch consumer (the compiled swatch
-   * stylesheet, var() reference validation, the palette picker), so no
-   * consumer concatenates its own variable names.
-   *
-   * @param string $name
-   *   The swatch's machine name.
-   */
-  public static function swatchVariable(string $name): string {
-    return '--' . self::SWATCH_PREFIX . '-' . $name;
-  }
-
-  /**
-   * Resolves a CSS custom property back to its swatch machine name.
-   *
-   * The reverse of swatchVariable(): a variable in the reserved swatch
-   * namespace resolves to the swatch name it references. Unambiguous by
-   * construction — validateTokenScales() refuses any scale prefix that
-   * equals or hyphen-extends the reserved prefix, so a variable is a
-   * swatch reference or a token reference, never both. A variable outside
-   * the namespace is not a swatch reference: like the token spine, the
-   * swatch spine owns exactly its reserved prefix, and custom properties a
-   * theme or chrome defines are none of its business.
-   *
-   * @param string $variable
-   *   A custom property name, leading dashes included ("--swatch-hero").
-   *
-   * @return string|null
-   *   The swatch machine name, or NULL when the variable is not in the
-   *   swatch namespace.
-   */
-  public static function swatchReference(string $variable): ?string {
-    $prefix = '--' . self::SWATCH_PREFIX . '-';
-    return str_starts_with($variable, $prefix) && strlen($variable) > strlen($prefix)
-      ? substr($variable, strlen($prefix))
-      : NULL;
-  }
-
-  /**
    * The keyframes name an animation delivers as: motion-{name}.
    *
-   * The animation counterpart of swatchVariable(), and like it the ONE
+   * The animation counterpart of tokenVariable(), and like it the ONE
    * derivation rule behind every animation consumer (the compiled
    * keyframes stylesheet, reference validation, the roster record's
    * spelling, the usage scan, the completions), so no consumer
@@ -2158,9 +2123,7 @@ class StyleGuide {
    * hyphen. Token NAMES may contain hyphens (--color-accent-hover), so
    * "text" beside "text-heading" would make --text-heading-lg parse as
    * either scale; the grammar refuses the ambiguity once instead of every
-   * var() consumer disambiguating forever. The swatch namespace
-   * (SWATCH_PREFIX, "--swatch-") is reserved by the same rule: no prefix
-   * may equal or extend it, because user swatches deliver there.
+   * var() consumer disambiguating forever.
    */
   protected function validateTokenScales(array $declarations, array &$errors): void {
     $dimensions = [
@@ -2229,15 +2192,7 @@ class StyleGuide {
         $prefix = $scale;
       }
       if ($prefix !== NULL) {
-        // The swatch namespace is reserved before any scale speaks: user
-        // swatches deliver as --swatch-{name} outside every scale, and a
-        // scale claiming the prefix (or extending it hyphen-wise) would
-        // make var(--swatch-…) references ambiguous between the two
-        // vocabularies.
-        if ($prefix === self::SWATCH_PREFIX || str_starts_with($prefix, self::SWATCH_PREFIX . '-')) {
-          $errors[] = sprintf('%s derives CSS variables with the prefix "--%s-", which is inside the reserved swatch namespace ("--%s-"); user swatches deliver there, so no scale may claim it.', $at, $prefix, self::SWATCH_PREFIX);
-        }
-        elseif (isset($prefixes[$prefix])) {
+        if (isset($prefixes[$prefix])) {
           $errors[] = sprintf('%s derives CSS variables with the prefix "--%s-", which the scale "%s" already uses; every scale needs its own variable namespace.', $at, $prefix, $prefixes[$prefix]);
         }
         else {
@@ -2593,7 +2548,7 @@ class StyleGuide {
    *
    * The generated-box grammar gate: a `pseudo` section is a map keyed by
    * the pseudo-element names the relative selector admits
-   * (RelativeSelector::PSEUDOS: before, after), each a map carrying
+   * (any name the browser knows: before, after, marker, …), each a map carrying
    * exactly a property_groups map, on a kind, block type, block plugin,
    * layout, base tag or any part of their elements trees (the nodes the
    * roster walk can land a pseudo-element on). Its complement: the
@@ -2654,13 +2609,14 @@ class StyleGuide {
         $errors[] = sprintf('The pseudo declaration of %s is not valid there: a generated box has no generated boxes of its own (a pseudo-element is terminal).', $where);
       }
       elseif (!is_array($section) || (array_is_list($section) && $section !== [])) {
-        $errors[] = sprintf('The pseudo declaration of %s must be a map keyed by pseudo-element (%s), each declaring the property_groups that generated box may style, or be omitted entirely.', $where, implode(', ', RelativeSelector::PSEUDOS));
+        $named = implode(', ', array_merge(RelativeSelector::GENERATED_BOXES, self::OWN_VOCABULARY_PSEUDOS));
+        $errors[] = sprintf('The pseudo declaration of %s must be a map keyed by pseudo-element (%s, or any other the browser knows), each declaring the property_groups that box may style, or be omitted entirely.', $where, $named);
       }
       else {
         foreach ($section as $pseudo => $box) {
           $at = sprintf('the ::%s pseudo-element of %s', $pseudo, $where);
-          if (!in_array($pseudo, RelativeSelector::PSEUDOS, TRUE)) {
-            $errors[] = sprintf('The pseudo declaration of %s keys by "%s", which is not a pseudo-element the relative selector admits; the generated boxes are %s.', $where, $pseudo, implode(' and ', RelativeSelector::PSEUDOS));
+          if (!is_string($pseudo) || !preg_match(RelativeSelector::PSEUDO_PATTERN, $pseudo) || !$this->wideSelectors->knowsPseudoElement($pseudo)) {
+            $errors[] = sprintf('The pseudo declaration of %s keys by "%s", which is not a pseudo-element the browser knows (the generated boxes %s, and %s, among the wide selector tier\'s).', $where, $pseudo, implode(' and ', RelativeSelector::GENERATED_BOXES), implode(', ', self::OWN_VOCABULARY_PSEUDOS));
             continue;
           }
           if (!is_array($box) || (array_is_list($box) && $box !== [])) {
@@ -2691,14 +2647,16 @@ class StyleGuide {
   }
 
   /**
-   * The declared generated boxes of a node: pseudo name => its declaration.
+   * The declared pseudo-element boxes of a node: pseudo name => declaration.
    *
    * The shared read of the recursing build checks and of the client
    * payload's serving walk: a `pseudo` section's well-formed entries (a
-   * map per pseudo-element the grammar admits), each a node like a
-   * part's, carrying property_groups the allowlist and scale checks judge
-   * as any node's. Malformed sections are the pseudo-section check's
-   * business and are skipped here.
+   * map per pseudo-element name the grammar spells,
+   * RelativeSelector::PSEUDO_PATTERN; whether the browser knows the name
+   * is the pseudo-section check's refusal against the wide selector
+   * tier), each a node like a part's, carrying property_groups the
+   * allowlist and scale checks judge as any node's. Malformed sections
+   * are the pseudo-section check's business and are skipped here.
    *
    * @return array<string, array>
    *   Pseudo-element name => its declaration node.
@@ -2707,7 +2665,7 @@ class StyleGuide {
     $section = $declaration['pseudo'] ?? NULL;
     $nodes = [];
     foreach (is_array($section) ? $section : [] as $pseudo => $box) {
-      if (in_array($pseudo, RelativeSelector::PSEUDOS, TRUE) && is_array($box) && !array_is_list($box)) {
+      if (is_string($pseudo) && preg_match(RelativeSelector::PSEUDO_PATTERN, $pseudo) && is_array($box) && !array_is_list($box)) {
         $nodes[$pseudo] = $box;
       }
     }

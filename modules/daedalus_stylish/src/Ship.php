@@ -15,7 +15,7 @@ use Drupal\daedalus_stylish\Exception\VariantValidationException;
  *
  * ShippedSync brings a module's MODULE.daedalus_stylish.<kind>*.yml INTO the site;
  * this orchestrator runs the kind shippers (ShippedDefinitionsShipper's
- * subclasses, one per kind: fonts, animations, swatches, skins and
+ * subclasses, one per kind: skins and
  * variants) over ONE module and answers with a ShipReport. It is the lane
  * the package author uses from a development site: change a shipped
  * material on the site (the distro lock lifted by the daedalus_blueprint
@@ -61,22 +61,14 @@ final class Ship implements PackageShipperInterface {
    *
    * @param \Drupal\Core\Extension\ModuleHandlerInterface $moduleHandler
    *   Answers whether the target module is enabled and where it lives.
-   * @param \Drupal\daedalus_stylish\FontShipper $fonts
-   *   The fonts lane's site-to-disk direction (the file and its assets).
-   * @param \Drupal\daedalus_stylish\AnimationShipper $animations
-   *   The animations lane's site-to-disk direction.
-   * @param \Drupal\daedalus_stylish\SwatchShipper $swatches
-   *   The swatches lane's site-to-disk direction.
    * @param \Drupal\daedalus_stylish\SkinShipper $skins
-   *   The skins lane's site-to-disk direction.
+   *   The skins lane's site-to-disk direction (the file and its font
+   *   assets).
    * @param \Drupal\daedalus_stylish\VariantShipper $variants
    *   The variants lane's site-to-disk direction.
    */
   public function __construct(
     protected ModuleHandlerInterface $moduleHandler,
-    protected FontShipper $fonts,
-    protected AnimationShipper $animations,
-    protected SwatchShipper $swatches,
     protected SkinShipper $skins,
     protected VariantShipper $variants,
   ) {}
@@ -84,7 +76,7 @@ final class Ship implements PackageShipperInterface {
   /**
    * The shippers keyed by kind, in the sync's order.
    *
-   * Fonts, animations, swatches, skins, variants (ShippedSync's order),
+   * Skins, variants (ShippedSync's order),
    * so a ship report reads like a sync report; nothing on disk depends
    * on it (each file is one kind).
    *
@@ -93,7 +85,7 @@ final class Ship implements PackageShipperInterface {
    */
   public function shippers(): array {
     $shippers = [];
-    foreach ([$this->fonts, $this->animations, $this->swatches, $this->skins, $this->variants] as $shipper) {
+    foreach ([$this->skins, $this->variants] as $shipper) {
       $shippers[$shipper->importer()->kind()] = $shipper;
     }
     return $shippers;

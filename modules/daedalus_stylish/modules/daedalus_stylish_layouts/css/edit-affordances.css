@@ -11,7 +11,7 @@
  * one emptiness fact, never layout markup (region-era selectors have died
  * silently twice that way). ONE attribute selector serves every depth
  * because the container is one box: the hint rides the container root,
- * <section> page band and nested <div> alike.
+ * top-level <section> and nested <div> alike.
  *
  * The hint text rides the attribute (`content: attr()`): a stylesheet cannot
  * carry a translatable string, and a real hint element would be matched by
@@ -36,12 +36,12 @@
  * for exactly as long as the hint exists.
  */
 
-/* The dashed box is the CONTENT box, never the border box: a page band is
+/* The dashed box is the CONTENT box, never the border box: a section is
    full-bleed by design, so its border box says nothing, while the content
    box (what padding-inline leaves between the insets) is exactly what a
    width variant moves. The ::before fills the content area and carries
    the edge and the hint; the dashed edge alone is the affordance (no
-   tint: it would fight the band's own background). Once children exist
+   tint: it would fight the section's own background). Once children exist
    they draw the inset themselves and this retires. */
 [data-container-empty-hint] {
   /* Centers the hint vertically even at the block-layout default; in a

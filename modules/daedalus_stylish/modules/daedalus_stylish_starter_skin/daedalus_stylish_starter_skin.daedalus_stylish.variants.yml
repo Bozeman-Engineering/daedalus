@@ -1,0 +1,180 @@
+# The Starter skin's motion looks: the animation-axis and hover-axis
+# variants wearing the skin's animations (starter_skin's
+# daedalus_stylish.skins.yml, `animations:`), one family on the universal
+# block kind and its twin on the universal container kind, so a section
+# and the blocks inside it speak one motion vocabulary. Basic mode's
+# motion control is a wearing row, not a widget: the Animation and Hover
+# axes are declared on the block and container kinds in
+# daedalus_stylish.page_builder.yml, the wear bar's row IS the control,
+# the AI wears an entrance by apply_variant, and a strict site curates
+# motion by which variants exist. An axis variant spells as an attribute
+# value in its SCOPE's slot (the label, lowercased: animation="fade-in"
+# on a block tag names the block look, on <d-container> the section
+# look). Members of the Starter design system (the module default).
+#
+# Every variant references one of the skin's animations with LITERAL
+# timings, never a token, and carries its own reduced-motion unset: skin
+# defaults are the bottom layer and the topmost setter wins per property,
+# so a skin's `animation: none` under the media query could never beat a
+# variant's animation-name. The setter unsets itself; every wearer is
+# honest, and the pattern is what minters copy. The longhands (not the
+# shorthand) carry the default so the advanced Motion section reads each
+# fact on its own row.
+#
+# Every entrance plays when the element scrolls into view, not at render:
+# the WHEN of an animation is a trigger property pair (the Animation
+# Triggers draft's spelling, curated in the Motion group), never a
+# condition. `timeline-trigger: --in-view view() entry 20% exit 100%`
+# names a view-timeline trigger whose activation range runs from the
+# point where 20% of the element has entered the scrollport until the
+# element has fully left it, and `animation-trigger: --in-view play-once`
+# binds the entrance to it. The end point is part of the WHEN: a lone
+# start (`entry 20%`) natively activates only while the element crosses
+# its entry band, so an element already in view when the trigger is
+# created (above the fold at load, worn in the editor, landed on by a
+# jump scroll) would never play; spelling `exit 100%` keeps it active
+# from the start point until full exit, and an element above the fold
+# plays at load. A wearer overrides either property to change how far in
+# (keep the `exit 100%` end) or to replay every time (`--in-view replay
+# reset`), keeping the `--in-view` name so the pair stays bound. The
+# reduced-motion unset already kills the animation, so the trigger needs
+# no work under that preference. Where the browser lacks
+# `animation-trigger`, the printer's `@supports not` hold and the
+# daedalus_stylish/motion_triggers runtime play the same role.
+#
+# The hover axis (declared after animation on both kinds): hover FEEL as
+# material on its own axis. A wear is unconditioned by construction (the
+# reference list is a sibling of the condition keys), so a variant
+# carries its own WHEN inside its styles: Lift ships the rest state's
+# transition under `default` and the moved state under `hover`, and the
+# wear bar's Hover row, posed Hover, shows that block. The one-per-axis
+# rule keeps an entrance and a hover feel from sharing an axis, so an
+# element wears both at once. Literal values only, and the variant's own
+# reduced-motion unset for what it set (the transition and the
+# transform); a shadow swap is not motion, so the shadow stays.
+starter_fade_in:
+  label: 'Fade in'
+  scope: 'kind:block'
+  axis: 'animation'
+  description: 'Fade the block in over 600ms when it scrolls into view. The quietest entrance; off under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        animation-name: 'motion-fade_in'
+        animation-duration: '600ms'
+        animation-timing-function: 'ease-out'
+        animation-fill-mode: 'both'
+        timeline-trigger: '--in-view view() entry 20% exit 100%'
+        animation-trigger: '--in-view play-once'
+      reduced-motion:
+        animation: 'none'
+starter_rise:
+  label: 'Rise'
+  scope: 'kind:block'
+  axis: 'animation'
+  description: 'Fade the block in while it drifts up 1rem into place over 600ms when it scrolls into view. Reach for it on cards and teasers that should arrive with a little lift; off under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        animation-name: 'motion-rise'
+        animation-duration: '600ms'
+        animation-timing-function: 'ease-out'
+        animation-fill-mode: 'both'
+        timeline-trigger: '--in-view view() entry 20% exit 100%'
+        animation-trigger: '--in-view play-once'
+      reduced-motion:
+        animation: 'none'
+starter_scale_in:
+  label: 'Scale in'
+  scope: 'kind:block'
+  axis: 'animation'
+  description: 'Fade the block in while it grows from 96% to full size over 500ms when it scrolls into view. Reach for it on media, callouts and buttons that should pop into place; off under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        animation-name: 'motion-scale_in'
+        animation-duration: '500ms'
+        animation-timing-function: 'ease-out'
+        animation-fill-mode: 'both'
+        timeline-trigger: '--in-view view() entry 20% exit 100%'
+        animation-trigger: '--in-view play-once'
+      reduced-motion:
+        animation: 'none'
+starter_fade_in_section:
+  label: 'Fade in'
+  scope: 'kind:container'
+  axis: 'animation'
+  description: 'Fade the container in over 600ms when it scrolls into view. The quietest entrance; off under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        animation-name: 'motion-fade_in'
+        animation-duration: '600ms'
+        animation-timing-function: 'ease-out'
+        animation-fill-mode: 'both'
+        timeline-trigger: '--in-view view() entry 20% exit 100%'
+        animation-trigger: '--in-view play-once'
+      reduced-motion:
+        animation: 'none'
+starter_rise_section:
+  label: 'Rise'
+  scope: 'kind:container'
+  axis: 'animation'
+  description: 'Fade the container in while it drifts up 1rem into place over 600ms when it scrolls into view. Reach for it on a section that should arrive with a little lift; off under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        animation-name: 'motion-rise'
+        animation-duration: '600ms'
+        animation-timing-function: 'ease-out'
+        animation-fill-mode: 'both'
+        timeline-trigger: '--in-view view() entry 20% exit 100%'
+        animation-trigger: '--in-view play-once'
+      reduced-motion:
+        animation: 'none'
+starter_scale_in_section:
+  label: 'Scale in'
+  scope: 'kind:container'
+  axis: 'animation'
+  description: 'Fade the container in while it grows from 96% to full size over 500ms when it scrolls into view. Reach for it on a hero or a color-blocked section that should pop into place; off under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        animation-name: 'motion-scale_in'
+        animation-duration: '500ms'
+        animation-timing-function: 'ease-out'
+        animation-fill-mode: 'both'
+        timeline-trigger: '--in-view view() entry 20% exit 100%'
+        animation-trigger: '--in-view play-once'
+      reduced-motion:
+        animation: 'none'
+starter_lift:
+  label: 'Lift'
+  scope: 'kind:block'
+  axis: 'hover'
+  description: 'Raise the block 4px with a soft shadow while the pointer hovers it, easing over 150ms. Reach for it on cards, teasers and buttons that should feel pressable; still under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        transition: 'transform 150ms ease-out, box-shadow 150ms ease-out'
+      hover:
+        transform: 'translateY(-4px)'
+        box-shadow: '0 8px 24px rgb(0 0 0 / 0.12)'
+      reduced-motion:
+        transition: 'none'
+        transform: 'none'
+starter_lift_section:
+  label: 'Lift'
+  scope: 'kind:container'
+  axis: 'hover'
+  description: 'Raise the container 4px with a soft shadow while the pointer hovers it, easing over 150ms. Reach for it on a card-like section or a linked panel that should feel pressable; still under a reduced-motion preference.'
+  styles:
+    '':
+      default:
+        transition: 'transform 150ms ease-out, box-shadow 150ms ease-out'
+      hover:
+        transform: 'translateY(-4px)'
+        box-shadow: '0 8px 24px rgb(0 0 0 / 0.12)'
+      reduced-motion:
+        transition: 'none'
+        transform: 'none'

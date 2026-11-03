@@ -1,27 +1,27 @@
-# The variant wearing the package's other three materials. A member of
-# aurora (the module default), it validates in aurora's universe: its own
-# skin's token and its own swatch and animation resolve whether or not
+# The variant wearing the package's skin materials. A member of aurora
+# (the module default), it validates in aurora's universe: its own skin's
+# tokens and the skin's aurora_fade animation resolve whether or not
 # aurora is the active design system, so the package lands whole on a
 # strict site while another system is active.
-aurora_band:
-  label: 'Aurora band'
+aurora_section:
+  label: 'Aurora section'
   description: 'The aurora opener.'
   scope: 'kind:container'
   styles:
     '':
       default:
         padding: 'var(--space-gutter)'
-        background-color: 'var(--swatch-aurora_accent)'
+        background-color: 'var(--color-accent)'
         animation-name: 'motion-aurora_fade'
 
-# The variant on the package's own axis. A member like aurora_band, its
+# The variant on the package's own axis. A member like aurora_section, its
 # token resolves in aurora's universe whatever is active, but the rhythm
 # axis exists only under aurora's law, which the site layers only while
 # aurora is active: the sync refuses it (STYLE_VARIANT_AXIS_INVALID)
 # while another system is active and lands it when aurora is activated.
 aurora_rhythm:
   label: 'Aurora rhythm'
-  description: 'The aurora band spacing.'
+  description: 'The aurora section spacing.'
   scope: 'kind:container'
   axis: rhythm
   styles:

@@ -103,7 +103,7 @@ final class ShipReport {
    *
    * @param string $kind
    *   The kind: a material noun as its lane names it (font, animation,
-   *   swatch, skin, variant, blueprint, icon), or the package's own parts
+   *   skin, variant, blueprint, icon), or the package's own parts
    *   (module, design_system).
    * @param string $name
    *   The entry's machine name.

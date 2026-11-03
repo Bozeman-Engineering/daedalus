@@ -24,10 +24,10 @@ use Drupal\Core\Cache\CacheableMetadata;
  * Two views of one site: the full roster is legality (what resolves,
  * validates and applies), and offered() is the AI's roster, the records
  * their authors share with the AI (MaterialRecord::$offered), which the
- * cached brief and the schema project. A band verdict on the offered
+ * cached brief and the schema project. A section verdict on the offered
  * view still resolves a blueprint's wearings against the full roster: a
  * placement rule is a fact of legality, and opting the worn variant out
- * of the brief must not turn a band into a free-floating blueprint.
+ * of the brief must not turn a section into a free-floating blueprint.
  */
 final class MaterialsRoster {
 
@@ -59,7 +59,7 @@ final class MaterialsRoster {
    *   The merged metadata of every provider (plus the builder's own).
    * @param \Drupal\daedalus_blueprint\Materials\MaterialsRoster|null $full
    *   For the offered view only: the full roster it is a view of, the one
-   *   legality questions (isBand(), rootOnlyWears()) resolve against. NULL
+   *   legality questions (isSection(), rootOnlyWears()) resolve against. NULL
    *   for a full roster.
    */
   public function __construct(array $records, private readonly CacheableMetadata $cacheMetadata, private readonly ?MaterialsRoster $full = NULL) {
@@ -103,7 +103,7 @@ final class MaterialsRoster {
    * same instance when nothing is opted out (the common site), so a
    * consumer memoizing on roster identity sees no second roster; a
    * filtered sibling otherwise, in roster order, carrying the same cache
-   * metadata and resolving band verdicts against this full roster.
+   * metadata and resolving section verdicts against this full roster.
    */
   public function offered(): MaterialsRoster {
     if ($this->offered === NULL) {
@@ -132,16 +132,6 @@ final class MaterialsRoster {
    */
   public function tokens(): array {
     return $this->ofKind(MaterialKind::Token);
-  }
-
-  /**
-   * The swatches, keyed by id.
-   *
-   * @return array<string, \Drupal\daedalus_blueprint\Materials\MaterialRecord>
-   *   The records.
-   */
-  public function swatches(): array {
-    return $this->ofKind(MaterialKind::Swatch);
   }
 
   /**
@@ -251,10 +241,10 @@ final class MaterialsRoster {
    * element's address (Address::pairsWith(), the family rule), a root-only
    * variant applies at top level only, and an owned variant applies only inside
    * its owning blueprint's placements. A blueprint gates on one fact, derived,
-   * never authored: it is a page band when any variant its root captured
+   * never authored: it is a section when any variant its root captured
    * (MaterialRecord::APPLIES_WEARS) resolves to a root-only record in this
-   * roster, and a band places at top level only; every other blueprint places
-   * anywhere the placement grammar allows. Tokens, swatches and animations are
+   * roster, and a section places at top level only; every other blueprint places
+   * anywhere the placement grammar allows. Tokens, animations and fonts are
    * values and apply everywhere.
    *
    * @param \Drupal\daedalus_blueprint\Materials\MaterialRecord $record
@@ -263,7 +253,7 @@ final class MaterialsRoster {
    *   The element's own address ("block_type:text", "layout:layout_onecol",
    *   "kind:container"); for a blueprint, the address its root lands as.
    * @param bool $top_level
-   *   Whether the element sits at top level (a page band) rather than
+   *   Whether the element sits at top level (a section) rather than
    *   nested inside another section; for a blueprint, where it would land.
    * @param string|null $within_blueprint
    *   The id of the blueprint whose placement the element sits inside, or
@@ -271,7 +261,7 @@ final class MaterialsRoster {
    */
   public function applicable(MaterialRecord $record, Address $element, bool $top_level = TRUE, ?string $within_blueprint = NULL): bool {
     if ($record->kind === MaterialKind::Blueprint) {
-      return $top_level || !$this->isBand($record);
+      return $top_level || !$this->isSection($record);
     }
     if ($record->kind !== MaterialKind::Variant) {
       return TRUE;
@@ -289,24 +279,24 @@ final class MaterialsRoster {
   }
 
   /**
-   * Whether a blueprint is a page band: its root wears a root-only variant.
+   * Whether a blueprint is a section: its root wears a root-only variant.
    *
-   * The one derivation behind every "band" word (the predicate above, the
+   * The one derivation behind every "section" word (the predicate above, the
    * schema's placement line, the dialect's refusal, the prompt's roster
    * line): the record's captured wearings resolved against the variant
    * records of THIS roster. A wearing that names no record here (a
    * variant unpublished since the capture, or one outside the active
    * design system) has no opinion. On the offered view the wearings
-   * resolve against the full roster (the class doc: a band is legality).
+   * resolve against the full roster (the class doc: a section is legality).
    */
-  public function isBand(MaterialRecord $blueprint): bool {
+  public function isSection(MaterialRecord $blueprint): bool {
     return $this->rootOnlyWears($blueprint) !== [];
   }
 
   /**
    * The root-only variant records a blueprint's root wears, keyed by id.
    *
-   * What makes a blueprint a band, named: a corrective spells the variant
+   * What makes a blueprint a section, named: a corrective spells the variant
    * and its axis from these. Resolved against the full roster, on every
    * view.
    *
@@ -346,8 +336,8 @@ final class MaterialsRoster {
    *
    * Ranked by similarity to the id, the label and each spelling
    * (whichever is closest), case-insensitive, so "limegreen" finds
-   * lime_green "Lime green", "buton" finds button and the custom property
-   * "--swatch-limegreen" a writer named finds var(--swatch-lime_green). A
+   * color/lime-green "lime-green", "buton" finds button and the custom property
+   * "--color-limegreen" a writer named finds var(--color-lime-green). A
    * record is a candidate when it contains the needle (or the needle
    * contains it) or is at least half similar; nothing below that is
    * offered, because a hint naming unrelated materials teaches the wrong
@@ -365,10 +355,10 @@ final class MaterialsRoster {
    *
    * The slot-aware sibling of candidates(): a reference that failed to
    * resolve in a slot is corrected against every material that CAN be
-   * written there (tokens and swatches for a var() in a style value,
-   * style variants for a class, one axis's variants for its attribute,
-   * blueprints for a placement name), whatever their kinds, so a swatch
-   * typo never gets a token-only hint.
+   * written there (tokens for a var() in a style value, style variants
+   * for a class, one axis's variants for its attribute, blueprints for a
+   * placement name), whatever their kinds, so a typo is corrected within
+   * its slot's vocabulary.
    *
    * @return \Drupal\daedalus_blueprint\Materials\MaterialRecord[]
    *   The candidates, best first, at most $limit of them.
@@ -488,7 +478,7 @@ final class MaterialsRoster {
    * The one spelling for every corrective and roster line that names
    * materials the writer could have reached for. The spelling is shown
    * as it is written in its slot (var(--x), class="x", width="x",
-   * <pb-blueprint name="x">, animation-name: x); a material with no
+   * <d-blueprint name="x">, animation-name: x); a material with no
    * spelling shows none.
    *
    * @param \Drupal\daedalus_blueprint\Materials\MaterialRecord[] $records
@@ -520,7 +510,7 @@ final class MaterialsRoster {
     }
     return match ($slot) {
       MaterialRecord::SLOT_CLASS => sprintf('class="%s"', $spelling),
-      MaterialRecord::SLOT_BLUEPRINT => sprintf('<pb-blueprint name="%s">', $spelling),
+      MaterialRecord::SLOT_BLUEPRINT => sprintf('<d-blueprint name="%s">', $spelling),
       MaterialRecord::SLOT_ANIMATION => sprintf('animation-name: %s', $spelling),
       MaterialRecord::SLOT_FONT => sprintf('font-family: %s', $spelling),
       default => $spelling,
@@ -530,7 +520,7 @@ final class MaterialsRoster {
   /**
    * Renders a stored named value (a string or condition-keyed map) as one line.
    *
-   * The one spelling of what a token or swatch IS, for every surface that
+   * The one spelling of what a token IS, for every surface that
    * shows values beside names (the cached prompt's NAMED VALUES, the
    * validator's correctives): the default value followed by its
    * conditioned values in parentheses ("#1a1a2e (dark: #e8e8f0)"),

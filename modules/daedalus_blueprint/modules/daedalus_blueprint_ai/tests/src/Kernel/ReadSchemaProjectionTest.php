@@ -11,6 +11,7 @@ use Drupal\daedalus_blueprint\Materials\BlueprintRequirements;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
+use Drupal\daedalus_blueprint\Materials\MaterialsSchema;
 use Drupal\daedalus_blueprint_materials_test\TestGroupsContributor;
 use Drupal\daedalus_blueprint_materials_test\TestMaterialsProvider;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
@@ -25,8 +26,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * must carry what the catalog does not (entity fields, what each element
  * is for, the materials, the blueprints) and nothing that contradicts or
  * duplicates it (the layout node grammar, the style-map key grammar,
- * stylable sets, conditions, anatomy trees). A bundle without a layout
- * keeps the JSON schema: that door is still eb_create_entity/eb_edit's.
+ * stylable sets, conditions, anatomy trees), and each element entry
+ * carries what it renders as from the catalog's render card (`renders`:
+ * dialect writes paired with the HTML each renders as, or the one
+ * sentence naming the shells an undeclared type renders through). A
+ * bundle without a layout keeps the JSON
+ * schema: that door is still eb_create_entity/eb_edit's.
  *
  * @group daedalus_blueprint
  */
@@ -71,16 +76,10 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
     ]);
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster queries published swatches.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // The materials roster queries the stylish material storages.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -114,14 +113,18 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
 
     $this->assertStringContainsString('This bundle carries a page-builder layout', $output);
     $this->assertStringContainsString('elements:', $output);
-    $this->assertStringContainsString('pb-container:', $output);
-    $this->assertStringContainsString('pb-basic:', $output);
+    $this->assertStringContainsString('d-container:', $output);
+    $this->assertStringContainsString('d-basic:', $output);
     $this->assertStringContainsString('field: field_heading', $output);
     $this->assertStringContainsString('materials:', $output);
-    // Grows-by-data: the fixture saves no variant, so no variants group
-    // rides, and the guidance says an absent kind has none.
+    // The dialect door's materials: the guidance says where the rest is
+    // (the brief) and that a kind this shape carries is absent only when
+    // the site has none; the fixture saves no blueprint, animation or
+    // font, so the narrowed shape is the guidance alone and the
+    // structure line says so.
     $this->assertStringNotContainsString('variants:', $output);
-    $this->assertStringContainsString('a kind absent here has no materials on this site', $output);
+    $this->assertStringContainsString('one of those kinds absent here has none on this site', $output);
+    $this->assertStringContainsString('and no materials beyond the brief', $output);
 
     foreach ([
       'section_structure',
@@ -135,6 +138,11 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
       'conditions:',
       'selectable key',
       'update_style',
+      'style_guide',
+      'bindings:',
+      'deviations:',
+      'tokens:',
+      'materials.variants',
     ] as $residue) {
       $this->assertStringNotContainsString($residue, $output, "The dialect view carries no '$residue'.");
     }
@@ -151,28 +159,124 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
     $this->assertTrue($projector->applies($schema, $catalog));
     $projected = $projector->project($schema, $catalog);
 
-    $this->assertSame(['entity_type', 'bundle', 'label', '_structure', 'fields', 'elements', 'materials', 'style_guide'], array_keys($projected));
+    $this->assertSame(['entity_type', 'bundle', 'label', '_structure', 'fields', 'elements', 'materials'], array_keys($projected));
     $this->assertArrayNotHasKey('styles', $projected);
-    $this->assertSame($schema['materials'], $projected['materials'], 'The schema\'s own materials key carries through unchanged.');
+    $this->assertArrayNotHasKey('style_guide', $projected, 'The style guide\'s law (bindings, deviations, guidance) is the brief\'s on this door.');
+    // The materials narrow to what the brief does not carry: the dialect
+    // shape, its own guidance, never a token or variant.
+    $materials_schema = $this->container->get('daedalus_blueprint.materials_schema');
+    $this->assertSame($materials_schema->dialect($schema['materials']), $projected['materials'], 'The schema\'s own materials key carries through the dialect narrowing.');
+    $this->assertSame([], array_diff(array_keys($projected['materials']), MaterialsSchema::DIALECT_KEYS));
+    $this->assertStringStartsWith(MaterialsSchema::DIALECT_OPENING, $projected['materials']['guidance']);
+    $this->assertStringNotContainsString(MaterialsSchema::DIALECT_OPENING, $schema['materials']['guidance'], 'The JSON door\'s fragment keeps its own paragraph.');
+    foreach (['tokens', 'variants'] as $brief_kind) {
+      $this->assertArrayNotHasKey($brief_kind, $projected['materials'], "The $brief_kind are the brief's.");
+    }
+    $this->assertStringContainsString('the design system brief (every token, variant, animation and font with its whole description and value, the bindings and deviations, the blueprints as a menu)', $projected['_structure']);
+    // This fixture saves no blueprint, animation or font: the narrowed
+    // shape is the guidance alone and the structure line says so (the
+    // kinds listing is pinned where a blueprint rides, below).
+    $this->assertSame(['guidance'], array_keys($projected['materials']));
+    $this->assertStringContainsString('and no materials beyond the brief\'s.', $projected['_structure']);
+    $this->assertStringNotContainsString('first sentence', $projected['_structure']);
+    $this->assertStringNotContainsString('materials in full', $projected['_structure']);
     $this->assertArrayNotHasKey('starts', $projected, 'No page blueprint fits this bundle, so no starts ride (grows-by-data).');
     $this->assertStringNotContainsString('"starts"', $projected['_structure']);
     $this->assertArrayNotHasKey('materials', $schema['styles']['style_guide'], 'The materials are never the field\'s.');
-    foreach (['stylable', 'conditions', 'current_values', 'anatomy'] as $taught) {
-      $this->assertArrayNotHasKey($taught, $projected['style_guide']);
-    }
-    $this->assertArrayHasKey('guidance', $projected['style_guide']);
+    $this->assertArrayHasKey('guidance', $schema['styles']['style_guide'], 'The JSON door\'s style guide is untouched.');
 
-    $this->assertSame(['pb-container', 'pb-slot', 'pb-linked', 'pb-basic'], array_keys($projected['elements']));
-    $this->assertSame(['name'], array_keys($projected['elements']['pb-slot']['attributes']), 'The slot form takes the container\'s attributes with name as the slot id (no axes on this catalog).');
-    $this->assertStringContainsString('fills a slot', $projected['elements']['pb-slot']['guidance']);
-    $this->assertSame(['blueprint'], array_keys($projected['elements']['pb-linked']['attributes']), 'The linked placement takes the blueprint it shows (no axes on this catalog).');
-    $this->assertStringContainsString('by reference', $projected['elements']['pb-linked']['guidance']);
-    $basic = $projected['elements']['pb-basic'];
+    $this->assertSame(['d-container', 'd-slot', 'd-linked', 'd-basic'], array_keys($projected['elements']));
+    $this->assertSame(['name'], array_keys($projected['elements']['d-slot']['attributes']), 'The slot form takes the container\'s attributes with name as the slot id (no axes on this catalog).');
+    $this->assertStringContainsString('fills a slot', $projected['elements']['d-slot']['guidance']);
+    $this->assertSame(['blueprint'], array_keys($projected['elements']['d-linked']['attributes']), 'The linked placement takes the blueprint it shows (no axes on this catalog).');
+    $this->assertStringContainsString('by reference', $projected['elements']['d-linked']['guidance']);
+    $basic = $projected['elements']['d-basic'];
     $this->assertSame('Basic', $basic['label']);
     $this->assertSame(['field' => 'field_heading'], $basic['attributes']['heading']);
     $this->assertSame('field_link', $basic['attributes']['link']['field']);
     $this->assertStringContainsString('"<nolink>"', $basic['attributes']['link']['guidance'], 'Link attributes teach the authorable grammar.');
     $this->assertArrayNotHasKey('body', $basic);
+    // The live cards: a bundle no layer declares renders through the kind
+    // shells (daedalus_ui's fallback card), the container through its
+    // layout's declaration.
+    $this->assertSame('through the theme\'s block template, each field in its field shell', $basic['renders']);
+    $container_renders = $projected['elements']['d-container']['renders'];
+    $this->assertIsArray($container_renders, 'The container is declared: pairs, not shells.');
+    $this->assertNotEmpty($container_renders);
+    foreach ($container_renders as $input => $html) {
+      $this->assertStringStartsWith('<d-container', $input);
+      $this->assertMatchesRegularExpression('/^<(section|div)[ >]/', $html);
+    }
+  }
+
+  /**
+   * Each element entry carries its render card, the generic entry the fallback.
+   *
+   * The schema register of the markup model: `renders` as the card's
+   * pairs (the image's four, the text block's three, the container's
+   * depth pair), or the shells sentence on a type that renders through
+   * kind shells, the generic <d-block type> entry of a bundle the
+   * contract cannot spell carrying the fallback under its own owner
+   * spelling. A catalog carrying no card for an element projects no
+   * `renders` for it.
+   */
+  public function testRendersRideTheElements(): void {
+    $projector = $this->container->get('daedalus_blueprint.dialect_schema_projector');
+    $text_renders = [
+      '<d-text>…</d-text>' => '<p>…</p>',
+      '<d-text url="…">…</d-text>' => '<p><a class="text-block-link" href="…">…</a></p>',
+      '<d-text tag="h1" url="…">…</d-text>' => '<h1><a class="text-block-link" href="…">…</a></h1>',
+    ];
+    $image_renders = [
+      '<d-image/>' => '<div></div>',
+      '<d-image media="…"/> (raster media)' => '<img class="image-block-image">',
+      '<d-image media="…"/> (vector media)' => '<svg class="image-block-image"></svg>',
+      '<d-image media="…" url="…"/> (raster media)' => '<a href="…"><img class="image-block-image"></a>',
+    ];
+    $container_renders = [
+      '<d-container>…</d-container> (top-level)' => '<section>…</section>',
+      '<d-container>…</d-container> (nested)' => '<div>…</div>',
+    ];
+    $fallback = ['renders' => [], 'shells' => ['block', 'field']];
+    $cards = [
+      'd-container' => ['renders' => $container_renders, 'shells' => []],
+      'd-text' => ['renders' => $text_renders, 'shells' => []],
+      'd-image' => ['renders' => $image_renders, 'shells' => []],
+      DialectCatalog::ownerForGenericBlockType('gallery') => $fallback,
+    ];
+    $block_types = [
+      'text' => [
+        'attributes' => ['tag' => ['field' => 'field_tag', 'values' => ['h1', 'p']]],
+        'body' => ['field' => 'field_text', 'kind' => 'plain'],
+      ],
+      'image' => ['attributes' => [], 'void' => TRUE],
+    ];
+    $schema = [
+      'layout' => [
+        'available_block_types' => [
+          'text' => ['label' => 'Text'],
+          'image' => ['label' => 'Image'],
+          'gallery' => ['label' => 'Gallery', 'block_fields' => ['field_images' => ['type' => 'entity_reference']]],
+        ],
+      ],
+    ];
+    $catalog = new DialectCatalog(containerLayoutId: 'layout_onecol', axes: [], blockTypes: $block_types, conditions: [], cards: $cards);
+    $elements = $projector->project($schema, $catalog)['elements'];
+
+    $this->assertSame(['d-container', 'd-slot', 'd-linked', 'd-text', 'd-image', 'd-block type="gallery"'], array_keys($elements));
+    $this->assertSame($image_renders, $elements['d-image']['renders']);
+    $this->assertSame($text_renders, $elements['d-text']['renders'], 'The pairs ride as the card carries them, plainest first.');
+    $this->assertSame($container_renders, $elements['d-container']['renders']);
+    $this->assertSame(['form', 'fields', 'renders'], array_keys($elements['d-block type="gallery"']));
+    $this->assertSame('through the theme\'s block template, each field in its field shell', $elements['d-block type="gallery"']['renders'], 'The generic entry carries the fallback: the kind shells it renders through, as one sentence.');
+    foreach (['d-slot', 'd-linked'] as $tag) {
+      $this->assertArrayNotHasKey('renders', $elements[$tag], "$tag is a form of another element's card.");
+    }
+
+    $bare = new DialectCatalog(containerLayoutId: 'layout_onecol', axes: [], blockTypes: $block_types, conditions: []);
+    foreach ($projector->project($schema, $bare)['elements'] as $tag => $entry) {
+      $this->assertArrayNotHasKey('renders', $entry, "No card, no renders on $tag.");
+    }
   }
 
   /**
@@ -190,7 +294,7 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
    */
   public function testStartsRideTheProjection(): void {
     $this->enableModules(['daedalus_blueprint_materials_test']);
-    // daedalus_stylish already teaches the swatch gesture; two providers
+    // daedalus_stylish already teaches the token gesture; two providers
     // may not, so the fixture teaches none here.
     TestMaterialsProvider::$gestureLines = [];
     $tree = [['kind' => 'container', 'layout_id' => 'layout_onecol', 'children' => []]];
@@ -217,12 +321,11 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
       ),
       new MaterialRecord(
         kind: MaterialKind::Blueprint,
-        id: 'band',
-        label: 'Band',
+        id: 'section',
+        label: 'Section',
         description: 'A block blueprint any host can hold.',
-        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'band'],
+        spellings: [MaterialRecord::SLOT_BLUEPRINT => 'section'],
         blueprintScope: MaterialRecord::SCOPE_BLOCK,
-        favorite: TRUE,
         tree: $tree,
       ),
     ];
@@ -237,7 +340,7 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
       ],
     ];
     $this->assertSame($starts, $schema['starts']);
-    $this->assertSame(['band'], array_keys($schema['materials']['blueprints']), 'The favorite block blueprint lists in full; the page blueprint is a start.');
+    $this->assertSame(['section'], array_keys($schema['materials']['blueprints']), 'The shared block blueprint lists in full; the page blueprint is a start.');
     $this->assertSame([DialectCatalog::UNGROUPED => ['blueprints' => 1]], $schema['materials']['groups'], 'The index counts block scope alone.');
 
     $catalog = $this->container->get('daedalus_blueprint.dialect_catalog_builder')->build();
@@ -251,10 +354,12 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
       'elements',
       'materials',
       'starts',
-      'style_guide',
     ];
     $this->assertSame($keys, array_keys($projected));
     $this->assertSame($schema['starts'], $projected['starts']);
+    $this->assertSame(['guidance', 'groups', 'blueprints'], array_keys($projected['materials']), 'The narrowed shape: the index and the blueprint in full.');
+    $this->assertSame($schema['materials']['blueprints'], $projected['materials']['blueprints']);
+    $this->assertStringContainsString('the materials composing reads on demand (blueprints: the blueprints in full, the animations\' steps, the fonts\' faces)', $projected['_structure'], 'The structure line names the kinds the narrowed shape carries.');
     $this->assertStringContainsString('"starts" lists the page blueprints a page of this bundle may start as', $projected['_structure']);
     $this->assertStringContainsString('page_create\'s start takes one of their ids, blank or template, instead of a layout', $projected['_structure']);
 
@@ -267,14 +372,15 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * The schema read lists the favorites, and one group in full on demand.
+   * The schema read lists every shared blueprint, and one group alone on demand.
    *
-   * By default materials.blueprints holds the site favorites in full and
+   * By default materials.blueprints holds every shared block blueprint in
+   * full, favorite or not (the flag is the Add panel's listing), and
    * materials.groups the vocabulary with counts (the reserved bucket for
    * the ones in no group included). With `group`, materials.blueprints
-   * holds that group's offered block blueprints instead, narrowed AFTER
+   * holds that group's shared block blueprints alone, narrowed AFTER
    * the cached schema is read: a default read right after answers the
-   * favorites again, and the index rides every answer unchanged. The
+   * whole set again, and the index rides every answer unchanged. The
    * reserved bucket lists the ones in no group; an unknown group answers
    * a corrective naming the ids; a bundle whose schema carries no
    * materials answers a corrective too.
@@ -284,7 +390,7 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
     TestMaterialsProvider::$gestureLines = [];
     TestGroupsContributor::$groups = [
       'heroes' => ['label' => 'Heroes', 'description' => 'Full-width openers.'],
-      'bands' => ['label' => 'Bands'],
+      'sections' => ['label' => 'Sections'],
     ];
     $tree = [['kind' => 'container', 'layout_id' => 'layout_onecol', 'children' => []]];
     $record = static fn (string $id, array $groups, bool $favorite) => new MaterialRecord(
@@ -300,17 +406,17 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
     );
     TestMaterialsProvider::$records = [
       $record('opener', ['heroes'], TRUE),
-      $record('wide_band', ['bands'], FALSE),
+      $record('wide_section', ['sections'], FALSE),
       $record('stray_card', [], FALSE),
     ];
     $this->container->get('daedalus_blueprint.materials_roster_builder')->reset();
     $this->container->get('daedalus_blueprint.dialect_catalog_builder')->reset();
 
     $schema = $this->container->get('daedalus_blueprint.schema_builder')->getSchema('entity_test', 'entity_test');
-    $this->assertSame(['opener'], array_keys($schema['materials']['blueprints']), 'The default listing is the site favorites.');
+    $this->assertSame(['opener', 'wide_section', 'stray_card'], array_keys($schema['materials']['blueprints']), 'The default listing is every shared block blueprint, favorite or not.');
     $this->assertSame([
       'heroes' => ['label' => 'Heroes', 'description' => 'Full-width openers.', 'blueprints' => 1],
-      'bands' => ['label' => 'Bands', 'blueprints' => 1],
+      'sections' => ['label' => 'Sections', 'blueprints' => 1],
       DialectCatalog::UNGROUPED => ['blueprints' => 1],
     ], $schema['materials']['groups']);
 
@@ -320,30 +426,30 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
     ] + ($group === NULL ? [] : ['group' => $group]));
     $default = $read();
     $this->assertStringContainsString("  blueprints:\n    opener:\n", $default);
-    $this->assertStringNotContainsString('wide_band:', $default);
-    $this->assertStringNotContainsString('stray_card:', $default);
+    $this->assertStringContainsString("\n    wide_section:\n", $default);
+    $this->assertStringContainsString("\n    stray_card:\n", $default);
     $this->assertStringContainsString("  groups:\n    heroes:\n", $default);
     $this->assertStringContainsString("    ungrouped:\n      blueprints: 1\n", $default);
 
-    $bands = $read('bands');
-    $this->assertStringContainsString("  blueprints:\n    wide_band:\n", $bands);
-    $this->assertStringContainsString('<pb-container', $bands, 'The group prints in full.');
-    $this->assertStringNotContainsString('opener:', $bands, 'The favorites are replaced by the group.');
-    $this->assertStringNotContainsString('stray_card:', $bands);
-    $this->assertStringContainsString("  groups:\n    heroes:\n", $bands, 'The index rides every answer.');
+    $sections = $read('sections');
+    $this->assertStringContainsString("  blueprints:\n    wide_section:\n", $sections);
+    $this->assertStringContainsString('<d-container', $sections, 'The group prints in full.');
+    $this->assertStringNotContainsString('opener:', $sections, 'The whole set is replaced by the group.');
+    $this->assertStringNotContainsString('stray_card:', $sections);
+    $this->assertStringContainsString("  groups:\n    heroes:\n", $sections, 'The index rides every answer.');
 
     $ungrouped = $read(DialectCatalog::UNGROUPED);
     $this->assertStringContainsString("  blueprints:\n    stray_card:\n", $ungrouped);
     $this->assertStringNotContainsString('opener:', $ungrouped);
-    $this->assertStringNotContainsString('wide_band:', $ungrouped);
+    $this->assertStringNotContainsString('wide_section:', $ungrouped);
 
     $again = $read();
     $this->assertSame($default, $again, 'The narrowing never reaches the cached schema.');
 
     $unknown = $read('cards');
-    $this->assertSame('Error: unknown group "cards". The groups are heroes, bands (materials.groups in the schema read); ungrouped lists the blueprints in no group. Pass one of them, or omit group for the site favorites.', $unknown);
+    $this->assertSame('Error: unknown group "cards". The groups are heroes, sections (materials.groups in the schema read); ungrouped lists the blueprints in no group. Pass one of them, or omit group for every shared blueprint.', $unknown);
 
-    $none = $this->runTool('eb_read_schema', ['entity_type' => 'block_content', 'bundle' => 'basic', 'group' => 'bands']);
+    $none = $this->runTool('eb_read_schema', ['entity_type' => 'block_content', 'bundle' => 'basic', 'group' => 'sections']);
     $this->assertSame('Error: group narrows materials.blueprints, and the schema of block_content/basic carries no materials.', $none);
   }
 
@@ -406,21 +512,29 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
       dressedTags: ['h1', 'h2', 'p', 'a'],
     );
     $elements = $projector->project($schema, $catalog)['elements'];
-    $this->assertSame('A placement from the palette is born wearing width="site"; a document states what it wears itself (an omitted axis is not worn).', $elements['pb-container']['born_wearing']);
-    $this->assertSame('A placement from the palette is born wearing button="primary"; a document states what it wears itself (an omitted axis is not worn).', $elements['pb-text']['born_wearing']);
-    $this->assertSame('The skin dresses h1, h2, p: pick the tag, the skin sizes it.', $elements['pb-text']['attributes']['tag']['dressed']);
-    $this->assertSame('THE HANDLER\'S OWN WORDS, ASPECT RATIO INCLUDED.', $elements['pb-image']['attributes']['generate']['guidance']);
-    $this->assertSame(['1:1', '16:9'], $elements['pb-image']['attributes']['aspect-ratio']['values']);
+    $this->assertSame('A placement from the palette is born wearing width="site"; a document states what it wears itself (an omitted axis is not worn).', $elements['d-container']['born_wearing']);
+    $this->assertSame('A placement from the palette is born wearing button="primary"; a document states what it wears itself (an omitted axis is not worn).', $elements['d-text']['born_wearing']);
+    $this->assertSame('The skin dresses h1, h2, p: pick the tag, the skin sizes it.', $elements['d-text']['attributes']['tag']['dressed']);
+    $this->assertSame('THE HANDLER\'S OWN WORDS, ASPECT RATIO INCLUDED.', $elements['d-image']['attributes']['generate']['guidance']);
+    $this->assertSame(['1:1', '16:9'], $elements['d-image']['attributes']['aspect-ratio']['values']);
     $this->assertStringNotContainsString('16:9 for', json_encode($elements), 'The projector keeps no copy of the aspect-ratio heuristic.');
     $this->assertStringNotContainsString('JSON DOOR', json_encode($elements), 'The JSON door\'s grammar never reaches the page language.');
-    $this->assertArrayNotHasKey('born_wearing', $elements['pb-image']);
+    $this->assertArrayNotHasKey('born_wearing', $elements['d-image']);
 
     $bare = new DialectCatalog(containerLayoutId: 'layout_onecol', axes: [], blockTypes: $block_types, conditions: []);
     $elements = $projector->project($schema, $bare)['elements'];
-    $this->assertArrayNotHasKey('born_wearing', $elements['pb-container']);
-    $this->assertArrayNotHasKey('dressed', $elements['pb-text']['attributes']['tag']);
-    $this->assertSame('Chosen with generate (its guidance carries the choice).', $elements['pb-image']['attributes']['aspect-ratio']['guidance']);
-    $this->assertStringContainsString('materials in full (tokens, swatches, variants, blueprints, animations', $projector->project($schema, $bare)['_structure']);
+    $this->assertArrayNotHasKey('born_wearing', $elements['d-container']);
+    $this->assertArrayNotHasKey('dressed', $elements['d-text']['attributes']['tag']);
+    $this->assertSame('Chosen with generate (its guidance carries the choice).', $elements['d-image']['attributes']['aspect-ratio']['guidance']);
+    // A schema carrying no materials says so; the axis note and the
+    // class guidance point at the brief, where every variant is
+    // described, never at a materials.variants the dialect door lacks.
+    $projected = $projector->project($schema, $catalog);
+    $this->assertStringContainsString('and no materials beyond the brief\'s.', $projected['_structure']);
+    $this->assertArrayNotHasKey('materials', $projected);
+    $this->assertStringContainsString('described under the element\'s heading on the design system brief in your instructions', $projected['elements']['d-text']['attributes_note']);
+    $this->assertStringContainsString('described under the element\'s heading on the design system brief in your instructions', $projected['elements']['d-container']['attributes_note']);
+    $this->assertStringNotContainsString('materials.variants', json_encode($projected));
   }
 
   /**
@@ -480,7 +594,7 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
     $output = $this->runTool('eb_read_schema', ['entity_type' => 'block_content', 'bundle' => 'basic']);
     $this->assertStringContainsString('field_heading', $output);
     $this->assertStringContainsString('Place all entity field values inside the "fields" object', $output);
-    $this->assertStringNotContainsString('pb-container:', $output);
+    $this->assertStringNotContainsString('d-container:', $output);
     $this->assertStringNotContainsString('This bundle carries a page-builder layout', $output);
   }
 

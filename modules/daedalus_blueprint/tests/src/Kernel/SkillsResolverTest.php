@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel;
 
-use Drupal\daedalus_blueprint\SkillType\CreateEntitySkillType;
 use Drupal\daedalus_blueprint\SkillType\DefaultSkillType;
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\SkillsResolver;
 use Drupal\daedalus_blueprint\SkillType\SkillTypeManager;
+use Drupal\daedalus_stylish\SkillType\SkinsSkillType;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -41,10 +41,11 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
  *
  * Everything shares one setUp (one Drupal install) and the assertions are
  * packed into a few fat methods, because reinstalling per method is the slow
- * part of a kernel run. The class asserts against the base module's real skill
- * YAML (create_entity) rather than synthetic fixtures, so it also guards that
- * shipped definition. The fixture module supplies the state-driven skills_alter
- * and context_alter hooks plus the context YAML used here.
+ * part of a kernel run. The class asserts against a real shipped skill YAML
+ * (daedalus_stylish's design skill; daedalus_blueprint ships no skill of its
+ * own) rather than synthetic fixtures, so it also guards that shipped
+ * definition. The fixture module supplies the state-driven skills_alter and
+ * context_alter hooks plus the context YAML used here.
  */
 #[CoversClass(SkillsResolver::class)]
 #[CoversClass(SkillTypeManager::class)]
@@ -53,10 +54,40 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 class SkillsResolverTest extends BlueprintKernelTestBase {
 
   /**
+   * {@inheritdoc}
+   *
+   * The real skill this class reads (design) and the one contributed skill
+   * type (skins) ship with daedalus_stylish; the modules before it are what
+   * its container needs at kernel compile, on top of the base class's.
+   */
+  protected static $modules = [
+    'layout_discovery',
+    'layout_builder',
+    'navigation',
+    'twig_events',
+    'daedalus_tempstore',
+    'daedalus_blueprint_api',
+    'daedalus_ui',
+    'daedalus_stylish',
+  ];
+
+  /**
    * Enables the fixture module providing the alter hooks and context YAML.
+   *
+   * With daedalus_stylish enabled, activating a design system (the
+   * membership test) runs its switch subscriber: the shipped sync reads the
+   * five material storages and the stylesheets compile, so their schema and
+   * config are installed here the way the subscriber's own kernel test does.
    */
   protected function setUp(): void {
     parent::setUp();
+    $this->installEntitySchema('daedalus_skin');
+    $this->installEntitySchema('daedalus_variant');
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_skin_material_usage',
+    ]);
+    $this->installConfig(['daedalus_blueprint', 'daedalus_stylish']);
     $this->enableModules(['daedalus_blueprint_test']);
     \Drupal::cache()->deleteAll();
   }
@@ -68,20 +99,20 @@ class SkillsResolverTest extends BlueprintKernelTestBase {
     /** @var \Drupal\daedalus_blueprint\SkillsResolver $resolver */
     $resolver = $this->container->get('daedalus_blueprint.skills_resolver');
 
-    // The base module ships one skill, discovered by filename suffix, with
+    // daedalus_stylish's design skill is discovered by filename suffix, with
     // its label/description/type intact.
     $skills = $resolver->getSkills();
-    $this->assertArrayHasKey('create_entity', $skills);
-    $this->assertSame('create_entity', $skills['create_entity']['type']);
-    $this->assertSame('Create Entity', $skills['create_entity']['label']);
+    $this->assertArrayHasKey('design', $skills);
+    $this->assertSame('default', $skills['design']['type']);
+    $this->assertSame('Design', $skills['design']['label']);
 
     // getSkill returns one definition by id, and NULL for an unknown id. Note
     // the discovered definition carries no 'id' key; the eb_skill tool injects
     // it before composing, so the resolver intentionally leaves it out.
-    $createEntity = $resolver->getSkill('create_entity');
-    $this->assertIsArray($createEntity);
-    $this->assertSame('Create Entity', $createEntity['label']);
-    $this->assertArrayNotHasKey('id', $createEntity);
+    $design = $resolver->getSkill('design');
+    $this->assertIsArray($design);
+    $this->assertSame('Design', $design['label']);
+    $this->assertArrayNotHasKey('id', $design);
     $this->assertNull($resolver->getSkill('does_not_exist'));
 
     // The alter hook can add a brand new skill and override an existing one.
@@ -92,10 +123,10 @@ class SkillsResolverTest extends BlueprintKernelTestBase {
         'type' => 'default',
         'instructions' => 'Fixture instructions.',
       ],
-      'create_entity' => [
-        'label' => 'Overridden Create',
+      'design' => [
+        'label' => 'Overridden Design',
         'description' => 'Overridden by alter.',
-        'type' => 'create_entity',
+        'type' => 'default',
         'instructions' => 'New instructions.',
       ],
     ]);
@@ -104,7 +135,7 @@ class SkillsResolverTest extends BlueprintKernelTestBase {
     // getSkills() is cached and not recomputed every call.
     $cached = $resolver->getSkills();
     $this->assertArrayNotHasKey('fixture_skill', $cached);
-    $this->assertSame('Create Entity', $cached['create_entity']['label']);
+    $this->assertSame('Design', $cached['design']['label']);
 
     // Invalidating the skills cache tag forces recomputation; now the alter
     // additions/overrides appear. This is the path a runtime skill change uses.
@@ -113,7 +144,50 @@ class SkillsResolverTest extends BlueprintKernelTestBase {
     $altered = $resolver->getSkills();
     $this->assertArrayHasKey('fixture_skill', $altered);
     $this->assertSame('Fixture Skill', $altered['fixture_skill']['label']);
-    $this->assertSame('Overridden Create', $altered['create_entity']['label']);
+    $this->assertSame('Overridden Design', $altered['design']['label']);
+  }
+
+  /**
+   * Tests the reframe flag: declared by the file, normalized for every skill.
+   *
+   * The context spine's segment policy closes the working transcript's
+   * segment on a reframing skill, so the flag must be a boolean on every
+   * resolved definition: TRUE where the file declares it (the design skill
+   * ships it), FALSE where the file or an altering hook omits it, and a
+   * non-boolean value is a developer error refused at discovery rather than
+   * read as something.
+   */
+  public function testReframeFlag(): void {
+    $resolver = $this->container->get('daedalus_blueprint.skills_resolver');
+
+    $this->assertTrue($resolver->getSkill('design')['reframe'], 'The design skill declares reframe: true.');
+
+    \Drupal::state()->set('daedalus_blueprint_test.skills', [
+      'plain_skill' => [
+        'label' => 'Plain Skill',
+        'description' => 'Declares nothing about reframing.',
+        'type' => 'default',
+        'instructions' => 'Plain instructions.',
+      ],
+    ]);
+    \Drupal::service('cache_tags.invalidator')->invalidateTags(['daedalus_blueprint_skills']);
+    $skills = $resolver->getSkills();
+    $this->assertFalse($skills['plain_skill']['reframe'], 'A skill added by the alter without the key is normalized to FALSE.');
+    $this->assertTrue($skills['design']['reframe']);
+
+    \Drupal::state()->set('daedalus_blueprint_test.skills', [
+      'broken_skill' => [
+        'label' => 'Broken Skill',
+        'description' => 'Declares reframe as a string.',
+        'type' => 'default',
+        'instructions' => 'Broken instructions.',
+        'reframe' => 'yes',
+      ],
+    ]);
+    \Drupal::service('cache_tags.invalidator')->invalidateTags(['daedalus_blueprint_skills']);
+    $this->expectException(\UnexpectedValueException::class);
+    $this->expectExceptionMessage('The "broken_skill" skill declares reframe as \'yes\'; it must be true or false');
+    $resolver->getSkills();
   }
 
   /**
@@ -149,7 +223,7 @@ class SkillsResolverTest extends BlueprintKernelTestBase {
     $this->setCurrentUser($this->createUser());
     $skills = $resolver->getSkills();
     $this->assertArrayNotHasKey('gated_skill', $skills);
-    $this->assertArrayHasKey('create_entity', $skills);
+    $this->assertArrayHasKey('design', $skills);
     $this->assertNull($resolver->getSkill('gated_skill'));
 
     // An account holding the permission reads the same cache entry and
@@ -189,7 +263,7 @@ class SkillsResolverTest extends BlueprintKernelTestBase {
     $this->assertArrayNotHasKey('aurora_voice', $skills, 'No system is active: the member does not exist for the request.');
     $this->assertArrayNotHasKey('aurora_named_voice', $skills);
     $this->assertNull($skills['plain_prose']['design_system']);
-    $this->assertNull($skills['create_entity']['design_system'], 'A module packaging no system ships global skills.');
+    $this->assertNull($skills['design']['design_system'], 'A module packaging no system ships global skills.');
     $cached = \Drupal::cache()->get('daedalus_blueprint:skills');
     $this->assertSame('aurora', $cached->data['aurora_voice']['design_system']);
     $this->assertSame('aurora', $cached->data['aurora_named_voice']['design_system']);
@@ -197,12 +271,12 @@ class SkillsResolverTest extends BlueprintKernelTestBase {
 
     // The system landing changes no answer; the gate still hides the
     // members until aurora is the active system.
-    $this->installConfig(['daedalus_blueprint', 'daedalus_blueprint_design_system_test']);
+    $this->installConfig(['daedalus_blueprint_design_system_test']);
     $skills = $resolver->getSkills();
     $this->assertArrayNotHasKey('aurora_voice', $skills);
     $this->assertArrayNotHasKey('aurora_named_voice', $skills);
     $this->assertNull($skills['plain_prose']['design_system']);
-    $this->assertNull($skills['create_entity']['design_system']);
+    $this->assertNull($skills['design']['design_system']);
     $this->assertNull($resolver->getSkill('aurora_voice'));
     $cached = \Drupal::cache()->get('daedalus_blueprint:skills');
     $this->assertSame('aurora', $cached->data['aurora_voice']['design_system']);
@@ -234,15 +308,16 @@ class SkillsResolverTest extends BlueprintKernelTestBase {
     /** @var \Drupal\daedalus_blueprint\SkillType\SkillTypeManager $manager */
     $manager = $this->container->get('daedalus_blueprint.skill_type_manager');
 
-    // The collector registered both shipped skill types by their type_id,
-    // and returns NULL for an unregistered id.
+    // The collector registered the base module's default type and the one
+    // another module contributes (daedalus_stylish's skins) by their
+    // type_id, and returns NULL for an unregistered id.
     $this->assertInstanceOf(
       DefaultSkillType::class,
       $manager->getType('default'),
     );
     $this->assertInstanceOf(
-      CreateEntitySkillType::class,
-      $manager->getType('create_entity'),
+      SkinsSkillType::class,
+      $manager->getType('skins'),
     );
     $this->assertNull($manager->getType('no_such_type'));
 

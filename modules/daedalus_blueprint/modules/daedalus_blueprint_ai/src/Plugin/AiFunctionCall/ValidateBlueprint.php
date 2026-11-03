@@ -19,7 +19,7 @@ use Drupal\daedalus_blueprint_ai\DaedalusBlueprintToolBase;
   id: 'daedalus_blueprint:validate_blueprint',
   function_name: 'eb_validate',
   name: 'Validate Blueprint',
-  description: 'Validates a NON-PAGE entity blueprint without creating an entity; pages are page_create\'s job (it judges the whole page before anything is built), never this tool\'s. Works with both content entities and config entities. Returns validation errors if the blueprint is invalid, or success if valid. Use this to check a blueprint before creating an entity.',
+  description: 'Validates a NON-PAGE entity blueprint without creating an entity. Works with both content entities and config entities. Returns validation errors if the blueprint is invalid, or success if valid.',
   group: 'information_tools',
   context_definitions: [
     'blueprint' => new ContextDefinition(

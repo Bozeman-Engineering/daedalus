@@ -19,9 +19,9 @@ test('compareLabels: case-insensitive', () => {
   assert.ok(compareLabels('Zebra', 'apple') > 0);
 });
 
-test('compareLabels: natural, so Band 2 precedes Band 10', () => {
-  assert.ok(compareLabels('Band 2', 'Band 10') < 0);
-  assert.ok(compareLabels('Band 10', 'Band 9') > 0);
+test('compareLabels: natural, so Section 2 precedes Section 10', () => {
+  assert.ok(compareLabels('Section 2', 'Section 10') < 0);
+  assert.ok(compareLabels('Section 10', 'Section 9') > 0);
   assert.ok(compareLabels('Issue 1', 'Issue 1b') < 0);
 });
 
@@ -34,18 +34,19 @@ test('compareLabels: anything reads as its string', () => {
 test('byLabel: label order, stable, the list untouched', () => {
   const faces = [
     face('c', 'Logo wall'),
-    face('b', 'band 2'),
-    face('a', 'Band 10'),
-    face('d', 'Hero band'),
-    face('e', 'hero band'),
+    face('b', 'section 2'),
+    face('a', 'Section 10'),
+    face('d', 'Hero section'),
+    face('e', 'hero section'),
   ];
   const copy = [...faces];
   const sorted = byLabel(faces);
   assert.deepEqual(
     sorted.map((f) => f.id),
-    // band 2, Band 10 (natural), then Hero band twice in the order given
-    // (stable under a case-insensitive tie), then Logo wall.
-    ['b', 'a', 'd', 'e', 'c'],
+    // Hero section twice in the order given (stable under a
+    // case-insensitive tie), Logo wall, then section 2 before Section 10
+    // (natural).
+    ['d', 'e', 'c', 'b', 'a'],
   );
   assert.deepEqual(faces, copy);
   assert.notEqual(sorted, faces);

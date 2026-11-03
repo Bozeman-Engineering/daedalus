@@ -26,6 +26,9 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * between matched forms), the one-box container's multi-form root (the
  * depth-conditioned section/div swap, the caller-fed emptiness input, the
  * root-form AND), and the field shell with its pattern-part namespace.
+ * The twin lock feeds each case's data facade to the PHP resolveData()
+ * entry and the client twin, and the case's entity to the resolve() entry
+ * (which reads it into that facade): the three trees must be equal.
  *
  * @group daedalus_ui
  */
@@ -305,7 +308,7 @@ class ElementResolverTest extends KernelTestBase {
   public function testContainerForms(): void {
     $declaration = $this->container->get('daedalus_ui.page_builder_declarations')->getKind('container');
 
-    // Root depth, populated: a real <section> page band, no parts, no
+    // Root depth, populated: a real <section>, no parts, no
     // slots — children mount at the root per the mounting rule.
     $resolved = $this->resolver->resolve($declaration, NULL, ElementResolver::DEPTH_ROOT, FALSE);
     $this->assertSame('section', $resolved['tag']);
@@ -399,16 +402,48 @@ class ElementResolverTest extends KernelTestBase {
   }
 
   /**
-   * The PHP resolver and its client twin resolve identical trees.
+   * A malformed facade is a caller bug, refused loudly.
+   *
+   * The facade is the twin's documented contract (fields as a map of
+   * string|NULL, mediaKind raster|vector|NULL, empty a boolean); a shape
+   * the twin never sends resolves no tree the data could vouch for.
+   */
+  public function testInvalidFacade(): void {
+    $declaration = $this->container->get('daedalus_ui.page_builder_declarations')->getBlockType('text');
+    $malformed = [
+      'an unknown key' => ['fields' => [], 'entity' => 'text'],
+      'fields not a map' => ['fields' => 'field_text_text'],
+      'a field holding a non-string' => ['fields' => ['field_text_tag' => ['h2']]],
+      'a media kind outside the vocabulary' => ['fields' => [], 'mediaKind' => 'bitmap'],
+      'an emptiness fact that is not a boolean' => ['empty' => 'yes'],
+    ];
+    foreach ($malformed as $label => $data) {
+      try {
+        $this->resolver->resolveData($declaration, $data);
+        $this->fail(sprintf('A facade with %s was resolved instead of refused.', $label));
+      }
+      catch (\InvalidArgumentException $e) {
+        $this->assertStringContainsString('data facade', $e->getMessage(), $label);
+      }
+    }
+  }
+
+  /**
+   * The PHP resolver's two entries and its client twin resolve identical trees.
    *
    * The round-trip lock (the CssPrinter/printer.js pattern, see daedalus_stylish's
    * PrinterEquivalenceTest): every shipped variation shape resolves here
-   * through the PHP resolver against real entities, and through the JS
-   * twin (js/edit_mode/blueprint/element-resolver.js, via node running
-   * tests/js/resolve-cases.mjs) against the documented data facade — the
-   * shape the editors derive from the blueprint mirror and the gesture's
-   * previewed values. The trees must be deeply equal, or the live editing
-   * preview shows something other than what commits.
+   * through the PHP entity entry (resolve()) against real entities, through
+   * the PHP facade entry (resolveData()) against the documented data facade
+   * — the shape the editors derive from the blueprint mirror and the
+   * gesture's previewed values — and through the JS twin
+   * (js/edit_mode/blueprint/element-resolver.js, via node running
+   * tests/js/resolve-cases.mjs) against that same facade. The three trees
+   * must be deeply equal, or the live editing preview (or a card sketched
+   * from a facade) shows something other than what commits. The facade the
+   * entity entry reads (readEntity()) must also equal the hand-written one,
+   * so the twin's facade contract and the PHP reader agree on what an
+   * entity state looks like.
    */
   public function testClientTwinEquivalence(): void {
     $node = $this->findNode();
@@ -579,11 +614,25 @@ class ElementResolverTest extends KernelTestBase {
 
     $php_output = [];
     $js_cases = [];
-    foreach ($cases as $case) {
+    foreach ($cases as $label => $case) {
       $depth = $case['depth'] ?? ElementResolver::DEPTH_ROOT;
-      // The PHP side's emptiness input is the case's 'empty' fact; the
-      // client twin reads the same fact from the facade's `empty` key.
-      $php_output[] = $this->resolver->resolve($case['declaration'], $case['entity'], $depth, $case['empty'] ?? NULL);
+      // The entity entry's emptiness input is the case's 'empty' fact; the
+      // facade entry and the client twin read the same fact from the
+      // facade's `empty` key. The entity reads into exactly the facade the
+      // case hand-writes (key order aside: the reader walks the entity's
+      // definitions), so the two PHP entries take equal inputs.
+      $this->assertSame(
+        $this->sorted($case['data']),
+        $this->sorted($this->resolver->readEntity($case['entity'], $case['empty'] ?? NULL)),
+        sprintf('Case "%s": the entity reads into a facade other than the one the twin\'s contract documents.', $label),
+      );
+      $resolved = $this->resolver->resolve($case['declaration'], $case['entity'], $depth, $case['empty'] ?? NULL);
+      $this->assertSame(
+        $resolved,
+        $this->resolver->resolveData($case['declaration'], $case['data'], $depth),
+        sprintf('Case "%s" diverged between the PHP entity entry and the PHP facade entry.', $label),
+      );
+      $php_output[] = $resolved;
       $js_cases[] = [
         'declaration' => $case['declaration'],
         'data' => $case['data'],
@@ -612,6 +661,24 @@ class ElementResolverTest extends KernelTestBase {
     $this->assertSame('a', $js_output[1]['parts']['.text-block-link']['tag'] ?? NULL);
     $this->assertSame('svg', $js_output[7]['parts']['.image-block-image']['tag'] ?? NULL);
     $this->assertSame('Vector', $js_output[7]['parts']['.image-block-image']['label'] ?? NULL);
+  }
+
+  /**
+   * A facade with its maps key-sorted, for order-insensitive equality.
+   *
+   * The comparison stays assertSame so string vs NULL is exact (assertEquals
+   * would let '' pass for NULL); only key order is forgiven, since the
+   * entity reader walks the field definitions in their own order.
+   */
+  protected function sorted(?array $data): ?array {
+    if ($data === NULL) {
+      return NULL;
+    }
+    if (isset($data['fields'])) {
+      ksort($data['fields']);
+    }
+    ksort($data);
+    return $data;
   }
 
   /**

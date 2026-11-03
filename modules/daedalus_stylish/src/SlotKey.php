@@ -23,7 +23,7 @@ use Drupal\daedalus_blueprint\Materials\RelativeSelector;
  *   name/type = machine name [a-z0-9_]+
  *   index     = 1-based [1-9][0-9]*
  *   selector  = a canonical RelativeSelector (".class", "p", "> *",
- *               "> pb-text .link", ...)
+ *               "> d-text .link", ...)
  *
  * Structural rules are parameterized by the ROOT KIND, because a root
  * carries exactly the paths its kind structurally contains:

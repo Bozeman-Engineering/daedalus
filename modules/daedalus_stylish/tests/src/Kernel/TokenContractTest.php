@@ -46,6 +46,7 @@ class TokenContractTest extends KernelTestBase {
   protected static $modules = [
     'system',
     'daedalus_blueprint',
+    'filter',
     'user',
     'field',
     'layout_discovery',
@@ -76,9 +77,6 @@ class TokenContractTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('user');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
@@ -87,10 +85,7 @@ class TokenContractTest extends KernelTestBase {
     // switch to an administrative account.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->styleGuide = $this->container->get('daedalus_stylish.style_guide');

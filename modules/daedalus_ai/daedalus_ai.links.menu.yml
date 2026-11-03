@@ -1,0 +1,19 @@
+# The AI chat settings form has two doors. The first is the Daedalus config
+# category (Configuration » Daedalus » AI); the second is drupal/ai's own
+# Tools & Automation page, where the memory, ledger and upstream forms also
+# sit. Same route, two links; SETTINGS.md at the daedalus repo root rosters
+# both.
+daedalus_ai.settings:
+  title: 'AI chat'
+  description: 'The assistant the chat sidebar talks to, image generation and its placeholder, and the models users may choose.'
+  route_name: daedalus_ai.settings
+  parent: daedalus.admin_config_ai
+  weight: -10
+
+# The second door: drupal/ai's Tools & Automation. The first door is
+# daedalus_ai.settings above, under daedalus.admin_config_ai; see SETTINGS.md.
+daedalus_ai.settings.ai_tools:
+  title: 'Daedalus AI chat'
+  description: 'The assistant the Daedalus chat sidebar talks to, image generation and its placeholder, and the models users may choose.'
+  route_name: daedalus_ai.settings
+  parent: ai.admin_config_tools

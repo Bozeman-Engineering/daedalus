@@ -83,6 +83,11 @@ class DaedalusStylishMediaLibraryOpenerTest extends KernelTestBase {
     $this->installEntitySchema('file');
     $this->installSchema('file', ['file_usage']);
     $this->installEntitySchema('media');
+    // The system import names the default theme and the daedalus_stylish
+    // import saves its settings: both are law changes that recompile the
+    // variants file over these storages.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['field', 'system', 'image', 'file', 'media', 'daedalus_stylish']);
     // The service provider registers the opener because media_library is
     // installed; getting it here is itself the registration assertion.

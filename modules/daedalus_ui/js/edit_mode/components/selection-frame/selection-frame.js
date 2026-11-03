@@ -7,6 +7,7 @@ import { typeForKey } from '../../selection/type-for-key';
 import { verbsForSet, runVerbOn, onChange } from '../../verbs/verbs';
 import { verbMenuItems } from '../../verbs/verb-menu-items';
 import { chipPlacement, chipFace, frameEditing } from './selection-frame-model';
+import { effectiveBlueprint } from '../../blueprint/effective-blueprint';
 
 /**
  * The selection frame: the ONE owner of everything anchored to the
@@ -43,12 +44,12 @@ import { chipPlacement, chipFace, frameEditing } from './selection-frame-model';
  * (verb-groups.js), the group seated where its lightest member sits.
  * This host draws a group as ONE split control (GroupControl): the
  * primary's verb button as the main half and a caret half that opens the
- * shared menu over the rest, the same control and stylesheet as the top
- * bar's Save (ButtonBuilderTrait::buildSplitButton(), split-button.css,
- * which rides the modes library that edit_mode depends on), so the chip
- * adds only the skin its halves need (selection-frame.css). WHICH verbs
- * it holds is the registry's applies gate (verbs.js): selection verbs while no
- * live edit lands on the primary, edit-scoped verbs while the store's
+ * shared menu over the rest; the control's stylesheet is split-button.css
+ * (the chip's own, riding the modes library that edit_mode depends on),
+ * so the chip adds only the skin its halves need (selection-frame.css).
+ * WHICH verbs it holds is the registry's applies gate (verbs.js):
+ * selection verbs while no live edit lands on the primary, edit-scoped
+ * verbs while the store's
  * editingKey IS it — so opening an edit swaps the face's contents
  * instead of hiding it, and the chip stays the one home of "what can I
  * do here" through the whole edit lifecycle. An edit's own controls
@@ -62,9 +63,9 @@ import { chipPlacement, chipFace, frameEditing } from './selection-frame-model';
  */
 
 // The caret-down glyph (daedalus_ui/assets/caret-down.svg, the one the
-// top bar's Save caret draws through the icon pack): the chip's chevron
-// and a split control's caret are the same "more of this" gesture, so
-// they wear the same glyph.
+// top bar's menu trigger draws through the icon pack): the chip's
+// chevron, a split control's caret and the bar's menu trigger are the
+// same "more of this" gesture, so they wear the same glyph.
 const CARET_DOWN =
   '<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 256 256"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></svg>';
 
@@ -207,9 +208,9 @@ const SelectionFrame = () => {
   const editingKey = useSelector((state) => state.selection.editingKey);
   const mode = useSelector((state) => state.mode.mode);
   // Chips name members through the type resolver's projection read, so
-  // a mirror replacement (e.g. a block-type change on re-place) must
-  // re-render them.
-  useSelector((state) => state.blueprint.blueprint);
+  // an effective-blueprint change (a mirror replacement, e.g. a block-type
+  // change on re-place, or a composed edit's draft) must re-render them.
+  useSelector((state) => effectiveBlueprint(state));
   // Re-render when verbs register after a selection already exists.
   const [, bump] = useState(0);
   useEffect(() => onChange(() => bump((version) => version + 1)), []);

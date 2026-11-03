@@ -59,20 +59,14 @@ class BlueprintManagerTest extends BlueprintKernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     // The materials delta resolves against the roster, whose daedalus_stylish
-    // provider reads all four storages on every build; the blueprint's
+    // provider reads all three storages on every build; the blueprint's
     // document carries its node styles in the map field the field manager
     // owns, and the source page's map is written raw.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->createReferenceFields();
@@ -241,13 +235,13 @@ class BlueprintManagerTest extends BlueprintKernelTestBase {
         'op' => 'save_material',
         'kind' => 'blueprint',
         'element' => $section,
-        'label' => 'Name band',
-        'description' => 'A band showing the name.',
+        'label' => 'Name section',
+        'description' => 'A section showing the name.',
       ],
     ]);
     $this->assertBatchSuccess($result);
 
-    $blueprint = $this->loadBlueprint('name_band');
+    $blueprint = $this->loadBlueprint('name_section');
     $node = $this->definitionOf($blueprint)[0]['children'][0]['children'][0];
     $this->assertSame('block', $node['kind']);
     $this->assertSame('name', $node['field'], 'A field block names its field; the host a blueprint lands on supplies the derivative.');
@@ -264,7 +258,7 @@ class BlueprintManagerTest extends BlueprintKernelTestBase {
     $result = $this->operations()->batchOperations($this->host($other), [
       [
         'op' => 'place_blueprint',
-        'blueprint' => 'name_band',
+        'blueprint' => 'name_section',
         'location' => ['anchor' => $other->uuid(), 'placement' => 'inside'],
         'uuid' => $root,
       ],
@@ -277,7 +271,7 @@ class BlueprintManagerTest extends BlueprintKernelTestBase {
       }
     }
     $this->assertNotNull($placed, 'The placement root carries the operation\'s uuid.');
-    $this->assertSame('name_band', $placed->getThirdPartySetting('daedalus_blueprint_library', 'blueprint'));
+    $this->assertSame('name_section', $placed->getThirdPartySetting('daedalus_blueprint_library', 'blueprint'));
     $components = array_values($placed->getComponents());
     $this->assertCount(1, $components);
     $this->assertNotSame($field_block, $components[0]->getUuid(), 'The placement mints its own identity.');
@@ -426,15 +420,15 @@ class BlueprintManagerTest extends BlueprintKernelTestBase {
     $this->assertSame(['MISSING_PARAMETER'], $codes['kind']);
     // With daedalus_stylish enabled every kind has a gesture provider, so a
     // token save is dispatched to that provider and its own refusal comes
-    // back: the token line owns its grammar (a token is minted on a scale,
-    // "group"; the blueprint's element and description mean nothing to it)
-    // and its grade (this fixture's account is an admin, so the permission
-    // gate never fires here). Nothing sits at kind; the envelope only
-    // routes.
+    // back: the token line owns its grammar (an element without a value
+    // is a capture of the literal it wears, which needs the "property" to
+    // read; the blueprint's description means nothing to it) and its
+    // grade (this fixture's account is an admin, so the permission gate
+    // never fires here). Nothing sits at kind; the envelope only routes.
     $codes = $this->errorCodes($this->operations()->batchOperations($this->host($entity), [
       ['op' => 'save_material', 'kind' => 'token', 'element' => $section, 'label' => 'CTA', 'description' => 'A CTA.'],
     ]));
-    $this->assertSame(['MISSING_PARAMETER'], $codes['group'], 'The token provider refused the mint in its own grammar.');
+    $this->assertSame(['MISSING_PARAMETER'], $codes['property'], 'The token provider refused the mint in its own grammar.');
     $this->assertArrayNotHasKey('kind', $codes, 'A kind with a gesture is never refused at kind.');
     $codes = $this->errorCodes($this->operations()->batchOperations($this->host($entity), [
       ['op' => 'update_material', 'kind' => 'blueprint', 'element' => $section],

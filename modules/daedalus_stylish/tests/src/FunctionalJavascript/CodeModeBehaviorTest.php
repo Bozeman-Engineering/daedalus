@@ -85,8 +85,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   swallowed `{`, the drafted row and its auto-focused island, the
  *   update_style commit at the selector key, CssPrinter's @scope print,
  *   to the browser's cascade on three real blocks): with three text
- *   blocks placed before the formatted ones, typing `> pb-text` on the
- *   container's island offers `> *` and `> pb-text` labelled by the
+ *   blocks placed before the formatted ones, typing `> d-text` on the
+ *   container's island offers `> *` and `> d-text` labelled by the
  *   bundle, picking mints the row (label "Text blocks", the canonical
  *   selector in its code face with a `>` chip) with the one live editor
  *   inside it, and `color: var(--color-accent);` lands on all three text
@@ -95,26 +95,52 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   mints the `p` row without a pick (the brace swallowed), and its
  *   color reaches the paragraph inside the formatted text block (doctrine
  *   B: a tag rule crosses a child's root) while the text blocks keep the
- *   heavier `> pb-text` rule; a `first-child` fact row minted on the
- *   `> pb-text` row through the `&` gesture uppercases the first text
- *   block alone (the fact prints bare, no force-state dual). Four layers
- *   agree only in a browser: the completion DOM, the printed @scope
- *   rule, the element stamps, and the cascade's specificity and
- *   proximity order.
+ *   heavier `> d-text` rule; `&:first-child {` typed in the `> d-text`
+ *   row's island (the `:` lane, through the digester) mints the
+ *   `> d-text:first-child` rule row, whose declaration uppercases the
+ *   first text block alone (a position is selector grammar, printed
+ *   inside its own :where(), no force-state dual). Four layers agree
+ *   only in a browser: the completion DOM, the printed @scope rule, the
+ *   element stamps, and the cascade's specificity and proximity order.
  * - The selector relations (seam: the code view's swallowed brace
  *   through element-model.js bracedSelector and the recursive grammar,
  *   the update_style commit at a relational key, CssPrinter's
  *   per-compound :where() print, the browser's cascade over four
  *   ordered siblings, the matcher's sibling walk into the selected
  *   block's stack, and originOf's ancestor sentence on the Advanced
- *   mark): on a fresh band of p, p and h3 text roots (the second
- *   linked) with an image block last, `> p + p {` typed on the band's
+ *   mark): on a fresh section of p, p and h3 text roots (the second
+ *   linked) with an image block last, `> p + p {` typed on the section's
  *   island mints the row (a chip per combinator) and its margin token
- *   lands on the second paragraph alone; `> pb-text:has(a) {` colors
- *   the linked block alone; `> *:not(pb-image) {` sizes the three text
- *   blocks and not the image; a `not-last-child` fact row on the `> *`
- *   row through the `&` gesture reaches the first three children and
- *   not the last; the second paragraph's Advanced Margin top row then
+ *   lands on the second paragraph alone; `> d-text:has(a) {` colors
+ *   the linked block alone, and its selector edited in place (a
+ *   double-click on the header opens the prelude editor, the retyped
+ *   `> d-text:not(:has(a))` paints its reach through the hover-selector
+ *   facet, Enter lands ONE move_style op) moves the color to the two
+ *   unlinked text blocks, re-seats the subject facet at the new key,
+ *   and undoes as one step; `> *:not(d-image) {` sizes the three text
+ *   blocks and not the image; `&:not(:last-child) {` typed in the `> *`
+ *   row's island mints the `> *:not(:last-child)` row, which reaches
+ *   the first three children and not the last; `> d-text:has(a)` typed
+ *   on the section's island with no brace paints the linked block
+ *   through the hover-selector facet, extending it to `> d-text:has(a)
+ *   a` moves the paint to the link, and blurring clears it (the mint
+ *   line's reach preview, no op); `> d-text:hover a {` typed on the
+ *   section's island keeps the state as a qualifier of the text
+ *   compound and mints the `> d-text:hover a` row under default, the
+ *   delivered CSS carries the force-state dual on that compound inside
+ *   its own :where(), and the State chip's Hover pose stamps the text
+ *   blocks so the linked block's anchor computes the rule's color (a
+ *   state on a non-terminal compound, posed: typed line to digester
+ *   to op to printer placement to the stamp's target); a typed
+ *   selector list (`> d-text:hover a, > d-text:focus-within a {`)
+ *   folds into the ONE `> d-text:is(:focus-within, :hover) a` row with
+ *   the fold notice toasted once, the delivered CSS carries each
+ *   member's dual inside the `:is()` inside the compound's :where(),
+ *   and the Hover pose finds the state inside the `:is()` member so the
+ *   anchor computes the folded rule's text-transform (typed list to
+ *   digester fold to one row to stamp target inside `:is()` to the
+ *   dual printed inside `:is()`); the second
+ *   paragraph's Advanced Margin top row then
  *   reads the sibling rule with its mark titled by the section and the
  *   `> p + p` literal.
  * - The floor lines (seam: the canvas tag read into the selected
@@ -144,15 +170,15 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   bubbling; the printed road is the one with its own index
  *   arithmetic.
  * - A rule's worn variant on the Page lens (seam: ONE apply_variant at
- *   the band's `pb-text` rule through the op spine, the rule-wear lane
- *   delivering the variant's link fragment by descent inside the band's
+ *   the section's `d-text` rule through the op spine, the rule-wear lane
+ *   delivering the variant's link fragment by descent inside the section's
  *   @scope, and the code view's roster reading the stack's enumeration,
  *   elementIslands over selectorSuffixes, so a position no map entry
  *   holds rows because a variant delivers there): guide_example's
  *   Primary (block_type:text, its only fragment `::.text-block-link`)
- *   worn at `container::pb-text` colors the linked paragraph's anchor;
- *   with nothing selected the Page lens lists the band's row with the
- *   continued position `pb-text .text-block-link` as a part row whose
+ *   worn at `container::d-text` colors the linked paragraph's anchor;
+ *   with nothing selected the Page lens lists the section's row with the
+ *   continued position `d-text .text-block-link` as a part row whose
  *   every line is delivered in Primary's hue, titled
  *   'Supplied by the variant "Primary".', printed, no editor live.
  * - A canvas seat mints the seated part's island (seam: the selection
@@ -176,11 +202,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   seed `content: ""` landing in the same op, the authoritative
  *   refresh splicing that server-born own line into the LIVE buffer
  *   above the typed text (island.js unseenOwnLines) so the park's
- *   settle diffs an honest buffer, and the box computing on the band):
- *   on the band at Element scope the gesture mints the "Before" row
+ *   settle diffs an honest buffer, and the box computing on the section):
+ *   on the section at Element scope the gesture mints the "Before" row
  *   (the anchor's code face, no chip, nothing in the map), a typed
  *   accent background lands with the seed beneath it, the live island
- *   reads `content: "";` first, the band's ::before computes the
+ *   reads `content: "";` first, the section's ::before computes the
  *   accent, and the wake of the root island parks the box island to a
  *   two-line print with the seed still in the map (before the splice
  *   the missing line read as a deletion and the box vanished on park).
@@ -207,19 +233,19 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   in code the `p::before` row stands lit, the `p` row dark. An empty
  *   minted island drops when the selection leaves (seam: select()
  *   clearing the target, the drafts keyed to the element): `&::after {`
- *   mints and seats `p::after`, selecting the band leaves no `p::after`
+ *   mints and seats `p::after`, selecting the section leaves no `p::after`
  *   row anywhere and no map entry, and reselecting the container does
- *   not revive it. The band is then reselected with its root island
+ *   not revive it. The section is then reselected with its root island
  *   woken, the posture the next leg starts from.
  * - A row typed inside the seated ancestor rule island (seam: the same
- *   gesture in the band's seated `> pb-text` island on the linked
- *   paragraph, composeUnder giving `> pb-text::before`, the island's
+ *   gesture in the section's seated `> d-text` island on the linked
+ *   paragraph, composeUnder giving `> d-text::before`, the island's
  *   owner an ancestor so element-view.js seatMinted seats the composed
  *   rule as the WRITE ADDRESS through source.address with no draft,
  *   placeEditable's virtual layer and rulesFor's wake): the chip lights
- *   at container::> pb-text::before worded "Text blocks directly in
+ *   at container::> d-text::before worded "Text blocks directly in
  *   Section › Before", the placed rule row is lit with its empty island
- *   live and focused while the `> pb-text` row goes dark, no row of the
+ *   live and focused while the `> d-text` row goes dark, no row of the
  *   paragraph's own carries the selector, and the map is untouched at
  *   both keys.
  * - The paste door (seam: the ClipboardEvent on the live island's
@@ -229,7 +255,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   batch through commitBatch, one labelled history entry -> the
  *   refresh materializing the `&:hover` condition row with its printed
  *   island beside the live root): a pasted bare declaration plus a
- *   nested state block lands at the band's default and hover
+ *   nested state block lands at the section's default and hover
  *   conditions, the chunk never stays as text. Four layers only a
  *   browser joins: the clipboard event, the fetch, the op queue, the
  *   render.
@@ -237,7 +263,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   the read route at mode=css -> the promise-backed ClipboardItem ->
  *   the clipboard write inside the gesture -> the "CSS copied" flash):
  *   with navigator.clipboard.write stubbed by injected script and the
- *   fetch real, the band's print reaches the stub as flat dialect rules
+ *   fetch real, the section's print reaches the stub as flat dialect rules
  *   under `#<uuid>`, its own entry and its rules among them.
  * - A run label's doorway (seam: the run widget's contextmenu bubbling
  *   out of the print to the island's handler -> the shared menu headed
@@ -257,10 +283,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   names as the carrier of what it delivers -> openDocument anchored
  *   at the rule's key -> seatAnchor's rule road seating the rule as
  *   the target so it becomes the wear key -> the frame mounting over
- *   the rule's wearing): Primary, worn at the band's `pb-text` rule and
- *   printed on the `pb-text .text-block-link` part row, opens the menu
+ *   the rule's wearing): Primary, worn at the section's `d-text` rule and
+ *   printed on the `d-text .text-block-link` part row, opens the menu
  *   headed "Primary" from its run label; "Edit Primary" seats the rule
- *   (the chip at container::pb-text, the selection still the band) and
+ *   (the chip at container::d-text, the selection still the section) and
  *   mounts the session frame labelled "Primary" with the built-in's
  *   read-only notice, parked again through the back control. The
  *   position itself wears nothing, so an anchor at it mounts no frame:
@@ -274,21 +300,21 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   reads the same.
  * - The bare rows (seam: page-model.js visibleTree's `styled` annotation
  *   through page-view.js to the rendered bare face, hasBody deciding the
- *   chevron): at Subtree over the band every child is a row, the three
+ *   chevron): at Subtree over the section every child is a row, the three
  *   unstyled text blocks bare (the row's words alone, the chevron's
  *   inert spacer in its place, no island and no editor beneath), the
- *   band's row and the image block's (born wearing guide_image_rounded:
+ *   section's row and the image block's (born wearing guide_image_rounded:
  *   a worn reference is styling) not; selecting a bare block mounts its
  *   real islands (printed, still no editor until a wake).
  * - The reveal (seam: the one reveal rule, daedalus_ui's
  *   Drupal.Daedalus.scrollReveal, through the browser's scrollports and
  *   the canvas's scroll-margin, a fact only a browser computes): with
  *   the window shortened so the code view overflows and both panels
- *   scrolled to their top, selecting the LAST styled element (the band)
+ *   scrolled to their top, selecting the LAST styled element (the section)
  *   leaves its row's rect fully inside the code view's scroller (it sat
  *   below the fold before) and the page elements panel's row fully
  *   inside its scroller; the window scrolled to its top again, a click on the code
- *   view's row leaves the band's canvas element in view with its top
+ *   view's row leaves the section's canvas element in view with its top
  *   edge below the fixed top bar (the code view never revealed the
  *   canvas before the rule).
  * - The pop-out keyboard wire (seam: a keydown in the pop-out document
@@ -318,7 +344,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   satellite collapsing its outline to the Page row with the pair
  *   flipped, the chevrons printing the section and block A collapsed to
  *   its summary count, and a selection from the leader revealing the
- *   band's text block's chain in the satellite while block A stays
+ *   section's text block's chain in the satellite while block A stays
  *   collapsed.
  *
  * The fixture is DaedalusFixtureTrait (the daedalus recipe's site, as
@@ -422,24 +448,55 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
    *   one mirrored row); the scope store rests at Element.
    * - The relations: a second section (p, p and h3 text roots, the
    *   second linked, an image block last) placed through the op spine;
-   *   on its island `> p + p {`, `> pb-text:has(a) {`,
-   *   `> *:not(pb-image) {` and `> * {` each mint by the swallowed brace,
+   *   on its island `> p + p {`, `> d-text:has(a) {`,
+   *   `> *:not(d-image) {` and `> * {` each mint by the swallowed brace,
    *   their declarations commit at the relational keys and land on
-   *   exactly the children each relation names; `&not-last-child` on the
-   *   `> *` row mints the condition row whose value reaches every child but
-   *   the last; the second paragraph selected in Advanced mode reads the
+   *   exactly the children each relation names; the `> d-text:has(a)`
+   *   header double-clicked opens the selector editor, retyping it to
+   *   `> d-text:not(:has(a))` previews the reach and Enter moves the
+   *   rule as one move_style op (the old key gone, the accent on the
+   *   unlinked blocks, the subject re-seated), undone as one step before
+   *   the section goes on; `&:not(:last-child) {` typed in the `> *`
+   *   row's island mints the `> *:not(:last-child)` row whose value
+   *   reaches every child but the last; the mint line's reach preview
+   *   (`> d-text:has(a)` typed with no brace paints the linked block,
+   *   `> d-text:has(a) a` the link, blur clears; keystroke to digester to
+   *   facet to canvas paint, no op); a state on a non-terminal compound
+   *   (`> d-text:hover a {` mints the row under default with the state
+   *   kept as the text compound's qualifier, the delivered CSS places
+   *   the force-state dual on that compound inside :where(), Hover posed
+   *   from the State chip stamps the text blocks and the linked block's
+   *   anchor computes the rule's color, No state clears it); a typed
+   *   selector list folded into one rule (`> d-text:hover a, >
+   *   d-text:focus-within a {` mints the ONE `> d-text:is(:focus-within,
+   *   :hover) a` row, no row per member, the fold notice toasted once
+   *   as a status entry, text-transform committed at the folded key,
+   *   the delivered CSS places each member's dual inside the `:is()`
+   *   inside the text compound's :where(), Hover posed from the State
+   *   chip stamps the text blocks through the state found inside the
+   *   `:is()` member and the anchor computes the folded rule's
+   *   text-transform, No state clears it); a literal
+   *   condition posed by the ruler (the law put at guarded for the step:
+   *   `@container (min-width: 400px) and (max-width: 480px) {` typed on
+   *   the section island mints its row under the canonical literal
+   *   clause, the gap declaration commits at that condition, the
+   *   delivered CSS nests it as its own @container at-rule, the stage
+   *   driven to 440px computes the gap and lights the row, the pose
+   *   released and the law strict again); the second
+   *   paragraph selected in
+   *   Advanced mode reads the
    *   sibling rule's margin token on its Margin top row and mark.
-   * - The worn rule: ONE apply_variant of Primary at the band's `pb-text`
+   * - The worn rule: ONE apply_variant of Primary at the section's `d-text`
    *   rule through the op spine lands the reference on the rule's entry
-   *   and no entry at `pb-text .text-block-link`; the linked paragraph's
+   *   and no entry at `d-text .text-block-link`; the linked paragraph's
    *   anchor computes the accent background; the selection cleared, the
-   *   code segment clicked and the Page scope picked, the band's row
+   *   code segment clicked and the Page scope picked, the section's row
    *   lists the continued position as a part row (its code face the
    *   canonical selector) whose lines are all delivered in
    *   Primary's hue titled by the variant, the accent background and
    *   contrast color among them in declaration order, no editor live.
    * - The seams appended after the box leg, in order: the paste door
-   *   on the band's live root island (a bare declaration and a nested
+   *   on the section's live root island (a bare declaration and a nested
    *   `&:hover` block, one history entry "Pasted 2 declarations", the
    *   hover row materialized); Copy CSS through a stubbed clipboard
    *   write and the real route; a variant minted from block B's look
@@ -447,9 +504,9 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
    *   opening the session frame over the document and the back control
    *   parking it; the first section renamed
    *   "Welcome" and a satellite mounted afterwards reading "Section"
-   *   + "Welcome" on its row, the iframe removed again; the band
+   *   + "Welcome" on its row, the iframe removed again; the section
    *   selected and Primary's run label on its continued position
-   *   right-clicked, "Edit Primary" seating the `pb-text` rule as the
+   *   right-clicked, "Edit Primary" seating the `d-text` rule as the
    *   target and mounting the frame labelled "Primary" with the
    *   built-in's read-only notice, the back control parking it; the
    *   bare rows and the reveal; last, the pop-out keyboard wire: a
@@ -460,7 +517,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
    *   closed; last, the collapse controls over the popped-out outline:
    *   the pair bound to 5 and 6, 5 pressed in the satellite collapsing
    *   its outline to the Page row, the chevrons printing block A's
-   *   summary count, and a leader selection revealing the band's text
+   *   summary count, and a leader selection revealing the section's text
    *   block's chain there with block A still collapsed.
    */
   public function testCodeModeIslandScenario(): void {
@@ -1201,7 +1258,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // Seam: the scope preference store (code-scope.js, localStorage-backed
     // and storage-synced exactly like the UI mode) through page-model.js
     // scopeNodes() to the rendered rows. The section placed above is the
-    // anchor: a container wearing its stamped band variants, holding the
+    // anchor: a container wearing its stamped variants, holding the
     // two styled blocks. With it selected, Page prints the entity root
     // above it (the whole page, every element a row), Subtree prints the container's
     // row and its two blocks' rows and nothing above, and Element prints
@@ -1257,7 +1314,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // gap: var(--space-gutter) (an in-fixture skin line; the parent
     // topic's basic-mode step had to pose the canvas for one), the
     // container kind's own declaration (daedalus_stylish_layouts) gap: 0px
-    // beneath it, and the stamped band variants set no gap, so the
+    // beneath it, and the stamped variants set no gap, so the
     // selected container's default island prints the skin's gap line in
     // the floor hue (SKIN_COLOR, layers.js), titled by its tier and
     // scope, winning, and the declaration's gap line struck by the
@@ -1642,62 +1699,62 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition('window.__st.editors() === 1', 10000, 'The pointerdown at the end of the container island woke it.');
     $session->executeScript("document.execCommand('insertText', false, '\\n>');");
     $this->assertJsCondition(
-      "window.__sel.completions().some(([label]) => label === '> pb-text')",
+      "window.__sel.completions().some(([label]) => label === '> d-text')",
       20000,
-      'Typing `>` on the container island offered the `> pb-text` selector.',
+      'Typing `>` on the container island offered the `> d-text` selector.',
     );
     $offered = json_decode((string) $session->evaluateScript('JSON.stringify(window.__sel.completions())'), TRUE);
     $labels = array_column($offered, 0);
     $details = array_combine($labels, array_column($offered, 1));
     $this->assertSame('> *', $labels[0], 'The universal child is offered first.');
-    $this->assertContains('> pb-formatted-text', $labels, 'The other type among the container\'s children is offered too (built from the matcher\'s actual children).');
-    $this->assertNotContains('> pb-image', $labels, 'A type absent from the container\'s children is not offered.');
-    $this->assertSame('Every text block here', $details['> pb-text'], 'The type option is labelled by the bundle\'s served label.');
+    $this->assertContains('> d-formatted-text', $labels, 'The other type among the container\'s children is offered too (built from the matcher\'s actual children).');
+    $this->assertNotContains('> d-image', $labels, 'A type absent from the container\'s children is not offered.');
+    $this->assertSame('Every text block here', $details['> d-text'], 'The type option is labelled by the bundle\'s served label.');
     $this->assertSame('Children', $details['> *'], 'The universal child reads "Children".');
-    // The editor's own fuzzy filter keeps `> pb-formatted-text` beside the
+    // The editor's own fuzzy filter keeps `> d-formatted-text` beside the
     // exact match (its letters occur in order), ranked below it.
-    $session->executeScript("document.execCommand('insertText', false, ' pb-text');");
+    $session->executeScript("document.execCommand('insertText', false, ' d-text');");
     $this->assertJsCondition(
-      "(() => { const labels = window.__sel.completions().map(([label]) => label); return labels[0] === '> pb-text' && !labels.includes('> *'); })()",
+      "(() => { const labels = window.__sel.completions().map(([label]) => label); return labels[0] === '> d-text' && !labels.includes('> *'); })()",
       20000,
-      'Typing the type\'s spelling narrows the offer: `> pb-text` ranks first and the universal child drops out.',
+      'Typing the type\'s spelling narrows the offer: `> d-text` ranks first and the universal child drops out.',
     );
 
     // Pick it with a real click on the option: the typed text is removed,
     // the row mints with its human label and canonical code face (one
     // `>` chip), and its island is the one live editor, focused.
-    $option = $session->getPage()->find('xpath', '//div[contains(@class, "cm-tooltip-autocomplete")]//li[.//span[contains(@class, "cm-completionLabel")][normalize-space(.)="> pb-text"]]');
-    $this->assertNotNull($option, 'The `> pb-text` completion option is present to click.');
+    $option = $session->getPage()->find('xpath', '//div[contains(@class, "cm-tooltip-autocomplete")]//li[.//span[contains(@class, "cm-completionLabel")][normalize-space(.)="> d-text"]]');
+    $this->assertNotNull($option, 'The `> d-text` completion option is present to click.');
     $option->click();
     $this->assertJsCondition(
-      "(() => { const facts = window.__sel.headerFacts('> pb-text'); return !!facts && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1; })()",
+      "(() => { const facts = window.__sel.headerFacts('> d-text'); return !!facts && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1; })()",
       20000,
-      'Picking `> pb-text` minted its row with the one live editor inside it, focused (the island took the cursor).',
+      'Picking `> d-text` minted its row with the one live editor inside it, focused (the island took the cursor).',
     );
-    $facts = json_decode((string) $session->evaluateScript("JSON.stringify(window.__sel.headerFacts('> pb-text'))"), TRUE);
+    $facts = json_decode((string) $session->evaluateScript("JSON.stringify(window.__sel.headerFacts('> d-text'))"), TRUE);
     $this->assertSame('Text blocks', $facts['label'], 'The row header reads the bundle\'s label, plural.');
-    $this->assertSame('> pb-text', $facts['code'], 'The row header\'s code face reads the canonical selector.');
+    $this->assertSame('> d-text', $facts['code'], 'The row header\'s code face reads the canonical selector.');
     $this->assertSame(1, $facts['chips'], 'The direct-child combinator wears its chip.');
     $this->assertJsCondition(
-      "!Array.from(document.querySelectorAll('.daedalus-stylish-page-tree .cm-line, .daedalus-stylish-page-tree .daedalus-stylish-island__line')).some((line) => line.textContent.includes('> pb-text') && !line.closest('.daedalus-stylish-islands__part-body'))",
+      "!Array.from(document.querySelectorAll('.daedalus-stylish-page-tree .cm-line, .daedalus-stylish-page-tree .daedalus-stylish-island__line')).some((line) => line.textContent.includes('> d-text') && !line.closest('.daedalus-stylish-islands__part-body'))",
       10000,
       'The typed selector text left the container island: structure is chrome, never characters.',
     );
 
     // A color typed into the new island commits at the selector key and
     // lands on the three text blocks' computed color, on nothing else.
-    $rule_key = "$container_key::> pb-text";
+    $rule_key = "$container_key::> d-text";
     $session->executeScript("document.execCommand('insertText', false, 'color: var(--color-accent);');");
     $this->assertJsCondition(
       "(" . $map . ")[" . json_encode($rule_key) . "]?.default?.color === 'var(--color-accent)'",
       20000,
-      'The declaration committed at the selector key (container::> pb-text).',
+      'The declaration committed at the selector key (container::> d-text).',
     );
     foreach ($text_uuids as $index => $uuid) {
       $this->assertJsCondition(
         "window.__sel.color(\"{$text_selector($uuid)}\") === " . json_encode($accent),
         20000,
-        'Text block ' . ($index + 1) . ' renders the container\'s `> pb-text` color.',
+        'Text block ' . ($index + 1) . ' renders the container\'s `> d-text` color.',
       );
     }
     $this->assertNotSame($accent, $session->evaluateScript("window.__sel.color(\"{$text_selector($block_a_uuid)}\")"), 'The formatted text block beside them does not: the type compound addresses text blocks only.');
@@ -1718,7 +1775,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "window.__ownColorError !== undefined || window.__sel.color(\"{$text_selector($text_1)}\") === " . json_encode($muted),
       20000,
-      'The first text block\'s own color wins over the container\'s `> pb-text` rule (the closest key\'s rule wins).',
+      'The first text block\'s own color wins over the container\'s `> d-text` rule (the closest key\'s rule wins).',
     );
     $this->assertNull($session->evaluateScript('window.__ownColorError ?? null'), 'The own color commit failed: ' . ($session->evaluateScript('window.__ownColorError ?? null') ?? ''));
     $this->assertSame($accent, $session->evaluateScript("window.__sel.color(\"{$text_selector($text_2)}\")"), 'The second text block still wears the container\'s rule.');
@@ -1728,7 +1785,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // face reads `p` with no chip (a descendant rule), and its color
     // reaches the paragraph INSIDE the formatted text block (doctrine B:
     // a tag rule crosses a child\'s root) while the text blocks keep the
-    // heavier `> pb-text` rule (0-1-0 over the tag tier\'s 0-0-1).
+    // heavier `> d-text` rule (0-1-0 over the tag tier\'s 0-0-1).
     $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
     $this->assertJsCondition(
       "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
@@ -1754,14 +1811,16 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'The container\'s `p` rule reaches the paragraph inside the formatted text block (a tag rule crosses a child\'s root).',
     );
-    $this->assertSame($accent, $session->evaluateScript("window.__sel.color(\"{$text_selector($text_2)}\")"), 'A text block\'s paragraph root keeps the `> pb-text` color: the type rule outweighs the tag tier.');
+    $this->assertSame($accent, $session->evaluateScript("window.__sel.color(\"{$text_selector($text_2)}\")"), 'A text block\'s paragraph root keeps the `> d-text` color: the type rule outweighs the tag tier.');
 
-    // A `first-child` fact row on the `> pb-text` row: the `&` gesture
-    // offers the structural facts under Position; picking one mints the
-    // condition row whose island commits under the condition, printed bare
-    // (`:scope > [data-element="block_type:text"]:first-child`, no
-    // force-state dual), so the browser\'s own :first-child picks the
-    // first text block alone.
+    // A position qualifier typed inside the `> d-text` row: position is
+    // selector grammar, never a condition, so `&:first-child {` typed in
+    // the row's island composes under the rule (CSS nesting's `&` is the
+    // rule) and the digester reads `> d-text:first-child`, a refinement
+    // minted as its own rule row at the qualified key, printed inside its
+    // own :where() (`:scope > [data-element="block_type:text"]:where(:first-child)`,
+    // no force-state dual, no weight added), so the browser's own
+    // :first-child picks the first text block alone.
     $session->executeScript(<<<'JS'
       (() => {
         const island = Array.from(document.querySelectorAll('.daedalus-stylish-page-tree .daedalus-stylish-islands__part-body .daedalus-stylish-island__editor'))
@@ -1772,56 +1831,47 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "window.__st.editors() === 1 && !!document.activeElement.closest('.daedalus-stylish-islands__part-body')",
       10000,
-      'The `> pb-text` row\'s island woke for the fact row.',
+      'The `> d-text` row\'s island woke for the position row.',
     );
-    $session->executeScript("document.execCommand('insertText', false, '\\n&first-child');");
+    $session->executeScript("document.execCommand('insertText', false, '\\n&:first-child');");
     $this->assertJsCondition(
-      "window.__sel.completions().some(([label]) => label === 'first-child')",
+      "window.__sel.completions().some(([label]) => label === '&:first-child')",
       20000,
-      'The `&` gesture offered the first-child fact on the selector row.',
+      'The `:` lane offered the first-child position on the rule\'s anchor, spelled as typed.',
     );
-    $fact_option = $session->getPage()->find('xpath', '//div[contains(@class, "cm-tooltip-autocomplete")]//li[.//span[contains(@class, "cm-completionLabel")][normalize-space(.)="first-child"]]');
-    $this->assertNotNull($fact_option, 'The first-child option is present to click.');
-    $fact_option->click();
-    // The condition island must hold the focus itself before the declaration
-    // is typed: the row's header renders a tick before its island wakes,
-    // and until that wake blurs the `> pb-text` island (parked on blur)
-    // the ONE live editor is still the old one, so a check on the count
-    // alone passes early and the declaration would land at the default
-    // condition instead.
+    $session->executeScript("document.execCommand('insertText', false, '{');");
+    $qualified_key = "$container_key::> d-text:first-child";
     $this->assertJsCondition(
-      "(() => { const header = window.__sel.header('> pb-text'); const when = header?.nextElementSibling?.querySelector('.daedalus-stylish-islands__condition'); const island = when?.nextElementSibling;"
-      . " return !!when && when.querySelector('.daedalus-stylish-islands__prelude')?.textContent === '&:first-child' && window.__st.editors() === 1"
-      . " && !!island && island.classList.contains('daedalus-stylish-island') && !!island.querySelector('.cm-editor') && island.contains(document.activeElement); })()",
+      "(() => { const facts = window.__sel.headerFacts('> d-text:first-child'); return !!facts && facts.code === '> d-text:first-child' && facts.chips === 1 && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1; })()",
       20000,
-      'Picking first-child minted the `&:first-child` condition row under the `> pb-text` row with its own island live and focused (the one editor on the tree).',
+      'Typing `&:first-child {` in the `> d-text` island minted the `> d-text:first-child` rule row (the brace swallowed, the refinement a row of its own with a `>` chip), its island live and focused (the one editor on the tree).',
     );
     $session->executeScript("document.execCommand('insertText', false, 'text-transform: uppercase;');");
     $this->assertJsCondition(
-      "(" . $map . ")[" . json_encode($rule_key) . "]?.['first-child']?.['text-transform'] === 'uppercase'",
+      "(" . $map . ")[" . json_encode($qualified_key) . "]?.default?.['text-transform'] === 'uppercase'",
       20000,
-      'The declaration committed under the first-child condition at the selector key.',
+      'The declaration committed at the qualified key (container::> d-text:first-child), default condition: a position is structure, never a condition.',
     );
     $this->assertJsCondition(
       "getComputedStyle(document.querySelector(\"{$text_selector($text_1)}\")).textTransform === 'uppercase'"
       . " && getComputedStyle(document.querySelector(\"{$text_selector($text_2)}\")).textTransform === 'none'",
       20000,
-      'The fact row uppercases the first text block alone: the browser\'s :first-child on the printed bare wrapper.',
+      'The position row uppercases the first text block alone: the browser\'s :first-child inside the printed :where().',
     );
 
     // ——— Selector relations: siblings, :has(), :not(), a negated fact. ———
-    // A second section is its own band: three text blocks rooted p, p
+    // A second section, its own top-level container: three text blocks rooted p, p
     // and h3 (the second carrying a URL, so its link part renders an
     // anchor) and an image block last, placed through the op spine so
     // each relation below has exactly one true answer among four ordered
     // children. The image block carries no media: its composed root's
     // empty form is a plain div, stamped like any block.
-    $band_uuid = $uuid_service->generate();
-    $band_key = "container:$band_uuid";
-    $band_p1 = $uuid_service->generate();
-    $band_p2 = $uuid_service->generate();
-    $band_h3 = $uuid_service->generate();
-    $band_img = $uuid_service->generate();
+    $second_section_uuid = $uuid_service->generate();
+    $second_section_key = "container:$second_section_uuid";
+    $second_section_p1 = $uuid_service->generate();
+    $second_section_p2 = $uuid_service->generate();
+    $second_section_h3 = $uuid_service->generate();
+    $second_section_img = $uuid_service->generate();
     $session->executeScript(<<<JS
       (() => {
         const Blueprint = Drupal.Daedalus.Blueprint;
@@ -1829,81 +1879,81 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
           operations: [
             {
               op: 'add_section',
-              uuid: '$band_uuid',
+              uuid: '$second_section_uuid',
               location: { anchor: Blueprint.getRoot().uuid, placement: 'inside' },
             },
             {
               op: 'add_element',
-              uuid: '$band_p1',
+              uuid: '$second_section_p1',
               block_type: 'text',
-              properties: { field_text_text: { value: 'Band first paragraph' }, field_text_tag: 'p' },
-              location: { anchor: '$band_uuid', placement: 'inside' },
+              properties: { field_text_text: { value: 'Section first paragraph' }, field_text_tag: 'p' },
+              location: { anchor: '$second_section_uuid', placement: 'inside' },
             },
             {
               op: 'add_element',
-              uuid: '$band_p2',
+              uuid: '$second_section_p2',
               block_type: 'text',
-              properties: { field_text_text: { value: 'Band linked paragraph' }, field_text_tag: 'p', field_text_url: { uri: 'https://example.com/band' } },
-              location: { anchor: '$band_p1', placement: 'after' },
+              properties: { field_text_text: { value: 'Section linked paragraph' }, field_text_tag: 'p', field_text_url: { uri: 'https://example.com/section' } },
+              location: { anchor: '$second_section_p1', placement: 'after' },
             },
             {
               op: 'add_element',
-              uuid: '$band_h3',
+              uuid: '$second_section_h3',
               block_type: 'text',
-              properties: { field_text_text: { value: 'Band heading' }, field_text_tag: 'h3' },
-              location: { anchor: '$band_p2', placement: 'after' },
+              properties: { field_text_text: { value: 'Section heading' }, field_text_tag: 'h3' },
+              location: { anchor: '$second_section_p2', placement: 'after' },
             },
             {
               op: 'add_element',
-              uuid: '$band_img',
+              uuid: '$second_section_img',
               block_type: 'image',
               properties: {},
-              location: { anchor: '$band_h3', placement: 'after' },
+              location: { anchor: '$second_section_h3', placement: 'after' },
             },
           ],
         })).catch((error) => {
-          window.__bandPlacementError = error.message;
+          window.__secondSectionPlacementError = error.message;
         });
       })();
       JS);
     $this->assertJsCondition(
-      "window.__bandPlacementError !== undefined"
-      . " || (!!document.querySelector(\"[data-selectable='block:$band_img']\") && !!document.querySelector(\"[data-selectable='block:$band_p2'] a.text-block-link\") && JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()).includes('$band_img'))",
+      "window.__secondSectionPlacementError !== undefined"
+      . " || (!!document.querySelector(\"[data-selectable='block:$second_section_img']\") && !!document.querySelector(\"[data-selectable='block:$second_section_p2'] a.text-block-link\") && JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()).includes('$second_section_img'))",
       20000,
-      'The band placed and rendered: the image block last, the second text block with its anchor.',
+      'The section placed and rendered: the image block last, the second text block with its anchor.',
     );
-    $band_placement_error = $session->evaluateScript('window.__bandPlacementError ?? null');
-    $this->assertNull($band_placement_error, 'Band placement failed: ' . ($band_placement_error ?? ''));
+    $second_section_placement_error = $session->evaluateScript('window.__secondSectionPlacementError ?? null');
+    $this->assertNull($second_section_placement_error, 'Section placement failed: ' . ($second_section_placement_error ?? ''));
     $this->assertSame(
-      [$band_p1, $band_p2, $band_h3, $band_img],
+      [$second_section_p1, $second_section_p2, $second_section_h3, $second_section_img],
       json_decode((string) $session->evaluateScript(
-        "JSON.stringify(Array.from(document.querySelector(\"[data-selectable='$band_key']\").querySelectorAll(':scope > [data-element]')).map((el) => el.dataset.selectable.replace('block:', '')))"
+        "JSON.stringify(Array.from(document.querySelector(\"[data-selectable='$second_section_key']\").querySelectorAll(':scope > [data-element]')).map((el) => el.dataset.selectable.replace('block:', '')))"
       ), TRUE),
-      'The band\'s direct children are the three text blocks then the image block, each stamped.',
+      'The section\'s direct children are the three text blocks then the image block, each stamped.',
     );
     $this->assertSame(
       ['P', 'P', 'H3', 'block_type:image'],
       json_decode((string) $session->evaluateScript(
-        "JSON.stringify([document.querySelector(\"{$text_selector($band_p1)}\").tagName, document.querySelector(\"{$text_selector($band_p2)}\").tagName, document.querySelector(\"{$text_selector($band_h3)}\").tagName, document.querySelector(\"{$text_selector($band_img)}\").dataset.element])"
+        "JSON.stringify([document.querySelector(\"{$text_selector($second_section_p1)}\").tagName, document.querySelector(\"{$text_selector($second_section_p2)}\").tagName, document.querySelector(\"{$text_selector($second_section_h3)}\").tagName, document.querySelector(\"{$text_selector($second_section_img)}\").dataset.element])"
       ), TRUE),
       'The text roots are the p, p and h3 the sibling combinator reads, and the image root wears the type stamp :not() prints against.',
     );
 
-    // The band selected at Element scope, code mode: its island prints
-    // alone. The relation helpers: the band's row headers by selector,
+    // The section selected at Element scope, code mode: its island prints
+    // alone. The relation helpers: the section's row headers by selector,
     // a part-body island by needle, a computed read, and a length token
-    // resolved to pixels inside the band (a probe, removed at once).
-    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
+    // resolved to pixels inside the section (a probe, removed at once).
+    $session->executeScript("Drupal.Daedalus.Selection.select('$second_section_key');");
     $this->assertJsCondition(
       "window.__st.scope() === 'element' && window.__st.floorLine() !== null && window.__st.editors() === 0"
-      . " && document.querySelector('.daedalus-stylish-page-tree [data-daedalus-stylish-page-key=\"$band_key\"]') !== null",
+      . " && document.querySelector('.daedalus-stylish-page-tree [data-daedalus-stylish-page-key=\"$second_section_key\"]') !== null",
       20000,
-      'The band\'s island prints at Element scope, no editor live.',
+      'The section\'s island prints at Element scope, no editor live.',
     );
     $session->executeScript(<<<JS
       window.__rel = {
         header(selector) {
-          return Array.from(document.querySelectorAll('.daedalus-stylish-page-tree [data-daedalus-stylish-part-owner="$band_key"]'))
+          return Array.from(document.querySelectorAll('.daedalus-stylish-page-tree [data-daedalus-stylish-part-owner="$second_section_key"]'))
             .find((header) => header.dataset.daedalusStylishPart === selector) ?? null;
         },
         facts(selector) {
@@ -1930,7 +1980,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
         px(property, value) {
           const probe = document.createElement('div');
           probe.style[property] = value;
-          document.querySelector('[data-selectable="$band_key"]').append(probe);
+          document.querySelector('[data-selectable="$second_section_key"]').append(probe);
           const resolved = getComputedStyle(probe)[property];
           probe.remove();
           return resolved;
@@ -1938,20 +1988,20 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       };
       JS);
     $space_8 = (string) $session->evaluateScript("window.__rel.px('marginTop', 'var(--space-8)')");
-    $this->assertMatchesRegularExpression('/^[1-9][0-9]*(\.[0-9]+)?px$/', $space_8, 'The skin\'s --space-8 resolves to a non-zero length inside the band (the value the sibling rule is read against).');
-    $band_selectors = [
-      'p1' => $text_selector($band_p1),
-      'p2' => $text_selector($band_p2),
-      'h3' => $text_selector($band_h3),
-      'img' => $text_selector($band_img),
+    $this->assertMatchesRegularExpression('/^[1-9][0-9]*(\.[0-9]+)?px$/', $space_8, 'The skin\'s --space-8 resolves to a non-zero length inside the section (the value the sibling rule is read against).');
+    $second_section_selectors = [
+      'p1' => $text_selector($second_section_p1),
+      'p2' => $text_selector($second_section_p2),
+      'h3' => $text_selector($second_section_h3),
+      'img' => $text_selector($second_section_img),
     ];
-    $band_computed = fn (string $property) => json_decode((string) $session->evaluateScript(
-      "JSON.stringify(Object.fromEntries(Object.entries(" . json_encode($band_selectors) . ").map(([name, selector]) => [name, window.__rel.computed(selector, " . json_encode($property) . ")])))"
+    $second_section_computed = fn (string $property) => json_decode((string) $session->evaluateScript(
+      "JSON.stringify(Object.fromEntries(Object.entries(" . json_encode($second_section_selectors) . ").map(([name, selector]) => [name, window.__rel.computed(selector, " . json_encode($property) . ")])))"
     ), TRUE);
-    $before = $band_computed('marginTop');
+    $before = $second_section_computed('marginTop');
     $this->assertNotSame($space_8, $before['p2'], 'Before any sibling rule the second paragraph does not wear the --space-8 margin (the control).');
 
-    // `> p + p {` typed on the band's island mints the sibling row by the
+    // `> p + p {` typed on the section's island mints the sibling row by the
     // swallowed brace (a relation line offers no completion): the row's
     // code face reads the canonical selector with a chip per combinator,
     // and its margin token (the strict law binds margin to the space
@@ -1960,7 +2010,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // `:where(:scope) > :where(p) + p` leaves the first paragraph (no
     // paragraph before it) and the heading (not a p) untouched.
     $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
-    $this->assertJsCondition('window.__st.editors() === 1', 10000, 'The band island woke for the sibling rule.');
+    $this->assertJsCondition('window.__st.editors() === 1', 10000, 'The section island woke for the sibling rule.');
     $session->executeScript("document.execCommand('insertText', false, '\\n> p + p ');");
     $session->executeScript("document.execCommand('insertText', false, '{');");
     $this->assertJsCondition(
@@ -1968,7 +2018,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'Typing `> p + p {` minted the sibling row (the brace swallowed), its island live and focused, the code face reading the canonical selector with a `>` chip and a `+` chip.',
     );
-    $sibling_key = "$band_key::> p + p";
+    $sibling_key = "$second_section_key::> p + p";
     $session->executeScript("document.execCommand('insertText', false, 'margin-top: var(--space-8);');");
     $this->assertJsCondition(
       "(" . $map . ")[" . json_encode($sibling_key) . "]?.default?.['margin-top'] === 'var(--space-8)'",
@@ -1976,16 +2026,16 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The margin declaration committed at the sibling key (container::> p + p).',
     );
     $this->assertJsCondition(
-      "window.__rel.computed(\"{$band_selectors['p2']}\", 'marginTop') === " . json_encode($space_8),
+      "window.__rel.computed(\"{$second_section_selectors['p2']}\", 'marginTop') === " . json_encode($space_8),
       20000,
       'The second paragraph (a p right after a p) computes the sibling rule\'s margin.',
     );
-    $after_sibling = $band_computed('marginTop');
+    $after_sibling = $second_section_computed('marginTop');
     $this->assertNotSame($space_8, $after_sibling['p1'], 'The first paragraph does not: no paragraph precedes it.');
     $this->assertNotSame($space_8, $after_sibling['h3'], 'The heading does not: `+ p` names a paragraph, and the heading root is an h3.');
     $this->assertNotSame($space_8, $after_sibling['img'], 'The image block does not: the sibling rule addresses paragraphs.');
 
-    // `> pb-text:has(a) {` mints the qualified type row; its color lands
+    // `> d-text:has(a) {` mints the qualified type row; its color lands
     // on the linked text block alone: the printed
     // `[data-element="block_type:text"]:has(:where(a))` reads the anchor
     // the second block's link part renders, and the other two text
@@ -1994,33 +2044,190 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
       10000,
-      'The band island woke again for the :has() rule.',
+      'The section island woke again for the :has() rule.',
     );
-    $session->executeScript("document.execCommand('insertText', false, '\\n> pb-text:has(a) ');");
+    $session->executeScript("document.execCommand('insertText', false, '\\n> d-text:has(a) ');");
     $session->executeScript("document.execCommand('insertText', false, '{');");
     $this->assertJsCondition(
-      "(() => { const facts = window.__rel.facts('> pb-text:has(a)'); return !!facts && facts.liveInBody === 1 && facts.focusedInBody && facts.code === '> pb-text:has(a)' && facts.chips === 1; })()",
+      "(() => { const facts = window.__rel.facts('> d-text:has(a)'); return !!facts && facts.liveInBody === 1 && facts.focusedInBody && facts.code === '> d-text:has(a)' && facts.chips === 1; })()",
       20000,
-      'Typing `> pb-text:has(a) {` minted the qualified row, its island live and focused, the code face reading the canonical selector with one `>` chip (the qualifier is code text).',
+      'Typing `> d-text:has(a) {` minted the qualified row, its island live and focused, the code face reading the canonical selector with one `>` chip (the qualifier is code text).',
     );
-    $has_key = "$band_key::> pb-text:has(a)";
+    $has_key = "$second_section_key::> d-text:has(a)";
     $session->executeScript("document.execCommand('insertText', false, 'color: var(--color-accent);');");
     $this->assertJsCondition(
       "(" . $map . ")[" . json_encode($has_key) . "]?.default?.color === 'var(--color-accent)'",
       20000,
-      'The color declaration committed at the :has() key (container::> pb-text:has(a)).',
+      'The color declaration committed at the :has() key (container::> d-text:has(a)).',
     );
     $this->assertJsCondition(
-      "window.__rel.computed(\"{$band_selectors['p2']}\", 'color') === " . json_encode($accent),
+      "window.__rel.computed(\"{$second_section_selectors['p2']}\", 'color') === " . json_encode($accent),
       20000,
       'The linked text block\'s root computes the :has() rule\'s color.',
     );
-    $after_has = $band_computed('color');
+    $after_has = $second_section_computed('color');
     $this->assertNotSame($accent, $after_has['p1'], 'The unlinked first paragraph does not: it holds no anchor.');
     $this->assertNotSame($accent, $after_has['h3'], 'The unlinked heading does not.');
     $this->assertNotSame($accent, $after_has['img'], 'The image block does not: the type compound names text blocks.');
 
-    // `> *:not(pb-image) {` mints the negated universal row, landing on
+    // The rule's selector edited in place (the edit-selector landing;
+    // seam: the double-click gesture on the row header -> the chrome
+    // swap to the selector editor -> the hover-selector preview -> ONE
+    // move_style op through commitBatch -> the mirror's rekeyed map ->
+    // the delivered CSS -> the re-seated subject facet: five layers that
+    // agree only in a browser, and no lower tier sees the re-seat or the
+    // CSS landing). The double-click is Edit Mode's one definition
+    // (daedalus_ui selection/double-click.js: the even OS click count on
+    // `click`, never `dblclick`), so the pair is two `click` events on
+    // the header's seat button, the second carrying the count; the first
+    // seats the row as it always has (the facet it already is).
+    $has_button_js = "window.__rel.header('> d-text:has(a)')?.querySelector('.daedalus-stylish-islands__part-select')";
+    $has_editor_js = "window.__rel.header('> d-text:has(a)')?.querySelector('.daedalus-stylish-islands__prelude--editing .cm-editor')";
+    // The real pointer rests where the last real click left it (the
+    // first-child completion's option, inside the tree), and a row header
+    // rendering under a resting pointer is hovered for real (its
+    // mouseenter writes the hover-selector facet, as it should), which
+    // would mask whether the editor's unmount cleared its preview. Park
+    // the pointer on the panel's mode strip, which writes no facet, so
+    // the facet below is the editor's alone.
+    $session->getPage()->find('css', '#daedalus_stylish_inspector .daedalus-stylish-inspector__ui-mode')->mouseOver();
+    $session->executeScript(<<<JS
+      (() => {
+        const button = $has_button_js;
+        button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+        button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 2 }));
+      })();
+      JS);
+    $this->assertJsCondition(
+      "(() => { const editor = $has_editor_js; return !!editor && editor.querySelector('.cm-content').textContent === '> d-text:has(a)' && editor.contains(document.activeElement); })()",
+      20000,
+      'The double-click swapped the :has() header\'s code face for the selector editor, seeded with the row\'s selector and holding the focus.',
+    );
+    $this->assertSame(
+      1,
+      (int) $session->evaluateScript("document.querySelectorAll('.daedalus-stylish-page-tree .daedalus-stylish-islands__prelude--editing').length"),
+      'One selector editor is open: the edit state is the host\'s, one row at a time.',
+    );
+
+    // Retyping the selector paints its reach before anything commits:
+    // every keystroke hands the typed text's canonical selector to the
+    // hover-selector facet on the rule's owner (the canvas dashed paint
+    // and the tree part rows follow the facet), so the designer sees
+    // where `> d-text:not(:has(a))` lands before the Enter.
+    $session->executeScript(<<<JS
+      (() => {
+        const content = ($has_editor_js).querySelector('.cm-content');
+        content.focus();
+        const selection = document.getSelection();
+        selection.selectAllChildren(content.querySelector('.cm-line'));
+        document.execCommand('insertText', false, '> d-text:not(:has(a))');
+      })();
+      JS);
+    $this->assertJsCondition(
+      "(() => { const editor = $has_editor_js; const hovered = Drupal.Daedalus.Selection.getHoveredSelector(); return !!editor && editor.querySelector('.cm-content').textContent === '> d-text:not(:has(a))' && hovered?.key === " . json_encode($second_section_key) . " && hovered?.selector === '> d-text:not(:has(a))'; })()",
+      20000,
+      'The retyped selector reads back in the editor and its reach previews: the hover-selector facet carries the typed text\'s canonical selector on the section before anything commits.',
+    );
+    $this->assertJsCondition(
+      "(" . $map . ")[" . json_encode($has_key) . "]?.default?.color === 'var(--color-accent)' && (" . $map . ")[" . json_encode("$second_section_key::> d-text:not(:has(a))") . "] === undefined",
+      2000,
+      'Nothing moved yet: the preview is the facet alone, the map still holds the :has() key and nothing at the typed one.',
+    );
+
+    // Enter commits: ONE move_style op lands through commitBatch (one
+    // history entry naming both selectors), the map holds the new key
+    // and not the old, the accent leaves the linked paragraph and lands
+    // on the two unlinked text blocks (the printed
+    // `[data-element="block_type:text"]:not(:has(:where(a)))`), the row
+    // reads the new selector in its code face, the editor is closed and
+    // its preview cleared, and the subject facet the row was (seated by
+    // its minting) follows to the new key, the subject line's chip with
+    // it.
+    $not_has_key = "$second_section_key::> d-text:not(:has(a))";
+    $history_entries_js = 'Drupal.Daedalus.History.getState().entries';
+    $entries_before_move = (int) $session->evaluateScript("$history_entries_js.length");
+    $session->executeScript("($has_editor_js).querySelector('.cm-content').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));");
+    $this->assertJsCondition(
+      "(" . $map . ")[" . json_encode($not_has_key) . "]?.default?.color === 'var(--color-accent)' && (" . $map . ")[" . json_encode($has_key) . "] === undefined",
+      20000,
+      'The move landed: the map holds the color at the new key (container::> d-text:not(:has(a))) and the old key is gone.',
+    );
+    $this->assertJsCondition(
+      "$history_entries_js.length === " . ($entries_before_move + 1)
+      . " && {$history_entries_js}[{$history_entries_js}.length - 1].label === " . json_encode('Moved "> d-text:has(a)" to "> d-text:not(:has(a))"'),
+      20000,
+      'Exactly one history entry more, labelled with both selectors: the rename is one move_style batch, never two gestures.',
+    );
+    $this->assertJsCondition(
+      "window.__rel.computed(\"{$second_section_selectors['p1']}\", 'color') === " . json_encode($accent)
+      . " && window.__rel.computed(\"{$second_section_selectors['h3']}\", 'color') === " . json_encode($accent)
+      . " && window.__rel.computed(\"{$second_section_selectors['p2']}\", 'color') !== " . json_encode($accent),
+      20000,
+      'The accent left the linked paragraph and landed on the two unlinked text blocks: the moved rule delivers at :not(:has(a)).',
+    );
+    $after_move = $second_section_computed('color');
+    $this->assertNotSame($accent, $after_move['img'], 'The image block still does not: the moved compound names text blocks.');
+    $this->assertJsCondition(
+      "(() => { const facts = window.__rel.facts('> d-text:not(:has(a))'); return !!facts && facts.code === '> d-text:not(:has(a))' && facts.chips === 1; })()",
+      20000,
+      'The row reads the new selector in its code face with its one `>` chip.',
+    );
+    $this->assertJsCondition(
+      "window.__rel.header('> d-text:has(a)') === null",
+      20000,
+      'No row stands at the old selector: the map lacks it, the minting draft renamed with the move and the seat followed.',
+    );
+    $this->assertJsCondition(
+      "document.querySelector('.daedalus-stylish-page-tree .daedalus-stylish-islands__prelude--editing') === null",
+      20000,
+      'The selector editor is closed after the commit.',
+    );
+    $this->assertJsCondition(
+      'Drupal.Daedalus.Selection.getHoveredSelector() === null',
+      20000,
+      'The editor\'s reach preview cleared with its unmount: the hover-selector facet stands empty (the real pointer is parked off the rows, so no header hover stands in for it).',
+    );
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getTarget()?.key === " . json_encode($second_section_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === '> d-text:not(:has(a))'"
+      . " && Drupal.Daedalus.Selection.getAddress() === null",
+      20000,
+      'The subject facet followed the move: the spine\'s target is the section at the new selector, no write address standing.',
+    );
+    $this->assertJsCondition(
+      "document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__address')?.dataset.daedalusStylishAddress === " . json_encode($not_has_key),
+      20000,
+      'The subject line\'s address chip stands at the moved rule\'s key.',
+    );
+
+    // Undo puts the old key back as one step (one batch, one entry): the
+    // map holds :has(a) again and nothing at the moved key, and the
+    // accent returns to the linked paragraph alone. Undo restores the
+    // map, never the selection, so the subject is seated back at the
+    // rule as it stood before the step and the section goes on as the next
+    // relation finds it.
+    $session->executeScript('Drupal.Daedalus.History.undo();');
+    $this->assertJsCondition(
+      "(" . $map . ")[" . json_encode($has_key) . "]?.default?.color === 'var(--color-accent)' && (" . $map . ")[" . json_encode($not_has_key) . "] === undefined",
+      20000,
+      'Undo put the old key back: the map holds :has(a) again and nothing at :not(:has(a)).',
+    );
+    $this->assertJsCondition(
+      "window.__rel.computed(\"{$second_section_selectors['p2']}\", 'color') === " . json_encode($accent)
+      . " && window.__rel.computed(\"{$second_section_selectors['p1']}\", 'color') !== " . json_encode($accent)
+      . " && window.__rel.computed(\"{$second_section_selectors['h3']}\", 'color') !== " . json_encode($accent),
+      20000,
+      'After the undo the accent is the linked paragraph\'s alone again: the delivered CSS followed the map back.',
+    );
+    $session->executeScript("Drupal.Daedalus.Selection.target('$second_section_key', '> d-text:has(a)');");
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getTarget()?.selector === '> d-text:has(a)'"
+      . " && (() => { const facts = window.__rel.facts('> d-text:has(a)'); return !!facts && facts.code === '> d-text:has(a)'; })()",
+      20000,
+      'The :has() row is back in the roster and seated as the subject again.',
+    );
+
+    // `> *:not(d-image) {` mints the negated universal row, landing on
     // the container's declared children (layout and sizing groups, so a
     // sizing literal is the write the strict law admits there); the
     // printed `:scope > *:not(:where([data-element="block_type:image"]))`
@@ -2029,46 +2236,48 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
       10000,
-      'The band island woke again for the :not() rule.',
+      'The section island woke again for the :not() rule.',
     );
-    $session->executeScript("document.execCommand('insertText', false, '\\n> *:not(pb-image) ');");
+    $session->executeScript("document.execCommand('insertText', false, '\\n> *:not(d-image) ');");
     $session->executeScript("document.execCommand('insertText', false, '{');");
     $this->assertJsCondition(
-      "(() => { const facts = window.__rel.facts('> *:not(pb-image)'); return !!facts && facts.liveInBody === 1 && facts.focusedInBody && facts.code === '> *:not(pb-image)' && facts.chips === 1; })()",
+      "(() => { const facts = window.__rel.facts('> *:not(d-image)'); return !!facts && facts.liveInBody === 1 && facts.focusedInBody && facts.code === '> *:not(d-image)' && facts.chips === 1; })()",
       20000,
-      'Typing `> *:not(pb-image) {` minted the negated row, its island live and focused, the code face reading the canonical selector with one `>` chip.',
+      'Typing `> *:not(d-image) {` minted the negated row, its island live and focused, the code face reading the canonical selector with one `>` chip.',
     );
-    $not_key = "$band_key::> *:not(pb-image)";
+    $not_key = "$second_section_key::> *:not(d-image)";
     // The empty image block's edit-mode placeholder carries its own
     // min-height (6rem), so the rule's literal is one nothing else
     // delivers and the image block is read against its own prior value.
-    $before_not = $band_computed('minHeight');
+    $before_not = $second_section_computed('minHeight');
     $session->executeScript("document.execCommand('insertText', false, 'min-height: 77px;');");
     $this->assertJsCondition(
       "(" . $map . ")[" . json_encode($not_key) . "]?.default?.['min-height'] === '77px'",
       20000,
-      'The min-height declaration committed at the :not() key (container::> *:not(pb-image)).',
+      'The min-height declaration committed at the :not() key (container::> *:not(d-image)).',
     );
     $this->assertJsCondition(
-      "window.__rel.computed(\"{$band_selectors['h3']}\", 'minHeight') === '77px'",
+      "window.__rel.computed(\"{$second_section_selectors['h3']}\", 'minHeight') === '77px'",
       20000,
       'The heading block computes the :not() rule\'s min-height.',
     );
-    $after_not = $band_computed('minHeight');
+    $after_not = $second_section_computed('minHeight');
     $this->assertSame('77px', $after_not['p1'], 'The first paragraph computes it too.');
     $this->assertSame('77px', $after_not['p2'], 'The linked paragraph computes it too: every child but the image.');
-    $this->assertSame($before_not['img'], $after_not['img'], 'The image block keeps its prior min-height: :not(pb-image) excludes it.');
+    $this->assertSame($before_not['img'], $after_not['img'], 'The image block keeps its prior min-height: :not(d-image) excludes it.');
     $this->assertNotSame('77px', $after_not['img'], 'The image block does not compute the rule\'s literal.');
 
-    // `> * {` mints the universal children row; a `not-last-child` fact
-    // row minted on it through the `&` gesture commits under the
-    // negated fact, printed bare (`:scope > *:not(:last-child)`), so the
-    // browser reaches the first three children and never the last.
+    // `> * {` mints the universal children row; `&:not(:last-child) {`
+    // typed in its island composes under the rule and mints the
+    // `> *:not(:last-child)` row (a negated position is selector grammar,
+    // never a condition), printed inside its own :where()
+    // (`:scope > *:not(:where(:last-child))`), so the browser reaches the
+    // first three children and never the last.
     $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
     $this->assertJsCondition(
       "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
       10000,
-      'The band island woke again for the universal children rule.',
+      'The section island woke again for the universal children rule.',
     );
     $session->executeScript("document.execCommand('insertText', false, '\\n> * ');");
     $session->executeScript("document.execCommand('insertText', false, '{');");
@@ -2077,7 +2286,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'Typing `> * {` minted the universal children row, its island live and focused.',
     );
-    $children_key = "$band_key::> *";
+    $children_key = "$second_section_key::> *";
     $session->executeScript("document.execCommand('insertText', false, 'max-width: 100%;');");
     $this->assertJsCondition(
       "(" . $map . ")[" . json_encode($children_key) . "]?.default?.['max-width'] === '100%'",
@@ -2100,41 +2309,493 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "window.__st.editors() === 1 && !!window.__rel.island('max-width: 100%')?.querySelector('.cm-editor') && !!document.activeElement.closest('.daedalus-stylish-islands__part-body')",
       10000,
-      'The `> *` row\'s island is live and focused for the fact row.',
+      'The `> *` row\'s island is live and focused for the negated position row.',
     );
-    $session->executeScript("document.execCommand('insertText', false, '\\n&not-last-child');");
+    $session->executeScript("document.execCommand('insertText', false, '\\n&:not(:last-child)');");
+    $session->executeScript("document.execCommand('insertText', false, '{');");
+    $negated_key = "$second_section_key::> *:not(:last-child)";
     $this->assertJsCondition(
-      "window.__sel.completions().some(([label]) => label === 'not-last-child')",
+      "(() => { const facts = window.__rel.facts('> *:not(:last-child)'); return !!facts && facts.code === '> *:not(:last-child)' && facts.chips === 1 && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1; })()",
       20000,
-      'The `&` gesture offered the not-last-child fact on the universal row.',
+      'Typing `&:not(:last-child) {` in the `> *` island minted the `> *:not(:last-child)` rule row (the brace swallowed), its island live and focused (the one editor on the tree).',
     );
-    $negated_option = $session->getPage()->find('xpath', '//div[contains(@class, "cm-tooltip-autocomplete")]//li[.//span[contains(@class, "cm-completionLabel")][normalize-space(.)="not-last-child"]]');
-    $this->assertNotNull($negated_option, 'The not-last-child option is present to click.');
-    $negated_option->click();
-    $this->assertJsCondition(
-      "(() => { const header = window.__rel.header('> *'); const when = header?.nextElementSibling?.querySelector('.daedalus-stylish-islands__condition'); const island = when?.nextElementSibling;"
-      . " return !!when && when.querySelector('.daedalus-stylish-islands__prelude')?.textContent === '&:not(:last-child)' && window.__st.editors() === 1"
-      . " && !!island && island.classList.contains('daedalus-stylish-island') && !!island.querySelector('.cm-editor') && island.contains(document.activeElement); })()",
-      20000,
-      'Picking not-last-child minted the `&:not(:last-child)` condition row under the `> *` row with its own island live and focused (the one editor on the tree; the first-child leg says why the focus is checked on the island itself).',
-    );
-    $before_fact = $band_computed('minWidth');
+    $before_fact = $second_section_computed('minWidth');
     $session->executeScript("document.execCommand('insertText', false, 'min-width: 313px;');");
     $this->assertJsCondition(
-      "(" . $map . ")[" . json_encode($children_key) . "]?.['not-last-child']?.['min-width'] === '313px'",
+      "(" . $map . ")[" . json_encode($negated_key) . "]?.default?.['min-width'] === '313px'",
       20000,
-      'The declaration committed under the not-last-child condition at the children key.',
+      'The declaration committed at the qualified key (container::> *:not(:last-child)), default condition.',
     );
     $this->assertJsCondition(
-      "window.__rel.computed(\"{$band_selectors['h3']}\", 'minWidth') === '313px'",
+      "window.__rel.computed(\"{$second_section_selectors['h3']}\", 'minWidth') === '313px'",
       20000,
-      'The third child computes the negated fact row\'s min-width.',
+      'The third child computes the negated position row\'s min-width.',
     );
-    $after_fact = $band_computed('minWidth');
+    $after_fact = $second_section_computed('minWidth');
     $this->assertSame('313px', $after_fact['p1'], 'The first child computes it.');
     $this->assertSame('313px', $after_fact['p2'], 'The second child computes it.');
-    $this->assertSame($before_fact['img'], $after_fact['img'], 'The last child keeps its prior min-width: the browser\'s :not(:last-child) on the printed bare wrapper.');
-    $this->assertNotSame('313px', $after_fact['img'], 'The last child does not compute the fact row\'s literal.');
+    $this->assertSame($before_fact['img'], $after_fact['img'], 'The last child keeps its prior min-width: the browser\'s :not(:last-child) inside the printed :where().');
+    $this->assertNotSame('313px', $after_fact['img'], 'The last child does not compute the position row\'s literal.');
+
+    // The mint line previews its reach (the selector-digest landing;
+    // seam: keystroke -> element-model.js previewReach over the digester
+    // -> the island's onPreview -> the hover-selector facet on the
+    // section -> the canvas dashed paint, with no op, no row and no
+    // brace at all). `> d-text:has(a)` typed on the section's island with
+    // no brace paints the linked text block alone; extending the line to
+    // `> d-text:has(a) a` moves the paint to the link inside it; blurring
+    // the island clears the facet. Re-selecting the section first drops
+    // the subject facet the `> *:not(:last-child)` mint seated (the
+    // facade's rule: re-selecting the selected key drops a target back
+    // to the whole element), so the children wear no dashed box of their
+    // own and the outline below is the hover paint's alone; the real
+    // pointer is parked on the mode strip, which writes no facet. The
+    // `> *:not(:last-child)` island is blurred first so the section's
+    // island is the one that wakes.
+    $session->executeScript('document.activeElement.blur();');
+    $session->executeScript("Drupal.Daedalus.Selection.select('$second_section_key');");
+    $session->getPage()->find('css', '#daedalus_stylish_inspector .daedalus-stylish-inspector__ui-mode')->mouseOver();
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Selection.getSelected() === '$second_section_key' && Drupal.Daedalus.Selection.getTarget() === null && Drupal.Daedalus.Selection.getHoveredSelector() === null && window.__st.editors() === 0",
+      20000,
+      'The section is re-selected with no subject facet and no hover-selector facet standing, no editor live (the control before the mint line is typed).',
+    );
+    $second_section_link = "{$second_section_selectors['p2']} a.text-block-link";
+    $outline_js = fn (string $selector) => "getComputedStyle(document.querySelector(" . json_encode($selector) . ")).outlineStyle";
+    $this->assertNotSame('dashed', (string) $session->evaluateScript($outline_js($second_section_selectors['p2'])), 'Before the mint line is typed the linked text block wears no dashed outline (the control).');
+    $this->assertNotSame('dashed', (string) $session->evaluateScript($outline_js($second_section_link)), 'Before the mint line is typed its link wears none either (the control).');
+    // The typed selector is one the relation legs already minted (the
+    // `> d-text:has(a)` row, back since the undo), so "nothing minted"
+    // below is "that entry and its one header are exactly as they stand
+    // here": the preview must never draft a second row at a key in use.
+    $has_entry_js = "JSON.stringify((" . $map . ")[" . json_encode($has_key) . "] ?? null)";
+    $has_headers_js = "document.querySelectorAll('.daedalus-stylish-page-tree [data-daedalus-stylish-part-owner=\"$second_section_key\"][data-daedalus-stylish-part=\"> d-text:has(a)\"]').length";
+    $has_entry_before = (string) $session->evaluateScript($has_entry_js);
+    $this->assertNotSame('null', $has_entry_before, 'The `> d-text:has(a)` key holds its entry before the mint line is typed (the control for "nothing minted").');
+    $this->assertSame(1, (int) $session->evaluateScript($has_headers_js), 'One `> d-text:has(a)` header stands before the mint line is typed (the control).');
+    $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
+    $this->assertJsCondition(
+      "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
+      10000,
+      'The section island woke for the mint line\'s reach preview.',
+    );
+    $session->executeScript("document.execCommand('insertText', false, '\\n> d-text:has(a)');");
+    $this->assertJsCondition(
+      "(() => { const hovered = Drupal.Daedalus.Selection.getHoveredSelector(); return hovered?.key === " . json_encode($second_section_key) . " && hovered?.selector === '> d-text:has(a)'; })()",
+      20000,
+      'Typing `> d-text:has(a)` with no brace hands the line\'s canonical reach to the hover-selector facet on the section: the island\'s mint line previews through the digester before any brace or pick.',
+    );
+    $this->assertJsCondition(
+      $outline_js($second_section_selectors['p2']) . " === 'dashed'",
+      20000,
+      'The linked text block carries the dashed hover paint: the canvas paints the typed line\'s reach.',
+    );
+    $this->assertNotSame('dashed', (string) $session->evaluateScript($outline_js($second_section_selectors['p1'])), 'The unlinked first paragraph carries no dashed paint: it holds no anchor.');
+    $this->assertNotSame('dashed', (string) $session->evaluateScript($outline_js($second_section_selectors['h3'])), 'The unlinked heading carries none.');
+    $this->assertNotSame('dashed', (string) $session->evaluateScript($outline_js($second_section_selectors['img'])), 'The image block carries none: the type compound names text blocks.');
+    $this->assertNotSame('dashed', (string) $session->evaluateScript($outline_js($second_section_link)), 'The link inside the linked block carries none yet: the reach is the block, not its anchor.');
+    $this->assertJsCondition(
+      $has_entry_js . " === " . json_encode($has_entry_before) . " && " . $has_headers_js . " === 1 && window.__st.editors() === 1",
+      2000,
+      'Nothing minted: the preview is the facet alone, the `> d-text:has(a)` entry is exactly what the relation legs left and its one header still stands alone (no draft row at the key in use), and the section island stays the one live editor.',
+    );
+    // Extending the line moves the paint: `> d-text:has(a) a` reaches
+    // the link inside the linked block and no longer the block itself.
+    $session->executeScript("document.execCommand('insertText', false, ' a');");
+    $this->assertJsCondition(
+      "(() => { const hovered = Drupal.Daedalus.Selection.getHoveredSelector(); return hovered?.key === " . json_encode($second_section_key) . " && hovered?.selector === '> d-text:has(a) a'; })()",
+      20000,
+      'Extending the line to `> d-text:has(a) a` moves the facet to the longer selector: the preview follows each settled token.',
+    );
+    $this->assertJsCondition(
+      $outline_js($second_section_link) . " === 'dashed'",
+      20000,
+      'The link inside the linked block now carries the dashed hover paint: the reach moved to the anchor.',
+    );
+    $this->assertNotSame('dashed', (string) $session->evaluateScript($outline_js($second_section_selectors['p2'])), 'The linked text block itself no longer carries it: the paint moved with the reach.');
+    $this->assertJsCondition(
+      "(" . $map . ")[" . json_encode("$second_section_key::> d-text:has(a) a") . "] === undefined && window.__rel.header('> d-text:has(a) a') === null",
+      2000,
+      'Still nothing minted at the extended selector: no key, no row.',
+    );
+    // Blur clears: the island parks and its preview goes with it.
+    $session->executeScript('document.activeElement.blur();');
+    $this->assertJsCondition(
+      "window.__st.editors() === 0 && Drupal.Daedalus.Selection.getHoveredSelector() === null",
+      20000,
+      'Blurring the island parked it and cleared the hover-selector facet: the mint line\'s preview never outlives the typing.',
+    );
+    $this->assertNotSame('dashed', (string) $session->evaluateScript($outline_js($second_section_link)), 'The link\'s dashed paint is gone with the facet.');
+    $this->assertNotSame('dashed', (string) $session->evaluateScript($outline_js($second_section_selectors['p2'])), 'The linked text block carries none either.');
+    // The parked print keeps the typed line as the live view showed it
+    // (no declaration, so nothing committed); remove it so the section's
+    // island prints only its declarations for the legs below.
+    $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
+    $this->assertJsCondition(
+      "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
+      10000,
+      'The section island woke again to drop the previewed line.',
+    );
+    $session->executeScript(<<<'JS'
+      (() => {
+        const content = window.__sel.rootIsland().querySelector('.cm-content');
+        const lines = content.querySelectorAll('.cm-line');
+        const selection = document.getSelection();
+        selection.selectAllChildren(lines[lines.length - 1]);
+        document.execCommand('delete');
+        document.execCommand('delete');
+      })();
+      JS);
+    $this->assertJsCondition(
+      "!window.__sel.rootIsland().querySelector('.cm-content').textContent.includes('> d-text:has(a)') && Drupal.Daedalus.Selection.getHoveredSelector() === null",
+      20000,
+      'The previewed line is gone from the island and no facet stands: an emptied line previews nothing.',
+    );
+    $session->executeScript('document.activeElement.blur();');
+    $this->assertJsCondition(
+      "window.__st.editors() === 0 && (" . $map . ")[" . json_encode("$second_section_key::> d-text:has(a) a") . "] === undefined && " . $has_entry_js . " === " . json_encode($has_entry_before) . " && " . $has_headers_js . " === 1",
+      20000,
+      'The island parked clean: the preview legs left no key behind (none at the extended selector, the `> d-text:has(a)` entry and its one header as the relation legs left them).',
+    );
+
+    // A state on a non-terminal compound, posed (the selector-digest
+    // landing; seam: the typed line through the digester -> ONE
+    // update_style at the qualified key -> CssPrinter placing the
+    // force-state dual at the text compound inside its own :where() ->
+    // the State chip's pose stamping the compound the state stands on
+    // (force-state.js stampTargets over prefix()) -> the browser's
+    // cascade lighting the link: five layers only a browser sees
+    // together). `> d-text:hover a {` typed on the section's island
+    // keeps `:hover` as a qualifier of the text compound (it stands
+    // before the last compound, so nothing peels) and mints the
+    // `> d-text:hover a` row under `default`; its color reaches the link
+    // inside a hovered text block and nothing else. The real pointer is
+    // parked on the mode strip, so no real :hover holds anywhere; the
+    // pose is the only way the dual can match. The `> *` rule stamps
+    // every child under any posed state (every rule's own targets are
+    // stamped), so the stamp on the text blocks is not the
+    // discriminator: the link's color is, since a stamp on the link
+    // alone could never satisfy a dual glued to the text compound.
+    $accent_hover = (string) $session->evaluateScript("window.__sel.token('--color-accent-hover')");
+    $this->assertNotSame('rgba(0, 0, 0, 0)', $accent_hover, 'The skin\'s --color-accent-hover resolves on the canvas (the value the state-qualified rule is read against).');
+    $this->assertNotSame($accent, $accent_hover, 'The accent-hover token differs from the accent the :has() rule already paints on the linked block, so the link\'s color below can only come from the state-qualified rule.');
+    $link_color_js = "window.__rel.computed(" . json_encode($second_section_link) . ", 'color')";
+    $this->assertNotSame($accent_hover, (string) $session->evaluateScript($link_color_js), 'Before the rule exists the link does not compute the accent-hover color (the control).');
+    $this->assertSame(
+      0,
+      (int) $session->evaluateScript("document.querySelector('[data-selectable=\"$second_section_key\"]').querySelectorAll('[data-force-state]').length"),
+      'No element under the section carries a force-state stamp before the pose (the control).',
+    );
+    $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
+    $this->assertJsCondition(
+      "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
+      10000,
+      'The section island woke for the state-qualified rule.',
+    );
+    $session->executeScript("document.execCommand('insertText', false, '\\n> d-text:hover a ');");
+    $session->executeScript("document.execCommand('insertText', false, '{');");
+    $state_key = "$second_section_key::> d-text:hover a";
+    $this->assertJsCondition(
+      "(() => { const facts = window.__rel.facts('> d-text:hover a'); return !!facts && facts.code === '> d-text:hover a' && facts.chips === 1 && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1; })()",
+      20000,
+      'Typing `> d-text:hover a {` minted the `> d-text:hover a` rule row (the brace swallowed; the state before the last compound is a qualifier the digester keeps, so the row is a plain selector row), its island live and focused, the code face reading the canonical selector with one `>` chip.',
+    );
+    $this->assertJsCondition(
+      "window.__rel.header('> d-text a') === null && (" . $map . ")[" . json_encode("$second_section_key::> d-text a") . "] === undefined",
+      2000,
+      'Nothing peeled: no `> d-text a` row or key stands in for the state-qualified selector.',
+    );
+    $session->executeScript("document.execCommand('insertText', false, 'color: var(--color-accent-hover);');");
+    $this->assertJsCondition(
+      "(" . $map . ")[" . json_encode($state_key) . "]?.default?.color === 'var(--color-accent-hover)'",
+      20000,
+      'The color declaration committed at the qualified key (container::> d-text:hover a) under the default condition: a state on a non-terminal compound is selector text, not the entry\'s condition.',
+    );
+    $this->assertJsCondition(
+      "(() => { const map = (" . $map . "); return Object.keys(map).filter((key) => key.startsWith(" . json_encode("$second_section_key::> d-text:hover") . ")).length === 1 && map[" . json_encode($second_section_key) . "]?.hover === undefined; })()",
+      2000,
+      'One key carries the rule and the section\'s own entry gained no hover condition: the op landed exactly one update_style at the qualified key.',
+    );
+    $delivered_css_js = "Array.from(document.querySelectorAll('style')).map((tag) => tag.textContent).join('\\n')";
+    $dual_at_text_js = 'new RegExp(' . json_encode(':where\(\[data-element="block_type:text"\]\):where\(:is\(:hover,\s*\[data-force-state~="hover"\]\)\) a\b') . ').test(' . $delivered_css_js . ')';
+    $dual_at_link_js = 'new RegExp(' . json_encode('block_type:text"\]\) a:(where\()?:?is\(:hover') . ').test(' . $delivered_css_js . ')';
+    $this->assertJsCondition(
+      $dual_at_text_js,
+      20000,
+      'The delivered CSS carries the force-state dual on the text compound inside its own :where(), before the `a`, exactly where the state stands in the selector (CssPrinter placing a qualifier at its compound; no weight added).',
+    );
+    $this->assertFalse((bool) $session->evaluateScript($dual_at_link_js), 'The dual is not glued to the `a`: the state qualifies the text compound, never the addressed link.');
+    $this->assertNotSame($accent_hover, (string) $session->evaluateScript($link_color_js), 'With no pose and no real hover the link does not compute the rule\'s color: the dual on the text compound holds nothing yet.');
+
+    // The State chip poses Hover on the selected section: the stamp
+    // lands on the text blocks (the `> d-text` prefix of the rule, the
+    // compound carrying the state) and the link inside the linked block
+    // computes the rule's color while the block roots keep theirs.
+    $session->executeScript('document.activeElement.blur();');
+    $this->assertJsCondition('window.__st.editors() === 0', 10000, 'The rule\'s island parked before the pose.');
+    $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-chip-row")]/button[contains(@class, "daedalus-stylish-chip--state")]');
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__label')",
+      20000,
+      'The State chip opened its menu.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Hover').click();"
+    );
+    $stamped_js = "((selector) => (document.querySelector(selector)?.getAttribute('data-force-state') ?? '').split(/\\s+/).includes('hover'))";
+    $this->assertJsCondition(
+      "(() => { const stamped = $stamped_js; return stamped(" . json_encode($second_section_selectors['p1']) . ") && stamped(" . json_encode($second_section_selectors['p2']) . ") && stamped(" . json_encode($second_section_selectors['h3']) . ")"
+      . " && (() => { const chip = document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-chip--state'); return !!chip && chip.classList.contains('daedalus-stylish-chip--lit') && chip.textContent.includes('Hover'); })(); })()",
+      20000,
+      'Posing Hover lit the State chip and stamped data-force-state="hover" on the three text blocks: the targets of the selector truncated at the compound carrying the state (`> d-text`), where the printed dual reads it.',
+    );
+    $this->assertJsCondition(
+      $link_color_js . " === " . json_encode($accent_hover),
+      20000,
+      'The link inside the linked text block computes the rule\'s color under the pose: the stamp on its text block satisfies the dual glued to the text compound, the reveal pattern (`li:hover > ul`) delivered end to end.',
+    );
+    $posed = $second_section_computed('color');
+    $this->assertSame($accent, $posed['p2'], 'The linked block\'s root keeps the :has() rule\'s accent: the state-qualified rule addresses the link, not the block.');
+    $this->assertNotSame($accent_hover, $posed['p1'], 'The first paragraph\'s root does not compute the rule\'s color: it is no link.');
+    $this->assertNotSame($accent_hover, $posed['h3'], 'The heading\'s root does not either.');
+
+    // The pose cleared through the same menu (No state): the stamps go,
+    // the link's color reverts, and the legs below start from no pose.
+    $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-chip-row")]/button[contains(@class, "daedalus-stylish-chip--state")]');
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__label')",
+      20000,
+      'The State chip opened its menu again.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'No state').click();"
+    );
+    $this->assertJsCondition(
+      "document.querySelector('[data-selectable=\"$second_section_key\"]').querySelectorAll('[data-force-state]').length === 0 && " . $link_color_js . " !== " . json_encode($accent_hover),
+      20000,
+      'No state posed again: every stamp under the section is gone and the link no longer computes the rule\'s color (the dual holds only while the compound is stamped or really hovered).',
+    );
+
+    // A typed selector list folds into ONE `:is()` rule (the
+    // css-selectors landing; seam: the typed list through the digester's
+    // fold -> ONE row minted with the canonical `:is()` header and the
+    // fold notice toasted once -> ONE update_style at the folded key ->
+    // CssPrinter placing each member's force-state dual inside the
+    // `:is()` inside the text compound's own :where() -> the State chip's
+    // pose finding the state INSIDE the `:is()` member on the
+    // non-terminal compound (editing-at.js stateQualifiers reporting it
+    // at the host compound's index, force-state.js stampTargets over
+    // prefix()) -> the browser's cascade lighting the link: five layers
+    // only a browser sees together, and the stamp-inside-`:is()` path is
+    // wiring no lower tier exercises end to end). `> d-text:hover a,
+    // > d-text:focus-within a {` typed on the section's island mints the
+    // one `> d-text:is(:focus-within, :hover) a` row (members in the
+    // grammar's sorted order), never a row per member. The declaration
+    // is text-transform, so it contends with nothing the `> d-text:hover
+    // a` rule above already paints on the link under the same pose.
+    $folded_selector = '> d-text:is(:focus-within, :hover) a';
+    $folded_key = "$second_section_key::$folded_selector";
+    $fold_notice = 'Folded into one rule: :is(…) holds the alternatives.';
+    $fold_notices_js = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'status' && entry.message === " . json_encode($fold_notice) . ").length";
+    $link_transform_js = "window.__rel.computed(" . json_encode($second_section_link) . ", 'textTransform')";
+    $this->assertNotSame('uppercase', (string) $session->evaluateScript($link_transform_js), 'Before the folded rule exists the link does not compute text-transform: uppercase (the control).');
+    $this->assertSame(0, (int) $session->evaluateScript($fold_notices_js), 'No fold notice stands in the messenger history before the list is typed (the control).');
+    $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
+    $this->assertJsCondition(
+      "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
+      10000,
+      'The section island woke for the selector list.',
+    );
+    $session->executeScript("document.execCommand('insertText', false, '\\n> d-text:hover a, > d-text:focus-within a ');");
+    $session->executeScript("document.execCommand('insertText', false, '{');");
+    $this->assertJsCondition(
+      "(() => { const facts = window.__rel.facts(" . json_encode($folded_selector) . "); return !!facts && facts.code === " . json_encode($folded_selector) . " && facts.chips === 1 && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1; })()",
+      20000,
+      'Typing the two-member list with its brace minted ONE `> d-text:is(:focus-within, :hover) a` rule row (the brace swallowed; the digester folded the members into `:is()` on the text compound, sorted), its island live and focused, the header reading the canonical `:is()` spelling with one `>` chip (a state inside `:is()` on a non-terminal compound is code, never a chip).',
+    );
+    $this->assertJsCondition(
+      "window.__rel.header('> d-text:focus-within a') === null && (" . $map . ")[" . json_encode("$second_section_key::> d-text:focus-within a") . "] === undefined",
+      2000,
+      'No row per member: nothing stands at `> d-text:focus-within a` (the `> d-text:hover a` row above is the earlier step\'s, untouched).',
+    );
+    $this->assertJsCondition(
+      $fold_notices_js . " === 1",
+      20000,
+      'The fold notice toasted exactly once through the messenger as a status entry, "Folded into one rule: :is(…) holds the alternatives." (the one-sentence training, read off the digester\'s folded flag, never the text).',
+    );
+    $session->executeScript("document.execCommand('insertText', false, 'text-transform: uppercase;');");
+    $this->assertJsCondition(
+      "(" . $map . ")[" . json_encode($folded_key) . "]?.default?.['text-transform'] === 'uppercase'",
+      20000,
+      'The declaration committed at the folded key (container::> d-text:is(:focus-within, :hover) a) under the default condition: one key, one island, one block for the list.',
+    );
+    $this->assertJsCondition(
+      "(() => { const map = (" . $map . "); return Object.keys(map).filter((key) => key.startsWith(" . json_encode("$second_section_key::> d-text:is(") . ")).length === 1 && map[" . json_encode("$second_section_key::> d-text:focus-within a") . "] === undefined && map[" . json_encode($state_key) . "]?.default?.color === 'var(--color-accent-hover)' && map[" . json_encode($state_key) . "]?.default?.['text-transform'] === undefined; })()",
+      2000,
+      'One key carries the folded rule, no member key appeared, and the earlier `> d-text:hover a` entry is exactly what its step left: the fold landed one update_style.',
+    );
+    $dual_inside_is_js = 'new RegExp(' . json_encode(':where\(\[data-element="block_type:text"\]\):where\(:is\(:is\(:focus-within,\s*\[data-force-state~="focus-within"\]\),\s*:is\(:hover,\s*\[data-force-state~="hover"\]\)\)\) a\b') . ').test(' . $delivered_css_js . ')';
+    $this->assertJsCondition(
+      $dual_inside_is_js,
+      20000,
+      'The delivered CSS carries the `:is()` inside the text compound\'s own :where(), each member\'s force-state dual inside it, before the `a` (CssPrinter placing the qualifier at its compound; every member rides inside the one :where(), so no weight is added).',
+    );
+    $this->assertNotSame('uppercase', (string) $session->evaluateScript($link_transform_js), 'With no pose and no real hover or focus the link does not compute the folded rule\'s text-transform: neither member holds yet.');
+
+    // The State chip poses Hover: the stamp lands on the text blocks (the
+    // compound carrying the state INSIDE the `:is()` member) and the link
+    // inside the linked block computes the folded rule's text-transform.
+    $session->executeScript('document.activeElement.blur();');
+    $this->assertJsCondition('window.__st.editors() === 0', 10000, 'The folded rule\'s island parked before the pose.');
+    $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-chip-row")]/button[contains(@class, "daedalus-stylish-chip--state")]');
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__label')",
+      20000,
+      'The State chip opened its menu for the folded rule.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Hover').click();"
+    );
+    $this->assertJsCondition(
+      "(() => { const stamped = $stamped_js; return stamped(" . json_encode($second_section_selectors['p1']) . ") && stamped(" . json_encode($second_section_selectors['p2']) . ") && stamped(" . json_encode($second_section_selectors['h3']) . ")"
+      . " && (() => { const chip = document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-chip--state'); return !!chip && chip.classList.contains('daedalus-stylish-chip--lit') && chip.textContent.includes('Hover'); })(); })()",
+      20000,
+      'Posing Hover lit the State chip and stamped data-force-state="hover" on the three text blocks: the state found inside the `:is()` member on the text compound, the targets of the selector truncated there (`> d-text:is(:focus-within, :hover)`), where the printed dual reads it.',
+    );
+    $this->assertJsCondition(
+      $link_transform_js . " === 'uppercase'",
+      20000,
+      'The link inside the linked text block computes the folded rule\'s text-transform under the pose: the stamp on its text block satisfies the hover member\'s dual inside the `:is()`, the typed list delivered end to end as one rule.',
+    );
+    $posed_transform = $second_section_computed('textTransform');
+    $this->assertNotSame('uppercase', $posed_transform['p2'], 'The linked block\'s root does not compute it: the folded rule addresses the link, not the block.');
+    $this->assertNotSame('uppercase', $posed_transform['p1'], 'The first paragraph\'s root does not either: it is no link.');
+
+    // The pose cleared again (No state): the stamps go, the link's
+    // text-transform reverts, and the legs below start from no pose.
+    $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-chip-row")]/button[contains(@class, "daedalus-stylish-chip--state")]');
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__label')",
+      20000,
+      'The State chip opened its menu to clear the pose.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'No state').click();"
+    );
+    $this->assertJsCondition(
+      "document.querySelector('[data-selectable=\"$second_section_key\"]').querySelectorAll('[data-force-state]').length === 0 && " . $link_transform_js . " !== 'uppercase'",
+      20000,
+      'No state posed again: every stamp under the section is gone and the link no longer computes the folded rule\'s text-transform (the duals inside the `:is()` hold only while a member is stamped or really holds).',
+    );
+
+    // A literal condition, posed by the ruler (the selector-digest
+    // landing's WHEN half; seam: the typed at-rule prelude through the
+    // digester's WHEN half -> the condition clause grammar reading it as
+    // a LITERAL clause, canonical -> the section's row minted under that
+    // clause by the swallowed brace -> ONE update_style at the literal
+    // condition -> CssPrinter nesting the rule as its own @container
+    // at-rule -> the clause's derived band -> the stage's width pose
+    // lighting the row: typed text to delivered CSS to the canvas,
+    // which only a browser sees together). The strict reference guide
+    // admits references only (a literal is INVALID_STYLE_CONDITION
+    // there, naming narrow and medium), so the law is put at guarded
+    // for this step the way a site builder picks a mode, server-side on
+    // the active system, and back at strict right after; the mint is the
+    // client's and the write the server's, so no reload is needed. The
+    // band is two-edged (400px to 480px) so it holds at no width the
+    // stage rests at and has a midpoint the ruler can be driven to; a
+    // one-edged `(min-width: 500px)` would already hold at rest.
+    $this->enforce('guarded');
+    $this->assertSame(
+      'guarded',
+      \Drupal::service('daedalus_stylish.style_guide')->enforcement(),
+      'The law is guarded for the literal step: a literal clause the browser knows is admitted, a reference-only closed world is not asked of it.',
+    );
+    $literal = '@container (min-width: 400px) and (max-width: 480px)';
+    $literal_js = json_encode($literal);
+    $section_gap_js = "getComputedStyle(document.querySelector(" . json_encode("[data-selectable='$second_section_key']") . ")).rowGap";
+    $this->assertNull($session->evaluateScript("document.documentElement.getAttribute('data-canvas-width')"), 'The canvas rests unposed before the literal step (the control: no width stamp on the document).');
+    $this->assertNotSame($space_8, (string) $session->evaluateScript($section_gap_js), 'Before the literal rule exists the section\'s row gap is not --space-8 (the control).');
+    $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
+    $this->assertJsCondition(
+      "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
+      10000,
+      'The section island woke for the literal condition.',
+    );
+    // Typed with free case and spacing: the clause grammar lands it
+    // canonical, as the digester lands a selector.
+    $session->executeScript("document.execCommand('insertText', false, '\\n@CONTAINER (min-width:400px) and (max-width: 480px) ');");
+    $session->executeScript("document.execCommand('insertText', false, '{');");
+    $this->assertJsCondition(
+      "window.__st.editors() === 1 && !window.__sel.rootIsland()?.querySelector('.cm-editor') && !!document.activeElement.closest('.daedalus-stylish-island')",
+      20000,
+      'Typing the at-rule prelude and `{` on the section island minted a condition island under the literal clause (the brace swallowed, the new island live and focused, the root island printed again).',
+    );
+    $this->assertJsCondition(
+      "(" . $map . ")[" . json_encode($second_section_key) . "]?.[$literal_js] === undefined && Object.keys(" . $map . ").filter((key) => key.startsWith(" . json_encode("$second_section_key::") . ") && key.includes('@')).length === 0",
+      2000,
+      'Nothing committed yet: the minted island is a draft row under the literal clause, no key or condition carries the at-rule text.',
+    );
+    $session->executeScript("document.execCommand('insertText', false, 'gap: var(--space-8);');");
+    $this->assertJsCondition(
+      "(" . $map . ")[" . json_encode($second_section_key) . "]?.[$literal_js]?.gap === 'var(--space-8)'",
+      20000,
+      'The gap declaration committed at the section\'s own key under the LITERAL condition, spelled canonically (`@container (min-width: 400px) and (max-width: 480px)`): one update_style whose condition is the clause the digester read, admitted by the guarded law.',
+    );
+    $this->assertJsCondition(
+      "Object.keys((" . $map . ")[" . json_encode($second_section_key) . "] ?? {}).filter((condition) => condition.includes('@')).length === 1",
+      2000,
+      'Exactly one literal condition stands on the section\'s entry: the typed spelling and the canonical one did not become two.',
+    );
+    $literal_block_js = 'new RegExp(' . json_encode('@container \(min-width: 400px\) and \(max-width: 480px\)\s*\{[\s\S]*?gap:\s*var\(--space-8\)') . ').test(' . $delivered_css_js . ')';
+    $this->assertJsCondition(
+      $literal_block_js,
+      20000,
+      'The delivered CSS nests the rule inside its own `@container (min-width: 400px) and (max-width: 480px)` at-rule: CssPrinter prints a literal clause as the at-rule its own text spells.',
+    );
+    $this->assertNotSame($space_8, (string) $session->evaluateScript($section_gap_js), 'At rest the stage is wider than the band, so the section does not compute the literal rule\'s gap: the browser evaluates the container query, nothing else.');
+    // The ruler driven to the band's midpoint: the stage's width pose
+    // (what the ruler drags) constrains the page container to 440px,
+    // the clause's derived band holds, the section computes the gap and
+    // the literal's island lights as the posed row.
+    $session->executeScript('document.activeElement.blur();');
+    $this->assertJsCondition('window.__st.editors() === 0', 10000, 'The literal island parked before the pose.');
+    $session->executeScript('Drupal.Daedalus.CanvasVector.set({ width: 440 });');
+    $this->assertJsCondition(
+      "document.documentElement.getAttribute('data-canvas-width') === '440'",
+      20000,
+      'Driving the stage to 440px (the band\'s midpoint) stamped the document\'s width pose.',
+    );
+    $space_8_posed = (string) $session->evaluateScript("window.__rel.px('rowGap', 'var(--space-8)')");
+    $this->assertMatchesRegularExpression('/^[1-9][0-9]*(\.[0-9]+)?px$/', $space_8_posed, 'The skin\'s --space-8 resolves to a non-zero length at the posed width (the value the literal rule is read against there).');
+    $this->assertJsCondition(
+      $section_gap_js . " === " . json_encode($space_8_posed),
+      20000,
+      'Inside the band the section computes the literal rule\'s gap: the typed `@container` query reached the browser as its own at-rule and the posed stage satisfies it.',
+    );
+    $this->assertJsCondition(
+      "(() => { const island = Array.from(document.querySelectorAll('.daedalus-stylish-page-tree .daedalus-stylish-island')).find((candidate) => (candidate.textContent ?? '').includes('gap: var(--space-8)')); return !!island && island.classList.contains('daedalus-stylish-island--posed'); })()",
+      20000,
+      'The literal clause\'s island is lit as the posed row: the pose derives from the clause\'s band (editing-at over the clause grammar), so a literal width clause in use poses like a published band.',
+    );
+    // The pose released and the law back at strict: the gap reverts and
+    // the legs below run under the strict reference guide as before.
+    $session->executeScript('Drupal.Daedalus.CanvasVector.set({ width: null });');
+    $this->assertJsCondition(
+      "document.documentElement.getAttribute('data-canvas-width') === null && " . $section_gap_js . " !== " . json_encode($space_8_posed),
+      20000,
+      'Releasing the width pose unstamps the document and the section no longer computes the literal rule\'s gap: the band holds only while the stage sits inside it.',
+    );
+    $this->enforce('strict');
+    $this->assertSame(
+      'strict',
+      \Drupal::service('daedalus_stylish.style_guide')->enforcement(),
+      'The law is strict again after the literal step: the legs below run under the strict reference guide\'s own law.',
+    );
 
     // The second paragraph selected in Advanced mode: its Spacing
     // section's Margin top row reads the sibling rule through the
@@ -2143,7 +2804,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // mark titled by originOf's ancestor sentence: the token's face, the
     // label-less section's name and the selector literal (`>` unescaped,
     // the sentence being a title attribute).
-    $session->executeScript("Drupal.Daedalus.Selection.select('block:$band_p2');");
+    $session->executeScript("Drupal.Daedalus.Selection.select('block:$second_section_p2');");
     $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-inspector__ui-mode")]/button[normalize-space() = "Advanced"]');
     $this->assertJsCondition(
       "(() => { const active = document.querySelector('.daedalus-stylish-inspector__ui-mode button[aria-pressed=\"true\"]');"
@@ -2172,24 +2833,24 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     );
 
     // ----- A rule's worn variant on the Page lens. -----
-    // Seam: ONE apply_variant at the band's `pb-text` rule (the op
+    // Seam: ONE apply_variant at the section's `d-text` rule (the op
     // spine; the landing pairing and the delivery are Kernel-pinned)
     // -> the rule-wear lane printing the variant's link fragment inside
-    // the band's @scope (the linked paragraph's anchor computes it) ->
+    // the section's @scope (the linked paragraph's anchor computes it) ->
     // the code view's roster reading the stack's enumeration
     // (element-model.js elementIslands over selectorSuffixes), so the
-    // band's tree row gains the continued position
-    // `pb-text .text-block-link` that no map entry holds: it exists
+    // section's tree row gains the continued position
+    // `d-text .text-block-link` that no map entry holds: it exists
     // because the variant delivers there. Its lines print delivered
     // in the variant's hue, each titled by the variant
     // (on the owner's own continued position the layer is the
-    // rule-carried variant tier), and the band is NOT selected while
+    // rule-carried variant tier), and the section is NOT selected while
     // the Page lens lists it: the roster is the map's, never the
-    // selection's. The rule position itself, `pb-text`, holds the
+    // selection's. The rule position itself, `d-text`, holds the
     // reference and no line of its own.
-    $worn_rule_key = "$band_key::pb-text";
-    $worn_position = 'pb-text .text-block-link';
-    $band_anchor = "{$text_selector($band_p2)} a.text-block-link";
+    $worn_rule_key = "$second_section_key::d-text";
+    $worn_position = 'd-text .text-block-link';
+    $second_section_anchor = "{$text_selector($second_section_p2)} a.text-block-link";
     $session->executeScript(<<<JS
       (() => {
         const Blueprint = Drupal.Daedalus.Blueprint;
@@ -2206,18 +2867,18 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       "window.__wearError !== undefined"
       . ' || JSON.stringify((' . $map . ')[' . json_encode($worn_rule_key) . "]?.variants ?? []) === " . json_encode(json_encode([['variant' => 'guide_button_primary', 'fragment' => '']])),
       20000,
-      'The apply_variant at the band\'s pb-text rule resolved: the map carries Primary\'s reference on the RULE\'s entry.',
+      'The apply_variant at the section\'s d-text rule resolved: the map carries Primary\'s reference on the RULE\'s entry.',
     );
     $wear_error = $session->evaluateScript('window.__wearError ?? null');
     $this->assertNull($wear_error, 'Wearing Primary at the rule failed: ' . ($wear_error ?? ''));
     $this->assertJsCondition(
-      "window.__rel.computed(\"$band_anchor\", 'backgroundColor') === " . json_encode($accent),
+      "window.__rel.computed(\"$second_section_anchor\", 'backgroundColor') === " . json_encode($accent),
       20000,
-      'The linked paragraph\'s anchor computes Primary\'s accent background: the rule delivers the variant\'s link fragment by descent inside the band\'s @scope.',
+      'The linked paragraph\'s anchor computes Primary\'s accent background: the rule delivers the variant\'s link fragment by descent inside the section\'s @scope.',
     );
     $this->assertSame(
       NULL,
-      json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode("$band_key::$worn_position") . '] ?? null)'), TRUE),
+      json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode("$second_section_key::$worn_position") . '] ?? null)'), TRUE),
       'The map holds NO entry at the continued position: the row below exists because the variant delivers there, not because the map does.',
     );
     $session->executeScript('Drupal.Daedalus.Selection.clear();');
@@ -2228,16 +2889,16 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The code body opened with nothing selected.',
     );
     $session->executeScript("window.__st.clickScope('page');");
-    $worn_header_js = 'document.querySelector(' . json_encode(".daedalus-stylish-page-tree [data-daedalus-stylish-part-owner=\"$band_key\"][data-daedalus-stylish-part=\"$worn_position\"]") . ')';
+    $worn_header_js = 'document.querySelector(' . json_encode(".daedalus-stylish-page-tree [data-daedalus-stylish-part-owner=\"$second_section_key\"][data-daedalus-stylish-part=\"$worn_position\"]") . ')';
     $worn_lines_js = "Array.from(($worn_header_js)?.nextElementSibling?.querySelectorAll('.daedalus-stylish-island__line') ?? [])";
     $this->assertJsCondition(
       "window.__st.scope() === 'page' && Drupal.Daedalus.Selection.getSelected() === null"
-      . " && window.__st.rows().includes(" . json_encode($band_key) . ')'
+      . " && window.__st.rows().includes(" . json_encode($second_section_key) . ')'
       . " && !!$worn_header_js"
       . " && ($worn_header_js).querySelector('.daedalus-stylish-islands__prelude')?.textContent === " . json_encode($worn_position)
       . " && ($worn_header_js).nextElementSibling?.classList.contains('daedalus-stylish-islands__part-body')",
       20000,
-      'The Page lens lists the band\'s row with the continued position `pb-text .text-block-link` as a part row (the rule-wear continuation, first in the roster\'s delivery order), the band unselected, its body beneath the header.',
+      'The Page lens lists the section\'s row with the continued position `d-text .text-block-link` as a part row (the rule-wear continuation, first in the roster\'s delivery order), the section unselected, its body beneath the header.',
     );
     $this->assertJsCondition(
       "(() => { const lines = $worn_lines_js;"
@@ -2396,11 +3057,11 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // islands, never as floor lines of the own islands). The linked
     // paragraph selected at Element scope: its row alone lists, the chip
     // reads "This element" at its bare key, and its menu offers the
-    // band's mintable `> pb-text` rule as "Text blocks directly in the
-    // section" (the band carries no label), hinted "new rule": no map
+    // section's mintable `> d-text` rule as "Text blocks directly in the
+    // section" (the section carries no label), hinted "new rule": no map
     // entry holds it yet.
-    $p2_key = "block:$band_p2";
-    $seated_rule_key = "$band_key::> pb-text";
+    $p2_key = "block:$second_section_p2";
+    $seated_rule_key = "$second_section_key::> d-text";
     $address_chip = '#daedalus_stylish_inspector .daedalus-stylish-inspector__address';
     $menu_items_js = "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
       . ".map((item) => [item.querySelector('.daedalus-ui-menu__label')?.textContent.trim(), item.querySelector('.daedalus-ui-menu__hint')?.textContent.trim() ?? null, item.getAttribute('aria-checked')])";
@@ -2418,8 +3079,8 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The linked paragraph lists alone at Element scope in code mode, no editor live, the chip at its bare key reading "This element", unlit.',
     );
     $this->assertNull(
-      $session->evaluateScript("window.__rel.header('> pb-text')"),
-      'Before the seat no `> pb-text` rule row prints under the paragraph: the rule exists nowhere yet.',
+      $session->evaluateScript("window.__rel.header('> d-text')"),
+      'Before the seat no `> d-text` rule row prints under the paragraph: the rule exists nowhere yet.',
     );
     $this->clickPanelXpath('//button[contains(@class, "daedalus-stylish-inspector__address")]');
     $this->assertJsCondition(
@@ -2429,7 +3090,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     );
     $menu_items = json_decode((string) $session->evaluateScript("JSON.stringify($menu_items_js)"), TRUE);
     $this->assertSame(['This element', NULL, 'true'], $menu_items[0], 'The menu leads with the own key, checked.');
-    $this->assertContains(['Text blocks directly in Section', 'new rule', 'false'], $menu_items, 'The menu offers the band\'s mintable `> pb-text` rule, hinted "new rule".');
+    $this->assertContains(['Text blocks directly in Section', 'new rule', 'false'], $menu_items, 'The menu offers the section\'s mintable `> d-text` rule, hinted "new rule".');
     $session->executeScript(
       "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
       . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Text blocks directly in Section').click();"
@@ -2438,7 +3099,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // on the paragraph and no facet stands: the bare element is the
     // subject), lights the chip at the rule's key, and the code
     // view mounts the rule's row under the paragraph's own rows: a
-    // header carrying the band's key and the rule's selector, lit
+    // header carrying the section's key and the rule's selector, lit
     // (--active, aria-pressed), worded as the chip's entry, its body
     // holding the mintable rule's empty island live and focused (the one
     // editor on the tree), so the seat is one move from the first
@@ -2447,24 +3108,24 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       "!document.querySelector('.daedalus-ui-menu')"
       . " && Drupal.Daedalus.Selection.getSelected() === " . json_encode($p2_key)
       . " && Drupal.Daedalus.Selection.getTarget() === null"
-      . " && Drupal.Daedalus.Selection.getAddress()?.key === " . json_encode($band_key)
-      . " && Drupal.Daedalus.Selection.getAddress()?.selector === '> pb-text'"
+      . " && Drupal.Daedalus.Selection.getAddress()?.key === " . json_encode($second_section_key)
+      . " && Drupal.Daedalus.Selection.getAddress()?.selector === '> d-text'"
       . " && (() => { const chip = document.querySelector('$address_chip'); return !!chip"
       . '   && chip.dataset.daedalusStylishAddress === ' . json_encode($seated_rule_key)
       . "   && chip.querySelector('.daedalus-stylish-inspector__address-label')?.textContent.trim() === 'Text blocks directly in Section'"
       . "   && chip.classList.contains('daedalus-stylish-chip--lit'); })()",
       20000,
-      'The pick closed the menu, seated the band\'s `> pb-text` rule as the write address with the selection still on the paragraph and no facet standing, and lit the chip at container::> pb-text.',
+      'The pick closed the menu, seated the section\'s `> d-text` rule as the write address with the selection still on the paragraph and no facet standing, and lit the chip at container::> d-text.',
     );
     $this->assertJsCondition(
-      "(() => { const header = window.__rel.header('> pb-text'); const facts = window.__rel.facts('> pb-text'); if (!header || !facts) { return false; }"
+      "(() => { const header = window.__rel.header('> d-text'); const facts = window.__rel.facts('> d-text'); if (!header || !facts) { return false; }"
       . " return header.classList.contains('daedalus-stylish-islands__part--rule') && header.classList.contains('daedalus-stylish-islands__part--active')"
       . "   && header.querySelector('.daedalus-stylish-islands__part-select')?.getAttribute('aria-pressed') === 'true'"
       . "   && header.querySelector('.daedalus-stylish-islands__part-label')?.textContent === 'Text blocks directly in Section'"
-      . "   && facts.code === '> pb-text' && facts.chips === 1"
+      . "   && facts.code === '> d-text' && facts.chips === 1"
       . "   && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1; })()",
       20000,
-      'The seated rule mounted as a lit rule row under the paragraph (the band\'s key and `> pb-text` on the header, --active and aria-pressed, worded "Text blocks directly in Section" with the one `>` chip) with its empty island live and focused, the one editor on the tree.',
+      'The seated rule mounted as a lit rule row under the paragraph (the section\'s key and `> d-text` on the header, --active and aria-pressed, worded "Text blocks directly in Section" with the one `>` chip) with its empty island live and focused, the one editor on the tree.',
     );
     $this->assertSame(
       NULL,
@@ -2473,7 +3134,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     );
     // A color typed into the seated island commits at the ANCESTOR key
     // (the rule's own key, the selection untouched) and lands on the
-    // band's text blocks: the unlinked first paragraph and the heading
+    // section's text blocks: the unlinked first paragraph and the heading
     // compute the muted color (the linked paragraph is not read: the
     // printer flattens specificity, so between its `:has(a)` sibling
     // rule and this one the emission order decides, not this seam), and
@@ -2481,13 +3142,13 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // blocks alone. The line prints in the rule's island alone: the
     // paragraph's own islands carry no line from the rule, since T4 the
     // ancestor tier is rule islands, never floor lines.
-    $before_seated = $band_computed('color');
+    $before_seated = $second_section_computed('color');
     $this->assertNotSame($muted, $before_seated['p1'], 'Before the write the first paragraph does not wear the muted color (the control).');
     $session->executeScript("document.execCommand('insertText', false, 'color: var(--color-muted);');");
     $this->assertJsCondition(
       "(" . $map . ")[" . json_encode($seated_rule_key) . "]?.default?.color === 'var(--color-muted)'",
       20000,
-      'The declaration committed at the ancestor key (container::> pb-text), minting the rule\'s entry.',
+      'The declaration committed at the ancestor key (container::> d-text), minting the rule\'s entry.',
     );
     $this->assertSame(
       NULL,
@@ -2495,68 +3156,68 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The paragraph\'s own entry is untouched by the write at the rule.',
     );
     $this->assertJsCondition(
-      "window.__rel.computed(\"{$band_selectors['p1']}\", 'color') === " . json_encode($muted),
+      "window.__rel.computed(\"{$second_section_selectors['p1']}\", 'color') === " . json_encode($muted),
       20000,
-      'The rule lands on the band: the first paragraph computes the muted color typed at container::> pb-text.',
+      'The rule lands on the section: the first paragraph computes the muted color typed at container::> d-text.',
     );
-    $after_seated = $band_computed('color');
-    $this->assertSame($muted, $after_seated['h3'], 'The heading computes it too: the rule reaches every text block directly in the band.');
+    $after_seated = $second_section_computed('color');
+    $this->assertSame($muted, $after_seated['h3'], 'The heading computes it too: the rule reaches every text block directly in the section.');
     $this->assertSame($before_seated['img'], $after_seated['img'], 'The image block keeps its prior color: the type compound names text blocks alone.');
     $this->assertJsCondition(
-      "(() => { const header = window.__rel.header('> pb-text'); if (!header) { return false; }"
+      "(() => { const header = window.__rel.header('> d-text'); if (!header) { return false; }"
       . " const own = ($own_lines_js).filter((line) => line.textContent.includes('color: var(--color-muted)'));"
       . " const inRule = Array.from(header.nextElementSibling.querySelectorAll('.cm-line, .daedalus-stylish-island__line')).filter((line) => line.textContent.includes('color: var(--color-muted)'));"
-      . " return own.length === 0 && inRule.length === 1 && Drupal.Daedalus.Selection.getAddress()?.selector === '> pb-text'; })()",
+      . " return own.length === 0 && inRule.length === 1 && Drupal.Daedalus.Selection.getAddress()?.selector === '> d-text'; })()",
       20000,
       'The declaration prints once, in the seated rule\'s island; the paragraph\'s own islands carry no line from the rule, and the address still stands at the rule after the write.',
     );
 
     // ----- A row typed INSIDE the seated ancestor rule island. -----
-    // Seam: the `&::before {` gesture typed in the band's seated
-    // `> pb-text` island (still the one live editor) -> element-model.js
+    // Seam: the `&::before {` gesture typed in the section's seated
+    // `> d-text` island (still the one live editor) -> element-model.js
     // composeUnder nesting the line under the island's rule
-    // (`> pb-text::before`) -> the island's owner being an ANCESTOR of
-    // the selection, so the minted row is a rule on the band, an
+    // (`> d-text::before`) -> the island's owner being an ANCESTOR of
+    // the selection, so the minted row is a rule on the section, an
     // ADDRESS, seated through source.address and never drafted under the
     // paragraph (element-view.js seatMinted: a draft would be a second
     // island for one spine fact) -> the chip turning to the rule's box,
-    // the `> pb-text` row going dark, and the placed `> pb-text::before`
+    // the `> d-text` row going dark, and the placed `> d-text::before`
     // rule row lit (placeEditable's virtual layer, `existing` false) with
     // its empty island taking the cursor through rulesFor's wake, the
     // map untouched at both keys. Only a browser runs the gesture inside
     // a rule island through the spine's address and the view's
     // placement in order; the node specs pin the composition.
-    $nested_rule_key = "$band_key::> pb-text::before";
+    $nested_rule_key = "$second_section_key::> d-text::before";
     $session->executeScript("document.execCommand('insertText', false, '\\n&::before ');");
     $session->executeScript("document.execCommand('insertText', false, '{');");
     $this->assertJsCondition(
       "Drupal.Daedalus.Selection.getSelected() === " . json_encode($p2_key)
       . " && Drupal.Daedalus.Selection.getTarget() === null"
-      . " && Drupal.Daedalus.Selection.getAddress()?.key === " . json_encode($band_key)
-      . " && Drupal.Daedalus.Selection.getAddress()?.selector === '> pb-text::before'"
+      . " && Drupal.Daedalus.Selection.getAddress()?.key === " . json_encode($second_section_key)
+      . " && Drupal.Daedalus.Selection.getAddress()?.selector === '> d-text::before'"
       . " && (() => { const chip = document.querySelector('$address_chip'); return !!chip"
       . '   && chip.dataset.daedalusStylishAddress === ' . json_encode($nested_rule_key)
       . "   && chip.querySelector('.daedalus-stylish-inspector__address-label')?.textContent.trim() === 'Text blocks directly in Section › Before'"
       . "   && chip.classList.contains('daedalus-stylish-chip--lit'); })()",
       20000,
-      'Typing `&::before {` inside the seated `> pb-text` island seated the composed rule as the write address: the selection still the paragraph, no facet, the address the band\'s `> pb-text::before`, the chip lit at container::> pb-text::before reading the rule\'s box.',
+      'Typing `&::before {` inside the seated `> d-text` island seated the composed rule as the write address: the selection still the paragraph, no facet, the address the section\'s `> d-text::before`, the chip lit at container::> d-text::before reading the rule\'s box.',
     );
     $this->assertJsCondition(
-      "(() => { const header = window.__rel.header('> pb-text::before'); const facts = window.__rel.facts('> pb-text::before'); if (!header || !facts) { return false; }"
+      "(() => { const header = window.__rel.header('> d-text::before'); const facts = window.__rel.facts('> d-text::before'); if (!header || !facts) { return false; }"
       . " return header.classList.contains('daedalus-stylish-islands__part--rule') && header.classList.contains('daedalus-stylish-islands__part--active')"
       . "   && header.querySelector('.daedalus-stylish-islands__part-select')?.getAttribute('aria-pressed') === 'true'"
       . "   && header.querySelector('.daedalus-stylish-islands__part-label')?.textContent === 'Text blocks directly in Section › Before'"
-      . "   && facts.code === '> pb-text::before' && facts.chips === 1"
+      . "   && facts.code === '> d-text::before' && facts.chips === 1"
       . "   && facts.liveInBody === 1 && facts.focusedInBody && window.__st.editors() === 1"
-      . "   && !window.__rel.header('> pb-text').classList.contains('daedalus-stylish-islands__part--active'); })()",
+      . "   && !window.__rel.header('> d-text').classList.contains('daedalus-stylish-islands__part--active'); })()",
       20000,
-      'The seated `> pb-text::before` rule mounted as the lit rule row under the paragraph (the band\'s key and the composed selector on the header, --active and aria-pressed, worded as the chip\'s entry with the one `>` chip) with its empty island live and focused, the one editor on the tree; the `> pb-text` row went dark.',
+      'The seated `> d-text::before` rule mounted as the lit rule row under the paragraph (the section\'s key and the composed selector on the header, --active and aria-pressed, worded as the chip\'s entry with the one `>` chip) with its empty island live and focused, the one editor on the tree; the `> d-text` row went dark.',
     );
     $this->assertJsCondition(
-      "!Array.from(document.querySelectorAll('.daedalus-stylish-page-tree [data-daedalus-stylish-part-owner=" . json_encode($p2_key) . "]')).some((header) => header.dataset.daedalusStylishPart === '> pb-text::before')"
-      . " && !Array.from(window.__rel.header('> pb-text').nextElementSibling.querySelectorAll('.cm-line, .daedalus-stylish-island__line')).some((line) => line.textContent.includes('&::before'))",
+      "!Array.from(document.querySelectorAll('.daedalus-stylish-page-tree [data-daedalus-stylish-part-owner=" . json_encode($p2_key) . "]')).some((header) => header.dataset.daedalusStylishPart === '> d-text::before')"
+      . " && !Array.from(window.__rel.header('> d-text').nextElementSibling.querySelectorAll('.cm-line, .daedalus-stylish-island__line')).some((line) => line.textContent.includes('&::before'))",
       10000,
-      'The minted rule drafted nothing under the paragraph (no row of the paragraph\'s own carries the selector: the seat is the whole gesture) and the typed anchor left the `> pb-text` island with the brace.',
+      'The minted rule drafted nothing under the paragraph (no row of the paragraph\'s own carries the selector: the seat is the whole gesture) and the typed anchor left the `> d-text` island with the brace.',
     );
     $this->assertSame(
       NULL,
@@ -2566,7 +3227,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertSame(
       ['default' => ['color' => 'var(--color-muted)']],
       json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($seated_rule_key) . '] ?? null)'), TRUE),
-      'The `> pb-text` entry is untouched by the mint: the typed anchor never reached it as a declaration.',
+      'The `> d-text` entry is untouched by the mint: the typed anchor never reached it as a declaration.',
     );
 
     // ----- A generated box typed on the root island, born with its seed. -----
@@ -2579,10 +3240,10 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // the LIVE buffer above the user's text (island.js unseenOwnLines),
     // so the seed prints as the island's first line and the park's settle
     // diffs an honest buffer instead of unsetting it -> the box computing
-    // on the band. The node specs pin the gesture, the mint and the
+    // on the section. The node specs pin the gesture, the mint and the
     // splice's model; only a browser runs the gesture through the
     // completion machinery, the commit, the refresh under the cursor and
-    // the blur's settle in order. The band's island is the root island
+    // the blur's settle in order. The section's island is the root island
     // here (the anchor is the owner's own box). guide_example declares no
     // `pseudo:` section, so under its strict law the first write is the
     // server's STYLE_PSEUDO_NOT_DECLARED refusal (Kernel-pinned; the code
@@ -2595,36 +3256,36 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       \Drupal::service('daedalus_stylish.style_guide')->enforcement(),
       'The active system is open for the box leg: the server grants the undeclared box.',
     );
-    $box_key = "$band_key::&::before";
-    $band_before_js = "getComputedStyle(document.querySelector('[data-selectable=\"$band_key\"]'), '::before')";
+    $box_key = "$second_section_key::&::before";
+    $second_section_before_js = "getComputedStyle(document.querySelector('[data-selectable=\"$second_section_key\"]'), '::before')";
     $box_lines_js = "Array.from(window.__rel.header('&::before')?.nextElementSibling?.querySelectorAll('.cm-line, .daedalus-stylish-island__line') ?? []).map((line) => line.textContent.trim())";
     $box_lines = json_encode(json_encode(['content: "";', 'background-color: var(--color-accent);']));
-    // A user reaches the band by a canvas click, whose blur parks the
+    // A user reaches the section by a canvas click, whose blur parks the
     // live rule island before the selection moves; through the facade
     // the park is explicit. Without it the focused island's cursor is
-    // remembered under its id (container::> pb-text|default) and the
-    // band's own `> pb-text` row, mounting under the same id, claims it
+    // remembered under its id (container::> d-text|default) and the
+    // section's own `> d-text` row, mounting under the same id, claims it
     // and wakes live (the stitching registry's re-render seam), which is
     // not the posture this leg starts from.
     $session->executeScript('document.activeElement.blur();');
     $this->assertJsCondition(
-      "window.__st.editors() === 0 && Drupal.Daedalus.Selection.getAddress()?.selector === '> pb-text::before'",
+      "window.__st.editors() === 0 && Drupal.Daedalus.Selection.getAddress()?.selector === '> d-text::before'",
       10000,
-      'The blur parked the seated rule\'s empty island: zero editors, the address still standing at the typed `> pb-text::before` rule.',
+      'The blur parked the seated rule\'s empty island: zero editors, the address still standing at the typed `> d-text::before` rule.',
     );
-    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
+    $session->executeScript("Drupal.Daedalus.Selection.select('$second_section_key');");
     $this->assertJsCondition(
-      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$band_key]))
+      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$second_section_key]))
       . " && Drupal.Daedalus.Selection.getTarget() === null && Drupal.Daedalus.Selection.getAddress() === null && window.__st.editors() === 0"
       . " && window.__rel.header('&::before') === null && !!window.__sel.rootIsland()",
       20000,
-      'The band lists alone at Element scope with no target and no address (the select dropped the rule) and no editor live, no box row yet, its root island printing the skin gap floor line.',
+      'The section lists alone at Element scope with no target and no address (the select dropped the rule) and no editor live, no box row yet, its root island printing the skin gap floor line.',
     );
     $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
     $this->assertJsCondition(
       "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
       10000,
-      'The band\'s root island woke for the box gesture.',
+      'The section\'s root island woke for the box gesture.',
     );
     $session->executeScript("document.execCommand('insertText', false, '\\n&::before ');");
     $session->executeScript("document.execCommand('insertText', false, '{');");
@@ -2660,9 +3321,9 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The seed joined the LIVE buffer above the typed line: the box island, still the one editor, reads `content: "";` then the background (the refresh spliced the server-born own line in under the cursor).',
     );
     $this->assertJsCondition(
-      "($band_before_js).content === '\"\"' && ($band_before_js).backgroundColor === " . json_encode($accent),
+      "($second_section_before_js).content === '\"\"' && ($second_section_before_js).backgroundColor === " . json_encode($accent),
       20000,
-      'The band\'s generated box computes on the canvas: the seeded content makes it exist and it wears the accent.',
+      'The section\'s generated box computes on the canvas: the seeded content makes it exist and it wears the accent.',
     );
     // The park (a wake on the root island blurs the box island): the
     // blur's settle diffs the spliced buffer against the truth, so
@@ -2680,7 +3341,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The park\'s settle unset nothing: the seed survived the blur (before the splice the missing line read as a deletion and the box vanished on park).',
     );
     $this->assertJsCondition(
-      "($band_before_js).content === '\"\"'",
+      "($second_section_before_js).content === '\"\"'",
       10000,
       'The box still exists on the canvas after the park.',
     );
@@ -2702,7 +3363,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // canvas landing in order; the node specs pin the composition. The
     // system is still open from the previous leg (the grant is the
     // op's). The container is reached through the facade after the
-    // band's live root island is parked explicitly (the canvas click's
+    // section's live root island is parked explicitly (the canvas click's
     // blur, as the previous leg explains).
     $nested_box_key = "$container_key::p::before";
     $p_island_js = "window.__sel.header('p')?.nextElementSibling?.querySelector('.daedalus-stylish-island__editor') ?? null";
@@ -2752,7 +3413,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       10000,
       'The typed anchor left the `p` island with the brace: no `&::before` text remains among its lines.',
     );
-    // The first declaration is a background, the band's box leg's
+    // The first declaration is a background, the section's box leg's
     // gesture: `content` is the box's existence switch with the closed
     // grammar `"" | none | one media reference` (GeneratedContent), so a
     // typed string like `content: "★";` is held by the lint and never
@@ -2841,14 +3502,14 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'Typing `&::after {` inside the `p` island minted and seated the composed `p::after`: the row lit with its empty island live and focused, the target and the chip at container::p::after.',
     );
     $session->executeScript('document.activeElement.blur();');
-    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
+    $session->executeScript("Drupal.Daedalus.Selection.select('$second_section_key');");
     $this->assertJsCondition(
-      "Drupal.Daedalus.Selection.getSelected() === " . json_encode($band_key)
+      "Drupal.Daedalus.Selection.getSelected() === " . json_encode($second_section_key)
       . " && Drupal.Daedalus.Selection.getTarget() === null"
       . " && document.querySelectorAll('[data-daedalus-stylish-part=\"p::after\"]').length === 0"
       . " && window.__st.editors() === 0",
       20000,
-      'Selecting the band dropped the empty minted island with its facet: the target is null and no `p::after` row exists anywhere on the tree.',
+      'Selecting the section dropped the empty minted island with its facet: the target is null and no `p::after` row exists anywhere on the tree.',
     );
     $this->assertSame(
       NULL,
@@ -2863,21 +3524,21 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'Reselecting the container does not revive the dropped island: the written `p::before` row stands, no `p::after` row returns.',
     );
-    // Back to the band's posture the paste leg starts from: its root
+    // Back to the section's posture the paste leg starts from: its root
     // island the one live editor.
     $session->executeScript('document.activeElement.blur();');
-    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
+    $session->executeScript("Drupal.Daedalus.Selection.select('$second_section_key');");
     $this->assertJsCondition(
-      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$band_key]))
+      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$second_section_key]))
       . " && Drupal.Daedalus.Selection.getTarget() === null && window.__st.editors() === 0 && !!window.__sel.rootIsland()",
       20000,
-      'The band lists alone again with no target (the select dropped the container\'s facet) and no editor live.',
+      'The section lists alone again with no target (the select dropped the container\'s facet) and no editor live.',
     );
     $session->executeScript("window.__sel.wakeAtEnd(window.__sel.rootIsland());");
     $this->assertJsCondition(
       "window.__st.editors() === 1 && window.__sel.rootIsland().querySelectorAll('.cm-editor').length === 1",
       10000,
-      'The band\'s root island woke again: the one live editor, the paste leg\'s starting posture.',
+      'The section\'s root island woke again: the one live editor, the paste leg\'s starting posture.',
     );
 
     // ----- The paste door, end to end. -----
@@ -2890,11 +3551,11 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // labelled by the count) -> the authoritative refresh splicing the
     // bare declaration into the LIVE root buffer and materializing the
     // `&:hover` condition row with its printed island beside it. The
-    // band's root island is the one live editor from the box leg's
+    // section's root island is the one live editor from the box leg's
     // wake; the text pairs a bare declaration with a nested state block,
     // so the answer carries an entry at the island's own condition and
     // one at hover, and the chunk never stays as text.
-    $band_map = "((" . $map . ")[" . json_encode($band_key) . "] ?? {})";
+    $second_section_map = "((" . $map . ")[" . json_encode($second_section_key) . "] ?? {})";
     $history_js = 'Drupal.Daedalus.History.getState()';
     $pasted = json_decode((string) $session->evaluateScript(<<<'JS'
       (() => {
@@ -2909,13 +3570,13 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       })()
       JS), TRUE);
     $this->assertIsArray($pasted, 'The paste step returned its facts.');
-    $this->assertTrue($pasted['live'], 'The band\'s root island was live for the paste (the box leg\'s wake).');
+    $this->assertTrue($pasted['live'], 'The section\'s root island was live for the paste (the box leg\'s wake).');
     $this->assertTrue($pasted['taken'], 'The door took the paste: the ClipboardEvent was prevented, so the structured text never entered the buffer.');
     $this->assertJsCondition(
-      $band_map . "?.default?.['padding-top'] === 'var(--space-4)'"
-      . " && " . $band_map . "?.hover?.color === 'var(--color-accent)'",
+      $second_section_map . "?.default?.['padding-top'] === 'var(--space-4)'"
+      . " && " . $second_section_map . "?.hover?.color === 'var(--color-accent)'",
       20000,
-      'The door\'s answer landed as update_style ops: the bare declaration at the band\'s default condition and the nested block\'s color at hover.',
+      'The door\'s answer landed as update_style ops: the bare declaration at the section\'s default condition and the nested block\'s color at hover.',
     );
     $this->assertJsCondition(
       "$history_js.entries.length === " . ((int) $pasted['before'] + 1)
@@ -2934,7 +3595,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       . "   && lines.some((text) => text.startsWith('color: var(--color-accent);'))"
       . "   && !!run && run.dataset.layer === 'element' && run.textContent.trim() === 'this element'; })()",
       20000,
-      'The paste materialized the `&:hover` condition row under the band\'s root (its prelude spelled as nested CSS) with its island printed: the pasted color on a line under the "this element" run label.',
+      'The paste materialized the `&:hover` condition row under the section\'s root (its prelude spelled as nested CSS) with its island printed: the pasted color on a line under the "this element" run label.',
     );
     $this->assertJsCondition(
       "(() => { const island = window.__sel.rootIsland(); const text = island?.textContent ?? '';"
@@ -3037,8 +3698,8 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // road, a hand pass). The cluster re-probes the door on every render
     // and nothing re-renders it for a stub mounted by script, so the
     // selection bounces through the linked paragraph and back to the
-    // band: the next render sees the clipboard and the two buttons come
-    // back enabled. The band is the selected element with no target, so
+    // section: the next render sees the clipboard and the two buttons come
+    // back enabled. The section is the selected element with no target, so
     // the write key is its own and the print carries its own entry
     // beside its rules.
     $session->executeScript(<<<'JS'
@@ -3057,7 +3718,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
         }
       })();
       JS);
-    // The paste leg left the band's root island live. Retire it here on
+    // The paste leg left the section's root island live. Retire it here on
     // purpose: on plain http the "Copy key" menu above closed it as a side
     // effect, and a secure origin skips that leg, so without this the
     // bounce below would carry a live editor and the "no editor live"
@@ -3067,16 +3728,16 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$p2_key])),
       20000,
-      'The selection left the band for the linked paragraph (the bounce that re-renders the cluster after the stub mounted).',
+      'The selection left the section for the linked paragraph (the bounce that re-renders the cluster after the stub mounted).',
     );
-    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
+    $session->executeScript("Drupal.Daedalus.Selection.select('$second_section_key');");
     $this->assertJsCondition(
-      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$band_key]))
+      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$second_section_key]))
       . " && window.__st.editors() === 0"
       . " && (() => { const cluster = $cluster_js; return !!cluster.copy && !!cluster.paste && !cluster.copy.disabled && !cluster.paste.disabled"
       . "   && cluster.copy.tooltip === 'Copy CSS' && cluster.paste.tooltip === 'Paste CSS'; })()",
       20000,
-      'The band is selected again at Element scope with no editor live, and the cluster\'s next render saw the stubbed clipboard: Copy CSS and Paste CSS are enabled again, each pill back to its label.',
+      'The section is selected again at Element scope with no editor live, and the cluster\'s next render saw the stubbed clipboard: Copy CSS and Paste CSS are enabled again, each pill back to its label.',
     );
     $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-inspector__actions")]//button[@aria-label="Copy CSS"]');
     $this->assertJsCondition(
@@ -3086,9 +3747,9 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The Copy CSS gesture wrote the route\'s text to the (stubbed) clipboard and flashed "CSS copied" on its own button.',
     );
     $copied = (string) $session->evaluateScript('window.__copied');
-    $this->assertStringContainsString("#$band_uuid", $copied, 'The copied text addresses the band by its uuid: the dialect\'s id, never an alias.');
-    $this->assertStringContainsString('padding-top: var(--space-4);', $copied, 'The band\'s own default entry prints as a rule (the pasted padding among its declarations).');
-    $this->assertStringContainsString('margin-top: var(--space-8);', $copied, 'The band\'s `> p + p` rule prints flat beside the element\'s own rule.');
+    $this->assertStringContainsString("#$second_section_uuid", $copied, 'The copied text addresses the section by its uuid: the dialect\'s id, never an alias.');
+    $this->assertStringContainsString('padding-top: var(--space-4);', $copied, 'The section\'s own default entry prints as a rule (the pasted padding among its declarations).');
+    $this->assertStringContainsString('margin-top: var(--space-8);', $copied, 'The section\'s `> p + p` rule prints flat beside the element\'s own rule.');
     $this->assertStringContainsString(':hover', $copied, 'The hover condition prints as a real CSS state on its rule.');
     $this->assertStringContainsString('/* Section', $copied, 'The print leads with the element\'s words as a comment (the naming spine, annotated on the read).');
     $this->assertStringNotContainsString('&', $copied, 'The server prints flat rules: nesting is sugar on parse only.');
@@ -3109,7 +3770,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // window; the declared item is inert by design; the ancestor-rule
     // seat has no run to hang on (own islands drop the ancestor tier,
     // sparse rows build no tree), recorded in the working notes for a
-    // ruling. A variant a RULE carries (Primary on the band's continued
+    // ruling. A variant a RULE carries (Primary on the section's continued
     // position) is the scenario's last leg: its doorway anchors at the
     // carrier rule.
     $session->executeScript(<<<JS
@@ -3258,7 +3919,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
 
     // ----- A rule-carried run anchors its doorway at the carrier. -----
     // Seam: the run label on a CONTINUED position (Primary, worn at the
-    // band's `pb-text` rule, printed on the `pb-text .text-block-link`
+    // section's `d-text` rule, printed on the `d-text .text-block-link`
     // part row) -> line-menu.js runMenuItems reading the layer record's
     // carrier off the position's stack (style-stack.js mapLayers names
     // the rule as the carrier of every reference it delivers) -> the
@@ -3272,14 +3933,14 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // print is the Door smoke leg's. Before the fix the run's anchor
     // was null, the session anchored at the selected key, which does
     // not wear Primary, and the pick did nothing visible.
-    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
+    $session->executeScript("Drupal.Daedalus.Selection.select('$second_section_key');");
     $primary_run_js = "($worn_header_js)?.nextElementSibling?.querySelector('.daedalus-stylish-island__run[data-layer=\"variant:guide_button_primary\"]') ?? null";
     $this->assertJsCondition(
-      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$band_key]))
+      "window.__st.scope() === 'element' && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode([$second_section_key]))
       . " && !document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector--session')"
       . " && ($primary_run_js)?.textContent.trim() === 'Primary'",
       20000,
-      'The band lists alone at Element scope with no frame mounted, its continued position `pb-text .text-block-link` printing Primary\'s run label worded by the variant.',
+      'The section lists alone at Element scope with no frame mounted, its continued position `d-text .text-block-link` printing Primary\'s run label worded by the variant.',
     );
     $session->executeScript(
       "($primary_run_js).scrollIntoView({ block: 'center', behavior: 'instant' });"
@@ -3310,9 +3971,9 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     );
     $this->assertJsCondition(
       "!document.querySelector('.daedalus-ui-menu')"
-      . " && Drupal.Daedalus.Selection.getSelected() === " . json_encode($band_key)
-      . " && Drupal.Daedalus.Selection.getTarget()?.key === " . json_encode($band_key)
-      . " && Drupal.Daedalus.Selection.getTarget()?.selector === 'pb-text'"
+      . " && Drupal.Daedalus.Selection.getSelected() === " . json_encode($second_section_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.key === " . json_encode($second_section_key)
+      . " && Drupal.Daedalus.Selection.getTarget()?.selector === 'd-text'"
       . " && !!document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector--session')"
       // The header's document control is the switcher (a select, its
       // option "Primary · Button") when the selection wears more than
@@ -3323,7 +3984,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       . " && (document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector--session .daedalus-stylish-inspector__empty')?.textContent ?? '').includes('\"Primary\" is built-in and read-only')"
       . " && document.querySelector('$address_chip')?.dataset.daedalusStylishAddress === " . json_encode($worn_rule_key),
       20000,
-      'The pick seated the band\'s `pb-text` rule as the target (the selection still the band, the chip at container::pb-text) and mounted the session frame labelled "Primary" over the rule\'s wearing, carrying the built-in\'s read-only notice: the run\'s doorway anchors at the carrier rule, never at the position the value lands on.',
+      'The pick seated the section\'s `d-text` rule as the target (the selection still the section, the chip at container::d-text) and mounted the session frame labelled "Primary" over the rule\'s wearing, carrying the built-in\'s read-only notice: the run\'s doorway anchors at the carrier rule, never at the position the value lands on.',
     );
     $this->clickPanelXpath('//div[contains(@class, "daedalus-stylish-session__top")]//button[contains(@class, "daedalus-stylish-session__back")]');
     $this->assertJsCondition(
@@ -3340,14 +4001,14 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // styled row mounts its islands, an unstyled one is bare (the header
     // alone, the chevron's inert spacer where a foldable row has its
     // chevron, no island and no editor beneath) until it is selected,
-    // when the honest edit surface mounts. The band's three text blocks
+    // when the honest edit surface mounts. The section's three text blocks
     // (p, p, h3) have no entry of their own (every write above landed at
-    // the band's relational keys), so at Subtree over the band they are
+    // the section's relational keys), so at Subtree over the section they are
     // the bare rows; the image block is born wearing guide_image_rounded
     // (guide_example's image block type default), and a worn reference IS
     // styling (isStyledElement's entryRefs half), so its row is not bare
-    // and mounts its island, the band's row likewise.
-    $band_children = json_encode([$band_key, "block:$band_p1", $p2_key, "block:$band_h3", "block:$band_img"]);
+    // and mounts its island, the section's row likewise.
+    $second_section_children = json_encode([$second_section_key, "block:$second_section_p1", $p2_key, "block:$second_section_h3", "block:$second_section_img"]);
     $session->executeScript(<<<'JS'
       window.__st.rowFaces = () => Array.from(document.querySelectorAll('.daedalus-stylish-page-tree [data-daedalus-stylish-page-key]'))
         .map((header) => {
@@ -3367,21 +4028,21 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $session->executeScript("window.__st.clickScope('subtree');");
     $this->assertJsCondition(
       "window.__st.scope() === 'subtree'"
-      . " && JSON.stringify(window.__st.rows()) === " . json_encode($band_children)
+      . " && JSON.stringify(window.__st.rows()) === " . json_encode($second_section_children)
       . " && (() => { const faces = window.__st.rowFaces();"
       . "   const styled = [faces[0], faces[4]]; const bare = faces.slice(1, 4);"
       . "   return styled.every((face) => !face.bare && face.chevron && !face.spacer && face.islands > 0)"
       . "     && bare.every((face) => face.bare && face.type === 'Text' && face.spacer && !face.chevron && face.islands === 0 && face.editors === 0); })()",
       20000,
-      'Subtree over the band prints the band\'s row and ALL four of its blocks\' rows in layout order: the band and the worn image block styled (chevron, islands), each unstyled text block a bare row speaking its type word as its tooltip with the chevron column\'s footprint in its place and neither an island nor an editor beneath it.',
+      'Subtree over the section prints the section\'s row and ALL four of its blocks\' rows in layout order: the section and the worn image block styled (chevron, islands), each unstyled text block a bare row speaking its type word as its tooltip with the chevron column\'s footprint in its place and neither an island nor an editor beneath it.',
     );
-    $session->executeScript("Drupal.Daedalus.Selection.select('block:$band_p1');");
+    $session->executeScript("Drupal.Daedalus.Selection.select('block:$second_section_p1');");
     $this->assertJsCondition(
       "window.__st.scope() === 'subtree'"
-      . " && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode(["block:$band_p1"]))
+      . " && JSON.stringify(window.__st.rows()) === " . json_encode(json_encode(["block:$second_section_p1"]))
       . " && (() => { const face = window.__st.rowFaces()[0];"
       . "   return !face.bare && face.chevron && !face.spacer && face.islands > 0 && face.editors === 0; })()"
-      . " && document.querySelector('.daedalus-stylish-page-tree__header.daedalus-ui-outline__row--selected')?.dataset.daedalusStylishPageKey === " . json_encode("block:$band_p1"),
+      . " && document.querySelector('.daedalus-stylish-page-tree__header.daedalus-ui-outline__row--selected')?.dataset.daedalusStylishPageKey === " . json_encode("block:$second_section_p1"),
       20000,
       'Selecting the bare first paragraph mounts its real islands (the Subtree now anchored at it: its row alone, no longer bare, the chevron back, the root island printed with the skin\'s kind:block floor lines delivered) with still no editor live: selection mounts islands, only a wake mounts an editor.',
     );
@@ -3408,13 +4069,13 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       "Drupal.Daedalus.Selection.clear(); window.__st.clickScope('page');"
       . " if (document.getElementById('page_elements').classList.contains('daedalus-ui-hidden')) { Drupal.Daedalus.SidebarManager.openSidebar('page_elements'); }"
     );
-    $band_row_js = "document.querySelector('.daedalus-stylish-page-tree [data-daedalus-stylish-page-key=" . json_encode($band_key) . "]')";
-    $band_tree_row_js = "document.querySelector('#page-elements-tree .daedalus-ui-tree__row[data-tree-key=" . json_encode($band_key) . "]')";
+    $second_section_row_js = "document.querySelector('.daedalus-stylish-page-tree [data-daedalus-stylish-page-key=" . json_encode($second_section_key) . "]')";
+    $second_section_tree_row_js = "document.querySelector('#page-elements-tree .daedalus-ui-tree__row[data-tree-key=" . json_encode($second_section_key) . "]')";
     $this->assertJsCondition(
       "window.__st.scope() === 'page' && Drupal.Daedalus.Selection.getSelected() === null"
-      . " && !!($band_row_js) && !!($band_tree_row_js)",
+      . " && !!($second_section_row_js) && !!($second_section_tree_row_js)",
       20000,
-      'Page scope with nothing selected: the band\'s row prints in the code view and in the page elements panel, the two rows the reveal will move.',
+      'Page scope with nothing selected: the section\'s row prints in the code view and in the page elements panel, the two rows the reveal will move.',
     );
     $session->executeScript(<<<JS
       window.__rv = {
@@ -3423,9 +4084,9 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
           const s = scroller.getBoundingClientRect();
           return r.top >= s.top && r.bottom <= s.bottom;
         },
-        codeRow() { return $band_row_js; },
+        codeRow() { return $second_section_row_js; },
         codeScroller() { return document.querySelector('.daedalus-stylish-inspector__body'); },
-        treeRow() { return $band_tree_row_js; },
+        treeRow() { return $second_section_tree_row_js; },
         treeScroller() { return this.treeRow().closest('.daedalus-ui-panel__body'); },
         toTop() {
           this.codeScroller().scrollTop = 0;
@@ -3439,11 +4100,11 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       "window.__rv.codeScroller().scrollTop === 0 && window.__rv.codeScroller().scrollHeight > window.__rv.codeScroller().clientHeight"
       . " && !window.__rv.inside(window.__rv.codeRow(), window.__rv.codeScroller())",
       20000,
-      'The precondition: at the shortened window the code view overflows and, scrolled to its top, the band\'s row sits below the fold (outside the scroller\'s rect), so the reveal has a distance to cover.',
+      'The precondition: at the shortened window the code view overflows and, scrolled to its top, the section\'s row sits below the fold (outside the scroller\'s rect), so the reveal has a distance to cover.',
     );
-    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
+    $session->executeScript("Drupal.Daedalus.Selection.select('$second_section_key');");
     $this->assertJsCondition(
-      "Drupal.Daedalus.Selection.getSelected() === " . json_encode($band_key)
+      "Drupal.Daedalus.Selection.getSelected() === " . json_encode($second_section_key)
       . " && window.__rv.inside(window.__rv.codeRow(), window.__rv.codeScroller())"
       . " && window.__rv.inside(window.__rv.treeRow(), window.__rv.treeScroller())",
       20000,
@@ -3453,13 +4114,13 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition('window.scrollY === 0', 10000, 'The window is back at its top before the row click.');
     $session->executeScript("window.__rv.codeRow().querySelector('.daedalus-stylish-page-tree__select').click();");
     $this->assertJsCondition(
-      "(() => { const canvas = document.querySelector(\"[data-selectable='$band_key']\");"
+      "(() => { const canvas = document.querySelector(\"[data-selectable='$second_section_key']\");"
       . "  const rect = canvas.getBoundingClientRect();"
       . "  const bar = document.getElementById('edit-mode-top-bar').getBoundingClientRect();"
-      . "  return Drupal.Daedalus.Selection.getSelected() === " . json_encode($band_key)
+      . "  return Drupal.Daedalus.Selection.getSelected() === " . json_encode($second_section_key)
       . "    && rect.top >= bar.bottom && rect.top < window.innerHeight; })()",
       20000,
-      'A click on the code view\'s row reveals the canvas: the band\'s element scrolls into view with its top edge below the fixed top bar (the scroll-margin\'s clearance), a reveal the code view never ran before the rule.',
+      'A click on the code view\'s row reveals the canvas: the section\'s element scrolls into view with its top edge below the fixed top bar (the scroll-margin\'s clearance), a reveal the code view never ran before the rule.',
     );
 
     // ——— The pop-out keyboard wire. ———
@@ -3721,12 +4382,12 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'Block A prints collapsed to its summary line: the chevron closed, its own declaration count shown, no islands mounted. State: ' . $session->evaluateScript('window.__co.state()'),
     );
     // The selection rule over the collapsed outline, from the leader: the
-    // band's first text block, under rows the all-gesture collapsed.
+    // section's first text block, under rows the all-gesture collapsed.
     // reveal opens its ancestors and expand opens the row itself (the
     // selection mounts its full body); block A, off the path, keeps its
     // collapse.
     $session->switchToIFrame(NULL);
-    $session->executeScript("Drupal.Daedalus.Selection.select('block:$band_p1');");
+    $session->executeScript("Drupal.Daedalus.Selection.select('block:$second_section_p1');");
     $this->assertTrue(
       (bool) $session->evaluateScript("!document.querySelector('.daedalus-stylish-page-tree')"),
       'The leader holds no code outline while the panel is popped out (the placeholder stands in for it), so the routed gesture had nowhere to land but the satellite.',
@@ -3734,7 +4395,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $session->switchToIFrame('daedalus_stylish_satellite');
     $this->assertJsCondition(
       "(() => {"
-      . " const header = document.querySelector('.daedalus-stylish-page-tree [data-daedalus-stylish-page-key=\"block:$band_p1\"]');"
+      . " const header = document.querySelector('.daedalus-stylish-page-tree [data-daedalus-stylish-page-key=\"block:$second_section_p1\"]');"
       . " if (!header) { return false; }"
       . " let node = header.parentElement; const chain = [];"
       . " while (node && node.classList.contains('daedalus-stylish-page-tree__node')) { chain.push(node.classList.contains('daedalus-stylish-page-tree__node--collapsed')); node = node.parentElement?.closest('.daedalus-stylish-page-tree__node') ?? null; }"
@@ -3744,7 +4405,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       . "   && !!a && a.collapsed"
       . "   && JSON.stringify(window.__co.pair()) === '{\"collapse\":false,\"expand\":false}'; })()",
       20000,
-      'The leader\'s selection revealed the band\'s text block in the satellite: its row and every row above it open with its islands mounted, block A off the path still collapsed, and the pair reading the mixed posture (both enabled). State: ' . $session->evaluateScript('window.__co.state()'),
+      'The leader\'s selection revealed the section\'s text block in the satellite: its row and every row above it open with its islands mounted, block A off the path still collapsed, and the pair reading the mixed posture (both enabled). State: ' . $session->evaluateScript('window.__co.state()'),
     );
     $session->switchToIFrame(NULL);
   }

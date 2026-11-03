@@ -413,7 +413,7 @@ final class BlueprintApiController extends ControllerBase {
    * - mode: 'full' (default), 'summary', 'element', or 'css'.
    * - uuid: the element UUID, required when mode is 'element' or 'css'.
    * - selector: css mode only, optional; a rule's relative selector under
-   *   the element (`> pb-text`, `.quote`), narrowing the print to that
+   *   the element (`> d-text`, `.quote`), narrowing the print to that
    *   rule's entry and its continuations by descent.
    * - langcode: optional translation language.
    *

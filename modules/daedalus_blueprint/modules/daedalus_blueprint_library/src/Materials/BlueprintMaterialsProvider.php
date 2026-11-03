@@ -6,6 +6,7 @@ namespace Drupal\daedalus_blueprint_library\Materials;
 
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\daedalus_blueprint\BlueprintOperationsInterface;
 use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\Url;
@@ -16,8 +17,10 @@ use Drupal\daedalus_blueprint\Materials\MaterialGestureOperationHandler;
 use Drupal\daedalus_blueprint\Materials\MaterialGestureResult;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
+use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
 use Drupal\daedalus_blueprint\Materials\MaterialsProviderInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
+use Drupal\daedalus_blueprint\Result\TargetType;
 use Drupal\daedalus_blueprint_library\BlueprintDiscovery;
 use Drupal\daedalus_blueprint_library\BlueprintDiscoveryInterface;
 use Drupal\daedalus_blueprint_library\BlueprintLayout;
@@ -57,8 +60,8 @@ use Drupal\daedalus_blueprint_library\BlueprintTypeInterface;
  * filters nothing), and a block-scope blueprint's root wearings (the
  * variant ids in its one root node's own styles entry,
  * MaterialRecord::APPLIES_WEARS): a capture fact only, since this module
- * knows no axis; the roster derives "page band" from it against the
- * variant records it holds (MaterialsRoster::isBand()), the definition's
+ * knows no axis; the roster derives "section" from it against the
+ * variant records it holds (MaterialsRoster::isSection()), the definition's
  * layout as the record's tree (discovery serves it in the printer's
  * shape: what the schema prints as the blueprint's page-language fragment,
  * and page_read on demand), what the blueprint needs of a host as the
@@ -71,7 +74,7 @@ use Drupal\daedalus_blueprint_library\BlueprintTypeInterface;
  * `ai: false` or the content blueprint's own field: the roster's offered
  * view omits a withheld blueprint, so it leaves the brief and the schema
  * while the palette still places it). The blueprint slot spelling is the
- * id itself: <pb-blueprint name="id">.
+ * id itself: <d-blueprint name="id">.
  *
  * The blueprint gestures (save_material / update_material / remove_material
  * with kind blueprint) dispatch here from the op spine; the palette's Save
@@ -88,6 +91,29 @@ use Drupal\daedalus_blueprint_library\BlueprintTypeInterface;
  * blueprint's TYPE (a capture names its type, `section` unless told
  * otherwise, and needs that type's create permission; update and remove
  * ask the saved blueprint, whose type decides).
+ *
+ * The container a block-scope blueprint is saved from is that blueprint's
+ * FIRST PLACEMENT, and a container pushed into a blueprint while unstamped
+ * becomes one too: the gesture stamps the source's provenance through the
+ * spine (BlueprintOperationsInterface::stampProvenance()) and names it as a
+ * target so the response re-renders it. Without the stamp the thing just
+ * saved had no Update verb (the chip reads the node's `blueprint` key) and
+ * refused the looks the blueprint adopted later (the ownership checker
+ * reads the same stamp). The manager keeps its invariant (a capture reads
+ * the page and writes the blueprint); the stamp is this gesture lane's one
+ * staged write on the host, rolled back with the batch like any op.
+ *
+ * A gesture that would share more with the AI answers the AI context
+ * budget (MaterialsBudget::assertRoom(), one wording on every door):
+ * an offered capture (the default; `offered: false` mints for the
+ * palette alone and passes) and an update turning `offered` on where it
+ * was off are refused while the site is full (`favorite` is the Add
+ * panel's listing and shares nothing). The guard refuses sharing, never
+ * saving: a capture withheld from the AI and an update that re-states
+ * the flag already on go through, and
+ * the check reads the current reading, never a predicted delta. The
+ * details route and the layout dialogs are adapters over these methods,
+ * so a person's save and the AI's op meet the same refusal.
  */
 final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
 
@@ -118,9 +144,12 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
   /**
    * Constructs the provider.
    *
-   * The manager arrives as a closure: the dependency is circular by
-   * construction (the manager's exporter reaches the field handlers, whose
-   * validator reads the roster this provider feeds).
+   * The manager and the operations spine arrive as closures: both
+   * dependencies are circular by construction (the manager's exporter
+   * reaches the field handlers, whose validator reads the roster this
+   * provider feeds; the spine collects the gesture handler that dispatches
+   * to this provider). The budget too: its sources render the roster this
+   * provider feeds.
    */
   public function __construct(
     protected BlueprintDiscoveryInterface $discovery,
@@ -128,6 +157,8 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
     protected \Closure $manager,
     protected AccountProxyInterface $currentUser,
     protected EntityTypeManagerInterface $entityTypeManager,
+    protected \Closure $operations,
+    protected \Closure $budget,
   ) {}
 
   /**
@@ -135,6 +166,41 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
    */
   protected function manager(): BlueprintManager {
     return ($this->manager)();
+  }
+
+  /**
+   * The operations spine: the provenance stamp's one writer and reader.
+   */
+  protected function operations(): BlueprintOperationsInterface {
+    return ($this->operations)();
+  }
+
+  /**
+   * The AI context budget: the guard every sharing gesture answers.
+   */
+  protected function budget(): MaterialsBudget {
+    return ($this->budget)();
+  }
+
+  /**
+   * Refuses a gesture that turns a sharing flag on while the site is full.
+   *
+   * @param mixed $wanted
+   *   What the gesture asks of the flag: TRUE shares; anything else is
+   *   not a share (FALSE withholds, NULL leaves the stored flag alone, a
+   *   non-boolean meets the manager's own refusal).
+   * @param bool $stored
+   *   The flag as stored (FALSE for a capture: nothing exists yet).
+   * @param string $path
+   *   The flag's parameter name, the refusal's path.
+   *
+   * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
+   *   AI_CONTEXT_FULL, when the flag turns on and the site is full.
+   */
+  protected function requireRoom(mixed $wanted, bool $stored, string $path): void {
+    if ($wanted === TRUE && !$stored) {
+      $this->budget()->assertRoom($path);
+    }
   }
 
   /**
@@ -152,7 +218,7 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
       $icon = $this->iconResolver->resolve($blueprint['icon'] ?? NULL, $this->iconCacheTags);
       // The wearings are a block-scope blueprint's one root's: what a
       // placement lands wearing. A page-scope document has no single
-      // root to place and no band verdict to derive; an empty canvas (a
+      // root to place and no section verdict to derive; an empty canvas (a
       // blueprint composed from scratch, not yet holding its root) wears
       // nothing yet.
       $wears = $blueprint['scope'] === MaterialRecord::SCOPE_BLOCK && isset($blueprint['layout'][0]) ? BlueprintLayout::wears($blueprint['layout'][0]) : [];
@@ -210,6 +276,15 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
 
   /**
    * {@inheritdoc}
+   */
+  public function reset(): void {
+    // Nothing to forget: records() reads discovery afresh on every call
+    // and memoizes no per-request input ($iconCacheTags is rewritten by
+    // each read, never consulted before one).
+  }
+
+  /**
+   * {@inheritdoc}
    *
    * The one place the capture and update keys are taught (the brief's
    * MINT line renders it): the capture keys, then the update gesture
@@ -227,6 +302,17 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
   /**
    * {@inheritdoc}
    *
+   * No site posture closes the blueprint lane to the AI: a blueprint
+   * mint is governed by the type's permissions alone (the user's gate on
+   * the MINT line is the whole rule), so there is nothing to advertise.
+   */
+  public function mintPosture(): ?string {
+    return NULL;
+  }
+
+  /**
+   * {@inheritdoc}
+   *
    * Save_material {kind: blueprint, element, label, description, icon?,
    * type?, adopt_variants?, global?}: mints a blueprint from the element's
    * subtree. `type` names the blueprint type (typeOf(): `section` unless
@@ -239,7 +325,10 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
    * `global` opts the blueprint out of the active design system (the
    * membership rule every capture shares, see globalOptOut()); `offered`
    * is the AI opt-out (offeredFlag(): false keeps the blueprint for the
-   * palette only).
+   * palette only; an offered save answers the AI context budget,
+   * requireRoom()). A block-scope save stamps the source container as the
+   * new blueprint's first placement (stampSource()); a page-scope save has
+   * no placement root (the whole document was captured) and stamps nothing.
    */
   public function capture(MaterialKind $kind, array $operation, ?HostInterface $host, array $options): MaterialGestureResult {
     $type = $this->typeOf($operation);
@@ -253,6 +342,9 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
         new BlueprintError('icon', 'INVALID_PARAMETER', 'icon must be a media reference string.', [], 'Pass an existing media item as "media:<uuid>", or omit the key for the default blueprint icon.'),
       ]);
     }
+    $offered = $this->offeredFlag($operation) ?? TRUE;
+    $strip_values = $this->stripValuesFlag($operation);
+    $this->requireRoom($offered, FALSE, 'offered');
     $result = $this->manager()->saveAsBlueprint(
       $host,
       $element,
@@ -261,14 +353,19 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
       $icon,
       $options[MaterialGestureOperationHandler::ORIGIN_OPTION] ?? MaterialRecord::ORIGIN_USER,
       $global,
-      $this->offeredFlag($operation) ?? TRUE,
-      $this->stripValuesFlag($operation),
+      $offered,
+      $strip_values,
       $type,
     );
     if ($adopt !== []) {
       $this->manager()->adoptVariants($result->blueprint, $adopt);
     }
-    return new MaterialGestureResult(MaterialKind::Blueprint, $result->blueprint->getMachineName(), $result->warnings, $result->blueprint);
+    // The source is the blueprint's first placement, whatever stamp it
+    // carried before: the editor chose to save it as THIS blueprint.
+    $targets = $result->blueprint->getScope() === BlueprintInterface::SCOPE_BLOCK
+      ? $this->stampSource($host, $element, $result->blueprint)
+      : [];
+    return new MaterialGestureResult(MaterialKind::Blueprint, $result->blueprint->getMachineName(), $result->warnings, $result->blueprint, targets: $targets);
   }
 
   /**
@@ -286,8 +383,15 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
    * opt-out (offeredFlag()); subject and bundles rewrite what the
    * blueprint is material for (BlueprintSubjects); groups refiles it under
    * the site's groups (filters only); favorite (a boolean) marks
-   * or unmarks it as a site favorite (a listing fact). Only content blueprints
+   * or unmarks it as a site favorite (the Add panel's listing fact, which
+   * no AI surface reads). Turning offered on where it was off answers the
+   * AI context budget (requireRoom()); re-stating it on is no share. Only content blueprints
    * update: file-shipped blueprints refuse with their own error, never a bare not-found.
+   * A push from an UNSTAMPED container makes that container a placement of
+   * the blueprint (stampSource()): the pushed-from container is where the
+   * editor works on the blueprint next. A container stamped for another
+   * blueprint keeps its stamp: pushing a placement of A into B does not
+   * re-own it.
    */
   public function update(MaterialKind $kind, string $id, array $operation, ?HostInterface $host, array $options): MaterialGestureResult {
     $blueprint = $this->manager()->resolveUpdatable($id);
@@ -314,14 +418,47 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
         new BlueprintError('icon', 'INVALID_PARAMETER', 'icon must be a media reference string or null.', [], 'Pass an existing media item as "media:<uuid>", null to clear the icon, or omit the key to leave it unchanged.'),
       ]);
     }
+    $this->requireRoom($changes['offered'] ?? NULL, $blueprint->isOffered(), 'offered');
     $warnings = [];
+    $targets = [];
     if ($changes !== []) {
       $warnings = $this->manager()->update($blueprint, $changes, $host)->warnings;
     }
     if ($adopt !== []) {
       $this->manager()->adoptVariants($blueprint, $adopt);
     }
-    return new MaterialGestureResult(MaterialKind::Blueprint, $blueprint->getMachineName(), $warnings, $blueprint);
+    if (isset($changes['element'])
+      && $blueprint->getScope() === BlueprintInterface::SCOPE_BLOCK
+      && !isset($this->operations()->getElement($host, $changes['element'])['blueprint'])
+    ) {
+      $targets = $this->stampSource($host, $changes['element'], $blueprint);
+    }
+    return new MaterialGestureResult(MaterialKind::Blueprint, $blueprint->getMachineName(), $warnings, $blueprint, targets: $targets);
+  }
+
+  /**
+   * Stamps a capture's source container as a placement of the blueprint.
+   *
+   * The spine writes the stamp (a container is a section at every depth, so
+   * its third-party settings, the slot add_section's birth stamp uses); the
+   * returned target names the container as restructured, which
+   * the render path maps to the container's own subtree, so the mutation
+   * response re-renders it and the client's mirror carries the stamp the
+   * Update verb and the owned-variant offer read.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host the container sits on (never NULL once requireElement() ran).
+   * @param string $uuid
+   *   The container's uuid.
+   * @param \Drupal\daedalus_blueprint_library\BlueprintInterface $blueprint
+   *   The blueprint it is now a placement of.
+   *
+   * @return array<int, array{uuid: string, field_name: string}>
+   *   The one change target, for the gesture result.
+   */
+  protected function stampSource(HostInterface $host, string $uuid, BlueprintInterface $blueprint): array {
+    $this->operations()->stampProvenance($host, $uuid, $blueprint->getMachineName());
+    return [['uuid' => $uuid, 'field_name' => TargetType::RESTRUCTURED]];
   }
 
   /**

@@ -13,6 +13,7 @@ import {
 } from '../../js/src/code/page-model.js';
 import { holdsFragments } from '../../js/src/variant-scope.js';
 import { variantLayerId } from '../../js/src/code/layers.js';
+import { documentTree } from '../../../daedalus_ui/js/edit_mode/blueprint/document-tree.js';
 
 const ROOT = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const S1 = '11111111-1111-1111-1111-111111111111';
@@ -53,7 +54,7 @@ const LAYOUT = [
         kind: 'container',
         uuid: NESTED,
         layout_id: 'daedalus_stylish_container',
-        ...named('Container', 'Hero band', null),
+        ...named('Container', 'Hero section', null),
         children: [{ kind: 'block', uuid: B3, block_type: 'image', ...named('Image') }],
       },
     ],
@@ -96,10 +97,23 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-// --- pageNodes: the layout tree as ordered element nodes --------------------
+// The root's own three words, as the annotator stamps them on the
+// blueprint root; the document's entity node carries them as its
+// `_element`, so the page row reads them as every row reads its node's.
+const PAGE = { type: 'Basic page', name: 'Welcome to Daedalus', icon: '/icons/page.svg' };
+// A document tree over a layout (daedalus_ui documentTree: the page above
+// its sections), keyed by the envelope's root uuid; null for a keyless
+// root (a host with no uuid), a null element for an unannotated
+// blueprint root.
+const docOf = (layout, uuid = ROOT, element = PAGE) => documentTree({ layout, _element: element }, uuid);
+// The document the source serves for LAYOUT: what source.getDocument()
+// answers on the leader and what the satellite receives in one broadcast.
+const DOCUMENT = docOf(LAYOUT);
+
+// --- pageNodes: the document tree as ordered element nodes -----------------
 
 test('pageNodes nests the whole layout under the entity root in layout order', () => {
-  const nodes = pageNodes(LAYOUT, ROOT);
+  const nodes = pageNodes(DOCUMENT);
   assert.equal(nodes.length, 1);
   const page = nodes[0];
   assert.equal(page.key, `entity:${ROOT}`);
@@ -128,7 +142,7 @@ test('pageNodes nests the whole layout under the entity root in layout order', (
   assert.equal(first.children[1].type, 'Main navigation');
   assert.equal(first.children[1].name, 'Main navigation');
   // A node the spine never named carries null words, never undefined.
-  const unnamed = pageNodes([{ kind: 'container', uuid: S1, layout_id: 'x', children: [{ kind: 'block', uuid: B1 }] }], null);
+  const unnamed = pageNodes(docOf([{ kind: 'container', uuid: S1, layout_id: 'x', children: [{ kind: 'block', uuid: B1 }] }], null));
   assert.equal(unnamed[0].type, null);
   assert.equal(unnamed[0].name, null);
   assert.equal(unnamed[0].children[0].name, null);
@@ -137,7 +151,7 @@ test('pageNodes nests the whole layout under the entity root in layout order', (
 // --- The three minted words ride every node --------------------------------
 
 test('pageNodes carries the icon beside the type and the name, null where nothing answered', () => {
-  const nodes = pageNodes(LAYOUT, ROOT);
+  const nodes = pageNodes(DOCUMENT);
   // A renamed section: its glyph, its type word and its name.
   const section = findNode(nodes, `container:${S1}`);
   assert.deepEqual([section.type, section.name, section.icon], ['Section', 'Welcome', '/icons/section.svg']);
@@ -147,56 +161,62 @@ test('pageNodes carries the icon beside the type and the name, null where nothin
   // The icon collector answered nothing for the nested container: null,
   // never a client-side guess (the row draws no icon zone then).
   const nested = findNode(nodes, `container:${NESTED}`);
-  assert.deepEqual([nested.type, nested.name, nested.icon], ['Container', 'Hero band', null]);
+  assert.deepEqual([nested.type, nested.name, nested.icon], ['Container', 'Hero section', null]);
   // A node without an annotation carries three nulls.
-  const [unnamed] = pageNodes([{ kind: 'container', uuid: S1, children: [] }]);
+  const [unnamed] = pageNodes(docOf([{ kind: 'container', uuid: S1, children: [] }], null));
   assert.deepEqual([unnamed.type, unnamed.name, unnamed.icon], [null, null, null]);
 });
 
-test('pageNodes words the page row from the root\'s minted words when the source carries them', () => {
-  // The lean tree holds the layout elements alone; the page row's words
-  // arrive beside it (the leader reads the blueprint root's `_element`,
-  // the satellite the broadcast's `rootElement`).
-  const [page] = pageNodes(LAYOUT, ROOT, { type: 'Basic page', name: 'Welcome to Daedalus', icon: '/icons/page.svg' });
+test('pageNodes words the page row from the document root\'s own annotation', () => {
+  // The document's root node carries the blueprint root's `_element`
+  // (the annotator's three words for the page), so the page row reads
+  // them exactly as every element row reads its node's, on the leader
+  // and the satellite alike: one document, no words riding beside it.
+  const [page] = pageNodes(DOCUMENT);
   assert.equal(page.key, `entity:${ROOT}`);
   assert.deepEqual([page.type, page.name, page.icon], ['Basic page', 'Welcome to Daedalus', '/icons/page.svg']);
-  // Without them (a satellite before its first broadcast) the page row
-  // has no words of its own; the view falls back to its vocabulary.
-  const [bare] = pageNodes(LAYOUT, ROOT);
+  // An unannotated blueprint's root carries no words: the page row has
+  // none of its own and the view falls back to its vocabulary.
+  const [bare] = pageNodes(docOf(LAYOUT, ROOT, null));
+  assert.equal(bare.key, `entity:${ROOT}`);
   assert.deepEqual([bare.type, bare.name, bare.icon], [null, null, null]);
-  // The sections render bare without a root uuid, whatever the root words.
-  assert.deepEqual(pageNodes(LAYOUT, null, { type: 'Basic page', name: 'x', icon: null }).map((node) => node.key), [`container:${S1}`, `container:${S2}`]);
+  // A keyless root (a host with no uuid) renders the sections bare,
+  // whatever words its annotation carries.
+  assert.deepEqual(pageNodes(docOf(LAYOUT, null)).map((node) => node.key), [`container:${S1}`, `container:${S2}`]);
+  // An empty document (no blueprint yet) renders nothing.
+  assert.deepEqual(pageNodes([]), []);
+  assert.deepEqual(pageNodes(null), []);
 });
 
 test('pageNodes recurses nested containers in place of components', () => {
-  const nodes = pageNodes(LAYOUT, ROOT);
+  const nodes = pageNodes(DOCUMENT);
   const nested = nodes[0].children[1].children[0];
   assert.equal(nested.key, `container:${NESTED}`);
   assert.equal(nested.kind, 'container');
   assert.equal(nested.type, 'Container');
-  assert.equal(nested.name, 'Hero band');
+  assert.equal(nested.name, 'Hero section');
   assert.deepEqual(nested.children.map((node) => node.key), [`block:${B3}`]);
 });
 
-test('pageNodes renders containers bare without a root uuid and skips uuid-less nodes', () => {
-  const bare = pageNodes(LAYOUT, null);
+test('pageNodes renders containers bare under a keyless root and skips uuid-less nodes', () => {
+  const bare = pageNodes(docOf(LAYOUT, null));
   assert.deepEqual(bare.map((node) => node.key), [`container:${S1}`, `container:${S2}`]);
   assert.equal(bare[0].depth, 0);
-  const withNoise = pageNodes([{ kind: 'container', uuid: null, children: [] }, ...LAYOUT.slice(0, 1)], null);
+  const withNoise = pageNodes(docOf([{ kind: 'container', uuid: null, children: [] }, ...LAYOUT.slice(0, 1)], null));
   assert.deepEqual(withNoise.map((node) => node.key), [`container:${S1}`]);
-  const noiseChild = pageNodes([{
+  const noiseChild = pageNodes(docOf([{
     kind: 'container',
     uuid: S1,
     layout_id: 'daedalus_stylish_container',
     children: [{ kind: 'block', uuid: null, block_type: 'text' }],
-  }], null);
+  }], null));
   assert.deepEqual(noiseChild[0].children, []);
 });
 
 // --- findNode + subtreeNodes: the draft-session subtree rule's projection ---
 
 test('findNode locates a node at any depth, null when the tree lacks it', () => {
-  const nodes = pageNodes(LAYOUT, ROOT);
+  const nodes = pageNodes(DOCUMENT);
   assert.equal(findNode(nodes, `entity:${ROOT}`).kind, 'entity');
   assert.equal(findNode(nodes, `block:${B3}`).type, 'Image');
   assert.equal(findNode(nodes, `container:${NESTED}`).children.length, 1);
@@ -205,7 +225,7 @@ test('findNode locates a node at any depth, null when the tree lacks it', () => 
 });
 
 test('subtreeNodes roots the tree at the anchor with descendants intact', () => {
-  const nodes = pageNodes(LAYOUT, ROOT);
+  const nodes = pageNodes(DOCUMENT);
   const subtree = subtreeNodes(nodes, `container:${S2}`);
   assert.equal(subtree.length, 1);
   assert.equal(subtree[0].key, `container:${S2}`);
@@ -216,7 +236,7 @@ test('subtreeNodes roots the tree at the anchor with descendants intact', () => 
 });
 
 test('subtreeNodes answers a missing anchor with a synthetic childless node', () => {
-  const nodes = pageNodes(LAYOUT, ROOT);
+  const nodes = pageNodes(DOCUMENT);
   // An element the layout walk does not carry (a field key) still renders
   // one honest row so its islands have a home.
   assert.deepEqual(subtreeNodes(nodes, 'field:abc:body'), [
@@ -228,14 +248,14 @@ test('subtreeNodes answers a missing anchor with a synthetic childless node', ()
 // --- scopeNodes: the code scope's projection -------------------------------
 
 test('scopeNodes page is the whole tree, selection or not', () => {
-  const nodes = pageNodes(LAYOUT, ROOT);
+  const nodes = pageNodes(DOCUMENT);
   assert.deepEqual(scopeNodes(nodes, 'page', `container:${S2}`), nodes);
   assert.deepEqual(scopeNodes(nodes, 'page', null), nodes);
   assert.deepEqual(scopeNodes(null, 'page', null), []);
 });
 
 test('scopeNodes subtree is subtreeNodes\' rule: the selection with its descendants', () => {
-  const nodes = pageNodes(LAYOUT, ROOT);
+  const nodes = pageNodes(DOCUMENT);
   const subtree = scopeNodes(nodes, 'subtree', `container:${S2}`);
   assert.deepEqual(subtree, subtreeNodes(nodes, `container:${S2}`));
   assert.equal(subtree.length, 1);
@@ -250,7 +270,7 @@ test('scopeNodes subtree is subtreeNodes\' rule: the selection with its descenda
 });
 
 test('scopeNodes element is the selection alone, its children dropped', () => {
-  const nodes = pageNodes(LAYOUT, ROOT);
+  const nodes = pageNodes(DOCUMENT);
   const one = scopeNodes(nodes, 'element', `container:${S2}`);
   assert.equal(one.length, 1);
   assert.equal(one[0].key, `container:${S2}`);
@@ -266,14 +286,14 @@ test('scopeNodes element is the selection alone, its children dropped', () => {
 });
 
 test('scopeNodes element and subtree project nothing without a selection', () => {
-  const nodes = pageNodes(LAYOUT, ROOT);
+  const nodes = pageNodes(DOCUMENT);
   assert.deepEqual(scopeNodes(nodes, 'element', null), []);
   assert.deepEqual(scopeNodes(nodes, 'subtree', null), []);
   assert.deepEqual(scopeNodes(nodes, 'element', ''), []);
 });
 
 test('visibleTree over a scoped projection annotates every row the scope projects', () => {
-  const nodes = pageNodes(LAYOUT, ROOT);
+  const nodes = pageNodes(DOCUMENT);
   const map = { [`block:${B3}`]: { default: { color: 'red' } } };
   // Subtree of an unstyled container over a styled descendant: the anchor
   // prints bare over S2's nested chain, the styled leaf at its end.
@@ -311,7 +331,7 @@ test('a tag-tier entry reads as styled (the row hosts its tag island)', () => {
   const key = `block:${B1}`;
   const map = { [`${key}::p`]: { default: { 'font-size': '1.25rem' } } };
   assert.equal(isStyledElement(map, key), true);
-  const tree = visibleTree(pageNodes(LAYOUT, ROOT), map);
+  const tree = visibleTree(pageNodes(DOCUMENT), map);
   assert.equal(findNode(tree, key).styled, true);
 });
 
@@ -319,7 +339,7 @@ test('a tag-tier entry reads as styled (the row hosts its tag island)', () => {
 
 test('visibleTree annotates styled flags and keeps every element as a row', () => {
   const map = { [`block:${B3}`]: { variants: [{ variant: 'glow', fragment: '' }] } };
-  const tree = visibleTree(pageNodes(LAYOUT, ROOT), map);
+  const tree = visibleTree(pageNodes(DOCUMENT), map);
   // The unstyled S1 branch prints bare, row for row; the chain down to
   // B3 prints its unstyled ancestors bare and the styled leaf with islands.
   assert.equal(tree.length, 1);
@@ -336,7 +356,7 @@ test('visibleTree annotates styled flags and keeps every element as a row', () =
 });
 
 test('a fully unstyled layout prints every row bare', () => {
-  const tree = visibleTree(pageNodes(LAYOUT, ROOT), {});
+  const tree = visibleTree(pageNodes(DOCUMENT), {});
   const keys = [];
   const walk = (list) => list.forEach((node) => {
     keys.push(node.key);
@@ -350,14 +370,14 @@ test('a fully unstyled layout prints every row bare', () => {
   ]);
   // The node shape is pageNodes' plus the flag; nothing else changes.
   assert.deepEqual(findNode(tree, `block:${B1}`), {
-    ...findNode(pageNodes(LAYOUT, ROOT), `block:${B1}`), styled: false,
+    ...findNode(pageNodes(DOCUMENT), `block:${B1}`), styled: false,
   });
 });
 
 // --- hasBody / outlineOf: which rows a chevron can collapse -----------------
 
 test('hasBody reads a styled row, a row with children, or the selection', () => {
-  const tree = visibleTree(pageNodes(LAYOUT, ROOT), { [`block:${B3}`]: { default: { color: 'red' } } });
+  const tree = visibleTree(pageNodes(DOCUMENT), { [`block:${B3}`]: { default: { color: 'red' } } });
   assert.equal(hasBody(findNode(tree, `entity:${ROOT}`)), true);
   assert.equal(hasBody(findNode(tree, `container:${NESTED}`)), true);
   assert.equal(hasBody(findNode(tree, `block:${B3}`)), true);
@@ -368,7 +388,7 @@ test('hasBody reads a styled row, a row with children, or the selection', () => 
 });
 
 test('outlineOf projects the rendered tree into the collapse model\'s shape over hasBody', () => {
-  const tree = visibleTree(pageNodes(LAYOUT, ROOT), { [`block:${B3}`]: { default: { color: 'red' } } });
+  const tree = visibleTree(pageNodes(DOCUMENT), { [`block:${B3}`]: { default: { color: 'red' } } });
   const flat = (outline) => outline.flatMap((row) => [
     { id: row.id, foldable: row.foldable, folded: row.folded }, ...flat(row.children),
   ]);

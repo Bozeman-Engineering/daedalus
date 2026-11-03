@@ -25,7 +25,7 @@ const record = (fields) => ({
  */
 const RECORDS = [
   record({ kind: 'token', id: 'color/accent', label: 'accent', value: { default: '#1475ad', dark: '#52b3eb' }, group: 'color', spellings: { style: 'var(--color-accent)' }, origin: 'shipped' }),
-  record({ kind: 'swatch', id: 'lime_green', label: 'Lime green', value: '#4dff8c', group: 'color', spellings: { style: 'var(--swatch-lime_green)' } }),
+  record({ kind: 'token', id: 'color/lime-green', label: 'lime-green', value: '#4dff8c', group: 'color', spellings: { style: 'var(--color-lime-green)' } }),
   record({ kind: 'variant', id: 'button', label: 'Button', group: 'style', spellings: { class: 'button' }, scope: 'block_type:text', origin: 'shipped' }),
   record({ kind: 'variant', id: 'container_full', label: 'Full width', group: 'width', spellings: { 'attr:kind:container:width': 'full' }, scope: 'kind:container', applies: { depth: 'root' }, weight: -10, origin: 'shipped' }),
   record({ kind: 'variant', id: 'block_full', label: 'Full width', group: 'width', spellings: { 'attr:kind:block:width': 'full' }, scope: 'kind:block', origin: 'shipped' }),
@@ -65,9 +65,9 @@ test('kind predicates split materials from inline values', () => {
 
 test('a resolved material carries its record; inline values carry none', () => {
   const r = roster();
-  const swatch = resolveValue('var(--swatch-lime_green)', SLOT.STYLE, r);
-  assert.equal(swatch.kind, KIND.SWATCH);
-  assert.equal(swatch.record, r.get('swatch', 'lime_green'));
+  const lime = resolveValue('var(--color-lime-green)', SLOT.STYLE, r);
+  assert.equal(lime.kind, KIND.TOKEN);
+  assert.equal(lime.record, r.get('token', 'color/lime-green'));
   assert.equal(resolveValue(' var( --color-accent ) ', SLOT.STYLE, r).kind, KIND.TOKEN, 'whitespace inside var() is tolerated; the spelling is canonical');
   assert.equal(resolveValue(' var( --color-accent ) ', SLOT.STYLE, r).spelling, 'var(--color-accent)');
   const media = resolveValue('url("media:ABC-123")', SLOT.STYLE, r);
@@ -82,7 +82,7 @@ test('a resolved material carries its record; inline values carry none', () => {
 
 test('unknown is a reference-shaped value the roster lacks, never a literal', () => {
   const r = roster();
-  assert.deepEqual(resolveValue('var(--swatch-limegreen)', SLOT.STYLE, r), { kind: KIND.UNKNOWN, id: '--swatch-limegreen', spelling: 'var(--swatch-limegreen)', record: null });
+  assert.deepEqual(resolveValue('var(--color-limegreen)', SLOT.STYLE, r), { kind: KIND.UNKNOWN, id: '--color-limegreen', spelling: 'var(--color-limegreen)', record: null });
   assert.equal(resolveValue('hero', SLOT.CLASS, r).kind, KIND.UNKNOWN, 'slots are separate vocabularies: the blueprint "hero" is no class');
   assert.equal(resolveValue('hero', SLOT.BLUEPRINT, r).kind, KIND.BLUEPRINT);
   assert.equal(resolveValue('full', attrSlot('kind:container', 'width'), r).id, 'container_full');
@@ -111,9 +111,9 @@ test('the animation slot resolves a keyframes name by its prefixed ident; the st
 
 test('references walks a compound style value and a class list in source order', () => {
   const r = roster();
-  const refs = references("1px solid var(--swatch-lime_green), linear-gradient(var(--color-accent, red), url(x.png)), url('media:M1'), url('generate:sky'), url('file:hero.svg')", SLOT.STYLE, r);
+  const refs = references("1px solid var(--color-lime-green), linear-gradient(var(--color-accent, red), url(x.png)), url('media:M1'), url('generate:sky'), url('file:hero.svg')", SLOT.STYLE, r);
   assert.deepEqual(refs.map((ref) => [ref.kind, ref.id]), [
-    ['swatch', 'lime_green'], ['token', 'color/accent'], ['media', 'm1'], ['generate', 'sky'], ['file', 'hero.svg'],
+    ['token', 'color/lime-green'], ['token', 'color/accent'], ['media', 'm1'], ['generate', 'sky'], ['file', 'hero.svg'],
   ]);
   assert.deepEqual(references('button  nope hero_glow', SLOT.CLASS, r).map((ref) => ref.kind), ['variant', 'unknown', 'variant']);
   assert.deepEqual(references('  ', SLOT.CLASS, r), []);
@@ -125,10 +125,10 @@ test('references walks a compound style value and a class list in source order',
 
 test('spell reads the provider spelling and refuses a slot the material lacks', () => {
   const r = roster();
-  assert.equal(spell(r.get('swatch', 'lime_green'), SLOT.STYLE), 'var(--swatch-lime_green)');
+  assert.equal(spell(r.get('token', 'color/lime-green'), SLOT.STYLE), 'var(--color-lime-green)');
   assert.equal(spell(r.get('variant', 'container_full'), attrSlot('kind:container', 'width')), 'full');
   assert.equal(spell(r.get('variant', 'block_full'), attrSlot('kind:block', 'width')), 'full');
-  assert.throws(() => spell(r.get('swatch', 'lime_green'), SLOT.CLASS), /swatch "lime_green" has no spelling in the class slot; it spells in: style\./);
+  assert.throws(() => spell(r.get('token', 'color/lime-green'), SLOT.CLASS), /token "color\/lime-green" has no spelling in the class slot; it spells in: style\./);
   assert.throws(() => spell(record({ kind: 'variant', id: 'axis_only' }), SLOT.CLASS), /it spells in: \(no slot\)/);
   assert.equal(spellMedia(' ABC '), "url('media:abc')");
   assert.equal(spellGenerate('  a dog  '), "url('generate:a dog')");
@@ -137,7 +137,7 @@ test('spell reads the provider spelling and refuses a slot the material lacks', 
 
 test('the roster index: read surface and loud refusals', () => {
   const r = roster();
-  assert.deepEqual(r.all().map((x) => x.id), ['color/accent', 'lime_green', 'button', 'container_full', 'block_full', 'hero_glow', 'link_quiet', 'hero', 'fade_in', 'inter']);
+  assert.deepEqual(r.all().map((x) => x.id), ['color/accent', 'color/lime-green', 'button', 'container_full', 'block_full', 'hero_glow', 'link_quiet', 'hero', 'fade_in', 'inter']);
   assert.deepEqual(r.ofKind('variant').map((x) => x.id), ['button', 'container_full', 'block_full', 'hero_glow', 'link_quiet']);
   assert.deepEqual(r.ofKind('nothing'), []);
   assert.ok(r.has('blueprint', 'hero') && !r.has('class', 'hero'));
@@ -151,7 +151,7 @@ test('the roster index: read surface and loud refusals', () => {
   assert.throws(() => createRoster([record({ kind: 'variant', id: 'x', label: 'X', spellings: { 'attr:width': 'full' }, scope: 'kind:block' })]), /names scope "null"/);
   assert.ok(!r.isEmpty() && createRoster([]).isEmpty());
   assert.throws(() => createRoster([record({ kind: 'paint', id: 'x' })]), /material kind only/);
-  assert.throws(() => createRoster([RECORDS[1], RECORDS[1]]), /Two swatch records share the id "lime_green"/);
+  assert.throws(() => createRoster([RECORDS[1], RECORDS[1]]), /Two token records share the id "color\/lime-green"/);
   assert.throws(() => createRoster([RECORDS[2], record({ kind: 'blueprint', id: 'button', spellings: { class: 'button' } })]), /both spell "button" in the class slot/);
 });
 
@@ -169,15 +169,15 @@ test('applicability: scope family, root-only depth, blueprint ownership', () => 
   assert.ok(!applicable(glow, 'kind:container') && !applicable(glow, 'kind:container', true, 'call_to_action'));
   assert.ok(applicable(glow, 'kind:container', true, 'hero') && applicable(button, 'block_type:text', true, 'hero'));
   assert.ok(applicable(quiet, 'block_type:text') && applicable(quiet, 'layout:layout_onecol', false));
-  assert.ok(applicable(r.get('swatch', 'lime_green'), 'block_type:image', false) && applicable(r.get('blueprint', 'hero'), 'kind:container', false));
+  assert.ok(applicable(r.get('token', 'color/lime-green'), 'block_type:image', false) && applicable(r.get('blueprint', 'hero'), 'kind:container', false));
   assert.ok(applicable(r.get('animation', 'fade_in'), 'block_type:image', false), 'non-variant kinds apply everywhere');
   assert.ok(!applicable(record({ kind: 'variant', id: 'scopeless' }), 'kind:block'), 'a variant with no scope applies nowhere');
   assert.ok(rootOnly(full) && !rootOnly(button) && !rootOnly(r.get('blueprint', 'hero')), 'rootOnly reads the depth stamp');
   assert.deepEqual(wears(r.get('blueprint', 'hero')), [], 'a blueprint captured with no wearings wears nothing');
 });
 
-test('applicability, the blueprint case: a band (its root wears a root-only variant) places at top level only', () => {
-  // Blueprints beyond the reference set: a band wearing the root-only width
+test('applicability, the blueprint case: a section (its root wears a root-only variant) places at top level only', () => {
+  // Blueprints beyond the reference set: a section wearing the root-only width
   // variant, a card wearing a plain style, one wearing a name no record
   // answers, and one wearing both a plain style and the root-only width.
   const blueprint = (id, worn) => record({
@@ -185,35 +185,35 @@ test('applicability, the blueprint case: a band (its root wears a root-only vari
   });
   const r = createRoster([
     ...RECORDS,
-    blueprint('band', ['container_full']),
+    blueprint('section', ['container_full']),
     blueprint('card', ['button']),
     blueprint('orphan', ['retired_width']),
-    blueprint('dressed_band', ['button', 'container_full']),
+    blueprint('dressed_section', ['button', 'container_full']),
   ]);
-  const { applicable, isBand, rootOnlyWears } = r;
-  const band = r.get('blueprint', 'band');
+  const { applicable, isSection, rootOnlyWears } = r;
+  const section = r.get('blueprint', 'section');
   const card = r.get('blueprint', 'card');
   const orphan = r.get('blueprint', 'orphan');
-  const dressed = r.get('blueprint', 'dressed_band');
-  assert.ok(applicable(band, 'kind:container', true) && !applicable(band, 'kind:container', false), 'a band places at top level, never nested');
+  const dressed = r.get('blueprint', 'dressed_section');
+  assert.ok(applicable(section, 'kind:container', true) && !applicable(section, 'kind:container', false), 'a section places at top level, never nested');
   assert.ok(applicable(card, 'kind:container', true) && applicable(card, 'kind:container', false), 'a blueprint wearing no root-only variant places anywhere');
   assert.ok(applicable(orphan, 'kind:container', false), 'a wearing that names no record has no opinion');
   assert.ok(applicable(r.get('blueprint', 'hero'), 'kind:container', false), 'a blueprint wearing nothing places anywhere');
-  assert.ok(applicable(dressed, 'kind:container', true) && !applicable(dressed, 'kind:container', false), 'one root-only wearing among plain ones makes a band');
-  assert.ok(applicable(band, 'kind:container', false, 'hero') === false, 'ownership never admits a band nested');
-  assert.ok(isBand(band) && isBand(dressed) && !isBand(card) && !isBand(orphan) && !isBand(r.get('blueprint', 'hero')));
-  assert.ok(!isBand(r.get('variant', 'container_full')), 'only a blueprint is ever a band');
+  assert.ok(applicable(dressed, 'kind:container', true) && !applicable(dressed, 'kind:container', false), 'one root-only wearing among plain ones makes a section');
+  assert.ok(applicable(section, 'kind:container', false, 'hero') === false, 'ownership never admits a section nested');
+  assert.ok(isSection(section) && isSection(dressed) && !isSection(card) && !isSection(orphan) && !isSection(r.get('blueprint', 'hero')));
+  assert.ok(!isSection(r.get('variant', 'container_full')), 'only a blueprint is ever a section');
   assert.deepEqual([...rootOnlyWears(dressed).keys()], ['container_full'], 'the root-only wearings are named, in wearing order');
   assert.equal(rootOnlyWears(dressed).get('container_full'), r.get('variant', 'container_full'), 'each names its variant record');
   assert.deepEqual([...rootOnlyWears(card).keys()], []);
-  // The band fact is the ROSTER's: the same record in a roster whose width
-  // variant is not root-only is no band.
+  // The section fact is the ROSTER's: the same record in a roster whose width
+  // variant is not root-only is no section.
   const relaxed = createRoster([
     ...RECORDS.filter((entry) => entry.id !== 'container_full'),
     record({ kind: 'variant', id: 'container_full', label: 'Full width', group: 'width', spellings: { 'attr:kind:container:width': 'full' }, scope: 'kind:container', origin: 'shipped' }),
-    blueprint('band', ['container_full']),
+    blueprint('section', ['container_full']),
   ]);
-  assert.ok(!relaxed.isBand(relaxed.get('blueprint', 'band')) && relaxed.applicable(relaxed.get('blueprint', 'band'), 'kind:container', false));
+  assert.ok(!relaxed.isSection(relaxed.get('blueprint', 'section')) && relaxed.applicable(relaxed.get('blueprint', 'section'), 'kind:container', false));
 });
 
 test('scopesPair: the family rule (MaterialsRosterTest::scopePairs)', () => {

@@ -1,0 +1,21 @@
+name: 'Daedalus AI Upstream'
+type: module
+description: 'Deprecated by design: the interim Anthropic provider plugin (daedalus_anthropic) that implements the context spine''s accelerators over ai_provider_anthropic until the same changes land upstream in drupal/ai and ai_provider_anthropic, when this module retires.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+php: 8.1
+# Deprecated from birth: every line here is a proposal to drupal/ai and
+# ai_provider_anthropic (the drafts beside the context-pruning notes), and
+# the module is deleted the day they merge. The lifecycle says so on the
+# modules page; the README says why.
+lifecycle: deprecated
+lifecycle_link: 'https://www.drupal.org/project/daedalus'
+configure: daedalus_ai_upstream.settings
+dependencies:
+  - daedalus:daedalus
+  # The capability interfaces and the rendering plan this plugin honors.
+  - daedalus:daedalus_ai
+  - ai:ai
+  # The contrib provider the plugin subclasses, whose key, host and cache
+  # settings it reads.
+  - ai_provider_anthropic:ai_provider_anthropic

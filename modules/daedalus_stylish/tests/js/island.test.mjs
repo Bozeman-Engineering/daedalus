@@ -238,7 +238,7 @@ test('csstree grammar misses are warnings, never errors', () => {
 
 const UUID = KEY.slice('block:'.length);
 const BLOCK_TYPES = { [UUID]: 'testimonial' };
-const linesOf = (map, key, condition, variants, axes = null, floorGuide = null, tree = null) =>
+const linesOf = (map, key, condition, variants, axes = null, floorGuide = null, document = null) =>
   stackLines(buildStack({
     guide: floorGuide,
     map,
@@ -247,9 +247,9 @@ const linesOf = (map, key, condition, variants, axes = null, floorGuide = null, 
     axes,
     blockTypes: BLOCK_TYPES,
     floor: floorGuide !== null,
-    tree,
+    document,
   }), condition);
-// The block alone in a tree, rendering as a paragraph: the read subject's
+// The block alone in a document, rendering as a paragraph: the read subject's
 // tag the base layer keys by.
 const P_ROOTED = [{ kind: 'block', uuid: UUID, block_type: 'testimonial', _element: { markup: { tag: 'p' } } }];
 
@@ -371,7 +371,7 @@ test('a declared line the skin beats strikes with the skin layer as its winner',
   ]);
 });
 
-test('the skin\'s base:{tag} layer prints beneath every scoped block, only when the tree names the subject\'s tag', () => {
+test('the skin\'s base:{tag} layer prints beneath every scoped block, only when the document names the subject\'s tag', () => {
   const withTag = linesOf({}, KEY, 'default', [], null, FLOOR, P_ROOTED);
   assert.deepEqual(withTag.map((line) => [line.layer, line.property]), [
     [DECLARED_KIND, 'margin'],

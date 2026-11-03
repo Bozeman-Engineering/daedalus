@@ -49,17 +49,11 @@ class BlueprintLayoutScopedVariantTest extends BlueprintKernelTestBase {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
 

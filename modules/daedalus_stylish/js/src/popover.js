@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
  * shared floating surface (Drupal.Daedalus.popover, library
  * daedalus_ui/popover).
  *
- * Every popover in the inspector (the swatch and choice wells, the
+ * Every popover in the inspector (the token and choice wells, the
  * color field, the media grid, the gradient builder's stop palette,
  * the variant picker) floats over the rows below it on the one surface
  * every pop-up in the chrome rides. The surface owns placement

@@ -228,7 +228,7 @@ class BlueprintSerializerTest extends BlueprintKernelTestBase {
         'op' => 'add_section',
         'uuid' => $section_uuid,
         'layout' => 'eb_test_container',
-        'layout_settings' => ['label' => 'Band'],
+        'layout_settings' => ['label' => 'Section'],
         'location' => ['anchor' => $source->uuid(), 'placement' => 'inside'],
       ],
       [
@@ -366,9 +366,6 @@ class BlueprintSerializerTest extends BlueprintKernelTestBase {
     ]);
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['block_content', 'daedalus_stylish']);

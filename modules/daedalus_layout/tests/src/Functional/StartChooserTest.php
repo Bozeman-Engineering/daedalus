@@ -45,7 +45,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * a document gets the same chooser; a vocabulary's terms are the second
  * type here. The fixture's Page template is blank (the recipe's), so the
  * node leg sees the chooser without its Template card first, then fills
- * the template with one band of text and sees the card, the words, the
+ * the template with one section of text and sees the card, the words, the
  * preview and the saved page follow.
  *
  * A card's face is a lazily loaded frame on the preview route: the start's
@@ -77,7 +77,7 @@ class StartChooserTest extends BrowserTestBase {
    */
   protected function setUp(): void {
     $this->daedalusSetUp();
-    // The group vocabulary (heroes, bands) and a second bundle entity type
+    // The group vocabulary (heroes, sections) and a second bundle entity type
     // (vocabularies); neither is part of the recipe.
     \Drupal::service('module_installer')->install(['daedalus_layout_site_groups_test', 'taxonomy']);
     $this->rebuildContainer();
@@ -90,8 +90,8 @@ class StartChooserTest extends BrowserTestBase {
       ['kind' => 'block', 'block_type' => 'text', 'block_fields' => ['field_text_text' => ['value' => 'Landing intro']]],
       ['kind' => 'block', 'field' => 'title'],
     ]);
-    $this->createPageBlueprint('notice', 'Notice', 'One band of text.', ['bands'], [
-      ['kind' => 'block', 'block_type' => 'text', 'block_fields' => ['field_text_text' => ['value' => 'Notice band']]],
+    $this->createPageBlueprint('notice', 'Notice', 'One section of text.', ['sections'], [
+      ['kind' => 'block', 'block_type' => 'text', 'block_fields' => ['field_text_text' => ['value' => 'Notice section']]],
     ]);
     // A block blueprint, which no chooser ever offers.
     $this->createBlueprint('card', 'Card', 'block', [], [
@@ -154,7 +154,7 @@ class StartChooserTest extends BrowserTestBase {
     $assert_session->elementTextContains('css', 'a[data-daedalus-layout-start-card="blank"]', 'An empty page. Nothing from the template.');
     $assert_session->elementTextContains('css', 'a[data-daedalus-layout-start-card="landing"] .daedalus-layout-start-card__name', 'Landing');
     $assert_session->elementTextContains('css', 'a[data-daedalus-layout-start-card="landing"] .daedalus-layout-start-card__description', 'A hero and the title.');
-    $this->assertSame(['' => 'All', 'heroes' => 'Heroes', 'bands' => 'Bands'], $this->filters());
+    $this->assertSame(['' => 'All', 'heroes' => 'Heroes', 'sections' => 'Sections'], $this->filters());
     $this->assertSame('true', $assert_session->elementExists('css', '[data-daedalus-layout-start-group=""]')->getAttribute('aria-current'));
     $this->assertFalse($assert_session->elementExists('css', '[data-daedalus-layout-start-group="heroes"]')->hasAttribute('aria-current'));
     $this->assertStringEndsWith('/node/add/page?group=heroes', $assert_session->elementExists('css', '[data-daedalus-layout-start-group="heroes"]')->getAttribute('href'));
@@ -182,17 +182,17 @@ class StartChooserTest extends BrowserTestBase {
     $this->drupalGet('/daedalus-layout/start-preview/node/page/landing', ['query' => ['navigationMode' => 'preview']]);
     $assert_session->statusCodeEquals(200);
     $assert_session->pageTextContains('Landing intro');
-    $assert_session->pageTextNotContains('Notice band');
+    $assert_session->pageTextNotContains('Notice section');
     $this->assertChromeless();
     $this->drupalGet('/daedalus-layout/start-preview/node/page/notice', ['query' => ['navigationMode' => 'preview']]);
     $assert_session->statusCodeEquals(200);
-    $assert_session->pageTextContains('Notice band');
+    $assert_session->pageTextContains('Notice section');
     $assert_session->pageTextNotContains('Landing intro');
     foreach (['blank', 'template'] as $start) {
       $this->drupalGet("/daedalus-layout/start-preview/node/page/$start", ['query' => ['navigationMode' => 'preview']]);
       $assert_session->statusCodeEquals(200);
       $assert_session->pageTextNotContains('Landing intro');
-      $assert_session->pageTextNotContains('Notice band');
+      $assert_session->pageTextNotContains('Notice section');
       $this->assertChromeless();
     }
     $this->assertSame($counts, $this->counts(), 'A preview saves nothing: the nodes, blocks and media are as they were.');
@@ -222,7 +222,7 @@ class StartChooserTest extends BrowserTestBase {
     $href = $assert_session->elementExists('css', 'a[data-daedalus-layout-start-card="landing"]')->getAttribute('href');
     $this->assertStringContainsString('group=heroes', $href);
     $this->assertStringContainsString('start=landing', $href);
-    $this->drupalGet('/node/add/page', ['query' => ['group' => 'bands']]);
+    $this->drupalGet('/node/add/page', ['query' => ['group' => 'sections']]);
     $this->assertSame(['blank', 'notice'], $this->cardIds());
     $this->drupalGet('/node/add/page', ['query' => ['group' => 'nope']]);
     $this->assertSame(['blank', 'landing', 'notice'], $this->cardIds());
@@ -279,10 +279,10 @@ class StartChooserTest extends BrowserTestBase {
     $assert_session->statusCodeEquals(200);
     $assert_session->pageTextContains('Landing intro');
 
-    // A template with a document to follow: one band of text on the Page
+    // A template with a document to follow: one section of text on the Page
     // display. The Template card now leads the cards, with its words, and
     // stays under every filter; the bundle form names the template among
-    // the starts; the template preview shows the band and neither
+    // the starts; the template preview shows the section and neither
     // blueprint.
     $this->fillPageTemplate();
     $this->drupalGet('/node/add/page');
@@ -295,9 +295,9 @@ class StartChooserTest extends BrowserTestBase {
     $this->assertSame(['template', 'blank', 'landing'], $this->cardIds());
     $this->drupalGet('/daedalus-layout/start-preview/node/page/template', ['query' => ['navigationMode' => 'preview']]);
     $assert_session->statusCodeEquals(200);
-    $assert_session->pageTextContains('Template band');
+    $assert_session->pageTextContains('Template section');
     $assert_session->pageTextNotContains('Landing intro');
-    $assert_session->pageTextNotContains('Notice band');
+    $assert_session->pageTextNotContains('Notice section');
     $this->assertChromeless();
     $this->drupalLogin($this->rootUser);
     $this->drupalGet('/admin/structure/types/manage/page');
@@ -320,11 +320,11 @@ class StartChooserTest extends BrowserTestBase {
     $this->assertSame($blocks_before, $this->blockIds(), 'Blank saved no block.');
     $this->drupalGet($node->toUrl());
     $assert_session->statusCodeEquals(200);
-    $assert_session->pageTextNotContains('Template band');
+    $assert_session->pageTextNotContains('Template section');
 
     // Template: the field stays empty, so the page follows its template
     // until its first edit seeds it, as every page did before starts; its
-    // view shows the template's band, and the save minted nothing of the
+    // view shows the template's section, and the save minted nothing of the
     // template (the presave saves what the page owns, an empty document,
     // never the template its render falls through to).
     $this->drupalGet('/node/add/page', ['query' => ['start' => 'template']]);
@@ -337,7 +337,7 @@ class StartChooserTest extends BrowserTestBase {
     $this->assertSame($blocks_before, $this->blockIds(), 'Template saved no block.');
     $this->drupalGet($node->toUrl());
     $assert_session->statusCodeEquals(200);
-    $assert_session->pageTextContains('Template band');
+    $assert_session->pageTextContains('Template section');
 
     // No page blueprint offered for the bundle, the setting still on: the
     // plain form.
@@ -402,14 +402,14 @@ class StartChooserTest extends BrowserTestBase {
     $assert_session->fieldNotExists('name[0][value]');
     $this->assertSame(['template', 'blank', 'notice'], $this->cardIds());
     $assert_session->elementTextContains('css', 'a[data-daedalus-layout-start-card="template"]', 'The Topics template.');
-    $this->assertSame(['' => 'All', 'bands' => 'Bands'], $this->filters(), 'Only the groups the offered starts carry are filters.');
+    $this->assertSame(['' => 'All', 'sections' => 'Sections'], $this->filters(), 'Only the groups the offered starts carry are filters.');
     // The card's frame previews the start on a sample term, and the route
     // answers it with the blueprint's content.
     $frame = $assert_session->elementExists('css', 'a[data-daedalus-layout-start-card="notice"] iframe.daedalus-layout-start-card__frame');
     $this->assertStringEndsWith('/daedalus-layout/start-preview/taxonomy_term/topics/notice?navigationMode=preview', $frame->getAttribute('src'));
     $this->drupalGet('/daedalus-layout/start-preview/taxonomy_term/topics/notice', ['query' => ['navigationMode' => 'preview']]);
     $assert_session->statusCodeEquals(200);
-    $assert_session->pageTextContains('Notice band');
+    $assert_session->pageTextContains('Notice section');
     $this->drupalGet('/admin/structure/taxonomy/manage/topics/add', ['query' => ['start' => 'notice']]);
     $assert_session->fieldExists('name[0][value]');
     $assert_session->elementExists('css', '.daedalus-layout-start-line[data-daedalus-layout-start="notice"]');
@@ -422,7 +422,7 @@ class StartChooserTest extends BrowserTestBase {
     $this->assertSame(['inline_block:text'], $this->pluginIds($sections));
     $new_blocks = array_values(array_diff($this->blockIds(), $blocks_before));
     $this->assertCount(1, $new_blocks);
-    $this->assertSame('Notice band', BlockContent::load($new_blocks[0])->get('field_text_text')->value);
+    $this->assertSame('Notice section', BlockContent::load($new_blocks[0])->get('field_text_text')->value);
   }
 
   /**
@@ -449,7 +449,7 @@ class StartChooserTest extends BrowserTestBase {
     $assert_session->statusCodeEquals(200);
     $assert_session->elementExists('css', '[data-daedalus-layout-start-chooser]');
     $this->assertSame(['blank', 'notice', 'aside', 'landing'], $this->cardIds());
-    $this->assertSame(['' => 'All', 'heroes' => 'Heroes', 'bands' => 'Bands'], $this->filters());
+    $this->assertSame(['' => 'All', 'heroes' => 'Heroes', 'sections' => 'Sections'], $this->filters());
 
     // Under a filter the order holds among the cards that remain.
     $this->drupalGet('/node/add/page', ['query' => ['group' => 'heroes']]);
@@ -463,13 +463,13 @@ class StartChooserTest extends BrowserTestBase {
   }
 
   /**
-   * Gives the Page template a document to follow: one band of text.
+   * Gives the Page template a document to follow: one section of text.
    *
    * The recipe's Page template is core's blank marker, one
    * layout_builder_blank section, and the blank judgement
    * (DaedalusLayoutAdapter::isBlankSectionList()) reads the FIRST section,
-   * so the marker is removed before the band is appended: an append onto
-   * the marker would leave the template blank. The band is a value block
+   * so the marker is removed before the section is appended: an append onto
+   * the marker would leave the template blank. The section is a value block
    * (a text block stored by its values, the way a display holds inline
    * content), so rendering it saves no block.
    */
@@ -478,9 +478,9 @@ class StartChooserTest extends BrowserTestBase {
     $section->setThirdPartySetting('daedalus_layout', 'uuid', \Drupal::service('uuid')->generate());
     $section->appendComponent(new SectionComponent(\Drupal::service('uuid')->generate(), 'content', [
       'id' => 'inline_block:text',
-      'label' => 'Template band',
+      'label' => 'Template section',
       'label_display' => '0',
-      'block_values' => ['field_text_text' => 'Template band'],
+      'block_values' => ['field_text_text' => 'Template section'],
     ]));
     $display = LayoutBuilderEntityViewDisplay::load('node.page.default');
     $this->assertInstanceOf(LayoutBuilderEntityViewDisplay::class, $display);

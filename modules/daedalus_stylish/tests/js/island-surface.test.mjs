@@ -196,11 +196,11 @@ test('an empty island prints the placeholder line and no run', () => {
 });
 
 test('the run label builder is the one DOM the widget and the printer share', () => {
-  const run = runLabel('Hero band', 'orange', 'variant:hero_band');
+  const run = runLabel('Hero section', 'orange', 'variant:hero_section');
   assert.equal(run.className, 'daedalus-stylish-island__run');
-  assert.equal(run.dataset.layer, 'variant:hero_band');
+  assert.equal(run.dataset.layer, 'variant:hero_section');
   assert.equal(run.children[0].style.background, 'orange');
-  assert.equal(run.textContent, 'Hero band');
+  assert.equal(run.textContent, 'Hero section');
 });
 
 // --- the offset and the island's placements ---------------------------------

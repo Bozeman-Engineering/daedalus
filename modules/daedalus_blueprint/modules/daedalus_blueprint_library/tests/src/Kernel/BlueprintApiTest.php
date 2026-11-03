@@ -63,6 +63,7 @@ class BlueprintApiTest extends KernelTestBase {
     'layout_discovery',
     'layout_builder',
     'daedalus_blueprint',
+    'filter',
     'daedalus_blueprint_library',
     'daedalus_blueprint_library_test',
   ];
@@ -75,7 +76,11 @@ class BlueprintApiTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('blueprint');
-    $this->installConfig(['image', 'file', 'media', 'daedalus_blueprint_library']);
+    // daedalus_blueprint's settings carry the AI context budget the
+    // details route's provider consults when a save turns `offered` on
+    // (MaterialsBudget::assertRoom(); a reading without the keys is a
+    // LogicException, not a pass).
+    $this->installConfig(['image', 'file', 'media', 'daedalus_blueprint', 'daedalus_blueprint_library']);
     // setUpCurrentUser() seeds a throwaway uid 1 first, so this user's
     // section permissions are what entity access actually evaluates.
     $this->setUpCurrentUser([], ['create section blueprint', 'edit any section blueprint', 'delete any section blueprint']);
@@ -315,19 +320,19 @@ class BlueprintApiTest extends KernelTestBase {
     // de-duplicated in order and logged, an absent key leaves it, an empty
     // list clears it, and a malformed list refuses naming the path.
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + [
-      'groups' => ['heroes', 'heroes', 'bands'],
+      'groups' => ['heroes', 'heroes', 'sections'],
     ]));
     $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
     $reloaded = $storage->loadUnchanged($blueprint->id());
-    $this->assertSame(['heroes', 'bands'], $reloaded->getGroups());
-    $this->assertStringContainsString('Groups: heroes, bands.', (string) $reloaded->getRevisionLogMessage());
+    $this->assertSame(['heroes', 'sections'], $reloaded->getGroups());
+    $this->assertStringContainsString('Groups: heroes, sections.', (string) $reloaded->getRevisionLogMessage());
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face));
     $this->assertSame(200, $response->getStatusCode());
-    $this->assertSame(['heroes', 'bands'], $storage->loadUnchanged($blueprint->id())->getGroups());
+    $this->assertSame(['heroes', 'sections'], $storage->loadUnchanged($blueprint->id())->getGroups());
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + ['groups' => ['Heroes!']]));
     $this->assertSame(422, $response->getStatusCode());
     $this->assertSame('groups', $this->decode($response)['errors'][0]['path']);
-    $this->assertSame(['heroes', 'bands'], $storage->loadUnchanged($blueprint->id())->getGroups(), 'Nothing stuck.');
+    $this->assertSame(['heroes', 'sections'], $storage->loadUnchanged($blueprint->id())->getGroups(), 'Nothing stuck.');
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + ['groups' => []]));
     $this->assertSame(200, $response->getStatusCode());
     $reloaded = $storage->loadUnchanged($blueprint->id());

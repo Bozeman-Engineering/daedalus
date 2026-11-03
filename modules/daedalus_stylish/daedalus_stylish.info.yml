@@ -3,6 +3,7 @@ description: 'Style anything on the page — browser widgets and AI sharing one 
 type: module
 core_version_requirement: '>=11.3 <11.5'
 package: Daedalus
+configure: daedalus_stylish.settings
 dependencies:
   - daedalus:daedalus
   - drupal:field

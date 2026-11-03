@@ -1,0 +1,8 @@
+name: 'Daedalus Stylish log sink test'
+type: module
+description: 'A tagged logger keeping the daedalus_stylish channel in a static array, so a kernel test reads what hooks logged across the container rebuilds a module or theme install performs.'
+package: Testing
+core_version_requirement: '*'
+hidden: true
+dependencies:
+  - daedalus:daedalus_stylish

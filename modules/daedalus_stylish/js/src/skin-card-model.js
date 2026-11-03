@@ -1,8 +1,8 @@
 /**
  * The skin card's pure model.
  *
- * The palette model's sibling for the skin itself: over the Palette's
- * skin section sits one card for the look the site wears, and this
+ * The skin model's sibling for the skin itself: over the Skin tab sits
+ * one card for the look the site wears, and this
  * module owns everything that card can compute without a DOM from its
  * one management read (the skins route: the active design system, the
  * skin it wears, the site's choice, the unit's default, and every member
@@ -12,31 +12,32 @@
  * not), the copy's source roster grouped by design system, the gesture
  * roster as data (presence means permitted AND applicable, so nothing on
  * the card is a dead control), what a restore restores, and the copy's
- * derived label. The view (palette.js SkinCard) only renders and
+ * derived label. The view (skin.js SkinCard) only renders and
  * dispatches.
  */
 
 /**
  * Whether the account may read the skin card at all.
  *
- * The skins route admits every grade that touches the skin (the token
- * gestures, the defaults gesture, the administer grade): whoever edits
- * the skin's tokens or defaults sees which skin they edit. With none of
+ * The skins route admits every grade that touches the skin (the skin
+ * material gestures, the defaults gesture, the administer grade): whoever
+ * edits the skin's materials or defaults sees which skin they edit. With none of
  * them the card is not mounted and no read is made.
  *
- * @param {object} tokens
- *   The token gesture gates (drupalSettings.daedalusStylish.tokens).
+ * @param {object} skinMaterials
+ *   The skin material gesture gates
+ *   (drupalSettings.daedalusStylish.skinMaterials).
  * @param {object} skin
  *   The skin gesture gates (drupalSettings.daedalusStylish.skin).
  *
  * @return {boolean}
  */
-export const skinCardReadable = (tokens = {}, skin = {}) =>
+export const skinCardReadable = (skinMaterials = {}, skin = {}) =>
   Boolean(
-    tokens?.canCreate ||
-      tokens?.canUpdate ||
-      tokens?.canDelete ||
-      tokens?.canDeleteInUse ||
+    skinMaterials?.canCreate ||
+      skinMaterials?.canUpdate ||
+      skinMaterials?.canDelete ||
+      skinMaterials?.canDeleteInUse ||
       skin?.canEditDefaults ||
       skin?.canAdminister,
   );

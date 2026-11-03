@@ -300,9 +300,9 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
   public function testTheDeliveryPayloadIsTheCanvasHosts(): void {
     $this->createBodyBlueprint();
     $this->createBlueprint([
-      'label' => 'Band',
-      'machine_name' => 'band',
-      'description' => 'An empty band any host can hold.',
+      'label' => 'Section',
+      'machine_name' => 'section',
+      'description' => 'An empty section any host can hold.',
     ]);
     $this->createBlueprint([
       'label' => 'Pages only',
@@ -314,9 +314,9 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
     ['entity' => $entity] = $this->createHost();
     $test_host = $this->host($entity);
 
-    $this->assertSame(['band', 'byline', 'pages_only'], $this->deliveredBlueprints(NULL), 'Without a canvas nothing is filtered.');
-    $this->assertSame(['band', 'byline', 'pages_only'], $this->deliveredBlueprints($node_host));
-    $this->assertSame(['band'], $this->deliveredBlueprints($test_host), 'The body blueprint and the allow-listed one do not fit entity_test.');
+    $this->assertSame(['byline', 'pages_only', 'section'], $this->deliveredBlueprints(NULL), 'Without a canvas nothing is filtered.');
+    $this->assertSame(['byline', 'pages_only', 'section'], $this->deliveredBlueprints($node_host));
+    $this->assertSame(['section'], $this->deliveredBlueprints($test_host), 'The body blueprint and the allow-listed one do not fit entity_test.');
 
     // The filtered payload is the same contract: {records}, the record
     // shape, roster order, a list (no holes where a record was dropped).
@@ -352,9 +352,9 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
   public function testTheCanvasOffersScopeRootAndFit(): void {
     $this->createBodyBlueprint();
     $this->createBlueprint([
-      'label' => 'Band',
-      'machine_name' => 'band',
-      'description' => 'An empty band any host can hold.',
+      'label' => 'Section',
+      'machine_name' => 'section',
+      'description' => 'An empty section any host can hold.',
     ]);
     $this->createBlueprint([
       'label' => 'Pages only',
@@ -386,18 +386,18 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
     $offer = $this->container->get('daedalus_blueprint.canvas_offer');
     $this->assertInstanceOf(CanvasOffer::class, $offer);
     $this->assertTrue($offer->offered($roster->get(MaterialKind::Blueprint, 'byline'), $node_host, MaterialRecord::SCOPE_BLOCK));
-    $this->assertTrue($offer->offered($roster->get(MaterialKind::Blueprint, 'band'), $test_host, MaterialRecord::SCOPE_BLOCK));
+    $this->assertTrue($offer->offered($roster->get(MaterialKind::Blueprint, 'section'), $test_host, MaterialRecord::SCOPE_BLOCK));
     $this->assertFalse($offer->offered($roster->get(MaterialKind::Blueprint, 'byline'), $test_host, MaterialRecord::SCOPE_BLOCK), 'The body field is not placeable on entity_test.');
     $this->assertFalse($offer->offered($roster->get(MaterialKind::Blueprint, 'pages_only'), $test_host, MaterialRecord::SCOPE_BLOCK), 'The allow-list excludes entity_test.');
     $this->assertFalse($offer->offered($roster->get(MaterialKind::Blueprint, 'whole_page'), $node_host, MaterialRecord::SCOPE_BLOCK), 'A page-scope blueprint is never offered on a canvas: it is the page library\'s.');
     $this->assertFalse($offer->offered($roster->get(MaterialKind::Blueprint, 'uncomposed'), $node_host, MaterialRecord::SCOPE_BLOCK), 'A blueprint with no root places nothing and is not offered.');
-    $this->assertTrue($offer->offered(new MaterialRecord(MaterialKind::Swatch, 'lime', 'Lime'), $test_host, MaterialRecord::SCOPE_BLOCK), 'Every other kind is offered everywhere.');
+    $this->assertTrue($offer->offered(new MaterialRecord(MaterialKind::Token, 'color/lime', 'lime'), $test_host, MaterialRecord::SCOPE_BLOCK), 'Every other kind is offered everywhere.');
     $this->assertSame($this->requirements()->cacheMetadata()->getCacheTags(), $offer->cacheMetadata()->getCacheTags());
 
     // The page-load half: the payload is what the canvas offers.
-    $this->assertSame(['band', 'byline', 'pages_only', 'uncomposed', 'whole_page'], $this->deliveredBlueprints(NULL), 'Without a canvas nothing is filtered.');
-    $this->assertSame(['band', 'byline', 'pages_only'], $this->deliveredBlueprints($node_host), 'No page-scope and no rootless blueprint.');
-    $this->assertSame(['band'], $this->deliveredBlueprints($test_host));
+    $this->assertSame(['byline', 'pages_only', 'section', 'uncomposed', 'whole_page'], $this->deliveredBlueprints(NULL), 'Without a canvas nothing is filtered.');
+    $this->assertSame(['byline', 'pages_only', 'section'], $this->deliveredBlueprints($node_host), 'No page-scope and no rootless blueprint.');
+    $this->assertSame(['section'], $this->deliveredBlueprints($test_host));
 
     // The mid-session half: a touched blueprint the canvas does not offer
     // is a remove, exactly as one the roster lacks; a touched one it
@@ -405,20 +405,20 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
     $change_set = $this->container->get('daedalus_blueprint.materials_change_set');
     $this->assertInstanceOf(MaterialsChangeSet::class, $change_set);
     $change_set->flush();
-    $change_set->touch(MaterialKind::Blueprint, 'byline', 'band', 'pages_only', 'whole_page', 'uncomposed', 'gone');
+    $change_set->touch(MaterialKind::Blueprint, 'byline', 'section', 'pages_only', 'whole_page', 'uncomposed', 'gone');
     $ids = static fn (array $records): array => array_column($records, 'id');
 
     $delta = $change_set->delta($test_host);
-    $this->assertSame(['band'], $ids($delta['upsert']));
+    $this->assertSame(['section'], $ids($delta['upsert']));
     $this->assertSame(['byline', 'pages_only', 'whole_page', 'uncomposed', 'gone'], $ids($delta['remove']), 'Not fitting, not fitting, page scope, no root, not in the roster: all removes, in touch order.');
     $this->assertSame(['kind' => 'blueprint', 'id' => 'byline'], $delta['remove'][0]);
 
     $delta = $change_set->delta($node_host);
-    $this->assertSame(['byline', 'band', 'pages_only'], $ids($delta['upsert']));
+    $this->assertSame(['byline', 'section', 'pages_only'], $ids($delta['upsert']));
     $this->assertSame(['whole_page', 'uncomposed', 'gone'], $ids($delta['remove']));
 
     $delta = $change_set->delta();
-    $this->assertSame(['byline', 'band', 'pages_only', 'whole_page', 'uncomposed'], $ids($delta['upsert']), 'With no canvas every touched id the roster carries is an upsert.');
+    $this->assertSame(['byline', 'section', 'pages_only', 'whole_page', 'uncomposed'], $ids($delta['upsert']), 'With no canvas every touched id the roster carries is an upsert.');
     $this->assertSame(['gone'], $ids($delta['remove']));
 
     // flush() is delta() for the canvas, then the drain.
@@ -440,9 +440,9 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
   public function testTheOfferAnswersTheScopeAsked(): void {
     $this->createBodyBlueprint();
     $this->createBlueprint([
-      'label' => 'Band',
-      'machine_name' => 'band',
-      'description' => 'An empty band any host can hold.',
+      'label' => 'Section',
+      'machine_name' => 'section',
+      'description' => 'An empty section any host can hold.',
     ]);
     $this->createBlueprint([
       'label' => 'Whole page',
@@ -484,7 +484,7 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
     $this->assertTrue($offered('article_page', $node_host, MaterialRecord::SCOPE_PAGE));
     $this->assertFalse($offered('uncomposed_page', $node_host, MaterialRecord::SCOPE_PAGE), 'A page blueprint with no root starts nothing and is not offered.');
     $this->assertFalse($offered('byline', $node_host, MaterialRecord::SCOPE_PAGE), 'A block blueprint is never a start: it is the Add panel\'s.');
-    $this->assertFalse($offered('band', $node_host, MaterialRecord::SCOPE_PAGE));
+    $this->assertFalse($offered('section', $node_host, MaterialRecord::SCOPE_PAGE));
 
     // The fit is judged against the host asked for, at either scope.
     $this->assertTrue($offered('whole_page', $test_host, MaterialRecord::SCOPE_PAGE), 'A page document needing nothing fits any host.');
@@ -492,14 +492,14 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
 
     // Block scope on the same host and records: the Add panel's answer.
     $this->assertTrue($offered('byline', $node_host, MaterialRecord::SCOPE_BLOCK));
-    $this->assertTrue($offered('band', $node_host, MaterialRecord::SCOPE_BLOCK));
+    $this->assertTrue($offered('section', $node_host, MaterialRecord::SCOPE_BLOCK));
     $this->assertFalse($offered('whole_page', $node_host, MaterialRecord::SCOPE_BLOCK));
     $this->assertFalse($offered('article_page', $node_host, MaterialRecord::SCOPE_BLOCK));
 
     // Other kinds ride at either scope; a scope no blueprint has is refused.
-    $this->assertTrue($offer->offered(new MaterialRecord(MaterialKind::Swatch, 'lime', 'Lime'), $node_host, MaterialRecord::SCOPE_PAGE));
+    $this->assertTrue($offer->offered(new MaterialRecord(MaterialKind::Token, 'color/lime', 'lime'), $node_host, MaterialRecord::SCOPE_PAGE));
     try {
-      $offer->offered($roster->get(MaterialKind::Blueprint, 'band'), $node_host, 'section');
+      $offer->offered($roster->get(MaterialKind::Blueprint, 'section'), $node_host, 'section');
       $this->fail('A scope no blueprint has must be refused.');
     }
     catch (\InvalidArgumentException $e) {
@@ -508,8 +508,8 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
 
     // The Add panel's delivery asks for block scope: a page-scope blueprint
     // never reaches a canvas payload, whatever it would start.
-    $this->assertSame(['article_page', 'band', 'byline', 'uncomposed_page', 'whole_page'], $this->deliveredBlueprints(NULL));
-    $this->assertSame(['band', 'byline'], $this->deliveredBlueprints($node_host));
+    $this->assertSame(['article_page', 'byline', 'section', 'uncomposed_page', 'whole_page'], $this->deliveredBlueprints(NULL));
+    $this->assertSame(['byline', 'section'], $this->deliveredBlueprints($node_host));
   }
 
   /**
@@ -532,22 +532,22 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
       'type' => BlueprintInterface::TYPE_SITE_CHROME,
     ]);
     $this->createBlueprint([
-      'label' => 'Band',
-      'machine_name' => 'band',
-      'description' => 'An empty band any host can hold.',
+      'label' => 'Section',
+      'machine_name' => 'section',
+      'description' => 'An empty section any host can hold.',
     ]);
     $discovery = $this->container->get('daedalus_blueprint_library.discovery');
     $header = $discovery->getBlueprint('header');
-    $band = $discovery->getBlueprint('band');
+    $section = $discovery->getBlueprint('section');
     $this->assertSame(BlueprintInterface::TYPE_SITE_CHROME, $header['type']);
     $this->assertTrue($header['frame_only'], 'Discovery serves the type\'s rule beside the type.');
-    $this->assertFalse($band['frame_only']);
+    $this->assertFalse($section['frame_only']);
     $this->assertTrue($this->container->get('entity_type.manager')->getStorage(BlueprintTypeInterface::ENTITY_TYPE_ID)->load(BlueprintInterface::TYPE_SITE_CHROME)->isFrameOnly());
     $this->assertFalse($this->container->get('entity_type.manager')->getStorage(BlueprintTypeInterface::ENTITY_TYPE_ID)->load(BlueprintInterface::TYPE_SECTION)->isFrameOnly());
 
     $requires = BlueprintRequirements::derive($header['layout'], $header['bundles'], $header['frame_only']);
     $this->assertSame([FrameInterface::ENTITY_TYPE_ID], $requires[BlueprintRequirements::FRAME]);
-    $this->assertArrayNotHasKey(BlueprintRequirements::FRAME, BlueprintRequirements::derive($band['layout'], $band['bundles'], $band['frame_only']), 'The kind is present only where it binds.');
+    $this->assertArrayNotHasKey(BlueprintRequirements::FRAME, BlueprintRequirements::derive($section['layout'], $section['bundles'], $section['frame_only']), 'The kind is present only where it binds.');
     $this->assertArrayNotHasKey(BlueprintRequirements::FRAME, BlueprintRequirements::derive([]));
     $roster = $this->container->get('daedalus_blueprint.materials_roster_builder')->build();
     $this->assertSame($requires, $roster->get(MaterialKind::Blueprint, 'header')->requires, 'The record carries the frame kind.');
@@ -567,19 +567,19 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
     $offer = $this->container->get('daedalus_blueprint.canvas_offer');
     $this->assertFalse($offer->offered($roster->get(MaterialKind::Blueprint, 'header'), $node_host, MaterialRecord::SCOPE_BLOCK));
     $this->assertTrue($offer->offered($roster->get(MaterialKind::Blueprint, 'header'), $frame_host, MaterialRecord::SCOPE_BLOCK));
-    $this->assertTrue($offer->offered($roster->get(MaterialKind::Blueprint, 'band'), $node_host, MaterialRecord::SCOPE_BLOCK));
-    $this->assertTrue($offer->offered($roster->get(MaterialKind::Blueprint, 'band'), $frame_host, MaterialRecord::SCOPE_BLOCK));
-    $this->assertSame(['band', 'header'], $this->deliveredBlueprints(NULL), 'Without a canvas nothing is filtered.');
-    $this->assertSame(['band'], $this->deliveredBlueprints($node_host), 'The page canvas\'s Add panel never lists the chrome.');
-    $this->assertSame(['band', 'header'], $this->deliveredBlueprints($frame_host), 'The frame canvas\'s does.');
+    $this->assertTrue($offer->offered($roster->get(MaterialKind::Blueprint, 'section'), $node_host, MaterialRecord::SCOPE_BLOCK));
+    $this->assertTrue($offer->offered($roster->get(MaterialKind::Blueprint, 'section'), $frame_host, MaterialRecord::SCOPE_BLOCK));
+    $this->assertSame(['header', 'section'], $this->deliveredBlueprints(NULL), 'Without a canvas nothing is filtered.');
+    $this->assertSame(['section'], $this->deliveredBlueprints($node_host), 'The page canvas\'s Add panel never lists the chrome.');
+    $this->assertSame(['header', 'section'], $this->deliveredBlueprints($frame_host), 'The frame canvas\'s does.');
     $change_set = $this->container->get('daedalus_blueprint.materials_change_set');
     $change_set->flush();
-    $change_set->touch(MaterialKind::Blueprint, 'header', 'band');
+    $change_set->touch(MaterialKind::Blueprint, 'header', 'section');
     $delta = $change_set->delta($node_host);
-    $this->assertSame(['band'], array_column($delta['upsert'], 'id'));
+    $this->assertSame(['section'], array_column($delta['upsert'], 'id'));
     $this->assertSame(['header'], array_column($delta['remove'], 'id'), 'A touched chrome blueprint is a remove on a page canvas.');
     $delta = $change_set->delta($frame_host);
-    $this->assertSame(['header', 'band'], array_column($delta['upsert'], 'id'));
+    $this->assertSame(['header', 'section'], array_column($delta['upsert'], 'id'));
     $this->assertSame([], $delta['remove']);
     $change_set->flush();
   }

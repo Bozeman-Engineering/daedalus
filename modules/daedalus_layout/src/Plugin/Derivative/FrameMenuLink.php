@@ -14,16 +14,19 @@ use Drupal\daedalus_ui\DaedalusUi;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Derives one Appearance menu link per site frame.
+ * Derives one administration menu link per site frame.
  *
- * The frame's fourth door: the first three sit on the admin pages where a
- * theme is managed (FrameDoors), this one in the administration menu under
- * Appearance, beside Themes, Skins and Design systems, so the frame is
- * reachable from every admin page regardless of what it renders. One child
- * of system.themes_page per frame, keyed by the frame's id (the theme's
- * machine name), titled "Site frame: @theme" with the theme's human name
- * (the id when the theme is not installed). There is no collection route:
- * one frame per theme makes the theme list the collection.
+ * The frame's doors in the administration menu: the first three doors sit
+ * on the admin pages where a theme is managed (FrameDoors); this deriver
+ * serves two base links, daedalus_layout.frame under Appearance (beside
+ * Themes, Skins and Design systems) and daedalus_layout.frame.daedalus
+ * under the Daedalus config category's Styling sub-category (see
+ * SETTINGS.md), so the frame is reachable from every admin page regardless
+ * of what it renders. One child of the base link's parent per frame, keyed
+ * by the frame's id (the theme's machine name), titled "Site frame: @theme"
+ * with the theme's human name (the id when the theme is not installed).
+ * There is no collection route: one frame per theme makes the theme list
+ * the collection.
  *
  * The link's route and parameters are read off DaedalusUi::getEditingUrl(),
  * the one derivation of "where this entity is edited" every door shares,

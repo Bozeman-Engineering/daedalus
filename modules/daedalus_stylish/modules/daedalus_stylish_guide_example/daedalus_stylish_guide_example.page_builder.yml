@@ -28,7 +28,7 @@
 # - On a strict site every binding below is law: a bound property
 #   accepts only the scale's minted tokens plus its allowed: literals,
 #   an undeclared property is rejected, and every var() must name a
-#   minted token or a published swatch. On a guarded site the
+#   minted token. On a guarded site the
 #   constraints stay law but undeclared properties pass with grammar
 #   checks; on an open site everything here only shapes the offer.
 # - stops: curate the OFFER, never legality, and only PER ELEMENT (the
@@ -40,7 +40,7 @@
 #   error. Site-wide offer curation is not guide code: which of a
 #   scale's tokens every uncurated row leads with is each token's
 #   `offered` flag in the skin (the everyday six of the nine space steps
-#   are offered, the gutter and the band tokens are not), so a row bound
+#   are offered, the gutter and the section tokens are not), so a row bound
 #   to a scale that no element curates offers the skin's offered tokens
 #   in stored order. A `stops` list under constraint_defaults is a build
 #   error.
@@ -167,7 +167,7 @@ site:
       scale: tracking
     # Text and border colors are role tokens, never ad hoc, so they bind
     # to the color scale (the suite leaves color to the package: another
-    # package keeps it unbound so swatches stay legal there). Backgrounds
+    # package keeps it unbound so literal colors stay legal there). Backgrounds
     # are deliberately NOT bound (see the unbound list below).
     # border-color is authored on the shorthand; the expansion carries
     # it to the four sides.
@@ -179,9 +179,9 @@ site:
       allowed: ['transparent', 'currentColor']
     # Spacing: the suite binds padding and gap to space with the zero
     # literal, and the skin marks the everyday six of its nine minted
-    # steps `offered` (the band tokens are worn through the container
+    # steps `offered` (the section tokens are worn through the container
     # rhythm axis, never picked by hand, and the gutter is the page
-    # band's inline inset, not a padding step: all `offered: false`).
+    # section's inline inset, not a padding step: all `offered: false`).
     # Margins: the ladder, zero, and auto (centering). The suite leaves
     # margin unbound because auto and negatives are legal there on an
     # open site; a designed site outlaws negative margins by construction
@@ -231,13 +231,14 @@ site:
       scale: layout
       allowed: ['none', '100%']
   # Deliberately UNBOUND, and why:
-  # - background-color and background-image: the palette (published
-  #   swatches, var(--swatch-*)) and gradients live here. A color-scale
-  #   binding would reject every swatch reference, and page bands and
-  #   cards are exactly where an editor reaches for the palette. On a
-  #   strict site the published-swatch and minted-token checks still
-  #   gate every var(); literals stay legal. The surface axis (the
-  #   guide_band_* variants) is the on-guide default for bands.
+  # - background-color and background-image: the palette's unbound half.
+  #   The skin's color tokens (var(--color-*)) and gradient tokens
+  #   (var(--gradient-*)) live here beside the literals, and sections
+  #   and cards are exactly where an editor reaches for the palette; a
+  #   binding to one scale would refuse the other. On a strict site the
+  #   minted-token check still gates every var(); literals stay legal.
+  #   The surface axis (the guide_section_* variants) is the on-guide
+  #   default for sections.
   # - padding-inline: the suite's width variants spell the content inset
   #   as max(gutter, calc(...)); a scale binding would reject them.
   # - width, height, min-*: structural mechanics; the image part
@@ -297,14 +298,14 @@ entity:
       label: 'Background'
       widget: background
 
-# Containers: the page-band vocabulary.
+# Containers: the section vocabulary.
 #
 # variant_axes is a LIST, and lists replace across layers, so the suite's
 # four axes (daedalus_stylish_layouts.page_builder.yml) are re-listed here beside
 # the two this package adds, each with its description and owns restated
 # (a list entry the suite qualified is unqualified here unless this file
-# says so). Both adds are root-only: a page band has a surface and a
-# rhythm; a nested container inherits both from its band. An axis
+# says so). Both adds are root-only: a section has a surface and a
+# rhythm; a nested container inherits both from its section. An axis
 # description is what the AI reads about the axis in the design system
 # brief: the sequence rules and cardinalities no single value can say.
 # owns names the properties the axis's values write; a hand-written
@@ -313,7 +314,7 @@ container:
   variant_axes:
     - width:
         depth: root
-        description: 'How wide a page band lets its content run: Site width on every band, a hero or color-blocked band included (a band''s background spans the screen at every width, so Full width is never the way to get a full-bleed background); Full width only when the content itself should reach the edges, such as a photographic band; Medium for a long prose band. A nested container inherits its band and never wears it.'
+        description: 'How wide a section lets its content run: Site width on every section, a hero or color-blocked section included (a section''s background spans the screen at every width, so Full width is never the way to get a full-bleed background); Full width only when the content itself should reach the edges, such as a photographic section; Medium for a long prose section. A nested container inherits its section and never wears it.'
         owns:
           - padding-left
           - padding-right
@@ -321,28 +322,28 @@ container:
     - container_layout:
         label: 'Layout'
         description: 'How a container arranges its children: stacked with the site gap between them (the skin''s container default, so a stacked container never writes a display or a gap) unless it wears columns, and then every direct child is an equal column (unequal shares are per-child flex-grow overrides). Nested rows are ordinary rows; an inline row of buttons is the Cluster look, not columns.'
-    # The band's paint: plain, tint, elevated, inverse, accent (the
-    # guide_band_* variants). Alternating tint and plain bands is the
+    # The section's paint: plain, tint, elevated, inverse, accent (the
+    # guide_section_* variants). Alternating tint and plain sections is the
     # page rhythm.
     - surface:
         depth: root
         label: 'Surface'
-        description: 'The band''s paint, and with it the page''s rhythm: alternate Plain and Tint so consecutive bands separate without a rule between them, never two Tint or two Inverse bands back to back, Elevated behind a row of cards, Inverse at most once per page as the closing statement or one spotlight, and Accent exactly once, for the single call-to-action band (a title, one line of copy, one button wearing On accent), never for content.'
-    # The band's vertical breathing room: compact, standard, spacious
+        description: 'The section''s paint, and with it the page''s rhythm: alternate Plain and Tint so consecutive sections separate without a rule between them, never two Tint or two Inverse sections back to back, Elevated behind a row of cards, Inverse at most once per page as the closing statement or one spotlight, and Accent exactly once, for the single call-to-action section (a title, one line of copy, one button wearing On accent), never for content.'
+    # The section's vertical breathing room: compact, standard, spacious
     # (the guide_rhythm_* variants, on banded space tokens).
     - rhythm:
         depth: root
         label: 'Rhythm'
-        description: 'The band''s vertical breathing room: Standard on every band, Spacious on the hero and on one statement band, Compact only on a strip that continues the band above.'
+        description: 'The section''s vertical breathing room: Standard on every section, Spacious on the hero and on one statement section, Compact only on a strip that continues the section above.'
         owns:
           - padding-top
           - padding-bottom
     - animation:
         label: 'Animation'
-        description: 'The entrance a band plays as it scrolls into view: a band is born still, at most one entrance per band, on the band or on its cards, never on body copy.'
+        description: 'The entrance a section plays as it scrolls into view: a section is born still, at most one entrance per section, on the section or on its cards, never on body copy.'
     - hover:
         label: 'Hover'
-        description: 'The feel a container answers a pointer with: Raise on a card that links somewhere, nothing on a band (the variant carries its own hover state, so the wear never carries a condition).'
+        description: 'The feel a container answers a pointer with: Raise on a card that links somewhere, nothing on a section (the variant carries its own hover state, so the wear never carries a condition).'
   property_groups:
     spacing: {}
     typography: {}

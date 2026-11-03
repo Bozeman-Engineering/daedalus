@@ -19,7 +19,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * live — the affordance CSS keys on the hint, not the marker). The
  * translated hint (`data-container-empty-hint`, "Empty container") is
  * stamped by the composed render in edit mode only, on the same root —
- * the container is one box, so <section> page band and nested <div> carry
+ * the container is one box, so a top-level <section> and a nested <div> carry
  * it alike. The affordance CSS rides the edit-mode asset bundle
  * (daedalus_stylish_layouts_library_info_alter), so live renders never load it.
  */
@@ -45,6 +45,10 @@ class EmptyContainerAffordanceTest extends NestedStorageKernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
+    // Importing daedalus_stylish's config saves its settings, a law change
+    // that recompiles the variants file over these storages.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
   }

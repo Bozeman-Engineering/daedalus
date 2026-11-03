@@ -96,10 +96,12 @@ class TextFormatWriteAccessTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * A nonexistent format falls back, and the fallback is access-checked too.
+   * A nonexistent format falls back to the actor's default format.
    *
-   * The plain_text format sorts first among enabled formats and is the site
-   * fallback format, so the restricted user may use it: warning, no error.
+   * The format restricted_html (weight 0) outranks plain_text (weight 10)
+   * in the roster, but the restricted user may not use it, so their default
+   * is plain_text, the site fallback format everyone may use: warning, no
+   * error.
    */
   public function testNonexistentFormatFallsBackToAccessibleFormat(): void {
     $this->setUpCurrentUser([], ['administer entity_test content']);
@@ -118,11 +120,107 @@ class TextFormatWriteAccessTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * A fallback into a format the user cannot use is denied, not silently kept.
+   * A nonexistent format on a field the user has no format for is an error.
+   *
+   * The fallback is the actor's default, so a field whose roster holds only
+   * formats the user may not use has no fallback: the write is refused
+   * naming the roster, never silently kept with a NULL format.
    */
   public function testFallbackIntoInaccessibleFormatDenied(): void {
-    // A field whose allowed_formats pins the restricted format, so the
-    // nonexistent-format fallback resolves to a format the user cannot use.
+    $this->createPinnedField();
+    $this->setUpCurrentUser([], ['administer entity_test content']);
+    [$definition, $handler] = $this->getTextFieldHandler('field_pinned');
+
+    $result = $handler->deserialize([
+      'value' => 'Hello',
+      'format' => 'does_not_exist',
+    ], $definition);
+
+    $this->assertTrue($result->hasErrors());
+    $errors = $result->getErrors();
+    $this->assertCount(1, $errors);
+    $this->assertSame('NO_TEXT_FORMAT', $errors[0]->getCode());
+    $this->assertSame('fields.field_pinned', $errors[0]->getPath());
+    $this->assertStringContainsString('does_not_exist', $errors[0]->getMessage());
+    $this->assertStringContainsString('restricted_html', $errors[0]->getHint());
+    $this->assertSame([], $result->getWarnings());
+  }
+
+  /**
+   * The actor option is the account judged, not the current user.
+   *
+   * A batch run for an actor (BlueprintOperations and the deserializer pass
+   * the option through to every handler) is judged for that actor even when
+   * the current user holds the permission.
+   */
+  public function testActorOptionJudgedOverCurrentUser(): void {
+    $this->setUpCurrentUser([], [
+      'administer entity_test content',
+      'use text format restricted_html',
+    ]);
+    $actor = $this->createUser(['administer entity_test content']);
+    [$definition, $handler] = $this->getTextFieldHandler();
+
+    $result = $handler->deserialize([
+      'value' => '<p>Sneaky</p>',
+      'format' => 'restricted_html',
+    ], $definition, ['actor' => $actor]);
+
+    $this->assertTrue($result->hasErrors());
+    $errors = $result->getErrors();
+    $this->assertCount(1, $errors);
+    $this->assertSame('ACCESS_DENIED_TEXT_FORMAT', $errors[0]->getCode());
+  }
+
+  /**
+   * A format-less write lands on the actor's first usable format.
+   *
+   * The format restricted_html is the roster's first by weight; the actor
+   * may use only plain_text, so that is their default, while the current
+   * user (who may use restricted_html) is not consulted.
+   */
+  public function testFormatlessWriteLandsOnActorsFormat(): void {
+    $this->setUpCurrentUser([], [
+      'administer entity_test content',
+      'use text format restricted_html',
+    ]);
+    $actor = $this->createUser(['administer entity_test content']);
+    [$definition, $handler] = $this->getTextFieldHandler();
+
+    $result = $handler->deserialize('No format named', $definition, ['actor' => $actor]);
+
+    $this->assertFalse($result->hasErrors());
+    $this->assertSame([], $result->getWarnings());
+    $this->assertSame('plain_text', $result->getValue()['format']);
+
+    $current = $handler->deserialize('No format named', $definition);
+    $this->assertFalse($current->hasErrors());
+    $this->assertSame('restricted_html', $current->getValue()['format']);
+  }
+
+  /**
+   * A format-less write by an actor with no usable format is refused.
+   */
+  public function testFormatlessWriteWithNoUsableFormatDenied(): void {
+    $this->createPinnedField();
+    $this->setUpCurrentUser([], ['administer entity_test content']);
+    [$definition, $handler] = $this->getTextFieldHandler('field_pinned');
+
+    $result = $handler->deserialize('Nowhere to land', $definition);
+
+    $this->assertTrue($result->hasErrors());
+    $errors = $result->getErrors();
+    $this->assertCount(1, $errors);
+    $this->assertSame('NO_TEXT_FORMAT', $errors[0]->getCode());
+    $this->assertSame('fields.field_pinned', $errors[0]->getPath());
+    $this->assertStringContainsString('restricted_html', $errors[0]->getHint());
+    $this->assertSame([], $result->getWarnings());
+  }
+
+  /**
+   * Creates field_pinned, a text_long field allowing only restricted_html.
+   */
+  protected function createPinnedField(): void {
     FieldStorageConfig::create([
       'field_name' => 'field_pinned',
       'entity_type' => 'entity_test',
@@ -135,23 +233,6 @@ class TextFormatWriteAccessTest extends BlueprintKernelTestBase {
       'label' => 'Pinned',
       'settings' => ['allowed_formats' => ['restricted_html']],
     ])->save();
-
-    $this->setUpCurrentUser([], ['administer entity_test content']);
-    [$definition, $handler] = $this->getTextFieldHandler('field_pinned');
-
-    $result = $handler->deserialize([
-      'value' => 'Hello',
-      'format' => 'does_not_exist',
-    ], $definition);
-
-    $this->assertTrue($result->hasErrors());
-    $errors = $result->getErrors();
-    $this->assertCount(1, $errors);
-    $this->assertSame('ACCESS_DENIED_TEXT_FORMAT', $errors[0]->getCode());
-    $this->assertSame('fields.field_pinned', $errors[0]->getPath());
-    $warnings = $result->getWarnings();
-    $this->assertCount(1, $warnings);
-    $this->assertSame('INVALID_TEXT_FORMAT', $warnings[0]->getCode());
   }
 
 }

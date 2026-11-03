@@ -42,10 +42,11 @@ interface DaedalusStylishVariantInterface extends ShippedSourceInterface, Conten
   /**
    * Returns the variant's description: when to reach for this look.
    *
-   * The AI-facing payload of the style guide's variants roster (the schema's
-   * materials.variants): what teaches a model (or a colleague) when this
-   * variant expresses the intent. Empty when the variant has none; the roster
-   * then serves identity only.
+   * The AI-facing payload of the style guide's variants roster (whole on
+   * the design system brief's element lines; the JSON door's schema prints
+   * it under materials.variants): what teaches a model (or a colleague)
+   * when this variant expresses the intent. Empty when the variant has
+   * none; the roster then serves identity only.
    */
   public function getDescription(): string;
 

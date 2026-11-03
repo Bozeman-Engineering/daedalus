@@ -51,7 +51,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   values (no block_revision_id anywhere in the export) and the style map
  *   as the display's third-party setting.
  * - SEEDING ON THE REAL CREATION DOOR: a page created through the node
- *   form arrives in Edit Mode showing the template's bands under fresh,
+ *   form arrives in Edit Mode showing the template's sections under fresh,
  *   derived identity, its own title edited in place through the field
  *   block, the template's style re-keyed onto the seeded container in the
  *   page's own map and painted on the canvas, both on the arrival render
@@ -391,7 +391,7 @@ class TemplateEditBehaviorTest extends WebDriverTestBase {
     $this->assertFalse($sample_facts['presented'], 'A field block on a template presents no field of the host. ' . print_r($sample_facts, TRUE));
 
     // The text block, a value block on the display, edits in place.
-    $template_text = 'Template band text';
+    $template_text = 'Template section text';
     $this->editTextInPlace("block:$text_uuid", $template_text, 'Template text');
     $this->assertJsCondition('window.__blueprintPosts === 4', 10000, 'The in-place edit was one blueprint POST.');
 
@@ -418,7 +418,7 @@ class TemplateEditBehaviorTest extends WebDriverTestBase {
         verb.run('block:$field_uuid');
       })();
       JS);
-    $dialog_form = '#layout-builder-modal form[data-daedalus-edit-configure-dialog="block:' . $field_uuid . '"]';
+    $dialog_form = '#drupal-modal form[data-daedalus-edit-configure-dialog="block:' . $field_uuid . '"]';
     $label_select = $assert_session->waitForElementVisible('css', "$dialog_form select[name=\"settings[formatter][label]\"]", 20000);
     $this->assertNotNull($label_select, 'The Configure verb opened the field block dialog on the defaults storage, its form stamped for the transport.');
     $this->assertSame('above', $label_select->getValue(), 'The dialog shows the formatter label setting the placement holds.');
@@ -430,7 +430,7 @@ class TemplateEditBehaviorTest extends WebDriverTestBase {
       "(() => {"
       . " const block = document.querySelector(\"$field_block\");"
       . " const container = document.querySelector(\"$container\");"
-      . " const modal = document.querySelector('#layout-builder-modal');"
+      . " const modal = document.querySelector('#drupal-modal');"
       . " return !!block && block !== window.__fieldBlockBeforeDialog"
       . " && container === window.__containerBeforeDialog"
       . " && block.querySelector('[data-element=\"kind:field\"]') !== null"
@@ -460,9 +460,9 @@ class TemplateEditBehaviorTest extends WebDriverTestBase {
     $this->openInspector();
     $background_well_xpath = '//div[@id = "daedalus_stylish_inspector"]//*[contains(@class, "daedalus-stylish-inspector__widget--background")]'
       . '//*[contains(@class, "daedalus-stylish-inspector__widget-row")][.//*[contains(@class, "daedalus-stylish-inspector__widget-axis") and normalize-space() = "Background"]]'
-      . '//button[contains(@class, "daedalus-stylish-swatch-well")]';
-    $this->clickXpath($background_well_xpath, "The container's Basic panel renders the Background row's swatch well.");
-    $stop_xpath = '//div[contains(@class, "daedalus-ui-popover")]//div[contains(@class, "daedalus-stylish-swatch-popover")]'
+      . '//button[contains(@class, "daedalus-stylish-token-well")]';
+    $this->clickXpath($background_well_xpath, "The container's Basic panel renders the Background row's token well.");
+    $stop_xpath = '//div[contains(@class, "daedalus-ui-popover")]//div[contains(@class, "daedalus-stylish-token-popover")]'
       . '//button[contains(@class, "daedalus-stylish-palette-grid__stop")][not(contains(@class, "daedalus-stylish-palette-grid__stop--active"))][1]';
     $this->clickXpath($stop_xpath, 'The well opened the palette popover offering a stop.');
     $map = $this->styleMapJs();
@@ -545,7 +545,7 @@ class TemplateEditBehaviorTest extends WebDriverTestBase {
     $seed_text = DocumentInstantiator::derivedUuid($first->uuid(), $text_uuid);
     $this->assertNotSame($container_uuid, $seed_container, 'The seeded identity is not the template\'s.');
     $seeded_container = "[data-main-entity] [data-selectable='container:$seed_container']";
-    $this->assertNotNull($assert_session->waitForElement('css', $seeded_container, 20000), 'The page shows the template\'s band under its own derived identity.');
+    $this->assertNotNull($assert_session->waitForElement('css', $seeded_container, 20000), 'The page shows the template\'s section under its own derived identity.');
     $assert_session->elementNotExists('css', "[data-main-entity] [data-selectable='container:$container_uuid']");
     $assert_session->elementExists('css', "$seeded_container [data-selectable='block:$seed_text']");
     $assert_session->elementExists('css', "$seeded_container [data-selectable='block:$seed_field']");
@@ -599,7 +599,7 @@ class TemplateEditBehaviorTest extends WebDriverTestBase {
     $this->enterEditModeViaCookies($second->toUrl());
     $this->waitForMirror('The mirror booted on the second page.');
     $second_seeded = "[data-main-entity] [data-selectable='container:$second_container']";
-    $this->assertNotNull($assert_session->waitForElement('css', "$second_seeded [data-selectable='block:$second_text']", 20000), 'The second page shows the template\'s band under its own identity.');
+    $this->assertNotNull($assert_session->waitForElement('css', "$second_seeded [data-selectable='block:$second_text']", 20000), 'The second page shows the template\'s section under its own identity.');
     $assert_session->elementNotExists('css', "[data-main-entity] [data-selectable='container:$seed_container']");
     $this->assertJsCondition(
       "document.querySelector(\"$second_seeded [data-selectable='block:$second_text']\")?.textContent.trim() === '$template_text'",

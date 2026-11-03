@@ -1,12 +1,13 @@
 import { parseKey } from './style-guide.js';
-import { BOX_LABELS, partsForKey, selectorLabel, INSTANCE_PART } from './parts.js';
+import { boxWord, partsForKey, selectorLabel, INSTANCE_PART } from './parts.js';
 import { scopeTargets, donutLimit } from './printer.js';
 import { pseudoOf, resolveTargets } from './computed-read.js';
 import { buildStack, deliveredEntry } from './style-stack.js';
 import { axisVocabulary } from './variant-scope.js';
 import {
   ANCHOR,
-  PSEUDOS,
+  GENERATED_BOXES,
+  PSEUDO_PATTERN,
   SUFFIX,
   isCanonicalSelector,
 } from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
@@ -60,7 +61,7 @@ const deliversBox = (entry) =>
  * and selectorFor(parentKey, selector, declarations) the
  * selector→scoped-CSS rule builder: literally the targets the styles will
  * use (the printers' scopeTargets and donutLimit for any relative
- * selector, a part's '.cls', the children '> *', a type '> pb-text'),
+ * selector, a part's '.cls', the children '> *', a type '> d-text'),
  * so anything painted through it is a truthful preview of what @scope
  * will hit (every match in the owner's scope root, or nothing when
  * template and YAML have drifted — a silent affordance is a diagnostic,
@@ -99,7 +100,7 @@ export const createPartBehavior = ({ source, guide }) => {
    *   The owning element's selection key.
    * @param {string} selector
    *   A canonical relative selector ('.quote', '.s-ab', '> *',
-   *   '> pb-text', 'p').
+   *   '> d-text', 'p').
    * @param {string} declarations
    *   CSS declarations text, nested verbatim inside the rule block.
    *
@@ -120,7 +121,7 @@ export const createPartBehavior = ({ source, guide }) => {
     const donut =
       parseKey(parentKey)?.kind === 'container' ? donutLimit(selector) : null;
     const limit = donut === null ? '' : ` to (${donut})`;
-    return `@scope ([data-selectable="${escapedKey}"])${limit} {\n  ${scopeTargets(selector).join(', ')} {\n    ${declarations}\n  }\n}`;
+    return `@scope ([data-selectable="${escapedKey}"])${limit} {\n  ${scopeTargets(selector, guide?.conditions).join(', ')} {\n    ${declarations}\n  }\n}`;
   };
 
   // ---- Canvas → part: the resolution walk. ---------------------------------
@@ -285,7 +286,7 @@ export const createPartBehavior = ({ source, guide }) => {
    *   the grammar; `pseudo` 'before' / 'after' for a box, else null.
    */
   const matches = (parentKey, selector) => ({
-    elements: resolveTargets(parentKey, selector),
+    elements: resolveTargets(parentKey, selector, guide?.conditions ?? {}),
     pseudo: pseudoOf(selector),
   });
 
@@ -297,13 +298,13 @@ export const createPartBehavior = ({ source, guide }) => {
    * some condition, the element's own entry (born with `content: ""` at
    * the op spine), a worn look's box fragment, a skin default, or an
    * ancestor rule ending in the same box that reaches the element
-   * (`> pb-text::before` on its section), so the answer is the box's
+   * (`> d-text::before` on its section), so the answer is the box's
    * full stack (style-stack.js buildStack at `key::&::before`, floor
    * and ancestor tier included) read for a delivered `content` other
    * than `none`. The page-elements tree renders one row per box under
    * the element, id the box's selector so the row seats it as the
    * styling target exactly as a part row seats its part. Pure over the
-   * source's current map, materials and tree; nothing is cached.
+   * source's current map, materials and document; nothing is cached.
    *
    * @param {string} key
    *   The owning element's selection key (a root key: a key already
@@ -324,27 +325,43 @@ export const createPartBehavior = ({ source, guide }) => {
     const sectionLayouts = source.getSectionLayouts();
     const map = source.getStyleMap();
     const variants = source.getMaterials().ofKind('variant');
+    // The axis vocabulary's depth read walks the layout; the stack reads
+    // the document (the host entity above the sections).
     const axes = axisVocabulary(guide, key, blockTypes, sectionLayouts, source.getTree?.() ?? []);
-    const tree = source.getTree();
-    return PSEUDOS.filter((pseudo) =>
-      deliversBox(
-        deliveredEntry(
-          buildStack({
-            guide,
-            map,
-            key: `${key}${SUFFIX}${ANCHOR}${SUFFIX}${pseudo}`,
-            variants,
-            axes,
-            blockTypes,
-            sectionLayouts,
-            tree,
-          }),
-        ),
+    const document = source.getDocument();
+    const delivered = (pseudo) =>
+      deliveredEntry(
+        buildStack({
+          guide,
+          map,
+          key: `${key}${SUFFIX}${ANCHOR}${SUFFIX}${pseudo}`,
+          variants,
+          axes,
+          blockTypes,
+          sectionLayouts,
+          document,
+        }),
+      );
+    // The two generated boxes are always asked (they exist once content
+    // is set); any other pseudo-element of the owner's own (`&::marker`)
+    // is listed where the map holds an entry for it that delivers a
+    // property, since it exists with its host and has no switch.
+    const own = `${key}${SUFFIX}${ANCHOR}${SUFFIX}`;
+    const others = [
+      ...new Set(
+        Object.keys(map ?? {})
+          .filter((entry) => entry.startsWith(own))
+          .map((entry) => entry.slice(own.length))
+          .filter((pseudo) => PSEUDO_PATTERN.test(pseudo) && !GENERATED_BOXES.includes(pseudo)),
       ),
-    ).map((pseudo) => ({
+    ];
+    return [
+      ...GENERATED_BOXES.filter((pseudo) => deliversBox(delivered(pseudo))),
+      ...others.filter((pseudo) => Object.values(delivered(pseudo)).some((values) => Object.keys(values).length > 0)),
+    ].map((pseudo) => ({
       id: `${ANCHOR}${SUFFIX}${pseudo}`,
       pseudo,
-      label: BOX_LABELS[pseudo](),
+      label: boxWord(pseudo),
     }));
   };
 

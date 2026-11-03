@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\block_content\Entity\BlockContentType;
+use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\ClientStyleGuide;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\Exception\StyleGuideException;
 use Drupal\daedalus_stylish\StyleGuide;
@@ -43,6 +43,7 @@ class ClientStyleGuideTest extends KernelTestBase {
   protected static $modules = [
     'system',
     'daedalus_blueprint',
+    'filter',
     'user',
     'field',
     'block_content',
@@ -70,28 +71,21 @@ class ClientStyleGuideTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    // The payload serves the published swatches; the user schema backs the
-    // swatch entity's owner field for the fixtures testSwatches() mints.
+    // The user schema backs the importers' administrative account switch.
     $this->installEntitySchema('user');
     $this->installEntitySchema('block_content');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-*, var() and family references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('theme_installer')->install([self::THEME]);
@@ -223,27 +217,27 @@ class ClientStyleGuideTest extends KernelTestBase {
     $this->assertSame(':hover', $payload['conditions']['hover']['wrapper']);
     $this->assertIsString($payload['conditions']['hover']['label']);
     $this->assertSame('@container (max-width: 767px)', $payload['conditions']['narrow']['wrapper']);
-    // The structured facts ride beside the wrapper as the condition types
-    // declare them: the canvas-posable width bands' px edges and the
-    // emulated preferences' feature + value. The client's ruler, the
-    // editing-at derivation and the pose read these, never the wrapper
-    // text; a state condition carries neither.
-    $this->assertSame(['label', 'wrapper', 'axis'], array_keys($payload['conditions']['hover']));
-    $this->assertSame(['max' => 767], $payload['conditions']['narrow']['band']);
-    $this->assertSame(['min' => 768, 'max' => 1023], $payload['conditions']['medium']['band']);
-    $this->assertArrayNotHasKey('preference', $payload['conditions']['narrow']);
-    $this->assertSame(['feature' => 'prefers-color-scheme', 'value' => 'dark'], $payload['conditions']['dark']['preference']);
-    $this->assertSame(['feature' => 'prefers-reduced-motion', 'value' => 'reduce'], $payload['conditions']['reduced-motion']['preference']);
-    $this->assertArrayNotHasKey('band', $payload['conditions']['dark']);
-    // A structural fact says so, and only a fact does: the printer twin
-    // prints it bare, the pose model skips it, the code view lights its
-    // row from the blueprint tree.
-    $this->assertSame(['label', 'wrapper', 'axis', 'fact'], array_keys($payload['conditions']['first-child']));
-    $this->assertTrue($payload['conditions']['first-child']['fact']);
-    $this->assertSame('structural', $payload['conditions']['first-child']['axis']);
-    $this->assertSame(':nth-child(odd)', $payload['conditions']['odd']['wrapper']);
-    $this->assertArrayNotHasKey('fact', $payload['conditions']['hover']);
-    $this->assertArrayNotHasKey('fact', $payload['conditions']['narrow']);
+    // A row is label, wrapper and axis, nothing else: the structured facts
+    // the canvas poses (the width bands' px edges, the emulated
+    // preferences' feature + value) are no longer declared beside the
+    // wrapper but derived from it on both sides by the clause grammar
+    // (ConditionClause; condition-clause.js over this payload), so the
+    // client's ruler, the editing-at derivation and the pose read the
+    // derivation, and a threshold lives in the wrapper alone.
+    foreach (['hover', 'narrow', 'medium', 'dark', 'reduced-motion'] as $name) {
+      $this->assertSame(['label', 'wrapper', 'axis'], array_keys($payload['conditions'][$name]), $name);
+    }
+    $this->assertSame('@container (min-width: 768px) and (max-width: 1023px)', $payload['conditions']['medium']['wrapper']);
+    $this->assertSame('@media (prefers-color-scheme: dark)', $payload['conditions']['dark']['wrapper']);
+    // Position is selector grammar, never a condition: the payload
+    // carries no position name and no condition carries a fact flag
+    // (the printer twin prints every pseudo-class condition with its
+    // force-state dual, the pose model poses every one).
+    $this->assertArrayNotHasKey('first-child', $payload['conditions']);
+    $this->assertArrayNotHasKey('odd', $payload['conditions']);
+    foreach ($payload['conditions'] as $name => $definition) {
+      $this->assertArrayNotHasKey('fact', $definition, $name);
+    }
 
     // The container-roots switch rides along so the client preview emits
     // the page-container rule exactly when the backend would.
@@ -278,7 +272,7 @@ class ClientStyleGuideTest extends KernelTestBase {
     $twocol = $payload['layouts']['layout_twocol_section'];
     $this->assertArrayHasKey('spacing', $twocol['grants']);
     $this->assertSame('6rem', $twocol['valueSpaces']['padding']['max']);
-    $this->assertSame('Content container', $twocol['elements']['.band-content']['label']);
+    $this->assertSame('Content container', $twocol['elements']['.section-content']['label']);
 
     // The served-shape invariants, payload-wide: the authored styling
     // wire is gone everywhere (elements trees and children pseudo-parts
@@ -350,8 +344,8 @@ class ClientStyleGuideTest extends KernelTestBase {
       'block_type:testimonial::.testimonial__quote' => $payload['blockTypes']['testimonial']['elements']['.testimonial__quote'],
       'block_plugin:fancy_menu' => $payload['blockPlugins']['fancy_menu'],
       'layout:layout_twocol_section' => $payload['layouts']['layout_twocol_section'],
-      'layout:layout_twocol_section::.band-content' => $payload['layouts']['layout_twocol_section']['elements']['.band-content'],
-      'layout:layout_twocol_section::.band-content > *' => $payload['layouts']['layout_twocol_section']['elements']['.band-content']['children'],
+      'layout:layout_twocol_section::.section-content' => $payload['layouts']['layout_twocol_section']['elements']['.section-content'],
+      'layout:layout_twocol_section::.section-content > *' => $payload['layouts']['layout_twocol_section']['elements']['.section-content']['children'],
       'base:p' => $payload['base']['p'],
     ] as $address => $node) {
       $roster = $builder->build(Address::fromString($address), self::THEME);
@@ -367,9 +361,9 @@ class ClientStyleGuideTest extends KernelTestBase {
 
     // The layout's part grants sizing and its children grant layout: the
     // roster's part rule, served at the part and children addresses.
-    $band = $payload['layouts']['layout_twocol_section']['elements']['.band-content'];
-    $this->assertSame(['sizing'], array_keys($band['grants']));
-    $this->assertSame(['layout'], array_keys($band['children']['grants']));
+    $content = $payload['layouts']['layout_twocol_section']['elements']['.section-content'];
+    $this->assertSame(['sizing'], array_keys($content['grants']));
+    $this->assertSame(['layout'], array_keys($content['children']['grants']));
 
     // The narrowed kind rides into the layout's roster: the layout's node
     // is the resolved answer, not the kind's declaration plus a rule; an
@@ -652,7 +646,7 @@ class ClientStyleGuideTest extends KernelTestBase {
       }
     }
     foreach ($node['pseudo'] ?? [] as $pseudo => $box) {
-      $this->assertContains($pseudo, RelativeSelector::PSEUDOS);
+      $this->assertMatchesRegularExpression(RelativeSelector::PSEUDO_PATTERN, (string) $pseudo);
       $this->assertSame(['grants', 'valueSpaces'], array_keys($box), 'A served box is the roster\'s answers and nothing else.');
       $this->assertServedNode($box, $groups);
     }
@@ -756,36 +750,32 @@ class ClientStyleGuideTest extends KernelTestBase {
   /**
    * Materials never ride the guide; their group vocabularies do.
    *
-   * The active skin's tokens and the published swatches are materials:
-   * they ride the roster's delivery payload beside the blueprint mirror
+   * The active skin's tokens (the palette among them) are materials: they
+   * ride the roster's delivery payload beside the blueprint mirror
    * (daedalus_blueprint's MaterialsDelivery) and the `materials` delta on
    * every mutation response, never the guide. The guide keeps the
-   * DECLARATIONS pickers group them under: token scales and swatch kinds,
-   * whose labels come from the declarations and plugin definitions, never
-   * client hardcoding.
+   * DECLARATIONS pickers group them under: the token scales, whose labels
+   * come from the declarations, never client hardcoding.
    */
   public function testMaterialsRideTheRosterNotTheGuide(): void {
-    $red = DaedalusStylishSwatch::create(['label' => 'Brand red', 'kind' => 'color']);
-    $red->setSwatchValue('#b91c1c');
-    $red->save();
+    $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora', 'status' => TRUE]);
+    $skin->setPackageTokens(['color' => ['brand-red' => '#b91c1c']])->save();
+    $this->activateSkin($skin);
 
     $payload = $this->clientStyleGuide->build(self::THEME);
-    $this->assertArrayNotHasKey('swatches', $payload);
     $this->assertArrayNotHasKey('tokens', $payload);
-    $this->assertStringNotContainsString('brand_red', json_encode($payload));
-    $this->assertSame('Color', $payload['swatchKinds']['color']['label']);
-    $this->assertSame('Gradient', $payload['swatchKinds']['gradient']['label']);
-    $this->assertArrayHasKey('tokenScales', $payload);
+    $this->assertStringNotContainsString('brand-red', json_encode($payload));
+    $this->assertSame('Color', $payload['tokenScales']['color']['label']);
 
-    // The roster carries the swatch instead, in the delivery record shape.
+    // The roster carries the token instead, in the delivery record shape.
     $records = $this->container->get('daedalus_blueprint.materials_delivery')->payload()['records'];
-    $this->assertSame(['swatch', 'brand_red'], [$records[0]['kind'], $records[0]['id']]);
-    $this->assertSame('var(--swatch-brand_red)', $records[0]['spellings']['style']);
+    $tokens = array_values(array_filter($records, static fn (array $record): bool => $record['kind'] === 'token'));
+    $this->assertSame(['token', 'color/brand-red'], [$tokens[0]['kind'], $tokens[0]['id']]);
+    $this->assertSame('var(--color-brand-red)', $tokens[0]['spellings']['style']);
 
-    // The swatch list tag is the roster's to carry (its provider names
-    // it); the guide payload no longer depends on the palette.
-    $this->assertNotContains('daedalus_swatch_list', ClientStyleGuide::CACHE_TAGS);
-    $this->assertContains('daedalus_swatch_list', $this->container->get('daedalus_blueprint.materials_delivery')->cacheMetadata()->getCacheTags());
+    // The skin list tag is the roster's to carry too (its provider names
+    // it): a token mint reaches every picker through the delivery.
+    $this->assertContains('daedalus_skin_list', $this->container->get('daedalus_blueprint.materials_delivery')->cacheMetadata()->getCacheTags());
   }
 
   /**
@@ -816,7 +806,7 @@ class ClientStyleGuideTest extends KernelTestBase {
       ],
       'layout:layout_onecol' => [
         '' => ['default' => ['display' => 'grid'], 'narrow' => ['display' => 'block']],
-        '::.band-inner' => ['default' => ['max-width' => '80rem']],
+        '::.section-inner' => ['default' => ['max-width' => '80rem']],
       ],
     ], $expected);
     $payload = $this->clientStyleGuide->build(self::THEME);
@@ -967,16 +957,20 @@ class ClientStyleGuideTest extends KernelTestBase {
 
     // The declared tier carries daedalus_layout's box fact for the part: code, no
     // skin, the mechanic a gap needs (a flex column, the container kind's
-    // own stacking model, so the bands pack instead of stretching).
+    // own stacking model, so the sections pack instead of stretching).
     $this->assertSame(['default' => ['display' => 'flex', 'flex-direction' => 'column']], $payload['declaredDefaults']['kind:entity']['::.daedalus-layout-layout']);
   }
 
   /**
-   * The enforcement mode is the active design system's.
+   * The enforcement mode and the system's identity are the active design
+   * system's: the Design system place heads itself with both.
    */
   public function testEnforcement(): void {
-    $this->enforce('strict');
-    $this->assertSame('strict', $this->clientStyleGuide->build(self::THEME)['enforcement']);
+    $id = $this->enforce('strict');
+    $payload = $this->clientStyleGuide->build(self::THEME);
+    $this->assertSame('strict', $payload['enforcement']);
+    $system = \Drupal::entityTypeManager()->getStorage(DesignSystem::ENTITY_TYPE_ID)->load($id);
+    $this->assertSame(['id' => $id, 'label' => (string) $system->label()], $payload['designSystem'], 'The payload names the active system the place is headed with.');
   }
 
   /**
@@ -1110,8 +1104,8 @@ class ClientStyleGuideTest extends KernelTestBase {
     $this->assertSame(['max' => '96rem'], $twocol['constraints']['max-width']);
     $this->assertSame(['source' => 'node', 'facts' => ['max' => $extra_layout_file]], $twocol['origins']['constraints']['max-width']);
     $this->assertSame(['source' => 'node', 'facts' => ['max' => $extra, 'units' => $theme]], $twocol['origins']['constraints']['padding'], 'The container kind\'s block reaches the layout with its origins.');
-    $this->assertSame(['source' => 'node', 'facts' => ['max' => $layout_file]], $twocol['elements']['.band-content']['origins']['constraints']['max-width']);
-    $this->assertSame([$layout_file], $twocol['elements']['.band-content']['children']['origins']['grants']['layout']);
+    $this->assertSame(['source' => 'node', 'facts' => ['max' => $layout_file]], $twocol['elements']['.section-content']['origins']['constraints']['max-width']);
+    $this->assertSame([$layout_file], $twocol['elements']['.section-content']['children']['origins']['grants']['layout']);
     $menu = $law['nodes']['block_plugin:fancy_menu'];
     $plugin_file = $origin('daedalus_stylish_guide_test', 'daedalus_stylish_guide_test.page_builder.block_plugin.fancy_menu.yml');
     $this->assertSame(['source' => 'node', 'facts' => ['max' => $plugin_file]], $menu['origins']['constraints']['font-size']);
@@ -1177,7 +1171,7 @@ class ClientStyleGuideTest extends KernelTestBase {
     $onecol = $law['nodes']['layout:layout_onecol'];
     $layout_defaults_file = $origin('daedalus_stylish_declared_defaults_test', 'daedalus_stylish_declared_defaults_test.page_builder.layout.layout_onecol.yml');
     $this->assertSame($layout_defaults_file, $onecol['origins']['defaults']['']['narrow']['display']);
-    $this->assertSame($layout_defaults_file, $onecol['origins']['defaults']['::.band-inner']['default']['max-width']);
+    $this->assertSame($layout_defaults_file, $onecol['origins']['defaults']['::.section-inner']['default']['max-width']);
     $state->delete('daedalus_stylish_control_test.site');
     $this->container->get('daedalus_stylish.style_guide')->resetCache();
   }

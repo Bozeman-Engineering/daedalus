@@ -40,6 +40,7 @@ class DaedalusStylishSkinTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -59,15 +60,12 @@ class DaedalusStylishSkinTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     // The skin save's token usage chokepoint (a token may reference
     // another token: accent-hover below).
-    $this->installSchema('daedalus_stylish', ['daedalus_token_usage', 'daedalus_font_usage']);
+    $this->installSchema('daedalus_stylish', ['daedalus_skin_material_usage']);
     $this->installConfig(['daedalus_stylish']);
     // The scales tokens validate against: one per shape.
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
@@ -145,12 +143,14 @@ class DaedalusStylishSkinTest extends KernelTestBase {
     $this->assertSame('aurora_dark_2', $second->getMachineName());
 
     // The shipped-source lane: one hash, two comparisons. The shipped
-    // payload covers both tiers under stable keys ({tokens, defaults}).
-    $loaded->setShippedSource('example_recipe', ['tokens' => $tokens, 'defaults' => []])->save();
+    // payload covers every tier under stable keys ({tokens, animations, fonts, defaults}).
+    $loaded->setShippedSource('example_recipe', ['tokens' => $tokens, 'animations' => [], 'fonts' => [], 'defaults' => []])->save();
     $this->assertTrue($loaded->isShipped());
     $this->assertFalse($loaded->isModified());
     $reordered = [
       'defaults' => [],
+      'fonts' => [],
+      'animations' => [],
       'tokens' => [
         'color' => [
           'accent' => [
@@ -333,6 +333,28 @@ class DaedalusStylishSkinTest extends KernelTestBase {
     ], json_decode($result->getValue(), TRUE));
     $result = $handler->deserialize(['space' => ['4' => ['value' => '1rem', 'stops' => TRUE]]], $definition);
     $this->assertSame('fields.tokens.space.4', $result->getErrors()[0]->getPath());
+
+    // A number is a spelling of a CSS value (a JSON writer sends 400 for
+    // a weight, 0 for a radius): the store holds the string, bare or in
+    // a record, and in each entry of a condition-keyed value, so every
+    // reader's string|array type holds.
+    $result = $handler->deserialize([
+      'weight' => [
+        'regular' => 400,
+        'bold' => ['value' => 600, 'description' => 'Emphasis.'],
+        'light' => ['default' => 300, 'narrow' => 350.5],
+      ],
+    ], $definition);
+    $this->assertFalse($result->hasErrors());
+    $this->assertSame([
+      'weight' => [
+        'regular' => ['value' => '400', 'description' => '', 'offered' => TRUE],
+        'bold' => ['value' => '600', 'description' => 'Emphasis.', 'offered' => TRUE],
+        'light' => ['value' => ['default' => '300', 'narrow' => '350.5'], 'description' => '', 'offered' => TRUE],
+      ],
+    ], json_decode($result->getValue(), TRUE));
+    $skin->setPackageTokens(['weight' => ['regular' => 400]]);
+    $this->assertSame('400', $skin->packageTokens()['weight']['regular']['value']);
 
     // An empty map short-circuits at the base handler (empty in, empty
     // out), like every other handler; the item's setStyleMap() empties it.

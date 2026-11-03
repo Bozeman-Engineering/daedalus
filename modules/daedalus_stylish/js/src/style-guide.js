@@ -23,17 +23,25 @@
  * resolution; VocabularyRosterTest::testClientTwinEquivalence locks the
  * two through tests/js/vocabulary-cases.mjs. Beside the rosters ride the
  * property definitions (groups), the conditions, the token scale
- * vocabulary (label, shape, prefix, keywords) and the swatch kind labels.
+ * vocabulary (label, shape, prefix, keywords).
  * The materials themselves (the skin's minted tokens, the published
- * swatches, variants, blueprints) are the materials store's, read beside
+ * variants, blueprints) are the materials store's, read beside
  * the guide as a roster (materials.js); nothing here lists or mutates a
  * material.
  */
 
 import {
+  ANCHOR_KIND,
+  ATTRIBUTE,
   CLASS_PART,
+  CLASS_QUALIFIER,
+  GENERATED_BOXES,
   HAS,
+  IS,
   NEXT,
+  NOT,
+  NTH_POSITIONS,
+  POSITIONS,
   SUBSEQUENT,
   TAG,
   TYPE,
@@ -41,6 +49,8 @@ import {
   splitKey,
   typeAddress,
 } from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
+import { knowsPseudoClass, knowsPseudoElement } from './wide-selectors.js';
+import { pseudoVocabulary } from './pseudo-vocabularies.js';
 
 const UUID =
   '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
@@ -73,11 +83,12 @@ const FORMS = [
  * @return {?{form: string, kind: string, uuid: string, selector: ?string}}
  *   The parsed key, or null when it does not parse. `selector` is the
  *   canonical relative selector after the "::" ('.class' a part, 'p' the
- *   tag tier, '> *' the children, '> pb-text .link' a compound), null
+ *   tag tier, '> *' the children, '> d-text .link' a compound), null
  *   for the element itself. The grammar here is charset only; which
  *   tags, types and parts a selector may name is semantic and enforced
  *   at resolution (declarationForKey walks the declarations; the server
- *   rejects an undeclared tag in every enforcement mode).
+ *   admits an undeclared tag by enforcement mode, like every other
+ *   vocabulary, and refuses a tag the browser does not know everywhere).
  */
 export const parseKey = (key) => {
   const split = splitKey(key);
@@ -599,10 +610,13 @@ export const flattenElements = (declaration) => {
  * resolves through the site's base section ONLY (guide.base, the one
  * declaration of a prose tag's styleability) — owner exact/pattern parts
  * and instance namespaces are never consulted for tags (classes only,
- * the PHP rule) — and an undeclared tag resolves to {} (the server
- * rejects the write in every enforcement mode; the client resolver just
- * has nothing to say about it). A terminal pseudo-element (`&::before`,
- * `.quote::after`, `> pb-text::before`) resolves to its host's
+ * the PHP rule) — and an undeclared tag resolves to {} (grammar-only on
+ * an open or guarded site, refused on a strict one; a tag the browser
+ * does not know is refused by the server everywhere, and the client
+ * resolver just has nothing to say about it). A compound's qualifiers
+ * are judged by mode on the way (judgeQualifiers): on a strict site a
+ * markup class, an attribute or an unpublished state lands nowhere. A terminal pseudo-element (`&::before`,
+ * `.quote::after`, `> d-text::before`) resolves to its host's
  * generated box (pseudoNode(): the served declared box, else the
  * derivation from the host node), once the chain has landed.
  */
@@ -704,35 +718,46 @@ const hostForKey = (guide, parsed, bundle) => {
     declaration = kinds[parsed.kind] || {};
   }
   const selector = parseSelector(parsed.selector);
+  const pseudo = selector?.pseudo ?? null;
+  // A pseudo-element the browser does not know (`::markr`) lands nowhere
+  // in every mode (the builder's walk: `known` FALSE, the server's
+  // STYLE_SELECTOR_UNKNOWN), as an unknown tag does.
+  if (pseudo !== null && !knowsPseudoElement(pseudo)) {
+    return { host: null, pseudo };
+  }
   return {
     host: walkChain(guide, selector?.compounds ?? [], declaration, declaration, declaration),
-    pseudo: selector?.pseudo ?? null,
+    pseudo,
   };
 };
 
 /**
- * The served node a pseudo-element lands on: its host's generated box.
+ * The served node a pseudo-element lands on: its host's box.
  *
  * The client twin of VocabularyRosterBuilder::pseudoNode() over served
- * answers: the host's served `pseudo.before` / `pseudo.after` node when
- * the host declares the box (ClientStyleGuide serves a declared box as
- * the roster at its address); else the derivation, a node granting
- * exactly what the host grants (its value spaces with it: the same
- * groups, allowlists and constraints resolve to the same answers) plus
- * the pseudo-only groups (pseudoGroups()) in full, last, each of their
- * properties taking the site's authored constraint default when one
- * names it (the builder's own rule for a group declared without
- * constraints). Nothing is re-derived from authored declarations: the
- * host's grants are the roster's, and the box's are the host's plus the
- * existence switch. VocabularyRosterTest::testClientTwinEquivalence
- * locks both branches.
+ * answers: the host's served `pseudo.<name>` node when the host declares
+ * the box (ClientStyleGuide serves a declared box as the roster at its
+ * address); else the spec table's node for a pseudo-element whose
+ * vocabulary is its own (specNode(): `::marker`, `::placeholder`,
+ * `::selection`, `::first-letter`, `::first-line`); else the derivation,
+ * a node granting exactly what the host grants (its value spaces with
+ * it: the same groups, allowlists and constraints resolve to the same
+ * answers), the vocabulary of `::before`, `::after` and every
+ * pseudo-element the table does not carry. The pseudo-only groups
+ * (pseudoGroups(): content, the existence switch) are granted in full,
+ * last, on the two generated boxes alone, each of their properties
+ * taking the site's authored constraint default when one names it (the
+ * builder's own rule for a group declared without constraints). Nothing
+ * is re-derived from authored declarations: the host's grants are the
+ * roster's. VocabularyRosterTest::testClientTwinEquivalence locks every
+ * branch.
  *
  * @param {object} guide
  *   The style guide payload.
  * @param {object} host
  *   The served node the selector's chain landed on.
  * @param {string} pseudo
- *   The pseudo-element's name ('before', 'after').
+ *   The pseudo-element's name ('before', 'marker', …).
  *
  * @return {object}
  *   The box's served node.
@@ -742,18 +767,63 @@ export const pseudoNode = (guide, host, pseudo) => {
   if (declared !== null) {
     return declared;
   }
-  const grants = grantsOf(host);
-  const valueSpaces = isPlainObject(host?.valueSpaces) ? { ...host.valueSpaces } : {};
-  pseudoGroups(guide).forEach((id) => {
-    if (Object.hasOwn(grants, id)) {
-      return;
+  const spec = specNode(guide, pseudo);
+  const grants = spec?.grants ?? grantsOf(host);
+  const valueSpaces = spec?.valueSpaces ?? (isPlainObject(host?.valueSpaces) ? { ...host.valueSpaces } : {});
+  if (GENERATED_BOXES.includes(pseudo)) {
+    pseudoGroups(guide).forEach((id) => {
+      if (Object.hasOwn(grants, id)) {
+        return;
+      }
+      const names = Object.keys(guide.groups[id].properties ?? {});
+      if (!names.length) {
+        return;
+      }
+      grants[id] = names;
+      names.forEach((property) => {
+        const block = guide?.constraintDefaults?.[property];
+        if (isPlainObject(block) && Object.keys(block).length) {
+          valueSpaces[property] = block;
+        }
+      });
+    });
+  }
+  return { grants, valueSpaces };
+};
+
+/**
+ * The spec table's served node for a pseudo-element, or null.
+ *
+ * The twin of VocabularyRosterBuilder::specNode(): the table's allowlist
+ * (pseudo-vocabularies.js) grouped by the served curated group that owns
+ * each property, groups in the allowlist's order of first appearance and
+ * each group's names in the group's own order (the manager's
+ * expandDeclaredProperties() intersects the owned names with the
+ * allowlist), each property taking the site's authored constraint
+ * default. A wide-tier property the spec allows is served by no group
+ * and so granted by none here; it is still admitted at the write by
+ * mode, as everywhere.
+ *
+ * @return {?{grants: object, valueSpaces: object}}
+ */
+const specNode = (guide, pseudo) => {
+  const allowed = pseudoVocabulary(pseudo);
+  if (allowed === null) {
+    return null;
+  }
+  const groups = isPlainObject(guide?.groups) ? guide.groups : {};
+  const ids = [];
+  allowed.forEach((property) => {
+    const id = Object.keys(groups).find((group) => Object.hasOwn(groups[group]?.properties ?? {}, property));
+    if (id !== undefined && !ids.includes(id)) {
+      ids.push(id);
     }
-    const names = Object.keys(guide.groups[id].properties ?? {});
-    if (!names.length) {
-      return;
-    }
-    grants[id] = names;
-    names.forEach((property) => {
+  });
+  const grants = {};
+  const valueSpaces = {};
+  ids.forEach((id) => {
+    grants[id] = Object.keys(groups[id].properties).filter((property) => allowed.includes(property));
+    grants[id].forEach((property) => {
       const block = guide?.constraintDefaults?.[property];
       if (isPlainObject(block) && Object.keys(block).length) {
         valueSpaces[property] = block;
@@ -805,6 +875,11 @@ const land = (guide, compound, node, owner) => {
   }
   if (compound.kind === TYPE) {
     return declarationForAddress(guide, typeAddress(compound.name));
+  }
+  // The qualified anchor is the owner itself: it lands where the chain
+  // started (the owner's root; the anchor stands only first).
+  if (compound.kind === ANCHOR_KIND) {
+    return node;
   }
   const children = node?.children;
   return children !== null &&
@@ -859,35 +934,109 @@ const walkChain = (guide, compounds, node, owner, previous) => {
 };
 
 /**
- * Whether every compound in a compound's qualifiers lands (PHP:
- * VocabularyRosterBuilder::judgeQualifiers()): a `:has()` argument walked
- * from the landing, its parts resolving against the argument owner and a
- * sibling lead in the compound's context; a `:not()` compound judged
- * where the qualified compound stands, an implied subject judging its
- * qualifiers from the qualified compound's landing.
+ * The published condition a pseudo-class name spells, or null
+ * (PHP: ConditionTypePluginManager::conditionSpelledBy()).
+ *
+ * The one lookup for "is this pseudo-class a state this site publishes":
+ * the roster's admission judge and the printer's force-state dual both
+ * ask it, over the guide payload's `conditions` table.
+ *
+ * @param {object} conditions
+ *   The condition table (guide.conditions): name => {label, wrapper, axis}.
+ * @param {string} name
+ *   The bare pseudo-class name.
+ *
+ * @return {?string}
+ */
+export const conditionForPseudoClass = (conditions, name) =>
+  Object.entries(isPlainObject(conditions) ? conditions : {}).find(
+    ([, condition]) => condition?.wrapper === `:${name}`,
+  )?.[0] ?? null;
+
+/**
+ * Whether a pseudo-class name spells a condition the guide publishes.
+ */
+const publishedState = (guide, name) =>
+  conditionForPseudoClass(guide?.conditions, name) !== null;
+
+/**
+ * Whether every compound in a compound's qualifiers lands and every
+ * qualifier is admitted (PHP: VocabularyRosterBuilder::judgeQualifiers()):
+ * a `:has()` argument walked from the landing, its parts resolving
+ * against the argument owner and a sibling lead in the compound's
+ * context; a `:not()` compound judged where the qualified compound
+ * stands, an implied subject judging its qualifiers from the qualified
+ * compound's landing; an `:is()` qualifier's every member judged as
+ * the `:not()` compound is (the words of every alternative must be in
+ * the vocabulary, whichever one matches); a position pseudo-class is
+ * structure with no vocabulary to judge. The other kinds are admitted
+ * by mode, the one
+ * rule for every vocabulary: a class qualifier is a declared part of the
+ * argument owner where one matches, else a markup class; an attribute
+ * qualifier a markup predicate; a pseudo-class a published condition
+ * where one is spelled by it (every mode), else a state the browser
+ * knows. A strict site (propertiesClosed) lands nowhere on the undeclared
+ * ones, an open or guarded one admits them on the compound's landing; a
+ * pseudo-class outside the wide selector tier lands nowhere in every
+ * mode (the server's STYLE_SELECTOR_UNKNOWN).
  */
 const judgeQualifiers = (guide, qualifiers, landing, argumentOwner, node, owner) =>
   qualifiers.every((qualifier) => {
     if (qualifier.name === HAS) {
       return walkChain(guide, qualifier.argument, landing, argumentOwner, node) !== null;
     }
-    const negated = qualifier.argument;
-    if (negated.kind === null) {
-      return judgeQualifiers(guide, negated.qualifiers, landing, argumentOwner, node, owner);
+    if (qualifier.name === CLASS_QUALIFIER) {
+      return (
+        !propertiesClosed(guide) ||
+        land(guide, { kind: CLASS_PART, name: `.${qualifier.argument}` }, argumentOwner, argumentOwner) !== null
+      );
     }
-    const negatedLanding = land(guide, negated, node, owner);
-    return (
-      negatedLanding !== null &&
-      judgeQualifiers(
-        guide,
-        negated.qualifiers,
-        negatedLanding,
-        negated.kind === TYPE ? negatedLanding : owner,
-        node,
-        owner,
-      )
-    );
+    if (qualifier.name === ATTRIBUTE) {
+      return !propertiesClosed(guide);
+    }
+    if (qualifier.name === NOT) {
+      return judgeMember(guide, qualifier.argument, landing, argumentOwner, node, owner);
+    }
+    if (qualifier.name === IS) {
+      return qualifier.argument.every((member) =>
+        judgeMember(guide, member, landing, argumentOwner, node, owner),
+      );
+    }
+    if (POSITIONS.includes(qualifier.name) || NTH_POSITIONS.includes(qualifier.name)) {
+      return true;
+    }
+    if (publishedState(guide, qualifier.name)) {
+      return true;
+    }
+    return knowsPseudoClass(qualifier.name) && !propertiesClosed(guide);
   });
+
+/**
+ * Whether a predicate compound (a `:not()` argument or an `:is()`
+ * member) lands and its qualifiers are admitted where the qualified
+ * compound stands: an implied subject judges its qualifiers from the
+ * qualified compound's landing and argument owner; a subject lands in
+ * the qualified compound's own context (the alternative subject at the
+ * same position, never the landing's part) and judges its qualifiers
+ * from there.
+ */
+const judgeMember = (guide, member, landing, argumentOwner, node, owner) => {
+  if (member.kind === null) {
+    return judgeQualifiers(guide, member.qualifiers, landing, argumentOwner, node, owner);
+  }
+  const memberLanding = land(guide, member, node, owner);
+  return (
+    memberLanding !== null &&
+    judgeQualifiers(
+      guide,
+      member.qualifiers,
+      memberLanding,
+      member.kind === TYPE ? memberLanding : owner,
+      node,
+      owner,
+    )
+  );
+};
 
 /**
  * The served root declaration a printed root address names, or null.
@@ -993,7 +1142,7 @@ export const tokenDisplayValue = (value) => {
  * @param {object} guide
  *   The style guide payload (conditions: name -> {label, wrapper, axis}).
  * @param {*} value
- *   A token/swatch value: a plain string or a condition-keyed map.
+ *   A token value: a plain string or a condition-keyed map.
  *
  * @return {?string}
  *   The scheme entry's display form, or null when the value is a plain
@@ -1045,39 +1194,6 @@ export const schemeCondition = (guide) => {
 };
 
 /**
- * The reserved swatch namespace's variable prefix (--swatch-{name}).
- *
- * The client twin of StyleGuide::SWATCH_PREFIX (PHP is authoritative):
- * validateTokenScales refuses scale prefixes equal to or extending it, so
- * a variable inside it is a swatch reference and nothing else.
- */
-const SWATCH_VARIABLE_PREFIX = '--swatch-';
-
-/**
- * Resolves a CSS custom property back to its swatch machine name.
- *
- * The client twin of StyleGuide::swatchReference() (PHP is authoritative):
- * prefix match against the reserved namespace; the bare prefix is not a
- * swatch (no name tail). A variable outside the namespace is NOT a swatch
- * reference. A NAMESPACE question only, for the lint's server-mirroring
- * rule (a var() inside the reserved namespace must name a rostered swatch);
- * whether a value IS a swatch is the value grammar's answer over the
- * materials roster (materials.js materialOf).
- *
- * @param {string} variable
- *   A custom property name, leading dashes included ('--swatch-brand_red').
- *
- * @return {?string}
- *   The swatch machine name, or null.
- */
-export const swatchReference = (variable) =>
-  typeof variable === 'string' &&
-  variable.startsWith(SWATCH_VARIABLE_PREFIX) &&
-  variable.length > SWATCH_VARIABLE_PREFIX.length
-    ? variable.slice(SWATCH_VARIABLE_PREFIX.length)
-    : null;
-
-/**
  * The reserved motion namespace's keyframes-name prefix (motion-{name}).
  *
  * The client twin of StyleGuide::ANIMATION_PREFIX (PHP is authoritative):
@@ -1095,7 +1211,7 @@ const ANIMATION_NAME_PREFIX = 'motion-';
  * prefix is not an animation (no name tail). An ident outside the
  * namespace is NOT an animation reference: it is a theme's own keyframes
  * name (or an animation keyword the property grammar owns). A NAMESPACE
- * question only, swatchReference's twin for the lint's published-animation
+ * question only, tokenReference's twin for the lint's published-animation
  * rule; whether a name IS a rostered animation is the value grammar's
  * answer in the animation slot (materials.js animationOf).
  *
@@ -1121,8 +1237,8 @@ export const animationReference = (ident) =>
  * A variable outside every declared prefix is NOT a token reference (the
  * token spine owns exactly its declared namespaces; theme and chrome
  * custom properties are none of its business). A NAMESPACE question only,
- * swatchReference's twin for the lint's minted-token rule; what a value IS
- * resolves through the materials roster (materials.js).
+ * for the lint's minted-token rule; what a value IS resolves through the
+ * materials roster (materials.js).
  *
  * @param {string} variable
  *   A custom property name, leading dashes included ('--space-4').
@@ -1202,7 +1318,7 @@ export const declaredSets = (declaration) => Object.keys(grantsOf(declaration));
  *
  * Depth-blind, like the served node (one layout, one node, any
  * placement): a grant is a function of the address alone, so a nested
- * container is granted exactly what the page band is. Placement curates
+ * container is granted exactly what the section is. Placement curates
  * offers and birth (the axis vocabulary's root-only read, the birth
  * defaults' skip), never legality.
  *
@@ -1344,7 +1460,7 @@ export const resolvedConstraintsFor = (guide, declaration, property) => {
  * `offered` flag; a record carrying none is offered, the store's
  * default).
  */
-const offeredToken = (token) => token.record?.offered !== false;
+export const offeredToken = (token) => token.record?.offered !== false;
 
 /**
  * Whether a token record was minted on the site: its origin is not

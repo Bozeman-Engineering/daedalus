@@ -302,20 +302,23 @@ const stackOf = ({ own = null, skin = null, declared = null, worn = false } = {}
     variants: library,
     blockTypes: { [UUID]: 'text' },
   });
-const originAt = (stack, condition, property = 'font-size') =>
-  originFor({ guide: posedGuide, materials: MATERIALS, condition, property, stack });
-// The block under a section whose `> pb-text` rule wears Loud (the worn
+// The law gate as the host attaches it (drupalSettings.daedalusStylish.law):
+// the declared tier's doorway is the "view style law" permission's.
+const LAW_OPEN = { canView: true };
+const originAt = (stack, condition, property = 'font-size', law = {}) =>
+  originFor({ guide: posedGuide, materials: MATERIALS, condition, property, stack, law });
+// The block under a section whose `> d-text` rule wears Loud (the worn
 // ancestor layer of T10), the guide naming the text type so the rule
 // reads in the switcher's words.
 const SECTION = 'container:cccccccc-1111-2222-3333-444444444444';
 const wordedGuide = { ...posedGuide, blockTypes: { text: { label: 'Text' } } };
 const underRule = () => buildStack({
   guide: wordedGuide,
-  map: { [`${SECTION}::> pb-text`]: { variants: [{ variant: 'loud', fragment: '' }] } },
+  map: { [`${SECTION}::> d-text`]: { variants: [{ variant: 'loud', fragment: '' }] } },
   key: KEY,
   variants: library,
   blockTypes: { [UUID]: 'text' },
-  tree: [{ kind: 'container', uuid: SECTION.slice('container:'.length), layout_id: 'daedalus_stylish_container', _element: { name: 'Section', type: 'Section' }, children: [{ kind: 'block', uuid: UUID, block_type: 'text', _element: { name: 'Text', type: 'Text' } }] }],
+  document: [{ kind: 'container', uuid: SECTION.slice('container:'.length), layout_id: 'daedalus_stylish_container', _element: { name: 'Section', type: 'Section' }, children: [{ kind: 'block', uuid: UUID, block_type: 'text', _element: { name: 'Text', type: 'Text' } }] }],
 });
 const withDrupal = (run) => {
   globalThis.Drupal = {
@@ -343,11 +346,14 @@ test('originFor: the skin delivers when the map sets nothing, lit in the skin hu
 
 test('originFor: the declaration delivers beneath a skin that sets nothing for the property', () => withDrupal(() => {
   const stack = stackOf({ skin: { default: { 'line-height': '1.5' } }, declared: { default: { 'font-size': '1rem' } } });
-  const origin = originAt(stack, 'medium');
+  const origin = originAt(stack, 'medium', 'font-size', LAW_OPEN);
   assert.equal(origin.delivers, true);
   assert.equal(origin.layer, 'declared:block_type:text');
   assert.equal(origin.header, '1rem from the text block type declaration at Base');
   assert.deepEqual(origin.doorways.map((doorway) => [doorway.id, doorway.scope, doorway.property]), [['declared', 'block_type:text', 'font-size']], 'the one doorway opens the Law tab at the declaration');
+  const gated = originAt(stack, 'medium');
+  assert.equal(gated.header, origin.header, 'without the law gate the declaration is still named');
+  assert.deepEqual(gated.doorways, [], 'and no doorway leads to the Law tab');
   assert.equal(originAt(stackOf({ declared: { default: { 'font-size': '1rem' } } }), 'medium').layer, 'declared:block_type:text', 'no skin at all');
 }));
 
@@ -399,7 +405,7 @@ test('originFor: a variant an ancestor\'s rule wears is the row\'s origin as a v
     ['document', 'Edit Loud at Dark…'],
     ['ancestor', 'Edit at Text blocks directly in Section'],
   ]);
-  assert.equal(origin.doorways[0].anchor, `${SECTION}::> pb-text`, 'the session anchors at the carrier');
+  assert.equal(origin.doorways[0].anchor, `${SECTION}::> d-text`, 'the session anchors at the carrier');
 }));
 
 test('originFor: nothing delivering is "Not set" with no hue, or "not here" in the topmost author\'s hue; a read handed in is used as is', () => withDrupal(() => {

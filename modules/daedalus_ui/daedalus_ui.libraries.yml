@@ -9,6 +9,19 @@ daedalus:
   dependencies:
     - core/drupal
 
+# The editor-preference helper (Drupal.Daedalus.saveSetting): one call,
+# the daedalus_ui.settings.save_setting route, EditorSettings::set. A
+# library of its own so chrome outside Edit Mode (the chat's model
+# choice) saves through the same lane; the edit-mode bundle depends on
+# it for its own settings scripts.
+save_setting:
+  js:
+    js/settings/save-setting.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupal.ajax
+    - core/jquery
+
 # The Daedalus chrome palette and shared tokens. A standalone library so
 # chrome that renders without the full modes stack (always-on sidebars, the
 # Daedalus Stylish satellite window) can pull in the tokens on their own.
@@ -271,6 +284,22 @@ media_library:
     - core/drupal.ajax
     - core/drupal.dialog.ajax
 
+# The daedalus popup's one opener (Drupal.Daedalus.openModal, js/modal.js):
+# core's modal (#drupal-modal) wearing the daedalus skin, opened through one
+# Drupal.ajax shape for any server-rendered surface, and every link wearing
+# data-daedalus-modal caught at the document. Standalone like dialog and
+# menu: no edit-mode dependency, so the chat on a non-editable page and the
+# satellite window host it; each door's library declares this and the
+# dialog AJAX stack rides along.
+modal:
+  js:
+    js/modal.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/drupal.ajax
+    - core/drupal.dialog.ajax
+
 modes:
   js:
     js/daedalus-ui.js: { attributes: { type: 'module' }}
@@ -325,7 +354,6 @@ edit_mode:
     js/edit_mode/behaviors/initial-messages.js: {}
     js/edit_mode/not-tools/file_upload/file-drag.js: { attributes: { type: 'module' }}
     js/edit_mode/settings/hotkey/hotkey-settings.js: {}
-    js/edit_mode/settings/save-setting.js: {}
     js/edit_mode/settings/chrome-density-setting.js: {}
     js/edit_mode/settings/media-file-associations/media-file-association.js: {}
   css:
@@ -344,8 +372,13 @@ edit_mode:
       css/notifications.css: {}
       css/history-sidebar.css: {}
   dependencies:
+    # The editor-preference helper the settings scripts save through.
+    - daedalus_ui/save_setting
     - core/drupal.dialog.ajax
     - core/drupal.ajax
+    # The top bar's discard confirm opens in the daedalus popup through
+    # the one opener.
+    - daedalus_ui/modal
     # The keyboard model announces traversal, lift, and drop through
     # core's live region.
     - core/drupal.announce
@@ -391,6 +424,21 @@ canvas_vector:
     - daedalus_ui/variables
     # The stage resize handles.
     - daedalus_ui/drag
+
+# The responsive preview window's one opener
+# (Drupal.Daedalus.openPreviewWindow, js/responsive_preview/open-window.js):
+# the window's name, its features and the pop-out route contract (?scope,
+# ?url) live here once; any surface (the top bar menu, daedalus_stylish's
+# chip row) declares this and calls the door instead of a window.open of
+# its own. Standalone on purpose: no edit-mode dependency; it reads the
+# two settings the Edit mode attaches on a route host
+# (daedalusUi.responsivePreview.url, daedalusUi.editSession.scope).
+preview_window:
+  js:
+    js/responsive_preview/open-window.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupalSettings
 
 # The pop-out window's shell: device selector + device-sized iframe.
 responsive_preview:

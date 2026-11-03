@@ -23,6 +23,7 @@ use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
 use Drupal\daedalus_blueprint\Plugin\Block\SlotBlock;
 use Drupal\daedalus_blueprint\Slot\SlotDoor;
 use Drupal\daedalus_blueprint\Slot\SlotFill;
+use Drupal\daedalus_blueprint\Slot\SlotLookup;
 use Drupal\daedalus_blueprint\Slot\SlotRoster;
 use Drupal\daedalus_layout\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
@@ -144,8 +145,10 @@ class InnerRender {
    * @return array
    *   One child per section, keyed by delta, each the section's layout
    *   render array stamped with its identity for the canvas at nested
-   *   depth, carrying the inner host's cacheability. Empty when there are
-   *   no sections.
+   *   depth, carrying the inner host's cacheability. With no sections, a
+   *   cache-only stub (`#cache` alone, empty to Element::isEmpty()) that
+   *   still carries the inner host: the render depends on the document it
+   *   read whether or not the document showed anything.
    *
    * @throws \Drupal\Component\Plugin\Exception\ContextException
    *   When the outer contexts carry no view mode: a hard contract, since
@@ -173,8 +176,8 @@ class InnerRender {
    *   Whether the render is an editing canvas.
    *
    * @return array
-   *   The layout root holding the sections, or an empty array when the
-   *   document has none.
+   *   The layout root holding the sections, or the cache-only stub
+   *   carrying the host when the document has none (see render()).
    */
   public function renderDocument(HostInterface $host, array $contexts, bool $in_preview = FALSE): array {
     return $this->renderSections($host, $host->ownSections(), $contexts, $in_preview, FALSE);
@@ -202,8 +205,8 @@ class InnerRender {
    *   Whether the render is the frame's editing canvas.
    *
    * @return array
-   *   The frame's layout root holding its sections, or an empty array for
-   *   an empty frame.
+   *   The frame's layout root holding its sections, or the cache-only
+   *   stub carrying the frame for an empty frame (see render()).
    */
   public function renderFrame(HostInterface $frame, RouteOutput $output, ?FieldableEntityInterface $subject, bool $in_preview = FALSE): array {
     return $this->renderDocument($frame, $this->frameContexts($frame, $output, $subject), $in_preview);
@@ -347,19 +350,26 @@ class InnerRender {
         }
       }
     }
-    if ($build !== [] && !$nested) {
+    $showed = $build !== [];
+    if ($showed && !$nested) {
       $build['#type'] = 'container';
       if ($stamps) {
         $build['#attributes']['class'][] = LayoutBuilderEntityViewDisplay::LAYOUT_ROOT_CLASS;
       }
     }
-    if ($build !== []) {
-      CacheableMetadata::createFromRenderArray($build)
-        ->addCacheableDependency($entity)
-        ->applyTo($build);
+    // The join declares what it read, whether or not anything showed: an
+    // empty document leaves the cache-only stub, so a page showing an
+    // empty blueprint re-renders when the blueprint is composed. The
+    // consumers alter a document that showed something only: on the stub
+    // a style tag or a root attribute would turn "built nothing" into an
+    // empty block wrapper.
+    CacheableMetadata::createFromRenderArray($build)
+      ->addCacheableDependency($entity)
+      ->applyTo($build);
+    if ($showed) {
+      $subject_entity = $subject?->getContextValue();
+      $this->moduleHandler->alter('daedalus_blueprint_inner_render', $build, $inner, $subject_entity);
     }
-    $subject_entity = $subject?->getContextValue();
-    $this->moduleHandler->alter('daedalus_blueprint_inner_render', $build, $inner, $subject_entity);
     return $build;
   }
 
@@ -457,6 +467,14 @@ class InnerRender {
    * here. A render with no subject (a view page inside the frame) has no
    * document beneath the outer, so nothing fills.
    *
+   * The lookup declares what it read: every host walked is a cacheable
+   * dependency of the answer, added as it is read, the outer excluded,
+   * since the door's answer (fill, default or nothing) depends on all of
+   * them whether or not one filled. A page that gains its first fill of
+   * a frame slot, or a template that gains one for its bundle, reaches
+   * the door because the door named them, never because the route's
+   * main content happened to carry their tags.
+   *
    * @param string $slot
    *   The slot id.
    * @param \Drupal\daedalus_blueprint\Host\HostInterface $outer
@@ -465,24 +483,27 @@ class InnerRender {
    *   The subject the outer render shows (its `layout_builder.entity`),
    *   or NULL when the render has none.
    *
-   * @return \Drupal\daedalus_blueprint\Slot\SlotFill|null
-   *   The filler and its section, or NULL when nothing fills the slot.
+   * @return \Drupal\daedalus_blueprint\Slot\SlotLookup
+   *   The filler and its section (NULL when nothing fills the slot) and
+   *   the cacheability of every host walked.
    */
-  public function slotFiller(string $slot, HostInterface $outer, ?FieldableEntityInterface $subject): ?SlotFill {
+  public function slotFiller(string $slot, HostInterface $outer, ?FieldableEntityInterface $subject): SlotLookup {
+    $cacheability = new CacheableMetadata();
     if ($subject === NULL) {
-      return NULL;
+      return new SlotLookup(NULL, $cacheability);
     }
     $candidate = $this->hostResolver->fromEntity($subject);
     while ($candidate !== NULL && !self::sameHost($candidate, $outer)) {
       $candidate->declineSeed();
+      $cacheability->addCacheableDependency($candidate->entity());
       foreach ($candidate->ownSections() as $section) {
         if (LayoutSerializer::slotOf($section) === $slot) {
-          return new SlotFill($candidate, $section);
+          return new SlotLookup(new SlotFill($candidate, $section), $cacheability);
         }
       }
       $candidate = $this->hostResolver->foreignOwner($candidate);
     }
-    return NULL;
+    return new SlotLookup(NULL, $cacheability);
   }
 
   /**
@@ -600,13 +621,52 @@ class InnerRender {
   }
 
   /**
+   * Renders the published blueprint of a machine name inside an outer render.
+   *
+   * The one render of a named document: the default of a slot and a
+   * linked placement both name a blueprint by machine name and show its
+   * own sections live, under the outer render's contexts, through
+   * render(). The render declares what it read whether or not anything
+   * showed. A blueprint found renders through render(), which carries
+   * the entity even when its document is empty, so composing an empty
+   * blueprint reaches every page showing it. A name no published
+   * blueprint carries answers a cache-only stub tagged with the blueprint
+   * type's list cache tags, so publishing one under the name reaches
+   * those pages too; without the library module no blueprint can exist
+   * and the stub carries nothing.
+   *
+   * @param string $machine_name
+   *   The blueprint's machine name.
+   * @param \Drupal\Core\Plugin\Context\ContextInterface[] $contexts
+   *   The outer render's contexts, as render() takes them.
+   * @param bool $in_preview
+   *   Whether the outer render is the editing canvas.
+   *
+   * @return array
+   *   The blueprint's document as render() returns it, or the stub.
+   */
+  public function renderBlueprint(string $machine_name, array $contexts, bool $in_preview = FALSE): array {
+    $blueprint = $this->blueprintHost($machine_name);
+    if ($blueprint !== NULL) {
+      return $this->render($blueprint, $blueprint->ownSections(), $contexts, $in_preview);
+    }
+    $build = [];
+    (new CacheableMetadata())
+      ->addCacheTags($this->entityTypeManager->getDefinition(BlueprintHost::ENTITY_TYPE_ID, FALSE)?->getListCacheTags() ?? [])
+      ->applyTo($build);
+    return $build;
+  }
+
+  /**
    * The host of a published blueprint entity, by machine name.
    *
    * The default of a slot and a linked placement name a blueprint by its
    * machine name; only an ENTITY has a document a render can show live (a
    * shipped file is material for copies, not a host). The entity type is
    * the library module's, known here by its id so the spine needs none of
-   * its classes; without the library no blueprint exists.
+   * its classes; without the library no blueprint exists. A render of the
+   * named document goes through renderBlueprint(); the host alone is what
+   * the policies and the annotator ask for.
    *
    * @param string $machine_name
    *   The blueprint's machine name.

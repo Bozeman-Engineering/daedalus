@@ -43,15 +43,6 @@ class VariantConformanceTest extends KernelTestBase {
   use UserCreationTrait;
 
   /**
-   * The suite's shipped block variants, global materials on every site.
-   *
-   * The activation in setUp syncs every enabled module, so they join the
-   * fixture's own variants on the roster; nothing in this fixture binds
-   * their motion literals, so they conform under either law.
-   */
-  protected const SUITE_BLOCK_VARIANTS = ['block_fade_in', 'block_lift', 'block_rise', 'block_scale_in'];
-
-  /**
    * {@inheritdoc}
    */
   protected static $modules = [
@@ -59,6 +50,7 @@ class VariantConformanceTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -78,21 +70,15 @@ class VariantConformanceTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_blueprint', 'daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-* and var() references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
@@ -146,11 +132,10 @@ class VariantConformanceTest extends KernelTestBase {
   /**
    * The roster as the next request would build it.
    *
-   * The builder memoizes per request and is reset by the material entity
-   * hooks and the design-system switch, not by an enforcement save (no
-   * subscriber wiring: the persistent verdict rides the config tag, and
-   * the request that saves the setting reads the roster no further). The
-   * reset here is that request boundary.
+   * The builder memoizes per request and every material write and law
+   * change resets it (the enforcement save among them, through
+   * _daedalus_design_system_change()); the reset here is the request
+   * boundary for a read that follows no write.
    */
   protected function roster(): MaterialsRoster {
     $builder = $this->container->get('daedalus_blueprint.materials_roster_builder');
@@ -183,14 +168,22 @@ class VariantConformanceTest extends KernelTestBase {
   }
 
   /**
-   * Makes the judge's next variant load a real one.
+   * Makes the judge's next read a cold judgement that loads the variants.
    *
-   * The repository memoizes the published set per request and the storage
-   * serves loaded entities from its static cache, where no load hook
-   * fires; both are cleared so the control module's load hook sees the
-   * judge's load.
+   * The enforcement save is a law change: _daedalus_design_system_change()
+   * resets the roster (the cascade forgets the memo) and recompiles both
+   * stylesheets, and the variants compile judges and persists the verdict
+   * under the new law key before the test reads anything. The legs that
+   * watch the judgement itself want the request after a material write
+   * invalidated that entry, so the memo and the persisted entry go (the
+   * variant list tag, what a variant save busts). The repository memoizes
+   * the published set per request and the storage serves loaded entities
+   * from its static cache, where no load hook fires; both are cleared so
+   * the control module's load hook sees the judge's load.
    */
-  protected function coldVariantLoads(): void {
+  protected function coldJudgement(): void {
+    $this->container->get('daedalus_blueprint.materials_roster_builder')->reset();
+    $this->container->get('cache_tags.invalidator')->invalidateTags(['daedalus_variant_list']);
     $this->container->get('daedalus_stylish.variant_repository')->reset();
     $this->container->get('entity_type.manager')->getStorage('daedalus_variant')->resetCache();
   }
@@ -205,7 +198,7 @@ class VariantConformanceTest extends KernelTestBase {
   public function testLawChangeFlipsTheVerdict(): void {
     // Guarded (the default): every offered variant conforms.
     $this->assertSame([], $this->withheld());
-    $this->assertSame(['aurora_raw', 'aurora_tidy', ...self::SUITE_BLOCK_VARIANTS, 'raw', 'tidy'], $this->offered());
+    $this->assertSame(['aurora_raw', 'aurora_tidy', 'raw', 'tidy'], $this->offered());
     $this->assertTrue($this->roster()->has(MaterialKind::Variant, 'raw'));
 
     // Strict: the closed world refuses the typography literal on both the
@@ -219,7 +212,7 @@ class VariantConformanceTest extends KernelTestBase {
       $this->assertSame('STYLE_PROPERTY_NOT_DECLARED', $verdict[$name][0]->getCode());
       $this->assertSame('default.font-size', $verdict[$name][0]->getPath());
     }
-    $this->assertSame(['aurora_tidy', ...self::SUITE_BLOCK_VARIANTS, 'tidy'], $this->offered());
+    $this->assertSame(['aurora_tidy', 'tidy'], $this->offered());
     $this->assertFalse($this->roster()->has(MaterialKind::Variant, 'raw'));
     $this->assertFalse($this->roster()->has(MaterialKind::Variant, 'nocturne_raw'));
 
@@ -244,12 +237,13 @@ class VariantConformanceTest extends KernelTestBase {
    */
   public function testJudgingInsideTheBuild(): void {
     $this->enforce('strict');
+    $this->coldJudgement();
     $cache = $this->container->get('cache.default');
     $this->assertFalse($cache->get(VariantConformance::CACHE_ID . '::strict:aurora'));
 
     // The first read is the build itself.
     $roster = $this->roster();
-    $this->assertSame(['aurora_tidy', ...self::SUITE_BLOCK_VARIANTS, 'tidy'], array_keys($roster->variants()));
+    $this->assertSame(['aurora_tidy', 'tidy'], array_keys($roster->variants()));
     $this->assertSame(['aurora_raw', 'raw'], $this->withheld());
     $this->assertNotFalse($cache->get(VariantConformance::CACHE_ID . '::strict:aurora'));
 
@@ -328,7 +322,7 @@ class VariantConformanceTest extends KernelTestBase {
   public function testParkedJudgementIsWaitedForByAnotherFiber(): void {
     $this->enforce('strict');
     $judge = $this->container->get('daedalus_stylish.variant_conformance');
-    $this->coldVariantLoads();
+    $this->coldJudgement();
     $this->container->get('state')->set('daedalus_stylish_control_test.park_variant_load', TRUE);
 
     $first = new \Fiber(static fn (): array => $judge->withheld());
@@ -354,7 +348,7 @@ class VariantConformanceTest extends KernelTestBase {
   public function testMainFlowJudgesBesideAParkedFiber(): void {
     $this->enforce('strict');
     $judge = $this->container->get('daedalus_stylish.variant_conformance');
-    $this->coldVariantLoads();
+    $this->coldJudgement();
     $this->container->get('state')->set('daedalus_stylish_control_test.park_variant_load', TRUE);
 
     $parked = new \Fiber(static fn (): array => $judge->withheld());
@@ -375,7 +369,7 @@ class VariantConformanceTest extends KernelTestBase {
   public function testRecursionFromTheJudgingFlowIsRefused(): void {
     $this->enforce('strict');
     $judge = $this->container->get('daedalus_stylish.variant_conformance');
-    $this->coldVariantLoads();
+    $this->coldJudgement();
     $this->container->get('state')->set('daedalus_stylish_control_test.rejudge_in_variant_load', TRUE);
 
     $this->expectException(\LogicException::class);

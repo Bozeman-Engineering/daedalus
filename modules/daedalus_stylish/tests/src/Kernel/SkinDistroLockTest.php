@@ -62,6 +62,7 @@ class SkinDistroLockTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -84,15 +85,9 @@ class SkinDistroLockTest extends KernelTestBase {
     // The materials roster's daedalus_stylish provider reads all four
     // storages on every build, and every validation builds it.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     // The vocabulary the shipped skin and the writes validate against.
@@ -226,7 +221,7 @@ class SkinDistroLockTest extends KernelTestBase {
     $skin->setPackageTokens(['space' => ['gutter' => '1rem']]);
     // daedalus_stylish_control_test ships no skins file: a provider whose
     // next release dropped the entry.
-    $skin->setShippedSource('daedalus_stylish_control_test', ['tokens' => $skin->packageTokens(), 'defaults' => []]);
+    $skin->setShippedSource('daedalus_stylish_control_test', ['tokens' => $skin->packageTokens(), 'animations' => [], 'fonts' => [], 'defaults' => []]);
     $skin->save();
     $this->assertNull(\Drupal::service('daedalus_stylish.skin_importer')->getShippedData($this->loadSkin('orphaned')));
 

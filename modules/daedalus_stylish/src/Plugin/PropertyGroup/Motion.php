@@ -12,8 +12,7 @@ use Drupal\daedalus_stylish\PropertyGroupBase;
  * Transitions and animations: how an element moves between and into states.
  *
  * The curated home of transition-* and animation-*, the two wearing halves
- * of motion (Carbon's word: the `transition` token scale is the site's
- * motion tokens). Curating them takes ownership away from the wide tier's
+ * of motion (the `transition` token scale is the site's motion tokens). Curating them takes ownership away from the wide tier's
  * Animations and Transitions derivatives (weight 80 beats wide:* at 100
  * in (weight, id) order), which makes them advanced-mode rows, strict-site
  * declarable, and gives animation-name the `animation_name` type the
@@ -26,8 +25,8 @@ use Drupal\daedalus_stylish\PropertyGroupBase;
  * the value space read them exactly.
  *
  * The WHEN of an animation is a trigger, a property rather than a
- * condition (a condition is a parameterless name; a trigger carries how
- * far in and once-or-every-time). The two shorthands of the CSS Animation
+ * condition (a condition is a name the site publishes; a trigger carries
+ * how far in and once-or-every-time). The two shorthands of the CSS Animation
  * Triggers draft are curated verbatim: timeline-trigger names a trigger
  * and its activation range (`--in-view view() entry 20% exit 100%`: the
  * end point is part of the range, since a lone start natively activates

@@ -24,3 +24,25 @@ export const warnMissingEntityUi = (consumer, missing) => {
     `Daedalus UI ${consumer}: ${missing} not found on the page. The entity UI attributes ride the entity template's root element; ensure the template prints {{ attributes }} on its outermost element.`,
   );
 };
+
+/**
+ * Warn when the blueprint draft names a key the mirror does not hold.
+ *
+ * The draft slot (blueprint-slice.js) carries an open gesture's resolved
+ * markup for one selectable key, and the effective tree
+ * (blueprint/effective-blueprint.js) lays it over that key's node. A key
+ * the lean tree no longer holds (the edited node left the page under a
+ * foreign mutation, and the resumed gesture re-previewed) cannot be
+ * overlaid, so the readers fall back to the committed mirror. Silent
+ * fallback would hide a gesture whose preview reaches the canvas and not
+ * the model, so the miss is reported; the effective tree memoizes on the
+ * (mirror, draft) pair, so it is reported once per draft, not per read.
+ *
+ * @param {string} key
+ *   The drafted selectable key.
+ */
+export const warnDraftKeyUnknown = (key) => {
+  console.warn(
+    `Daedalus UI effectiveBlueprint: the draft names ${key}, which the blueprint mirror does not hold; readers see the committed tree until the next preview or mirror replacement.`,
+  );
+};

@@ -71,6 +71,10 @@ class BaselineControlBindingsTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
+    // Importing daedalus_stylish's config saves its settings, a law change
+    // that recompiles the variants file over these storages.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
   }
 

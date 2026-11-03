@@ -38,32 +38,28 @@ const PopOutIcon = () => (
  *   The style guide payload (drupalSettings.daedalusStylish.guide).
  * @param {object} [props.variants]
  *   The variant gesture gates (drupalSettings.daedalusStylish.variants).
- * @param {object} [props.swatches]
- *   The swatch gesture gates (drupalSettings.daedalusStylish.swatches).
- * @param {object} [props.tokens]
- *   The token gesture gates (drupalSettings.daedalusStylish.tokens).
- * @param {object} [props.animations]
- *   The animation gesture gates (drupalSettings.daedalusStylish.animations).
- * @param {object} [props.fonts]
- *   The font gesture gates (drupalSettings.daedalusStylish.fonts).
+ * @param {object} [props.skinMaterials]
+ *   The skin material gesture gates
+ *   (drupalSettings.daedalusStylish.skinMaterials).
  * @param {object} [props.skin]
  *   The skin gesture gates (drupalSettings.daedalusStylish.skin).
- * @param {?object} [props.previewWindow]
- *   The preview-window opener {url, scope} for the chip row's width-menu
- *   tail, composed by the entry point from daedalusUi.responsivePreview.url
- *   and daedalusUi.editSession.scope.
+ * @param {object} [props.law]
+ *   The law gate (drupalSettings.daedalusStylish.law): {canView}.
+ * @param {boolean} [props.previewWindow]
+ *   Whether a preview window is available for the chip row's width-menu
+ *   tail (the entry point reads daedalusUi.responsivePreview, attached by
+ *   the Edit mode on a route host); the tail opens it through
+ *   Drupal.Daedalus.openPreviewWindow.
  */
 export const InspectorHost = ({
   source,
   popout,
   guide = {},
   variants = {},
-  swatches = {},
-  tokens = {},
-  animations = {},
-  fonts = {},
+  skinMaterials = {},
   skin = {},
-  previewWindow = null,
+  law = {},
+  previewWindow = false,
 }) => {
   const [poppedOut, setPoppedOut] = useState(
     popout ? popout.isPoppedOut() : false,
@@ -125,11 +121,9 @@ export const InspectorHost = ({
       headerActions={headerActions}
       rail
       variants={variants}
-      swatches={swatches}
-      tokens={tokens}
-      animations={animations}
-      fonts={fonts}
+      skinMaterials={skinMaterials}
       skin={skin}
+      law={law}
       previewWindow={previewWindow}
     />
   );

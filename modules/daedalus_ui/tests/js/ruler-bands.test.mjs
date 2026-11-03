@@ -12,6 +12,7 @@ import {
   normalizeBands,
   bandEdgeTicks,
   bandFor,
+  bandsHolding,
   constrained,
 } from '../../js/canvas_vector/ruler-bands.js';
 
@@ -114,4 +115,22 @@ test('unposed, only a stage measured inside a band constrains', () => {
   assert.equal(constrained(bands, null, null), false);
   // No bands contributed: there is no band for the stage to sit in.
   assert.equal(constrained([], null, 500), false);
+});
+
+test('bandsHolding lights every band containing the width: a marked band nested in a contributed one', () => {
+  const literal = { min: 400, max: 480, label: '400-480px', name: '@container (min-width: 400px) and (max-width: 480px)' };
+  const bands = normalizeBands([...SHIPPED, literal]);
+  // Inside both narrow and the nested literal: both hold, narrow first.
+  assert.deepEqual(bandsHolding(bands, 440).map((band) => band.name), ['narrow', literal.name]);
+  // Inside narrow alone.
+  assert.deepEqual(bandsHolding(bands, 300).map((band) => band.name), ['narrow']);
+  // The literal's edges are inclusive.
+  assert.deepEqual(bandsHolding(bands, 480).map((band) => band.name), ['narrow', literal.name]);
+  assert.deepEqual(bandsHolding(bands, 481).map((band) => band.name), ['narrow']);
+  // Above every band, and with no width: none.
+  assert.deepEqual(bandsHolding(bands, 1440), []);
+  assert.deepEqual(bandsHolding(bands, null), []);
+  // bandFor is the first holding band, the constrained rule's read.
+  assert.equal(bandFor(bands, 440).name, 'narrow');
+  assert.equal(constrained(bands, null, 440), true);
 });

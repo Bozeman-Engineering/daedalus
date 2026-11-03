@@ -29,6 +29,7 @@ import {
   stackAt,
 } from './style-stack.js';
 import { createMatcher } from './selector-matcher.js';
+import { layoutOf } from '../../../daedalus_ui/js/edit_mode/blueprint/document-tree.js';
 
 /**
  * Basic-mode controls: the JS half of the control contract.
@@ -182,17 +183,17 @@ const contextPresence = (context) => {
  * A RULE key's part-presence rule, over the matcher.
  *
  * The elements a rule matches on the tree are the set its part
- * candidates paint on (`container:X::> pb-text .text-block-link` lands
+ * candidates paint on (`container:X::> d-text .text-block-link` lands
  * where a matched text block renders the anchor), so a part is present
  * when ANY matched element carries it in its facts (selector-matcher.js
  * facts().parts: the annotation's declared parts, the hoisted ones and
  * the tagless ones included), absent when the set is known and none
- * does, and unknown (null) without a tree or when the tree does not
- * carry the owner (a satellite before its broadcast). The root is always
- * on the page.
+ * does, and unknown (null) without a document or when the document does
+ * not carry the owner (a satellite before its broadcast). The root is
+ * always on the page.
  *
- * @param {?Array} tree
- *   The blueprint's lean node tree, or null when unknown.
+ * @param {?Array} document
+ *   The document tree (source.getDocument()), or null when unknown.
  * @param {string} key
  *   The rule key (`{owner}::{selector}`).
  * @param {string} selector
@@ -201,13 +202,13 @@ const contextPresence = (context) => {
  * @return {Function}
  *   (element) → true | false | null.
  */
-const rulePresence = (tree, key, selector) => {
+const rulePresence = (document, key, selector) => {
   const unknown = (element) => (element === '' ? true : null);
   const owner = splitKey(key)?.root ?? null;
-  if (!Array.isArray(tree) || owner === null) {
+  if (!Array.isArray(document) || owner === null) {
     return unknown;
   }
-  const matcher = createMatcher(tree);
+  const matcher = createMatcher(document);
   if (!matcher.has(owner)) {
     return unknown;
   }
@@ -293,7 +294,7 @@ export const ownAtPose = (read, condition) =>
  * worn values, so reading the root's authored value over the anchor's
  * skin value shows exactly what paints. Within a level, list order is
  * the declaration's preference (the link before the root: a background
- * on a linked block is a pill unless the band was authored).
+ * on a linked block is a pill unless the root's background was authored).
  * resolveCandidates asks per property (a set of one: the row's read),
  * resolveGroup for a gesture's whole set (the write).
  */
@@ -332,7 +333,7 @@ const pickAddress = (readings) =>
  * `alsoOn` on a read is the honesty fact of the address rule: `{label,
  * value}` when the property carries an AUTHORED value on a candidate
  * other than the one it resolved to (the Button's link background over
- * a root band: the row shows the link's, `alsoOn` names the root's), so
+ * a root background: the row shows the link's, `alsoOn` names the root's), so
  * the row's menu can say "Also set on element" and no painting value
  * is hidden silently; null otherwise. It rides the read because the
  * question is asked per property, at the row (provenance-model.js
@@ -475,7 +476,7 @@ export const resolveGroup = (
  *
  * A gesture spans keys when a removal riding beside its set values
  * lives on another box (write where you read: a gradient pick on a
- * linked block whose root wears an authored band clears the root's
+ * linked block whose root wears an authored background clears the root's
  * background-color and places background-image on the anchor, the box
  * the set resolved to as a group) or when a section writes several
  * elements at once (the Layout section's takeover and column resize).
@@ -642,7 +643,7 @@ export const compoundOperations = (changes) =>
  * What moves is WHERE a property writes: every candidate REBASES to the
  * address, the facet's own candidate (the root, or the drilled part) to
  * the address itself, another candidate to the address continued by
- * descent (`container:Y::> pb-text .text-block-link`) when the grammar
+ * descent (`container:Y::> d-text .text-block-link`) when the grammar
  * admits it and the matcher confirms the rebased rule reaches that box
  * on the selected element; a candidate that cannot rebase is out of
  * the address's reach and takes no part in the write routing. The
@@ -684,11 +685,11 @@ export const compoundOperations = (changes) =>
  * controls are root-bound by definition (the server rejects a part
  * candidate on them — a namespace's instances are content and declare
  * no parts of their own), so a binding naming one is malformed here and
- * drops. A RULE key (`container:X::> pb-text`, a chain facet seated
+ * drops. A RULE key (`container:X::> d-text`, a chain facet seated
  * from a code-mode row header) models the landing type's controls over
  * the container's rule, one thing at a time: a root candidate is the
  * rule key itself, a part candidate continues the chain by descent
- * (`container:X::> pb-text .text-block-link`), and a part's presence
+ * (`container:X::> d-text .text-block-link`), and a part's presence
  * is the matcher's answer over the rule's matched elements (present
  * when any of them carries the part in its facts, absent when the set
  * is known and none does, unknown without a tree), never the selection
@@ -729,16 +730,19 @@ export const compoundOperations = (changes) =>
  *   `present` reads (false = absent, true = present, missing =
  *   unknown). Null when unknown (a satellite pre-broadcast): every part
  *   counts as present. A rule key ignores it (its presence is the
- *   matcher's, over `tree`).
+ *   matcher's, over `document`).
  * @param {?string} [targetSelector]
  *   The targeted shell part's selector while one is targeted, else null
  *   (the spine's styling target on the owner's panel; a rule key is
  *   addressed through `key` itself, never through this).
- * @param {?Array} [tree]
- *   The blueprint's lean node tree (source.getTree()): keys the
- *   candidates' ancestor tier, so a row's origin can name a container's
- *   rule reaching this element, and their skin base:{tag} layer (each
- *   candidate's tag from the tree). Null leaves both out.
+ * @param {?Array} [document]
+ *   The document tree (source.getDocument(): daedalus_ui's documentTree
+ *   over the delivered blueprint, the host entity above its sections):
+ *   keys the candidates' ancestor tier, so a row's origin can name a
+ *   container's or the page's rule reaching this element, their skin
+ *   base:{tag} layer (each candidate's tag from the document) and a
+ *   rule key's presence read; its layout (layoutOf) is the depth fact
+ *   the axis vocabulary reads. Null leaves all of them out.
  * @param {?{key: string, selector: string}} [writeAddress]
  *   The panel's write address: the spine's `address` fact (a rule on an
  *   ancestor, or on the selected key itself: an instance part's own tag
@@ -769,7 +773,7 @@ export const controlModels = (
   condition = 'default',
   context = null,
   targetSelector = null,
-  tree = null,
+  document = null,
   writeAddress = null,
 ) => {
   const parsed = parseKey(key);
@@ -780,7 +784,7 @@ export const controlModels = (
   // A selector key models the controls of the declaration the roster
   // walk LANDS on (declarationForKey): an INSTANCE part's covering
   // namespace, whose controls bind the part key itself; a rule key's
-  // landing type (`> pb-text` lands on the text block type, so basic
+  // landing type (`> d-text` lands on the text block type, so basic
   // mode renders the text block's own rows over the container's rule);
   // a tag's base declaration; the landing's `children` declaration node
   // (the guide's `> *` vocabulary, served by ClientStyleGuide; no panel
@@ -801,14 +805,16 @@ export const controlModels = (
   // so cross-axis property overlaps resolve in DELIVERY order (axis
   // declaration order), matching the inspector and code-view lanes. Part
   // bindings share the root's vocabulary (axes are a scope fact). The
-  // tree is also the depth fact the vocabulary reads (nested sections
-  // drop root-only axes); null degrades to the ungated root posture.
+  // document's layout is the depth fact the vocabulary reads (nested
+  // sections drop root-only axes: a read over the LAYOUT, the sections
+  // at the top, never over the document, under whose root every section
+  // would read as nested); null degrades to the ungated root posture.
   const axes = axisVocabulary(
     guide,
     key,
     blockTypes,
     sectionLayouts,
-    tree ?? [],
+    layoutOf(document),
   );
   const conditions = isPlainObject(guide?.conditions) ? guide.conditions : {};
   // The shell drill: only an owner's panel (never an instance drill, whose
@@ -821,13 +827,13 @@ export const controlModels = (
   // on a positive absence, null when unknown; the root is always on the
   // page. An ELEMENT key reads the selection context (the mirror's
   // answer for the selected element); a RULE key reads the matcher: the
-  // elements the rule matches on the tree, present when any carries the
-  // part in its facts, absent when the set is known and none does,
-  // unknown without a tree (a satellite before its broadcast) or when
-  // the tree does not carry the owner.
+  // elements the rule matches on the document, present when any carries
+  // the part in its facts, absent when the set is known and none does,
+  // unknown without a document (a satellite before its broadcast) or
+  // when the document does not carry the owner.
   const presenceOf =
     parsed.selector !== null && !instance
-      ? rulePresence(tree, key, parsed.selector)
+      ? rulePresence(document, key, parsed.selector)
       : contextPresence(context);
   // The candidate's declaration node: the part's entry anywhere in the
   // elements tree (parts nest: a menu's link sits under its item under
@@ -852,12 +858,12 @@ export const controlModels = (
       : null;
   const rootKey = splitKey(key)?.root ?? key;
   const matcher =
-    address !== null && Array.isArray(tree) ? createMatcher(tree) : null;
+    address !== null && Array.isArray(document) ? createMatcher(document) : null;
   // A candidate's REBASED key under the address: the address itself for
   // the facet's own box, the address continued by descent for another
   // part when the grammar admits it and the rebased rule reaches that
   // part on the selected element (the matcher's answer; unknown without
-  // a tree is out of reach), null when the box is beyond the address.
+  // a document is out of reach), null when the box is beyond the address.
   const rebasedKey = (element) => {
     if (element === facetElement) {
       return addressKey(address);
@@ -924,7 +930,7 @@ export const controlModels = (
       // Each candidate's stack: floor, ancestor tier and rendered tag
       // included; the address rule takes its posed reads from these. A
       // part candidate of a rule key rides the rule's selector
-      // (`container:X::> pb-text .text-block-link`: the part class
+      // (`container:X::> d-text .text-block-link`: the part class
       // continues the chain by descent, a selector never carries a
       // second `::`). Its write key is its own key, or the rebased key
       // under the address (null beyond the address's reach).
@@ -960,7 +966,7 @@ export const controlModels = (
             axes,
             blockTypes,
             sectionLayouts,
-            tree,
+            document,
             editable,
           }),
         };

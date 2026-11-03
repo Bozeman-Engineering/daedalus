@@ -68,16 +68,10 @@ class CapabilityGateTest extends BlueprintKernelTestBase {
     $this->installEntitySchema('entity_test_mul');
     $this->installConfig(['block_content', 'language']);
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->entityTypeManager = $this->container->get('entity_type.manager');
@@ -164,7 +158,7 @@ class CapabilityGateTest extends BlueprintKernelTestBase {
     $error = $this->firstError($this->apply($host, [
       'op' => 'apply_variant',
       'key' => "container:$section_uuid",
-      'variant' => 'band',
+      'variant' => 'section',
     ]));
     $this->assertSame('FOREIGN_DOCUMENT', $error['code']);
     $this->assertSame('key', $error['path']);

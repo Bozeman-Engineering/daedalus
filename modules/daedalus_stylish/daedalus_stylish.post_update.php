@@ -220,3 +220,67 @@ function daedalus_stylish_post_update_relative_selector_0004_skins() {
   $lines = \Drupal::service('daedalus_stylish.relative_selector_convergence')->convergeSkins();
   return t('Converged skin defaults onto the relative selector grammar (@count report lines logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
 }
+
+/**
+ * Syncs shipped variants and skins onto the position-qualifier grammar.
+ *
+ * Position is a qualifier now, not a condition: the shipped definitions'
+ * disk sources speak the qualifier grammar (none ever shipped a fact
+ * condition). Shipped-unmodified entities converge through the sync lane
+ * here, BEFORE the convergence passes, so the in-place rewrite never
+ * touches an unmodified shipped entity (which would flip its hash to
+ * "modified" and cut it off from future updates).
+ */
+function daedalus_stylish_post_update_fact_condition_0001_sync_shipped(): void {
+  $report = \Drupal::service('daedalus_stylish.shipped_sync')->sync();
+  if ($report->hasFailures()) {
+    throw new UpdateException(implode("\n", $report->failureLines()));
+  }
+}
+
+/**
+ * Moves host style maps' position-fact conditions onto qualified keys.
+ *
+ * Every content entity revision and translation carrying a style map is
+ * walked through daedalus_layout's transform spine: an entry's
+ * "first-child" block at "{key}" becomes the entry at "{key}::&:first-child",
+ * a "not-last-child" block at "{key}::> *" the entry at
+ * "{key}::> *:not(:last-child)", "odd" and "even" ":nth-child(odd|even)",
+ * the posable remainder of a compound ("hover+first-child") staying the
+ * block's condition. Per-map details are logged to the daedalus_stylish
+ * channel.
+ */
+function daedalus_stylish_post_update_fact_condition_0002_hosts(&$sandbox) {
+  if (!\Drupal::hasService('daedalus_layout.host_entity_walker')) {
+    $sandbox['#finished'] = 1;
+    return t('daedalus_layout is not installed; no style map stores to migrate.');
+  }
+  $saved = \Drupal::service('daedalus_layout.host_entity_walker')->walk($sandbox);
+  if (!empty($sandbox['#finished']) && $sandbox['#finished'] >= 1) {
+    return t('Moved position-fact conditions onto qualified keys in host style maps (all revisions and translations).');
+  }
+  return t('Converged @count host revisions in this batch.', ['@count' => $saved]);
+}
+
+/**
+ * Moves style variants' position-fact conditions onto qualified keys.
+ *
+ * Across ALL revisions, composition slot paths and the entries carrying
+ * nested references included. Shipped unmodified variants are skipped:
+ * fact_condition_0001 synced their disk sources already.
+ */
+function daedalus_stylish_post_update_fact_condition_0003_variants() {
+  $lines = \Drupal::service('daedalus_stylish.fact_condition_convergence')->convergeVariants();
+  return t('Moved position-fact conditions onto qualified keys in style variants (@count report lines logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
+}
+
+/**
+ * Moves skin defaults' position-fact conditions onto qualified keys.
+ *
+ * Across ALL revisions. Shipped unmodified skins are skipped for the same
+ * sync-lane reason as variants.
+ */
+function daedalus_stylish_post_update_fact_condition_0004_skins() {
+  $lines = \Drupal::service('daedalus_stylish.fact_condition_convergence')->convergeSkins();
+  return t('Moved position-fact conditions onto qualified keys in skin defaults (@count report lines logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
+}

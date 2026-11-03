@@ -24,7 +24,14 @@ import {
   wearerWinners,
   wearingOf,
 } from '../../js/src/code/variant-document.js';
-import { pendingLineId, stageLine, updateSession } from '../../js/src/pending.js';
+import {
+  movedStyles,
+  pendingLineId,
+  skinSession,
+  stageLine,
+  stageMove,
+  updateSession,
+} from '../../js/src/pending.js';
 import { stackLines } from '../../js/src/code/island.js';
 import { buildStack } from '../../js/src/style-stack.js';
 import { ELEMENT_LAYER, variantLayerId } from '../../js/src/code/layers.js';
@@ -126,7 +133,7 @@ test("keys order: own entry, the part-less selectors, then each part with its ow
     '::.b': { default: { color: 'red' } },
     '::.a > *': { default: { gap: '1rem' } },
     '::> *': { default: { margin: '0' } },
-    '::> pb-text': { default: { color: 'blue' } },
+    '::> d-text': { default: { color: 'blue' } },
     '::.a': { default: { padding: '0' } },
     '': { default: { display: 'grid' } },
   };
@@ -134,7 +141,7 @@ test("keys order: own entry, the part-less selectors, then each part with its ow
   assert.deepEqual(root.keys, [
     { key: '', selector: null },
     { key: '::> *', selector: '> *' },
-    { key: '::> pb-text', selector: '> pb-text' },
+    { key: '::> d-text', selector: '> d-text' },
     { key: '::.b', selector: '.b' },
     { key: '::.a', selector: '.a' },
     { key: '::.a > *', selector: '.a > *' },
@@ -194,11 +201,11 @@ test('carriedBy names each fragment\'s carriers by record id, in map order, rule
     'block:b3': { variants: [{ variant: '00000000-0000-0000-0000-000000000001', fragment: '' }] },
     [`container:${SEC}::.quote`]: { default: { color: 'red' } },
     // A rule wearing the document carries its root fragment at every match.
-    [`container:${SEC}::> pb-text`]: { variants: [{ variant: 'cta', fragment: '' }] },
+    [`container:${SEC}::> d-text`]: { variants: [{ variant: 'cta', fragment: '' }] },
   };
   const carriers = carriedBy(map, 'cta');
   assert.deepEqual([...carriers.entries()], [
-    ['', [`container:${SEC}`, 'container:other', `container:${SEC}::> pb-text`]],
+    ['', [`container:${SEC}`, 'container:other', `container:${SEC}::> d-text`]],
     ['block(text,1)', [`block:${TXT}`]],
   ]);
   assert.deepEqual([...carriedBy(map, null).entries()], []);
@@ -341,7 +348,7 @@ test('no wearing, no resolution, or no diff pre-stages nothing', () => {
 });
 
 test('a rule anchor pre-stages its own entry and its continuations by descent', () => {
-  const rule = `container:${SEC}::> pb-text`;
+  const rule = `container:${SEC}::> d-text`;
   const map = {
     [rule]: {
       variants: [{ variant: 'cta', fragment: '' }],
@@ -363,14 +370,14 @@ test('a rule anchor pre-stages its own entry and its continuations by descent', 
 test('the table maps island keys to the capture\'s relative keys', () => {
   const map = {
     [`container:${SEC}`]: { default: { padding: '2rem' } },
-    [`container:${SEC}::.band`]: { default: { gap: '0' } },
+    [`container:${SEC}::.section`]: { default: { gap: '0' } },
     [`block:${TXT}`]: { default: { margin: '0' } },
     // An instance part never captures, so it gets no marks.
     [`block:${TXT}::.s-a1b2`]: { default: { color: 'red' } },
   };
   const table = captureRelativeTable(map, `container:${SEC}`, layout);
   assert.equal(table.get(`container:${SEC}`), '');
-  assert.equal(table.get(`container:${SEC}::.band`), '::.band');
+  assert.equal(table.get(`container:${SEC}::.section`), '::.section');
   assert.equal(table.get(`block:${TXT}`), 'block(text,1)');
   assert.equal(table.has(`block:${TXT}::.s-a1b2`), false);
 });
@@ -414,6 +421,87 @@ test('documentSlotEntry without a session is the variant sheet at rest', () => {
   // An empty slot projects an empty entry (a fresh part the session can
   // still stage into).
   assert.deepEqual(documentSlotEntry(library[0].value, '::.missing', null), { entry: {}, pending: {} });
+});
+
+
+// --- staged moves: the tree and the slot projection read through them ------
+
+test('the tree lists a moved rule and its family at the new keys in place of the old', () => {
+  const styles = {
+    '': { default: { display: 'grid' } },
+    '::> d-text': { variants: [{ variant: 'loud', fragment: '' }], default: { color: 'teal' } },
+    '::> d-text .link': { default: { 'text-decoration': 'underline' } },
+    '::> d-text::before': { default: { content: '"*"' } },
+    '::.quote': { default: { color: 'navy' } },
+    'block(text,1)::p': { default: { margin: '0' } },
+  };
+  let session = updateSession('cta', `container:${SEC}`);
+  session = stageMove(session, '::> d-text', '> d-text:has(a)');
+  session = stageMove(session, 'block(text,1)::p', 'strong');
+  const nodes = documentTree(styles, session, 'container');
+  assert.deepEqual(nodes.map((node) => node.slot), ['', 'block(text,1)']);
+  assert.deepEqual(nodes[0].keys, [
+    { key: '', selector: null },
+    { key: '::> d-text:has(a)', selector: '> d-text:has(a)' },
+    // The tree's own rank: a rule's box (one compound) before its descent.
+    { key: '::> d-text:has(a)::before', selector: '> d-text:has(a)::before' },
+    { key: '::> d-text:has(a) .link', selector: '> d-text:has(a) .link' },
+    { key: '::.quote', selector: '.quote' },
+  ]);
+  assert.deepEqual(nodes[1].keys, [{ key: 'block(text,1)::strong', selector: 'strong' }]);
+  // A session reading the document already through its moves lists the same.
+  assert.deepEqual(documentTree(movedStyles(session, styles), session, 'container'), nodes);
+  // Without the session the stored keys list as stored.
+  assert.deepEqual(documentTree(styles, null, 'container')[0].keys.map(({ key }) => key), ['', '::> d-text', '::> d-text::before', '::> d-text .link', '::.quote']);
+  // A skin session's moves read the same way over a scope's defaults.
+  const skin = stageMove(skinSession('kind:container', `container:${SEC}`), '::.quote', '.callout');
+  assert.deepEqual(documentTree(styles, skin, 'container')[0].keys.map(({ key }) => key), ['', '::> d-text', '::> d-text::before', '::> d-text .link', '::.callout']);
+});
+
+test('a moved lines-only row lists at its new key; lines staged before the move follow it into the tree', () => {
+  let session = updateSession('cta', `container:${SEC}`);
+  session = stageLine(session, { relative: '::> d-image', condition: 'default', property: 'width', value: '100%' });
+  session = stageLine(session, { relative: '::.quote', condition: 'default', property: 'color', value: 'red' });
+  session = stageMove(session, '::> d-image', '> d-image:has(img)');
+  session = stageMove(session, '::.quote', '.callout');
+  const [root] = documentTree(library[0].value, session, 'container');
+  assert.deepEqual(root.keys.map(({ key }) => key), ['', '::> d-image:has(img)', '::.callout']);
+});
+
+test('documentSlotEntry at a moved key projects the entry that moved there, session overlaid', () => {
+  let session = updateSession('cta', `container:${SEC}`);
+  session = stageLine(session, { relative: '::.quote', condition: 'default', property: 'color', value: 'red' });
+  session = stageMove(session, '::.quote', '.callout');
+  const { entry, pending } = documentSlotEntry(library[0].value, '::.callout', session);
+  assert.deepEqual(entry, { default: { color: 'red' } });
+  assert.deepEqual(pending, { default: { color: { id: pendingLineId('::.callout', 'default', 'color'), unset: false } } });
+  // The key the rule left projects an empty slot now.
+  assert.deepEqual(documentSlotEntry(library[0].value, '::.quote', session), { entry: {}, pending: {} });
+  // The baseline read at the new key is the moved document's.
+  assert.deepEqual(documentBaselineLines(movedStyles(session, library[0].value), '::.callout', 'default'), [
+    { property: 'color', value: 'teal', layer: ELEMENT_LAYER, variant: null, lost: false, winner: null },
+  ]);
+});
+
+test('the tree lists the view\'s drafted keys in their slots, ranked like stored ones', () => {
+  const styles = {
+    '': { default: { display: 'grid' } },
+    '::.quote': { default: { color: 'navy' } },
+  };
+  // A drafted children row at the root and a drafted paragraph row in a
+  // child slot nothing stores yet: both list, the child slot minted by
+  // the draft alone; a drafted key the document already lists is one row.
+  const drafted = ['::> *', 'block(text,1)::p', '::.quote'];
+  const nodes = documentTree(styles, null, 'container', drafted);
+  assert.deepEqual(nodes.map((node) => node.slot), ['', 'block(text,1)']);
+  assert.deepEqual(nodes[0].keys.map(({ key }) => key), ['', '::> *', '::.quote']);
+  assert.deepEqual(nodes[1].keys, [{ key: 'block(text,1)::p', selector: 'p' }]);
+  // Without drafts the stored keys alone list (the default argument).
+  assert.deepEqual(documentTree(styles, null, 'container')[0].keys.map(({ key }) => key), ['', '::.quote']);
+  // A drafted key rides beside a session's staged and moved keys.
+  let session = updateSession('cta', `container:${SEC}`);
+  session = stageMove(session, '::.quote', '.callout');
+  assert.deepEqual(documentTree(styles, session, 'container', ['::> *'])[0].keys.map(({ key }) => key), ['', '::> *', '::.callout']);
 });
 
 process.stdout.write('variant-document suite passed\n');

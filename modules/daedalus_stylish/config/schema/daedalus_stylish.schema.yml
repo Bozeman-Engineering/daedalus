@@ -4,7 +4,7 @@ daedalus_stylish.settings:
   mapping:
     ai_minting:
       type: boolean
-      label: 'Whether AI may mint new tokens, palette swatches and animations through the material gestures and the blueprint create lane. Its own governance axis, never derived from how the active design system enforces its law: humans stay governed by the "create tokens" / "create swatches" / "create animations" permissions, disk-shipped materials by the importers. Only an explicit false closes the gate (fail-open for sites predating the key).'
+      label: 'Whether AI may mint new tokens, animations and fonts through the material gestures and the blueprint create lane. Its own governance axis, never derived from how the active design system enforces its law: humans stay governed by the "create skin materials" permission, disk-shipped materials by the importers. Only an explicit false closes the gate (fail-open for sites predating the key).'
     container_roots:
       type: boolean
       label: 'Emit the page-level width-band query container rule (container-type: inline-size on the page canvas) wherever container breakpoint conditions are styled (turn off when the theme manages its own query container)'

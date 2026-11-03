@@ -38,6 +38,7 @@ class VariantManagerTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -75,10 +76,7 @@ class VariantManagerTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('daedalus_variant');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);

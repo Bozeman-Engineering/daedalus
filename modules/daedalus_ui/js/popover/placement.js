@@ -93,3 +93,50 @@ export const anchoredPosition = ({
     margin,
   });
 };
+
+/**
+ * Places a menu's flyout (a submenu's list) beside its row: to the right
+ * of the row by default, flipped to the left only when the right would
+ * leave the viewport and the left fits, else clamped like any surface;
+ * its top aligned so the flyout's first row sits level with the submenu
+ * row (`inset` is the list padding the flyout wears above its first
+ * row), pulled up when it would run off the bottom and never past the
+ * top margin. Horizontal only ever flips, never clamps into a position
+ * covering the row, unless neither side fits (an oversized flyout pins
+ * to the left margin).
+ *
+ * @param {object} spec
+ *   {rect: {left, right, top, bottom} (the row's), width, height,
+ *   viewportWidth, viewportHeight, gap?, margin?, inset?}.
+ *
+ * @return {{left: number, top: number, side: string}}
+ *   The flyout's viewport top-left and which side of the row it took
+ *   ('right' or 'left').
+ */
+export const flyoutPosition = ({
+  rect,
+  width,
+  height,
+  viewportWidth,
+  viewportHeight,
+  gap = 0,
+  margin = 4,
+  inset = 4,
+}) => {
+  const fits = {
+    right: rect.right + gap + width + margin <= viewportWidth,
+    left: rect.left - gap - width >= margin,
+  };
+  const side = !fits.right && fits.left ? 'left' : 'right';
+  const x = side === 'left' ? rect.left - gap - width : rect.right + gap;
+  const position = clampPosition({
+    x,
+    y: rect.top - inset,
+    width,
+    height,
+    viewportWidth,
+    viewportHeight,
+    margin,
+  });
+  return { ...position, side };
+};

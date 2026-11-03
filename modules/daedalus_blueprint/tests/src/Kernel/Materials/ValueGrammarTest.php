@@ -42,6 +42,7 @@ class ValueGrammarTest extends KernelTestBase {
     'system',
     'user',
     'daedalus_blueprint',
+    'filter',
     'daedalus_blueprint_materials_test',
   ];
 
@@ -81,22 +82,22 @@ class ValueGrammarTest extends KernelTestBase {
     $grammar = $this->grammar();
     $roster = $this->roster();
 
-    $swatch = $grammar->resolve('var(--swatch-lime_green)', MaterialRecord::SLOT_STYLE, $roster);
-    $this->assertSame(ValueKind::Swatch, $swatch->kind);
-    $this->assertSame('lime_green', $swatch->id);
-    $this->assertSame($roster->get(MaterialKind::Swatch, 'lime_green'), $swatch->record, 'A resolved material carries its record.');
-    $this->assertTrue($swatch->isMaterial());
-    $this->assertSame(['kind' => 'swatch', 'id' => 'lime_green', 'spelling' => 'var(--swatch-lime_green)'], $swatch->toArray());
+    $lime = $grammar->resolve('var(--color-lime-green)', MaterialRecord::SLOT_STYLE, $roster);
+    $this->assertSame(ValueKind::Token, $lime->kind);
+    $this->assertSame('color/lime-green', $lime->id);
+    $this->assertSame($roster->get(MaterialKind::Token, 'color/lime-green'), $lime->record, 'A resolved material carries its record.');
+    $this->assertTrue($lime->isMaterial());
+    $this->assertSame(['kind' => 'token', 'id' => 'color/lime-green', 'spelling' => 'var(--color-lime-green)'], $lime->toArray());
 
     $token = $grammar->resolve(' var( --color-accent ) ', MaterialRecord::SLOT_STYLE, $roster);
     $this->assertSame(ValueKind::Token, $token->kind);
     $this->assertSame('color/accent', $token->id);
     $this->assertSame('var(--color-accent)', $token->spelling, 'Whitespace inside var() is tolerated; the spelling is canonical.');
 
-    $unknown = $grammar->resolve('var(--swatch-limegreen)', MaterialRecord::SLOT_STYLE, $roster);
+    $unknown = $grammar->resolve('var(--color-limegreen)', MaterialRecord::SLOT_STYLE, $roster);
     $this->assertSame(ValueKind::Unknown, $unknown->kind);
-    $this->assertSame('--swatch-limegreen', $unknown->id, 'Unknown keeps the name as written, for the corrective.');
-    $this->assertSame('var(--swatch-limegreen)', $unknown->spelling);
+    $this->assertSame('--color-limegreen', $unknown->id, 'Unknown keeps the name as written, for the corrective.');
+    $this->assertSame('var(--color-limegreen)', $unknown->spelling);
     $this->assertNull($unknown->record);
     $this->assertFalse($unknown->isMaterial());
 
@@ -117,7 +118,7 @@ class ValueGrammarTest extends KernelTestBase {
 
     foreach ([
       'red',
-      '1px solid var(--swatch-lime_green)',
+      '1px solid var(--color-lime-green)',
       'var(--color-accent, red)',
       'url(https://x/y.png)',
       "linear-gradient(red, blue), url('media:m1')",
@@ -151,7 +152,7 @@ class ValueGrammarTest extends KernelTestBase {
     $this->assertSame(ValueKind::Unknown, $unknown->kind);
     $this->assertSame(['kind' => 'unknown', 'id' => 'full', 'spelling' => 'full'], $unknown->toArray());
     $this->assertSame(ValueKind::Literal, $grammar->resolve('', MaterialRecord::SLOT_CLASS, $roster)->kind);
-    $this->assertSame(ValueKind::Unknown, $grammar->resolve('var(--swatch-lime_green)', MaterialRecord::SLOT_CLASS, $roster)->kind, 'A var() is no class: the style slot\'s syntax does not leak.');
+    $this->assertSame(ValueKind::Unknown, $grammar->resolve('var(--color-lime-green)', MaterialRecord::SLOT_CLASS, $roster)->kind, 'A var() is no class: the style slot\'s syntax does not leak.');
 
     // The animation slot resolves a keyframes name by its prefixed ident;
     // the style slot never resolves a bare ident (property-scoped: only a
@@ -174,9 +175,9 @@ class ValueGrammarTest extends KernelTestBase {
       $ref->id,
     ], $refs);
 
-    $compound = "1px solid var(--swatch-lime_green), linear-gradient(var(--color-accent, red), url(x.png)), url('media:M1'), url('generate:sky'), url('file:hero.svg')";
+    $compound = "1px solid var(--color-lime-green), linear-gradient(var(--color-accent, red), url(x.png)), url('media:M1'), url('generate:sky'), url('file:hero.svg')";
     $this->assertSame([
-      ['swatch', 'lime_green'],
+      ['token', 'color/lime-green'],
       ['token', 'color/accent'],
       ['media', 'm1'],
       ['generate', 'sky'],
@@ -225,7 +226,7 @@ class ValueGrammarTest extends KernelTestBase {
   public function testSpell(): void {
     $grammar = $this->grammar();
     $roster = $this->roster();
-    $this->assertSame('var(--swatch-lime_green)', $grammar->spell($roster->get(MaterialKind::Swatch, 'lime_green'), MaterialRecord::SLOT_STYLE));
+    $this->assertSame('var(--color-lime-green)', $grammar->spell($roster->get(MaterialKind::Token, 'color/lime-green'), MaterialRecord::SLOT_STYLE));
     $this->assertSame('full', $grammar->spell($roster->get(MaterialKind::Variant, 'container_full'), MaterialRecord::attrSlot('kind:container', 'width')));
     $this->assertSame('full', $grammar->spell($roster->get(MaterialKind::Variant, 'block_full'), MaterialRecord::attrSlot('kind:block', 'width')));
     $this->assertSame('hero', $grammar->spell($roster->get(MaterialKind::Blueprint, 'hero'), MaterialRecord::SLOT_BLUEPRINT));
@@ -235,8 +236,8 @@ class ValueGrammarTest extends KernelTestBase {
     $this->assertSame("url('file:hero.svg')", ValueGrammar::spellFile('  hero.svg  '));
 
     $this->expectException(\InvalidArgumentException::class);
-    $this->expectExceptionMessage('Swatch "lime_green" has no spelling in the class slot; it spells in: style.');
-    $grammar->spell($roster->get(MaterialKind::Swatch, 'lime_green'), MaterialRecord::SLOT_CLASS);
+    $this->expectExceptionMessage('Token "color/lime-green" has no spelling in the class slot; it spells in: style.');
+    $grammar->spell($roster->get(MaterialKind::Token, 'color/lime-green'), MaterialRecord::SLOT_CLASS);
   }
 
   /**
@@ -257,11 +258,11 @@ class ValueGrammarTest extends KernelTestBase {
    * A reference's shape is guarded: materials carry their record, only.
    */
   public function testReferenceGuards(): void {
-    $record = $this->roster()->get(MaterialKind::Swatch, 'lime_green');
-    $this->assertSame($record, (new ValueReference(ValueKind::Swatch, 'lime_green', 'var(--swatch-lime_green)', $record))->record);
+    $record = $this->roster()->get(MaterialKind::Token, 'color/lime-green');
+    $this->assertSame($record, (new ValueReference(ValueKind::Token, 'color/lime-green', 'var(--color-lime-green)', $record))->record);
     $guards = [
-      'material without record' => static fn () => new ValueReference(ValueKind::Swatch, 'lime_green', 'x'),
-      'material with a record of another kind' => static fn () => new ValueReference(ValueKind::Token, 'lime_green', 'x', $record),
+      'material without record' => static fn () => new ValueReference(ValueKind::Token, 'color/lime-green', 'x'),
+      'material with a record of another kind' => static fn () => new ValueReference(ValueKind::Variant, 'color/lime-green', 'x', $record),
       'inline with a record' => static fn () => new ValueReference(ValueKind::Media, 'u', 'x', $record),
       'literal with an id' => static fn () => new ValueReference(ValueKind::Literal, 'x', 'x'),
       'unknown without an id' => static fn () => new ValueReference(ValueKind::Unknown, NULL, 'x'),
@@ -293,12 +294,12 @@ class ValueGrammarTest extends KernelTestBase {
     $roster = $this->roster();
 
     $style_values = [
-      'var(--swatch-lime_green)', ' var( --color-accent ) ', 'var(--swatch-limegreen)', 'var(--color-accent, red)',
+      'var(--color-lime-green)', ' var( --color-accent ) ', 'var(--color-limegreen)', 'var(--color-accent, red)',
       'url("media:ABC-123")', "URL( 'Media:x' )", "url('generate: a calm lake ')", "url('generate:')", 'url(https://x/y.png)',
       'url("File: Hero.svg ")', "url('file:')",
-      'red', '', '1px solid var(--swatch-lime_green)',
+      'red', '', '1px solid var(--color-lime-green)',
       "linear-gradient(var(--color-accent, red), url(x.png)), url('media:M1'), url('generate:sky'), url('file:hero.svg')",
-      'var(--nope) var(--swatch-lime_green)', 'button', 'hero', 'motion-fade_in',
+      'var(--nope) var(--color-lime-green)', 'button', 'hero', 'motion-fade_in',
     ];
     $slot_values = [
       [MaterialRecord::SLOT_CLASS, 'button'], [MaterialRecord::SLOT_CLASS, ' button '], [
@@ -306,7 +307,7 @@ class ValueGrammarTest extends KernelTestBase {
         'hero',
       ],
       [MaterialRecord::SLOT_CLASS, "button  nope\thero_glow"], [MaterialRecord::SLOT_CLASS, ''],
-      [MaterialRecord::SLOT_CLASS, 'var(--swatch-lime_green)'],
+      [MaterialRecord::SLOT_CLASS, 'var(--color-lime-green)'],
       [MaterialRecord::attrSlot('kind:container', 'width'), 'full'], [
         MaterialRecord::attrSlot('kind:container', 'width'),
         ' full ',
@@ -327,7 +328,7 @@ class ValueGrammarTest extends KernelTestBase {
         MaterialRecord::SLOT_ANIMATION,
         'spin',
       ],
-      [MaterialRecord::SLOT_ANIMATION, 'var(--swatch-lime_green)'], [MaterialRecord::SLOT_ANIMATION, ''],
+      [MaterialRecord::SLOT_ANIMATION, 'var(--color-lime-green)'], [MaterialRecord::SLOT_ANIMATION, ''],
     ];
     $value_cases = array_merge(
       array_map(static fn (string $value): array => ['value' => $value, 'slot' => MaterialRecord::SLOT_STYLE], $style_values),
@@ -356,8 +357,8 @@ class ValueGrammarTest extends KernelTestBase {
       }
     }
     $applicable_cases[] = [
-      'kind' => 'swatch',
-      'id' => 'lime_green',
+      'kind' => 'token',
+      'id' => 'color/lime-green',
       'scope' => 'block_type:image',
       'topLevel' => FALSE,
       'withinBlueprint' => NULL,
@@ -407,7 +408,7 @@ class ValueGrammarTest extends KernelTestBase {
     $kinds = array_unique(array_column($php['resolve'], 'kind'));
     sort($kinds);
     $this->assertSame([
-      'animation', 'blueprint', 'file', 'generate', 'literal', 'media', 'swatch', 'token', 'unknown', 'variant',
+      'animation', 'blueprint', 'file', 'generate', 'literal', 'media', 'token', 'unknown', 'variant',
     ], $kinds);
     $this->assertContains(TRUE, $php['applicable']);
     $this->assertContains(FALSE, $php['applicable']);

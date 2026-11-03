@@ -79,10 +79,10 @@ class EditModeBehaviorTest extends WebDriverTestBase {
    *
    * The inline_block:text ("Pro tip: to edit things quickly, use tab to move
    * through elements.", inline block 42ed7027) that is the only component of
-   * the Pro tip band (01c25804), the second band nested under the footer's
+   * the Pro tip section (01c25804), the second section nested under the footer's
    * one root, in the daedalus recipe's site chrome content (the `footer`
    * blueprint the frame places linked after the main slot; a block blueprint
-   * holds one root and its bands nest under it). The test installs from the
+   * holds one root and its sections nest under it). The test installs from the
    * recipe on disk, so a
    * recipe content change that drops this component fails the
    * editing-universe step below: re-pin it to the footer's LAST attributed
@@ -165,6 +165,15 @@ class EditModeBehaviorTest extends WebDriverTestBase {
    *   (the caret's chip names the section, never a new container in the
    *   page) and the drop lands the block as the section's first child in
    *   the mirror, the panel and the canvas.
+   * - The top bar's Save and its menu: Save is the one unsaved indicator
+   *   (the server stamps it from the history timeline; a placement through
+   *   the op queue flips it); the Daedalus mark opens the bar's one menu
+   *   over the shared primitive, whose rows run through existing doors: a
+   *   Panels ▸ row opens and closes a panel through the sidebar manager
+   *   (`.active` on its toggle, the slot cookie), ArrowRight/ArrowLeft
+   *   move DOM focus into and out of the flyout, Editing chrome ▸ Minimal
+   *   restamps <html> through the density door and the Settings select
+   *   follows its event, and Discard changes… opens the confirm modal.
    * - The Page form's toggle presents the root through the editor door:
    *   the panel opens on the top-level form with its first revealed widget
    *   as the open edit.
@@ -1580,7 +1589,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     );
 
     // --- Boot params, chipless. ---
-    // ?canvas* is the vector's out-of-band address: a fresh server render
+    // ?canvas* is the vector's address outside the page: a fresh server render
     // (the edit cookie is still path-scoped to this node) must come up
     // already posed, with no chip cluster anywhere in the chrome — the
     // spine boots headless from the URL alone.
@@ -1657,7 +1666,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     // section with one text block in each region, so both regions stay
     // addressable.
     $uuid_service = \Drupal::service('uuid');
-    $band_uuid = $uuid_service->generate();
+    $hopper_section_uuid = $uuid_service->generate();
     $twocol_uuid = $uuid_service->generate();
     $first_block_uuid = $uuid_service->generate();
     $second_block_uuid = $uuid_service->generate();
@@ -1680,9 +1689,9 @@ class EditModeBehaviorTest extends WebDriverTestBase {
         'block_serialized' => NULL,
       ]);
     };
-    $band = new Section('daedalus_stylish_container');
-    $band->setThirdPartySetting('daedalus_layout', 'uuid', $band_uuid);
-    $band->appendComponent($text_component($hopper_uuid, 'content', 'Column hopper'));
+    $hopper_section = new Section('daedalus_stylish_container');
+    $hopper_section->setThirdPartySetting('daedalus_layout', 'uuid', $hopper_section_uuid);
+    $hopper_section->appendComponent($text_component($hopper_uuid, 'content', 'Column hopper'));
     $twocol = new Section('layout_twocol_section');
     $twocol->setThirdPartySetting('daedalus_layout', 'uuid', $twocol_uuid);
     $twocol->appendComponent($text_component($first_block_uuid, 'first', 'First column'));
@@ -1690,7 +1699,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     $region_node = Node::create([
       'type' => 'page',
       'title' => 'Region slots test page',
-      'layout_builder__layout' => [$band, $twocol],
+      'layout_builder__layout' => [$hopper_section, $twocol],
     ]);
     $region_node->save();
     $this->drupalGet($region_node->toUrl());
@@ -1718,7 +1727,7 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       . " return wrapper ? ['first', 'second'].find((name) => wrapper.classList.contains('layout__region--' + name)) ?? null : null; })";
     // The index's region slots: the panel draws the two region rows from
     // the tree's region nodes, one block under each, and the hopper sits
-    // under the container band with no region row (a lone region
+    // under the stylish container with no region row (a lone region
     // collapses into its section row).
     $this->assertJsCondition(
       "$region_of_js('$first_block_uuid') === 'first' && $region_of_js('$second_block_uuid') === 'second' && $region_of_js('$hopper_uuid') === null"
@@ -1824,6 +1833,16 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       'The blueprint mirror booted on the page-built page.',
     );
+    // Save is the bar's one unsaved indicator (Edit::buildTopBar() stamps
+    // data-daedalus-ui-saved from the user's history timeline): a fresh
+    // page has nothing to undo, so the bar arrives reading Saved.
+    $this->assertJsCondition(
+      "(() => { const save = document.querySelector('#edit-mode-top-bar #daedalus-ui-save');"
+      . " return save !== null && save.getAttribute('data-daedalus-ui-saved') === 'true'"
+      . " && save.querySelector('.daedalus-ui-save__label').textContent.trim() === 'Saved'; })()",
+      20000,
+      'The bar arrives reading Saved: the fresh page has nothing to undo.',
+    );
     $section_uuid = $uuid_service->generate();
     $component_uuid = $uuid_service->generate();
     $session->executeScript(<<<JS
@@ -1857,6 +1876,19 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     );
     $gate_placement_error = $session->evaluateScript('window.__gatePlacementError ?? null');
     $this->assertNull($gate_placement_error, 'Placement failed: ' . ($gate_placement_error ?? ''));
+    // The placement flipped Save to unsaved. The seam: the op queue's
+    // response carries the timeline (history.can_undo) and then replaces
+    // the mirror; top-bar.js's two listeners (the history mirror's
+    // onChange, Blueprint.onBlueprintChange) land that fact on the bar's
+    // attribute and label. Node proves the composer and the queue apart;
+    // only a browser sees a mutation reach the bar.
+    $this->assertJsCondition(
+      "(() => { const save = document.querySelector('#edit-mode-top-bar #daedalus-ui-save');"
+      . " return save.getAttribute('data-daedalus-ui-saved') === 'false'"
+      . " && save.querySelector('.daedalus-ui-save__label').textContent.trim() === 'Save changes'; })()",
+      20000,
+      'The placement flipped Save to "Save changes" (data-daedalus-ui-saved="false").',
+    );
 
     // A single block at CLEAN density: the face is the registry's own
     // tab partition (the flagged verbs as the chip's buttons), the
@@ -2002,6 +2034,198 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     );
     $this->getSession()->resizeWindow(1024, 768);
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
+
+    // --- The Daedalus menu: the bar's one menu over the shared primitive. ---
+    // The mark (#daedalus-ui-menu, Edit::buildTopBar()) opens
+    // Drupal.Daedalus.menu over the pure composer (top-bar-menu-items.js,
+    // node-tested: the order, the submenus, the checked rows). Every row
+    // runs through a door that exists on its own; the seams below are the
+    // doors' far ends, which only a browser sees: the sidebar manager's
+    // cookie and `.active` mirror, DOM focus, the density event between
+    // two chrome surfaces, and the modal opener. The trigger is clicked
+    // for real (WebDriver): the surface dismisses on an outside
+    // pointerdown and the trigger toggles, so a synthetic click is not a
+    // user's gesture; a menu row's own click handler is, so rows are
+    // clicked synthetically. A row's textContent is label + hint
+    // ("BlocksI"), so rows are matched by their `.daedalus-ui-menu__label`
+    // text, never their whole text.
+    $top_row = fn (string $label): string =>
+      "Array.from(document.querySelectorAll('.daedalus-ui-popover > .daedalus-ui-menu:not(.daedalus-ui-menu--flyout) > .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label').textContent === '$label')";
+    $flyout_row = fn (string $label): string =>
+      "Array.from(document.querySelectorAll('.daedalus-ui-popover > .daedalus-ui-menu--flyout > .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label').textContent === '$label')";
+    $open_menu = function () use ($session): void {
+      $session->getPage()->find('css', '#edit-mode-top-bar #daedalus-ui-menu')->click();
+      $this->assertJsCondition(
+        "document.querySelector('#daedalus-ui-menu').getAttribute('aria-expanded') === 'true'"
+        . " && document.querySelector('.daedalus-ui-popover > .daedalus-ui-menu') !== null"
+        . " && Drupal.Daedalus.menu.isOpen() === true",
+        20000,
+        'The mark opened the Daedalus menu as the floating surface\'s content, the trigger reading expanded.',
+      );
+    };
+
+    // (a) The submenu's keyboard, the seam the pure state machine cannot
+    // see: DOM focus. The menu opens with its first focusable row, Panels
+    // ▸, active (menu.js focuses the active row on every sync); ArrowRight
+    // on it mounts the flyout as a second list inside the same surface and
+    // moves focus to the flyout's first row; ArrowLeft drops the flyout
+    // alone and focus returns to the Panels row, the menu still open.
+    $open_menu();
+    $this->assertJsCondition(
+      "(() => { const row = document.activeElement;"
+      . " return row !== null && row.classList.contains('daedalus-ui-menu__item--submenu')"
+      . " && row.querySelector('.daedalus-ui-menu__label').textContent === 'Panels'"
+      . " && row.getAttribute('aria-haspopup') === 'menu' && row.getAttribute('aria-expanded') === 'false'; })()",
+      20000,
+      'The menu opened with its first row, Panels, focused and collapsed.',
+    );
+    $this->pressKeyOnFocused('ArrowRight');
+    $this->assertJsCondition(
+      "(() => { const flyout = document.querySelector('.daedalus-ui-popover > .daedalus-ui-menu--flyout');"
+      . " return flyout !== null && flyout.contains(document.activeElement)"
+      . " && document.activeElement.classList.contains('daedalus-ui-menu__item')"
+      . " && " . $top_row('Panels') . ".getAttribute('aria-expanded') === 'true'; })()",
+      20000,
+      'ArrowRight on the Panels row mounted its flyout in the surface and moved DOM focus into it.',
+    );
+    $this->pressKeyOnFocused('ArrowLeft');
+    $this->assertJsCondition(
+      "document.querySelector('.daedalus-ui-popover > .daedalus-ui-menu--flyout') === null"
+      . " && document.activeElement === " . $top_row('Panels')
+      . " && document.activeElement.getAttribute('aria-expanded') === 'false'"
+      . " && Drupal.Daedalus.menu.isOpen() === true",
+      20000,
+      'ArrowLeft closed the flyout alone and returned focus to the Panels row.',
+    );
+
+    // (b) Panels ▸ Blocks opens the panel. The seam: the row's run goes
+    // through SidebarManager.openSidebar() into the panel plugin
+    // (DefaultSidebar.open()), which writes the slot cookie and mirrors
+    // `.active` onto the bar's toggle ([data-sidebar-button-for]); the
+    // menu, transient, closes with the run. A click on the Panels row
+    // opens the flyout (menu.js: a submenu row's click is ArrowRight).
+    // No leg before this one opened the Add panel on this page.
+    $this->assertJsCondition(
+      "document.getElementById('place_block').classList.contains('daedalus-ui-hidden')"
+      . " && !document.querySelector('#daedalus-layout-add').classList.contains('active')",
+      20000,
+      'The Blocks panel is closed and its toggle inactive before the menu opens it.',
+    );
+    $session->executeScript($top_row('Panels') . '.click();');
+    $this->assertJsCondition(
+      "(() => { const row = " . $flyout_row('Blocks') . ";"
+      . " return !!row && row.getAttribute('role') === 'menuitemcheckbox' && row.getAttribute('aria-checked') === 'false'; })()",
+      20000,
+      'The Panels flyout lists Blocks unchecked while its panel is closed.',
+    );
+    $session->executeScript($flyout_row('Blocks') . '.click();');
+    $this->assertJsCondition(
+      "!document.getElementById('place_block').classList.contains('daedalus-ui-hidden')"
+      . " && document.querySelector('#daedalus-layout-add').classList.contains('active')"
+      . " && Drupal.Daedalus.getCookieValue('left_bottom_sidebar') === 'place_block'"
+      . " && Drupal.Daedalus.menu.isOpen() === false"
+      . " && document.querySelector('#daedalus-ui-menu').getAttribute('aria-expanded') === 'false'",
+      20000,
+      'The Blocks row opened the panel through the sidebar manager: the toggle reads active, the slot cookie names the panel, and the menu closed.',
+    );
+    // And closes it again: the open state is read at composition time, so
+    // the row now reads checked, and its run is the manager's close.
+    $open_menu();
+    $session->executeScript($top_row('Panels') . '.click();');
+    $this->assertJsCondition(
+      "(() => { const row = " . $flyout_row('Blocks') . ";"
+      . " return !!row && row.getAttribute('aria-checked') === 'true'; })()",
+      20000,
+      'The Panels flyout lists Blocks checked while its panel is open.',
+    );
+    $session->executeScript($flyout_row('Blocks') . '.click();');
+    $this->assertJsCondition(
+      "document.getElementById('place_block').classList.contains('daedalus-ui-hidden')"
+      . " && !document.querySelector('#daedalus-layout-add').classList.contains('active')"
+      . " && Drupal.Daedalus.getCookieValue('left_bottom_sidebar') === null"
+      . " && Drupal.Daedalus.menu.isOpen() === false",
+      20000,
+      'The checked Blocks row closed the panel again: the toggle inactive, the slot cookie emptied.',
+    );
+
+    // (c) Editing chrome ▸ Minimal. The seam: the row calls the one
+    // density door (Drupal.Daedalus.setChromeDensity), which restamps
+    // <html> and dispatches daedalus-ui:chrome-density on document; the
+    // Settings panel's select follows that event, two chrome surfaces
+    // agreeing through nothing but the door. The earlier density legs
+    // stamped the attribute directly, so the select still reads the
+    // fixture's default here.
+    $this->assertJsCondition(
+      "document.documentElement.getAttribute('data-daedalus-ui-chrome-density') === 'full'"
+      . " && document.querySelector('#daedalus-ui-chrome-density').value === 'full'",
+      20000,
+      'The html stamp and the Settings select both read full before the menu changes the tier.',
+    );
+    $open_menu();
+    $session->executeScript($top_row('Editing chrome') . '.click();');
+    $this->assertJsCondition(
+      "(() => { const minimal = " . $flyout_row('Minimal') . "; const everything = " . $flyout_row('Everything') . ";"
+      . " return !!minimal && minimal.getAttribute('aria-checked') === 'false'"
+      . " && !!everything && everything.getAttribute('aria-checked') === 'true'; })()",
+      20000,
+      'The Editing chrome flyout checks the current tier, Everything.',
+    );
+    $session->executeScript($flyout_row('Minimal') . '.click();');
+    $this->assertJsCondition(
+      "document.documentElement.getAttribute('data-daedalus-ui-chrome-density') === 'minimal'"
+      . " && document.querySelector('#daedalus-ui-chrome-density').value === 'minimal'"
+      . " && Drupal.Daedalus.menu.isOpen() === false",
+      20000,
+      'The Minimal row restamped <html> through the density door and the Settings select followed the event.',
+    );
+    // The door also saves the setting (one Drupal.ajax per write): let
+    // the write land before restoring the default through the same door,
+    // so two writes in flight cannot persist minimal for the legs that
+    // follow.
+    $assert_session->assertWaitOnAjaxRequest();
+    $session->executeScript("Drupal.Daedalus.setChromeDensity('full');");
+    $this->assertJsCondition(
+      "document.documentElement.getAttribute('data-daedalus-ui-chrome-density') === 'full'"
+      . " && document.querySelector('#daedalus-ui-chrome-density').value === 'full'",
+      20000,
+      'The door restored full density on both surfaces.',
+    );
+    $assert_session->assertWaitOnAjaxRequest();
+
+    // (d) Discard changes… opens the one confirm, daedalus_edit's
+    // ConfirmDiscardChangesForm in the daedalus popup, through
+    // Drupal.Daedalus.openModal (the seam: the modal opener and the AJAX
+    // form it loads); the menu's danger grammar marks the row, not an
+    // in-menu two-step. Dismissed through the dialog's own close, so the
+    // staged placement survives and Save still reads unsaved.
+    $open_menu();
+    $this->assertJsCondition(
+      "(() => { const row = " . $top_row('Discard changes…') . ";"
+      . " return !!row && row.classList.contains('daedalus-ui-menu__item--danger'); })()",
+      20000,
+      'The menu lists Discard changes… as a danger row.',
+    );
+    $session->executeScript($top_row('Discard changes…') . '.click();');
+    $this->assertNotNull(
+      $assert_session->waitForElementVisible('css', '.discard-changes-dialog', 20000),
+      'The Discard row opened the confirm modal.',
+    );
+    $this->assertJsCondition(
+      "Drupal.Daedalus.menu.isOpen() === false"
+      . " && document.querySelector('.discard-changes-dialog .ui-dialog-titlebar-close') !== null",
+      20000,
+      'The menu closed with the run and the modal carries its own close control.',
+    );
+    $session->getPage()->find('css', '.discard-changes-dialog .ui-dialog-titlebar-close')->click();
+    $this->assertJsCondition(
+      "(() => { const dialog = document.querySelector('.discard-changes-dialog');"
+      . " return (dialog === null || dialog.getClientRects().length === 0)"
+      . " && document.querySelector('#daedalus-ui-save').getAttribute('data-daedalus-ui-saved') === 'false'; })()",
+      20000,
+      'Dismissing the modal kept the staged changes: Save still reads unsaved.',
+    );
 
     // daedalus_layout's interaction guard surviving a mutation swap (the behavior
     // under test is daedalus_layout's js/settings/disable-interactive-elements.js;

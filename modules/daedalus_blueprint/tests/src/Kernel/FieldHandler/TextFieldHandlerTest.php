@@ -6,6 +6,7 @@ namespace Drupal\Tests\daedalus_blueprint\Kernel\FieldHandler;
 
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerManager;
 use Drupal\daedalus_blueprint\FieldHandler\TextFieldHandler;
+use Drupal\filter\Entity\FilterFormat;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -134,7 +135,11 @@ class TextFieldHandlerTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests deserializing a bare string normalizes to structured format.
+   * A bare string becomes an item carrying the actor's default format.
+   *
+   * The base installs plain_text alone, so the default is plain_text: the
+   * format core's text_format element would give an empty item, never NULL
+   * (which renders through the site fallback with every tag escaped).
    */
   public function testDeserializeBareString(): void {
     $entity = $this->createTestEntity();
@@ -143,10 +148,113 @@ class TextFieldHandlerTest extends BlueprintKernelTestBase {
     $result = $this->handler->deserialize('Plain text input', $definition);
 
     $this->assertFalse($result->hasErrors());
+    $this->assertSame([], $result->getWarnings());
     $value = $result->getValue();
     $this->assertIsArray($value);
     $this->assertSame('Plain text input', $value['value']);
-    $this->assertNull($value['format']);
+    $this->assertSame('plain_text', $value['format']);
+  }
+
+  /**
+   * An explicit NULL format gets the default the same way a bare string does.
+   */
+  public function testDeserializeNullFormat(): void {
+    $entity = $this->createTestEntity();
+    $definition = $entity->get('field_description')->getFieldDefinition();
+
+    $result = $this->handler->deserialize(['value' => 'No format', 'format' => NULL], $definition);
+
+    $this->assertFalse($result->hasErrors());
+    $this->assertSame([], $result->getWarnings());
+    $this->assertSame('plain_text', $result->getValue()['format']);
+  }
+
+  /**
+   * The default is the roster's first by weight, not by the alphabet.
+   *
+   * The format zz_first sits at weight -10 and aa_last at 0 (plain_text
+   * ships at 10), both usable by the admin running the suite: the bare
+   * string lands on zz_first, and the schema's roster lists the three in
+   * weight order.
+   */
+  public function testDefaultFormatFollowsWeightOrder(): void {
+    FilterFormat::create([
+      'format' => 'zz_first',
+      'name' => 'ZZ first',
+      'weight' => -10,
+    ])->save();
+    FilterFormat::create([
+      'format' => 'aa_last',
+      'name' => 'AA last',
+      'weight' => 0,
+    ])->save();
+    $entity = $this->createTestEntity();
+    $definition = $entity->get('field_description')->getFieldDefinition();
+
+    $result = $this->handler->deserialize('Weighted', $definition);
+
+    $this->assertFalse($result->hasErrors());
+    $this->assertSame('zz_first', $result->getValue()['format']);
+    $this->assertSame(
+      ['available_formats' => ['zz_first', 'aa_last', 'plain_text']],
+      $this->handler->getSchemaAdditions($definition),
+    );
+  }
+
+  /**
+   * The system posture takes the roster's first; an actor takes their first.
+   *
+   * The current user may use aa_last and plain_text but not zz_first: a
+   * system write (the seed, an importer) lands on zz_first regardless, and
+   * the same write judged for the user lands on aa_last, their first by
+   * weight.
+   */
+  public function testSystemPostureTakesRosterFirst(): void {
+    FilterFormat::create([
+      'format' => 'zz_first',
+      'name' => 'ZZ first',
+      'weight' => -10,
+    ])->save();
+    FilterFormat::create([
+      'format' => 'aa_last',
+      'name' => 'AA last',
+      'weight' => 0,
+    ])->save();
+    $this->setUpCurrentUser([], [
+      'administer entity_test content',
+      'use text format aa_last',
+    ]);
+    $entity = $this->createTestEntity();
+    $definition = $entity->get('field_description')->getFieldDefinition();
+
+    $system = $this->handler->deserialize('Seeded', $definition, ['system' => TRUE]);
+    $this->assertFalse($system->hasErrors());
+    $this->assertSame('zz_first', $system->getValue()['format']);
+
+    $judged = $this->handler->deserialize('Judged', $definition);
+    $this->assertFalse($judged->hasErrors());
+    $this->assertSame('aa_last', $judged->getValue()['format']);
+  }
+
+  /**
+   * A stored default echoes on serialize: the page print carries the format.
+   *
+   * DialectPrinter prints the format attribute exactly when the stored
+   * format is a set scalar, so a round trip from a bare string shows the
+   * format it was given.
+   */
+  public function testSerializeAfterDeserializeEchoesFormat(): void {
+    $entity = $this->createTestEntity();
+    $definition = $entity->get('field_description')->getFieldDefinition();
+
+    $result = $this->handler->deserialize('Echoed', $definition);
+    $this->assertFalse($result->hasErrors());
+    $entity->set('field_description', $result->getValue());
+    $entity->save();
+
+    $reloaded = $this->entityTypeManager->getStorage('entity_test')->loadUnchanged($entity->id());
+    $serialized = $this->handler->serialize($reloaded->get('field_description'), $definition);
+    $this->assertSame(['value' => 'Echoed', 'format' => 'plain_text'], $serialized);
   }
 
   /**

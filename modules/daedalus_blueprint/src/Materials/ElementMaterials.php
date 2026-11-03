@@ -48,7 +48,7 @@ class ElementMaterials {
    * address it is given: an element key wears what its root entry
    * carries; a part key ('{root}::.class') wears what its root wears,
    * because the root's variants style the part; a rule key
-   * ('{root}::> pb-text') wears what its own entry carries (delivered at
+   * ('{root}::> d-text') wears what its own entry carries (delivered at
    * the rule's matches) beneath what its root wears at that selector.
    * Each layer is one wearing: a root wearing the editor applied, a
    * wearing a composition distributed (its origin named), or a fragment
@@ -153,7 +153,7 @@ class ElementMaterials {
    * kind (`container:{uuid}` for a section at any depth, `block:{uuid}`
    * for a component, `entity:{uuid}` for the page itself). The one read
    * behind every gesture that takes a page-language element and needs its
-   * style entry (a swatch captured from what it wears, a variant saved
+   * style entry (a token captured from what it wears, a variant saved
    * from its look).
    */
   public function keyFor(HostInterface $host, string $uuid): ?string {

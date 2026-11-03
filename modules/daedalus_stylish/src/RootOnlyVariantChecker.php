@@ -16,7 +16,7 @@ use Drupal\daedalus_blueprint\Result\BlueprintError;
  * Placement curates offers and birth, never legality: a container's grant
  * is its layout's grant at every depth, and a variant validates wherever
  * it is worn. What placement DOES curate is the offer of a root-only axis
- * (width on the shipped container: a page band's content column, a
+ * (width on the shipped container: a section's content column, a
  * doubled gutter on a nested one), and the picker's skip of that axis at
  * nested depth is only curation while every apply door respects it. This
  * checker is the op spine's half: a NEW wearing of a root-only variant on
@@ -44,7 +44,7 @@ use Drupal\daedalus_blueprint\Result\BlueprintError;
  * memory, and a move that nests a container strips it
  * (ElementStylesSubscriber::onElementMoved) while a move back to root
  * redresses with the layout's defaults. Refuse, never translate, at THIS
- * gate: a band captured with its width and placed nested fails loudly
+ * gate: a section captured with its width and placed nested fails loudly
  * with the axis named rather than silently losing its width.
  */
 class RootOnlyVariantChecker implements VariantApplicabilityCheckerInterface {

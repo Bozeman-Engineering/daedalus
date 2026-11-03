@@ -80,7 +80,7 @@ class VariantRepository {
    * at apply time), so this list is what the roster's variant records are
    * read from, in the order they keep: weight-then-label (the order every
    * surface lists variants in), loaded once per
-   * request and workspace; the swatch repository's publishedSwatches()
+   * request and workspace; the animation repository's publishedAnimations()
    * twin. Inside a workspace the storage answers with the workspace's
    * active revisions, so staged edits preview here.
    *

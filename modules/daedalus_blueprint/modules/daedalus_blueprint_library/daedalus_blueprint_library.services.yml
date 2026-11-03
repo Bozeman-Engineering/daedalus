@@ -132,6 +132,14 @@ services:
       - !service_closure '@daedalus_blueprint_library.manager'
       - '@current_user'
       - '@entity_type.manager'
+      # A closure for the same reason: the spine collects the gesture
+      # handler that dispatches here. The provider stamps a capture's
+      # source container as the blueprint's first placement through it.
+      - !service_closure '@daedalus_blueprint.operations'
+      # The AI context budget, the guard an offered capture and an update
+      # turning offered or favorite on answer: a closure, since its weight
+      # sources render the roster this provider feeds.
+      - !service_closure '@daedalus_blueprint.materials_budget'
     tags:
       - { name: daedalus_blueprint.materials_provider }
   Drupal\daedalus_blueprint_library\Materials\BlueprintMaterialsProvider: '@daedalus_blueprint_library.materials_provider'

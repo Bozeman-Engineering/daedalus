@@ -14,7 +14,7 @@
 # typed literal still commits and the bindings only shape the offer.
 # Which tokens the basic rows lead with is a fact about the tokens,
 # spelled here per token as `offered`: the four space steps are the
-# everyday padding and gap stops, and the gutter (the page band's inline
+# everyday padding and gap stops, and the gutter (the section's inline
 # inset, not a padding step) is `offered: false`, legal and referenced
 # by the container defaults below but off the rows. A token is stored
 # as a record {value, description, offered}; a bare value here is the
@@ -76,7 +76,7 @@ olivero:
         value:
           default: '2rem'
           narrow: '1rem'
-        description: 'The page band''s inline inset and the container gap; not a padding step.'
+        description: 'The section''s inline inset and the container gap; not a padding step.'
         offered: false
     radius:
       sm: '0.5rem'
@@ -91,6 +91,65 @@ olivero:
 
   # DEFAULT STYLES that get applied to bare elements.
   # Every font-size is a bare token reference, never a clamp().
+  # The skin's motion: keyframes as data, delivered as @keyframes
+  # motion-{name} in the compiled skin file and worn from a style as
+  # animation-name: motion-{name}. An animation is a record {steps,
+  # description, offered}; steps map an offset (from | to | N%) to
+  # declarations in the same universal vocabulary a style map speaks
+  # (media and re-timing animation-* properties refused;
+  # animation-timing-function is allowed per step). Every value here is
+  # a literal, so the motion plays the same on every site that wears the
+  # skin. Two families. Entrances (fade_in, rise, scale_in) run once and
+  # settle; this package's animation-axis variants
+  # ({package}.daedalus_stylish.variants.yml) wear them with literal timings
+  # and their own reduced-motion unset. Attention (pulse) and continuous
+  # (spin) animations ship as materials only: they want an iteration count
+  # and a purpose the advanced Motion section or the AI supplies per
+  # element.
+  animations:
+    fade_in:
+      description: 'Opacity from 0 to 1: the quietest entrance. Reach for it on sections and content that should simply appear.'
+      steps:
+        from:
+          opacity: '0'
+        to:
+          opacity: '1'
+    rise:
+      description: 'Fade in while drifting up 1rem into place, easing out. Reach for it on cards, teasers and sections that should arrive with a little lift.'
+      steps:
+        from:
+          opacity: '0'
+          transform: 'translateY(1rem)'
+          animation-timing-function: 'ease-out'
+        to:
+          opacity: '1'
+          transform: 'none'
+    scale_in:
+      description: 'Fade in while growing from 96% to full size, easing out. Reach for it on media, callouts and buttons that should pop into place.'
+      steps:
+        from:
+          opacity: '0'
+          transform: 'scale(0.96)'
+          animation-timing-function: 'ease-out'
+        to:
+          opacity: '1'
+          transform: 'none'
+    pulse:
+      description: 'Grow to 105% and back, a heartbeat. Reach for it with an infinite iteration count on a call to action that should draw the eye; use sparingly.'
+      steps:
+        '0%':
+          transform: 'scale(1)'
+        '50%':
+          transform: 'scale(1.05)'
+        '100%':
+          transform: 'scale(1)'
+    spin:
+      description: 'One full clockwise rotation. Reach for it with a linear easing and an infinite iteration count on loaders and decorative icons.'
+      steps:
+        from:
+          transform: 'rotate(0deg)'
+        to:
+          transform: 'rotate(360deg)'
   defaults:
     'base:h1':
       '':

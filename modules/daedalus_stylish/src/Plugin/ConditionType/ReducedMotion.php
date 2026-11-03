@@ -27,7 +27,6 @@ final class ReducedMotion extends ConditionTypeBase {
       'reduced-motion' => [
         'label' => $this->t('Reduced motion'),
         'wrapper' => '@media (prefers-reduced-motion: reduce)',
-        'preference' => ['feature' => 'prefers-reduced-motion', 'value' => 'reduce'],
       ],
     ];
   }

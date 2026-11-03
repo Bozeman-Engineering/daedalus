@@ -29,7 +29,7 @@ import { useFieldGesture, useGesture } from './use-gesture.js';
 import { DimensionField, useKachunk } from './dimension-field.js';
 import { Mark } from './mark.js';
 import { Segments } from './segments.js';
-import { wellFace } from './swatch-well-model.js';
+import { wellFace } from './token-well-model.js';
 import { useRowHighlight } from './use-highlight.js';
 import { useRowMenu } from './use-row-menu.js';
 
@@ -188,6 +188,7 @@ export const ChoiceRow = ({
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
   source = null,
   highlight = null,
 }) => {
@@ -293,6 +294,7 @@ export const ChoiceRow = ({
         read,
         blockTypes: source?.getBlockTypes?.() ?? {},
         sectionLayouts: source?.getSectionLayouts?.() ?? {},
+        law,
       })
     : null;
   const style = origin?.color
@@ -543,7 +545,7 @@ export const ChoiceRow = ({
 /**
  * The choice well + its popover: the well surface's two slots (the face
  * button inline on the row, the popover floating over the rows below on
- * the shared surface), the swatch well's posture over a text or painted
+ * the shared surface), the token well's posture over a text or painted
  * vocabulary. The
  * face is wellFace's answer over the offer (the lit stop, custom, or
  * unset, a dash when no layer delivers; a literal color reads as custom
@@ -659,7 +661,7 @@ const useChoiceWell = ({
   const popover = !open
     ? null
     : portal(
-        <div className="daedalus-stylish-swatch-popover daedalus-stylish-choice-popover">
+        <div className="daedalus-stylish-token-popover daedalus-stylish-choice-popover">
           {painted ? (
             <PaletteGrid
               stops={offer}

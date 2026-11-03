@@ -1,12 +1,30 @@
-# The skin minting the token the shipped variant references as
-# var(--space-gutter), and a font token (the suite binds font-family to
-# the font scale) whose stack names this module's shipped font by its
-# family; the test activates a design system whose default_skin names the
-# skin before anything syncs (a recipe's config lands before its content).
+# The skin minting the tokens the shipped variant references as
+# var(--space-gutter) and var(--color-accent), the animation it wears as
+# motion-sync_test_fade, a font (its one face's bytes under assets/fonts/)
+# and a font token (the suite binds font-family to the font scale) whose
+# stack names that font by its family; the test activates a design system
+# whose default_skin names the skin before anything syncs (a recipe's
+# config lands before its content).
 sync_test_skin:
   label: 'Sync test skin'
   tokens:
     space:
       gutter: '2rem'
+    color:
+      accent: '#ff5500'
     font:
       body: '"Sync Test Sans", sans-serif'
+  animations:
+    sync_test_fade:
+      description: 'A soft entrance for the sync test section.'
+      steps:
+        from:
+          opacity: '0'
+        to:
+          opacity: '1'
+  fonts:
+    sync_test_font:
+      family: 'Sync Test Sans'
+      faces:
+        - source:
+            file: sync-test-sans.woff2

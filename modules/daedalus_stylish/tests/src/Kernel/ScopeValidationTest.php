@@ -42,6 +42,7 @@ class ScopeValidationTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -71,22 +72,16 @@ class ScopeValidationTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-* and var() references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->validator = $this->container->get('daedalus_stylish.style_map_validator');
@@ -155,7 +150,7 @@ class ScopeValidationTest extends KernelTestBase {
    * The '::> *' children pseudo-part validates like a declared part.
    *
    * The container kind declares children (layout), the twocol layout's
-   * .band-content part declares its own, so root and
+   * .section-content part declares its own, so root and
    * part-composed children keys validate against the children section's
    * property groups; malformed suffixes fail the key grammar; strict mode
    * rejects undeclared properties on declared children and the '::> *' key
@@ -172,7 +167,7 @@ class ScopeValidationTest extends KernelTestBase {
 
     // A part's children ('::.class > *'), on the layout scope's part.
     $this->assertSame([], $this->validator->validateAt([
-      '::.band-content > *' => ['default' => ['flex-grow' => '1']],
+      '::.section-content > *' => ['default' => ['flex-grow' => '1']],
     ], Address::fromString('layout:layout_twocol_section')));
 
     // Open site, element without a children declaration: grammar-checked
@@ -182,7 +177,7 @@ class ScopeValidationTest extends KernelTestBase {
     ], Address::fromString('kind:block')));
 
     // The children suffix never doubles and is always last.
-    foreach (['::>::>', '::>::.card', '::>x', '::>', '::.band-content::>'] as $bad) {
+    foreach (['::>::>', '::>::.card', '::>x', '::>', '::.section-content::>'] as $bad) {
       $codes = $this->codes($this->validator->validateAt([
         $bad => ['default' => ['flex-grow' => '1']],
       ], Address::fromString('kind:container')));
@@ -289,22 +284,22 @@ class ScopeValidationTest extends KernelTestBase {
   public function testLayoutScope(): void {
     // The effective declaration layers the universal section kind (spacing,
     // padding max 4rem) under the layout declaration (sizing, max-width max
-    // 90rem); the declared .band-content part validates through
+    // 90rem); the declared .section-content part validates through
     // its own declaration (max-width max 80rem).
     $this->assertSame([], $this->validator->validateAt([
       '' => ['default' => ['max-width' => '90rem', 'padding' => '1rem']],
-      '::.band-content' => ['default' => ['max-width' => '80rem']],
+      '::.section-content' => ['default' => ['max-width' => '80rem']],
     ], Address::fromString('layout:layout_twocol_section')));
 
     // Root and part carry different constraints, and the section kind's
     // padding cap reaches the layout root through the base layer.
     $codes = $this->codes($this->validator->validateAt([
       '' => ['default' => ['max-width' => '95rem', 'padding' => '6rem']],
-      '::.band-content' => ['default' => ['max-width' => '85rem']],
+      '::.section-content' => ['default' => ['max-width' => '85rem']],
     ], Address::fromString('layout:layout_twocol_section')));
     $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes['default.max-width']);
     $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes['default.padding']);
-    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes['::.band-content.default.max-width']);
+    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes['::.section-content.default.max-width']);
 
     // An undeclared layout degrades to the universal section declaration —
     // never an error, so a variant may ship before its layout's guide.

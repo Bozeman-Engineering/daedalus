@@ -65,16 +65,16 @@ test('captureScope mirrors the server vocabulary', () => {
   // address, a tag's base tag; a part, the children and a subjectless
   // compound land on no element scope.
   assert.equal(captureScope(`block:${UUID_A}::.quote`, blockTypes), null);
-  assert.equal(captureScope(`container:${UUID_A}::> pb-testimonial`, blockTypes), 'block_type:testimonial');
-  assert.equal(captureScope(`container:${UUID_A}::> pb-text > pb-container`), 'kind:container');
+  assert.equal(captureScope(`container:${UUID_A}::> d-testimonial`, blockTypes), 'block_type:testimonial');
+  assert.equal(captureScope(`container:${UUID_A}::> d-text > d-container`), 'kind:container');
   assert.equal(captureScope(`container:${UUID_A}::a`), 'base:a');
   assert.equal(captureScope(`container:${UUID_A}::> p + p`), 'base:p');
-  assert.equal(captureScope(`container:${UUID_A}::> pb-text .link`), null);
+  assert.equal(captureScope(`container:${UUID_A}::> d-text .link`), null);
   assert.equal(captureScope(`container:${UUID_A}::> *`), null);
-  assert.equal(captureScope(`container:${UUID_A}::> *:not(pb-image)`), null);
+  assert.equal(captureScope(`container:${UUID_A}::> *:not(d-image)`), null);
   // A generated box is no element scope, behind a type, a tag or the
   // owner's own anchor: no variant pairs at a pseudo rule.
-  assert.equal(captureScope(`container:${UUID_A}::> pb-testimonial::before`, blockTypes), null);
+  assert.equal(captureScope(`container:${UUID_A}::> d-testimonial::before`, blockTypes), null);
   assert.equal(captureScope(`container:${UUID_A}::a::after`), null);
   assert.equal(captureScope(`block:${UUID_A}::&::before`, blockTypes), null);
   // Sections scope per layout when the table resolves them, degrading to
@@ -132,10 +132,10 @@ test('scopeMatches: one family rule — kind wildcard, exact refinements', () =>
   assert.equal(scopeMatches('base:a', 'bogus'), false);
   // A rule pairs by its landing: a text variant wears at the text rule,
   // never the container's; nothing pairs at a part or the children.
-  assert.equal(scopeMatches('block_type:testimonial', `container:${UUID_A}::> pb-testimonial`), true);
-  assert.equal(scopeMatches('kind:block', `container:${UUID_A}::> pb-testimonial`), true);
-  assert.equal(scopeMatches('kind:container', `container:${UUID_A}::> pb-testimonial`), false);
-  assert.equal(scopeMatches('kind:container', `container:${UUID_A}::> pb-container`), true);
+  assert.equal(scopeMatches('block_type:testimonial', `container:${UUID_A}::> d-testimonial`), true);
+  assert.equal(scopeMatches('kind:block', `container:${UUID_A}::> d-testimonial`), true);
+  assert.equal(scopeMatches('kind:container', `container:${UUID_A}::> d-testimonial`), false);
+  assert.equal(scopeMatches('kind:container', `container:${UUID_A}::> d-container`), true);
   assert.equal(scopeMatches('base:a', `container:${UUID_A}::a`), true);
   assert.equal(scopeMatches('kind:block', `container:${UUID_A}::a`), false);
   assert.equal(scopeMatches('kind:container', `container:${UUID_A}::> *`), false);
@@ -211,7 +211,7 @@ test('blueprintProvenance resolves the nearest self-or-ancestor stamp', () => {
           kind: 'container',
           uuid: 'cccccccc-1111-2222-3333-444444444444',
           layout_id: 'layout_onecol',
-          blueprint: 'inner_band',
+          blueprint: 'inner_section',
           children: [{ kind: 'block', uuid: 'dddddddd-1111-2222-3333-444444444444', block_type: 'basic' }],
         },
       ],
@@ -225,8 +225,8 @@ test('blueprintProvenance resolves the nearest self-or-ancestor stamp', () => {
   // Part keys resolve through their root.
   assert.equal(blueprintProvenance(`block:${UUID_B}::.quote`, layout), 'cta_card');
   // A nested placement's own stamp shadows its ancestor's.
-  assert.equal(blueprintProvenance('container:cccccccc-1111-2222-3333-444444444444', layout), 'inner_band');
-  assert.equal(blueprintProvenance('block:dddddddd-1111-2222-3333-444444444444', layout), 'inner_band');
+  assert.equal(blueprintProvenance('container:cccccccc-1111-2222-3333-444444444444', layout), 'inner_section');
+  assert.equal(blueprintProvenance('block:dddddddd-1111-2222-3333-444444444444', layout), 'inner_section');
   // Unstamped, unknown, and treeless selections read as unprovenanced.
   assert.equal(blueprintProvenance('container:eeeeeeee-1111-2222-3333-444444444444', layout), null);
   assert.equal(blueprintProvenance('container:ffffffff-1111-2222-3333-444444444444', layout), null);
@@ -299,31 +299,32 @@ test('elementEntries extracts element-relative custom entries only', () => {
 });
 
 test('continuedKey and relativeUnder: an element appends its relatives, a rule continues them by descent', () => {
-  const RULE = `container:${UUID_A}::> pb-text`;
+  const RULE = `container:${UUID_A}::> d-text`;
   assert.equal(continuedKey(KEY, ''), KEY);
   assert.equal(continuedKey(KEY, '::.x'), `${KEY}::.x`);
   assert.equal(continuedKey(RULE, ''), RULE);
   assert.equal(continuedKey(RULE, '::.x'), `${RULE} .x`);
-  assert.equal(continuedKey(RULE, '::> pb-image'), `${RULE} > pb-image`);
-  // A suffix the grammar refuses under the rule (a class after a tag).
-  assert.equal(continuedKey(`container:${UUID_A}::a`, '::.icon'), null);
+  assert.equal(continuedKey(RULE, '::> d-image'), `${RULE} > d-image`);
+  // A class continues a tag rule by descent too (a class qualifies any
+  // compound).
+  assert.equal(continuedKey(`container:${UUID_A}::a`, '::.icon'), `container:${UUID_A}::a .icon`);
   assert.equal(relativeUnder(KEY, `${KEY}::.x`), '::.x');
   assert.equal(relativeUnder(KEY, KEY), null);
   assert.equal(relativeUnder(KEY, `${KEY}:field_x`), null);
   assert.equal(relativeUnder(RULE, `${RULE} .x`), '::.x');
-  assert.equal(relativeUnder(RULE, `${RULE} > pb-image`), '::> pb-image');
+  assert.equal(relativeUnder(RULE, `${RULE} > d-image`), '::> d-image');
   assert.equal(relativeUnder(RULE, RULE), null);
-  assert.equal(relativeUnder(RULE, `container:${UUID_A}::> pb-image`), null);
+  assert.equal(relativeUnder(RULE, `container:${UUID_A}::> d-image`), null);
   assert.equal(relativeUnder(RULE, `container:${UUID_A}`), null);
 });
 
 test('elementEntries at a rule key: the rule\'s entry and its continuations by descent', () => {
-  const RULE = `container:${UUID_A}::> pb-text`;
+  const RULE = `container:${UUID_A}::> d-text`;
   const ruleMap = {
     [`container:${UUID_A}`]: { default: { padding: '1rem' } },
     [RULE]: { variants: [{ variant: 'gritty', fragment: '' }], default: { color: 'red' } },
     [`${RULE} .quote`]: { default: { 'font-style': 'italic' } },
-    [`container:${UUID_A}::> pb-image`]: { default: { margin: '0' } },
+    [`container:${UUID_A}::> d-image`]: { default: { margin: '0' } },
   };
   assert.deepEqual(elementEntries(ruleMap, RULE), {
     '': { default: { color: 'red' } },
@@ -508,7 +509,7 @@ test('capture: the root is overrides-only, children keep refs as refs', () => {
 });
 
 test('capture keeps a rule entry\'s references as refs, own and children\'s, the origin stripped', () => {
-  // A rule's wear is part of the look: the section's `> pb-text` rule
+  // A rule's wear is part of the look: the section's `> d-text` rule
   // wears "card" (delivered at every text child), a child's `> a` rule
   // wears "link". Both travel as the captured '::selector' entry's
   // reference list beside its overrides, exactly as a child's root
@@ -516,7 +517,7 @@ test('capture keeps a rule entry\'s references as refs, own and children\'s, the
   // a fragment reference at a rule never travels.
   const subtreeMap = {
     [`container:${SEC}`]: { variants: [{ variant: 'hero', fragment: '' }], default: { padding: '0' } },
-    [`container:${SEC}::> pb-text`]: {
+    [`container:${SEC}::> d-text`]: {
       variants: [{ variant: 'card', fragment: '', via: 'hero' }, { variant: 'hero', fragment: 'block(text,1)' }],
       default: { margin: '0' },
     },
@@ -525,19 +526,19 @@ test('capture keeps a rule entry\'s references as refs, own and children\'s, the
   };
   assert.deepEqual(captureEntries(subtreeMap, `container:${SEC}`, layout), {
     '': { default: { padding: '0' } },
-    '::> pb-text': { variants: [{ variant: 'card', fragment: '' }], default: { margin: '0' } },
+    '::> d-text': { variants: [{ variant: 'card', fragment: '' }], default: { margin: '0' } },
     '::p': { variants: [{ variant: 'prose', fragment: '' }] },
     'block(text,2)::> a': { variants: [{ variant: 'link', fragment: '' }], default: { color: 'teal' } },
   });
   assert.deepEqual(captureSources(subtreeMap, `container:${SEC}`, layout).own.map(({ key, entry }) => [key, entry.variants ?? null]), [
     [`container:${SEC}`, null],
-    [`container:${SEC}::> pb-text`, [{ variant: 'card', fragment: '' }]],
+    [`container:${SEC}::> d-text`, [{ variant: 'card', fragment: '' }]],
     [`container:${SEC}::p`, [{ variant: 'prose', fragment: '' }]],
   ]);
   // elementEntries stays the values-only read.
   assert.deepEqual(elementEntries(subtreeMap, `container:${SEC}`), {
     '': { default: { padding: '0' } },
-    '::> pb-text': { default: { margin: '0' } },
+    '::> d-text': { default: { margin: '0' } },
   });
 });
 
@@ -616,8 +617,8 @@ test('capture keeps every selector but instance parts (structure transfers)', ()
     [`block:${T2}::> *`]: { default: { gap: '1rem' } },
     [`block:${T2}::.s-a3`]: { default: { color: 'teal' } },
     [`container:${SEC}`]: { default: { padding: '0' } },
-    [`container:${SEC}::> pb-text`]: { default: { color: 'navy' } },
-    [`container:${SEC}::> pb-text .s-b4`]: { default: { color: 'olive' } },
+    [`container:${SEC}::> d-text`]: { default: { color: 'navy' } },
+    [`container:${SEC}::> d-text .s-b4`]: { default: { color: 'olive' } },
   };
   assert.deepEqual(captureEntries(map, `block:${T2}`, layout), {
     '': { default: { margin: '0' } },
@@ -627,7 +628,7 @@ test('capture keeps every selector but instance parts (structure transfers)', ()
   });
   assert.deepEqual(captureEntries(map, `container:${SEC}`, layout), {
     '': { default: { padding: '0' } },
-    '::> pb-text': { default: { color: 'navy' } },
+    '::> d-text': { default: { color: 'navy' } },
     'block(text,2)': { default: { margin: '0' } },
     'block(text,2)::p': { default: { 'font-size': '1.25rem' } },
     'block(text,2)::ul > *': { default: { color: 'red' } },
@@ -789,7 +790,7 @@ test('captureSources at a rule key: the entry and its continuations by descent, 
   // descent, at the relatives delivery prints them; a sibling rule and
   // the subtree's elements are not the rule's (a variant is saved from
   // an element, so direct is empty).
-  const rule = `container:${SEC}::> pb-text`;
+  const rule = `container:${SEC}::> d-text`;
   const map = {
     [rule]: { variants: [{ variant: 'card', fragment: '' }], default: { margin: '0' } },
     [`${rule} .quote`]: { variants: [{ variant: 'prose', fragment: '', via: 'card' }], default: { color: 'navy' } },
@@ -805,7 +806,7 @@ test('captureSources at a rule key: the entry and its continuations by descent, 
 });
 
 test('shadowClearingOps at a rule anchor retires the rule\'s redundant overrides and its continuations\'', () => {
-  const rule = `container:${SEC}::> pb-text`;
+  const rule = `container:${SEC}::> d-text`;
   const look = {
     id: 'text_look',
     group: 'style',
@@ -1050,10 +1051,10 @@ test('axisVocabulary at a rule key reads the landing\'s vocabulary, root-only ax
     base: { p: { axes: axesOf(['style', 'prose']) } },
   };
   // A type chain lands on the type's own declaration.
-  assert.deepEqual(axisVocabulary(guide, `container:${UUID_A}::> pb-text`, blockTypes, sectionLayouts), ['style', 'emphasis']);
+  assert.deepEqual(axisVocabulary(guide, `container:${UUID_A}::> d-text`, blockTypes, sectionLayouts), ['style', 'emphasis']);
   // A container rule lands on kind:container: root-only axes never offer
   // at a rule (its matches are never top-level).
-  assert.deepEqual(axisVocabulary(guide, `container:${UUID_A}::> pb-container`, blockTypes, sectionLayouts), ['style', 'container_layout']);
+  assert.deepEqual(axisVocabulary(guide, `container:${UUID_A}::> d-container`, blockTypes, sectionLayouts), ['style', 'container_layout']);
   // A tag tier lands on the base tag's declaration.
   assert.deepEqual(axisVocabulary(guide, `block:${UUID_A}::p`, blockTypes, sectionLayouts), ['style', 'prose']);
   // A part lands on no element scope: its root's vocabulary, as before.
@@ -1070,13 +1071,13 @@ test('axisDescription and axisOwns read the served axis facts, null and [] other
       layout_twocol_section: {
         axes: {
           style: { label: null, root_only: false, description: null, owns: [] },
-          width: { label: 'Width', root_only: true, description: 'The band\'s content column.', owns: ['padding-left', 'padding-right'] },
+          width: { label: 'Width', root_only: true, description: 'The section\'s content column.', owns: ['padding-left', 'padding-right'] },
         },
       },
     },
     blockTypes: { testimonial: { axes: axesOf(['style', 'emphasis']) } },
   };
-  assert.equal(axisDescription(guide, `container:${UUID_A}`, 'width', blockTypes, sectionLayouts), 'The band\'s content column.');
+  assert.equal(axisDescription(guide, `container:${UUID_A}`, 'width', blockTypes, sectionLayouts), 'The section\'s content column.');
   assert.deepEqual(axisOwns(guide, `container:${UUID_A}`, 'width', blockTypes, sectionLayouts), ['padding-left', 'padding-right']);
   // Sub-element keys read their root's axes.
   assert.deepEqual(axisOwns(guide, `container:${UUID_A}::.daedalus-stylish-layout-container`, 'width', blockTypes, sectionLayouts), ['padding-left', 'padding-right']);

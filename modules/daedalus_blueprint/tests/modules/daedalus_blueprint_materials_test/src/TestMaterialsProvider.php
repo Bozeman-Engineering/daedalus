@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint_materials_test;
 
 use Drupal\Core\Cache\CacheableMetadata;
+use Drupal\Core\Cache\CacheTagsInvalidatorInterface;
 use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialGestureException;
@@ -22,9 +23,38 @@ use Drupal\daedalus_blueprint\Result\BlueprintError;
  * recording fake: every capture / update / remove lands on the static
  * $gestures log with the arguments the op handler dispatched, so the spine's
  * dispatch (kind routing, alias resolution, origin stamping) is observable
- * without a real material entity behind it.
+ * without a real material entity behind it. One key is honored for real:
+ * an update carrying `offered` flips the record's flag in the static set
+ * and announces the write the way a real provider's entity hook does
+ * (its list tag invalidated, the roster memo dropped), after the AI
+ * context budget's guard on a share (MaterialsBudget::assertRoom(), the
+ * real providers' requireRoom()), so a surface that writes the sharing
+ * flag through the providers (the design system size form) is testable
+ * over this fixture: the next roster build and reading see the flip.
  */
 final class TestMaterialsProvider implements MaterialsProviderInterface {
+
+  /**
+   * The list tag every record of this provider rides.
+   */
+  public const CACHE_TAG = 'materials_test_list';
+
+  /**
+   * Constructs the fixture.
+   *
+   * @param \Closure $budget
+   *   The AI context budget, lazily (it collects the weight sources,
+   *   which read the roster this provider feeds: circular otherwise).
+   * @param \Closure $rosterBuilder
+   *   The roster builder, lazily (it collects this provider).
+   * @param \Drupal\Core\Cache\CacheTagsInvalidatorInterface $cacheTagsInvalidator
+   *   The invalidator a write announces itself through.
+   */
+  public function __construct(
+    private readonly \Closure $budget,
+    private readonly \Closure $rosterBuilder,
+    private readonly CacheTagsInvalidatorInterface $cacheTagsInvalidator,
+  ) {}
 
   /**
    * An override for the record set, or NULL for the reference set.
@@ -43,6 +73,14 @@ final class TestMaterialsProvider implements MaterialsProviderInterface {
    * @var array<string, string>|null
    */
   public static ?array $gestureLines = NULL;
+
+  /**
+   * An override for the mint posture: a closed-lane sentence, or NULL.
+   *
+   * The fixture gates no lane itself; a test closing one sets the
+   * sentence here and pins where the brief states it.
+   */
+  public static ?string $mintPosture = NULL;
 
   /**
    * How many times records() ran, so memoization is observable.
@@ -69,8 +107,15 @@ final class TestMaterialsProvider implements MaterialsProviderInterface {
    */
   public function cacheMetadata(): CacheableMetadata {
     return (new CacheableMetadata())
-      ->addCacheTags(['materials_test_list'])
+      ->addCacheTags([self::CACHE_TAG])
       ->addCacheContexts(['user.permissions']);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function reset(): void {
+    // Nothing to forget: records() answers from the static set directly.
   }
 
   /**
@@ -78,9 +123,16 @@ final class TestMaterialsProvider implements MaterialsProviderInterface {
    */
   public function gestureLines(): array {
     return self::$gestureLines ?? [
-      MaterialKind::Swatch->value => 'value',
+      MaterialKind::Token->value => 'value',
       MaterialKind::Blueprint->value => 'element',
     ];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function mintPosture(): ?string {
+    return self::$mintPosture;
   }
 
   /**
@@ -104,10 +156,46 @@ final class TestMaterialsProvider implements MaterialsProviderInterface {
 
   /**
    * {@inheritdoc}
+   *
+   * Records the dispatch; an `offered` key is honored (see the class doc).
    */
   public function update(MaterialKind $kind, string $id, array $operation, ?HostInterface $host, array $options): MaterialGestureResult {
     $this->record('update', $kind, $id, $operation, $host, $options);
+    if (array_key_exists('offered', $operation)) {
+      $this->flipOffered($kind, $id, $operation['offered']);
+    }
     return new MaterialGestureResult($kind, $id);
+  }
+
+  /**
+   * Flips a record's `offered` in the static set and announces the write.
+   *
+   * A share (the flag turning on while stored off) answers the budget
+   * first, as every real provider's update does; a withhold never does.
+   *
+   * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
+   *   AI_CONTEXT_FULL from the guard; NOT_FOUND for an id the set lacks.
+   */
+  private function flipOffered(MaterialKind $kind, string $id, bool $offered): void {
+    $records = self::$records ?? self::referenceRecords();
+    foreach ($records as $index => $record) {
+      if ($record->kind !== $kind || $record->id !== $id) {
+        continue;
+      }
+      if ($offered && !$record->offered) {
+        ($this->budget)()->assertRoom('offered');
+      }
+      // Every constructor parameter is a public property of the same
+      // name, so the record rebuilds from its own fields with one changed.
+      $records[$index] = new MaterialRecord(...[...get_object_vars($record), 'offered' => $offered]);
+      self::$records = $records;
+      $this->cacheTagsInvalidator->invalidateTags([self::CACHE_TAG]);
+      ($this->rosterBuilder)()->reset();
+      return;
+    }
+    throw new MaterialGestureException([
+      new BlueprintError('id', 'NOT_FOUND', sprintf('No %s named "%s".', $kind->noun(), $id), [], 'Name a material on the roster.'),
+    ]);
   }
 
   /**
@@ -154,12 +242,12 @@ final class TestMaterialsProvider implements MaterialsProviderInterface {
         origin: MaterialRecord::ORIGIN_SHIPPED,
       ),
       new MaterialRecord(
-        kind: MaterialKind::Swatch,
-        id: 'lime_green',
-        label: 'Lime green',
+        kind: MaterialKind::Token,
+        id: 'color/lime-green',
+        label: 'lime-green',
         value: '#4dff8c',
         group: 'color',
-        spellings: [MaterialRecord::SLOT_STYLE => 'var(--swatch-lime_green)'],
+        spellings: [MaterialRecord::SLOT_STYLE => 'var(--color-lime-green)'],
       ),
       new MaterialRecord(
         kind: MaterialKind::Variant,

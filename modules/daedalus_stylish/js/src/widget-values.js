@@ -28,7 +28,7 @@
  *   canonical value.
  * - `label` is an untranslated string; components wrap it in Drupal.t()
  *   (this module runs under node where Drupal.t does not exist).
- * - `paint` (stopsFor-derived stops) is the display value a swatch face
+ * - `paint` (stopsFor-derived stops) is the display value a token face
  *   paints, straight from the material record — never a var() the browser
  *   would have to resolve. Stops without it paint their `value` (Segments).
  * - `paintDark` (stopsFor-derived stops) is the scheme-paired display value beside
@@ -41,10 +41,9 @@ import {
   animationOptions,
   materialOf,
   scaleTokens,
-  swatchOptions,
   tokenOptions,
 } from './materials.js';
-import { scaleRow } from './style-guide.js';
+import { offeredToken, scaleRow } from './style-guide.js';
 
 /**
  * Normalizes a committed value for stop matching.
@@ -120,7 +119,7 @@ const positionAxis = (orientation, property, write) => ({
  *
  * In a flex container free space on the main axis goes to auto margins
  * before justify-content (CSS Flexbox 8.1), so `margin-bottom: auto`
- * pins a stacked child to the top of a tall band, `margin-top: auto` to
+ * pins a stacked child to the top of a tall section, `margin-top: auto` to
  * its bottom, and both center it. No single child property says this
  * (justify-self is ignored by flex), so the axis writes the PAIR: each
  * stop's pair (MARGIN_PAIRS, by stop id) is what a pick sets on the two
@@ -374,18 +373,18 @@ export const parentAlignment = (parent, localValue, stops) => {
 export const textGate = (self) => !self || self.hasText;
 
 /**
- * A material reference as a stop: the swatch chip commits the record's
+ * A material reference as a stop: the token chip commits the record's
  * style spelling (its var() reference, as the value grammar spells it).
  *
  * The stop honestly represents ONLY the reference spelling — a literal
  * equal to the material's current resolution is a different statement
- * (it will not track a swatch edit or a skin swap), so it stays custom.
+ * (it will not track a token edit or a skin swap), so it stays custom.
  * `paint` carries the display value straight from the record: the face
  * never relies on var() resolution, because the panel DOM may sit outside
  * the token scope; `paintDark` is its scheme pair (null for single-valued
- * materials), same rule. `group` is the palette-side grouping label (a
- * scale's label, a swatch kind's label) the swatch-well popover sections
- * by; flat renderers ignore it.
+ * materials), same rule. `group` is the palette-side grouping label (the
+ * scale's label) the token-well popover sections by; flat renderers
+ * ignore it.
  */
 const referenceStop = (ref, label, paint, paintDark = null, group = null) => ({
   id: ref,
@@ -404,7 +403,7 @@ const referenceStop = (ref, label, paint, paintDark = null, group = null) => ({
  * verbatim on both validators). A literal paints as itself; an allowed
  * entry that is itself a material reference (a var() the guide curated
  * into the list, the grammar's whole-value read) paints from the
- * referenced token's or swatch's display value (scheme pair included),
+ * referenced token's display value (scheme pair included),
  * same no-resolution rule as everywhere. A plain literal never carries a
  * pair: it is one value under every scheme. A value a `fallback` stop
  * honestly represents adopts that stop's id, label and aliases (an
@@ -423,7 +422,7 @@ const literalStop = (guide, materials, raw, fallback = []) => {
   if (material !== null) {
     paint = material.value;
     paintDark = material.valueDark;
-    label = material.record.kind === 'swatch' ? material.label : material.name;
+    label = material.name;
   } else {
     const twin = fallback.find((stop) => stop.matches.includes(normalized));
     if (twin) {
@@ -491,7 +490,8 @@ const dedupe = (stops) => {
  * - No constraint: the fallback argument stands, identically (the
  *   property's one built-in vocabulary, fallbackFor — the deliberate
  *   zero-config offer on sites that declare none, or the materials
- *   store's color/gradient swatches for color- and image-shaped rows).
+ *   store's offered color/gradient tokens for color- and image-shaped
+ *   rows).
  *   Callers derive it through propertyStops, never hand a table of
  *   their own.
  * Equivalent spellings collapse into the first occurrence, so a
@@ -555,16 +555,18 @@ export const stopsFor = (guide, materials, constraints, fallback) => {
  * the gradient builder's stop-color offer).
  *
  * The materials roster is the one color vocabulary (the hardcoded neutral
- * tables died with it): color-shaped skin tokens first (roster order:
- * scale declaration order, labeled by token name — the face paints the
- * value, so a `name · value` label would say it twice), then color-kind
- * swatches (labeled by swatch label), each stop committing its style
- * spelling and lit by the reference spelling only. Every stop carries
+ * tables died with it): the OFFERED tokens of every color-shaped scale,
+ * roster order (scale declaration order, then the skin's authoring order;
+ * labeled by token name — the face paints the value, so a `name · value`
+ * label would say it twice), each stop committing its style spelling and
+ * lit by the reference spelling only. The offered flag is the skin's
+ * per-token curation (the same flag scaleRow reads on a bound row), so a
+ * token withheld there leaves the unbound rows too. Every stop carries
  * `paint` from record data (Segments' faces never resolve var()) and
  * `paintDark`, its scheme pair (null when the material is single-valued
  * — those faces stay whole); equivalent spellings collapse into the first
  * occurrence. No materials means no stops — the honest empty vocabulary;
- * committed values still render as the custom pill. A swatch minted
+ * committed values still render as the custom pill. A token minted
  * mid-session is here the moment the store learns it: the row derives per
  * render from the roster it is handed.
  *
@@ -577,35 +579,15 @@ export const stopsFor = (guide, materials, constraints, fallback) => {
  *   label: string, paint: string, paintDark: ?string}>}
  */
 export const paletteFallback = (guide, materials) =>
-  dedupe([
-    ...tokenOptions(guide, materials, ['color']).map((token) =>
-      referenceStop(
-        token.ref,
-        token.name,
-        token.value,
-        token.valueDark,
-        token.scaleLabel,
-      ),
-    ),
-    ...swatchOptions(guide, materials, ['color']).map((swatch) =>
-      referenceStop(
-        swatch.ref,
-        swatch.label,
-        swatch.value,
-        swatch.valueDark,
-        swatch.kindLabel,
-      ),
-    ),
-  ]);
+  shapeFallback(guide, materials, 'color');
 
 /**
- * The <image> rows' unconstrained vocabulary: every gradient-kind swatch
- * as a reference stop, roster (label) order — fallbackFor's answer for a
- * free <image> definition (imageSlot), and the unconstrained tier of the color
- * widgets' gradient row (widget-gradients.js gradientStops). No token
- * scale shape maps onto images, so swatches are the whole offer; a
- * gradient swatch minted mid-session is here the moment the store learns
- * it.
+ * The <image> rows' unconstrained vocabulary: the OFFERED tokens of every
+ * gradient-shaped scale as reference stops, roster order — fallbackFor's
+ * answer for a free <image> definition (imageSlot), and the unconstrained
+ * tier of the color widgets' gradient row (widget-gradients.js
+ * gradientStops). A gradient token minted mid-session is here the moment
+ * the store learns it.
  *
  * @param {?object} guide
  *   The style guide payload (drupalSettings.daedalusStylish.guide).
@@ -616,16 +598,24 @@ export const paletteFallback = (guide, materials) =>
  *   label: string, paint: string, paintDark: ?string, group: string}>}
  */
 export const gradientFallback = (guide, materials) =>
+  shapeFallback(guide, materials, 'gradient');
+
+/**
+ * The offered tokens of every scale of one shape, as reference stops.
+ */
+const shapeFallback = (guide, materials, shape) =>
   dedupe(
-    swatchOptions(guide, materials, ['gradient']).map((swatch) =>
-      referenceStop(
-        swatch.ref,
-        swatch.label,
-        swatch.value,
-        swatch.valueDark,
-        swatch.kindLabel,
+    tokenOptions(guide, materials, [shape])
+      .filter(offeredToken)
+      .map((token) =>
+        referenceStop(
+          token.ref,
+          token.name,
+          token.value,
+          token.valueDark,
+          token.scaleLabel,
+        ),
       ),
-    ),
   );
 
 /**
@@ -636,7 +626,7 @@ export const gradientFallback = (guide, materials) =>
  * `animation_name` type. The stop's value IS the spelling (a keyframes
  * name is a plain ident the browser reads as written, no var() to
  * resolve), labeled by the animation's label; the paint is the spelling
- * too, since motion has no face a swatch could show. No group: nothing
+ * too, since motion has no face a token could show. No group: nothing
  * grids these stops. An animation minted mid-session is here the moment
  * the store learns it.
  *
@@ -703,7 +693,7 @@ export const boundChildCount = (self, element) => {
  * The gap widget's gate: whether the BOUND element lays out more than one
  * child box. Gap exists only between siblings, so on the page's layout
  * root (the entity kind's `gap` control bound to `.daedalus-layout-layout`) a
- * one-band page hides the row; unknown degrades to offering like every
+ * one-section page hides the row; unknown degrades to offering like every
  * gate. Reads the bound part's OWN children, never the selection's: the
  * selection is the entity root, whose one child box is the layout root
  * itself. The registry's value-set override (a committed gap keeps the
@@ -1115,10 +1105,10 @@ const keywordStops = (keywords) =>
  *
  * The offer follows the type; the media flag adds the picker. A media
  * definition whose type leaves the value free (background-image, type
- * text) takes anything an <image> can be, so the gradient swatches, the
- * gradient builder and every swatch kind offer beside the media picker.
+ * text) takes anything an <image> can be, so the gradient tokens, the
+ * gradient builder and the palette offer beside the media picker.
  * A keyword-typed media definition (content: `""`, `none` or exactly one
- * media token) takes no gradient and no swatch reference the server
+ * media token) takes no gradient and no token reference the server
  * would accept, so its offer is its keywords plus the picker alone: a
  * stop the server refuses is a lie in the row. Read by fallbackFor, the
  * code view's token completions and the advanced row's gradient half.
@@ -1145,9 +1135,9 @@ export const imageSlot = (definition) =>
  *   open. Judged before the media branch so a keyword-typed media
  *   property (content) offers `""` and `none`, never a gradient the
  *   server refuses there (imageSlot).
- * - A free <image> definition offers the store's gradient swatches
+ * - A free <image> definition offers the store's offered gradient tokens
  *   (gradientFallback); a color-shaped one the whole color palette
- *   (paletteFallback) — so a swatch minted mid-session appears in every
+ *   (paletteFallback) — so a token minted mid-session appears in every
  *   color and image space at once, in both modes.
  * - A keyframes-name definition (`animation_name`) offers the store's
  *   animations by their motion-{name} spellings plus its keywords

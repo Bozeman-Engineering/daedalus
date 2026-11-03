@@ -63,7 +63,7 @@ use Drupal\daedalus_blueprint\Result\BlueprintResult;
  * overridable: HostResolver::foreignOwner() names the template's host)
  * owns only the slots its template places, so its starts are fills: a
  * page blueprint whose every root is a slot section (`slot` on the
- * tree's top-level containers, <pb-slot name="id"> in the dialect) of a
+ * tree's top-level containers, <d-slot name="id"> in the dialect) of a
  * slot the template declares (CanvasOffer::fillsSlots(), the offer's
  * one extra condition at page scope) lands those fills in the page's
  * own document, under the lock, exactly as an editor fills the slots on
@@ -315,7 +315,7 @@ final class PageStart {
           code: 'BLUEPRINT_WRONG_SCOPE',
           message: sprintf('Blueprint "%s" is a block blueprint: one container placed into a page, never a page\'s start.', $start),
           context: ['blueprint' => $start, 'scope' => $record->blueprintScope],
-          hint: 'Start the page from a page blueprint, blank or template, then place the block blueprint into it with place_blueprint (the page language\'s <pb-blueprint>, the Add panel).',
+          hint: 'Start the page from a page blueprint, blank or template, then place the block blueprint into it with place_blueprint (the page language\'s <d-blueprint>, the Add panel).',
         ),
       ]);
     }
@@ -356,7 +356,7 @@ final class PageStart {
           code: 'BLUEPRINT_DOES_NOT_FIT',
           message: sprintf('Blueprint "%s" does not fit this %s: a page of this bundle owns only the slots its template places (%s), and the blueprint is not a set of fills of them.', $start, $subject, $slots === [] ? 'none' : implode(', ', $slots)),
           context: ['blueprint' => $start, 'subject' => $subject, 'slots' => $slots],
-          hint: sprintf('Start from %s, or from a page blueprint whose every top-level section is a <pb-slot name="..."> filling one of those slots (its schema read lists them under starts); a whole page document starts a page of a bundle whose display allows each page its own layout.', self::TEMPLATE),
+          hint: sprintf('Start from %s, or from a page blueprint whose every top-level section is a <d-slot name="..."> filling one of those slots (its schema read lists them under starts); a whole page document starts a page of a bundle whose display allows each page its own layout.', self::TEMPLATE),
         ),
       ]);
     }

@@ -25,7 +25,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * as install config, then every package lane (the system's content
  * blueprints graduate into blueprint files with their variants; the
  * module's per-id material files are rebuilt from the site and the
- * system's unshipped fonts, animations, swatches, skins and variants
+ * system's unshipped fonts, animations, skins and variants
  * adopted).
  * A module that does not exist is created under --dir and installed
  * first. One line per entry in the sync command's grammar

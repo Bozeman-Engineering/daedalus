@@ -8,6 +8,7 @@ use Drupal\daedalus_blueprint\LayoutBuilder\FieldBlock;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\ValueKind;
 use Drupal\daedalus_blueprint\Materials\ValueReference;
 use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
@@ -33,7 +34,7 @@ final class DialectWalk {
    *
    * Id is identity, class and style are wear and look, blueprint is
    * placement provenance (the blueprint the element was placed from, an
-   * identity fact the print carries and the write keeps). <pb-blueprint>
+   * identity fact the print carries and the write keeps). <d-blueprint>
    * takes id and name only: a reference is not a placement.
    */
   public const GLOBAL_ATTRS = ['id', 'class', 'style', 'blueprint'];
@@ -45,31 +46,57 @@ final class DialectWalk {
    * word the editor's tree, chips and panels call the section by
    * (layout_settings.label, the same slot update_element {label} takes).
    * Container-only: a block's name is derived from its content and is
-   * not renamable, so <pb-text name="..."> is ILLEGAL_ATTR. On
-   * <pb-blueprint> the same spelling names the blueprint to place, a
+   * not renamable, so <d-text name="..."> is ILLEGAL_ATTR. On
+   * <d-blueprint> the same spelling names the blueprint to place, a
    * different attribute (blueprintReference()).
    */
   public const NAME_ATTR = 'name';
 
   /**
+   * The plain container's tag.
+   *
+   * The selector grammar's container type is the same word (a type
+   * compound names the element as the page language spells it), so the
+   * tag is the grammar's constant, itself built from the prefix.
+   */
+  public const CONTAINER_TAG = RelativeSelector::TYPE_CONTAINER;
+
+  /**
+   * The generic block form's tag: <d-block field|plugin|type>.
+   *
+   * The grammar's block type, as CONTAINER_TAG is its container type.
+   */
+  public const BLOCK_TAG = RelativeSelector::TYPE_BLOCK;
+
+  /**
+   * The blueprint reference's tag: <d-blueprint name="id" />.
+   */
+  public const BLUEPRINT_TAG = RelativeSelector::TYPE_PREFIX . 'blueprint';
+
+  /**
+   * The generic block form's field child: <d-field name="x">value</d-field>.
+   */
+  public const FIELD_TAG = RelativeSelector::TYPE_PREFIX . 'field';
+
+  /**
    * The slot section's tag: a top-level container filling a slot.
    *
-   * <pb-slot name="hero"> is the container form of a section tagged with
+   * <d-slot name="hero"> is the container form of a section tagged with
    * the slot id it fills (the serializer's `slot` key on a top-level
    * container); name is the slot id there, a birth fact the op door
    * judges, never the section's label. Top level only: a slot section is
    * one of the document's own root containers.
    */
-  public const SLOT_TAG = 'pb-slot';
+  public const SLOT_TAG = RelativeSelector::TYPE_PREFIX . 'slot';
 
   /**
    * The linked placement's tag.
    *
-   * <pb-linked blueprint="header"/> is a blueprint shown by reference (the
+   * <d-linked blueprint="header"/> is a blueprint shown by reference (the
    * lean tree's {kind: linked, blueprint}): one block node whose content is
    * the blueprint's own document, rendered live where the node sits.
    */
-  public const LINKED_TAG = 'pb-linked';
+  public const LINKED_TAG = RelativeSelector::TYPE_PREFIX . 'linked';
 
   /**
    * The linked placement's one attribute of its own: the blueprint it shows.
@@ -79,7 +106,7 @@ final class DialectWalk {
   /**
    * The container tags: the plain container and the slot section.
    */
-  public const CONTAINER_TAGS = ['pb-container', self::SLOT_TAG];
+  public const CONTAINER_TAGS = [self::CONTAINER_TAG, self::SLOT_TAG];
 
   /**
    * The structural errors found while walking.
@@ -134,27 +161,27 @@ final class DialectWalk {
       $this->errors[] = new DialectError('UNPREFIXED_TAG', sprintf('<%s> is missing the dialect prefix; write <%s>', $tag, $pb_form), $el->line);
       return NULL;
     }
-    if ($tag === 'pb-container') {
+    if ($tag === self::CONTAINER_TAG) {
       return $this->container($el, $depth);
     }
     if ($tag === self::SLOT_TAG) {
       if ($depth > 0) {
-        $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('<%s> belongs at the top level of the document: a slot section fills a slot of the document around this one and never nests', self::SLOT_TAG), $el->line, [], 'Write <pb-container> for a nested grouping; <pb-slot name="..."> is one of the page\'s own top-level containers.');
+        $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('<%s> belongs at the top level of the document: a slot section fills a slot of the document around this one and never nests', self::SLOT_TAG), $el->line, [], 'Write <d-container> for a nested grouping; <d-slot name="..."> is one of the page\'s own top-level containers.');
         return NULL;
       }
       return $this->container($el, $depth, TRUE);
     }
-    if ($tag === 'pb-block') {
+    if ($tag === self::BLOCK_TAG) {
       return $this->pluginOrGenericBlock($el, $depth);
     }
-    if ($tag === 'pb-blueprint') {
+    if ($tag === self::BLUEPRINT_TAG) {
       return $this->blueprintReference($el, $depth);
     }
     if ($tag === self::LINKED_TAG) {
       return $this->linkedPlacement($el, $depth);
     }
-    if ($tag === 'pb-field') {
-      $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', '<pb-field> is legal only inside <pb-block type=...> or a structured field context', $el->line);
+    if ($tag === self::FIELD_TAG) {
+      $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', '<d-field> is legal only inside <d-block type=...> or a structured field context', $el->line);
       return NULL;
     }
     $block_type = DialectCatalog::blockTypeForTag($tag);
@@ -162,27 +189,27 @@ final class DialectWalk {
       $tags = array_map([DialectCatalog::class, 'tagForBlockType'], array_keys($this->catalog->blockTypes()));
       $this->errors[] = new DialectError('UNKNOWN_TAG', sprintf('<%s> is not in the catalog', $tag), $el->line, [
         'tag' => $tag,
-        'elements' => array_merge(['pb-container', self::SLOT_TAG], $tags, [
-          'pb-block',
-          'pb-blueprint',
+        'elements' => array_merge([self::CONTAINER_TAG, self::SLOT_TAG], $tags, [
+          self::BLOCK_TAG,
+          self::BLUEPRINT_TAG,
           self::LINKED_TAG,
         ]),
-      ], sprintf('Elements: <pb-container>, <%s>, %s, <pb-block>, <pb-blueprint>, <%s>.', self::SLOT_TAG, implode(', ', array_map(static fn (string $t): string => '<' . $t . '>', $tags)), self::LINKED_TAG));
+      ], sprintf('Elements: <d-container>, <%s>, %s, <d-block>, <d-blueprint>, <%s>.', self::SLOT_TAG, implode(', ', array_map(static fn (string $t): string => '<' . $t . '>', $tags)), self::LINKED_TAG));
       return NULL;
     }
     return $this->declaredBlock($el, $block_type, $depth);
   }
 
   /**
-   * Builds a container node: <pb-container>, or the slot form <pb-slot>.
+   * Builds a container node: <d-container>, or the slot form <d-slot>.
    *
    * Both forms take the same attributes; name is the section's label on
-   * <pb-container> and the slot id on <pb-slot> (required there, landed
+   * <d-container> and the slot id on <d-slot> (required there, landed
    * on the node's `slot` key; a slot section's label has no spelling,
    * the slot being the word it is called by).
    */
   private function container(RawElement $el, int $depth, bool $slot = FALSE): array {
-    $tag = $slot ? self::SLOT_TAG : 'pb-container';
+    $tag = $slot ? self::SLOT_TAG : self::CONTAINER_TAG;
     $node = ['kind' => 'container', 'layout_id' => $this->catalog->containerLayoutId()];
     $worn = [];
     $axis_values = [];
@@ -225,14 +252,14 @@ final class DialectWalk {
       $this->errors[] = self::illegalAttr($name, $tag, $legal, $el->line);
     }
     if ($slot && !isset($node['slot'])) {
-      $this->errors[] = new DialectError('ILLEGAL_ATTR', sprintf('<%s> needs name="..." (the id of the slot it fills)', self::SLOT_TAG), $el->line, ['attribute' => self::NAME_ATTR, 'legal' => $legal], 'A slot section names the slot the document around this one placed: <pb-slot name="hero">.');
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', sprintf('<%s> needs name="..." (the id of the slot it fills)', self::SLOT_TAG), $el->line, ['attribute' => self::NAME_ATTR, 'legal' => $legal], 'A slot section names the slot the document around this one placed: <d-slot name="hero">.');
     }
 
     $children = [];
     foreach ($el->children as $child) {
       if (!$child instanceof RawElement) {
         if (trim($child['#text']) !== '') {
-          $this->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" inside <%s>: wrap copy in <pb-text> or <pb-formatted-text>', DialectParser::excerpt($child['#text']), $tag), $child['#line']);
+          $this->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" inside <%s>: wrap copy in <d-text> or <d-formatted-text>', DialectParser::excerpt($child['#text']), $tag), $child['#line']);
         }
         continue;
       }
@@ -268,8 +295,8 @@ final class DialectWalk {
         continue;
       }
       $value = $value === NULL ? '' : (string) $value;
-      if ($tag === 'pb-image' && $name === 'src') {
-        $this->errors[] = new DialectError('ILLEGAL_SRC', 'src is not writable on <pb-image>: reference existing media with media="id or label", mint one with generate="prompt" + alt, or place a file this conversation holds with file="name" + alt', $el->line);
+      if ($tag === DialectCatalog::tagForBlockType('image') && $name === 'src') {
+        $this->errors[] = new DialectError('ILLEGAL_SRC', 'src is not writable on <d-image>: reference existing media with media="id or label", mint one with generate="prompt" + alt, or place a file this conversation holds with file="name" + alt', $el->line);
         continue;
       }
       if ($this->globalAttr($el, $name, $value, $node, $default, $worn, $roster)) {
@@ -298,7 +325,7 @@ final class DialectWalk {
     $body = $spec['body'] ?? NULL;
     if ($body !== NULL && $body['kind'] === 'plain') {
       foreach ($el->elementChildren() as $child) {
-        $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('<%s> takes text only; <%s> found. A link is url="..." on <pb-text>, not a child element', $tag, $child->tag), $child->line);
+        $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('<%s> takes text only; <%s> found. A link is url="..." on <d-text>, not a child element', $tag, $child->tag), $child->line);
       }
       $text = trim(preg_replace('/\s+/', ' ', $el->text()));
       if ($text !== '') {
@@ -335,7 +362,7 @@ final class DialectWalk {
           $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('<%s> takes no children; <%s> found', $tag, $child->tag), $child->line);
         }
         elseif (trim($child['#text']) !== '') {
-          $this->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" in <%s>: wrap copy in <pb-text> or <pb-formatted-text>', DialectParser::excerpt($child['#text']), $tag), $child['#line']);
+          $this->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" in <%s>: wrap copy in <d-text> or <d-formatted-text>', DialectParser::excerpt($child['#text']), $tag), $child['#line']);
         }
       }
     }
@@ -351,10 +378,10 @@ final class DialectWalk {
   /**
    * Builds a field, plugin-block or undeclared-type (generic form) block node.
    *
-   * <pb-block field="name"/> is one of the page's fields (the node spells
+   * <d-block field="name"/> is one of the page's fields (the node spells
    * the field; the page the fragment lands on supplies the field block),
-   * <pb-block plugin="id"/> an existing plugin block, <pb-block type="x">
-   * an undeclared block type with <pb-field> children; exactly one of the
+   * <d-block plugin="id"/> an existing plugin block, <d-block type="x">
+   * an undeclared block type with <d-field> children; exactly one of the
    * three names the element.
    */
   private function pluginOrGenericBlock(RawElement $el, int $depth): array {
@@ -399,37 +426,37 @@ final class DialectWalk {
         $this->axisAttr($el, $name, $value, $axes[$name], $depth, $axis_values);
         continue;
       }
-      $this->errors[] = self::illegalAttr($name, 'pb-block', $legal, $el->line);
+      $this->errors[] = self::illegalAttr($name, self::BLOCK_TAG, $legal, $el->line);
     }
     $named = array_keys(array_filter(['field' => $field, 'plugin' => $plugin, 'type' => $type], static fn (?string $value): bool => $value !== NULL));
     if ($named === []) {
-      $this->errors[] = new DialectError('ILLEGAL_ATTR', '<pb-block> needs field="..." (one of the page\'s fields), plugin="..." (plugin block) or type="..." (undeclared block type)', $el->line);
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', '<d-block> needs field="..." (one of the page\'s fields), plugin="..." (plugin block) or type="..." (undeclared block type)', $el->line);
     }
     elseif (count($named) > 1) {
-      $this->errors[] = new DialectError('ILLEGAL_ATTR', sprintf('<pb-block> takes one of field, plugin or type, not %s', implode(' and ', $named)), $el->line, ['attributes' => $named], 'field="name" renders one of the page\'s fields, plugin="id" an existing plugin block, type="x" an undeclared block type.');
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', sprintf('<d-block> takes one of field, plugin or type, not %s', implode(' and ', $named)), $el->line, ['attributes' => $named], 'field="name" renders one of the page\'s fields, plugin="id" an existing plugin block, type="x" an undeclared block type.');
     }
     elseif ($field === '') {
-      $this->errors[] = new DialectError('ILLEGAL_ATTR', '<pb-block field="..."> names one of the page\'s fields', $el->line, [], 'Set field to a field machine name the page has (read_schema lists them under available_fields).');
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', '<d-block field="..."> names one of the page\'s fields', $el->line, [], 'Set field to a field machine name the page has (read_schema lists them under available_fields).');
     }
     elseif ($plugin !== NULL && FieldBlock::isFieldBlock($plugin)) {
-      $this->errors[] = new DialectError('ILLEGAL_ATTR', sprintf('a field block is placed by field, never by its plugin id "%s"', $plugin), $el->line, ['field' => FieldBlock::fieldOf($plugin)], sprintf('Write <pb-block field="%s"/>: the page the fragment lands on supplies its own field block.', FieldBlock::fieldOf($plugin) ?? 'name'));
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', sprintf('a field block is placed by field, never by its plugin id "%s"', $plugin), $el->line, ['field' => FieldBlock::fieldOf($plugin)], sprintf('Write <d-block field="%s"/>: the page the fragment lands on supplies its own field block.', FieldBlock::fieldOf($plugin) ?? 'name'));
     }
 
     $fields = [];
     foreach ($el->children as $child) {
       if (!$child instanceof RawElement) {
         if (trim($child['#text']) !== '') {
-          $this->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" in <pb-block>: field values ride <pb-field name="...">', DialectParser::excerpt($child['#text'])), $child['#line']);
+          $this->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" in <d-block>: field values ride <d-field name="...">', DialectParser::excerpt($child['#text'])), $child['#line']);
         }
         continue;
       }
-      if ($child->tag !== 'pb-field') {
-        $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('<pb-block> takes <pb-field> children only; <%s> found', $child->tag), $child->line);
+      if ($child->tag !== self::FIELD_TAG) {
+        $this->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('<d-block> takes <d-field> children only; <%s> found', $child->tag), $child->line);
         continue;
       }
       $field_name = $child->attr('name');
       if ($field_name === NULL || $field_name === '') {
-        $this->errors[] = new DialectError('ILLEGAL_ATTR', '<pb-field> needs name="..."', $child->line);
+        $this->errors[] = new DialectError('ILLEGAL_ATTR', '<d-field> needs name="..."', $child->line);
         continue;
       }
       $fields[$field_name] = $child->text();
@@ -538,7 +565,7 @@ final class DialectWalk {
           continue;
         }
         if ($record->entityId === NULL) {
-          $this->errors[] = new DialectError('BLUEPRINT_NOT_LINKABLE', sprintf('"%s" is a shipped blueprint file: it has no live document to show by reference', $reference->id), $el->line, ['blueprint' => $reference->id], sprintf('Place a copy instead (<pb-blueprint name="%s" />), or link a blueprint saved on this site.', $reference->id));
+          $this->errors[] = new DialectError('BLUEPRINT_NOT_LINKABLE', sprintf('"%s" is a shipped blueprint file: it has no live document to show by reference', $reference->id), $el->line, ['blueprint' => $reference->id], sprintf('Place a copy instead (<d-blueprint name="%s" />), or link a blueprint saved on this site.', $reference->id));
           continue;
         }
         $node[LinkedBlueprintBlock::BLUEPRINT_KEY] = $reference->id;
@@ -574,7 +601,7 @@ final class DialectWalk {
    * The name resolves through the blueprint slot: a placement names a
    * published blueprint or is refused here, with the roster's candidates,
    * instead of failing as BLUEPRINT_NOT_FOUND deep in the translated batch.
-   * A page band (a blueprint whose root wears a root-only variant, the
+   * A section (a blueprint whose root wears a root-only variant, the
    * roster's one predicate) is refused below the top level in
    * AXIS_NOT_TOP_LEVEL's words, naming the wearing, instead of failing
    * as VARIANT_ROOT_ONLY on the root's own apply_variant deep in the
@@ -606,7 +633,7 @@ final class DialectWalk {
           $wears = $roster->rootOnlyWears($reference->record);
           $wearing = reset($wears);
           $described = MaterialsRoster::describe([$wearing], FALSE);
-          $this->errors[] = new DialectError('BLUEPRINT_NOT_TOP_LEVEL', sprintf('"%s" is a page band (its root wears %s): it applies to top-level containers only, never nested inside another container', $reference->id, $described), $el->line, [
+          $this->errors[] = new DialectError('BLUEPRINT_NOT_TOP_LEVEL', sprintf('"%s" is a section (its root wears %s): it applies to top-level containers only, never nested inside another container', $reference->id, $described), $el->line, [
             'blueprint' => $reference->id,
             'variant' => $wearing->id,
             'axis' => $wearing->group,
@@ -619,10 +646,10 @@ final class DialectWalk {
       if ($this->globalAttr($el, $name, $value, $node, $default, $worn, [])) {
         continue;
       }
-      $this->errors[] = self::illegalAttr($name, 'pb-blueprint', ['id', 'name'], $el->line);
+      $this->errors[] = self::illegalAttr($name, self::BLUEPRINT_TAG, ['id', 'name'], $el->line);
     }
     if (!$named) {
-      $this->errors[] = new DialectError('ILLEGAL_ATTR', '<pb-blueprint> needs name="..."', $el->line, [], 'Name a published blueprint: <pb-blueprint name="blueprint_id" />.');
+      $this->errors[] = new DialectError('ILLEGAL_ATTR', '<d-blueprint> needs name="..."', $el->line, [], 'Name a published blueprint: <d-blueprint name="blueprint_id" />.');
     }
     $this->attachStyles($node, [], $default);
     return $node;
@@ -801,7 +828,7 @@ final class DialectWalk {
       $default = $this->css->parseDeclarations($value, $el->line, $context, $this->errors);
       return TRUE;
     }
-    if ($name === 'blueprint' && $el->tag !== 'pb-blueprint' && $el->tag !== self::LINKED_TAG) {
+    if ($name === 'blueprint' && $el->tag !== self::BLUEPRINT_TAG && $el->tag !== self::LINKED_TAG) {
       $this->provenance($el, $value, $node);
       return TRUE;
     }
@@ -818,7 +845,7 @@ final class DialectWalk {
    * the name (UNKNOWN_BLUEPRINT, the roster's did-you-mean) or when the
    * blueprint places the other kind of element (BLUEPRINT_MISMATCH: a
    * section-rooted blueprint claimed on a block, or a block-rooted one on
-   * <pb-container>). A fresh copy is <pb-blueprint name="id" />.
+   * <d-container>). A fresh copy is <d-blueprint name="id" />.
    */
   private function provenance(RawElement $el, string $value, array &$node): void {
     $reference = $this->catalog->resolve($value, MaterialRecord::SLOT_BLUEPRINT);
@@ -838,7 +865,7 @@ final class DialectWalk {
         sprintf('blueprint="%s" on <%s>: a blueprint places a container, never a block', $reference->id, $el->tag),
         $el->line,
         ['attribute' => 'blueprint', 'blueprint' => $reference->id, 'element' => $el->tag],
-        sprintf('blueprint="" is placement provenance and stays on the container the blueprint placed; to place a fresh copy write <pb-blueprint name="%s" />.', $reference->id),
+        sprintf('blueprint="" is placement provenance and stays on the container the blueprint placed; to place a fresh copy write <d-blueprint name="%s" />.', $reference->id),
       );
       return;
     }

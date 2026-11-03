@@ -10,6 +10,7 @@ use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\ai\Attribute\FunctionCall;
 use Drupal\ai\OperationType\Chat\Tools\ToolsFunctionInput;
+use Drupal\daedalus_blueprint\Tool\ParameterProse;
 use Drupal\daedalus_blueprint_ai\DaedalusBlueprintToolBase;
 
 /**
@@ -35,20 +36,22 @@ use Drupal\daedalus_blueprint_ai\DaedalusBlueprintToolBase;
   id: 'daedalus_blueprint:edit',
   function_name: 'eb_edit',
   name: 'Edit',
-  description: 'Applies operations atomically to one NON-PAGE entity (config entities, skins, media); the current page and other pages are page_edit\'s job and materials update_material\'s, never this tool\'s. From a trivial single edit to a whole composition, every change is a batch. All changes are validated upfront and rolled back together on failure. Later operations see earlier operations\' results, so one batch can compose a nested structure with minted uuids and edit or style the newborns by those uuids in the same gesture. The "operations" parameter carries the full op grammar. Write text values literally, never HTML-escaped (write &, not &amp;); HTML entities belong only inside rich-text HTML values.',
+  description: 'Applies one batch of operations atomically to a NON-PAGE entity (config entities, skins, media): every operation is validated upfront, and the batch rolls back whole on failure. Later operations see earlier operations\' results, so one batch can compose a nested structure with minted uuids and edit or style the newborns by those uuids in the same gesture. The "operations" parameter carries the full op grammar. Write text values literally, never HTML-escaped (write &, not &amp;); HTML entities belong only inside rich-text HTML values.',
   group: 'modification_tools',
   context_definitions: [
     'entity_type' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Entity Type'),
       required: TRUE,
-      description: new TranslatableMarkup('The entity type ID (e.g. node, image_style).'),
+      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+      description: new TranslatableMarkup(ParameterProse::ENTITY_TYPE),
     ),
     'entity_id' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Entity ID'),
       required: TRUE,
-      description: new TranslatableMarkup('The entity ID. Numeric for content entities, machine name for config entities.'),
+      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+      description: new TranslatableMarkup(ParameterProse::ENTITY_ID),
     ),
     'operations' => new ContextDefinition(
       data_type: 'map',
@@ -196,7 +199,7 @@ class Edit extends DaedalusBlueprintToolBase {
       $result_array = $result->toArray();
       $is_config = $result instanceof ConfigBlueprintResult;
       $result_array['persisted'] = ($save || $is_config) ? 'database' : 'tempstore';
-      $this->output = $this->withMarkupEcho($this->formatArray($result_array), $result);
+      $this->output = $this->formatArray($result_array);
     }
     catch (\Exception $e) {
       $this->output = 'Error: ' . $e->getMessage();

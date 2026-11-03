@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
+use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\Exception\StyleGuideException;
 use Drupal\daedalus_stylish\ShippedDefinitionsImporter;
+use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\daedalus_stylish\StyleGuide;
 use Drupal\daedalus_stylish\StyleMapValidator;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
@@ -73,6 +75,7 @@ class StarterSkinTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -93,25 +96,20 @@ class StarterSkinTest extends KernelTestBase {
    * The site is met the way a site enabling the starter meets it: the
    * package is enabled and its system activated (the activation syncs
    * the package's skin under its own law), then the suite's globals
-   * (daedalus_stylish's and daedalus_stylish_layouts' variants and animations) land on a
-   * site whose only skin is the starter. Nothing lands first under
-   * another system: the starter ships open, so the suite's literal-timed
-   * motion variants commit, and it mints the gutter token row spells.
+   * (daedalus_stylish_layouts' variants) land on a site whose only skin is
+   * the starter, and the package's own motion (the skin's animations and
+   * the variants wearing them) lands with it. Nothing lands first under
+   * another system: the starter ships open, so its literal-timed motion
+   * variants commit, and it mints the gutter token row spells.
    */
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish', 'daedalus_blueprint']);
     // The importers switch to an administrative account (shipped
@@ -154,7 +152,7 @@ class StarterSkinTest extends KernelTestBase {
     catch (StyleGuideException $e) {
       $this->fail('the layered guide builds clean with the starter active: ' . $e->getMessage());
     }
-    $this->assertSame(['color', 'font', 'text', 'weight', 'leading', 'tracking', 'space', 'radius', 'transition', 'layout'], array_keys($definitions['site']['token_scales']), 'the starter declares no scale of its own: the suite\'s ten are the guide\'s');
+    $this->assertSame(['color', 'gradient', 'font', 'text', 'weight', 'leading', 'tracking', 'space', 'radius', 'transition', 'layout'], array_keys($definitions['site']['token_scales']), 'the starter declares no scale of its own: the suite\'s eleven are the guide\'s');
 
     $served = $this->styleGuide->getConstraintDefaults(self::THEME);
     $this->assertSame(['scale' => 'space', 'allowed' => ['0']], $served['padding'], 'the served padding block is the suite\'s, uncurated');
@@ -167,15 +165,21 @@ class StarterSkinTest extends KernelTestBase {
   /**
    * Every bound property resolves to a scale the starter mints.
    *
-   * Every declared scale carries at least one token, so no basic row is
-   * an empty closed space; the served map binds the suite's seven
-   * properties and each block's scale is minted.
+   * Every declared scale but gradient carries at least one token, so no
+   * basic row is an empty closed space (the gradient scale is the
+   * palette's unbound half: a skin that wants no gradient mints none, and
+   * the starter's palette is flat); the served map binds the suite's
+   * seven properties and each block's scale is minted.
    */
   public function testBoundPropertiesResolveToMintedScales(): void {
     $skin = $this->container->get('daedalus_stylish.skin_manager')->loadActiveSkin();
     $this->assertNotNull($skin);
     $tokens = $skin->tokens();
     foreach ($this->styleGuide->getTokenScales(self::THEME) as $scale => $declaration) {
+      if ($scale === 'gradient') {
+        $this->assertArrayNotHasKey('gradient', $tokens, 'the starter mints no gradient: the scale is unbound and its palette is flat');
+        continue;
+      }
       $this->assertNotEmpty($tokens[$scale] ?? [], "the starter mints the declared $scale scale");
     }
     foreach (['bg', 'surface', 'text', 'border', 'accent'] as $role) {
@@ -246,6 +250,29 @@ class StarterSkinTest extends KernelTestBase {
       }
       $this->assertMatchesRegularExpression('/^(0|[a-z-]+)$/', $value, "$at is a token reference, the zero literal or a keyword, never a raw value");
     }
+  }
+
+  /**
+   * The starter owns its motion: five animations on the skin, eight looks.
+   *
+   * The suite ships no motion of its own, so a skin that wants an
+   * entrance carries the keyframes (`animations:` beside its tokens) and
+   * the animation-axis variants wearing them; the compiled skin file
+   * prints the @keyframes blocks and the roster offers them as the
+   * starter system's materials. ShippedMotionTest pins every face; this
+   * pins that the starter has them.
+   */
+  public function testMotionRidesTheSkin(): void {
+    $skin = $this->container->get('daedalus_stylish.skin_manager')->loadActiveSkin();
+    $this->assertSame(['fade_in', 'rise', 'scale_in', 'pulse', 'spin'], array_keys($skin->animations()));
+    $roster = $this->container->get('daedalus_blueprint.materials_roster_builder')->build();
+    $this->assertSame(['fade_in', 'rise', 'scale_in', 'pulse', 'spin'], array_keys($roster->animations()));
+    foreach (['starter_fade_in', 'starter_rise', 'starter_scale_in', 'starter_lift', 'starter_fade_in_section', 'starter_rise_section', 'starter_scale_in_section', 'starter_lift_section'] as $name) {
+      $this->assertTrue($roster->has(MaterialKind::Variant, $name), "the starter ships the $name look");
+      $this->assertSame(self::SYSTEM, $roster->get(MaterialKind::Variant, $name)->designSystem);
+    }
+    $css = file_get_contents($this->container->get('state')->get(SkinStylesheet::STATE_KEY));
+    $this->assertStringContainsString('@keyframes motion-rise {', $css);
   }
 
 }

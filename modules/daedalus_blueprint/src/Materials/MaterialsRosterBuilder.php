@@ -16,11 +16,19 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * the cached prompt, the schema, the validators, the client payload and
  * the delivery CSS all ask here. Memoized per request and per workspace:
  * inside a workspace the providers' storages answer with staged revisions
- * (a workspace-minted swatch previews in that workspace only), so the
+ * (a workspace-minted variant previews in that workspace only), so the
  * memo keys on the active workspace and the roster's cache metadata
  * carries the workspace context. A material write mid-request (the
  * providers' entity hooks) calls reset() so a gesture that mints and
- * references in one request never sees the pre-write roster.
+ * references in one request never sees the pre-write roster. The reset
+ * cascades: after dropping its own rosters the builder calls every
+ * provider's reset(), so whatever a provider memoizes per request about
+ * its records' inputs (daedalus_stylish's conformance verdict, which
+ * decides which variants its records() offers) is forgotten with the
+ * roster it fed. The roster and those memos are one derived value
+ * remembered in two places; a law change (a skin write, an enforcement
+ * edit, a design-system switch) resets the roster once and no site
+ * remembers a second reset beside it.
  *
  * The roster is the ACTIVE set: a provider serves every record it has,
  * and build() keeps the global ones (no design system) and the active
@@ -91,7 +99,7 @@ class MaterialsRosterBuilder {
    * active: what the site WOULD offer with that system active. The
    * validators' universe for a member (a shipped package lands while
    * another system is active, and its variant must still resolve its own
-   * system's tokens, swatches and animations); every other consumer reads
+   * system's tokens, animations and fonts); every other consumer reads
    * build(), the active set. Memoized beside it and dropped by the same
    * reset().
    */
@@ -192,6 +200,28 @@ class MaterialsRosterBuilder {
   }
 
   /**
+   * The providers' mint postures: the closed lanes the brief states.
+   *
+   * One sentence per provider whose mintPosture() is not NULL, in
+   * provider priority order; [] while every lane on the site is open to
+   * the AI. The MINT line appends them after the gesture clauses, so
+   * the model is told a lane is closed before it is refused.
+   *
+   * @return string[]
+   *   The sentences.
+   */
+  public function mintPostures(): array {
+    $postures = [];
+    foreach ($this->providers as ['provider' => $provider]) {
+      $posture = $provider->mintPosture();
+      if ($posture !== NULL) {
+        $postures[] = $posture;
+      }
+    }
+    return $postures;
+  }
+
+  /**
    * The provider that performs a kind's gestures, or NULL.
    *
    * The provider that teaches a kind's gesture line is the provider that
@@ -208,11 +238,19 @@ class MaterialsRosterBuilder {
   }
 
   /**
-   * Drops every memoized roster (a material changed mid-request).
+   * Drops every memoized roster, then every provider's own request memo.
+   *
+   * A material or a law changed mid-request. The providers reset after
+   * the rosters: a provider's memo is an input to the roster (the
+   * conformance verdict decides which variant records daedalus_stylish
+   * offers), so the next build() must read it fresh.
    */
   public function reset(): void {
     $this->memo = [];
     $this->systemMemo = [];
+    foreach ($this->providers as ['provider' => $provider]) {
+      $provider->reset();
+    }
   }
 
 }

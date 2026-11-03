@@ -28,7 +28,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
       data_type: 'string',
       label: new TranslatableMarkup('Skill'),
       required: TRUE,
-      description: new TranslatableMarkup('The skill ID to invoke (e.g. create_entity).'),
+      description: new TranslatableMarkup('The skill ID to invoke (e.g. design).'),
     ),
     'args' => new ContextDefinition(
       data_type: 'string',

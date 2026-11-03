@@ -9,8 +9,8 @@ use Drupal\daedalus_blueprint\DesignSystem\DesignSystemMemberInterface;
 /**
  * Reads a blueprint write's design-system membership for the value seams.
  *
- * The field handlers behind variant styles, swatch values and animation
- * steps validate through StyleMapValidator with the MEMBER's universe in
+ * The field handlers behind variant styles, animation steps and font
+ * faces validate through StyleMapValidator with the MEMBER's universe in
  * context (see validateAt()'s design_system): the submitted sibling
  * field wins (the membership this write establishes, an explicit NULL
  * included: `design_system: ~` on disk, "global" on a create payload),

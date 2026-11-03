@@ -58,6 +58,7 @@ final class FileDeclarationHandlerTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint',
+    'filter',
     'daedalus_blueprint_api',
     'daedalus_ui',
   ];

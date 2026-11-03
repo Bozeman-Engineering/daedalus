@@ -48,6 +48,7 @@ class StyleValueResolverTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',

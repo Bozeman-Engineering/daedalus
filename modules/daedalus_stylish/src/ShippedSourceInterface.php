@@ -10,7 +10,7 @@ use Drupal\Core\Entity\EntityPublishedInterface;
 /**
  * A content entity with a disk source: the shipped lane's identity facts.
  *
- * Variants, skins, swatches and animations all carry the "one hash, two
+ * Variants, skins, animations and fonts all carry the "one hash, two
  * comparisons" identity ShippedSourceTrait implements: a provider module and
  * the hash of the payload that module shipped. The lane's two directions
  * (ShippedDefinitionsImporter brings files in, ShippedDefinitionsShipper

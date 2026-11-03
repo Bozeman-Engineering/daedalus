@@ -98,7 +98,7 @@ final class KeyframesNames {
   /**
    * Rewrites one keyframes name in a motion value, in place.
    *
-   * The write direction of the grammar inValue() reads (the swatch usage's
+   * The write direction of the grammar inValue() reads (the token usage's
    * scan/rewrite pairing at ident scope): every name component equal to
    * $name, in whichever position the property's grammar puts it, becomes
    * $replacement, and every other byte of the value (other names, times,

@@ -173,12 +173,12 @@ class AddPanelIconTest extends NestedStorageKernelTestBase {
     BlockContentType::load('basic')
       ->setThirdPartySetting('daedalus_layout', 'icon', '/modules/custom/theme/basic.svg')
       ->setThirdPartySetting('daedalus_layout', 'favorite', TRUE)
-      ->setThirdPartySetting('daedalus_layout', 'groups', ['heroes', 'bands'])
+      ->setThirdPartySetting('daedalus_layout', 'groups', ['heroes', 'sections'])
       ->save();
 
     $block_type = BlockContentType::load('basic');
     $this->assertTrue($block_type->getThirdPartySetting('daedalus_layout', 'favorite'));
-    $this->assertSame(['heroes', 'bands'], $block_type->getThirdPartySetting('daedalus_layout', 'groups'));
+    $this->assertSame(['heroes', 'sections'], $block_type->getThirdPartySetting('daedalus_layout', 'groups'));
 
     $typed = $this->container->get('config.typed')->get('block_content.type.basic');
     $this->assertInstanceOf(BooleanData::class, $typed->get('third_party_settings.daedalus_layout.favorite'));

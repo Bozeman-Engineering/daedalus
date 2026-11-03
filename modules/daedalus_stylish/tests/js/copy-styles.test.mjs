@@ -21,7 +21,7 @@ import {
 const A = 'block:11111111-1111-1111-1111-111111111111';
 const B = 'block:22222222-2222-2222-2222-222222222222';
 const SECTION = 'container:33333333-3333-3333-3333-333333333333';
-const RULE = `${SECTION}::> pb-text`;
+const RULE = `${SECTION}::> d-text`;
 
 const map = {
   [A]: {
@@ -34,14 +34,14 @@ const map = {
   },
   [`${A}::.title`]: { default: { 'font-weight': '700' } },
   [`${A}::.s-ab12`]: { default: { color: 'red' } },
-  [`${A}::> pb-text`]: { variants: [{ variant: 'link_style', fragment: '' }] },
+  [`${A}::> d-text`]: { variants: [{ variant: 'link_style', fragment: '' }] },
   [B]: { default: { margin: '1rem' } },
   [RULE]: {
     variants: [{ variant: 'quiet', fragment: '' }],
     default: { 'font-size': '1rem' },
   },
   [`${RULE} .link`]: { default: { 'text-decoration': 'none' } },
-  [`${SECTION}::> pb-image`]: { default: { opacity: '0.5' } },
+  [`${SECTION}::> d-image`]: { default: { opacity: '0.5' } },
 };
 
 let current = null;
@@ -63,7 +63,7 @@ test('the target key is the selection, or the seated target as a rule key', () =
   assert.equal(targetKeyOf(A, null), A);
   assert.equal(targetKeyOf(A, { key: A, selector: null }), A);
   assert.equal(targetKeyOf(A, { key: A, selector: '.title' }), `${A}::.title`);
-  assert.equal(targetKeyOf(A, { key: SECTION, selector: '> pb-text' }), RULE);
+  assert.equal(targetKeyOf(A, { key: SECTION, selector: '> d-text' }), RULE);
 });
 
 // --- Copy --------------------------------------------------------------------
@@ -74,7 +74,7 @@ test('an element copy carries its own entries, its parts and its root wear; inst
     '': { default: { color: '#0a55f0', padding: '2rem' }, hover: { color: '#ff8800' } },
     '::.title': { default: { 'font-weight': '700' } },
   });
-  assert.deepEqual(copied.wear, { '': ['hero'], '::> pb-text': ['link_style'] });
+  assert.deepEqual(copied.wear, { '': ['hero'], '::> d-text': ['link_style'] });
   assert.equal(documentSize(copied), 6);
 });
 
@@ -109,7 +109,7 @@ test('a paste rebases every relative under the target and lands as one additive 
     { op: 'update_style', key: B, condition: 'hover', properties: { color: '#ff8800' } },
     { op: 'update_style', key: `${B}::.title`, properties: { 'font-weight': '700' } },
     { op: 'apply_variant', key: B, variant: 'hero' },
-    { op: 'apply_variant', key: `${B}::> pb-text`, variant: 'link_style' },
+    { op: 'apply_variant', key: `${B}::> d-text`, variant: 'link_style' },
   ]);
   assert.equal(plan.count, 6);
   assert.deepEqual(plan.skipped, { properties: 0, variants: 0 });
@@ -119,7 +119,7 @@ test('a paste at a rule continues the relatives by descent', () => {
   const plan = pastePlan(documentOf(map, A), RULE);
   assert.deepEqual(
     plan.operations.map((operation) => operation.key),
-    [RULE, RULE, `${RULE} .title`, RULE, `${RULE} > pb-text`],
+    [RULE, RULE, `${RULE} .title`, RULE, `${RULE} > d-text`],
   );
 });
 
@@ -161,7 +161,7 @@ test('a variant whose scope does not pair with the new key is skipped; an unknow
   const plan = pastePlan(documentOf(map, A), B, { variants });
   assert.deepEqual(
     plan.operations.filter((operation) => operation.op === 'apply_variant'),
-    [{ op: 'apply_variant', key: `${B}::> pb-text`, variant: 'link_style' }],
+    [{ op: 'apply_variant', key: `${B}::> d-text`, variant: 'link_style' }],
   );
   assert.deepEqual(plan.skipped, { properties: 0, variants: 1 });
   assert.equal(plan.count, 5);

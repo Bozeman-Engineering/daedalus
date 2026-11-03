@@ -9,10 +9,8 @@ use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\Materials\MaterialsChangeSet;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
-use Drupal\daedalus_stylish\DefaultsStylesheet;
-use Drupal\daedalus_stylish\SwatchStylesheet;
+use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\daedalus_stylish\VariantStylesheet;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
@@ -24,7 +22,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Activating a system is one config write (daedalus_blueprint.settings);
  * DesignSystemSwitchSubscriber reacts to it, so every writer (the op,
  * the admin form, drush config-set, config sync) restyles the site the
- * same way: the skin, variants and swatches files recompile to the newly
+ * same way: the skin and variants files recompile to the newly
  * active system's members plus the global ones, and both systems' token
  * and member ids ride the request's materials delta (the old system's
  * resolve to removes, the new system's to upserts). Every activation
@@ -33,7 +31,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * and the delta carry the members the site's law refused while a
  * packaged system was inactive; the globals daedalus_stylish itself ships
  * converge in setUp the way a real site's install lands them, so a
- * switch's delta is the two systems' own ids.
+ * switch's delta is the two systems' own ids plus every published
+ * variant (a sweep is a law change and the conformance verdict a
+ * projection of the law, so each variant rides, resolved against the
+ * fresh roster: offered to an upsert, withheld or inactive to a remove).
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -49,6 +50,7 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -69,15 +71,9 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_blueprint', 'daedalus_stylish']);
     // The importers switch to an administrative account: give them one.
@@ -90,6 +86,9 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
       'token_scales' => [
         'space' => ['label' => 'Space', 'shape' => 'dimension'],
+        // The packaged aurora skin mints color/accent: the fixture replaces
+        // the suite's site lane, so the scale is declared here.
+        'color' => ['label' => 'Color', 'shape' => 'color'],
       ],
     ]);
     $this->container->get('state')->set('daedalus_stylish_control_test.kinds', [
@@ -99,22 +98,19 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
   }
 
   /**
-   * Ships a design system with a member skin, variant and swatch.
+   * Ships a design system with a member skin (a space and a color token) and variant.
    */
   protected function createSystem(string $id, string $token): void {
     DesignSystem::create(['id' => $id, 'label' => ucfirst($id), 'default_skin' => $id])->save();
     $skin = DaedalusStylishSkin::create(['label' => ucfirst($id), 'machine_name' => $id, 'design_system' => $id]);
-    $skin->setPackageTokens(['space' => [$token => '1rem']])->save();
+    $skin->setPackageTokens(['space' => [$token => '1rem'], 'color' => [$id => '#6941c6']])->save();
     $variant = DaedalusStylishVariant::create([
-      'label' => ucfirst($id) . ' band',
-      'machine_name' => $id . '_band',
+      'label' => ucfirst($id) . ' section',
+      'machine_name' => $id . '_section',
       'scope' => 'kind:container',
       'design_system' => $id,
     ]);
     $variant->setStyles(['' => ['default' => ['padding' => '1rem']]])->save();
-    $swatch = DaedalusStylishSwatch::create(['label' => ucfirst($id) . ' accent', 'kind' => 'color', 'design_system' => $id]);
-    $swatch->setSwatchValue('#6941c6');
-    $swatch->save();
   }
 
   /**
@@ -138,14 +134,14 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
   }
 
   /**
-   * A switch recompiles all three roster-fed files and touches both systems.
+   * A switch recompiles both roster-fed files and touches both systems.
    */
   public function testSwitchRecompilesAndTouchesBothSystems(): void {
     $this->createSystem('aurora', 'gutter');
-    $this->createSystem('borealis', 'band');
+    $this->createSystem('borealis', 'section');
     $global = DaedalusStylishVariant::create([
-      'label' => 'Plain band',
-      'machine_name' => 'plain_band',
+      'label' => 'Plain section',
+      'machine_name' => 'plain_section',
       'scope' => 'kind:container',
     ]);
     $global->setStyles(['' => ['default' => ['padding' => '2rem']]])->save();
@@ -153,61 +149,62 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
     assert($change_set instanceof MaterialsChangeSet);
     $active = $this->container->get(ActiveDesignSystem::SERVICE_ID);
 
-    // No system active: no skin, the global variant alone, no swatch.
-    $this->assertSame('', $this->css(DefaultsStylesheet::STATE_KEY));
+    // No system active: no skin, the global variant alone.
+    $this->assertSame('', $this->css(SkinStylesheet::STATE_KEY));
     $variants = $this->css(VariantStylesheet::STATE_KEY);
-    $this->assertStringContainsString('.daedalus-stylish-variant--plain_band', $variants);
-    $this->assertStringNotContainsString('.daedalus-stylish-variant--aurora_band', $variants);
-    $this->assertSame('', $this->css(SwatchStylesheet::STATE_KEY));
+    $this->assertStringContainsString('.daedalus-stylish-variant--plain_section', $variants);
+    $this->assertStringNotContainsString('.daedalus-stylish-variant--aurora_section', $variants);
 
-    // Activating aurora lands its members in all three files and upserts
-    // them on the delta; nothing was active before, so nothing leaves.
+    // Activating aurora lands its members in both files and upserts
+    // them on the delta; nothing was active before, so no token leaves.
+    // Every published variant rides each sweep (the law changed, so the
+    // verdict may have): the global as an upsert, the inactive system's
+    // member as a remove.
     $change_set->flush();
     $active->activate('aurora');
     $this->assertSame('aurora', $this->container->get('daedalus_stylish.skin_manager')->activeSkinName());
-    $this->assertStringContainsString('--space-gutter: 1rem;', $this->css(DefaultsStylesheet::STATE_KEY));
+    $this->assertStringContainsString('--space-gutter: 1rem;', $this->css(SkinStylesheet::STATE_KEY));
     $variants = $this->css(VariantStylesheet::STATE_KEY);
-    $this->assertStringContainsString('.daedalus-stylish-variant--aurora_band', $variants);
-    $this->assertStringContainsString('.daedalus-stylish-variant--plain_band', $variants);
-    $this->assertStringNotContainsString('.daedalus-stylish-variant--borealis_band', $variants);
-    $this->assertStringContainsString('--swatch-aurora_accent:', $this->css(SwatchStylesheet::STATE_KEY));
+    $this->assertStringContainsString('.daedalus-stylish-variant--aurora_section', $variants);
+    $this->assertStringContainsString('.daedalus-stylish-variant--plain_section', $variants);
+    $this->assertStringNotContainsString('.daedalus-stylish-variant--borealis_section', $variants);
+    $this->assertStringContainsString('--color-aurora: #6941c6;', $this->css(SkinStylesheet::STATE_KEY));
     $this->assertSame([
-      'upsert' => ['swatch:aurora_accent', 'token:space/gutter', 'variant:aurora_band'],
-      'remove' => [],
+      'upsert' => ['token:color/aurora', 'token:space/gutter', 'variant:aurora_section', 'variant:plain_section'],
+      'remove' => ['variant:borealis_section'],
     ], $this->deltaIds($change_set->flush()));
 
     // Switching to borealis: aurora's members leave every file and the
-    // delta, borealis's arrive; the global variant stays throughout.
+    // delta, borealis's arrive; the global variant stays throughout (and
+    // rides as an upsert each time).
     $active->activate('borealis');
     $this->assertSame('borealis', $this->container->get('daedalus_stylish.skin_manager')->activeSkinName());
-    $skin = $this->css(DefaultsStylesheet::STATE_KEY);
-    $this->assertStringContainsString('--space-band: 1rem;', $skin);
+    $skin = $this->css(SkinStylesheet::STATE_KEY);
+    $this->assertStringContainsString('--space-section: 1rem;', $skin);
     $this->assertStringNotContainsString('--space-gutter', $skin);
     $variants = $this->css(VariantStylesheet::STATE_KEY);
-    $this->assertStringContainsString('.daedalus-stylish-variant--borealis_band', $variants);
-    $this->assertStringContainsString('.daedalus-stylish-variant--plain_band', $variants);
-    $this->assertStringNotContainsString('.daedalus-stylish-variant--aurora_band', $variants);
-    $swatches = $this->css(SwatchStylesheet::STATE_KEY);
-    $this->assertStringContainsString('--swatch-borealis_accent:', $swatches);
-    $this->assertStringNotContainsString('--swatch-aurora_accent', $swatches);
+    $this->assertStringContainsString('.daedalus-stylish-variant--borealis_section', $variants);
+    $this->assertStringContainsString('.daedalus-stylish-variant--plain_section', $variants);
+    $this->assertStringNotContainsString('.daedalus-stylish-variant--aurora_section', $variants);
     $this->assertSame([
-      'upsert' => ['swatch:borealis_accent', 'token:space/band', 'variant:borealis_band'],
-      'remove' => ['swatch:aurora_accent', 'token:space/gutter', 'variant:aurora_band'],
+      'upsert' => ['token:color/borealis', 'token:space/section', 'variant:borealis_section', 'variant:plain_section'],
+      'remove' => ['token:color/aurora', 'token:space/gutter', 'variant:aurora_section'],
     ], $this->deltaIds($change_set->flush()));
 
-    // Deactivating: the global variant alone again, borealis's ids leave.
+    // Deactivating: the global variant alone again, borealis's ids leave
+    // (and aurora's member, inactive still, resolves to a remove again).
     $this->config(ActiveDesignSystem::CONFIG_NAME)->set(ActiveDesignSystem::KEY, NULL)->save();
-    $this->assertSame('', $this->css(DefaultsStylesheet::STATE_KEY));
+    $this->assertSame('', $this->css(SkinStylesheet::STATE_KEY));
     $variants = $this->css(VariantStylesheet::STATE_KEY);
-    $this->assertStringContainsString('.daedalus-stylish-variant--plain_band', $variants);
-    $this->assertStringNotContainsString('.daedalus-stylish-variant--borealis_band', $variants);
-    $this->assertSame('', $this->css(SwatchStylesheet::STATE_KEY));
+    $this->assertStringContainsString('.daedalus-stylish-variant--plain_section', $variants);
+    $this->assertStringNotContainsString('.daedalus-stylish-variant--borealis_section', $variants);
     $this->assertSame([
-      'upsert' => [],
-      'remove' => ['swatch:borealis_accent', 'token:space/band', 'variant:borealis_band'],
+      'upsert' => ['variant:plain_section'],
+      'remove' => ['token:color/borealis', 'token:space/section', 'variant:aurora_section', 'variant:borealis_section'],
     ], $this->deltaIds($change_set->flush()));
 
-    // A daedalus_stylish.settings save is not a switch: nothing rides the delta.
+    // A daedalus_stylish.settings save is not a switch and not a choice:
+    // nothing rides the delta (both files recompile, byte-identical).
     $this->config('daedalus_stylish.settings')->set('container_roots', FALSE)->save();
     $this->assertTrue($change_set->isEmpty());
   }
@@ -242,26 +239,26 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
     // Landing with nothing active: the package is deferred whole, so no
     // member exists and none is delivered.
     $this->installConfig(['daedalus_stylish_design_system_test']);
-    $this->assertSame([], $storage->loadByProperties(['machine_name' => 'aurora_band']));
+    $this->assertSame([], $storage->loadByProperties(['machine_name' => 'aurora_section']));
     $this->assertSame([], $storage->loadByProperties(['machine_name' => 'aurora_rhythm']));
-    $this->assertStringNotContainsString('.daedalus-stylish-variant--aurora_band', $this->css(VariantStylesheet::STATE_KEY));
+    $this->assertStringNotContainsString('.daedalus-stylish-variant--aurora_section', $this->css(VariantStylesheet::STATE_KEY));
 
     // Activation lands the package whole in all three files and on the delta.
     $change_set->flush();
     $active->activate('aurora');
-    $this->assertNotEmpty($storage->loadByProperties(['machine_name' => 'aurora_band']));
+    $this->assertNotEmpty($storage->loadByProperties(['machine_name' => 'aurora_section']));
     $this->assertNotEmpty($storage->loadByProperties(['machine_name' => 'aurora_rhythm']));
-    $this->assertStringContainsString('--space-gutter: 2rem;', $this->css(DefaultsStylesheet::STATE_KEY));
+    $this->assertStringContainsString('--space-gutter: 2rem;', $this->css(SkinStylesheet::STATE_KEY));
     $variants = $this->css(VariantStylesheet::STATE_KEY);
-    $this->assertStringContainsString('.daedalus-stylish-variant--aurora_band', $variants);
+    $this->assertStringContainsString('.daedalus-stylish-variant--aurora_section', $variants);
     $this->assertStringContainsString('.daedalus-stylish-variant--aurora_rhythm', $variants);
-    $this->assertStringContainsString('--swatch-aurora_accent:', $this->css(SwatchStylesheet::STATE_KEY));
+    $this->assertStringContainsString('--color-accent: #6941c6;', $this->css(SkinStylesheet::STATE_KEY));
     $members = [
       'animation:aurora_fade',
-      'swatch:aurora_accent',
+      'token:color/accent',
       'token:space/gutter',
-      'variant:aurora_band',
       'variant:aurora_rhythm',
+      'variant:aurora_section',
     ];
     $this->assertSame(['upsert' => $members, 'remove' => []], $this->deltaIds($change_set->flush()));
 
@@ -270,7 +267,7 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
     DesignSystem::create(['id' => 'borealis', 'label' => 'Borealis'])->save();
     $active->activate('borealis');
     $variants = $this->css(VariantStylesheet::STATE_KEY);
-    $this->assertStringNotContainsString('.daedalus-stylish-variant--aurora_band', $variants);
+    $this->assertStringNotContainsString('.daedalus-stylish-variant--aurora_section', $variants);
     $this->assertStringNotContainsString('.daedalus-stylish-variant--aurora_rhythm', $variants);
     $this->assertSame(['upsert' => [], 'remove' => $members], $this->deltaIds($change_set->flush()));
   }
@@ -287,7 +284,7 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
    */
   public function testChoiceFollowsTheSystem(): void {
     $this->createSystem('aurora', 'gutter');
-    $this->createSystem('borealis', 'band');
+    $this->createSystem('borealis', 'section');
     $dusk = DaedalusStylishSkin::create(['label' => 'Dusk', 'machine_name' => 'dusk', 'design_system' => 'aurora']);
     $dusk->setPackageTokens(['space' => ['dusk' => '2rem']])->save();
     $change_set = $this->container->get('daedalus_blueprint.materials_change_set');
@@ -296,41 +293,43 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
     $manager = $this->container->get('daedalus_stylish.skin_manager');
 
     $active->activate('aurora');
-    $this->assertStringContainsString('--space-gutter: 1rem;', $this->css(DefaultsStylesheet::STATE_KEY));
+    $this->assertStringContainsString('--space-gutter: 1rem;', $this->css(SkinStylesheet::STATE_KEY));
     $change_set->flush();
     $manager->choose('dusk');
     $this->assertSame('dusk', $manager->activeSkinName());
-    $css = $this->css(DefaultsStylesheet::STATE_KEY);
+    $css = $this->css(SkinStylesheet::STATE_KEY);
     $this->assertStringContainsString('--space-dusk: 2rem;', $css);
     $this->assertStringNotContainsString('--space-gutter', $css);
+    // A choice is a law change too, so every published variant rides it:
+    // aurora's member offered (an upsert), borealis's inactive (a remove).
     $this->assertSame([
-      'upsert' => ['token:space/dusk'],
-      'remove' => ['token:space/gutter'],
+      'upsert' => ['token:space/dusk', 'variant:aurora_section'],
+      'remove' => ['token:color/aurora', 'token:space/gutter', 'variant:borealis_section'],
     ], $this->deltaIds($change_set->flush()));
 
     // Away: the chosen skin's tokens leave with aurora's members.
     $active->activate('borealis');
-    $this->assertStringContainsString('--space-band: 1rem;', $this->css(DefaultsStylesheet::STATE_KEY));
+    $this->assertStringContainsString('--space-section: 1rem;', $this->css(SkinStylesheet::STATE_KEY));
     $this->assertSame([
-      'upsert' => ['swatch:borealis_accent', 'token:space/band', 'variant:borealis_band'],
-      'remove' => ['swatch:aurora_accent', 'token:space/dusk', 'variant:aurora_band'],
+      'upsert' => ['token:color/borealis', 'token:space/section', 'variant:borealis_section'],
+      'remove' => ['token:space/dusk', 'variant:aurora_section'],
     ], $this->deltaIds($change_set->flush()));
 
     // Back: the choice holds, and it is the chosen skin that arrives.
     $active->activate('aurora');
-    $css = $this->css(DefaultsStylesheet::STATE_KEY);
+    $css = $this->css(SkinStylesheet::STATE_KEY);
     $this->assertStringContainsString('--space-dusk: 2rem;', $css);
     $this->assertStringNotContainsString('--space-gutter', $css);
     $this->assertSame([
-      'upsert' => ['swatch:aurora_accent', 'token:space/dusk', 'variant:aurora_band'],
-      'remove' => ['swatch:borealis_accent', 'token:space/band', 'variant:borealis_band'],
+      'upsert' => ['token:space/dusk', 'variant:aurora_section'],
+      'remove' => ['token:color/borealis', 'token:space/section', 'variant:borealis_section'],
     ], $this->deltaIds($change_set->flush()));
 
     // A choice for the inactive system: nothing worn changes, nothing
     // rides the delta, the file is byte-identical.
     $this->config('daedalus_stylish.settings')->set('skin_choice.borealis', 'borealis')->save();
     $this->assertTrue($change_set->isEmpty());
-    $this->assertStringContainsString('--space-dusk: 2rem;', $this->css(DefaultsStylesheet::STATE_KEY));
+    $this->assertStringContainsString('--space-dusk: 2rem;', $this->css(SkinStylesheet::STATE_KEY));
   }
 
 }

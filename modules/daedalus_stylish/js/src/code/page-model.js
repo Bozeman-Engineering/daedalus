@@ -7,6 +7,7 @@ import {
   holdsFragments,
 } from '../variant-scope.js';
 import { variantLayerId } from './layers.js';
+import { layoutOf } from '../../../../daedalus_ui/js/edit_mode/blueprint/document-tree.js';
 
 /**
  * The page-tree code view model (pure; the view renders it).
@@ -14,22 +15,23 @@ import { variantLayerId } from './layers.js';
  * The page tree is the whole-layout surface of the islands architecture:
  * one chrome row per selectable element in LAYOUT ORDER — the root entity,
  * then containers, their blocks, nested containers recursively — each row
- * hosting the element's islands. Structure comes from the lean node tree
- * the source serves (source.getTree(), the blueprint's `layout`, broadcast
- * to the satellite), never from the style map: the map only says which
- * of the structure's elements carry styles. Everything here is
- * data-in/data-out so the same logic serves both hosts and gets node-test
- * backpressure.
+ * hosting the element's islands. Structure comes from the document tree
+ * the source serves (source.getDocument(): daedalus_ui
+ * blueprint/document-tree.js documentTree(), the host entity above the
+ * blueprint's `layout`, broadcast to the satellite), never from the
+ * style map: the map only says which of the structure's elements carry
+ * styles. Everything here is data-in/data-out so the same logic serves
+ * both hosts and gets node-test backpressure.
  */
 
 /**
  * The ordered element tree the page view renders.
  *
- * Walks the lean node tree into nodes of {key, kind, type, name, icon,
+ * Walks the document tree into nodes of {key, kind, type, name, icon,
  * depth, children}; `type`, `name` and `icon` are the element-naming
  * spine's three minted words each node carries (the annotator's
- * `_element.type` / `_element.name` / `_element.icon`: a page band
- * "Section" named by its label, a nested one "Container", a block its
+ * `_element.type` / `_element.name` / `_element.icon`: a section
+ * "Section" named by its label, a nested container "Container", a block its
  * type's label named by its content excerpt; an unrenamed element's name
  * is its type word; the icon a URL, or null when nothing answered the
  * icon collector). The row reads the icon then the name and speaks the
@@ -39,25 +41,23 @@ import { variantLayerId } from './layers.js';
  * directly under its row — regions have no keys (nothing could select or
  * style them), so a multi-region container's region nodes unwrap under
  * the section row in stored region order. Nested containers recurse in
- * place of components. Nodes without a uuid are skipped. With a root uuid
- * the whole layout nests under one entity node (the page's row, worded
- * by the root's own three words when the source carries them), so the
- * tree reads Page{container{block}}.
+ * place of components. Nodes without a uuid are skipped. The document's
+ * root is the page's row, worded by the root's own three words (the
+ * annotator stamps them on the blueprint root, the document carries them
+ * as the root's `_element`), so the tree reads Page{container{block}};
+ * a keyless root (a host with no uuid: a template host, the site frame)
+ * renders the sections bare, the same rule the matcher applies to a
+ * node nothing addresses.
  *
- * @param {Array} tree
- *   The lean node tree (source.getTree()).
- * @param {?string} rootUuid
- *   The root entity's uuid (source.getRootUuid()), or null to render the
- *   sections bare.
- * @param {?{type: ?string, name: ?string, icon: ?string}} root
- *   The root's minted words (source.getRootElement()), or null: the lean
- *   tree holds the layout elements alone, so the page row's words arrive
- *   beside it.
+ * @param {Array} document
+ *   The document tree (source.getDocument()).
  *
  * @return {Array<object>}
  *   The node tree, layout order preserved at every depth.
  */
-export const pageNodes = (tree, rootUuid = null, root = null) => {
+export const pageNodes = (document) => {
+  const root = Array.isArray(document) ? (document[0] ?? null) : null;
+  const rootUuid = root?.kind === 'entity' && root.uuid ? root.uuid : null;
   const words = (element) => ({
     type: element?.type ?? null,
     name: element?.name ?? null,
@@ -93,7 +93,7 @@ export const pageNodes = (tree, rootUuid = null, root = null) => {
     };
   };
   const depth = rootUuid ? 1 : 0;
-  const sections = (Array.isArray(tree) ? tree : [])
+  const sections = layoutOf(document)
     .map((section) => sectionNode(section, depth))
     .filter(Boolean);
   if (!rootUuid) {
@@ -103,7 +103,7 @@ export const pageNodes = (tree, rootUuid = null, root = null) => {
     {
       key: `entity:${rootUuid}`,
       kind: 'entity',
-      ...words(root),
+      ...words(root._element),
       depth: 0,
       children: sections,
     },

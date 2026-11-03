@@ -6,7 +6,7 @@ namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityRepositoryInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\FontFacesItem;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinFontsItem;
 use Drupal\daedalus_ui\File\FileLane;
 use Drupal\file\FileInterface;
 
@@ -14,18 +14,23 @@ use Drupal\file\FileInterface;
  * The font validation spine: the family name and the faces grammar.
  *
  * The one gate every font write path converges on (the material gestures
- * through FontManager, the disk lane's importer, the tab's routes as
- * adapters): a family that a font-family value can name (no quotes,
- * separators or control characters; never a generic family or a CSS-wide
- * keyword, which would name something else in every stack), and faces
- * that print (a non-empty list; each a map of weight, style and a typed
- * source; the weight and style through FontFacesItem's one grammar; the
- * source `{file: uuid}` resolving to a managed file the file lane admits,
- * woff2 or woff; one face per weight and style).
+ * through SkinMaterialManager, the disk lane's importer landing a skin's
+ * fonts tier, the skin tab's routes as adapters): a family that a
+ * font-family value can name (no quotes, separators or control
+ * characters; never a generic family or a CSS-wide keyword, which would
+ * name something else in every stack), and faces that print (a non-empty
+ * list; each a map of weight, style and a typed source; the weight and
+ * style through SkinFontsItem's one grammar; the source `{file: uuid}`
+ * resolving to a managed file the file lane admits, woff2 or woff; one
+ * face per weight and style).
  *
- * Errors carry the gesture's own paths ('family', 'faces',
- * 'faces.{i}', 'faces.{i}.weight', 'faces.{i}.style', 'faces.{i}.source',
- * 'faces.{i}.source.file'), so nothing re-roots.
+ * validateFonts() is the seam over a skin's fonts section as worn
+ * (StyleMapValidator::validateAnimations()'s twin): the name grammar, the
+ * record shape, then the two grammars per record, errors at
+ * "{name}", "{name}.family", "{name}.faces", "{name}.faces.{i}",
+ * "{name}.faces.{i}.weight", ".style", ".source", ".source.file",
+ * "{name}.description", "{name}.offered", so the gesture re-roots them
+ * onto its own keys and the disk lane under its field path.
  */
 class FontValidator {
 
@@ -41,6 +46,59 @@ class FontValidator {
   public function __construct(
     protected EntityRepositoryInterface $entityRepository,
   ) {}
+
+  /**
+   * Validates a skin's fonts section: canonical records by name.
+   *
+   * @param array $fonts
+   *   The fonts as worn, {name: {family, faces, description, offered}}
+   *   (SkinFontsItem::mergeLayers()).
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
+   *   Errors with paths relative to the fonts map; empty when valid.
+   */
+  public function validateFonts(array $fonts): array {
+    $errors = [];
+    $families = [];
+    foreach ($fonts as $name => $record) {
+      $name = (string) $name;
+      if (!preg_match(SkinFontsItem::NAME, $name)) {
+        $errors[] = new BlueprintError($name, 'INVALID_FONT_NAME', sprintf('"%s" is not a valid font name.', $name), [], 'Font names are lowercase letters, digits, and inner hyphens or underscores ("inter", "display_serif"); the name is the roster id, the family is what stacks reference.');
+        continue;
+      }
+      if (!SkinFontsItem::isRecord($record)) {
+        $errors[] = new BlueprintError($name, 'INVALID_FONT_RECORD', sprintf('%s is not a font record.', $name), ['keys' => SkinFontsItem::RECORD_KEYS], 'A font is a record {"family": "Inter", "faces": [{"weight": "400", "style": "normal", "source": {"file": "<uuid>"}}], "description": "...", "offered": true}.');
+        continue;
+      }
+      if ($unknown = array_diff(array_keys($record), SkinFontsItem::RECORD_KEYS)) {
+        $errors[] = new BlueprintError($name, 'INVALID_FONT_RECORD', sprintf('Unknown key(s) %s in the record of %s.', implode(', ', array_map(static fn ($key) => "\"$key\"", $unknown)), $name), ['keys' => SkinFontsItem::RECORD_KEYS], sprintf('A font record carries %s and nothing else.', implode(', ', SkinFontsItem::RECORD_KEYS)));
+        continue;
+      }
+      if (!is_string($record['description'] ?? '')) {
+        $errors[] = new BlueprintError("$name.description", 'INVALID_FONT_RECORD', sprintf('The description of %s is not text.', $name), [], 'Pass "description" as a sentence on when to reach for the family, or omit it.');
+      }
+      if (!is_bool($record['offered'] ?? TRUE)) {
+        $errors[] = new BlueprintError("$name.offered", 'INVALID_FONT_RECORD', sprintf('The offered flag of %s is not a boolean.', $name), [], 'Pass "offered" as true or false, or omit it (offered).');
+      }
+      $own = $this->validate($record['family'], $record['faces']);
+      foreach ($own as $error) {
+        $errors[] = $error->withPath("$name." . $error->getPath());
+      }
+      // One font per family: a stack names the FAMILY, so two records
+      // delivering one family would share every reference and the usage
+      // lane could not tell whose deletion drops it from the stacks.
+      if (is_string($record['family']) && !in_array('family', array_map(static fn (BlueprintError $error): string => $error->getPath(), $own), TRUE)) {
+        $family = trim($record['family']);
+        if (isset($families[$family])) {
+          $errors[] = new BlueprintError("$name.family", 'DUPLICATE_FONT_FAMILY', sprintf('%s and %s both deliver the family "%s".', $families[$family], $name, $family), ['font' => $families[$family]], 'One font per family on a skin: add the faces to the existing font (update_material with kind font), or name the family differently.');
+        }
+        else {
+          $families[$family] = $name;
+        }
+      }
+    }
+    return $errors;
+  }
 
   /**
    * Validates a family name and faces together.
@@ -103,13 +161,13 @@ class FontValidator {
         $errors[] = new BlueprintError($at, 'INVALID_FONT_FACE', sprintf('Face %d carries unknown keys: %s.', $index, implode(', ', $unknown)), ['keys' => array_values($unknown)], 'A face takes "weight", "style" and "source" only.');
         continue;
       }
-      $weight = FontFacesItem::canonicalWeight($face['weight'] ?? NULL);
+      $weight = SkinFontsItem::canonicalWeight($face['weight'] ?? NULL);
       if ($weight === NULL) {
         $errors[] = new BlueprintError("$at.weight", 'INVALID_FONT_WEIGHT', sprintf('"%s" is not a font weight.', is_scalar($face['weight']) ? (string) $face['weight'] : gettype($face['weight'])), [], 'A weight is a number from 1 to 1000 ("400"), a keyword ("normal", "bold"), or a variable-font range of two ascending numbers ("100 900").');
       }
-      $style = FontFacesItem::canonicalStyle($face['style'] ?? NULL);
+      $style = SkinFontsItem::canonicalStyle($face['style'] ?? NULL);
       if ($style === NULL) {
-        $errors[] = new BlueprintError("$at.style", 'INVALID_FONT_STYLE', sprintf('"%s" is not a font style.', is_scalar($face['style']) ? (string) $face['style'] : gettype($face['style'])), ['styles' => FontFacesItem::STYLES], 'A style is one of normal, italic or oblique.');
+        $errors[] = new BlueprintError("$at.style", 'INVALID_FONT_STYLE', sprintf('"%s" is not a font style.', is_scalar($face['style']) ? (string) $face['style'] : gettype($face['style'])), ['styles' => SkinFontsItem::STYLES], 'A style is one of normal, italic or oblique.');
       }
       array_push($errors, ...$this->validateSource("$at.source", $face['source'] ?? NULL));
       if ($weight !== NULL && $style !== NULL) {
@@ -135,13 +193,13 @@ class FontValidator {
    *   Errors at the source path and beneath.
    */
   protected function validateSource(string $at, mixed $source): array {
-    if (!is_array($source) || array_keys($source) !== [FontFacesItem::SOURCE_FILE]) {
+    if (!is_array($source) || array_keys($source) !== [SkinFontsItem::SOURCE_FILE]) {
       return [
-        new BlueprintError($at, 'INVALID_FONT_SOURCE', 'A face\'s source is a typed map naming its file.', ['kinds' => [FontFacesItem::SOURCE_FILE]], 'Pass "source" as {"file": "<uuid>"}, the uuid of a font file the site holds (upload one first, or take it from the FONTS roster); no other source kind exists yet.'),
+        new BlueprintError($at, 'INVALID_FONT_SOURCE', 'A face\'s source is a typed map naming its file.', ['kinds' => [SkinFontsItem::SOURCE_FILE]], 'Pass "source" as {"file": "<uuid>"}, the uuid of a font file the site holds (upload one first, or take it from the FONTS roster); no other source kind exists yet.'),
       ];
     }
-    $uuid = $source[FontFacesItem::SOURCE_FILE];
-    $path = $at . '.' . FontFacesItem::SOURCE_FILE;
+    $uuid = $source[SkinFontsItem::SOURCE_FILE];
+    $path = $at . '.' . SkinFontsItem::SOURCE_FILE;
     if (!is_string($uuid) || $uuid === '') {
       return [
         new BlueprintError($path, 'INVALID_FONT_SOURCE', 'A file source names the file by uuid.', [], 'Pass "file" as the uuid of an uploaded font file.'),

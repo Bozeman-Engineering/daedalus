@@ -30,6 +30,7 @@ class ConditionTypeTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -47,11 +48,8 @@ class ConditionTypeTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
   }
@@ -67,38 +65,22 @@ class ConditionTypeTest extends KernelTestBase {
       'focus-within' => ':focus-within',
       'focus-visible' => ':focus-visible',
       'active' => ':active',
-      'first-child' => ':first-child',
-      'last-child' => ':last-child',
-      'only-child' => ':only-child',
-      'empty' => ':empty',
-      'odd' => ':nth-child(odd)',
-      'even' => ':nth-child(even)',
-      'not-first-child' => ':not(:first-child)',
-      'not-last-child' => ':not(:last-child)',
-      'not-only-child' => ':not(:only-child)',
-      'not-empty' => ':not(:empty)',
       'narrow' => '@container (max-width: 767px)',
       'medium' => '@container (min-width: 768px) and (max-width: 1023px)',
       'dark' => '@media (prefers-color-scheme: dark)',
       'reduced-motion' => '@media (prefers-reduced-motion: reduce)',
     ], array_map(static fn (array $definition) => $definition['wrapper'], $manager->getConditions()));
 
-    // The structural conditions are FACTS (the element's place in the
-    // markup, never posable); every other condition is not. The four
-    // negations are facts of the same shape, identified by their :not()
-    // wrapper (odd and even are each other's complement and need none).
-    $this->assertSame(
-      ['first-child', 'last-child', 'only-child', 'empty', 'odd', 'even', 'not-first-child', 'not-last-child', 'not-only-child', 'not-empty'],
-      array_keys(array_filter($manager->getConditions(), static fn (array $definition): bool => ($definition['fact'] ?? FALSE) === TRUE)),
-    );
-    $this->assertTrue($manager->isFact('first-child'));
-    $this->assertTrue($manager->isFact('odd'));
-    $this->assertTrue($manager->isFact('not-last-child'));
-    $this->assertTrue($manager->isFact('not-empty'));
-    $this->assertSame(':not(:last-child)', $manager->getWrapper('not-last-child'));
-    $this->assertFalse($manager->isFact('hover'));
-    $this->assertFalse($manager->isFact('narrow'));
-    $this->assertFalse($manager->isFact('bogus'));
+    // Where an element sits among its siblings is never a condition: the
+    // position pseudo-classes are selector grammar (RelativeSelector's
+    // qualifiers), so no plugin publishes them and no condition carries
+    // a flag telling a state from a fact.
+    foreach (['first-child', 'last-child', 'only-child', 'empty', 'odd', 'even', 'not-first-child', 'not-last-child', 'not-only-child', 'not-empty'] as $retired) {
+      $this->assertFalse($manager->hasCondition($retired), "$retired is a position qualifier, not a condition.");
+    }
+    foreach ($manager->getConditions() as $name => $definition) {
+      $this->assertArrayNotHasKey('fact', $definition, "$name carries no fact flag.");
+    }
 
     $this->assertTrue($manager->hasCondition('hover'));
     $this->assertFalse($manager->hasCondition('default'));
@@ -108,8 +90,8 @@ class ConditionTypeTest extends KernelTestBase {
     $this->assertTrue($manager->isContainerCondition('medium'));
     $this->assertFalse($manager->isContainerCondition('dark'));
     $this->assertFalse($manager->isContainerCondition('hover'));
-    // A scheme condition is keyed on the declared preference fact
-    // (preference.feature), not the wrapper text: dark is one, a
+    // A scheme condition is keyed on the preference the clause grammar
+    // derives from its wrapper (preference.feature): dark is one, a
     // width-only condition and a pseudo-class are not.
     $this->assertTrue($manager->isSchemeCondition('dark'));
     $this->assertFalse($manager->isSchemeCondition('narrow'));
@@ -124,29 +106,17 @@ class ConditionTypeTest extends KernelTestBase {
       'focus-within' => 'state',
       'focus-visible' => 'state',
       'active' => 'state',
-      'first-child' => 'structural',
-      'last-child' => 'structural',
-      'only-child' => 'structural',
-      'empty' => 'structural',
-      'odd' => 'structural',
-      'even' => 'structural',
-      'not-first-child' => 'structural',
-      'not-last-child' => 'structural',
-      'not-only-child' => 'structural',
-      'not-empty' => 'structural',
       'narrow' => 'width',
       'medium' => 'width',
       'dark' => 'scheme',
       'reduced-motion' => 'motion',
     ], array_map(static fn (array $definition) => $definition['axis'], $manager->getConditions()));
     $this->assertSame('width', $manager->getAxis('narrow'));
-    $this->assertSame('structural', $manager->getAxis('first-child'));
+    $this->assertNull($manager->getAxis('first-child'));
     $this->assertNull($manager->getAxis('bogus'));
     // Axis-declaration order: the order axes first appear across the
-    // (weight, id)-ordered types — the canonical compound part order. The
-    // structural axis sits between state and width (weight 15) so a
-    // compound reads hover+first-child+narrow.
-    $this->assertSame(['state', 'structural', 'width', 'scheme', 'motion'], $manager->conditionAxes());
+    // (weight, id)-ordered types — the canonical compound part order.
+    $this->assertSame(['state', 'width', 'scheme', 'motion'], $manager->conditionAxes());
   }
 
   /**
@@ -164,25 +134,37 @@ class ConditionTypeTest extends KernelTestBase {
     $this->assertSame('hover+narrow+dark', $manager->canonicalizeCondition('hover+narrow+dark'));
     $this->assertSame('narrow+dark', $manager->canonicalizeCondition('dark+narrow'));
     $this->assertSame('narrow+reduced-motion', $manager->canonicalizeCondition('reduced-motion+narrow'));
-    // A structural fact takes its axis's place: after the state, before
-    // the width band.
-    $this->assertSame('hover+first-child+narrow', $manager->canonicalizeCondition('narrow+first-child+hover'));
-    $this->assertSame('odd+dark', $manager->canonicalizeCondition('dark+odd'));
     $this->assertSame('hover', $manager->canonicalizeCondition('hover'));
     $this->assertSame('default', $manager->canonicalizeCondition('default'));
     $this->assertSame('variants', $manager->canonicalizeCondition('variants'));
     // Unknown parts sort after every placed part, keeping spelled order:
     // canonicalization never invents or drops anything.
     $this->assertSame('dark+bogus+worse', $manager->canonicalizeCondition('bogus+dark+worse'));
+    // The grammar is ConditionClause's, a parser over the table: a
+    // literal clause carries spaces, colons and parentheses, takes its
+    // feature's axis (a published sibling's where one tests the same
+    // feature, its own name otherwise, after the published axes), and a
+    // literal spelling a published wrapper canonicalizes to the name.
+    $this->assertSame(['@media (hover: hover)', 'hover'], $manager::compoundParts('@media (hover: hover)+hover'));
+    $this->assertSame('hover+@media (hover: hover)', $manager->canonicalizeCondition('@media (hover: hover)+hover'));
+    $this->assertSame('hover+@media (prefers-color-scheme: light)+reduced-motion', $manager->canonicalizeCondition('reduced-motion+@media (prefers-color-scheme: light)+hover'));
+    $this->assertSame('hover+narrow', $manager->canonicalizeCondition('@CONTAINER ( max-width:767px )+:hover'));
+    $this->assertSame('@container (min-width: 500px)', $manager->canonicalizeCondition('@container (MIN-WIDTH:500px)'));
 
-    // A compound uses containers when any part does.
+    // A compound uses containers when any part does, a literal container
+    // clause included.
     $this->assertTrue($manager->isContainerCondition('narrow+dark'));
     $this->assertTrue($manager->isContainerCondition('hover+medium'));
     $this->assertFalse($manager->isContainerCondition('hover+dark'));
-    // A compound is a scheme condition when ANY part is.
+    $this->assertTrue($manager->isContainerCondition('@container (min-width: 500px)'));
+    $this->assertFalse($manager->isContainerCondition('@media (min-width: 500px)'));
+    // A compound is a scheme condition when ANY part is, the preference
+    // derived from the clause's CSS, so a literal scheme query counts.
     $this->assertTrue($manager->isSchemeCondition('narrow+dark'));
     $this->assertTrue($manager->isSchemeCondition('hover+dark'));
     $this->assertFalse($manager->isSchemeCondition('hover+medium'));
+    $this->assertTrue($manager->isSchemeCondition('@media (prefers-color-scheme: light)'));
+    $this->assertFalse($manager->isSchemeCondition('@media (prefers-contrast: more)'));
     $this->assertTrue($manager->mapUsesContainerConditions([
       'block:x' => ['narrow+dark' => ['padding' => '1rem']],
     ]));
@@ -225,23 +207,15 @@ class ConditionTypeTest extends KernelTestBase {
         'narrow+dark' => ['padding' => '1rem'],
         'dark+hover' => ['color' => 'red'],
         'hover+narrow+reduced-motion' => ['transition' => 'none'],
-        'first-child' => ['margin-top' => '0'],
-        'hover+last-child' => ['color' => 'blue'],
-        'not-last-child' => ['margin-bottom' => '24px'],
-        'hover+not-first-child+narrow' => ['color' => 'green'],
       ],
     ]));
-    // Two facts share the structural axis: alternatives, never combinables;
-    // a negation is one more fact on the axis, so it never combines with
-    // the fact it complements.
-    $errors = $validator->validate(["entity:$uuid" => ['first-child+odd' => ['padding' => '1rem']]]);
-    $this->assertCount(1, $errors);
-    $this->assertSame('STYLE_CONDITION_AXIS_CONFLICT', $errors[0]->getCode());
-    $this->assertSame('structural', $errors[0]->getContext()['axis']);
-    $errors = $validator->validate(["entity:$uuid" => ['first-child+not-last-child' => ['padding' => '1rem']]]);
-    $this->assertCount(1, $errors);
-    $this->assertSame('STYLE_CONDITION_AXIS_CONFLICT', $errors[0]->getCode());
-    $this->assertSame('structural', $errors[0]->getContext()['axis']);
+    // A retired position name is no condition any more: the position is
+    // a qualifier in the key ("::&:first-child"), and the entry keyed on
+    // the old name is refused as any unknown part is.
+    $errors = $validator->validate(["entity:$uuid" => ['first-child' => ['margin-top' => '0'], 'hover+not-last-child' => ['color' => 'blue']]]);
+    $this->assertCount(2, $errors);
+    $this->assertSame(['INVALID_STYLE_CONDITION', 'INVALID_STYLE_CONDITION'], array_map(static fn ($error) => $error->getCode(), $errors));
+    $this->assertSame([], $validator->validate(["entity:$uuid::&:first-child" => ['default' => ['margin-top' => '0'], 'hover' => ['color' => 'blue']]]));
 
     // An unknown part fails the whole compound, naming the part.
     $errors = $validator->validate(["entity:$uuid" => ['narrow+bogus' => ['padding' => '1rem']]]);
@@ -368,10 +342,12 @@ class ConditionTypeTest extends KernelTestBase {
     $this->assertSame('always applies', $conditions['default']);
     $this->assertSame(['wrapper' => ':hover', 'axis' => 'state'], $conditions['hover']);
     $this->assertSame(['wrapper' => '@container (max-width: 767px)', 'axis' => 'width'], $conditions['narrow']);
-    // A structural fact says so: the AI learns it is a place, not a state.
-    $this->assertSame(['wrapper' => ':first-child', 'axis' => 'structural', 'fact' => TRUE], $conditions['first-child']);
-    $this->assertSame(['wrapper' => ':nth-child(odd)', 'axis' => 'structural', 'fact' => TRUE], $conditions['odd']);
-    $this->assertSame(['wrapper' => ':not(:last-child)', 'axis' => 'structural', 'fact' => TRUE], $conditions['not-last-child']);
+    // No condition is a place: position is selector grammar, so the
+    // schema carries no fact flag and no position name.
+    $this->assertArrayNotHasKey('first-child', $conditions);
+    foreach ($conditions as $name => $definition) {
+      $this->assertArrayNotHasKey('fact', is_array($definition) ? $definition : [], $name);
+    }
   }
 
 }

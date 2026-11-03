@@ -1,0 +1,101 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for Daedalus AI Memory.
+ */
+
+/**
+ * Implements hook_update_dependencies().
+ *
+ * Installing the ledger rebuilds the container, which names every module
+ * in core.extension; the hooks that take the deleted daedalus_ai_anthropic,
+ * daedalus_blueprint_ai_anthropic, daedalus_blueprint_ai_dev_tools and
+ * daedalus_blueprint_ai_log_repair out of the registry must run first,
+ * or the install fails on a module missing from disk and leaves the ledger
+ * listed as enabled with no schema and no config.
+ */
+function daedalus_ai_memory_update_dependencies(): array {
+  return [
+    'daedalus_ai_memory' => [
+      11103 => [
+        'daedalus_ai' => 11103,
+        'daedalus_blueprint_ai' => 11102,
+      ],
+    ],
+  ];
+}
+
+/**
+ * Add the segment policy's settings to daedalus_ai_memory.settings.
+ *
+ * The context spine holds the model-facing history in segments that close
+ * on a measured budget or on a reframing skill; a site installed before
+ * the policy existed gets the shipped defaults where it has no value.
+ */
+function daedalus_ai_memory_update_11101(): void {
+  $config = \Drupal::configFactory()->getEditable('daedalus_ai_memory.settings');
+  $defaults = [
+    'segment_budget_tokens' => 80000,
+    'segment_budget_overrides' => [],
+    'segment_headroom_tokens' => 32000,
+    'reframe_minimum_tokens' => 25000,
+  ];
+  foreach ($defaults as $key => $value) {
+    if ($config->get($key) === NULL) {
+      $config->set($key, $value);
+    }
+  }
+  $config->save(TRUE);
+}
+
+/**
+ * Keep only the settings the schema knows; add the cache TTL.
+ *
+ * The transcript's segments replaced the message-count trimmer, whose two
+ * settings left the schema with it; a site's config keeps the keys the
+ * schema still has, and the renderer asks a capable provider for a cache
+ * TTL.
+ */
+function daedalus_ai_memory_update_11102(): void {
+  $config = \Drupal::configFactory()->getEditable('daedalus_ai_memory.settings');
+  $kept = [
+    'enabled_agents',
+    'cache_ttl',
+    'segment_budget_tokens',
+    'segment_budget_overrides',
+    'segment_headroom_tokens',
+    'reframe_minimum_tokens',
+  ];
+  $data = array_intersect_key($config->getRawData(), array_flip($kept));
+  $data += ['cache_ttl' => '5m'];
+  $config->setData($data)->save(TRUE);
+}
+
+/**
+ * Install the usage ledger the runner and the segment window now depend on.
+ *
+ * The runner gates every turn through the ledger and the segment window
+ * measures a segment by the ledger's last prompt size; a site that enabled
+ * memory before the ledger existed has no ledger, and the container cannot
+ * build the runner without it.
+ */
+function daedalus_ai_memory_update_11103(): void {
+  \Drupal::service('module_installer')->install(['daedalus_ai_ledger']);
+}
+
+/**
+ * Add the segment budget minimum to daedalus_ai_memory.settings.
+ *
+ * A budget set under the prompt's own floor (tools, system prompt and
+ * catalog run about 20000 tokens) closes every finished turn and pays a
+ * carry-over call each time; the policy clamps the budget and every
+ * per-model override up to this minimum, and 50000 leaves room for that
+ * floor plus several turns.
+ */
+function daedalus_ai_memory_update_11104(): void {
+  $config = \Drupal::configFactory()->getEditable('daedalus_ai_memory.settings');
+  if ($config->get('segment_budget_minimum_tokens') === NULL) {
+    $config->set('segment_budget_minimum_tokens', 50000)->save(TRUE);
+  }
+}

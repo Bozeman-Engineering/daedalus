@@ -40,13 +40,13 @@
 variant_axes:
   - animation:
       label: 'Animation'
-      description: 'The entrance a block plays as it enters the view: a block is born still, so reach for an entrance on the few blocks that should arrive (Slide in for items that arrive in sequence, Pop for one badge, stat or button per band), never on body copy.'
+      description: 'The entrance a block plays as it enters the view: a block is born still, so reach for an entrance on the few blocks that should arrive (Slide in for items that arrive in sequence, Pop for one badge, stat or button per section), never on body copy.'
   - hover:
       label: 'Hover'
       description: 'The feel a block answers a pointer with: Raise on an image teaser or a linked block that should feel pressable (the variant carries its own hover state, so the wear never carries a condition).'
   - button:
       label: 'Button'
-      description: 'The link part as one of the site''s buttons, inert until the block carries a link: one Primary per band at most, a Secondary beside it for the lesser action, Link for a tertiary "Read more" line and for the link under a card''s description, On accent for the one button inside an Accent band, and every button a pill at the caption size, restyled by swapping its look, never by hand-writing its fill, corners or padding.'
+      description: 'The link part as one of the site''s buttons, inert until the block carries a link: one Primary per section at most, a Secondary beside it for the lesser action, Link for a tertiary "Read more" line and for the link under a card''s description, On accent for the one button inside an Accent section, and every button a pill at the caption size, restyled by swapping its look, never by hand-writing its fill, corners or padding.'
       owns:
         - background-color
         - border-radius
@@ -88,7 +88,7 @@ elements:
             stops: ['accent-contrast', 'accent', 'text', 'inverse-text']
       # A button is a flat fill: no images, no gradients on buttons. The
       # fill is bound to the color scale HERE (site-wide it is unbound so
-      # bands may wear the palette), curated to the button roles.
+      # sections may wear the palette), curated to the button roles.
       background:
         properties:
           - background-color

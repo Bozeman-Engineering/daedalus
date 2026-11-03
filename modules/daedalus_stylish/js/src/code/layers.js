@@ -110,7 +110,7 @@ export const documentLayerId = (reference) =>
 
 /**
  * A law document's reference: the declaration at one declaring scope,
- * as the Materials place's Law tab shows it, optionally at one property.
+ * as the Design system place's Law tab shows it, optionally at one property.
  *
  * The declared tier's doorway rides the one openDocument road the skin
  * and variant doorways ride (provenance-model.js declaredDoorway,
@@ -151,7 +151,7 @@ export const lawDocumentFocus = (reference) => {
 
 /**
  * An ancestor-rule layer id: another element's selector entry reaching
- * this key (`ancestor:container:{uuid}::> pb-text`), the rule's own key
+ * this key (`ancestor:container:{uuid}::> d-text`), the rule's own key
  * after the tier prefix (ancestorRule() reads it back).
  *
  * Like the floor's, an ancestor layer is a display layer in the
@@ -180,7 +180,7 @@ export const ancestorLayerId = (owner, selector) =>
 /**
  * A worn ancestor layer id: a variant a rule wears, read at the position
  * its fragment reaches this key through
- * (`ancestor:container:{uuid}::> pb-text|button`). The own id with the
+ * (`ancestor:container:{uuid}::> d-text|button`). The own id with the
  * variant after a `|`, a character neither the selector grammar
  * (relative-selector.js) nor a machine name admits, so the tail after
  * the LAST `|` is the variant and ancestorRule() reads the position back
@@ -282,7 +282,7 @@ export const isFloorLayer = (id) => {
  * the box-model diagram, the code view's floor and ancestor lines and
  * winner chips: layerColor for every `skin:*`, `declared:*` and own
  * `ancestor:*` id; a worn ancestor layer wears its variant's hue
- * instead). A fixed teal, kept well away from the element blue's band.
+ * instead). A fixed teal, kept well away from the element blue's hue range.
  */
 export const SKIN_COLOR = 'hsl(172 66% 50%)';
 
@@ -309,7 +309,7 @@ export const winnerLayerId = (winner) => winner.layer;
  * wears, reaching this key: ancestorWearLayerId) is that variant's hue,
  * the same hash an own wearing of it gets, so one variant is one color
  * whether the element or a rule above it wears it. Hues landing on the
- * element blue's band shift deterministically away so the top layer
+ * element blue's hue range shift deterministically away so the top layer
  * stays visually reserved. Two variants may still collide (accepted;
  * the chip labels disambiguate).
  *

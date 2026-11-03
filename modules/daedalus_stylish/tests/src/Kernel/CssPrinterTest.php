@@ -30,6 +30,7 @@ class CssPrinterTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -293,49 +294,54 @@ CSS;
   }
 
   /**
-   * A structural fact prints its pseudo-class bare: no force-state dual.
+   * A position is a qualifier of its compound, never a condition.
    *
-   * The fact holds by the element's place in the markup, so nothing the
-   * editor stamps can make it true; a posable state in the same compound
-   * keeps its :is() dual, and the fact appends to every target of a
-   * selector entry (the children lane's ":scope > *:first-child").
+   * The keys the fact-condition convergence writes (`> *:first-child`,
+   * `&:empty`): the position prints at its compound inside the weight
+   * discipline (no force-state dual, nothing the editor stamps can make
+   * it true), a state on the same rule keeps its :is() dual as the
+   * entry's condition suffix, and every pseudo-class condition the
+   * printer meets prints the dual: there is no bare print left.
    */
-  public function testStructuralFacts(): void {
+  public function testPositionIsNeverACondition(): void {
     $css = $this->printer->printMap([
-      "container:{$this->uuid}::> *" => [
-        'first-child' => ['margin-top' => '0'],
-        'odd' => ['background-color' => '#f5f5f5'],
-        'hover+last-child' => ['color' => 'blue'],
-      ],
-      "block:{$this->uuid}" => [
-        'empty' => ['display' => 'none'],
-        'even+narrow' => ['padding' => '1rem'],
-      ],
+      "container:{$this->uuid}::> *:first-child" => ['default' => ['margin-top' => '0']],
+      "container:{$this->uuid}::> *:nth-child(odd)" => ['default' => ['background-color' => '#f5f5f5']],
+      "container:{$this->uuid}::> *:last-child" => ['hover' => ['color' => 'blue']],
+      "block:{$this->uuid}::&:empty" => ['default' => ['display' => 'none']],
+      "block:{$this->uuid}::&:nth-child(even)" => ['narrow' => ['padding' => '1rem']],
     ]);
     $expected = <<<CSS
 @scope ([data-selectable="container:{$this->uuid}"]) {
-  :scope > *:first-child {
+  :scope > *:where(:first-child) {
     margin-top: 0;
   }
-  :scope > *:nth-child(odd) {
+}
+@scope ([data-selectable="container:{$this->uuid}"]) {
+  :scope > *:where(:nth-child(odd)) {
     background-color: #f5f5f5;
   }
-  :scope > *:is(:hover, [data-force-state~="hover"]):last-child {
+}
+@scope ([data-selectable="container:{$this->uuid}"]) {
+  :scope > *:where(:last-child):is(:hover, [data-force-state~="hover"]) {
     color: blue;
   }
 }
 @scope ([data-selectable="block:{$this->uuid}"]) {
-  :scope:empty {
+  :scope:where(:empty) {
     display: none;
   }
+}
+@scope ([data-selectable="block:{$this->uuid}"]) {
   @container (max-width: 767px) {
-    :scope:nth-child(even) {
+    :scope:where(:nth-child(even)) {
       padding: 1rem;
     }
   }
 }
 CSS;
     $this->assertSame($expected, $css);
+    $this->assertStringNotContainsString('data-force-state~="first-child"', $css);
   }
 
   /**
@@ -556,12 +562,12 @@ CSS;
    */
   public function testSelectorDiscipline(): void {
     $cases = [
-      "container:{$this->uuid}::> pb-text" => ':where(:scope) > [data-element="block_type:text"]',
-      "container:{$this->uuid}::pb-formatted-text" => '[data-element="block_type:formatted_text"]',
-      "container:{$this->uuid}::> pb-text .text-block-link" => ':where(:scope) > :where([data-element="block_type:text"]) .text-block-link',
-      "container:{$this->uuid}::> pb-text p" => ':where(:scope) > :where([data-element="block_type:text"]) p',
-      "container:{$this->uuid}::> pb-container" => ':where(:scope) > [data-element^="layout:"]',
-      "container:{$this->uuid}::pb-block" => ':is([data-element^="block_type:"], [data-element^="block_plugin:"])',
+      "container:{$this->uuid}::> d-text" => ':where(:scope) > [data-element="block_type:text"]',
+      "container:{$this->uuid}::d-formatted-text" => '[data-element="block_type:formatted_text"]',
+      "container:{$this->uuid}::> d-text .text-block-link" => ':where(:scope) > :where([data-element="block_type:text"]) .text-block-link',
+      "container:{$this->uuid}::> d-text p" => ':where(:scope) > :where([data-element="block_type:text"]) p',
+      "container:{$this->uuid}::> d-container" => ':where(:scope) > [data-element^="layout:"]',
+      "container:{$this->uuid}::d-block" => ':is([data-element^="block_type:"], [data-element^="block_plugin:"])',
       "container:{$this->uuid}::> * > *" => ':scope > * > *',
     ];
     foreach ($cases as $key => $target) {
@@ -581,11 +587,11 @@ CSS;
     // on the type; a part continuing by a descendant combinator takes no
     // donut and keeps the tag's 0-0-1.
     $css = $this->printer->printMap([
-      "container:{$this->uuid}::.band > pb-text" => ['default' => ['color' => 'red']],
-      "container:{$this->uuid}::.band p" => ['default' => ['color' => 'blue']],
+      "container:{$this->uuid}::.section > d-text" => ['default' => ['color' => 'red']],
+      "container:{$this->uuid}::.section p" => ['default' => ['color' => 'blue']],
     ]);
-    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {' . "\n" . '  :where(:scope):where(.band) > [data-element="block_type:text"], :where(.band) > [data-element="block_type:text"] {', $css);
-    $this->assertStringContainsString('@scope ([data-selectable="container:' . $this->uuid . '"]) {' . "\n" . '  :where(:scope):where(.band) p, :where(.band) p {', $css);
+    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {' . "\n" . '  :where(:scope):where(.section) > [data-element="block_type:text"], :where(.section) > [data-element="block_type:text"] {', $css);
+    $this->assertStringContainsString('@scope ([data-selectable="container:' . $this->uuid . '"]) {' . "\n" . '  :where(:scope):where(.section) p, :where(.section) p {', $css);
   }
 
   /**
@@ -596,7 +602,7 @@ CSS;
    * their argument's specificity, so every argument compound prints
    * inside :where() with its combinators bare (:where() takes complex
    * selectors, never relative ones, so the wrap is per compound). The
-   * subject alone weighs, so `> *:not(pb-image)` leaves the weight on
+   * subject alone weighs, so `> *:not(d-image)` leaves the weight on
    * `:scope`. A part's dual carries the part's qualifiers and is skipped
    * when the part's next compound is a sibling (the scope root has no
    * sibling inside itself). The bare print path (the defaults tier)
@@ -604,17 +610,17 @@ CSS;
    */
   public function testRelationDiscipline(): void {
     $cases = [
-      "container:{$this->uuid}::> pb-text:has(a)" => ':where(:scope) > [data-element="block_type:text"]:has(:where(a))',
-      "container:{$this->uuid}::> pb-container:has(> pb-image)" => ':where(:scope) > [data-element^="layout:"]:has(> :where([data-element="block_type:image"]))',
-      "container:{$this->uuid}::> pb-text:has(+ pb-image)" => ':where(:scope) > [data-element="block_type:text"]:has(+ :where([data-element="block_type:image"]))',
+      "container:{$this->uuid}::> d-text:has(a)" => ':where(:scope) > [data-element="block_type:text"]:has(:where(a))',
+      "container:{$this->uuid}::> d-container:has(> d-image)" => ':where(:scope) > [data-element^="layout:"]:has(> :where([data-element="block_type:image"]))',
+      "container:{$this->uuid}::> d-text:has(+ d-image)" => ':where(:scope) > [data-element="block_type:text"]:has(+ :where([data-element="block_type:image"]))',
       "container:{$this->uuid}::> p + p" => ':where(:scope) > :where(p) + p',
       "container:{$this->uuid}::> p ~ p" => ':where(:scope) > :where(p) ~ p',
       "container:{$this->uuid}::> p + *" => ':where(:scope) > p + *',
-      "container:{$this->uuid}::> *:not(pb-image)" => ':scope > *:not(:where([data-element="block_type:image"]))',
-      "container:{$this->uuid}::> *:not(pb-image):not(pb-video)" => ':scope > *:not(:where([data-element="block_type:image"])):not(:where([data-element="block_type:video"]))',
-      "container:{$this->uuid}::> pb-text:not(:has(a))" => ':where(:scope) > [data-element="block_type:text"]:not(:has(:where(a)))',
-      "container:{$this->uuid}::> pb-text:has(a):not(.featured)" => ':where(:scope) > [data-element="block_type:text"]:has(:where(a)):not(:where(.featured))',
-      "container:{$this->uuid}::> pb-text .link ~ .link" => ':where(:scope) > :where([data-element="block_type:text"]) :where(.link) ~ .link',
+      "container:{$this->uuid}::> *:not(d-image)" => ':scope > *:not(:where([data-element="block_type:image"]))',
+      "container:{$this->uuid}::> *:not(d-image):not(d-video)" => ':scope > *:not(:where([data-element="block_type:image"])):not(:where([data-element="block_type:video"]))',
+      "container:{$this->uuid}::> d-text:not(:has(a))" => ':where(:scope) > [data-element="block_type:text"]:not(:has(:where(a)))',
+      "container:{$this->uuid}::> d-text:has(a):not(.featured)" => ':where(:scope) > [data-element="block_type:text"]:has(:where(a)):not(:where(.featured))',
+      "container:{$this->uuid}::> d-text .link ~ .link" => ':where(:scope) > :where([data-element="block_type:text"]) :where(.link) ~ .link',
       "block:{$this->uuid}::p:has(a)" => 'p:has(:where(a))',
     ];
     foreach ($cases as $key => $target) {
@@ -624,7 +630,7 @@ CSS;
       $this->assertStringContainsString("\n  {$target}:is(:hover, [data-force-state~=\"hover\"]) {\n    color: blue;\n  }\n", $css, $key);
     }
     $css = $this->printer->printMap([
-      "container:{$this->uuid}::> pb-text:has(a)" => ['default' => ['color' => 'red']],
+      "container:{$this->uuid}::> d-text:has(a)" => ['default' => ['color' => 'red']],
     ]);
     $expected = <<<CSS
 @scope ([data-selectable="container:{$this->uuid}"]) {
@@ -638,18 +644,302 @@ CSS;
     // A part-first sibling chain prints no dual; a qualified part keeps
     // it, the qualifier riding both halves, and the standard donut.
     $css = $this->printer->printMap([
-      "container:{$this->uuid}::.band + .band" => ['default' => ['margin-top' => '0']],
-      "container:{$this->uuid}::.band:has(a)" => ['default' => ['color' => 'red']],
-      "container:{$this->uuid}::.band:has(a) > *" => ['default' => ['color' => 'blue']],
+      "container:{$this->uuid}::.section + .section" => ['default' => ['margin-top' => '0']],
+      "container:{$this->uuid}::.section:has(a)" => ['default' => ['color' => 'red']],
+      "container:{$this->uuid}::.section:has(a) > *" => ['default' => ['color' => 'blue']],
     ]);
-    $this->assertStringContainsString("\n  :where(.band) + .band {\n", $css);
-    $this->assertStringNotContainsString(':scope:where(.band) + .band', $css);
-    $this->assertStringContainsString('to (:scope [data-selectable^="container:"], :scope [data-selectable^="block:"]) {' . "\n" . '  :scope.band:has(:where(a)), .band:has(:where(a)) {', $css);
-    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {' . "\n" . '  :scope:where(.band):has(:where(a)) > *, .band:has(:where(a)) > * {', $css);
+    $this->assertStringContainsString("\n  :where(.section) + .section {\n", $css);
+    $this->assertStringNotContainsString(':scope:where(.section) + .section', $css);
+    $this->assertStringContainsString('to (:scope [data-selectable^="container:"], :scope [data-selectable^="block:"]) {' . "\n" . '  :scope.section:has(:where(a)), .section:has(:where(a)) {', $css);
+    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {' . "\n" . '  :scope:where(.section):has(:where(a)) > *, .section:has(:where(a)) > * {', $css);
 
     // The bare lane prints the same compounds after the element's selector.
-    $css = $this->printer->printBareEntry(':where([data-element="kind:container"])', RelativeSelector::parse('> pb-text:has(+ pb-image) ~ p'), ['default' => ['color' => 'red']]);
+    $css = $this->printer->printBareEntry(':where([data-element="kind:container"])', RelativeSelector::parse('> d-text:has(+ d-image) ~ p'), ['default' => ['color' => 'red']]);
     $this->assertSame(":where([data-element=\"kind:container\"]) > :where([data-element=\"block_type:text\"]):has(+ :where([data-element=\"block_type:image\"])) ~ :where(p) {\n  color: red;\n}", $css);
+  }
+
+  /**
+   * A position qualifier prints inside :where() at its compound; the
+   * qualified anchor prints on the scope root.
+   *
+   * Position is structure (the WHERE), selector text the markup decides,
+   * and a position pseudo-class weighs 0-1-0 on its own; the discipline
+   * puts ONE weight on the chain, so it prints inside its own :where()
+   * with its canonical argument, inside a negation too, and a rule's
+   * weight never moves (`> *:not(:last-child)` weighs what `> *` weighs,
+   * `li:nth-child(2n+1)` what `li` weighs: proved by the specificity
+   * algorithm, not by eye). The qualified anchor is the owner standing
+   * first: it prints as the `:scope` link itself with its qualifiers
+   * glued on, bare when it carries the weight and in :where() otherwise;
+   * a part behind it keeps the hoisted dual (the class glued onto the
+   * anchor's print) and the part's donut, and a condition suffix and the
+   * box compose after it as on any host. The bare lane glues the anchor's
+   * qualifiers onto the element's own selector.
+   */
+  public function testPositionQualifiers(): void {
+    $cases = [
+      ['> *:not(:last-child)', '> *', [':scope > *:not(:where(:last-child))']],
+      ['> *:first-child', '> *', [':scope > *:where(:first-child)']],
+      ['li:nth-child(2n+1)', 'li', ['li:where(:nth-child(2n+1))']],
+      ['> d-text:first-of-type', '> d-text', [':where(:scope) > [data-element="block_type:text"]:where(:first-of-type)']],
+      ['&:first-child', NULL, [':scope:where(:first-child)']],
+      ['&:not(:last-child) > *', '> *', [':scope:not(:where(:last-child)) > *']],
+      ['&:first-child > d-text', '> d-text', [':where(:scope):where(:first-child) > [data-element="block_type:text"]']],
+      ['&:only-child > *:nth-last-child(-n+3)', '> *', [':scope:where(:only-child) > *:where(:nth-last-child(-n+3))']],
+      ['&:first-child::before', '&::before', [':scope:where(:first-child)::before']],
+      ['&:first-child .quote', '.quote', [':scope:where(:first-child).quote', ':where(:scope):where(:first-child) .quote']],
+      ['&:first-child .quote > *', '.quote > *', [':scope:where(:first-child):where(.quote) > *', ':where(:scope):where(:first-child) .quote > *']],
+      ['.section:not(:first-child) > *', '.section > *', [':scope:where(.section):not(:where(:first-child)) > *', '.section:not(:where(:first-child)) > *']],
+    ];
+    foreach ($cases as [$qualified, $plain, $targets]) {
+      $this->assertSame($targets, CssPrinter::scopeTargets(RelativeSelector::parse($qualified)), $qualified);
+      $plain_targets = CssPrinter::scopeTargets($plain === NULL ? NULL : RelativeSelector::parse($plain));
+      $this->assertSame(array_map(self::specificity(...), $plain_targets), array_map(self::specificity(...), $targets), sprintf('%s weighs what %s weighs.', $qualified, $plain ?? 'the root'));
+      $key = ($qualified === '&:first-child' || $qualified === '&:first-child::before' || $qualified === 'li:nth-child(2n+1)' ? 'block:' : 'container:') . $this->uuid . '::' . $qualified;
+      $css = $this->printer->printMap([$key => ['default' => ['color' => 'red'], 'hover' => ['color' => 'blue']]]);
+      $list = implode(', ', $targets);
+      $this->assertStringContainsString("\n  $list {\n    color: red;\n  }\n", $css, $key);
+      $this->assertStringContainsString("\n  " . implode(', ', array_map(static fn (string $target): string => preg_replace('/(::\w+)?$/', ':is(:hover, [data-force-state~="hover"])$1', $target, 1), $targets)) . " {\n    color: blue;\n  }\n", $css, $key);
+    }
+    // The algorithm sees a bare position weigh, so the equalities above
+    // are not vacuous.
+    $this->assertSame([0, 2, 0], self::specificity(':scope > *:first-child'));
+    $this->assertSame([0, 1, 1], self::specificity('li:nth-child(2n+1)'));
+    $this->assertSame([0, 1, 0], self::specificity(':scope:where(:first-child)'));
+
+    // The donut follows the part behind the anchor; the anchor's own
+    // children take none.
+    $this->assertSame(CssPrinter::donutLimit(RelativeSelector::parse('.quote')), CssPrinter::donutLimit(RelativeSelector::parse('&:first-child .quote')));
+    $this->assertSame(CssPrinter::donutLimit(RelativeSelector::parse('.quote > *')), CssPrinter::donutLimit(RelativeSelector::parse('&:first-child .quote > *')));
+    $this->assertNull(CssPrinter::donutLimit(RelativeSelector::parse('&:first-child > *')));
+    $css = $this->printer->printMap([
+      "container:{$this->uuid}::&:first-child .quote" => ['default' => ['color' => 'red']],
+      "block:{$this->uuid}::&:first-child::before" => ['default' => ['content' => '""'], 'hover' => ['color' => 'blue']],
+    ]);
+    $expected = <<<CSS
+@scope ([data-selectable="container:{$this->uuid}"]) to (:scope [data-selectable^="container:"], :scope [data-selectable^="block:"]) {
+  :scope:where(:first-child).quote, :where(:scope):where(:first-child) .quote {
+    color: red;
+  }
+}
+@scope ([data-selectable="block:{$this->uuid}"]) {
+  :scope:where(:first-child)::before {
+    content: "";
+  }
+  :scope:where(:first-child):is(:hover, [data-force-state~="hover"])::before {
+    color: blue;
+  }
+}
+CSS;
+    $this->assertSame($expected, $css);
+
+    // The bare lane: the anchor's qualifiers glue onto the element's own
+    // selector, a position prints inside :where() as in the @scope lane.
+    $this->assertSame(":where([data-element=\"kind:block\"]):where(:first-child) {\n  margin-top: 0;\n}", $this->printer->printBareEntry(':where([data-element="kind:block"])', RelativeSelector::parse('&:first-child'), ['default' => ['margin-top' => '0']]));
+    $this->assertSame(":where([data-element=\"kind:container\"]):not(:where(:last-child)) > * {\n  margin-bottom: 1rem;\n}", $this->printer->printBareEntry(':where([data-element="kind:container"])', RelativeSelector::parse('&:not(:last-child) > *'), ['default' => ['margin-bottom' => '1rem']]));
+    $this->assertSame(":where([data-element=\"kind:container\"]) > *:not(:where(:last-child)) {\n  margin-bottom: 1rem;\n}", $this->printer->printBareEntry(':where([data-element="kind:container"])', RelativeSelector::parse('> *:not(:last-child)'), ['default' => ['margin-bottom' => '1rem']]));
+  }
+
+  /**
+   * A qualifier prints at its compound inside :where(); a state as the dual.
+   *
+   * A class, an attribute and a pseudo-class qualify the compound they
+   * stand on (the WHERE the markup decides), and each weighs 0-1-0 on its
+   * own; the discipline puts ONE weight on the chain, so every one prints
+   * inside its own :where() at its compound (`li:where(.active) > ul`
+   * weighs what `li > ul` weighs: proved by the specificity algorithm, not
+   * by eye), inside a negation and a `:has()` argument too. A pseudo-class
+   * spelling a published state is posable, so it prints the same
+   * force-state dual the condition suffix prints (ONE helper, two
+   * callers), inside the :where(): the pose on the `li` reveals
+   * `li:hover > ul`. A pseudo-class the roster does not publish
+   * (`:visited`) prints bare. The anchor's qualifiers print on the scope
+   * root (`&.open > ul` is the owner wearing the class, `&:hover > ul`
+   * the owner hovered), a part's extra classes ride its hoisted dual, and
+   * the condition suffix and the box still compose after the whole
+   * chain. The bare lane glues the anchor's qualifiers onto the element's
+   * own selector. An `:is()` prints inside its own :where() like the rest
+   * (it takes its most specific member), its members bare inside it by
+   * the same rules: the dual per posable member for Lily's
+   * `.menu-item:is(:focus-within, :hover) > ul`, a type by its address
+   * stamp, a tag bare (`*:where(:is(h1, h2))`, the fold of `h1, h2`,
+   * weighs nothing as `*` does), a member's own `:has()` and state
+   * unwrapped, and inside a `:has()` argument too.
+   */
+  public function testQualifiersPlace(): void {
+    $hover = ':is(:hover, [data-force-state~="hover"])';
+    $focus = ':is(:focus-within, [data-force-state~="focus-within"])';
+    $either = ":is($focus, $hover)";
+    $cases = [
+      ['.menu-item:is(:focus-within, :hover) > ul', '.menu-item > ul', [":where(:scope):where(.menu-item):where($either) > ul", ":where(.menu-item):where($either) > ul"]],
+      ['> d-text:is(:focus-within, :hover) a', '> d-text a', [":where(:scope) > :where([data-element=\"block_type:text\"]):where($either) a"]],
+      ['> *:is(d-image, d-text)', '> *', [':scope > *:where(:is([data-element="block_type:image"], [data-element="block_type:text"]))']],
+      ['> d-text:has(*:is(a, button))', '> d-text', [':where(:scope) > [data-element="block_type:text"]:has(*:where(:is(a, button)))']],
+      ['li:hover > ul', 'li > ul', [":where(li):where($hover) > ul"]],
+      ['> d-text:hover a', '> d-text a', [":where(:scope) > :where([data-element=\"block_type:text\"]):where($hover) a"]],
+      ['li.active > ul', 'li > ul', [':where(li):where(.active) > ul']],
+      ['li[aria-current="page"] > a', 'li > a', [':where(li):where([aria-current="page"]) > a']],
+      ['*[aria-expanded="true"] > ul', '> ul', ['*:where([aria-expanded="true"]) > ul']],
+      ['&.open > ul', '> ul', [':where(:scope):where(.open) > ul']],
+      ['&:hover > ul', '> ul', [":where(:scope):where($hover) > ul"]],
+      ['&.open', NULL, [':scope:where(.open)']],
+      ['a:visited', 'a', ['a:where(:visited)']],
+      ['> *:not(:hover)', '> *', [":scope > *:not(:where($hover))"]],
+      ['> d-text:has(a:hover)', '> d-text', [":where(:scope) > [data-element=\"block_type:text\"]:has(:where(a):where($hover))"]],
+      ['.featured.quote', '.featured', [':scope.featured:where(.quote)', '.featured:where(.quote)']],
+      ['li.active:hover[aria-current="page"] > a', 'li > a', [":where(li):where(.active):where($hover):where([aria-current=\"page\"]) > a"]],
+    ];
+    $conditions = $this->container->get('plugin.manager.daedalus_stylish_condition_type')->getConditions();
+    foreach ($cases as [$qualified, $plain, $targets]) {
+      $this->assertSame($targets, CssPrinter::scopeTargets(RelativeSelector::parse($qualified), $conditions), $qualified);
+      $plain_targets = CssPrinter::scopeTargets($plain === NULL ? NULL : RelativeSelector::parse($plain), $conditions);
+      $this->assertSame(array_map(self::specificity(...), $plain_targets), array_map(self::specificity(...), $targets), sprintf('%s weighs what %s weighs.', $qualified, $plain ?? 'the root'));
+      $css = $this->printer->printMap(["container:{$this->uuid}::$qualified" => ['default' => ['color' => 'red'], 'hover' => ['color' => 'blue']]]);
+      $this->assertStringContainsString("\n  " . implode(', ', $targets) . " {\n    color: red;\n  }\n", $css, $qualified);
+      $this->assertStringContainsString("\n  " . implode(', ', array_map(static fn (string $target): string => $target . $hover, $targets)) . " {\n    color: blue;\n  }\n", $css, $qualified);
+    }
+    // The fold of `h1, h2` by descent weighs nothing, as `*` does: the
+    // :is() rides inside :where(), its tag members bare. A member's own
+    // qualifiers print by the same rules, unwrapped (the one :where() has
+    // zeroed them): a `:has()` argument bare, a state the dual.
+    foreach ([
+      ['*:is(h1, h2)', '*:where(:is(h1, h2))'],
+      ['*:is(.a, :not(.b))', '*:where(:is(.a, :not(.b)))'],
+      ['*:is(.x:has(em), a:hover)', "*:where(:is(.x:has(em), a$hover))"],
+    ] as [$selector, $target]) {
+      $this->assertSame([$target], CssPrinter::scopeTargets(RelativeSelector::parse($selector), $conditions), $selector);
+      $this->assertSame([0, 0, 0], self::specificity($target), "$selector weighs nothing.");
+    }
+    $this->assertSame([0, 0, 1], self::specificity('*:is(h1, h2)'));
+    $this->assertSame([0, 1, 1], self::specificity("*:is(.x:has(em), a$hover)"));
+    // Without a condition table no pseudo-class is a published state: the
+    // same qualifier prints bare, which is what makes the dual the
+    // table's verdict and not the grammar's, inside :is() too.
+    $this->assertSame([':where(li):where(:hover) > ul'], CssPrinter::scopeTargets(RelativeSelector::parse('li:hover > ul')));
+    $this->assertSame([':where(:scope):where(.menu-item):where(:is(:focus-within, :hover)) > ul', ':where(.menu-item):where(:is(:focus-within, :hover)) > ul'], CssPrinter::scopeTargets(RelativeSelector::parse('.menu-item:is(:focus-within, :hover) > ul')));
+    // The algorithm sees a bare qualifier weigh, so the equalities above
+    // are not vacuous.
+    $this->assertSame([0, 1, 2], self::specificity('li.active > ul'));
+    $this->assertSame([0, 1, 2], self::specificity('li:hover > ul'));
+    $this->assertSame([0, 1, 2], self::specificity('li[aria-current="page"] > a'));
+    $this->assertSame([0, 2, 0], self::specificity(":scope$hover"));
+    $this->assertSame([0, 1, 0], self::specificity(":scope:where($hover)"));
+
+    // The box and the condition suffix compose after the qualified chain,
+    // the state qualifier at its compound and the condition on the host.
+    $css = $this->printer->printMap([
+      "container:{$this->uuid}::li:hover > ul::before" => ['default' => ['content' => '""'], 'hover' => ['color' => 'blue']],
+    ]);
+    $expected = <<<CSS
+@scope ([data-selectable="container:{$this->uuid}"]) {
+  :where(li):where($hover) > ul::before {
+    content: "";
+  }
+  :where(li):where($hover) > ul$hover::before {
+    color: blue;
+  }
+}
+CSS;
+    $this->assertSame($expected, $css);
+
+    // The bare lane: the anchor's qualifiers glue onto the element's own
+    // selector, a chain's at their compounds, the dual included.
+    $this->assertSame(":where([data-element=\"kind:container\"]):where(.open) > :where(ul) {\n  display: block;\n}", $this->printer->printBareEntry(':where([data-element="kind:container"])', RelativeSelector::parse('&.open > ul'), ['default' => ['display' => 'block']]));
+    $this->assertSame(":where([data-element=\"kind:container\"]) :where(li):where($hover) > :where(ul) {\n  display: block;\n}", $this->printer->printBareEntry(':where([data-element="kind:container"])', RelativeSelector::parse('li:hover > ul'), ['default' => ['display' => 'block']]));
+  }
+
+  /**
+   * The specificity of one compound or complex selector, as [a, b, c].
+   *
+   * CSS's algorithm over the printer's output, so the weight discipline
+   * is proved rather than eyeballed: :where() weighs nothing; :is(),
+   * :not() and :has() weigh their most specific argument; an id 1-0-0; a
+   * class, an attribute and every other pseudo-class (:scope included)
+   * 0-1-0; a tag and a pseudo-element 0-0-1; `*` and combinators nothing.
+   */
+  protected static function specificity(string $selector): array {
+    $weight = [0, 0, 0];
+    $length = strlen($selector);
+    for ($i = 0; $i < $length; $i++) {
+      $char = $selector[$i];
+      if ($char === '#' || $char === '.') {
+        preg_match('/[A-Za-z0-9_-]+/A', $selector, $m, 0, $i + 1);
+        $i += strlen($m[0]);
+        $weight[$char === '#' ? 0 : 1]++;
+      }
+      elseif ($char === '[') {
+        $i = strpos($selector, ']', $i);
+        $weight[1]++;
+      }
+      elseif ($char === ':') {
+        $element = ($selector[$i + 1] ?? '') === ':';
+        preg_match('/[a-z-]+/A', $selector, $m, 0, $i + ($element ? 2 : 1));
+        $name = $m[0];
+        $i += strlen($name) + ($element ? 1 : 0);
+        $argument = NULL;
+        if (($selector[$i + 1] ?? '') === '(') {
+          $depth = 0;
+          for ($j = $i + 1; $j < $length; $j++) {
+            $depth += match ($selector[$j]) {
+              '(' => 1,
+              ')' => -1,
+              default => 0,
+            };
+            if ($depth === 0) {
+              break;
+            }
+          }
+          $argument = substr($selector, $i + 2, $j - $i - 2);
+          $i = $j;
+        }
+        if ($element) {
+          $weight[2]++;
+        }
+        elseif (in_array($name, ['is', 'not', 'has'], TRUE)) {
+          $most = max(array_map(self::specificity(...), self::selectorList($argument)));
+          $weight = [$weight[0] + $most[0], $weight[1] + $most[1], $weight[2] + $most[2]];
+        }
+        elseif ($name !== 'where') {
+          $weight[1]++;
+        }
+      }
+      elseif (ctype_alpha($char)) {
+        preg_match('/[A-Za-z0-9-]+/A', $selector, $m, 0, $i);
+        $i += strlen($m[0]) - 1;
+        $weight[2]++;
+      }
+    }
+    return $weight;
+  }
+
+  /**
+   * The members of a selector list, split at its TOP-LEVEL commas only.
+   *
+   * A nested list (`:not(:where(:is(:hover, […])))`) stays one member, so
+   * a zero-weight :where() around a dual weighs nothing, as CSS says.
+   *
+   * @return string[]
+   *   The members, in order.
+   */
+  protected static function selectorList(string $text): array {
+    $members = [];
+    $depth = 0;
+    $start = 0;
+    $length = strlen($text);
+    for ($i = 0; $i < $length; $i++) {
+      if ($text[$i] === '(') {
+        $depth++;
+      }
+      elseif ($text[$i] === ')') {
+        $depth--;
+      }
+      elseif ($depth === 0 && substr($text, $i, 2) === ', ') {
+        $members[] = substr($text, $start, $i - $start);
+        $start = $i + 2;
+      }
+    }
+    $members[] = substr($text, $start);
+    return $members;
   }
 
   /**
@@ -676,7 +966,6 @@ CSS;
       "block:{$this->uuid}::&::before" => [
         'default' => ['content' => '""', 'color' => 'red', 'animation-trigger' => '--in-view play-once'],
         'hover' => ['color' => 'blue'],
-        'first-child' => ['display' => 'none'],
         'narrow' => ['display' => 'none'],
       ],
     ]);
@@ -696,9 +985,6 @@ CSS;
   :scope:is(:hover, [data-force-state~="hover"])::before {
     color: blue;
   }
-  :scope:first-child::before {
-    display: none;
-  }
   @container (max-width: 767px) {
     :scope::before {
       display: none;
@@ -713,12 +999,12 @@ CSS;
     // untouched beneath it; a pseudo rule crosses into children exactly
     // as its host does, so it takes no donut.
     $cases = [
-      "container:{$this->uuid}::> pb-text::before" => [':where(:scope) > [data-element="block_type:text"]', '::before'],
-      "container:{$this->uuid}::> pb-text:has(a)::after" => [':where(:scope) > [data-element="block_type:text"]:has(:where(a))', '::after'],
+      "container:{$this->uuid}::> d-text::before" => [':where(:scope) > [data-element="block_type:text"]', '::before'],
+      "container:{$this->uuid}::> d-text:has(a)::after" => [':where(:scope) > [data-element="block_type:text"]:has(:where(a))', '::after'],
       "container:{$this->uuid}::> p + p::before" => [':where(:scope) > :where(p) + p', '::before'],
       "container:{$this->uuid}::> *::after" => [':scope > *', '::after'],
-      "container:{$this->uuid}::pb-block::before" => [':is([data-element^="block_type:"], [data-element^="block_plugin:"])', '::before'],
-      "container:{$this->uuid}::> pb-text .link::after" => [':where(:scope) > :where([data-element="block_type:text"]) .link', '::after'],
+      "container:{$this->uuid}::d-block::before" => [':is([data-element^="block_type:"], [data-element^="block_plugin:"])', '::before'],
+      "container:{$this->uuid}::> d-text .link::after" => [':where(:scope) > :where([data-element="block_type:text"]) .link', '::after'],
       "block:{$this->uuid}::p::before" => ['p', '::before'],
       "block:{$this->uuid}::&::after" => [':scope', '::after'],
     ];
@@ -735,19 +1021,26 @@ CSS;
     // after a sibling step, where the dual is skipped too).
     $css = $this->printer->printMap([
       "container:{$this->uuid}::.quote::after" => ['default' => ['content' => '""'], 'hover' => ['color' => 'purple']],
-      "container:{$this->uuid}::.band > *::before" => ['default' => ['content' => '""']],
-      "container:{$this->uuid}::.band + .band::before" => ['default' => ['content' => '""']],
+      "container:{$this->uuid}::.section > *::before" => ['default' => ['content' => '""']],
+      "container:{$this->uuid}::.section + .section::before" => ['default' => ['content' => '""']],
     ]);
     $this->assertStringContainsString('to (:scope [data-selectable^="container:"], :scope [data-selectable^="block:"]) {' . "\n" . '  :scope.quote::after, .quote::after {', $css);
     $this->assertStringContainsString("\n  :scope.quote:is(:hover, [data-force-state~=\"hover\"])::after, .quote:is(:hover, [data-force-state~=\"hover\"])::after {\n", $css);
-    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {' . "\n" . '  :scope:where(.band) > *::before, .band > *::before {', $css);
-    $this->assertStringContainsString("@scope ([data-selectable=\"container:{$this->uuid}\"]) {\n  :where(.band) + .band::before {", $css);
-    $this->assertStringNotContainsString(':scope:where(.band) + .band::before', $css);
+    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {' . "\n" . '  :scope:where(.section) > *::before, .section > *::before {', $css);
+    $this->assertStringContainsString("@scope ([data-selectable=\"container:{$this->uuid}\"]) {\n  :where(.section) + .section::before {", $css);
+    $this->assertStringNotContainsString(':scope:where(.section) + .section::before', $css);
 
-    // Outside the grammar nothing prints: another pseudo-element, a bare
-    // anchor, a space before the box, a box behind a box.
-    $this->assertSame('', $this->printer->printMap([
+    // Any pseudo-element the browser spells prints as the box's tail.
+    $this->assertStringContainsString(":scope::marker {\n    color: red;", $this->printer->printMap([
       "block:{$this->uuid}::&::marker" => ['default' => ['color' => 'red']],
+    ]));
+    $this->assertStringContainsString("\n  li::first-letter {\n    color: red;", $this->printer->printMap([
+      "block:{$this->uuid}::li::first-letter" => ['default' => ['color' => 'red']],
+    ]));
+    // Outside the grammar nothing prints: a functional pseudo-element, a
+    // bare anchor, a space before the box, a box behind a box.
+    $this->assertSame('', $this->printer->printMap([
+      "block:{$this->uuid}::&::part(x)" => ['default' => ['color' => 'red']],
       "block:{$this->uuid}::&" => ['default' => ['color' => 'red']],
       "block:{$this->uuid}::& ::before" => ['default' => ['color' => 'red']],
       "block:{$this->uuid}::.quote::before::after" => ['default' => ['color' => 'red']],
@@ -777,7 +1070,7 @@ CSS;
     $this->assertSame($expected, $css);
     $css = $this->printer->printBareEntry(':where(.daedalus-stylish-token-scope [data-element="block_type:text"])', RelativeSelector::parse('.quote::after'), ['default' => ['content' => '""']]);
     $this->assertSame(":where(.daedalus-stylish-token-scope [data-element=\"block_type:text\"]) :where(.quote)::after {\n  content: \"\";\n}", $css);
-    $css = $this->printer->printBareEntry(':where(.daedalus-stylish-token-scope [data-element="kind:container"])', RelativeSelector::parse('> pb-text::before'), ['default' => ['content' => '""']]);
+    $css = $this->printer->printBareEntry(':where(.daedalus-stylish-token-scope [data-element="kind:container"])', RelativeSelector::parse('> d-text::before'), ['default' => ['content' => '""']]);
     $this->assertSame(":where(.daedalus-stylish-token-scope [data-element=\"kind:container\"]) > :where([data-element=\"block_type:text\"])::before {\n  content: \"\";\n}", $css);
 
     // Worn at a rule, a fragment's anchor continues onto the rule's
@@ -787,7 +1080,7 @@ CSS;
       '::&::before' => ['default' => ['content' => '""'], 'hover' => ['color' => 'purple']],
       '::.link::after' => ['default' => ['content' => '""']],
     ];
-    $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'block_type:text', $styles, '', RelativeSelector::fromString('> pb-text'));
+    $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'block_type:text', $styles, '', RelativeSelector::fromString('> d-text'));
     $expected = <<<CSS
 @scope ([data-selectable="container:x"]) {
   :where(:scope) > [data-element="block_type:text"] {
@@ -812,7 +1105,7 @@ CSS;
 
     // A rule ending in a box admits no continuation: only the fragment's
     // own entry prints, at the box.
-    $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'block_type:text', $styles, '', RelativeSelector::fromString('> pb-text::before'));
+    $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'block_type:text', $styles, '', RelativeSelector::fromString('> d-text::before'));
     $expected = <<<CSS
 @scope ([data-selectable="container:x"]) {
   :where(:scope) > [data-element="block_type:text"]::before {
@@ -1291,11 +1584,12 @@ CSS;
    * A fragment printed under a rule continues every suffix by descent.
    *
    * The rule-wear rebase: the '' suffix prints at the rule's own targets,
-   * '::.cls' at `{rule} .cls`, '::> *' at `{rule} > *`; a suffix the
-   * grammar refuses under the rule (a class under a tag) prints nothing;
-   * and the donut follows the rebased selector's shape (a type rule is
-   * never part-first, so a container-scoped variant worn at
-   * `> pb-container` prints unbounded).
+   * '::.cls' at `{rule} .cls` (under a tag rule too, since a class
+   * qualifies any compound: `a .link`), '::> *' at `{rule} > *`; and the
+   * donut follows the rebased selector's shape (a type rule is never
+   * part-first, so a container-scoped variant worn at `> d-container`
+   * prints unbounded). A suffix the grammar refuses under the rule (any
+   * suffix under a box rule) prints nothing: printer.test.mjs locks it.
    */
   public function testFragmentUnderRule(): void {
     $styles = [
@@ -1303,7 +1597,7 @@ CSS;
       '::.link' => ['default' => ['font-weight' => '700']],
       '::> *' => ['default' => ['margin' => '0']],
     ];
-    $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'block_type:text', $styles, '', RelativeSelector::fromString('> pb-text'));
+    $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'block_type:text', $styles, '', RelativeSelector::fromString('> d-text'));
     $expected = <<<CSS
 @scope ([data-selectable="container:x"]) {
   :where(:scope) > [data-element="block_type:text"] {
@@ -1326,8 +1620,9 @@ CSS;
 CSS;
     $this->assertSame($expected, $css);
 
-    // Under a tag rule the class suffix is outside the grammar: only the
-    // root and the children print.
+    // Under a tag rule the class suffix continues by descent like any
+    // other (`a .link`), the tag inside :where() and the class carrying
+    // the weight.
     $css = $this->printer->printFragmentStyles('[data-selectable="container:x"]', 'base:a', $styles, '', RelativeSelector::fromString('a'));
     $expected = <<<CSS
 @scope ([data-selectable="container:x"]) {
@@ -1336,6 +1631,11 @@ CSS;
   }
   a:is(:hover, [data-force-state~="hover"]) {
     color: purple;
+  }
+}
+@scope ([data-selectable="container:x"]) {
+  :where(a) .link {
+    font-weight: 700;
   }
 }
 @scope ([data-selectable="container:x"]) {
@@ -1352,7 +1652,7 @@ CSS;
       '' => ['default' => ['gap' => '2rem']],
       '::.daedalus-stylish-layout-container' => ['default' => ['max-width' => '60rem']],
       'container(1)' => ['default' => ['padding' => '0']],
-    ], '', RelativeSelector::fromString('> pb-container'));
+    ], '', RelativeSelector::fromString('> d-container'));
     $expected = <<<CSS
 @scope ([data-selectable="container:x"]) {
   :where(:scope) > [data-element^="layout:"] {

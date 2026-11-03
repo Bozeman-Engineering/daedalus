@@ -26,26 +26,37 @@
  * then removes the style and leaves the view. A start() during that
  * return cancels it and resumes in place.
  *
- * The label chip anchors on `position: relative`, which the printer adds
- * only for the planes this host reports static (anchored). The read is
- * made once per element (a WeakMap): the printed sheet itself makes an
- * anchored element read `relative`, so a later read of the same element
- * would drop the anchor and the next would restore it. A new element
- * under an address the sheet already anchors (a mutation swapped its
- * markup) keeps the anchor rather than trusting a read the sheet has
- * tainted. Only lifted, labeled planes are read: an anchor makes the
- * element the containing block of its absolutely positioned descendants,
- * a cost worth paying for a chip and for nothing else.
+ * Two facts about a plane's element come from the DOM and tune what the
+ * printer paints on it, both read once per element (a WeakMap) because
+ * the printed sheet taints a later read: the label chip anchors on
+ * `position: relative`, which the printer adds only for the planes this
+ * host reports static (anchored), and the sheet then makes that element
+ * read `relative`; the translucent surface prints only on the planes
+ * this host reports bare (no background color or image of their own),
+ * and the sheet then gives that element a background. A read repeated
+ * after the print would drop the anchor or the surface and the next
+ * would restore it. A new element under an address the sheet already
+ * anchors or surfaces (a mutation swapped its markup) keeps the
+ * treatment rather than trusting a read the sheet has tainted. Only
+ * lifted planes are read, and the anchor only for labeled ones: an
+ * anchor makes the element the containing block of its absolutely
+ * positioned descendants, a cost worth paying for a chip and for nothing
+ * else. A plane with its own background keeps it: a section's color, a
+ * hero's photo or a button's fill is what makes the plane recognizable
+ * as the element it is, and painting the surface over it would leave
+ * every plane the same washed-out white.
  *
  * Part planes are addressed by one printed rule reaching every match, so
- * `anchored` is keyed by the plane address and a part address anchors
- * every match at once: the read covers the matches the behavior's
+ * `anchored` and `bare` are keyed by the plane address and a part address
+ * treats every match at once: the read covers the matches the behavior's
  * `matches(owner, selector)` lists (the DOM twin of its selectorFor), and
- * the address anchors when there is at least one match and every match
- * reads static. One positioned match among static ones withholds the
- * anchor from all of them (their chips then sit on the nearest positioned
- * ancestor, usually the anchored owner) rather than turning an absolute
- * or sticky match relative, which would move it.
+ * the address anchors (or surfaces) when there is at least one match and
+ * every match reads static (or bare). One positioned match among static
+ * ones withholds the anchor from all of them (their chips then sit on the
+ * nearest positioned ancestor, usually the anchored owner) rather than
+ * turning an absolute or sticky match relative, which would move it; one
+ * backgrounded match among bare ones likewise keeps its background for
+ * all of them rather than painting over it.
  *
  * The chip's wording: a block plane speaks its type (app.Blueprint
  * .typeForKey, the one type resolver, which lives on the Blueprint facade
@@ -72,6 +83,32 @@ export const STYLE_ID = 'daedalus-explode';
 const FLAT = Object.freeze({ tilt: 0, turn: 0, scale: 1, gap: 0 });
 
 const DEFAULT_DURATION_MS = 600;
+
+/**
+ * Whether a computed background-color is fully transparent: the keyword,
+ * or any color function whose alpha (after the comma or the slash) is
+ * zero, as `rgba(0, 0, 0, 0)` or `color(srgb 0 0 0 / 0)`.
+ *
+ * @param {string} color
+ *   The computed background-color.
+ *
+ * @return {boolean}
+ */
+const isTransparent = (color) =>
+  color === 'transparent' || /(?:,|\/)\s*0(?:\.0+)?\)$/.test(color);
+
+/**
+ * Whether an element paints no background of its own: no image and a
+ * fully transparent color.
+ *
+ * @param {Element} element
+ *
+ * @return {boolean}
+ */
+const paintsNoBackground = (element) => {
+  const style = getComputedStyle(element);
+  return style.backgroundImage === 'none' && isTransparent(style.backgroundColor);
+};
 
 /**
  * The stage element the sheet transforms.
@@ -153,9 +190,13 @@ export const createHost = ({ app, settings }) => {
   let frame = null;
   let pendingReturn = null;
   // Element → whether its computed position was static when first read.
-  const measured = new WeakMap();
+  const measuredPosition = new WeakMap();
+  // Element → whether it painted no background of its own when first read.
+  const measuredBackground = new WeakMap();
   // The plane addresses the printed sheet anchors right now.
   let anchoredKeys = new Set();
+  // The plane addresses the printed sheet surfaces right now.
+  let bareKeys = new Set();
 
   /**
    * The registered part behavior at this moment, or null.
@@ -184,14 +225,28 @@ export const createHost = ({ app, settings }) => {
    * or the anchor it already wears when the sheet has tainted the read.
    */
   const isStatic = (element, address) => {
-    if (!measured.has(element)) {
-      measured.set(
+    if (!measuredPosition.has(element)) {
+      measuredPosition.set(
         element,
         anchoredKeys.has(address) ||
           getComputedStyle(element).position === 'static',
       );
     }
-    return measured.get(element);
+    return measuredPosition.get(element);
+  };
+
+  /**
+   * Whether an element counts as bare for the surface: its first read,
+   * or the surface it already wears when the sheet has tainted the read.
+   */
+  const isBare = (element, address) => {
+    if (!measuredBackground.has(element)) {
+      measuredBackground.set(
+        element,
+        bareKeys.has(address) || paintsNoBackground(element),
+      );
+    }
+    return measuredBackground.get(element);
   };
 
   const paint = () => ({
@@ -214,22 +269,35 @@ export const createHost = ({ app, settings }) => {
       app.Selection.getSelectedSet(),
     ).map(worded);
 
-  const anchorsFor = (planes, behavior) => {
+  /**
+   * The DOM reads for the lifted planes: the addresses to anchor and the
+   * addresses to surface, each when every element the plane addresses
+   * agrees (and there is at least one).
+   */
+  const readsFor = (planes, behavior) => {
     const anchors = new Set();
+    const bare = new Set();
     for (const plane of planes) {
-      if (!plane.lifted || !plane.labeled) {
+      if (!plane.lifted) {
         continue;
       }
       const elements = elementsOf(plane, behavior);
+      if (elements.length === 0) {
+        continue;
+      }
       if (
-        elements.length > 0 &&
+        plane.labeled &&
         elements.every((element) => isStatic(element, plane.address))
       ) {
         anchors.add(plane.address);
       }
+      if (elements.every((element) => isBare(element, plane.address))) {
+        bare.add(plane.address);
+      }
     }
     anchoredKeys = anchors;
-    return anchors;
+    bareKeys = bare;
+    return { anchored: anchors, bare };
   };
 
   const render = () => {
@@ -239,7 +307,7 @@ export const createHost = ({ app, settings }) => {
     const behavior = partBehavior();
     style.textContent = print(planes, view, paint(), {
       selectorFor: behavior?.selectorFor ?? null,
-      anchored: anchorsFor(planes, behavior),
+      ...readsFor(planes, behavior),
     });
     log('print', `Printed ${planes.length} planes`, view);
   };
@@ -311,6 +379,7 @@ export const createHost = ({ app, settings }) => {
       labeled: false,
     }));
     anchoredKeys = new Set();
+    bareKeys = new Set();
     // Part planes settle through the same behavior they lifted through;
     // dropping them from the flat sheet would snap them down unanimated.
     style.textContent = print(flat, FLAT, {}, {

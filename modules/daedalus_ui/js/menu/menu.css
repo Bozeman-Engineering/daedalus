@@ -5,8 +5,12 @@
  * (daedalus_ui/popover, whose popover.css owns the chrome: palette,
  * radius, shadow, typeface, position, z-index): an optional caption,
  * item rows with an optional check gutter, icon, label, and muted hint,
- * and rules between groups. Nothing here positions; the surface places
- * the list.
+ * group captions, read-only meter rows, rules between groups, and
+ * submenu rows with a trailing chevron. Nothing here positions the top
+ * list; the surface places it. A submenu's flyout is a second list in
+ * the same surface root that the host places itself (menu.js, by
+ * flyoutPosition), fixed in the viewport beside its row and wearing
+ * the surface's chrome, since it stands outside the top list's box.
  */
 
 .daedalus-ui-menu {
@@ -123,8 +127,123 @@
   color: inherit;
 }
 
+/* The submenu row's chevron: trailing, muted, the hint's weight. */
+.daedalus-ui-menu__chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-inline-start: 0.5rem;
+  margin-inline-end: -0.2rem;
+  color: var(--daedalus-text-muted);
+}
+
+.daedalus-ui-menu__chevron svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* A submenu row whose flyout stands reads as the active row even while
+   the keyboard is inside the flyout: the wash marks the flyout's parent
+   as well as the roving focus. */
+.daedalus-ui-menu__item[aria-expanded="true"] {
+  background: var(--daedalus-selection-background);
+}
+
+.daedalus-ui-menu__item[aria-expanded="true"] .daedalus-ui-menu__chevron {
+  color: inherit;
+}
+
+/* The flyout: a list placed by the host (inline left/top, viewport
+   pixels) rather than by the surface, so it carries the surface's chrome
+   itself (popover.css: lines, radius, background, shadow). Fixed, not
+   absolute: the surface root scrolls its overflow and would clip an
+   absolute child reaching past its edge, while a fixed one escapes the
+   clip (the root has no transform). It paints over the top list within
+   the root's stacking context. */
+.daedalus-ui-menu--flyout {
+  position: fixed;
+  z-index: 1;
+  overflow: auto;
+  box-sizing: border-box;
+  max-height: calc(100vh - 0.5rem);
+  border: 1px solid var(--daedalus-lines);
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-background);
+  box-shadow: 0 8px 24px rgb(0, 0, 0, 0.14);
+}
+
 .daedalus-ui-menu__separator {
   height: 1px;
   margin: 0.25rem 0.35rem;
   background: var(--daedalus-lines);
+}
+
+/* The read-only meter row: the gutter, the label and the track on one
+   line, the hint on a second, a grid so the tracks of sibling rows line
+   up whatever their labels. The label column grows to its content from
+   a floor: the short labels ("5 hours", "1 month") share the floor so the
+   bars align across rows, and a longer one widens its
+   own row instead of running under the bar (the row is nowrap, so a
+   fixed column let it overflow). The bar column carries the bar's
+   minimum width. Inert: no hover wash, no pointer. */
+.daedalus-ui-menu__item--meter,
+.daedalus-ui-menu__item--meter:hover,
+.daedalus-ui-menu__item--meter:focus-visible {
+  display: grid;
+  grid-template-columns: 1rem minmax(4.2rem, max-content) minmax(7rem, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 0.4rem;
+  row-gap: 2px;
+  align-items: center;
+  cursor: default;
+  color: var(--daedalus-text);
+  outline: none;
+  background: transparent;
+}
+
+.daedalus-ui-menu__item--meter .daedalus-ui-menu__label {
+  grid-column: 2;
+  grid-row: 1;
+  white-space: nowrap;
+}
+
+.daedalus-ui-menu__meter {
+  display: block;
+  grid-column: 3;
+  grid-row: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--daedalus-lines);
+}
+
+.daedalus-ui-menu__meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--daedalus-selection);
+}
+
+.daedalus-ui-menu__item--meter .daedalus-ui-menu__hint {
+  grid-column: 2 / 4;
+  grid-row: 2;
+  margin: 0;
+}
+
+/* Under a tenth the row warns; at nothing it reads as danger. */
+.daedalus-ui-menu__item--meter.is-low .daedalus-ui-menu__meter-fill {
+  background: var(--daedalus-warning);
+}
+
+.daedalus-ui-menu__item--meter.is-low .daedalus-ui-menu__hint {
+  color: var(--daedalus-warning);
+}
+
+.daedalus-ui-menu__item--meter.is-out .daedalus-ui-menu__meter-fill {
+  background: var(--daedalus-danger);
+}
+
+.daedalus-ui-menu__item--meter.is-out .daedalus-ui-menu__hint {
+  color: var(--daedalus-danger);
 }

@@ -15,6 +15,7 @@ use Drupal\daedalus_stylish\SkinManager;
 use Drupal\daedalus_stylish\StyleGuide;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyProse;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
+use Drupal\daedalus_stylish\Vocabulary\VocabularyValueSpaces;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -22,7 +23,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  *
  * The styling half of the site's page language that no material record
  * carries, from the same live sources every other styling surface reads.
- * Daedalus Stylish's materials (tokens, swatches, variants) reach the catalog
+ * Daedalus Stylish's materials (tokens, variants, animations, fonts) reach the catalog
  * through the materials roster (DaedalusStylishMaterialsProvider), never here:
  * one published set, one spelling derivation, one did-you-mean.
  * - Axes per variant scope: the container kind's, the block kind's,
@@ -42,15 +43,26 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  *   beside the system, and the dressed tags: the base tags its defaults
  *   dress (its base:{tag} scopes), so "pick the tag, the skin sizes it"
  *   is data.
- * - Conditions: the condition type plugins' name => wrapper roster, in
- *   declaration order (the canonical compound order).
+ * - Conditions: the condition type plugins' name => [wrapper, axis]
+ *   roster, in declaration order (the canonical compound order): the
+ *   REFERENCES, names whose CSS the site owns. A literal clause the
+ *   browser knows (a feature query, a supports test, a pseudo-class
+ *   state) is never a roster entry: the digester reads it through the
+ *   clause grammar as its own canonical CSS, and whether this site
+ *   admits it beside the references is the validator's verdict by
+ *   enforcement mode (StyleMapValidator::validateCondition()), taught
+ *   by the prose's condition sentence, never by the table.
  * - Selector rosters per owner: the declared part classes of the
  *   container (the container layout's elements, the kind's beneath), of
- *   each declared block type (.text-block-link on <pb-text>) and of any
+ *   each declared block type (.text-block-link on <d-text>) and of any
  *   other block (the block kind's and every declared block plugin's,
- *   since <pb-block> is the one spelling for all of them), each beside
- *   the base tags a tag compound may name there (the site declaration's
- *   base section, the one declaration of a prose tag's styleability).
+ *   since <d-block> is the one spelling for all of them), each beside
+ *   the base tags the site declares there (the declaration's base
+ *   section). The roster is the DECLARED vocabulary, never the grammar:
+ *   a selector is CSS's (a class, an attribute, a pseudo-class on any
+ *   compound), and a tag, class, attribute or state the declaration
+ *   does not name is admitted or refused by enforcement mode, the
+ *   validator's verdict (StyleMapValidator::resolveRoster()).
  * - Instances: the spine's instance namespaces (identity classes and the
  *   declared tag vocabulary).
  * - Vocabulary rosters, in every posture: per element kind, the kind's
@@ -60,7 +72,11 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  *   prompt teaches exactly the roster the validator judges against, in
  *   the words the schema uses. One roster per kind at every
  *   placement depth: a grant is a function of the declaration alone, so
- *   a nested container styles what a page band styles.
+ *   a nested container styles what a section styles. Beside the
+ *   rosters ride their value spaces (VocabularyValueSpaces, the one
+ *   derivation the JSON door's style_guide prints from): the site-wide
+ *   bindings per property and the deviations per address, as data, so
+ *   the brief can state the law its Law line tells the model to obey.
  *
  * Theme resolution is PageBuilderDeclarations::siteTheme(), the one the
  * materials provider, the schema and the validators resolve: the catalog
@@ -85,6 +101,7 @@ class DialectVocabularySubscriber implements EventSubscriberInterface {
     protected VocabularyRosterBuilder $vocabularyRosters,
     protected PageBuilderDeclarations $declarations,
     protected SkinManager $skinManager,
+    protected VocabularyValueSpaces $valueSpaces,
   ) {}
 
   /**
@@ -155,7 +172,7 @@ class DialectVocabularySubscriber implements EventSubscriberInterface {
    * the top level (StyleGuide::defaultVariants() over the effective
    * declaration, the kind's defaults layered under the refinement's, the
    * same read the birth stamp makes), keyed by the axis attribute the
-   * element's tag speaks: a container's axes spell on <pb-container>
+   * element's tag speaks: a container's axes spell on <d-container>
    * whichever layout places it, a block type's on its own tag.
    */
   protected function contributeBirthDefaults(DialectCatalogBuildEvent $event): void {
@@ -214,31 +231,30 @@ class DialectVocabularySubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * The condition vocabulary: name => wrapper, in canonical order.
+   * The condition vocabulary: name => [wrapper, axis], in canonical order.
    *
-   * The structural facts among them ride the facts lane, so the dialect
-   * parses and prints them as pseudo-classes like states while teaching
-   * and correcting them apart.
+   * The references. Every pseudo-class among them is a posable state
+   * (position is selector grammar, never a condition), so the digester
+   * behind the dialect's parser peels these off the addressed element
+   * by name; a pseudo-class it does not publish peels as a LITERAL
+   * state (":checked") and an at-rule prelude equal to none of the
+   * wrappers reads as a literal clause, both admitted or refused by the
+   * validator's mode, never by this table.
    */
   protected function contributeConditions(DialectCatalogBuildEvent $event): void {
     $conditions = [];
-    $facts = [];
     foreach ($this->conditionTypeManager->getConditions() as $name => $definition) {
-      $conditions[$name] = (string) $definition['wrapper'];
-      if ($this->conditionTypeManager->isFact($name)) {
-        $facts[] = $name;
-      }
+      $conditions[$name] = ['wrapper' => (string) $definition['wrapper'], 'axis' => (string) $definition['axis']];
     }
     $event->addConditions($conditions);
-    $event->addFacts($facts);
   }
 
   /**
    * The selector roster per owner: its declared parts and its tags.
    *
-   * One owner per dialect spelling: <pb-container> reads the container
+   * One owner per dialect spelling: <d-container> reads the container
    * layout's merged declaration (the kind's elements beneath the
-   * layout's), each declared block type its own, and <pb-block> (any
+   * layout's), each declared block type its own, and <d-block> (any
    * plugin block or undeclared type) the block kind's plus every
    * declared block plugin's, the union being what that one spelling may
    * name. Parts are the class-keyed elements at every depth of the
@@ -306,7 +322,7 @@ class DialectVocabularySubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * The vocabulary roster per element kind, with its prose.
+   * The vocabulary roster per element kind, the value spaces, the prose.
    *
    * Every posture contributes: the roster is the design system's
    * vocabulary whatever the site does outside it, and teaching it in
@@ -315,7 +331,12 @@ class DialectVocabularySubscriber implements EventSubscriberInterface {
    * the padding shorthand on a container that only grants the
    * longhands, repeatedly in one document). What varies with the
    * posture is one sentence, and the prose generator states it; a kind
-   * whose roster names nothing teaches nothing.
+   * whose roster names nothing teaches nothing. The value spaces are
+   * the same law at the value level: the site-wide bindings and, over
+   * the universal roots and every declared place under them (the set
+   * the style map's style_guide covers), the deviations, derived once
+   * by VocabularyValueSpaces so the brief and the JSON door print one
+   * text.
    */
   protected function contributeStylable(DialectCatalogBuildEvent $event): void {
     $stylable = [];
@@ -327,7 +348,13 @@ class DialectVocabularySubscriber implements EventSubscriberInterface {
       }
       $stylable[$kind] = $roster;
     }
-    $event->addStylable($stylable, VocabularyProse::of($this->styleGuide));
+    $rosters = $this->valueSpaces->rosters($this->valueSpaces->roots($theme), $theme);
+    $event->addStylable(
+      $stylable,
+      VocabularyProse::of($this->styleGuide),
+      $this->valueSpaces->bindings($theme),
+      $this->valueSpaces->deviations($rosters, $theme),
+    );
   }
 
 }

@@ -62,7 +62,7 @@ globalThis.drupalSettings = {};
 
 const { partPlacement, partPresence, rootTag, partTag, partLabel } = await import('../../js/edit_mode/blueprint/markup-index.js');
 const { default: store } = await import('../../js/edit_mode/store/store.js');
-const { blueprintBooted } = await import('../../js/edit_mode/store/slices/blueprint-slice.js');
+const { blueprintBooted, markupDrafted, draftCleared } = await import('../../js/edit_mode/store/slices/blueprint-slice.js');
 
 const ROOT = '99999999-1111-2222-3333-444444444444';
 const SECTION = 'aaaaaaaa-1111-2222-3333-444444444444';
@@ -395,4 +395,36 @@ test('a root with no fields indexes its own markup and no field carriers', () =>
     viewMode: 'full',
     blueprint: state.blueprint,
   }));
+});
+
+// ---------------------------------------------------------------------------
+// The draft: the index reads the effective tree, not the raw mirror
+// ---------------------------------------------------------------------------
+
+test('a drafted key answers the draft over the committed annotation until the draft clears', () => {
+  boot();
+  // A composed edit previewed h2 with a link on the text block: the
+  // resolver twin's tree reaches the slot through the facade's
+  // draftMarkup door (here, its action).
+  store.dispatch(markupDrafted({
+    key: `block:${TEXT}`,
+    markup: {
+      tag: 'h2',
+      parts: { '.text-block-link': { tag: 'a', attributes: { href: '/x' }, parts: {} } },
+    },
+  }));
+  assert.equal(rootTag(`block:${TEXT}`), 'h2');
+  assert.equal(partPlacement(`block:${TEXT}`, '.text-block-link'), 'element');
+  assert.equal(partPresence(`block:${TEXT}`, '.text-block-link'), true);
+  assert.equal(partTag(`block:${TEXT}`, '.text-block-link'), 'a');
+  // The committed rich-text facts survive beneath the structural draft.
+  assert.equal(partPlacement(`block:${TEXT}`, '.s-ef'), 'element');
+  // Every other key still answers the mirror.
+  assert.equal(rootTag(`block:${LINKED}`), 'a');
+  assert.equal(rootTag(`entity:${ROOT}`), 'article');
+  // The raw mirror never moved: the draft is a sibling, not a write.
+  assert.equal(store.getState().blueprint.blueprint.layout[0].children[0].children[2]._element.markup.tag, 'div');
+  store.dispatch(draftCleared());
+  assert.equal(rootTag(`block:${TEXT}`), 'div');
+  assert.equal(partPlacement(`block:${TEXT}`, '.text-block-link'), false);
 });

@@ -59,6 +59,11 @@ class LayoutBlockMigrationTest extends NestedStorageKernelTestBase {
     parent::setUp();
     // The pre-migration shape: the retired layout_block bundle.
     $this->createLayoutBlockType();
+    // Importing daedalus_stylish's config saves its settings, a law change
+    // that recompiles the variants file over these storages (this class
+    // alone rides the module, so the lines live here, not in the base).
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
   }

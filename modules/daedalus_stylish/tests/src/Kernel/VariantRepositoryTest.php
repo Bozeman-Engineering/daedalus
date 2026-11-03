@@ -33,6 +33,7 @@ class VariantRepositoryTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -52,10 +53,7 @@ class VariantRepositoryTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
   }
@@ -170,8 +168,9 @@ class VariantRepositoryTest extends KernelTestBase {
   /**
    * Same weight and label: the machine name breaks the tie, never the db.
    *
-   * The shipped motion variants pair a block_ and a container_ variant on
-   * one label ("Rise", "Fade in", "Scale in") at weight 0. Without a total
+   * A skin package's motion variants pair a block and a section variant
+   * on one label ("Rise", "Fade in", "Scale in") at weight 0; the fixture
+   * below mints that shape itself. Without a total
    * order the database picks the pair's order and its pick drifts between
    * requests; the roster rides the AI's cached system prompt, so a drift
    * rewrites the cached prefix and every other turn reads nothing from the

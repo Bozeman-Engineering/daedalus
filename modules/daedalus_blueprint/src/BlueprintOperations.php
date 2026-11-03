@@ -45,6 +45,7 @@ use Drupal\daedalus_blueprint\LayoutBuilder\InlineBlockValues;
 use Drupal\daedalus_blueprint\LayoutBuilder\OpaqueDataMerger;
 use Drupal\daedalus_blueprint\LayoutBuilder\PluginBlockConfiguration;
 use Drupal\daedalus_blueprint\Dialect\DialectAliasMap;
+use Drupal\daedalus_blueprint\Dialect\DialectParser;
 use Drupal\daedalus_blueprint\OperationHandler\OperationHandlerRegistry;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
@@ -1705,6 +1706,41 @@ class BlueprintOperations implements BlueprintOperationsInterface {
 
   /**
    * {@inheritdoc}
+   *
+   * The two storages are the two the serializer surfaces as the node's
+   * read-only `blueprint` key and the ownership checker walks
+   * (BlueprintVariantOwnershipChecker::walkSection()): a located section is
+   * a container at any depth (the tree index files a container's uuid as a
+   * section, never as a block, so a nested container never resolves to its
+   * wrapper component here), and takes its third-party settings, addSection's
+   * own slot; a located component is a block root and takes its additional
+   * data, add_element's slot. The locate resolves one storage wrapper and
+   * the bubble writes a nested section's change back through its container
+   * component, the same persistence every element write takes.
+   */
+  public function stampProvenance(HostInterface $host, string $uuid, string $blueprint): void {
+    $context = $this->elementLocator->locate($host, $uuid);
+    if ($context === NULL) {
+      throw new \InvalidArgumentException(sprintf('No element "%s" on %s %s to stamp as a placement of "%s".', $uuid, $host->entityTypeId(), $host->id() ?? $host->uuid(), $blueprint));
+    }
+    if ($context->isSection()) {
+      /** @var \Drupal\layout_builder\Section $section */
+      $section = $context->target;
+      $section->setThirdPartySetting(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, 'blueprint', $blueprint);
+    }
+    elseif ($context->isLbComponent()) {
+      /** @var \Drupal\layout_builder\SectionComponent $component */
+      $component = $context->target;
+      $component->set(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, $blueprint);
+    }
+    else {
+      throw new \InvalidArgumentException(sprintf('Element "%s" is a paragraph; a placement is a container or a block.', $uuid));
+    }
+    $this->bubbleStorageChanges($context->sectionStorage);
+  }
+
+  /**
+   * {@inheritdoc}
    */
   public function removeElement(HostInterface $host, string $uuid): BlueprintResult {
     $context = $this->locateElement($host, $uuid, 'element', 'ELEMENT_NOT_FOUND');
@@ -2328,10 +2364,12 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * author's allow-list) is judged here as a detached placement judges it
    * (BlueprintOperationHandler), once, at the one op door every road into
    * the document passes: place_blueprint's linked mode, a tree's
-   * {kind: linked} node, the dialect's <pb-linked>, and a raw add_element.
-   * The plugin derives per published block-scope blueprint entity, so a
-   * stale derivative (the entity unpublished since the definitions were
-   * cached) is refused as not found rather than placed to render nothing.
+   * {kind: linked} node, the dialect's <d-linked>, and a raw add_element.
+   * The plugin derives per block-scope blueprint entity, published or not
+   * (the derivative follows the entity so the join can declare what it
+   * read), so publication is judged HERE: an unpublished name has a
+   * derivative and is refused as not found rather than placed to render
+   * nothing.
    *
    * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
    *   The host.
@@ -2941,7 +2979,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $all_warnings = [];
     $all_targets = [];
     $all_aliases = [];
-    $tainted_uuids = [];
+    $tainted_identity = [];
 
     // Apply operations sequentially and evaluate EVERY operation, even after
     // a failure: the consumer is a writer that patches the whole batch per
@@ -2963,16 +3001,18 @@ class BlueprintOperations implements BlueprintOperationsInterface {
 
       // An operation that references identity a FAILED operation was to mint
       // was evaluated against a world where that identity never came to be:
-      // its errors (ELEMENT_NOT_FOUND and friends) are shadows of the
-      // earlier failure, and reporting them would invite the writer to
-      // "fix" an operation whose only problem is upstream. Suppress them
-      // wholesale and propagate the taint through this operation's own
-      // minted identity, so cascades stay silent at any depth. The
-      // suppressed operation is re-evaluated in full on the next round —
-      // rollback is total, so the corrected batch is always resubmitted
-      // whole.
-      $dependency_tainted = $this->referencesTaintedUuid($operation, $tainted_uuids);
-      array_push($tainted_uuids, ...$this->mintedUuids($operation));
+      // its errors (ELEMENT_NOT_FOUND, UNKNOWN_ID_SELECTOR and friends) are
+      // shadows of the earlier failure, and reporting them would invite the
+      // writer to "fix" an operation whose only problem is upstream.
+      // Suppress them wholesale and propagate the taint through this
+      // operation's own minted identity (its spine uuids, and for a dialect
+      // insert or replace the ids its fragment carries, since a fragment
+      // refused at the parse mints none of its aliases), so cascades stay
+      // silent at any depth. The suppressed operation is re-evaluated in
+      // full on the next round: rollback is total, so the corrected batch
+      // is always resubmitted whole.
+      $dependency_tainted = $this->referencesTaintedIdentity($operation, $tainted_identity);
+      array_push($tainted_identity, ...$this->mintedIdentity($operation));
       if ($dependency_tainted) {
         continue;
       }
@@ -4539,14 +4579,23 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * 'uuid' keys REFERENCE existing items instead of minting, so it is
    * excluded rather than tainting live identity.
    *
+   * A dialect insert or replace mints the ids its fragment carries too
+   * (DialectAliasMap: an author id becomes an alias over a minted uuid, a
+   * uuid-shaped id IS the minted uuid). The dialect door records them only
+   * once the fragment parses, so a fragment refused at the parse (an
+   * unknown class, a bad token) mints nothing, and a sibling op addressing
+   * `#steps` fails as a shadow of that refusal alone. The ids are read off
+   * the html itself, not the parse, because the parse is what failed.
+   *
    * @param array $operation
    *   The operation definition.
    *
    * @return string[]
-   *   The UUIDs the operation would have minted.
+   *   The identity the operation would have minted: uuids and aliases.
    */
-  protected function mintedUuids(array $operation): array {
-    if (($operation['op'] ?? '') === 'reorder_field') {
+  protected function mintedIdentity(array $operation): array {
+    $op = $operation['op'] ?? '';
+    if ($op === 'reorder_field') {
       return [];
     }
 
@@ -4556,37 +4605,53 @@ class BlueprintOperations implements BlueprintOperationsInterface {
         $minted[] = $value;
       }
     });
-    return $minted;
+    if (in_array($op, ['insert', 'replace'], TRUE) && is_string($operation['html'] ?? NULL)) {
+      preg_match_all('/(?<![\w-])id\s*=\s*(["\'])([^"\']*)\1/i', $operation['html'], $matches);
+      foreach ($matches[2] as $id) {
+        if ($id !== '') {
+          $minted[] = $id;
+        }
+      }
+    }
+    return array_values(array_unique($minted));
   }
 
   /**
    * Determines whether an operation references tainted minted identity.
    *
-   * Matches every string leaf against the tainted set by substring, because
-   * references appear both as bare uuid values (element, anchors, region
-   * orderings) and embedded in composite keys (a style key like
-   * "block:<uuid>" or "block:<uuid>:field_name").
+   * A tainted uuid matches any string leaf by substring, because references
+   * appear both as bare uuid values (element, anchors, region orderings) and
+   * embedded in composite keys (a style key like "block:<uuid>" or
+   * "block:<uuid>:field_name"). A tainted alias matches a string leaf that
+   * is exactly the alias (a dialect op's ref, at.ref, or element) or that
+   * carries it as a `#alias` selector token (a style op's css, a remove
+   * entry's selector), never by bare substring: "steps" inside a text
+   * value or a longer id ("#steps-two") is not a reference to it.
    *
    * @param array $operation
    *   The operation definition.
-   * @param string[] $tainted_uuids
+   * @param string[] $tainted_identity
    *   Identity minted by already-failed operations in this batch.
    *
    * @return bool
-   *   TRUE when any string value in the operation contains a tainted uuid.
+   *   TRUE when any string value in the operation references tainted
+   *   identity.
    */
-  protected function referencesTaintedUuid(array $operation, array $tainted_uuids): bool {
-    if (empty($tainted_uuids)) {
+  protected function referencesTaintedIdentity(array $operation, array $tainted_identity): bool {
+    if (empty($tainted_identity)) {
       return FALSE;
     }
 
     $found = FALSE;
-    array_walk_recursive($operation, static function ($value) use ($tainted_uuids, &$found): void {
+    array_walk_recursive($operation, static function ($value) use ($tainted_identity, &$found): void {
       if ($found || !is_string($value)) {
         return;
       }
-      foreach ($tainted_uuids as $uuid) {
-        if (str_contains($value, $uuid)) {
+      foreach ($tainted_identity as $identity) {
+        $referenced = DialectParser::isUuid($identity)
+          ? str_contains($value, $identity)
+          : ($value === $identity || preg_match('/#' . preg_quote($identity, '/') . '(?![A-Za-z0-9_-])/', $value) === 1);
+        if ($referenced) {
           $found = TRUE;
           return;
         }

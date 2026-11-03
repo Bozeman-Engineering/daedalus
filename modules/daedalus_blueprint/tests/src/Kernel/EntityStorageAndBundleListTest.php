@@ -32,11 +32,12 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
  * here).
  *
  * BundleListBuilder builds the AI-visible entity-type/bundle catalog that
- * drives eb_list_bundles, the create_entity skill, and schema discovery. Its
+ * drives eb_list_bundles, the PAGES line, and schema discovery. Its
  * visibility filtering is the admin control that hides bundles from the AI: a
  * hidden bundle must never reach the LLM. The test proves hidden_bundles drops
  * the named bundle (and drops the whole entity type when that was its last
- * visible bundle), hidden_entity_types removes a type outright, and
+ * visible bundle), hidden_entity_types removes a type outright, an internal
+ * entity type is outside the catalog before any config runs, and
  * formatAsMarkdown emits the documented "## Label (id)" / "- bundle: label"
  * shape with the description suffix appended only when the bundle actually has
  * a description.

@@ -70,6 +70,9 @@ final class HotkeySettings implements EventSubscriberInterface {
       '#weight' => 10,
       '#open' => FALSE,
       '#attributes' => [
+        // The top bar menu's "Keyboard shortcuts" row opens the Settings
+        // panel and this details element, then scroll-reveals it.
+        'id' => 'daedalus-ui-hotkeys',
         'class' => ['daedalus-ui-details', 'setting-details', 'hotkey-details'],
       ],
       '#attached' => ['drupalSettings' => ['daedalusUi' => ['hotKeys' => $binding_map]]],

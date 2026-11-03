@@ -193,7 +193,7 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
         'weight' => 0,
         'configuration' => $this->createInlineBlockConfiguration('text_section', $nested_block, 'Nested Block'),
       ],
-    ], ['label' => 'Band']);
+    ], ['label' => 'Section']);
     $nested_section->setThirdPartySetting('daedalus_layout', 'uuid', '98ecbc05-28b3-48c5-895e-86dfa276af6c');
 
     $root_section = $this->createSection('layout_onecol');
@@ -214,7 +214,7 @@ class BlueprintSerializerElementTest extends BlueprintKernelTestBase {
     $this->assertSame('container', $result['kind']);
     $this->assertEquals('layout_onecol', $result['layout_id']);
     $this->assertEquals('98ecbc05-28b3-48c5-895e-86dfa276af6c', $result['uuid']);
-    $this->assertEquals('Band', $result['label']);
+    $this->assertEquals('Section', $result['label']);
     $this->assertArrayNotHasKey('block_type', $result);
     $this->assertArrayNotHasKey('plugin_id', $result);
     $this->assertArrayNotHasKey('regions', $result);

@@ -10,15 +10,15 @@ use Drupal\daedalus_stylish\ControlSection;
 use Drupal\daedalus_stylish\ControlWidgetBase;
 
 /**
- * A swatch row over the selection's surface color.
+ * A color row over the selection's surface color.
  *
- * One segmented row of swatches over the element's surface: color stops
+ * One segmented row of color stops over the element's surface: color stops
  * write background-color, gradient stops and the gradient builder write
  * background-image (the Background property group owns both; text color
- * lives in Typography). The built-in neutral swatches are the fallback
+ * lives in Typography). The built-in neutral stops are the fallback
  * vocabulary; a guide `allowed:` list on background-color IS the palette,
  * so a theme's strict-mode surfaces reach basic mode with no new concept.
- * Free-form values no swatch can represent render as the explicit
+ * Free-form values no stop can represent render as the explicit
  * "custom" state, including a background-image occupied by media, layered
  * values, or the gradient-text recipe.
  *

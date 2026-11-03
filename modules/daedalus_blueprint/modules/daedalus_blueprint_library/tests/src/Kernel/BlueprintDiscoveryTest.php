@@ -311,7 +311,7 @@ class BlueprintDiscoveryTest extends BlueprintKernelTestBase {
     }
     catch (BlueprintDefinitionException $e) {
       $this->assertSame('daedalus_blueprint_library_ai_shape_test', $e->getProvider());
-      $this->assertSame('loud_band', $e->getBlueprintId());
+      $this->assertSame('loud_section', $e->getBlueprintId());
       $this->assertSame('INVALID_BLUEPRINT', $e->getErrors()[0]->getCode());
       $this->assertStringContainsString('invalid ai key', $e->getMessage());
     }
@@ -394,10 +394,10 @@ class BlueprintDiscoveryTest extends BlueprintKernelTestBase {
     \Drupal::service('cache_tags.invalidator')->invalidateTags([BlueprintDiscovery::CACHE_TAG]);
     $this->assertNull(DesignSystem::load('aurora'), 'The window: the package is installed, its system has not landed.');
     $blueprints = $this->discovery()->getBlueprints();
-    $this->assertEqualsCanonicalizing(['aurora_band', 'aurora_named_band', 'call_to_action', 'hero', 'plain_band'], array_keys($blueprints));
-    $this->assertSame('aurora', $blueprints['aurora_band']['design_system']);
-    $this->assertSame('aurora', $blueprints['aurora_named_band']['design_system']);
-    $this->assertNull($blueprints['plain_band']['design_system']);
+    $this->assertEqualsCanonicalizing(['aurora_section', 'aurora_named_section', 'call_to_action', 'hero', 'plain_section'], array_keys($blueprints));
+    $this->assertSame('aurora', $blueprints['aurora_section']['design_system']);
+    $this->assertSame('aurora', $blueprints['aurora_named_section']['design_system']);
+    $this->assertNull($blueprints['plain_section']['design_system']);
     $this->assertNull($blueprints['hero']['design_system']);
     $this->assertContains('config:design_system_list', \Drupal::cache()->get('daedalus_blueprint_library:blueprints')->tags);
 
@@ -405,9 +405,9 @@ class BlueprintDiscoveryTest extends BlueprintKernelTestBase {
     $this->installConfig(['daedalus_blueprint', 'daedalus_blueprint_design_system_test']);
     $this->assertInstanceOf(DesignSystem::class, DesignSystem::load('aurora'));
     $blueprints = $this->discovery()->getBlueprints();
-    $this->assertSame('aurora', $blueprints['aurora_band']['design_system']);
-    $this->assertSame('aurora', $blueprints['aurora_named_band']['design_system']);
-    $this->assertNull($blueprints['plain_band']['design_system']);
+    $this->assertSame('aurora', $blueprints['aurora_section']['design_system']);
+    $this->assertSame('aurora', $blueprints['aurora_named_section']['design_system']);
+    $this->assertNull($blueprints['plain_section']['design_system']);
     $this->assertNull($blueprints['hero']['design_system']);
     $this->assertSame([
       'label',
@@ -459,7 +459,7 @@ class BlueprintDiscoveryTest extends BlueprintKernelTestBase {
     }
     catch (BlueprintDefinitionException $e) {
       $this->assertSame('daedalus_blueprint_library_design_system_unknown_test', $e->getProvider());
-      $this->assertSame('stray_band', $e->getBlueprintId());
+      $this->assertSame('stray_section', $e->getBlueprintId());
       $error = $e->getErrors()[0];
       $this->assertSame('BLUEPRINT_DESIGN_SYSTEM_UNKNOWN', $error->getCode());
       $this->assertSame([], $error->getContext()['design_systems']);

@@ -45,7 +45,7 @@ const UUID = 'aaaaaaaa-1111-2222-3333-444444444444';
 const ROOT = `block:${UUID}`;
 const BLOCK_TYPES = { [UUID]: 'text' };
 const SECTION = 'container:cccccccc-1111-2222-3333-444444444444';
-const WORN_RULE = `${SECTION}::> pb-text`;
+const WORN_RULE = `${SECTION}::> d-text`;
 
 const VARIANTS = [
   variantRecord('stuff', {
@@ -59,7 +59,7 @@ const SKIN = {
   ...BARE,
   skinDefaults: { 'block_type:text': { '': { default: { 'padding-top': '1.125rem' } } } },
 };
-const TREE = [{
+const DOCUMENT = [{
   kind: 'container',
   uuid: SECTION.slice('container:'.length),
   layout_id: 'daedalus_stylish_container',
@@ -71,8 +71,8 @@ const worn = (own = {}) => ({ [ROOT]: { variants: [{ variant: 'stuff', fragment:
 
 // A row's origin the way the rows derive it (choice-row-model.js
 // originFor / the advanced row): the stack read at the pose, projected.
-const originAt = ({ map = {}, guide = BARE, session = null, tree = null, editable = null }, pose, options = {}) => {
-  const stack = buildStack({ guide, map, key: ROOT, variants: VARIANTS, axes: ['style'], blockTypes: BLOCK_TYPES, session, tree, editable });
+const originAt = ({ map = {}, guide = BARE, session = null, document = null, editable = null }, pose, options = {}) => {
+  const stack = buildStack({ guide, map, key: ROOT, variants: VARIANTS, axes: ['style'], blockTypes: BLOCK_TYPES, session, document, editable });
   return originOf(stackAt(stack, 'padding-top', pose, CONDITIONS), { stack, property: 'padding-top', pose, conditions: CONDITIONS, guide, ...options });
 };
 
@@ -146,7 +146,7 @@ test('a variant at another condition: drive poses the canvas, the document doorw
 });
 
 test('an ancestor\'s own rule: Edit at seats the rule as the write address on the source, never as the facet', () => {
-  const origin = originAt({ map: { [`${SECTION}::> *`]: { default: { 'padding-top': '8px' } } }, tree: TREE }, 'default');
+  const origin = originAt({ map: { [`${SECTION}::> *`]: { default: { 'padding-top': '8px' } } }, document: DOCUMENT }, 'default');
   const { calls, handlers } = recorder();
   const spec = rowMenuSpec({ origin, ...handlers });
   assert.deepEqual(labels(spec), ['Edit at Section (> *)']);
@@ -155,7 +155,7 @@ test('an ancestor\'s own rule: Edit at seats the rule as the write address on th
 });
 
 test('an ancestor\'s rule previews its reach while active: enter drives the hover-selector facet, leave clears only its own pair, and the element doorway previews nothing', () => {
-  const origin = originAt({ map: { [`${SECTION}::> *`]: { default: { 'padding-top': '8px' } } }, tree: TREE }, 'default');
+  const origin = originAt({ map: { [`${SECTION}::> *`]: { default: { 'padding-top': '8px' } } }, document: DOCUMENT }, 'default');
   const hovered = { pair: null };
   const { calls, handlers } = recorder(hovered);
   const spec = rowMenuSpec({ origin, ...handlers });
@@ -164,7 +164,7 @@ test('an ancestor\'s rule previews its reach while active: enter drives the hove
   item.preview(true);
   assert.deepEqual(calls, [['hoverSelector', SECTION, '> *']]);
   // Another surface took the hover meanwhile: leaving touches nothing.
-  hovered.pair = { key: SECTION, selector: '> pb-text' };
+  hovered.pair = { key: SECTION, selector: '> d-text' };
   item.preview(false);
   assert.deepEqual(calls, [['hoverSelector', SECTION, '> *']]);
   // The hover is still this pair: leaving clears it.
@@ -177,7 +177,7 @@ test('an ancestor\'s rule previews its reach while active: enter drives the hove
   inert.preview(false);
   // The element doorway (address(null)) has no pair to paint.
   const standing = originAt(
-    { map: { [ROOT]: { default: { 'padding-top': '24px' } } }, tree: TREE, editable: { key: SECTION, selector: '> *' } },
+    { map: { [ROOT]: { default: { 'padding-top': '24px' } } }, document: DOCUMENT, editable: { key: SECTION, selector: '> *' } },
     'default',
   );
   const element = rowMenuSpec({ origin: standing, source: handlers.source }).items.find((entry) => entry.label === 'Edit on the element');
@@ -185,19 +185,19 @@ test('an ancestor\'s rule previews its reach while active: enter drives the hove
 });
 
 test('a variant an ancestor\'s rule wears: the document doorway opens the variant anchored at the CARRIER, Edit at seats the carrier rule', () => {
-  const origin = originAt({ map: { [WORN_RULE]: { variants: [{ variant: 'stuff', fragment: '' }] } }, tree: TREE }, 'default');
-  assert.equal(origin.layer, ancestorWearLayerId(SECTION, '> pb-text', 'stuff'));
+  const origin = originAt({ map: { [WORN_RULE]: { variants: [{ variant: 'stuff', fragment: '' }] } }, document: DOCUMENT }, 'default');
+  assert.equal(origin.layer, ancestorWearLayerId(SECTION, '> d-text', 'stuff'));
   const { calls, handlers } = recorder();
   const spec = rowMenuSpec({ origin, ...handlers });
   assert.equal(spec.header, '22px from Stuff at Text blocks directly in Section');
   assert.deepEqual(doorways(spec), ['Edit Stuff at Base…', 'Edit at Text blocks directly in Section']);
   run(spec, 'Edit Stuff at Base…');
   run(spec, 'Edit at Text blocks directly in Section');
-  assert.deepEqual(calls, [['document', 'stuff', 'default', WORN_RULE], ['address', SECTION, '> pb-text']]);
+  assert.deepEqual(calls, [['document', 'stuff', 'default', WORN_RULE], ['address', SECTION, '> d-text']]);
 });
 
 test('a row handed no source keeps an inert ancestor doorway: the menu opens, the item runs, nothing throws', () => {
-  const origin = originAt({ map: { [WORN_RULE]: { variants: [{ variant: 'stuff', fragment: '' }] } }, tree: TREE }, 'default');
+  const origin = originAt({ map: { [WORN_RULE]: { variants: [{ variant: 'stuff', fragment: '' }] } }, document: DOCUMENT }, 'default');
   const spec = rowMenuSpec({ origin });
   assert.deepEqual(doorways(spec), ['Edit Stuff at Base…', 'Edit at Text blocks directly in Section']);
   run(spec, 'Edit at Text blocks directly in Section');
@@ -215,7 +215,7 @@ test('a session\'s winner: the doorway hands the winner to onWinner', () => {
 
 test('a write address: the element\'s own value above the rule\'s layer offers "Edit on the element", which drops the address on the source (address(null), the subject staying) with no sheet and no winner handler; a row with no source stays inert, nothing throws', () => {
   const origin = originAt(
-    { map: { [ROOT]: { default: { 'padding-top': '24px' } } }, tree: TREE, editable: { key: SECTION, selector: '> *' } },
+    { map: { [ROOT]: { default: { 'padding-top': '24px' } } }, document: DOCUMENT, editable: { key: SECTION, selector: '> *' } },
     'default',
   );
   const { calls, handlers } = recorder();

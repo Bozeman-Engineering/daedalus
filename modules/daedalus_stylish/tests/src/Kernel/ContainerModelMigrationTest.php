@@ -64,11 +64,8 @@ class ContainerModelMigrationTest extends NestedStorageKernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and every compile and validation builds it.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);

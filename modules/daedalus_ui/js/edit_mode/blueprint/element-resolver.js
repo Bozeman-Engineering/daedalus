@@ -16,12 +16,22 @@
  * the op round-trips. The editors resolve the previewed property bag
  * through this twin and morph the DOM to the answer — the same computation
  * the server render, the annotation, and the AI projection share, so the
- * preview cannot drift from what commits.
+ * preview cannot drift from what commits. The answer reaches the model
+ * too: the composed-edit preview (daedalus_edit's element-preview.js)
+ * drafts the resolved tree into the blueprint slice's draft slot through
+ * Drupal.Daedalus.Blueprint.draftMarkup, and every mirror reader reads the
+ * effective tree (blueprint/effective-blueprint.js) with that draft laid
+ * over the edited node, so the page-elements panel and the styling
+ * inspector follow the gesture as the canvas does, until the commit's
+ * response replaces the mirror and clears the draft.
  *
- * The data facade replaces the PHP side's entity: the client has no
- * entity, it has field values (the blueprint mirror, plus the gesture's
- * previewed values). `data` is null (no entity: every data condition is
- * FALSE, data-decided values resolve null) or:
+ * The data facade is the PHP side's input too: ElementResolver::
+ * resolveData() takes this exact shape (its entity entry, resolve(), reads
+ * the entity into it through readEntity()), so there is one computation
+ * in two runtimes, not an entity resolver and a facade resolver. The
+ * client has no entity, it has field values (the blueprint mirror, plus
+ * the gesture's previewed values). `data` is null (no entity: every data
+ * condition is FALSE, data-decided values resolve null) or:
  * - fields: {NAME: string|null} — a key EXISTS iff the field is non-empty
  *   (the {field: NAME} presence fact), and its value is the string the
  *   markup prints for it (a tag field's value, a link's uri) or null when
@@ -46,7 +56,7 @@
  */
 
 /**
- * The root nesting depth: the section renders as a page band.
+ * The root nesting depth: the root form, a <section> at page depth.
  */
 export const DEPTH_ROOT = 'root';
 

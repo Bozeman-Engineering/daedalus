@@ -18,27 +18,57 @@ edit_mode:
 
 chat:
   js:
-    # The design posture state and its design_posture context provider,
-    # ahead of the kebab that flips it. The provider registers with
-    # Drupal.Daedalus.AiContext, which rides the ai_chatbot/deepchat dependency.
-    js/daedalus-ai-design-posture.js: {}
     js/daedalus-ai-chat-menu.js: {}
     js/daedalus-ai-chat-panel.js: {}
+    # The "AI is working" signal: the chat's busy state mirrored onto
+    # <html> for the edge glow (reads deep-chat's loading class and
+    # ai_chatbot's processing flag; wires no lane).
+    js/daedalus-ai-working.js: {}
   css:
     theme:
       css/daedalus-ai-deep-chat.css: {}
+      css/daedalus-ai-working.css: {}
   dependencies:
-    # The root the design posture facade attaches Drupal.Daedalus.Ai to.
+    # The Drupal.Daedalus root the kebab reads the usage facade
+    # (Drupal.Daedalus.Ai.usage, assigned by the usage library) off.
     - daedalus_ui/daedalus
     - ai_chatbot/deepchat
+    # ai 1.5.1 split the deep-chat bundle out of ai_chatbot/deepchat (which
+    # now carries deepchat-init.js alone) into this library, which only
+    # ai_chatbot's own block attaches, under its eager load strategy. The
+    # sidebar renders its own <deep-chat>, so it loads the bundle itself;
+    # without it the element never upgrades and deepchat-init.js waits on
+    # customElements.whenDefined('deep-chat') forever. Unconditional: 1.5.1
+    # is the floor (composer.json's conflict entry).
+    - ai_chatbot/deepchat.bundle
     - core/drupal
     - core/once
     # The header's options kebab opens the shared menu primitive.
     - daedalus_ui/menu
+    # The kebab's model choice saves through the editor-preference helper.
+    - daedalus_ui/save_setting
     # The header's close/menu buttons wear the kit's daedalus-ui-icon-button recipe.
     - daedalus_ui/panel_controls
     # The panel chrome and the deep-chat shadow-DOM styles consume the
     # --daedalus-* tokens.
+    - daedalus_ui/variables
+
+# The usage meter: the current user's usage windows fetched from the
+# ledger's status route (drupalSettings.daedalus_ai.usageUrl) at attach
+# and at every turn's end, kept for the kebab's usage group, the kebab's
+# dot and the notice under the chat. Attached by ChatSidebar::build()
+# only when the url is set (a configured window applies to the user: a
+# site window to everyone, a user window to those without the bypass).
+usage:
+  js:
+    js/daedalus-ai-usage.js: {}
+  css:
+    theme:
+      css/daedalus-ai-usage.css: {}
+  dependencies:
+    - daedalus_ai/chat
+    - core/drupal
+    - core/once
     - daedalus_ui/variables
 
 layout_context:

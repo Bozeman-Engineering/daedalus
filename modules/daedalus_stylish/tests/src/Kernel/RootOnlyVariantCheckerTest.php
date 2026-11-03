@@ -54,6 +54,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     'layout_builder',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -84,20 +85,17 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and the checker reads the roster.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
     // The daedalus_stylish_layouts install syncs the shipped variants (the entrance
-    // family's motion-* references mirror into the animation usage table);
+    // family's motion-* references mirror into the skin material usage table);
     // the importer switches to an administrative account. A host entity
     // saved directly (the whole-map lane below) mirrors its variant
     // references into the variant usage table.
-    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_animation_usage', 'daedalus_token_usage', 'daedalus_font_usage']);
+    $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_skin_material_usage']);
     $this->setUpCurrentUser([], [], TRUE);
     \Drupal::service('module_installer')->install(['daedalus_stylish_layouts']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -129,7 +127,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
   }
 
   /**
-   * A host with one root band nesting one container, both minted by ops.
+   * A host with one root section nesting one container, both minted by ops.
    *
    * @return array{0: \Drupal\entity_test\Entity\EntityTest, 1: string, 2: string}
    *   The entity, the root section uuid, the nested section uuid.
@@ -162,7 +160,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $root_key = "container:$root";
     $nested_key = "container:$nested";
 
-    // Birth: the band wears container_site, the nested container skips the
+    // Birth: the section wears container_site, the nested container skips the
     // root-only axis (the default_variants face, untouched).
     $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $this->styleMap($entity)[$root_key] ?? NULL);
     $this->assertArrayNotHasKey($nested_key, $this->styleMap($entity));
@@ -226,7 +224,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
    * and validates clean and a re-apply is the only gate. The move path is
    * where depth is settled: out to the root flow the reference rides
    * along (it IS the house width, so the redress adds nothing), and back
-   * inside another band it is stripped.
+   * inside another section it is stripped.
    */
   public function testExistingNestedReferenceStrippedOnNest(): void {
     [$entity, $root, $nested] = $this->createHost();
@@ -250,7 +248,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $this->assertSame('VARIANT_ROOT_ONLY', $result->getErrors()[0]->getCode());
     $this->assertSame($nested_entry, $this->styleMap($entity)[$nested_key] ?? NULL);
 
-    // Out to the root flow: the container becomes a band, the reference
+    // Out to the root flow: the container becomes a section, the reference
     // rides along; the redress finds the width axis already worn.
     $locator = $this->container->get('daedalus_blueprint.element_locator');
     $this->assertTrue($locator->isNestedSection($this->host($entity), $nested));
@@ -260,7 +258,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $this->assertFalse($locator->isNestedSection($this->host($entity), $nested));
     $this->assertSame($nested_entry, $this->styleMap($entity)[$nested_key] ?? NULL);
 
-    // Back inside another band: root-only wear is a fact of depth, so the
+    // Back inside another section: root-only wear is a fact of depth, so the
     // move strips the width reference; the entry held nothing else and is
     // dropped.
     $this->batch($entity, [
@@ -275,14 +273,14 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
   /**
    * A root-only variant is refused at any rule: matches are never top-level.
    *
-   * The rule's owner may be the page band itself; what the rule reaches
+   * The rule's owner may be the section itself; what the rule reaches
    * sits inside it, so the depth question has one answer before the
    * locator is asked. An every-depth variant wears at the rule as one
    * reference on the rule's entry, distributing nothing.
    */
   public function testRuleApplyRefused(): void {
     [$entity, $root, $nested] = $this->createHost();
-    $rule = "container:$root::> pb-container";
+    $rule = "container:$root::> d-container";
 
     foreach (['container_site', 'container_md'] as $variant) {
       $result = $this->operations->batchOperations($this->host($entity), [

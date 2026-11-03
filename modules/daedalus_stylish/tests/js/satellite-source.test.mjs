@@ -81,7 +81,7 @@ test('a pick-media intent relays the routed changes verbatim', async () => {
     property: 'background-image',
     label: 'Styled Background',
     // The pipeline's routed list: the placeholder and the seed grouped on
-    // the anchor, a replaced band's null on the root it lives on.
+    // the anchor, a replaced background's null on the root it lives on.
     changes: [
       {
         key: 'block:aaaaaaaa-1111-2222-3333-444444444444::a',
@@ -115,14 +115,14 @@ test('materials: the satellite boots from its own envelope, follows the wire, re
   // The popout page attaches the same MaterialsDelivery envelope the
   // editing page boots from; the satellite seats its own record set
   // from it and indexes it as a roster.
-  const brand = { kind: 'swatch', id: 'brand_red', label: 'Brand red', description: '', value: '#b91c1c', group: 'color', spellings: { style: 'var(--swatch-brand_red)' }, scope: null, applies: {}, owned_by: null, published: true, weight: 0, icon: null, origin: 'user', updatable: true };
-  const dawn = { ...brand, id: 'dawn', label: 'Dawn', value: '#ffd166', spellings: { style: 'var(--swatch-dawn)' } };
+  const brand = { kind: 'token', id: 'color/brand-red', label: 'brand-red', description: '', value: '#b91c1c', group: 'color', spellings: { style: 'var(--color-brand-red)' }, scope: null, applies: {}, owned_by: null, published: true, weight: 0, icon: null, origin: 'user', updatable: true, offered: true };
+  const dawn = { ...brand, id: 'color/dawn', label: 'dawn', value: '#ffd166', spellings: { style: 'var(--color-dawn)' } };
   globalThis.drupalSettings = { daedalusUi: { materials: JSON.stringify({ records: [brand] }) } };
   const source = createSatelliteSource(SCOPE);
-  assert.deepEqual(source.getMaterials().ofKind('swatch').map((record) => record.id), ['brand_red']);
-  assert.deepEqual(source.getMaterials().bySpelling('style', 'var(--swatch-brand_red)'), brand);
+  assert.deepEqual(source.getMaterials().ofKind('token').map((record) => record.id), ['color/brand-red']);
+  assert.deepEqual(source.getMaterials().bySpelling('style', 'var(--color-brand-red)'), brand);
   const seen = [];
-  source.onMaterialsChange((roster) => seen.push(roster.ofKind('swatch').map((record) => record.id)));
+  source.onMaterialsChange((roster) => seen.push(roster.ofKind('token').map((record) => record.id)));
   // A delta the leader relays on the materials wire (materials-store.js's
   // protocol: channel materials:<scope>, frame delta) seats the record
   // by the shared rule and announces a fresh roster.
@@ -131,7 +131,7 @@ test('materials: the satellite boots from its own envelope, follows the wire, re
   leaderWire.onmessage = (event) => heard.push(event.data);
   leaderWire.postMessage({ type: 'delta', upsert: [dawn], remove: [] });
   await settle();
-  assert.deepEqual(seen, [['brand_red', 'dawn']]);
+  assert.deepEqual(seen, [['color/brand-red', 'color/dawn']]);
   // An empty delta (every ordinary response's) touches nothing.
   leaderWire.postMessage({ type: 'delta', upsert: [], remove: [] });
   await settle();
@@ -139,13 +139,13 @@ test('materials: the satellite boots from its own envelope, follows the wire, re
   // A gesture run in THIS window applies its response's delta here and
   // posts it on the wire for the leader's store; an empty one posts
   // nothing, and a response without materials is ignored.
-  source.applyResponse({ swatch: { machine_name: 'brand_red' }, materials: { upsert: [], remove: [{ kind: 'swatch', id: 'brand_red' }] } });
+  source.applyResponse({ materials: { upsert: [], remove: [{ kind: 'token', id: 'color/brand-red' }] } });
   source.applyResponse({ deleted: true, materials: { upsert: [], remove: [] } });
   source.applyResponse({ usages: 3 });
   await settle();
-  assert.deepEqual(seen, [['brand_red', 'dawn'], ['dawn']]);
-  assert.deepEqual(heard, [{ type: 'delta', upsert: [], remove: [{ kind: 'swatch', id: 'brand_red' }] }]);
-  // A live material preview (a swatch's, a token's) travels to the
+  assert.deepEqual(seen, [['color/brand-red', 'color/dawn'], ['color/dawn']]);
+  assert.deepEqual(heard, [{ type: 'delta', upsert: [], remove: [{ kind: 'token', id: 'color/brand-red' }] }]);
+  // A live material preview (a token's) travels to the
   // leader by kind and id; null releases; no record, no intent.
   const wire = listen();
   source.previewMaterial(dawn, '#000000');
@@ -153,8 +153,8 @@ test('materials: the satellite boots from its own envelope, follows the wire, re
   source.previewMaterial(null, '#000000');
   await settle();
   assert.deepEqual(wire.frames.filter((frame) => frame.intent === 'material-preview'), [
-    { type: 'intent', intent: 'material-preview', kind: 'swatch', id: 'dawn', value: '#000000' },
-    { type: 'intent', intent: 'material-preview', kind: 'swatch', id: 'dawn', value: null },
+    { type: 'intent', intent: 'material-preview', kind: 'token', id: 'color/dawn', value: '#000000' },
+    { type: 'intent', intent: 'material-preview', kind: 'token', id: 'color/dawn', value: null },
   ]);
   // A keyframes session's draft travels the same way: by record id, the
   // steps map whole; null releases; no record, no intent.
@@ -173,15 +173,18 @@ test('materials: the satellite boots from its own envelope, follows the wire, re
   delete globalThis.drupalSettings;
 });
 
-test('the snapshot carries the selection, its target and the tree, and no canvas read of its own', async () => {
+test('the snapshot carries the selection, its target and the document, and no canvas read of its own', async () => {
   // A leader source stub: a heading block selected with its eyebrow part
   // targeted. The satellite renders the same selection and target the
-  // leader holds and reads every tag from the relayed tree (the read
+  // leader holds and reads every tag from the relayed document (the read
   // subject's, style-stack.js subjectTag), never from a canvas.
   const wire = listen();
   const addressed = [];
   const selection = { key: 'block:aaaaaaaa-1111-2222-3333-444444444444', selector: '.eyebrow', address: { key: 'container:bbbbbbbb-1111-2222-3333-444444444444', selector: 'span' } };
   const tree = [{ kind: 'block', uuid: 'aaaaaaaa-1111-2222-3333-444444444444', block_type: 'heading', _element: { markup: { tag: 'h2', parts: { '.eyebrow': { tag: 'span' } } } } }];
+  // The document tree the leader serves (daedalus_ui documentTree): the
+  // host entity above the layout, carrying the root's own annotation.
+  const document = [{ kind: 'entity', uuid: 'root', _element: { type: 'Basic page', name: 'Welcome', icon: null, markup: {} }, children: tree }];
   const targetListeners = new Set();
   const leaderSource = {
     getSelected: () => selection.key,
@@ -192,7 +195,10 @@ test('the snapshot carries the selection, its target and the tree, and no canvas
     getRootUuid: () => 'root',
     getBlockTypes: () => ({}),
     getSectionLayouts: () => ({}),
-    getTree: () => tree,
+    getDocument: () => document,
+    // The leader's canvas is a blueprint's own document: its
+    // self-provenance rides the snapshot beside the document.
+    getSelfProvenance: () => 'section',
     getLayoutContext: () => null,
     getMediaUrls: () => ({}),
     canPickMedia: () => false,
@@ -206,7 +212,11 @@ test('the snapshot carries the selection, its target and the tree, and no canvas
     onCanvasVectorChange: () => () => {},
   };
   const satellite = createSatelliteSource(SCOPE);
+  // Unknown until the leader is heard from: null, never an empty
+  // document or layout (the gated readers degrade to offering).
+  assert.equal(satellite.getDocument(), null);
   assert.equal(satellite.getTree(), null);
+  assert.equal(satellite.getSelfProvenance(), null);
   createPopoutLeader({ scope: SCOPE, url: 'about:blank', source: leaderSource });
   await settle();
   assert.equal(satellite.getSelected(), selection.key);
@@ -214,7 +224,16 @@ test('the snapshot carries the selection, its target and the tree, and no canvas
   // The write address rides the same snapshot beside the facet: spine
   // state on the leader, never a satellite-local pick.
   assert.deepEqual(satellite.getAddress(), { key: 'container:bbbbbbbb-1111-2222-3333-444444444444', selector: 'span' });
+  // The one broadcast document, and the layout read back out of it
+  // (daedalus_ui layoutOf: the entity root's children), never a second
+  // field on the wire.
+  assert.deepEqual(satellite.getDocument(), document);
   assert.deepEqual(satellite.getTree(), tree);
+  assert.equal(satellite.getTree(), satellite.getDocument()[0].children);
+  assert.equal('getRootElement' in satellite, false);
+  // The canvas's self-provenance arrives with it, so the satellite's
+  // offer and consent reads substitute it exactly as the leader's do.
+  assert.equal(satellite.getSelfProvenance(), 'section');
   assert.equal('readCanvasTag' in satellite, false);
   // The satellite's target-aware subscription fires the facade's
   // three-fact shape, and an address move alone fires it.
@@ -316,7 +335,7 @@ test('a satellite commitBatch settles with the leader\'s op-queue result, succes
   // payload on success (the materials delta a material op's caller reads
   // its record from) or an Error carrying .payload on failure.
   const batches = [];
-  const minted = { kind: 'swatch', id: 'ember', label: 'Ember', group: 'color', value: '#ff5a1f' };
+  const minted = { kind: 'token', id: 'color/ember', label: 'ember', group: 'color', value: '#ff5a1f' };
   const leaderSource = {
     getSelected: () => null,
     getTarget: () => null,
@@ -338,9 +357,9 @@ test('a satellite commitBatch settles with the leader\'s op-queue result, succes
     onCanvasVectorChange: () => () => {},
     commitBatch: (batch) => {
       batches.push(batch);
-      if (batch.operations[0].label === 'Taken') {
+      if (batch.operations[0].label === 'taken') {
         const error = new Error('That label is taken.');
-        error.payload = { success: false, errors: [{ path: 'label', code: 'STYLE_SWATCH_LABEL_TAKEN', message: 'That label is taken.', hint: 'Pick another name.' }] };
+        error.payload = { success: false, errors: [{ path: 'label', code: 'STYLE_TOKEN_NAME_TAKEN', message: 'That label is taken.', hint: 'Pick another name.' }] };
         return Promise.reject(error);
       }
       return Promise.resolve({ success: true, materials: { upsert: [minted], remove: [] } });
@@ -352,15 +371,15 @@ test('a satellite commitBatch settles with the leader\'s op-queue result, succes
   const satellite = createSatelliteSource(scope);
   createPopoutLeader({ scope, url: 'about:blank', source: leaderSource });
   await settle();
-  const ok = await satellite.commitBatch({ operations: [{ op: 'save_material', kind: 'swatch', label: 'Ember', value: '#ff5a1f' }], label: 'Added the swatch Ember' });
+  const ok = await satellite.commitBatch({ operations: [{ op: 'save_material', kind: 'token', label: 'ember', value: '#ff5a1f' }], label: 'Saved the color as the token ember' });
   // The leader ran the batch verbatim and the satellite read the leader's
   // own payload: the minted record is where a material op's caller looks.
-  assert.deepEqual(batches[0], { operations: [{ op: 'save_material', kind: 'swatch', label: 'Ember', value: '#ff5a1f' }], label: 'Added the swatch Ember' });
+  assert.deepEqual(batches[0], { operations: [{ op: 'save_material', kind: 'token', label: 'ember', value: '#ff5a1f' }], label: 'Saved the color as the token ember' });
   assert.deepEqual(ok.materials.upsert, [minted]);
   // A failure rejects in the op queue's shape (message + payload.errors),
   // the one shape failureText reads on either lane.
   await assert.rejects(
-    satellite.commitBatch({ operations: [{ op: 'save_material', kind: 'swatch', label: 'Taken', value: '#000' }], label: 'x' }),
+    satellite.commitBatch({ operations: [{ op: 'save_material', kind: 'token', label: 'taken', value: '#000' }], label: 'x' }),
     (error) => error.message === 'That label is taken.' && error.payload.errors[0].hint === 'Pick another name.',
   );
   assert.equal(batches.length, 2);
@@ -425,7 +444,7 @@ test('every op intent carries a request id and settles from the leader\'s answer
     calls.push([name, ...args]);
     if (label === 'Taken') {
       const error = new Error('That label is taken.');
-      error.payload = { success: false, errors: [{ path: 'label', code: 'STYLE_SWATCH_LABEL_TAKEN', message: 'That label is taken.', hint: 'Pick another name.' }] };
+      error.payload = { success: false, errors: [{ path: 'label', code: 'STYLE_TOKEN_NAME_TAKEN', message: 'That label is taken.', hint: 'Pick another name.' }] };
       return Promise.reject(error);
     }
     return Promise.resolve({ success: true, op: name });
@@ -479,12 +498,12 @@ test('every op intent carries a request id and settles from the leader\'s answer
   assert.deepEqual(await satellite.commit(change), { success: true, op: 'commit' });
   assert.deepEqual(await satellite.applyVariant(key, 'hero', 'Apply Hero'), { success: true, op: 'applyVariant' });
   assert.deepEqual(await satellite.detachVariant(key, 'hero', 'Detach Hero'), { success: true, op: 'detachVariant' });
-  assert.deepEqual(await satellite.commitBatch({ operations: [{ op: 'save_material', kind: 'swatch', label: 'Ember', value: '#ff5a1f' }], label: 'Added the swatch Ember' }), { success: true, op: 'commitBatch' });
+  assert.deepEqual(await satellite.commitBatch({ operations: [{ op: 'save_material', kind: 'token', label: 'ember', value: '#ff5a1f' }], label: 'Saved the color as the token ember' }), { success: true, op: 'commitBatch' });
   assert.deepEqual(calls, [
     ['commit', change],
     ['applyVariant', key, 'hero', 'Apply Hero'],
     ['detachVariant', key, 'hero', 'Detach Hero'],
-    ['commitBatch', { operations: [{ op: 'save_material', kind: 'swatch', label: 'Ember', value: '#ff5a1f' }], label: 'Added the swatch Ember' }],
+    ['commitBatch', { operations: [{ op: 'save_material', kind: 'token', label: 'ember', value: '#ff5a1f' }], label: 'Saved the color as the token ember' }],
   ]);
   assert.deepEqual(heard, []);
   // Each intent crossed the wire with its own uuid request id beside its
@@ -542,7 +561,7 @@ test('an address pick crosses the wire as a target intent and echoes back in the
     getRootUuid: () => 'root',
     getBlockTypes: () => ({}),
     getSectionLayouts: () => ({}),
-    getTree: () => [],
+    getDocument: () => [],
     getLayoutContext: () => null,
     getMediaUrls: () => ({}),
     canPickMedia: () => false,

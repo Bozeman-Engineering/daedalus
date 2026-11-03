@@ -9,7 +9,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { EMPTY_MATERIALS, materialsFrom } from './materials-fixture.mjs';
-import { gradientSwatchOf } from '../../js/src/materials.js';
+import { gradientTokenOf } from '../../js/src/materials.js';
 import {
   addStop,
   defaultGradientValue,
@@ -34,12 +34,8 @@ const paletteGuide = {
     color: { label: 'Color', shape: 'color', prefix: 'color' },
   },
   tokens: {
-    color: { accent: { default: '#1a1a2e', dark: '#e8e8f0' }, surface: '#ffffff' },
+    color: { accent: { default: '#1a1a2e', dark: '#e8e8f0' }, surface: '#ffffff', 'brand-red': { value: '#b91c1c', origin: 'user' } },
   },
-  swatchKinds: { color: { label: 'Colors' } },
-  swatches: [
-    { machine_name: 'brand_red', label: 'Brand red', kind: 'color', value: '#b91c1c', variable: '--swatch-brand_red' },
-  ],
 };
 const paletteMaterials = materialsFrom(paletteGuide);
 
@@ -75,14 +71,12 @@ test('seedGradient: one palette choice fades itself', () => {
   // A single choice seeds both stops rather than inventing a second
   // color the palette never offered.
   const oneChoice = {
-    swatchKinds: { color: { label: 'Colors' } },
-    swatches: [
-      { machine_name: 'brand_red', label: 'Brand red', kind: 'color', value: '#b91c1c', variable: '--swatch-brand_red' },
-    ],
+    tokenScales: { color: { label: 'Color', shape: 'color', prefix: 'color' } },
+    tokens: { color: { 'brand-red': { value: '#b91c1c', origin: 'user' } } },
   };
   const seed = seedGradient(oneChoice, materialsFrom(oneChoice), null);
-  assert.equal(seed.stops[0].color, 'var(--swatch-brand_red)');
-  assert.equal(seed.stops[1].color, 'var(--swatch-brand_red)');
+  assert.equal(seed.stops[0].color, 'var(--color-brand-red)');
+  assert.equal(seed.stops[1].color, 'var(--color-brand-red)');
 });
 
 test('seedGradient: no palette and no constraint seeds the neutral scrim', () => {
@@ -223,46 +217,53 @@ test('knobAngle: pointer offsets read as CSS gradient degrees', () => {
   assert.equal(knobAngle(1, -1), 45);
 });
 
-// The edit-in-place gate's roster: a gradient swatch beside a color one.
-const sessionGuide = { swatchKinds: { color: { label: 'Colors' }, gradient: { label: 'Gradients' } } };
+// The edit-in-place gate's roster: a gradient token beside a color one.
+const sessionGuide = {
+  tokenScales: {
+    color: { label: 'Color', shape: 'color', prefix: 'color' },
+    gradient: { label: 'Gradient', shape: 'gradient', prefix: 'gradient' },
+  },
+};
 const sessionMaterials = materialsFrom({
-  swatches: [
-    { machine_name: 'brand_red', label: 'Brand red', kind: 'color', value: '#b91c1c' },
-    { machine_name: 'hero_fade', label: 'Hero fade', kind: 'gradient', value: 'linear-gradient(90deg, #111 0%, #eee 100%)' },
-  ],
+  ...sessionGuide,
+  tokens: {
+    color: { 'brand-red': '#b91c1c' },
+    gradient: { 'hero-fade': 'linear-gradient(90deg, #111 0%, #eee 100%)' },
+  },
 });
 
-test('gradientSwatchOf: exactly one var() naming a gradient swatch answers its entry', () => {
-  const entry = gradientSwatchOf(sessionGuide, sessionMaterials, 'var(--swatch-hero_fade)');
-  assert.equal(entry?.name, 'hero_fade');
-  assert.equal(entry?.ref, 'var(--swatch-hero_fade)');
-  assert.equal(entry?.record, sessionMaterials.get('swatch', 'hero_fade'));
+test('gradientTokenOf: exactly one var() naming a gradient-scale token answers its entry', () => {
+  const entry = gradientTokenOf(sessionGuide, sessionMaterials, 'var(--gradient-hero-fade)');
+  assert.equal(entry?.name, 'hero-fade');
+  assert.equal(entry?.ref, 'var(--gradient-hero-fade)');
+  assert.equal(entry?.record, sessionMaterials.get('token', 'gradient/hero-fade'));
   // Whitespace and the var keyword's case keep it one var() and nothing
   // else (the grammar's whole-value read, head canonicalized).
-  assert.equal(gradientSwatchOf(sessionGuide, sessionMaterials, '  VAR( --swatch-hero_fade )  ')?.name, 'hero_fade');
+  assert.equal(gradientTokenOf(sessionGuide, sessionMaterials, '  VAR( --gradient-hero-fade )  ')?.name, 'hero-fade');
 });
 
-test('gradientSwatchOf: anything but one gradient-swatch var() answers null', () => {
-  // A color-kind swatch: the chip's ordinary builder, not the session.
-  assert.equal(gradientSwatchOf(sessionGuide, sessionMaterials, 'var(--swatch-brand_red)'), null);
+test('gradientTokenOf: anything but one gradient-token var() answers null', () => {
+  // A color-scale token: the chip's ordinary builder, not the session.
+  assert.equal(gradientTokenOf(sessionGuide, sessionMaterials, 'var(--color-brand-red)'), null);
   // A name the roster does not carry.
-  assert.equal(gradientSwatchOf(sessionGuide, sessionMaterials, 'var(--swatch-missing)'), null);
-  // A variable outside the reserved swatch namespace.
-  assert.equal(gradientSwatchOf(sessionGuide, sessionMaterials, 'var(--color-accent)'), null);
+  assert.equal(gradientTokenOf(sessionGuide, sessionMaterials, 'var(--gradient-missing)'), null);
+  // A variable outside every declared scale.
+  assert.equal(gradientTokenOf(sessionGuide, sessionMaterials, 'var(--theme-accent)'), null);
   // A fallback makes the value a literal, not a reference (the grammar's
   // rule: the whole value is the reference, or it is not one).
-  assert.equal(gradientSwatchOf(sessionGuide, sessionMaterials, 'var(--swatch-hero_fade, none)'), null);
+  assert.equal(gradientTokenOf(sessionGuide, sessionMaterials, 'var(--gradient-hero-fade, none)'), null);
   // A layered value: the reference is not ALONE.
   assert.equal(
-    gradientSwatchOf(sessionGuide, sessionMaterials, "var(--swatch-hero_fade), url('media:1')"),
+    gradientTokenOf(sessionGuide, sessionMaterials, "var(--gradient-hero-fade), url('media:1')"),
     null,
   );
   // A literal gradient, an empty value, a non-string.
-  assert.equal(gradientSwatchOf(sessionGuide, sessionMaterials, 'linear-gradient(#111, #eee)'), null);
-  assert.equal(gradientSwatchOf(sessionGuide, sessionMaterials, ''), null);
-  assert.equal(gradientSwatchOf(sessionGuide, sessionMaterials, null), null);
-  // No swatches rostered at all.
-  assert.equal(gradientSwatchOf(sessionGuide, EMPTY_MATERIALS, 'var(--swatch-hero_fade)'), null);
+  assert.equal(gradientTokenOf(sessionGuide, sessionMaterials, 'linear-gradient(#111, #eee)'), null);
+  assert.equal(gradientTokenOf(sessionGuide, sessionMaterials, ''), null);
+  assert.equal(gradientTokenOf(sessionGuide, sessionMaterials, null), null);
+  // No tokens rostered at all; a guide declaring no gradient shape.
+  assert.equal(gradientTokenOf(sessionGuide, EMPTY_MATERIALS, 'var(--gradient-hero-fade)'), null);
+  assert.equal(gradientTokenOf({}, sessionMaterials, 'var(--gradient-hero-fade)'), null);
 });
 
 let failures = 0;

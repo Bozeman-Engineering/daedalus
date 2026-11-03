@@ -14,6 +14,18 @@ import { h } from 'preact';
  * through the same gesture ops the AI submits (`offered: false` on
  * save_material / update_material) or the variant details route.
  *
+ * Beside the control, for a user who may read the AI context usage, the
+ * door to it: "See what the AI holds" opens daedalus_blueprint's usage
+ * display (the bar of what the site shares with the AI by kind, against
+ * the budget) in the daedalus popup. The URL rides drupalSettings
+ * .daedalusStylish.aiContext.url (InspectorGates::aiContext(): set only
+ * with the permission, so the link's absence is honest chrome) and the
+ * link wears data-daedalus-modal, the attribute the popup's one opener
+ * (Drupal.Daedalus.openModal, daedalus_ui/modal) catches at the
+ * document, with the display's class for its styling and the tests.
+ * Sharing past the budget is refused with the same display named in the
+ * hint; the link is where the user sees why.
+ *
  * @param {object} props
  * @param {?boolean} props.offered
  *   The record's flag; anything but false reads as offered.
@@ -36,25 +48,57 @@ export const AiOfferToggle = ({
   className = '',
   label = null,
   title = null,
-}) => (
-  <label
-    className={`daedalus-stylish-ai-offer${className ? ` ${className}` : ''}`}
-    title={
-      title ??
-      Drupal.t(
-        'Off, the AI is not told about this material: it leaves the brief and the schema but still applies on the page.',
-      )
-    }
-  >
-    <input
-      type="checkbox"
-      checked={offered !== false}
-      disabled={disabled}
-      onChange={(event) => onChange(event.target.checked)}
-    />
-    {label ?? Drupal.t('Offer to the AI')}
-  </label>
-);
+}) => {
+  const contextUrl = aiContextUrl();
+  return (
+    <span
+      className={`daedalus-stylish-ai-offer${className ? ` ${className}` : ''}`}
+    >
+      <label
+        className="daedalus-stylish-ai-offer__control"
+        title={
+          title ??
+          Drupal.t(
+            'Off, the AI is not told about this material: it leaves the brief and the schema but still applies on the page.',
+          )
+        }
+      >
+        <input
+          type="checkbox"
+          checked={offered !== false}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        {label ?? Drupal.t('Offer to the AI')}
+      </label>
+      {contextUrl ? (
+        <a
+          className="daedalus-stylish-ai-offer__context"
+          href={contextUrl}
+          data-daedalus-modal=""
+          data-daedalus-modal-class="daedalus-ai-context-dialog"
+          title={Drupal.t(
+            'What the site shares with the AI, by kind, against the budget.',
+          )}
+        >
+          {Drupal.t('See what the AI holds')}
+        </a>
+      ) : null}
+    </span>
+  );
+};
+
+/**
+ * The usage display's URL, or null when the user may not read it.
+ *
+ * Read at render (never grabbed at bundle load): the settings land with
+ * the surface that attaches the bundle, and the satellite window carries
+ * its own copy.
+ *
+ * @return {?string}
+ */
+export const aiContextUrl = () =>
+  window.drupalSettings?.daedalusStylish?.aiContext?.url ?? null;
 
 /**
  * A record's offered flag: an absent key reads as offered, the default.

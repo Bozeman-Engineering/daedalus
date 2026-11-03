@@ -11,7 +11,7 @@ use Drupal\Core\Config\Entity\ConfigEntityInterface;
  *
  * The site holds several; ONE is active (daedalus_blueprint.settings
  * active_design_system, read through ActiveDesignSystem). Members (skins,
- * variants, swatches, animations, blueprints, skills) reference it by id
+ * variants, animations, fonts, blueprints, skills) reference it by id
  * or carry none and are global; the roster partitions on it.
  */
 interface DesignSystemInterface extends ConfigEntityInterface {

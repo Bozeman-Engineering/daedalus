@@ -45,7 +45,6 @@ import {
   tabStops,
 } from './stitching.js';
 import {
-  PSEUDO,
   bracedSelector,
   conditionRemovalOps,
   draftRoster,
@@ -56,13 +55,28 @@ import {
   ownIslandLines,
   partRemovalOps,
   posedRoster,
+  previewReach,
+  renameDrafts,
   restoredLines,
   ruleIslandLines,
+  ruleMovePlan,
   selectorGestureOptions,
   settleOps,
   shouldRestoreTinted,
 } from './element-model.js';
-import { Prelude } from './selector-chrome.js';
+import {
+  Prelude,
+  selectorCompletionItems,
+  selectorDetail,
+  selectorHeaderClick,
+  selectorOfferValidity,
+} from './selector-chrome.js';
+import {
+  REFUSED_CONTINUATION,
+  REFUSED_TARGET_EXISTS,
+  planRuleMove,
+} from '../rule-move.js';
+import { movedStyles } from '../pending.js';
 import {
   FRESH_LINE,
   createIslandSurface,
@@ -111,33 +125,114 @@ import {
   TYPE_BLOCK,
   TYPE_CONTAINER,
   CLASS_PART,
-  TAG,
-  TYPE,
-  UNIVERSAL,
+  SUFFIX,
   splitKey,
   typeAddress,
 } from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 import {
   animationOptions,
   scaleTokens,
-  swatchOptions,
   tokenOptions,
 } from '../materials.js';
 import { KEYFRAMES_PROPERTIES } from '../keyframes-names.js';
 import { imageSlot } from '../widget-values.js';
-import { widePropertyNames, wideValueKeywords } from './wide-tier.js';
-import { PART_SELECTOR, boxWord, selectorLabel, partsForKey, typeLabels } from '../parts.js';
-import {
-  conditionRenders,
-  isFactCondition,
-  satisfiedFacts,
-} from '../editing-at.js';
+import { isWideProperty, widePropertyNames, wideValueKeywords } from './wide-tier.js';
+import { OWNER, digest } from '../../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
+import { PART_SELECTOR, selectorLabel, partsForKey, typeLabels } from '../parts.js';
+import { conditionRenders } from '../editing-at.js';
 import { createMatcher } from '../selector-matcher.js';
 import {
   addressDeclaration,
   addressLabel,
   ownerName,
 } from '../write-address.js';
+
+/**
+ * The selector gesture's vocabulary, shared by every row of a host: what
+ * selectorGestureOptions reads beside the owner's own facts (the
+ * document tree for the children present, a type's declared parts for a
+ * chain landing on it, the guide's posture, the base tag words and the
+ * type labels). Built once per host render (the element view, the
+ * document view); the per-row context adds the owner key, its parts,
+ * its DOM presence and its prose tags.
+ */
+const selectorGestureVocabulary = (guide, document) => {
+  const partsOfType = (type) => {
+    const address = typeAddress(type);
+    const declaration =
+      type === TYPE_CONTAINER
+        ? guide?.kinds?.container
+        : type === TYPE_BLOCK
+          ? guide?.kinds?.block
+          : address?.startsWith('block_type:')
+            ? guide?.blockTypes?.[address.slice('block_type:'.length)]
+            : null;
+    return Object.entries(flattenElements(declaration))
+      .filter(([selector]) => PART_SELECTOR.test(selector))
+      .map(([selector, part]) => ({ id: selector, label: part?.label ?? selector }));
+  };
+  return {
+    document,
+    partsFor: partsOfType,
+    closed: propertiesClosed(guide),
+    tags: Object.fromEntries(
+      baseTags(guide?.base).map((tag) => [tag, tagWord(guide, tag)]),
+    ),
+    types: typeLabels(guide),
+    // The published condition table: the `:` lane's states and the
+    // digester's roster (the peel) for every gesture over this host.
+    conditions: guide?.conditions ?? {},
+  };
+};
+
+/**
+ * The digester's reading of a selector a gesture spelled (an option
+ * picked from the completion, composed under its island's rule already):
+ * what to mint, or null when the digester refuses it. The one call every
+ * mint on a host goes through beside the brace (bracedSelector), so a
+ * picked `a:hover` mints the `a` row's hover island exactly as the
+ * typed `a:hover {` does.
+ */
+const mintReading = (spelling, conditions) => {
+  const answer = digest(spelling, { conditions: conditions ?? {} });
+  return answer.refusal === null && answer.selector !== null
+    ? { selector: answer.selector, condition: answer.condition, folded: answer.folded }
+    : null;
+};
+
+/**
+ * The fold notice, once per mint: a typed list minted ONE `:is()` row
+ * and the digester said so (`folded`), so the host tells the designer
+ * where the alternatives went, in the row's voice. Read off the
+ * digester's answer, never the text (the digester is the one reader of
+ * commas); nothing for a plain selector, a typed `:is()` or a wrapper.
+ */
+const notifyFold = ({ folded }) => {
+  if (folded) {
+    notify('status', Drupal.t('Folded into one rule: :is(…) holds the alternatives.'));
+  }
+};
+
+/**
+ * A rule move's refusal, worded for the host's failure path (rule-move.js
+ * REFUSED_*): the same sentence whether the move is the element view's
+ * op or a document's staged fact, since the plan refusing it is the same.
+ */
+const moveRefusalMessage = (refusal, to) => {
+  switch (refusal.reason) {
+    case REFUSED_TARGET_EXISTS:
+      return Drupal.t('A rule already stands at "!key" here; moving onto it would merge the two.', {
+        '!key': refusal.key,
+      });
+    case REFUSED_CONTINUATION:
+      return Drupal.t('"!key" cannot follow "!to": a generated box takes no continuation.', {
+        '!key': refusal.key,
+        '!to': to,
+      });
+    default:
+      return Drupal.t('"!to" is not a selector.', { '!to': to });
+  }
+};
 
 /**
  * The per-element islands body (the page tree mounts one per element)
@@ -154,7 +249,7 @@ import {
  * bounded to one editor however big the page is.
  * Selectors, condition wrappers, and selector headers cannot be typed
  * here — they MATERIALIZE from typing instead: a relative selector typed
- * at a declaration position (`>`, `.`, `pb-`, a bare tag word, a chain
+ * at a declaration position (`>`, `.`, `d-`, a bare tag word, a chain
  * of them on one line) opens ONE selector completion built from the
  * element itself (element-model.js selectorGestureOptions over the
  * selector matcher: the children present, their types and tags, the
@@ -268,55 +363,30 @@ const TOKEN_SHAPES_FOR = {
 };
 
 /**
- * The swatch kinds a property definition type's completions offer.
+ * The palette completions for one property: the tokens, shape-filtered.
  *
- * The palette's swatch half of the mapping above: color swatches in color
- * slots and on rows without a clean mapping, no swatches on numeric rows
- * (no kind fits). Free <image> slots (widget-values.js imageSlot) bypass
- * this table: the value is free-typed grammar where a gradient swatch is
- * the whole layer and a color swatch is a legitimate stop, so both offer.
- * A keyword-typed media property (content) offers no swatch kind at all:
- * its grammar takes its keywords or one media token, and a swatch
- * reference is refused there, so the offer follows the type and the
- * flag adds only the picker.
- */
-const SWATCH_KINDS_FOR = {
-  color: ['color'],
-  dimension: [],
-  number: [],
-  animation_name: [],
-};
-
-/**
- * The palette completions for one property: tokens and swatches, filtered.
+ * Free <image> slots (widget-values.js imageSlot) take every shape: the
+ * value is free-typed grammar where a gradient token is the whole layer
+ * and a color token is a legitimate stop. A keyword-typed media property
+ * (content) offers no token at all: its grammar takes its keywords or one
+ * media token, and a var() is refused there, so the offer follows the
+ * type and the flag adds only the picker.
  */
 const tokenCompletions = (guide, materials, definition) => {
-  const shapes = definition?.type
-    ? (TOKEN_SHAPES_FOR[definition.type] ?? null)
-    : null;
-  const kinds = definition?.media
-    ? imageSlot(definition)
-      ? null
-      : []
-    : definition?.type
-      ? (SWATCH_KINDS_FOR[definition.type] ?? ['color'])
-      : ['color'];
-  return [
-    ...tokenOptions(guide, materials, shapes).map((token) => ({
-      label: token.ref,
-      type: 'constant',
-      detail: token.value
-        ? `${token.scaleLabel} · ${token.value}`
-        : token.scaleLabel,
-    })),
-    ...swatchOptions(guide, materials, kinds).map((swatch) => ({
-      label: swatch.ref,
-      type: 'constant',
-      detail: swatch.value
-        ? `${swatch.kindLabel} · ${swatch.value}`
-        : swatch.kindLabel,
-    })),
-  ];
+  if (definition?.media && !imageSlot(definition)) {
+    return [];
+  }
+  const shapes =
+    definition?.type && !definition?.media
+      ? (TOKEN_SHAPES_FOR[definition.type] ?? null)
+      : null;
+  return tokenOptions(guide, materials, shapes).map((token) => ({
+    label: token.ref,
+    type: 'constant',
+    detail: token.value
+      ? `${token.scaleLabel} · ${token.value}`
+      : token.scaleLabel,
+  }));
 };
 
 /**
@@ -467,10 +537,10 @@ export const guideCompletions = (context, propsRef) => {
     };
   }
   // The token trigger: typing "--" (or "var(--") asks for the palette
-  // vocabulary — minted tokens and published swatches; the completion
-  // inserts the full var() reference. Typed, so free values keep their
-  // no-popup path. Underscores are in the charset: swatch machine names
-  // carry them (--swatch-brand_red).
+  // vocabulary — the active skin's minted tokens; the completion inserts
+  // the full var() reference. Typed, so free values keep their no-popup
+  // path. Underscores are in the charset: a theme's own custom property
+  // may carry them, and the trigger must not cut such a word short.
   const tokenWord = context.matchBefore(/(?:var\(\s*)?--[A-Za-z0-9_-]*$/);
   if (tokenWord) {
     const tokenChoices = tokenCompletions(guide, materials, definition);
@@ -488,45 +558,38 @@ export const guideCompletions = (context, propsRef) => {
 /**
  * The declaration-position read every gesture shares: the line's text
  * before and after the cursor, or null when the cursor is not at a
- * declaration position (text follows it, or a colon precedes it). A
- * generated box's `::` tail (`&::`, `> pb-text::bef`) is the selector
- * gesture's own token, not a declaration's colon.
+ * declaration position (text follows it, or a declaration's colon
+ * precedes it: a colon followed by a space, the end of a `name: value`
+ * head). A colon glued to what follows it is a selector's (`a:ho`, the
+ * `:` lane; `&::`, a generated box's tail) and passes; whether the word
+ * before it is a property is the selector gesture's own check.
  */
 const gestureLine = (context) => {
   const line = context.state.doc.lineAt(context.pos);
   const before = line.text.slice(0, context.pos - line.from);
   const after = line.text.slice(context.pos - line.from);
-  if (after.trim() !== '' || before.replace(/::[A-Za-z]*$/, '').includes(':')) {
+  if (after.trim() !== '' || /:\s/.test(before) || /[;{}]/.test(before)) {
     return null;
   }
   return { line, before, after };
 };
 
 /**
- * The sentence a selector completion's detail reads: what the rule
- * addresses, in the reader's words.
+ * Whether a typed line's colon is a declaration's: the head before the
+ * first colon is one bare word the guide or the wide tier knows as a
+ * property (`color:`, `margin:`), so `color:` never opens the `:` lane
+ * (a tag word is never a property; `a:`, `li:`, `d-text:` open it).
  */
-const selectorDetail = (option) => {
-  const lower = (label) =>
-    typeof label === 'string' && label !== ''
-      ? label.charAt(0).toLowerCase() + label.slice(1)
-      : label;
-  switch (option.kind) {
-    case UNIVERSAL:
-      return Drupal.t('Children');
-    case TYPE:
-      return option.name === TYPE_CONTAINER || option.name === TYPE_BLOCK
-        ? Drupal.t('Every !label here', { '!label': lower(option.label ?? option.name) })
-        : Drupal.t('Every !label block here', {
-            '!label': lower(option.label ?? option.name),
-          });
-    case TAG:
-      return Drupal.t('Every !label here', { '!label': lower(option.label ?? option.name) });
-    case PSEUDO:
-      return boxWord(option.name);
-    default:
-      return option.label ?? option.name;
+const declarationHead = (before, guide) => {
+  const colon = before.indexOf(':');
+  if (colon === -1 || before[colon + 1] === ':') {
+    return false;
   }
+  const head = before.slice(0, colon).trim();
+  if (!/^[A-Za-z-]+$/.test(head)) {
+    return false;
+  }
+  return definitionFor(guide, head) !== null || isWideProperty(head);
 };
 
 /**
@@ -544,10 +607,10 @@ const selectorDetail = (option) => {
  * anything: structure never becomes characters. The offer re-queries
  * whenever the token under the cursor changes shape (a space, a `>`, a
  * `.`, a `::`), so a chain typed on one line completes compound by
- * compound and a subject continues into its boxes (`> pb-text::`; the
+ * compound and a subject continues into its boxes (`> d-text::`; the
  * owner's own through the anchor, `&::`).
  *
- * Inside a rule island (the `p` row, an ancestor's `> pb-text` row) the
+ * Inside a rule island (the `p` row, an ancestor's `> d-text` row) the
  * line composes under the island's rule by CSS nesting's relative rule
  * before the offer is read (element-model.js nestUnder: `&` is the
  * rule, a bare line is relative to it), so the position is the rule's
@@ -557,62 +620,56 @@ const selectorDetail = (option) => {
  * composed canonical selector (`p::before`, `p > a`).
  */
 const selectorCompletions = (context, propsRef) => {
-  const { materialize } = propsRef.current;
-  if (!materialize?.selectors) {
+  const { guide, materialize } = propsRef.current;
+  if (!materialize?.selector) {
     return null;
   }
   const read = gestureLine(context);
   if (!read) {
     return null;
   }
-  const match = /^(\s*)([A-Za-z0-9_.*>& -]*(?:::[A-Za-z]*)?)$/.exec(read.before);
-  if (!match || match[2].trim() === '') {
+  const match = /^(\s*)(\S.*)$/.exec(read.before);
+  if (!match || declarationHead(match[2], guide)) {
     return null;
   }
   const typed = match[2];
-  const { rule } = materialize.selectors;
-  const offer = selectorGestureOptions(
-    nestUnder(rule, typed),
-    materialize.selectors.context,
-  );
+  const { rule, context: gesture } = materialize.selector;
+  const offer = selectorGestureOptions(nestUnder(rule, typed), gesture);
   if (!offer) {
     return null;
   }
   const tokenFrom = read.line.from + match[1].length;
+  // Picking REMOVES the typed text and mints what the digester reads in
+  // the option's spelling (a state on the last compound peels into the
+  // row's condition); an open qualifier option inserts its spelling for
+  // the designer to finish instead.
   const pick = (selector) => (view, completion, from, to) => {
+    const reading = mintReading(selector, gesture?.conditions);
+    if (reading === null) {
+      return;
+    }
     view.dispatch({ changes: { from: tokenFrom, to } });
-    materialize.selectors.onMaterialize(selector);
+    materialize.selector.onMaterialize(reading);
   };
-  const typeOf = (kind) =>
-    kind === UNIVERSAL || kind === PSEUDO ? 'keyword' : kind === TYPE ? 'type' : 'class';
-  const completions = offer.options.map((option) => ({
-    label: nestedSpelling(rule, typed, option.selector),
-    type: typeOf(option.kind),
-    detail: selectorDetail(option),
-    apply: pick(option.selector),
-  }));
-  if (offer.create) {
-    completions.push({
-      label: nestedSpelling(rule, typed, offer.create),
-      type: 'class',
-      detail: Drupal.t('Create this part'),
-      boost: -1,
-      apply: pick(offer.create),
+  const insert = (text) => (view, completion, from, to) => {
+    const spelled = nestedSpelling(rule, typed, text);
+    view.dispatch({
+      changes: { from: tokenFrom, to, insert: spelled },
+      selection: { anchor: tokenFrom + spelled.length },
     });
-  }
+  };
+  const completions = selectorCompletionItems(offer, {
+    label: (selector) => nestedSpelling(rule, typed, selector),
+    apply: pick,
+    insert,
+  });
   if (!completions.length) {
     return null;
   }
-  // The stem is the typed text up to the token under the cursor; the
-  // popup stays valid while only that token grows, and a new compound
-  // (a space, a combinator, a dot) asks the source again.
-  const token = /[A-Za-z0-9_.*-]*$/.exec(typed)?.[0] ?? '';
-  const stem = typed.slice(0, typed.length - token.length);
   return {
     from: tokenFrom,
     options: completions,
-    validFor: (text) =>
-      text.startsWith(stem) && /^[A-Za-z0-9_.*-]*$/.test(text.slice(stem.length)),
+    validFor: selectorOfferValidity(typed),
   };
 };
 
@@ -620,7 +677,8 @@ const selectorCompletions = (context, propsRef) => {
  * Materialization-from-typing: the `&` / `@` gestures.
  *
  * A condition sigil owns its line: `&` and `@` open the condition
- * vocabulary on any island, the structural facts grouped under Position.
+ * vocabulary on any island (the posable conditions; a position is
+ * selector text, typed on the compound it qualifies, never a condition).
  * The `&` is also the anchor of the island's generated boxes (the
  * owner's own on its island, the rule's inside a rule island: `p::before`
  * in the `p` row), so that popup ends with `::before` and `::after`
@@ -649,21 +707,15 @@ const conditionCompletions = (context, propsRef) => {
   if (!vocabulary.length) {
     return null;
   }
-  // Structural facts (first-child, empty, …) are offered under their
-  // own Position group after the posable conditions: a fact is the
-  // element's place in the markup, never a canvas pose, so the group
-  // says what picking one means (a row that renders when the element
-  // sits there).
-  const position = { name: Drupal.t('Position'), rank: 1 };
   const box = { name: Drupal.t('Generated box'), rank: 2 };
   // The island's boxes behind the anchor: the anchor's `::` tail
   // composed under the island's rule (`&::` is the owner's boxes on its
   // island, `p::` inside the `p` row), each labelled past the sigil
   // (`::before`) and minting the composed selector.
-  const anchored = read.before.trim().startsWith('&') && materialize.selectors;
-  const rule = anchored ? materialize.selectors.rule : null;
+  const anchored = read.before.trim().startsWith('&') && materialize.selector;
+  const rule = anchored ? materialize.selector.rule : null;
   const boxes = anchored
-    ? (selectorGestureOptions(nestUnder(rule, '&::'), materialize.selectors.context)
+    ? (selectorGestureOptions(nestUnder(rule, '&::'), materialize.selector.context)
         ?.options ?? [])
     : [];
   return {
@@ -675,7 +727,6 @@ const conditionCompletions = (context, propsRef) => {
         label: name,
         type: 'keyword',
         detail: definition?.label,
-        ...(isFactCondition(name, guide?.conditions) && { section: position }),
         apply: (view, completion, from, to) => {
           view.dispatch({ changes: { from: tokenFrom, to } });
           materialize.condition(name);
@@ -687,8 +738,12 @@ const conditionCompletions = (context, propsRef) => {
         detail: selectorDetail(option),
         section: box,
         apply: (view, completion, from, to) => {
+          const reading = mintReading(option.selector, materialize.selector.context?.conditions);
+          if (reading === null) {
+            return;
+          }
           view.dispatch({ changes: { from: tokenFrom, to } });
-          materialize.selectors.onMaterialize(option.selector);
+          materialize.selector.onMaterialize(reading);
         },
       })),
     ],
@@ -706,7 +761,7 @@ const conditionCompletions = (context, propsRef) => {
  * the selector offer merge into one popup at the same anchor (the typed
  * word), letting the editor's own filtering rank them; an exact tag
  * match surfaces its row offer beside the properties. Any other
- * selector shape (`>`, `.`, `pb-`, a chain) is the selector gesture
+ * selector shape (`>`, `.`, `d-`, a chain) is the selector gesture
  * alone, and the property offer stands down there (guideCompletions
  * reads only a bare word as a property).
  */
@@ -948,7 +1003,9 @@ class PendingMarkWidget extends WidgetType {
  * own run reads "this rule"); `onOpenDocument` is the variant doorway
  * the run menu opens a variant run through (the Inspector's
  * openDocument: reference, condition, anchor), null where no host wires
- * it (the satellite), which drops the item.
+ * it (the satellite), which drops the item. `law` is the law gate
+ * ({canView}): the declared run's "See the declaration" item exists only
+ * under it; otherwise the run says the declaration is code.
  */
 const Island = ({
   source,
@@ -969,6 +1026,7 @@ const Island = ({
   project = null,
   rule = false,
   onOpenDocument = null,
+  law = {},
 }) => {
   const containerRef = useRef(null);
   const surfaceRef = useRef(null);
@@ -1011,6 +1069,7 @@ const Island = ({
     project,
     rule,
     onOpenDocument,
+    law,
   };
 
   // The wearer cascade's winners for this island — the document honesty
@@ -1898,10 +1957,55 @@ const Island = ({
       commitTimer: null,
       door: null,
       doorInFlight: null,
+      previewedReach: null,
     };
     setHasErrors(false);
     // A re-print retires the line the menu was over.
     menu.close();
+
+    // The mint line's reach preview: the cursor's line read as the brace
+    // would read it (element-model.js previewReach: composed under the
+    // island's rule, digested, the posable states stripped) and handed
+    // to the host's onPreview, which drives the hover-selector facet on
+    // the island's owner (the canvas dashed paint and the tree part rows
+    // follow the facet, the satellite rides the same intent), so the
+    // designer sees where `> d-text:has(a) a` lands before any brace or
+    // pick. Read per keystroke and when the cursor changes lines; the
+    // facet is written only when this island's reading CHANGES (a
+    // declaration line previews nothing, and must not clear a hover a
+    // pointer set elsewhere), and cleared when the line stops digesting,
+    // when the brace mints it, on blur and on the island's teardown. A
+    // bare word the guide or the wide tier knows as a property
+    // (`color`, `margin`) is a declaration's head being typed, never a
+    // tag rule's preview (declarationHead's rule, before its colon).
+    const previewTypedLine = (view) => {
+      const gesture = propsRef.current.materialize?.selector;
+      if (!gesture?.onPreview) {
+        return;
+      }
+      const text = view.state.doc.lineAt(view.state.selection.main.head).text;
+      const word = /^\s*([A-Za-z-]+)\s*$/.exec(text)?.[1] ?? null;
+      const property =
+        word !== null &&
+        (definitionFor(propsRef.current.guide, word) !== null || isWideProperty(word));
+      const reached = property
+        ? null
+        : previewReach(text, {
+            rule: gesture.rule,
+            conditions: gesture.context?.conditions ?? {},
+          });
+      if (reached !== session.current.previewedReach) {
+        session.current.previewedReach = reached;
+        gesture.onPreview(reached);
+      }
+    };
+    const clearTypedPreview = () => {
+      if (session.current.previewedReach === null) {
+        return;
+      }
+      session.current.previewedReach = null;
+      propsRef.current.materialize?.selector?.onPreview?.(null);
+    };
 
     // The live posture's state, over the standing print's exact text (the
     // pointerdown caret mapping's contract); wake places the caret in the
@@ -1921,30 +2025,38 @@ const Island = ({
           autocompletion({
             override: [(context) => completionSource(context, propsRef)],
           }),
-          // The braced materialize: `p {` / `> pb-text {` / `.quote {`
-          // typed at a declaration position mints the selector's row
-          // without the pick, the brace and the selector swallowed
-          // together (bracedSelector decides; a partial selector or a
-          // declaration keeps the brace as text for the lint to name).
-          // Inside a rule island the line composes under the island's
-          // rule first (`&::before {` in the `p` row mints `p::before`).
+          // The braced materialize: `p {` / `> d-text {` / `.quote {` /
+          // `a:hover {` / `li:hover > ul {` / `h1, h2 {` typed at a
+          // declaration position mints the rows without the pick, the
+          // brace and the selector swallowed together (bracedSelector
+          // decides through the digester: a partial selector or a
+          // declaration keeps the brace as text for the lint to name; a
+          // state on the last compound peels into the row's condition; a
+          // list folds into its one `:is()` row). Inside a rule island
+          // the line composes under the island's rule first (`&::before
+          // {` in the `p` row mints `p::before`, `&:hover {` its hover
+          // row).
           EditorView.inputHandler.of((view, from, to, inserted) => {
-            const selectors = propsRef.current.materialize?.selectors;
-            if (inserted !== '{' || !selectors) {
+            const gesture = propsRef.current.materialize?.selector;
+            if (inserted !== '{' || !gesture) {
               return false;
             }
             const line = view.state.doc.lineAt(from);
-            const selector = bracedSelector(
+            const reading = bracedSelector(
               line.text.slice(0, from - line.from),
               line.text.slice(to - line.from),
-              selectors.rule,
+              gesture.rule,
+              { conditions: gesture.context?.conditions ?? {} },
             );
-            if (selector === null) {
+            if (reading === null) {
               return false;
             }
             const leading = line.text.length - line.text.trimStart().length;
             view.dispatch({ changes: { from: line.from + leading, to: line.to } });
-            selectors.onMaterialize(selector);
+            // The commit clears the preview: the minted row seats its
+            // own facet.
+            clearTypedPreview();
+            gesture.onMaterialize(reading);
             return true;
           }),
           linter(
@@ -1982,6 +2094,7 @@ const Island = ({
                   semicolon = true;
                 }
               });
+              previewTypedLine(update.view);
               clearTimeout(session.current.previewTimer);
               session.current.previewTimer = setTimeout(() => {
                 const analysis = previewPass(update.view);
@@ -2004,6 +2117,7 @@ const Island = ({
               const headLine = update.state.doc.lineAt(head).number;
               if (session.current.cursorLine !== headLine) {
                 session.current.cursorLine = headLine;
+                previewTypedLine(update.view);
                 commitPass(update.view, { includeActive: false });
               }
             }
@@ -2011,6 +2125,7 @@ const Island = ({
           EditorView.domEventHandlers({
             paste: (event, target) => handlePaste(event, target),
             blur: (event, target) => {
+              clearTypedPreview();
               commitPass(target, { includeActive: true });
               // Park on blur, EXCEPT when the whole window lost focus: a
               // Cmd-Tab must not lose the cursor.
@@ -2058,6 +2173,7 @@ const Island = ({
     return () => {
       clearTimeout(session.current.previewTimer);
       clearTimeout(session.current.commitTimer);
+      clearTypedPreview();
       releaseStaged();
       const live = surface.live;
       if (registry && live?.hasFocus) {
@@ -2266,10 +2382,12 @@ const Island = ({
       default: {
         // The declared run: the declaration is code, so the doorway
         // shows it in the Law tab at its scope (a law document through
-        // the same openDocument, code/layers.js lawDocument); without a
-        // host wiring the doorway the item stays and says so.
+        // the same openDocument, code/layers.js lawDocument), and only
+        // under the law gate (the tab is the "view style law"
+        // permission's); without a host wiring the doorway, or without
+        // the gate, the item stays and says the declaration is code.
         const open = propsRef.current.onOpenDocument;
-        return open
+        return open && propsRef.current.law?.canView === true
           ? {
               label: Drupal.t('See the declaration…'),
               title: Drupal.t(
@@ -2338,11 +2456,9 @@ const Island = ({
  * the Inspector's driveCanvas), and the island matching the posed
  * compound (`posed`, derived from the canvas vector + force state) wears
  * the "Posed" tag — posed, not editing here: islands address their own
- * conditions, so the pose only picks what the canvas previews. A
- * structural fact (first-child, empty, …) is no pose: its row lights
- * ("Applies") when this element satisfies it in the blueprint tree, and
- * a compound with facts lights when its posable parts are posed and its
- * facts hold.
+ * conditions, so the pose only picks what the canvas previews. Where the
+ * element sits among its siblings is never a condition row: a position
+ * is selector text, a rule row of its own (`&:first-child`).
  *
  * With `posedGhost` (the hosts set it on the SELECTED element only), a
  * posed compound with no stored island renders an empty chrome-minted
@@ -2401,6 +2517,10 @@ const Island = ({
  * for the selection alone) lights the seated one, and a seated rule the
  * map does not hold yet mounts as an empty island that takes the
  * cursor: the chip and the headers are two readouts of one spine fact.
+ * A double-click on any selector header (a part row, a rule row) swaps
+ * its prelude for the selector editor (selector-chrome.js, the mint
+ * surface in place); a commit moves the rule and its family through one
+ * `move_style` op (element-model.js ruleMovePlan) and the seat follows.
  */
 export const ElementIslands = ({
   source,
@@ -2417,6 +2537,7 @@ export const ElementIslands = ({
   targetSelector = null,
   address = null,
   onOpenDocument = null,
+  law = {},
 }) => {
   const selected = elementKey;
   // The stitching registry spans the whole code surface: the page tree
@@ -2429,19 +2550,23 @@ export const ElementIslands = ({
   const stitching = stitch ?? localStitch.current;
   const blockTypes = source.getBlockTypes();
   const layoutsTable = source.getSectionLayouts();
-  const tree = source.getTree?.() ?? null;
-  // The matcher over the tree, for the rule headers' owner words; the
-  // roster and the stacks build their own reads of the same tree.
+  // The document (source.getDocument(): the host entity above the
+  // sections), null before a satellite's first broadcast: the matcher
+  // for the rule headers' owner words, the roster and the stacks build
+  // their own reads of the same document. The axis vocabulary's depth
+  // reads walk the layout (source.getTree(): the sections at the top).
+  const document = source.getDocument?.() ?? null;
   const matcher = useMemo(
-    () => (Array.isArray(tree) ? createMatcher(tree) : null),
-    [tree],
+    () => (Array.isArray(document) ? createMatcher(document) : null),
+    [document],
   );
+  const layout = source.getTree?.() ?? [];
   const axes = axisVocabulary(
     guide,
     selected,
     blockTypes,
     layoutsTable,
-    tree ?? [],
+    layout,
   );
   const library = variants ?? [];
   const selectedParsed = parseKey(selected);
@@ -2550,6 +2675,104 @@ export const ElementIslands = ({
         )
       : Drupal.t('Remove this row and unset its styles.');
 
+  // The selector edit: a rule row's selector changed in place through the
+  // mint surface (selector-chrome.js SelectorEditor, the prelude's edit
+  // mode). The edit STATE is this host's, one row open at a time and
+  // keyed to the element like the drafts (a selection change closes it):
+  // a double-click on a row header opens it (selectorHeaderClick over
+  // Edit Mode's one double-click, the single click of the pair seating
+  // the row as it always has), the editor hosts the owner's selector
+  // completion (the typed text is the whole selector from the owner, so
+  // the owner's own gesture context), paints the typed text's reach
+  // through the hoverSelector facet per keystroke (the canvas and the
+  // tree part rows follow the facet; the editor's unmount clears it),
+  // and commits through moveRule. Every rule row is editable, own-key
+  // part rows included: the map records nothing about how an entry was
+  // minted (the topic's first decision).
+  const [editState, setEditState] = useState(null);
+  const editingRow =
+    editState !== null && editState.for === selected ? editState : null;
+  const closeEdit = () => setEditState(null);
+  const openEdit = (owner, selector) =>
+    setEditState({ for: selected, owner, selector });
+  // The commit: one plan over the owner's stored and drafted keys
+  // (element-model.js ruleMovePlan: the family follows, a collision
+  // refuses before anything is sent). A row with something stored sends
+  // ONE move_style batch through the spine (one history entry; the
+  // handler judges the landing at the one door and names a refusal
+  // through the source's own failure path, so a rejected batch leaves
+  // the row as it was and needs nothing here); when it lands, the drafts
+  // keyed to the moved keys rename and the seat follows: the write
+  // address when the moved rule was seated, the subject facet when the
+  // moved row was this element's part facet, read from the spine at that
+  // moment rather than from the props the gesture was rendered with. A
+  // row with nothing stored (`viewOnly`: a drafted part, a seated rule
+  // the map lacks) follows the same way without an op; a row that is
+  // neither (its lines a worn variant's) has nothing of this element's
+  // to move and refuses honestly, the × rule.
+  const moveRule = (owner, from, to, viewOnly) => {
+    closeEdit();
+    const plan = ruleMovePlan(styleMap ?? {}, drafts, owner, from, to);
+    if (plan.refusal !== null) {
+      notify('error', moveRefusalMessage(plan.refusal, to));
+      return;
+    }
+    const follow = () => {
+      withDrafts((state) => renameDrafts(state, owner, plan.moves));
+      const seated = source.getAddress?.() ?? null;
+      if (seated?.key === owner && seated?.selector === from) {
+        source.address?.(owner, to);
+        return;
+      }
+      const subject = source.getTarget?.() ?? null;
+      if (owner === selected && subject?.key === selected && subject?.selector === from) {
+        source.target?.(selected, to);
+      }
+    };
+    if (plan.operations.length) {
+      source
+        .commitBatch({
+          operations: plan.operations,
+          label: Drupal.t('Moved "!from" to "!to"', { '!from': from, '!to': to }),
+        })
+        .then(follow, () => {
+          // Named already by the source's failure report; the row stays.
+        });
+      return;
+    }
+    if (!viewOnly) {
+      notify(
+        'error',
+        Drupal.t('Nothing of this element\'s to move at "!from": its styles are a variant\'s, which stay until the variant is detached.', {
+          '!from': from,
+        }),
+      );
+      return;
+    }
+    follow();
+  };
+  // A typed selector's reach on an owner, painted through the
+  // hover-selector facet (the canvas dashed paint and the tree part rows
+  // follow it; the satellite rides the same intent): the prelude
+  // editor's per-keystroke preview and the islands' mint line share it.
+  const previewFor = (owner) => (canonical) =>
+    canonical === null
+      ? source.hoverSelector?.(null)
+      : source.hoverSelector?.(owner, canonical);
+  // The editor's props for a row header, or null while the row shows
+  // its code face (Prelude's `edit`).
+  const editFor = (owner, selector, viewOnly) =>
+    editingRow !== null &&
+    editingRow.owner === owner &&
+    editingRow.selector === selector
+      ? {
+          completions: selectorGesturesFor(owner)?.context ?? null,
+          onPreview: previewFor(owner),
+          onMove: (from, to) => moveRule(owner, from, to, viewOnly),
+          onClose: closeEdit,
+        }
+      : null;
+
   // The full body (the selection) lists the ancestor rules reaching each
   // key and places the write address's rule under the subject facet's
   // row; a sparse row lists none.
@@ -2561,7 +2784,7 @@ export const ElementIslands = ({
     axes,
     blockTypes,
     layoutsTable,
-    sparse ? null : tree,
+    sparse ? null : document,
     sparse ? null : address,
     sparse ? null : targetSelector,
   );
@@ -2611,7 +2834,7 @@ export const ElementIslands = ({
 
   // Selector materialization is every island's gesture, each under its
   // own rule: on the owner's island a typed selector is as typed; inside
-  // a rule island (the `p` row, an ancestor's `> pb-text` row) it
+  // a rule island (the `p` row, an ancestor's `> d-text` row) it
   // composes under the island's rule by CSS nesting's relative rule
   // (element-model.js nestUnder / composeUnder: `&::before` in the `p`
   // row is `p::before`, `> a` is `p > a`), the same substitution the
@@ -2644,47 +2867,31 @@ export const ElementIslands = ({
   // turns to it, Basic and Advanced read it, the canvas highlights it)
   // and drafted here with the cursor, the code twin of the chip's "+
   // Before"; when the owner is an ancestor (a row typed inside the
-  // seated `> pb-text` island) the composed selector is a rule on that
+  // seated `> d-text` island) the composed selector is a rule on that
   // ancestor, an ADDRESS, seated through source.address, and the rule
   // row the address places takes the cursor itself (rulesFor's wake for
   // a seated rule the map lacks), so no draft is made for it: a draft
   // would be a second island for one spine fact. Both seats belong to a
   // selection, so an unselected row (the page tree's sparse rows) is
   // selected first, the part header click's rule.
-  const seatMinted = (owner) => (selector) => {
+  const seatMinted = (owner) => (selector, condition) => {
     if (source.getSelected?.() !== selected) {
       source.select?.(selected);
     }
     if (owner === selected) {
       source.target?.(selected, selector);
-      materializeSelector(selector);
+      materializeSelector(selector, { focus: condition === null });
+      if (condition !== null) {
+        materializeCondition(`${selected}${SUFFIX}${selector}`, condition);
+      }
       return;
     }
     source.address?.(owner, selector);
+    if (condition !== null) {
+      materializeCondition(`${owner}${SUFFIX}${selector}`, condition);
+    }
   };
-  const partsOfType = (type) => {
-    const address = typeAddress(type);
-    const declaration =
-      type === TYPE_CONTAINER
-        ? guide?.kinds?.container
-        : type === TYPE_BLOCK
-          ? guide?.kinds?.block
-          : address?.startsWith('block_type:')
-            ? guide?.blockTypes?.[address.slice('block_type:'.length)]
-            : null;
-    return Object.entries(flattenElements(declaration))
-      .filter(([selector]) => PART_SELECTOR.test(selector))
-      .map(([selector, part]) => ({ id: selector, label: part?.label ?? selector }));
-  };
-  const gestureVocabulary = {
-    tree,
-    partsFor: partsOfType,
-    closed: propertiesClosed(guide),
-    tags: Object.fromEntries(
-      baseTags(guide?.base).map((tag) => [tag, tagWord(guide, tag)]),
-    ),
-    types: typeLabels(guide),
-  };
+  const gestureVocabulary = selectorGestureVocabulary(guide, document);
   const selectorGesturesFor = (mapKey) => {
     const split = splitKey(mapKey);
     if (split === null) {
@@ -2693,11 +2900,17 @@ export const ElementIslands = ({
       return null;
     }
     const { root: owner, selector: rule } = split;
+    // The island's own row (the owner itself on its island, the rule
+    // inside a rule island) is minted only as a condition row (`&:hover
+    // {`, the `&hover` pick's twin); every other selector seats and
+    // drafts its row, under the condition the digester peeled.
+    const self = rule ?? OWNER;
     return {
       rule,
       context: {
         ...gestureVocabulary,
         key: owner,
+        map: styleMap ?? null,
         parts: partsForKey(guide, owner, blockTypes, layoutsTable),
         presence:
           owner === source.getSelected?.()
@@ -2705,39 +2918,35 @@ export const ElementIslands = ({
             : null,
         present: source.getMarkup?.(owner)?.tags ?? null,
       },
-      onMaterialize: seatMinted(owner),
+      onMaterialize: (reading) => {
+        const { selector, condition } = reading;
+        notifyFold(reading);
+        if (selector === self) {
+          if (condition !== null) {
+            materializeCondition(mapKey, condition);
+          }
+          return;
+        }
+        seatMinted(owner)(selector, condition);
+      },
+      // The mint line's reach while it is typed (the island reads it
+      // through element-model.js previewReach), on the island's owner.
+      onPreview: previewFor(owner),
     };
   };
 
   // The posed tag matches non-default compounds only: the default
   // condition is the canvas's resting pose, and marking every default
   // island at rest would say nothing.
-  // A condition row is lit when its condition renders on this element right
-  // now: its posable parts are the posed compound and its structural
-  // facts (first-child, empty, …) are ones this element satisfies, read
-  // from the lean node tree's sibling index (editing-at.js
-  // satisfiedFacts over the selector matcher). A fact on a SELECTOR row
-  // qualifies the row's targets, not this element, so there no fact
-  // ever lights: the row addresses other elements' places. An ancestor
-  // rule reaching the ROOT qualifies this element (it is the rule's
-  // match), so its rows read the own facts; one reaching a part reads
-  // none, like the part row.
-  const conditionTable = guide?.conditions ?? {};
-  const ownFacts = satisfiedFacts(tree, selected, conditionTable);
-  const noFacts = new Set();
-  const isPosed = (condition, facts) =>
-    conditionRenders(condition, posed, facts, conditionTable);
-  // The lit tag's word: "Posed" for a compound the canvas stands at,
-  // "Applies" for a pure fact, which no pose produced.
-  const litTag = (condition) =>
-    condition
-      .split('+')
-      .every((part) => isFactCondition(part, conditionTable))
-      ? Drupal.t('Applies')
-      : Drupal.t('Posed');
+  // A condition row is lit when its condition renders on this element
+  // right now: it is the posed compound (editing-at.js
+  // conditionRenders). Where an element sits among its siblings is
+  // selector text (a position-qualified rule row), never a condition,
+  // so the pose alone lights a row.
+  const isPosed = (condition) => conditionRenders(condition, posed);
 
   // The style stack for one of this element's islands, keyed by the
-  // island's own key: with the floor and the ancestor tier (the tree)
+  // island's own key: with the floor and the ancestor tier (the document)
   // for the selection's full body only (the docblock's rule). Built once
   // per island key; the key's islands share it.
   const stackFor = (mapKey) =>
@@ -2750,7 +2959,7 @@ export const ElementIslands = ({
       blockTypes,
       sectionLayouts: layoutsTable,
       floor: !sparse,
-      tree: sparse ? null : tree,
+      document: sparse ? null : document,
     });
   // A rule island's stack: the rule's own key, the map's layers alone
   // (the rule's wear, the owner's wear continued to the position, the
@@ -2764,15 +2973,14 @@ export const ElementIslands = ({
       map: styleMap ?? {},
       key: rule.key,
       variants: library,
-      axes: axisVocabulary(guide, rule.owner, blockTypes, layoutsTable, tree),
+      axes: axisVocabulary(guide, rule.owner, blockTypes, layoutsTable, layout),
       blockTypes,
       sectionLayouts: layoutsTable,
       floor: false,
     });
 
   // One island per condition of one island key. `stack` is the key's
-  // stack, `project` the Island's line projection, `facts` the fact set
-  // the condition rows light against, `declaration` the grant judge for the
+  // stack, `project` the Island's line projection, `declaration` the grant judge for the
   // key's writes, `wake` the condition whose island takes the cursor on
   // mount beside the drafts' focus. The key's islands share one selector
   // gesture under the key's rule (selectorGesturesFor).
@@ -2782,18 +2990,17 @@ export const ElementIslands = ({
     {
       stack,
       project = null,
-      facts = noFacts,
       declaration = declarationOf(mapKey),
       wake = null,
       rule = false,
     },
   ) => {
-    const selectors = selectorGesturesFor(mapKey);
+    const selectorGesture = selectorGesturesFor(mapKey);
     return conditions.map((condition) => (
       <Fragment key={`${mapKey}|${condition}`}>
         {condition !== 'default' && (
           <div
-            className={`daedalus-stylish-islands__condition${isPosed(condition, facts) ? ' daedalus-stylish-islands__condition--posed' : ''}`}
+            className={`daedalus-stylish-islands__condition${isPosed(condition) ? ' daedalus-stylish-islands__condition--posed' : ''}`}
           >
             {/* The pose gesture: chrome never takes the cursor — the
               mouse's gesture, skipped by the keyboard chain. */}
@@ -2818,9 +3025,9 @@ export const ElementIslands = ({
               />
             </button>
             {/* The canvas stands here: this island's styles render. */}
-            {isPosed(condition, facts) && (
+            {isPosed(condition) && (
               <span className="daedalus-stylish-islands__condition-lit">
-                {litTag(condition)}
+                {Drupal.t('Posed')}
               </span>
             )}
             {!isGhost(mapKey, condition) && (
@@ -2855,18 +3062,19 @@ export const ElementIslands = ({
           variants={library}
           axes={axes}
           materialize={{
-            selectors,
+            selector: selectorGesture,
             condition: (name) => materializeCondition(mapKey, name),
           }}
           autoFocus={
             drafts.focus === `${mapKey}|${condition}` || wake === condition
           }
           stitch={stitching}
-          posed={isPosed(condition, facts)}
+          posed={isPosed(condition)}
           stack={stack}
           project={project}
           rule={rule}
           onOpenDocument={onOpenDocument}
+          law={law}
         />
       </Fragment>
     ));
@@ -2889,12 +3097,15 @@ export const ElementIslands = ({
   // from the first declaration; its first settled write mints the entry
   // at the ancestor key. `facetStack` is the reached key's full stack,
   // whose winners strike what this element beats in the rule's lines.
-  const rulesFor = (rules, facetStack, facts) =>
+  const rulesFor = (rules, facetStack) =>
     rules.map((rule) => {
       const lit =
         address !== null &&
         address.key === rule.owner &&
         address.selector === rule.selector;
+      // A rule the map lacks is the seat's row alone (the chip's
+      // mintable entry): its selector change is the seat following.
+      const edit = editFor(rule.owner, rule.selector, !rule.existing);
       return (
         <Fragment key={rule.key}>
           <div
@@ -2918,12 +3129,17 @@ export const ElementIslands = ({
               className="daedalus-stylish-islands__part-select"
               title={rule.key}
               aria-pressed={lit}
-              onClick={() => {
-                if (source.getSelected?.() !== selected) {
-                  source.select?.(selected);
-                }
-                source.address?.(rule.owner, rule.selector);
-              }}
+              onClick={(event) =>
+                selectorHeaderClick(event, {
+                  seat: () => {
+                    if (source.getSelected?.() !== selected) {
+                      source.select?.(selected);
+                    }
+                    source.address?.(rule.owner, rule.selector);
+                  },
+                  edit: () => openEdit(rule.owner, rule.selector),
+                })
+              }
             >
               <span className="daedalus-stylish-islands__part-label">
                 {addressLabel(
@@ -2934,19 +3150,31 @@ export const ElementIslands = ({
                   layoutsTable,
                 )}
               </span>
+              {edit === null && (
+                <Prelude
+                  selector={rule.selector}
+                  guide={guide}
+                  className="daedalus-stylish-islands__prelude"
+                />
+              )}
+            </button>
+            {/* The editor mounts beside the seat button, not inside it: a
+                click in its text must reach CodeMirror alone, never seat
+                the row again or close a second pair. */}
+            {edit !== null && (
               <Prelude
                 selector={rule.selector}
                 guide={guide}
                 className="daedalus-stylish-islands__prelude"
+                edit={edit}
               />
-            </button>
+            )}
           </div>
           <div className="daedalus-stylish-islands__part-body">
             {islandsFor(rule.key, rule.conditions, {
               stack: ruleStackFor(rule),
               project: (lines, condition) =>
                 ruleIslandLines(lines, rule, stackLines(facetStack, condition)),
-              facts,
               declaration: addressDeclaration(
                 guide,
                 { key: rule.owner, selector: rule.selector },
@@ -2967,7 +3195,6 @@ export const ElementIslands = ({
       {islandsFor(selected, model.conditions, {
         stack: rootStack,
         project: ownIslandLines,
-        facts: ownFacts,
       })}
       {model.parts.map((part) => {
         const partStack = stackFor(part.key);
@@ -2980,6 +3207,10 @@ export const ElementIslands = ({
           address === null
             ? part.selector === targetSelector
             : address.key === selected && address.selector === part.selector;
+        // A drafted row (minted, never written) renames as view state;
+        // anything else goes through the plan (an entry or a family moves,
+        // a variant-supplied row refuses).
+        const edit = editFor(selected, part.selector, drafts.parts.includes(part.selector));
         return (
           <Fragment key={part.key}>
             {/* The part header is the part's chrome row on the selection
@@ -3014,12 +3245,17 @@ export const ElementIslands = ({
                 className="daedalus-stylish-islands__part-select"
                 title={part.key}
                 aria-pressed={active}
-                onClick={() => {
-                  if (source.getSelected?.() !== selected) {
-                    source.select?.(selected);
-                  }
-                  source.target?.(selected, part.selector);
-                }}
+                onClick={(event) =>
+                  selectorHeaderClick(event, {
+                    seat: () => {
+                      if (source.getSelected?.() !== selected) {
+                        source.select?.(selected);
+                      }
+                      source.target?.(selected, part.selector);
+                    },
+                    edit: () => openEdit(selected, part.selector),
+                  })
+                }
               >
                 <span className="daedalus-stylish-islands__part-label">
                   {selectorLabel(
@@ -3031,12 +3267,22 @@ export const ElementIslands = ({
                     source.getMarkup?.(selected),
                   )}
                 </span>
+                {edit === null && (
+                  <Prelude
+                    selector={part.selector}
+                    guide={guide}
+                    className="daedalus-stylish-islands__prelude"
+                  />
+                )}
+              </button>
+              {edit !== null && (
                 <Prelude
                   selector={part.selector}
                   guide={guide}
                   className="daedalus-stylish-islands__prelude"
+                  edit={edit}
                 />
-              </button>
+              )}
               <button
                 type="button"
                 tabIndex={-1}
@@ -3062,12 +3308,12 @@ export const ElementIslands = ({
                 stack: partStack,
                 project: ownIslandLines,
               })}
-              {rulesFor(part.ancestors ?? [], partStack, noFacts)}
+              {rulesFor(part.ancestors ?? [], partStack)}
             </div>
           </Fragment>
         );
       })}
-      {rulesFor(model.ancestors ?? [], rootStack, ownFacts)}
+      {rulesFor(model.ancestors ?? [], rootStack)}
     </div>
   );
 };
@@ -3101,7 +3347,17 @@ export const ElementIslands = ({
  *   entered from (an element or a rule).
  * @param {object} props.document
  *   The document context the Inspector builds: {reference, styles,
- *   session, rootKind, stage(slot, condition, lines), dismiss(id)}.
+ *   session, rootKind, stage(slot, condition, lines), dismiss(id),
+ *   stageMove(from, to)}.
+ *
+ * Selector rows are the host body's chrome one document over (the
+ * edit-selector landing: variants and skins ride the same selector
+ * targeting machinery): a selector typed with `{` on any island mints a
+ * row as a draft under the island's slot, the row's × stages nulls for
+ * its stored lines and drops its staged ones, and a double-click on its
+ * header opens the prelude editor whose commit stages a move in the
+ * session (`document.stageMove`), the document's landing of the one
+ * gesture (the host body sends move_style).
  */
 export const VariantDocumentView = ({
   source,
@@ -3118,7 +3374,12 @@ export const VariantDocumentView = ({
   const map = styleMap ?? {};
   const blockTypes = source.getBlockTypes();
   const layoutsTable = source.getSectionLayouts();
-  const tree = documentTree(doc.styles, doc.session, doc.rootKind);
+  // The stored document as the session's staged moves leave it: the
+  // baseline every per-slot read below prints and diffs against (the
+  // islands' sheet, the condition roster, the × and the move's "is
+  // anything stored here?"), so a moved row shows the entry that moved
+  // with it (pending.js movedStyles; the identity with no session).
+  const stored = movedStyles(doc.session, doc.styles);
   // A skin document's one slot is carried by the anchor alone: the
   // scope's element the session was entered from (every element of the
   // scope carries it, and the anchor is the one whose stack the islands
@@ -3126,13 +3387,16 @@ export const VariantDocumentView = ({
   const carriers = isSkinDocument(doc.reference)
     ? new Map(anchor ? [['', [anchor]]] : [])
     : carriedBy(map, doc.reference);
-  // The matcher over the blueprint tree, for the slot headers' element
-  // words (the same read every host makes: the leader off the mirror,
-  // the satellite off the broadcast tree).
-  const nodeTree = source.getTree?.() ?? null;
+  // The page's document (source.getDocument(): the host entity above
+  // the sections; `document` here is the variant document, `doc`), for
+  // the slot headers' element words and the completion (the same read
+  // every host makes: the leader off the mirror, the satellite off the
+  // broadcast document). The axis vocabulary's depth reads walk the
+  // layout (source.getTree()).
+  const pageDocument = source.getDocument?.() ?? null;
   const nodeMatcher = useMemo(
-    () => (Array.isArray(nodeTree) ? createMatcher(nodeTree) : null),
-    [nodeTree],
+    () => (Array.isArray(pageDocument) ? createMatcher(pageDocument) : null),
+    [pageDocument],
   );
   // One stitching registry over the whole document, so the keyboard
   // chain crosses slot boundaries in document order.
@@ -3140,26 +3404,73 @@ export const VariantDocumentView = ({
   if (!stitchRef.current) {
     stitchRef.current = createStitching();
   }
-  // Materialized-but-uncommitted condition rows on document keys (the `@`
-  // gesture): view state keyed to the document, exactly the host body's
-  // draft rule one document over.
-  const emptyDrafts = { for: doc.reference, conditions: {}, focus: null };
-  const [drafts, setDrafts] = useState(emptyDrafts);
-  const draftConditions = drafts.for === doc.reference ? drafts.conditions : {};
-  const draftFocus = drafts.for === doc.reference ? drafts.focus : null;
+  // Materialized-but-uncommitted rows on document keys: view state keyed
+  // to the document, exactly the host body's draft rule one document
+  // over. `conditions` is keyed by DOCUMENT key: a drafted condition row
+  // (the `@` gesture) lists its names under the key, and a drafted
+  // SELECTOR row (a selector typed with `{` on a document island, the
+  // mint gesture) is the key present with no names, since the default
+  // condition is every listed key's island already (conditionsFor). One
+  // table serves both, so renameDrafts rekeys both when a move lands and
+  // the × drops both at once; `parts` stays empty (the host body's
+  // element-relative draft list, which a document has no owner for).
+  const emptyDrafts = { for: doc.reference, conditions: {}, parts: [], focus: null };
+  const [draftState, setDraftState] = useState(emptyDrafts);
+  const drafts = draftState.for === doc.reference ? draftState : emptyDrafts;
+  const withDrafts = (mutate) =>
+    setDraftState((previous) =>
+      mutate(previous.for === doc.reference ? previous : emptyDrafts),
+    );
+  const draftConditions = drafts.conditions;
+  const draftFocus = drafts.focus;
   const materializeCondition = (key, name) =>
-    setDrafts((previous) => {
-      const base = previous.for === doc.reference ? previous.conditions : {};
-      const existing = base[key] ?? [];
+    withDrafts((state) => {
+      const existing = state.conditions[key] ?? [];
       return {
-        for: doc.reference,
+        ...state,
         conditions: {
-          ...base,
+          ...state.conditions,
           [key]: existing.includes(name) ? existing : [...existing, name],
         },
         focus: `${key}|${name}`,
       };
     });
+  // A selector row minted by typing under a slot: the composed selector
+  // (the island composed it under its own rule, so it is relative to the
+  // slot) keyed into the document, its island under the condition the
+  // digester peeled (default when none) taking the cursor.
+  const materializeSelectorRow = (slot, selector, condition = null) => {
+    const key = `${slot}${SUFFIX}${selector}`;
+    withDrafts((state) => {
+      const existing = state.conditions[key] ?? [];
+      return {
+        ...state,
+        conditions: {
+          ...state.conditions,
+          [key]: condition === null || existing.includes(condition) ? existing : [...existing, condition],
+        },
+        focus: `${key}|${condition ?? 'default'}`,
+      };
+    });
+  };
+  const tree = documentTree(
+    doc.styles,
+    doc.session,
+    doc.rootKind,
+    Object.keys(draftConditions),
+  );
+  // The selector edit (selector-chrome.js SelectorEditor, the prelude's
+  // edit mode): the edit STATE is this host's, one row open at a time
+  // and keyed to the document like the drafts, opened by a double-click
+  // on a selector row's header (selectorHeaderClick; the document has no
+  // seat for the single click to take) and closed when the move lands or
+  // the editor cancels. The commit is a staged fact in the pending
+  // session (doc.stageMove), never an op: the document's landing.
+  const [editState, setEditState] = useState(null);
+  const editingKey =
+    editState !== null && editState.for === doc.reference ? editState.key : null;
+  const closeEdit = () => setEditState(null);
+  const openEdit = (key) => setEditState({ for: doc.reference, key });
   const conditionLabel = (name) => guide?.conditions?.[name]?.label ?? name;
   const isEntry = (value) =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -3182,6 +3493,150 @@ export const VariantDocumentView = ({
     const carrier = carrierOf(fragment);
     return carrier === null ? '' : styleTarget(carrier).key;
   };
+
+  // The selector gesture under a document slot: the same typing surface
+  // the host body mints with (one grammar, one completion, the brace or
+  // Enter the gate), its context the slot's carrier (the element the
+  // slot's rows resolve through: its tree facts, its declared parts, its
+  // DOM presence when it is the canvas selection, its prose tags); a
+  // slot nothing on this page carries offers from the vocabulary alone
+  // (the gate's degrade rule), since the brace mints regardless. The
+  // document view's islands compose under the row's own selector as the
+  // host's rule islands do, so a minted selector arrives relative to the
+  // slot and keys straight into the document.
+  const gestureVocabulary = selectorGestureVocabulary(guide, pageDocument ?? []);
+  const gestureContextFor = (slot) => {
+    const owner = labelOwner(slot);
+    return {
+      ...gestureVocabulary,
+      key: owner || null,
+      parts: owner ? partsForKey(guide, owner, blockTypes, layoutsTable) : [],
+      presence:
+        owner && owner === source.getSelected?.()
+          ? (source.getLayoutContext?.()?.self?.parts ?? null)
+          : null,
+      present: owner ? (source.getMarkup?.(owner)?.tags ?? null) : null,
+    };
+  };
+  const selectorGestureFor = (node, key) => {
+    const rule = key === node.slot ? null : key.slice(node.slot.length + SUFFIX.length);
+    const self = rule ?? OWNER;
+    return {
+      rule,
+      context: gestureContextFor(node.slot),
+      // The island's own row mints only as a condition row; every other
+      // selector keys into the document under the peeled condition.
+      onMaterialize: (reading) => {
+        const { selector, condition } = reading;
+        notifyFold(reading);
+        if (selector === self) {
+          if (condition !== null) {
+            materializeCondition(key, condition);
+          }
+          return;
+        }
+        materializeSelectorRow(node.slot, selector, condition);
+      },
+      // The mint line's reach while it is typed (the island reads it
+      // through element-model.js previewReach), carried onto the page
+      // as an edited row's is.
+      onPreview: (reached) => previewDocumentReach(node.slot, reached),
+    };
+  };
+  // The typed selector's reach while a row is being edited or a mint
+  // line typed: the slot's carrier continued by it (an element carrier
+  // at the selector itself, a rule carrier by descent), painted through
+  // the hover-selector facet as the host body paints; nothing when
+  // nothing on this page carries the slot (no element could honestly
+  // show the reach).
+  const previewDocumentReach = (slot, canonical) => {
+    if (canonical === null) {
+      source.hoverSelector?.(null);
+      return;
+    }
+    const carrier = carrierOf(slot);
+    const carried =
+      carrier === null ? null : continuedKey(carrier, `${SUFFIX}${canonical}`);
+    const split = carried === null ? null : splitKey(carried);
+    if (split?.selector) {
+      source.hoverSelector?.(split.root, split.selector);
+    }
+  };
+  // The staged lines standing at a document key, by condition.
+  const stagedAt = (key) =>
+    (doc.session?.lines ?? []).filter((line) => line.relative === key);
+  // The move: one plan over the slot's keys (stored as the moves leave
+  // them, staged, drafted: the family follows, a landing any of them
+  // holds refuses before anything is staged, the chrome's gate). A row
+  // with something stored or staged under the plan stages the move in
+  // the session (pending.js stageMove: the stored entries move whole at
+  // Push, the staged lines follow at once); a row with neither (a
+  // drafted selector, never written) renames as view state alone. The
+  // drafts keyed to the moved keys rename either way (renameDrafts over
+  // the slot as the owner: the document key's prefix is `{slot}::`).
+  const moveDocumentRule = (slot, key, from, to) => {
+    closeEdit();
+    const prefix = `${slot}${SUFFIX}`;
+    const relatives = [
+      ...new Set(
+        [
+          ...Object.keys(stored),
+          ...(doc.session?.lines ?? []).map((line) => line.relative),
+          ...Object.keys(draftConditions),
+        ].filter((candidate) => candidate.startsWith(prefix)),
+      ),
+    ].map((candidate) => candidate.slice(prefix.length));
+    const plan = planRuleMove(relatives, from, to);
+    if (plan.refusal !== null) {
+      notify('error', moveRefusalMessage(plan.refusal, to));
+      return;
+    }
+    const carried = Object.keys(plan.moves).some((relative) => {
+      const origin = `${prefix}${relative}`;
+      return isEntry(stored[origin]) || stagedAt(origin).length > 0;
+    });
+    if (carried) {
+      doc.stageMove(key, to);
+    }
+    withDrafts((state) => renameDrafts(state, slot, plan.moves));
+  };
+  // The ×: unset the row's own styles (a pending null per stored line,
+  // staged through the islands' replacement write so the row's staged
+  // sets at those conditions drop with them) and dismiss its staged lines
+  // at conditions nothing stores, then drop its drafts. A nested
+  // `variants` list is not a line and stays: the row keeps listing while
+  // it carries references.
+  const removeDocumentRow = (key) => {
+    const entry = isEntry(stored[key]) ? stored[key] : {};
+    const conditions = new Set([
+      ...Object.keys(entry).filter((name) => name !== 'variants'),
+      ...stagedAt(key).map((line) => line.condition),
+    ]);
+    conditions.forEach((condition) => {
+      const own = isEntry(entry[condition]) ? entry[condition] : {};
+      doc.stage(
+        key,
+        condition,
+        Object.keys(own).map((property) => ({ property, value: null })),
+      );
+    });
+    withDrafts((state) => {
+      const remaining = { ...state.conditions };
+      delete remaining[key];
+      return { ...state, conditions: remaining, focus: null };
+    });
+  };
+  // The editor's props for a selector row, or null while it shows its
+  // code face (Prelude's `edit`).
+  const editFor = (node, key, selector) =>
+    editingKey === key
+      ? {
+          completions: gestureContextFor(node.slot),
+          onPreview: (canonical) => previewDocumentReach(node.slot, canonical),
+          onMove: (from, to) => moveDocumentRule(node.slot, key, from, to),
+          onClose: closeEdit,
+        }
+      : null;
   // A slot header's words: the element's minted type word and, after it,
   // its minted name ONLY when it says more than the type does (the
   // annotator names an unrenamed element with its type word, so an equal
@@ -3224,17 +3679,14 @@ export const VariantDocumentView = ({
   // ones, and the drafts — the default condition always present as the
   // add-a-line surface (every listed key is an edit surface here).
   const conditionsFor = (key) => {
-    const stored = Object.keys(
-      isEntry(doc.styles?.[key]) ? doc.styles[key] : {},
-    ).filter((name) => name !== 'variants');
-    const staged = (doc.session?.lines ?? [])
-      .filter((line) => line.relative === key)
-      .map((line) => line.condition);
+    const own = Object.keys(isEntry(stored[key]) ? stored[key] : {}).filter(
+      (name) => name !== 'variants',
+    );
     return [
       ...new Set([
         'default',
-        ...stored,
-        ...staged,
+        ...own,
+        ...stagedAt(key).map((line) => line.condition),
         ...(draftConditions[key] ?? []),
       ]),
     ];
@@ -3284,7 +3736,7 @@ export const VariantDocumentView = ({
     const anchored = carried !== null;
     const mapKey = anchored ? carried : `~${key}`;
     const axes = anchored
-      ? axisVocabulary(guide, carrier, blockTypes, layoutsTable, nodeTree ?? [])
+      ? axisVocabulary(guide, carrier, blockTypes, layoutsTable, source.getTree?.() ?? [])
       : [];
     const declaration = anchored
       ? declarationForKey(
@@ -3350,12 +3802,13 @@ export const VariantDocumentView = ({
           materialize={{
             parts: null,
             condition: (name) => materializeCondition(key, name),
+            selector: selectorGestureFor(node, key),
           }}
           autoFocus={draftFocus === `${key}|${condition}`}
           stitch={stitchRef.current}
           sheet={{
             reference: doc.reference,
-            variantStyles: doc.styles,
+            variantStyles: stored,
             session: doc.session,
             slot: key,
             anchored,
@@ -3394,27 +3847,71 @@ export const VariantDocumentView = ({
             )}
             {carriedChip(node.slot)}
           </div>
-          {node.keys.map(({ key, selector }) => (
+          {node.keys.map(({ key, selector }) => {
+            const edit = selector === null ? null : editFor(node, key, selector);
+            return (
             <Fragment key={key}>
               {selector !== null && (
-                <div className="daedalus-stylish-islands__part">
-                  <span className="daedalus-stylish-islands__part-label">
-                    {selectorLabel(
-                      guide,
-                      labelOwner(node.slot),
-                      selector,
-                      blockTypes,
-                      layoutsTable,
-                      labelOwner(node.slot)
-                        ? source.getMarkup?.(labelOwner(node.slot))
-                        : null,
+                /* The selector row's header, the host body's chrome one
+                   document over: the header button takes the double-click
+                   that opens the editor (a single click has no seat to
+                   take here: the document's rows are its own keys, not
+                   spine facts), the editor mounts beside the button (a
+                   click in its text must reach CodeMirror alone), and the
+                   × unsets the row through the pending lane. */
+                <div
+                  className="daedalus-stylish-islands__part"
+                  data-daedalus-stylish-document-key={key}
+                >
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className="daedalus-stylish-islands__part-select"
+                    title={key}
+                    onClick={(event) =>
+                      selectorHeaderClick(event, {
+                        seat: () => {},
+                        edit: () => openEdit(key),
+                      })
+                    }
+                  >
+                    <span className="daedalus-stylish-islands__part-label">
+                      {selectorLabel(
+                        guide,
+                        labelOwner(node.slot),
+                        selector,
+                        blockTypes,
+                        layoutsTable,
+                        labelOwner(node.slot)
+                          ? source.getMarkup?.(labelOwner(node.slot))
+                          : null,
+                      )}
+                    </span>
+                    {edit === null && (
+                      <Prelude
+                        selector={selector}
+                        guide={guide}
+                        className="daedalus-stylish-islands__prelude"
+                      />
                     )}
-                  </span>
-                  <Prelude
-                    selector={selector}
-                    guide={guide}
-                    className="daedalus-stylish-islands__prelude"
-                  />
+                  </button>
+                  {edit !== null && (
+                    <Prelude
+                      selector={selector}
+                      guide={guide}
+                      className="daedalus-stylish-islands__prelude"
+                      edit={edit}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className="daedalus-stylish-islands__remove daedalus-ui-icon-button daedalus-ui-icon-button--muted"
+                    title={Drupal.t('Remove this row and unset its styles.')}
+                    onClick={() => removeDocumentRow(key)}
+                  >
+                    ×
+                  </button>
                 </div>
               )}
               <div
@@ -3427,7 +3924,8 @@ export const VariantDocumentView = ({
                 {islandsFor(node, key)}
               </div>
             </Fragment>
-          ))}
+            );
+          })}
         </div>
         );
       })}

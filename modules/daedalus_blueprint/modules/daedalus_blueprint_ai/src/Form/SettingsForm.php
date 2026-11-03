@@ -4,36 +4,48 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint_ai\Form;
 
-use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\daedalus_blueprint\BundleListBuilder;
+use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Configuration form for AI-visible entity types and bundles.
+ * Configuration form for AI-visible entity types and bundles, and the budget.
+ *
+ * The form lists exactly the catalog BundleListBuilder::getCatalog() offers
+ * the AI, so a type the catalog never carries (an internal entity type)
+ * never shows up here as something to hide.
+ *
+ * It also edits the AI context budget, which lives on the spine's
+ * settings object (daedalus_blueprint.settings: MaterialsBudget::KEY_BUDGET
+ * and ::KEY_RATIO), not on this module's: the guard at the materials
+ * providers reads the spine, and this form is its one consumer with a
+ * field. The two fields save through #config_target, so the fully
+ * validatable object is validated whole (the Range constraints on both
+ * keys refuse a zero) before anything is written.
  */
 class SettingsForm extends ConfigFormBase {
 
-  /**
-   * The entity type manager.
-   */
-  protected EntityTypeManagerInterface $entityTypeManager;
-
-  /**
-   * The entity type bundle info service.
-   */
-  protected EntityTypeBundleInfoInterface $bundleInfo;
+  public function __construct(
+    ConfigFactoryInterface $config_factory,
+    TypedConfigManagerInterface $typedConfigManager,
+    protected BundleListBuilder $bundleListBuilder,
+  ) {
+    parent::__construct($config_factory, $typedConfigManager);
+  }
 
   /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container): static {
-    $instance = parent::create($container);
-    $instance->entityTypeManager = $container->get('entity_type.manager');
-    $instance->bundleInfo = $container->get('entity_type.bundle.info');
-    return $instance;
+    return new static(
+      $container->get('config.factory'),
+      $container->get('config.typed'),
+      $container->get('daedalus_blueprint.bundle_list_builder'),
+    );
   }
 
   /**
@@ -47,7 +59,7 @@ class SettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   protected function getEditableConfigNames(): array {
-    return ['daedalus_blueprint_ai.settings'];
+    return ['daedalus_blueprint_ai.settings', MaterialsBudget::CONFIG_NAME];
   }
 
   /**
@@ -58,6 +70,31 @@ class SettingsForm extends ConfigFormBase {
     $hidden_entity_types = $config->get('hidden_entity_types') ?? [];
     $hidden_bundles = $config->get('hidden_bundles') ?? [];
 
+    $form['ai_context'] = [
+      '#type' => 'details',
+      '#title' => $this->t('AI context budget'),
+      '#description' => $this->t("What the site shares with the AI as materials (the design system brief and the schema's materials fragment) is measured locally in characters and shown as an estimate in tokens; past the budget, offering more to the AI is refused. What the AI holds, by material kind, is at <a href=':url'>the usage display</a>.", [':url' => MaterialsBudget::DIALOG_PATH]),
+      '#open' => TRUE,
+    ];
+    $form['ai_context'][MaterialsBudget::KEY_BUDGET] = [
+      '#type' => 'number',
+      '#title' => $this->t('Budget (estimated tokens)'),
+      '#description' => $this->t("The ceiling on what the site shares, for every model the site may use; a provider's per-model context window is the segment budget's concern, not this one's."),
+      '#config_target' => MaterialsBudget::CONFIG_NAME . ':' . MaterialsBudget::KEY_BUDGET,
+      '#min' => 1,
+      '#step' => 1,
+      '#required' => TRUE,
+    ];
+    $form['ai_context'][MaterialsBudget::KEY_RATIO] = [
+      '#type' => 'number',
+      '#title' => $this->t('Characters per token'),
+      '#description' => $this->t('The ratio the estimate divides by. Tune it once against the billed prompt sizes in the usage ledger; 4 is the usual figure for English prose and code.'),
+      '#config_target' => MaterialsBudget::CONFIG_NAME . ':' . MaterialsBudget::KEY_RATIO,
+      '#min' => 1,
+      '#step' => 1,
+      '#required' => TRUE,
+    ];
+
     $form['description'] = [
       '#markup' => '<p>' . $this->t('Uncheck entity types or bundles to hide them from the AI bundle discovery list. Hidden items will not appear when the AI asks what entity types are available to create.') . '</p>',
     ];
@@ -67,22 +104,12 @@ class SettingsForm extends ConfigFormBase {
       '#tree' => TRUE,
     ];
 
-    foreach ($this->entityTypeManager->getDefinitions() as $type_id => $definition) {
-      if (!$definition->entityClassImplements(FieldableEntityInterface::class)) {
-        continue;
-      }
-
-      $bundles = $this->bundleInfo->getBundleInfo($type_id);
-      if (empty($bundles)) {
-        continue;
-      }
-
-      $type_label = (string) $definition->getLabel();
+    foreach ($this->bundleListBuilder->getCatalog() as $type_id => $type_data) {
       $type_hidden = in_array($type_id, $hidden_entity_types, TRUE);
 
       $form['entity_types'][$type_id] = [
         '#type' => 'details',
-        '#title' => "{$type_label} ({$type_id})",
+        '#title' => "{$type_data['label']} ({$type_id})",
         '#open' => !$type_hidden || !empty($hidden_bundles[$type_id]),
       ];
 
@@ -93,8 +120,8 @@ class SettingsForm extends ConfigFormBase {
       ];
 
       $bundle_options = [];
-      foreach ($bundles as $bundle_id => $bundle_info) {
-        $bundle_options[$bundle_id] = (string) ($bundle_info['label'] ?? $bundle_id);
+      foreach ($type_data['bundles'] as $bundle_id => $bundle_data) {
+        $bundle_options[$bundle_id] = $bundle_data['label'];
       }
 
       $hidden_for_type = $hidden_bundles[$type_id] ?? [];

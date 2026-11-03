@@ -25,13 +25,13 @@ entity:
     daedalus_stylish_styles:
       element: false
   elements:
-    # The layout root is the box that arranges the root bands (daedalus_layout
+    # The layout root is the box that arranges the root sections (daedalus_layout
     # renders it and declares it a flex column), so it gets the groups a
     # list's box gets, the .field__items shape below: spacing for the gap
-    # between bands (the page-level Gap control daedalus_edit binds here, and
+    # between sections (the page-level Gap control daedalus_edit binds here, and
     # the same `gap` the AI writes at entity:{uuid}::.daedalus-layout-layout), and
     # layout for the arranging facts. Never typography or background: the
-    # page's look is the entity root's; this part is air between bands.
+    # page's look is the entity root's; this part is air between sections.
     # daedalus_layout is not a daedalus_stylish dependency, so on a site without it this
     # layer alone declares a part no markup ever carries: the part is
     # presence-gated by its render, so no row, control or write reaches it,
@@ -79,10 +79,15 @@ block:
     effects: {}
     shadow: {}
   # The animation axis: basic mode's motion control is a wearing row (the
-  # Layout = container_layout precedent), fed by the shipped entrance
-  # variants in daedalus_stylish.daedalus_stylish.variants.yml. The hover axis after it:
-  # hover FEEL as material (block_lift), each variant carrying its own
-  # `hover` block, since a wear never carries a condition. Declared once,
+  # Layout = container_layout precedent), fed by the entrance variants a
+  # skin package mints (the suite ships no motion of its own: the starter
+  # and olivero packages carry theirs in
+  # daedalus_stylish_starter_skin.daedalus_stylish.variants.yml and
+  # daedalus_stylish_olivero_skin.daedalus_stylish.variants.yml, and a
+  # package that mints none shows an empty row). The hover axis after it:
+  # hover FEEL as material (starter_lift, olivero_lift), each variant
+  # carrying its own `hover` block, since a wear never carries a
+  # condition. Declared once,
   # here on the universal block kind, and inherited by every block type:
   # variant_axes is a LIST, and lists replace across layers, so a block
   # type authoring its own variant_axes must re-list both to keep the
@@ -123,6 +128,15 @@ site:
     color:
       label: Color
       shape: color
+    # Named gradients, the other half of the palette: an <image> value of
+    # one or more comma-separated gradient functions or var() layers
+    # (--gradient-{name}). Unbound by the suite like color, so a band may
+    # wear the palette on background-image; a package that wants law over
+    # it binds background-image to this scale, and a package that wants no
+    # gradients mints none.
+    gradient:
+      label: Gradient
+      shape: gradient
     # Typeface stacks (font-family values). shape text: a stack is a free
     # string, not a dimension or keyword. A theme's own CSS typically reads
     # font.body for everything; a skin's base:code default reads font.mono.
@@ -165,7 +179,7 @@ site:
   # one EVERY shipped skin mints (font, text, weight, leading, space,
   # radius), because a suite binding is a promise every skin must keep;
   # a scale some skins skip (tracking) or packages disagree on (color:
-  # one leaves it unbound so swatches stay legal, another binds it with
+  # one leaves it unbound so palette tokens stay legal, another binds it with
   # allowed keywords) is a package binding, not the suite's. These
   # bindings define the minimum a skin mints: a bound scale minting
   # nothing is a skin defect the row shows honestly (an empty closed
@@ -216,11 +230,12 @@ site:
   # element-scoped tag tier ({key}::{tag}, one element's paragraphs)
   # resolve and validate against these groups, so what a skin may set on
   # a tag site-wide is exactly what an element may override on it. The
-  # legal tag set is code (StyleGuide::BASE_TAGS); declaring a tag here
-  # is what makes it stylable on a STRICT site and a tag-tier target on
-  # any site, so the common prose tags below are stylable by default, a
-  # theme withdraws one by declaring it NULL and adds another by
-  # declaring it. Instance namespaces (daedalus_edit's `instances:` lane)
+  # declarable tag set is code (StyleGuide::BASE_TAGS); declaring a tag
+  # here is what makes it stylable on a STRICT site and gives it a grant
+  # on any site (an undeclared tag is admitted grant-less on open and
+  # guarded sites, refused on strict), so the common prose tags below are
+  # stylable by default, a theme withdraws one by declaring it NULL and
+  # adds another by declaring it. Instance namespaces (daedalus_edit's `instances:` lane)
   # declare identity only; they never widen or narrow this vocabulary.
   # Values are skin data (the daedalus_skin defaults field): a shipped
   # skin carries its typography as base:{tag} defaults; theme CSS keeps
@@ -229,7 +244,7 @@ site:
   # declaration overrides its word with `label:`.
   #
   # Block-level prose tags carry background + border beside typography +
-  # spacing: the tag tier's callout gestures (a tinted paragraph band, a
+  # spacing: the tag tier's callout gestures (a tinted paragraph, a
   # ruled blockquote) are the same writes a minted instance part makes.
   # Inline tags keep typography (code adds background for the inline
   # chip); links carry motion (see the a: entry).

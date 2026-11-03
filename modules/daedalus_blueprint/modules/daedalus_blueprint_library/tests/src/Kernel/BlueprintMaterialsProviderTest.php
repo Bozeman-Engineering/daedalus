@@ -10,9 +10,11 @@ use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\Materials\DistroLock;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
+use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
 use Drupal\daedalus_blueprint_library\BlueprintDiscovery;
 use Drupal\file\Entity\File;
 use Drupal\media\Entity\Media;
+use Drupal\Tests\daedalus\Traits\AiContextRefusalTrait;
 use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -28,16 +30,22 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * dangling reference), the blueprint's scope, the blueprint slot spelling,
  * a block-scope root's captured wearings as applies.wears (a capture fact:
  * the variant ids in the root node's own styles entry, whatever they are;
- * the roster, not this provider, decides whether they make a band), the
+ * the roster, not this provider, decides whether they make a section), the
  * definition's layout as the record's tree (discovery's served grammar,
  * what the schema prints as the fragment), the published-only rule, the
  * discovery cache tag as the provider's cache domain, and the memo reset
- * on blueprint CRUD.
+ * on blueprint CRUD. The AI context budget's guard on the gestures:
+ * while the site is full, an offered capture (through the save_material
+ * op, the AI's door) and an update turning `offered` on are refused with
+ * the one wording, and a capture withheld from the AI, a face edit,
+ * turning `favorite` on (the Add panel's listing, no share) and a flag
+ * re-stated go through.
  */
 #[Group('daedalus_blueprint')]
 #[RunTestsInSeparateProcesses]
 class BlueprintMaterialsProviderTest extends BlueprintKernelTestBase {
 
+  use AiContextRefusalTrait;
   use MediaTypeCreationTrait;
 
   /**
@@ -112,8 +120,8 @@ class BlueprintMaterialsProviderTest extends BlueprintKernelTestBase {
       'description' => 'A single quote block.',
     ]);
     $draft = $this->createBlueprint([
-      'label' => 'Draft band',
-      'machine_name' => 'draft_band',
+      'label' => 'Draft section',
+      'machine_name' => 'draft_section',
       'description' => 'Still staging.',
       'status' => 0,
     ]);
@@ -164,8 +172,8 @@ class BlueprintMaterialsProviderTest extends BlueprintKernelTestBase {
     // Publishing the draft surfaces it through the same hook (discovery
     // order: files, then content by entity id).
     $draft->setPublished()->save();
-    $this->assertSame(['call_to_action', 'hero', 'pull_quote', 'draft_band'], array_keys($builder->build()->blueprints()));
-    $this->assertSame('block', $builder->build()->get(MaterialKind::Blueprint, 'draft_band')->blueprintScope);
+    $this->assertSame(['call_to_action', 'hero', 'pull_quote', 'draft_section'], array_keys($builder->build()->blueprints()));
+    $this->assertSame('block', $builder->build()->get(MaterialKind::Blueprint, 'draft_section')->blueprintScope);
 
     // A saved blueprint's groups and favorite reach its record, and the
     // delivery, through the entity.
@@ -213,19 +221,20 @@ class BlueprintMaterialsProviderTest extends BlueprintKernelTestBase {
     // catalog; the global ones (opted out, or from a packageless module)
     // are on.
     $roster = $builder->build();
-    $this->assertEqualsCanonicalizing(['call_to_action', 'hero', 'plain_band'], array_keys($roster->blueprints()));
-    // The schema's default listing is the favorites; the whole partition
-    // reads through the reserved bucket (no layer declares a group here).
-    $this->assertEqualsCanonicalizing(['call_to_action', 'hero', 'plain_band'], array_keys($schema->narrow($schema->fragment(), NULL, DialectCatalog::UNGROUPED)['blueprints']));
-    $this->assertNull($roster->get(MaterialKind::Blueprint, 'plain_band')->designSystem);
-    $this->assertSame(['aurora_band', 'aurora_named_band'], array_map(static fn (MaterialRecord $record): string => $record->id, $builder->members('aurora')));
+    $this->assertEqualsCanonicalizing(['call_to_action', 'hero', 'plain_section'], array_keys($roster->blueprints()));
+    // The schema's default listing is every shared blueprint; the whole
+    // partition also reads through the reserved bucket (no layer declares
+    // a group here).
+    $this->assertEqualsCanonicalizing(['call_to_action', 'hero', 'plain_section'], array_keys($schema->narrow($schema->fragment(), NULL, DialectCatalog::UNGROUPED)['blueprints']));
+    $this->assertNull($roster->get(MaterialKind::Blueprint, 'plain_section')->designSystem);
+    $this->assertSame(['aurora_named_section', 'aurora_section'], array_map(static fn (MaterialRecord $record): string => $record->id, $builder->members('aurora')));
 
     $active->activate('aurora');
     $roster = $builder->build();
-    $this->assertEqualsCanonicalizing(['aurora_band', 'aurora_named_band', 'call_to_action', 'hero', 'plain_band'], array_keys($roster->blueprints()));
-    $this->assertSame('aurora', $roster->get(MaterialKind::Blueprint, 'aurora_band')->designSystem);
-    $this->assertSame('aurora', $roster->get(MaterialKind::Blueprint, 'aurora_band')->toArray()['design_system']);
-    $this->assertArrayHasKey('aurora_band', $schema->narrow($schema->fragment(), NULL, DialectCatalog::UNGROUPED)['blueprints']);
+    $this->assertEqualsCanonicalizing(['aurora_section', 'aurora_named_section', 'call_to_action', 'hero', 'plain_section'], array_keys($roster->blueprints()));
+    $this->assertSame('aurora', $roster->get(MaterialKind::Blueprint, 'aurora_section')->designSystem);
+    $this->assertSame('aurora', $roster->get(MaterialKind::Blueprint, 'aurora_section')->toArray()['design_system']);
+    $this->assertArrayHasKey('aurora_section', $schema->narrow($schema->fragment(), NULL, DialectCatalog::UNGROUPED)['blueprints']);
 
     // A content member follows the same partition.
     $this->createBlueprint([
@@ -237,7 +246,7 @@ class BlueprintMaterialsProviderTest extends BlueprintKernelTestBase {
     $this->assertSame('aurora', $builder->build()->get(MaterialKind::Blueprint, 'aurora_quote')->designSystem);
     DesignSystem::create(['id' => 'borealis', 'label' => 'Borealis'])->save();
     $active->activate('borealis');
-    $this->assertEqualsCanonicalizing(['call_to_action', 'hero', 'plain_band'], array_keys($builder->build()->blueprints()));
+    $this->assertEqualsCanonicalizing(['call_to_action', 'hero', 'plain_section'], array_keys($builder->build()->blueprints()));
   }
 
   /**
@@ -281,6 +290,91 @@ class BlueprintMaterialsProviderTest extends BlueprintKernelTestBase {
     $roster = $builder->build();
     $this->assertNull($roster->get(MaterialKind::Blueprint, 'promo')->icon);
     $this->assertNotContains('media:' . $media->id(), $roster->getCacheableMetadata()->getCacheTags());
+  }
+
+  /**
+   * The budget guards sharing: an offered save, or `offered` turned on.
+   *
+   * With the budget set tiny, save_material through the batch door (the
+   * AI's op; the dialogs submit the same op) is refused with the one
+   * AI_CONTEXT_FULL wording at path `offered`, the reading as context and
+   * the dialog's path in the hint, and nothing is saved; the same save
+   * with `offered: false` goes through. On the provider (the details
+   * route's door) an update turning `offered` on is refused at `offered`,
+   * while a face edit keeping it off passes and so does turning
+   * `favorite` on: the favorite is the Add panel's listing, no AI surface
+   * reads it, so it shares nothing. With room again the same update
+   * shares; full again, re-stating the flag already on (the details
+   * dialog re-sends it) is no share and passes.
+   */
+  public function testBudgetGuardsSharing(): void {
+    $this->installConfig(['daedalus_blueprint']);
+    ['entity' => $entity, 'root_section' => $root] = $this->createHost();
+    $budget = $this->container->get('daedalus_blueprint.materials_budget');
+    $provider = $this->container->get('daedalus_blueprint_library.materials_provider');
+    $storage = $this->container->get('entity_type.manager')->getStorage('blueprint');
+    $result = $this->operations()->batchOperations($this->host($entity), [
+      [
+        'op' => 'insert',
+        'html' => '<d-container id="hero"></d-container>',
+        'at' => ['ref' => $root, 'position' => 'afterend'],
+      ],
+    ], $this->dialectOptions());
+    $this->assertBatchSuccess($result);
+    $hero = $result->getAliases()['hero'];
+    $save = [
+      'op' => 'save_material',
+      'kind' => 'blueprint',
+      'element' => $hero,
+      'label' => 'Banner',
+      'description' => 'The banner section',
+    ];
+
+    $this->config('daedalus_blueprint.settings')->set(MaterialsBudget::KEY_BUDGET, 1)->save();
+    $reading = $budget->reading();
+    $this->assertTrue($reading->over);
+
+    // The AI's op: an offered save is refused through the batch door with
+    // the provider's refusal as the batch's one error, and nothing saved.
+    $refused = $this->operations()->batchOperations($this->host($entity), [$save], $this->dialectOptions());
+    $this->assertFalse($refused->isSuccess(), 'A full site refuses an offered save.');
+    $errors = $refused->getErrors();
+    $this->assertCount(1, $errors);
+    $this->assertErrorIsFull($errors[0], $reading, 'offered');
+    $this->assertSame([], $storage->loadByProperties(['machine_name' => 'banner']), 'A refused save mints nothing.');
+
+    // A save withheld from the AI shares nothing and goes through.
+    $this->assertBatchSuccess($this->operations()->batchOperations($this->host($entity), [$save + ['offered' => FALSE]], $this->dialectOptions()));
+    $blueprint = $this->loadBlueprint('banner');
+    $this->assertFalse($blueprint->isOffered());
+    $this->assertFalse($blueprint->isFavorite());
+    $id = $blueprint->uuid();
+
+    // The details route's door: turning offered on is refused at that
+    // path; a face edit keeping it off passes, and so does marking the
+    // blueprint a favorite, which shares nothing.
+    $share = ['offered' => TRUE, 'label' => 'Shared banner'];
+    $this->assertRefusedAsFull(fn () => $provider->update(MaterialKind::Blueprint, $id, $share, NULL, []), $reading, 'offered');
+    $this->assertSame('Banner', $this->loadBlueprint('banner')->label(), 'A refused update writes nothing.');
+    $provider->update(MaterialKind::Blueprint, $id, ['label' => 'Banner section', 'offered' => FALSE, 'favorite' => TRUE], NULL, []);
+    $blueprint = $this->loadBlueprint('banner');
+    $this->assertSame('Banner section', $blueprint->label());
+    $this->assertTrue($blueprint->isFavorite(), 'A favorite is a listing fact: it passes on a full site.');
+    $this->assertFalse($blueprint->isOffered());
+
+    // Room again: the same update shares.
+    $this->config('daedalus_blueprint.settings')->set(MaterialsBudget::KEY_BUDGET, MaterialsBudget::INSTALL_DEFAULTS[MaterialsBudget::KEY_BUDGET])->save();
+    $this->assertFalse($budget->reading()->over);
+    $provider->update(MaterialKind::Blueprint, $id, ['offered' => TRUE, 'favorite' => TRUE], NULL, []);
+    $blueprint = $this->loadBlueprint('banner');
+    $this->assertTrue($blueprint->isOffered());
+    $this->assertTrue($blueprint->isFavorite());
+
+    // Full again: the flag re-stated as it stands is no share.
+    $this->config('daedalus_blueprint.settings')->set(MaterialsBudget::KEY_BUDGET, 1)->save();
+    $this->assertTrue($budget->reading()->over);
+    $provider->update(MaterialKind::Blueprint, $id, ['label' => 'Banner', 'offered' => TRUE, 'favorite' => TRUE], NULL, []);
+    $this->assertSame('Banner', $this->loadBlueprint('banner')->label());
   }
 
 }

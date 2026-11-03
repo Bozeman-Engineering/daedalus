@@ -14,7 +14,6 @@ use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\TestFileCreationTrait;
 use Drupal\node\Entity\Node;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
 use Drupal\user\Entity\Role;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -23,8 +22,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Drives the basic-mode color widgets' gradient capability on a real page.
  *
  * The capability under test: the Background and Text color ControlWidgets
- * are gradient-capable. Gradient-kind swatches offer as painted stops in
- * both widgets' swatch-well popovers (the palette renders behind the
+ * are gradient-capable. Gradient-scale tokens offer as painted stops in
+ * both widgets' token-well popovers (the palette renders behind the
  * well, a face button wearing the row's current value; picking closes
  * the popover again), a gradient chip opens the shared GradientBuilder
  * popover for custom authoring, and gradient text is a direct widget
@@ -35,9 +34,9 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * see, because it only exists where the widget DOM, the op queue,
  * tempstore, and the rendered canvas meet in a browser:
  * - Stop pick round trip: clicking the gradient stop on Background commits
- *   var(--swatch-*) through the op queue into tempstore and the mutation
+ *   var(--gradient-*) through the op queue into tempstore and the mutation
  *   response's re-render restyles the canvas WITHOUT a reload — the
- *   swatch's custom property resolving through the compiled swatch file on
+ *   token's custom property resolving through the compiled skin file on
  *   the token scope element (pick → op → tempstore → render, four layers
  *   that only agree in a browser).
  * - Custom gradient via the chip popover: the builder's input previews and
@@ -77,27 +76,27 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   another stop and reorders the array to visual order (the selection
  *   following the dragged stop), and the settle serializes the explicit
  *   percent positions.
- * - Save-as-swatch mints site-wide from the builder: the commit becomes
- *   the var() reference, and the delivery pair (the response's materials
- *   delta seating the record in the store, plus the leader source's
+ * - Save-as-token mints onto the skin from the builder: the commit becomes
+ *   the var() reference (the server inferred the gradient scale from the
+ *   value's shape), and the delivery pair (the response's materials delta
+ *   seating the record in the store, plus the leader source's
  *   custom-property stamp) resolves the fresh custom property on the
  *   canvas and grows every widget's stop vocabulary, all in the same
- *   document.
- * - Palette apply on a second element: the fresh swatch is pickable
+ *   document; the row appears under Gradient in the Skin tab.
+ * - Palette apply on a second element: the fresh token is pickable
  *   vocabulary on a widget that mounted after the mint, one POST like any
  *   stop pick.
- * - Edit-in-place over a worn swatch: with the swatch reference committed,
- *   the same chip gates into the update session over the swatch's OWN
+ * - Edit-in-place over a worn token: with the token reference committed,
+ *   the same chip gates into the update session over the token's OWN
  *   value; its preview restyles a SECOND wearer live (the source's
- *   previewSwatch seam, before any commit), Discard restores the stored value
- *   everywhere, and Update persists one revisioned entity save that
- *   restyles every wearer for good while the wears keep holding the
- *   reference.
- * - Strict-site swatch authoring from the palette card: strict governs
+ *   previewMaterial seam, before any commit), Discard restores the stored
+ *   value everywhere, and Update persists one skin save that restyles
+ *   every wearer for good while the wears keep holding the reference.
+ * - Strict-site token authoring from the palette card: strict governs
  *   consumers, never authors, so the palette's mint gesture (the color
- *   kind's picker driving the shared draft, Save submitting the
+ *   editor's picker driving the shared draft, Save submitting the
  *   save_material op) persists a LITERAL color while the guide is strict,
- *   and the fresh swatch joins the widget vocabulary in the same
+ *   and the fresh token joins the widget vocabulary in the same
  *   document. The sanctioned extension point staying open is a wiring
  *   fact only the strict-posture browser scenario can lock.
  * - Basic media pick commits the seeded companion batch: the media chip's
@@ -181,10 +180,11 @@ class GradientBehaviorTest extends WebDriverTestBase {
   /**
    * {@inheritdoc}
    *
-   * The recipe's editor role carries the swatch authoring pair alongside
-   * the variants pair (daedalus_editor_roles), so the mint,
-   * edit-in-place, and palette-card steps below run on the shipped grant
-   * list — this suite is part of the proof that the list is sufficient.
+   * The recipe's editor role carries the token authoring pair (create
+   * tokens, update tokens) alongside the variants pair
+   * (daedalus_editor_roles), so the mint, edit-in-place, and palette-card
+   * steps below run on the shipped grant list — this suite is part of the
+   * proof that the list is sufficient.
    */
   protected function setUp(): void {
     $this->daedalusSetUp();
@@ -207,9 +207,9 @@ class GradientBehaviorTest extends WebDriverTestBase {
   }
 
   /**
-   * Opens a color widget's swatch-well palette popover.
+   * Opens a color widget's token-well palette popover.
    *
-   * The palette is an open vocabulary behind the well (the swatch-well
+   * The palette is an open vocabulary behind the well (the token-well
    * redesign): stop chips exist only inside the OPEN popover, and every
    * pick closes it again, so each stop interaction starts here. Any
    * OTHER widget's open popover is closed first through its own well
@@ -220,12 +220,12 @@ class GradientBehaviorTest extends WebDriverTestBase {
    */
   private function openWell(string $widget): void {
     $this->getSession()->executeScript(
-      "document.querySelectorAll('.daedalus-stylish-swatch-well--open').forEach((well) => well.click());"
+      "document.querySelectorAll('.daedalus-stylish-token-well--open').forEach((well) => well.click());"
     );
-    $this->clickPanel("$widget .daedalus-stylish-swatch-well");
+    $this->clickPanel("$widget .daedalus-stylish-token-well");
     $this->assertNotNull(
-      $this->assertSession()->waitForElement('css', '.daedalus-ui-popover .daedalus-stylish-swatch-popover'),
-      sprintf('The swatch-well popover opened on %s.', $widget),
+      $this->assertSession()->waitForElement('css', '.daedalus-ui-popover .daedalus-stylish-token-popover'),
+      sprintf('The token-well popover opened on %s.', $widget),
     );
   }
 
@@ -242,24 +242,24 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $this->openWell($widget);
     $this->clickPanel(".daedalus-ui-popover .daedalus-stylish-palette-lane--$lane");
     $this->assertJsCondition(
-      "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-swatch-popover')",
+      "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-token-popover')",
       20000,
       sprintf('The %s lane closed the well popover on %s.', $lane, $widget),
     );
   }
 
   /**
-   * Closes a widget's open swatch-well popover (the well's own toggle).
+   * Closes a widget's open token-well popover (the well's own toggle).
    *
    * A real click is safe here: the popover floats on the shared surface
    * under body, so its close never reflows the panel under the pointer.
    */
   private function closeWell(string $widget): void {
-    $this->clickPanel("$widget .daedalus-stylish-swatch-well--open");
+    $this->clickPanel("$widget .daedalus-stylish-token-well--open");
     $this->assertJsCondition(
-      "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-swatch-popover')",
+      "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-token-popover')",
       20000,
-      'The swatch-well popover closed.',
+      'The token-well popover closed.',
     );
   }
 
@@ -312,7 +312,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
    *
    * One fixture (the recipe-installed site, strict) drives the whole
    * gradient capability through the real widgets on a real page:
-   * - a gradient swatch renders as a stop in the Background widget and its
+   * - a gradient token renders as a stop in the Background widget and its
    *   pick restyles the canvas without reload (pick → op → tempstore →
    *   render round trip),
    * - the worn background gradient makes the Text color widget honestly
@@ -325,12 +325,12 @@ class GradientBehaviorTest extends WebDriverTestBase {
    *   guide, asserted on the map entry and the emitted @scope CSS,
    * - the builder's track edits for real (click-to-add samples neighbors,
    *   a captured drag crosses, reorders, and serializes positions),
-   * - save-as-swatch mints site-wide and the canvas resolves the fresh
+   * - save-as-token mints onto the skin and the canvas resolves the fresh
    *   var() without reload, the new stop appearing in both widgets,
-   * - the swatch applies from the palette on a SECOND element, whose
+   * - the token applies from the palette on a SECOND element, whose
    *   wear then restyles live under the first element's edit-in-place
-   *   session (Update persists to the entity, Discard restores),
-   * - the palette card mints a literal-color swatch under the SAME strict
+   *   session (Update persists to the skin, Discard restores),
+   * - the palette card mints a literal-color token under the SAME strict
    *   guide (the picker path, then the save_material op) and the vocabulary
    *   grows without a reload,
    * - the basic media pick lands the token plus the seeded companions
@@ -364,14 +364,6 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $session = $this->getSession();
     $assert_session = $this->assertSession();
 
-    // The palette fixture: one published gradient swatch, created BEFORE the
-    // page loads so the client guide payload carries it and the compiled
-    // swatch stylesheet delivers its custom property. It is what renders as
-    // the gradient stop in both widgets.
-    $swatch = DaedalusStylishSwatch::create(['label' => 'Hero fade', 'kind' => 'gradient']);
-    $swatch->setSwatchValue('linear-gradient(135deg, #e94560, #16213e)')->save();
-    $this->assertSame('hero_fade', $swatch->getMachineName(), 'The swatch minted as --swatch-hero_fade.');
-
     // The skin fixture: an active skin whose one base:a default is the
     // co-target steps' interposer, the DIRECT link-color rule the compiled
     // skin file lands on every content anchor
@@ -389,9 +381,14 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // (code declares the scale, the skin mints the values — the code/data
     // split): three tokens, delivered as --space-{name} custom properties
     // on the token scope by the compiled skin file, which is what the
-    // padding step's committed var() must resolve through.
+    // padding step's committed var() must resolve through. And the
+    // palette fixture: one gradient token on the suite's gradient scale,
+    // minted BEFORE the page loads so the materials roster carries it and
+    // the compiled skin file delivers --gradient-hero-fade. It is what
+    // renders as the gradient stop in both widgets.
     $skin->setPackageTokens([
       'space' => ['2' => '0.5rem', '4' => '1rem', '8' => '2rem'],
+      'gradient' => ['hero-fade' => 'linear-gradient(135deg, #e94560, #16213e)'],
     ]);
     $skin->setPackageDefaults([
       'base:a' => ['' => ['default' => ['color' => '#881144']]],
@@ -531,27 +528,27 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // Select the block programmatically — the facade is the sanctioned
     // programmatic face of a canvas click, and the panel follows the
     // committed selection. Both color widgets must render, each offering
-    // the swatch's gradient stop inside its swatch-well popover (the
+    // the token's gradient stop inside its token-well popover (the
     // payload-derived vocabulary reaching the widget DOM; the palette
     // renders behind the well, so the offer only exists while open).
     $bg = '#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--background';
     $text = '#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--text-color';
-    $stop = "button[aria-label='Hero fade']";
+    $stop = "button[aria-label='hero-fade']";
     // The palette chips live in the open well's popover, portaled onto the
     // shared floating surface under body (never the widget's subtree); one
     // popover is open per window, so the surface's chips are the well's
     // that openWell() just opened.
-    $chips = '.daedalus-ui-popover .daedalus-stylish-swatch-popover';
+    $chips = '.daedalus-ui-popover .daedalus-stylish-token-popover';
     $session->executeScript("Drupal.Daedalus.Selection.select('$block_key');");
     $this->openWell($bg);
     $this->assertNotNull(
       $assert_session->waitForElement('css', "$chips $stop"),
-      'The Background widget offers the gradient swatch as a stop in its palette popover.',
+      'The Background widget offers the gradient token as a stop in its palette popover.',
     );
     $this->openWell($text);
     $this->assertNotNull(
       $assert_session->waitForElement('css', "$chips $stop"),
-      'The Text color widget offers the gradient swatch as a stop in its palette popover.',
+      'The Text color widget offers the gradient token as a stop in its palette popover.',
     );
 
     // The map read every step below asserts against: the root entity's
@@ -561,24 +558,24 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $entry = $this->styleMapJs() . "[" . json_encode($block_key) . "]";
 
     // ——— Gradient stop pick on Background: the full round trip. ———
-    // A real click on the stop commits var(--swatch-hero_fade) to
+    // A real click on the stop commits var(--gradient-hero-fade) to
     // background-image through the op queue; the mutation response lands it
     // in the mirror's map entry and swaps the canvas subtree, whose
-    // computed background resolves the swatch var() through the compiled
-    // swatch file on the token scope element. Four layers, one gesture, no
+    // computed background resolves the token var() through the compiled
+    // skin file on the token scope element. Four layers, one gesture, no
     // reload.
     $posts = (int) $session->evaluateScript('window.__blueprintPosts');
     $this->openWell($bg);
     $this->clickPanel("$chips $stop");
     $this->assertJsCondition(
-      "$entry?.default?.['background-image'] === 'var(--swatch-hero_fade)'",
+      "$entry?.default?.['background-image'] === 'var(--gradient-hero-fade)'",
       20000,
-      'The stop pick committed the swatch var() reference into the map entry (op → tempstore → mirror).',
+      'The stop pick committed the token var() reference into the map entry (op → tempstore → mirror).',
     );
     $this->assertJsCondition(
       "getComputedStyle(document.querySelector(\"$canvas\")).backgroundImage.includes('linear-gradient')",
       20000,
-      'The canvas restyled without reload: the swatch var() resolved to the gradient on the re-rendered block.',
+      'The canvas restyled without reload: the token var() resolved to the gradient on the re-rendered block.',
     );
     $this->assertSame(
       $posts + 1,
@@ -586,7 +583,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'The stop pick was exactly one blueprint POST.',
     );
     $this->assertJsCondition(
-      "!!document.querySelector(\"$bg .daedalus-stylish-swatch-well--stop\")",
+      "!!document.querySelector(\"$bg .daedalus-stylish-token-well--stop\")",
       20000,
       'The well wears the picked stop\'s face (the pick closed the popover).',
     );
@@ -598,8 +595,8 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // face and no stop face.
     $this->assertJsCondition(
       "(() => { const w = document.querySelector(\"$text\");"
-      . " return !!w.querySelector('.daedalus-stylish-swatch-well--custom')"
-      . " && !w.querySelector('.daedalus-stylish-swatch-well--stop'); })()",
+      . " return !!w.querySelector('.daedalus-stylish-token-well--custom')"
+      . " && !w.querySelector('.daedalus-stylish-token-well--stop'); })()",
       20000,
       'With a background gradient worn, the Text color well wears the honest custom face (collision, direction one).',
     );
@@ -627,7 +624,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'The canvas background restored on unpick.',
     );
     $this->assertJsCondition(
-      "!document.querySelector(\"$text .daedalus-stylish-swatch-well--custom\")",
+      "!document.querySelector(\"$text .daedalus-stylish-token-well--custom\")",
       20000,
       'The Text color widget\'s custom face cleared with the collision gone.',
     );
@@ -684,7 +681,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $this->clickPanel("$chips $stop");
     $this->assertJsCondition(
       "(() => { const e = $entry?.default ?? {};"
-      . " return e['background-image'] === 'var(--swatch-hero_fade)'"
+      . " return e['background-image'] === 'var(--gradient-hero-fade)'"
       . " && e['background-clip'] === 'text'"
       . " && e['color'] === 'transparent'; })()",
       20000,
@@ -703,7 +700,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'The canvas wears gradient text: clipped background, transparent color, gradient image.',
     );
     $this->assertJsCondition(
-      "!!document.querySelector(\"$text .daedalus-stylish-swatch-well--stop\")",
+      "!!document.querySelector(\"$text .daedalus-stylish-token-well--stop\")",
       20000,
       'The recipe state lit the Text color well with the stop\'s face.',
     );
@@ -715,8 +712,8 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // destructive unpick from.
     $this->assertJsCondition(
       "(() => { const w = document.querySelector(\"$bg\");"
-      . " return !!w.querySelector('.daedalus-stylish-swatch-well--custom')"
-      . " && !w.querySelector('.daedalus-stylish-swatch-well--stop'); })()",
+      . " return !!w.querySelector('.daedalus-stylish-token-well--custom')"
+      . " && !w.querySelector('.daedalus-stylish-token-well--stop'); })()",
       20000,
       'With the text recipe worn, the Background well wears the honest custom face (collision, direction two).',
     );
@@ -745,7 +742,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'The canvas restored on recipe unpick.',
     );
     $this->assertJsCondition(
-      "!document.querySelector(\"$bg .daedalus-stylish-swatch-well--custom\")",
+      "!document.querySelector(\"$bg .daedalus-stylish-token-well--custom\")",
       20000,
       'The Background widget\'s custom face cleared with the recipe gone.',
     );
@@ -761,7 +758,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // computed style.
     $session->executeScript("Drupal.Daedalus.Selection.select('$field_key');");
     $this->assertJsCondition(
-      "(() => { return !!document.querySelector(\"$text .daedalus-stylish-swatch-well\")"
+      "(() => { return !!document.querySelector(\"$text .daedalus-stylish-token-well\")"
       . " && !document.querySelector(\"$bg\"); })()",
       20000,
       'The field-root selection rendered Text color (field kind) and no Background widget.',
@@ -771,7 +768,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $this->clickPanel("$chips $stop");
     $this->assertJsCondition(
       "(() => { const e = $field_entry?.default ?? {};"
-      . " return e['background-image'] === 'var(--swatch-hero_fade)'"
+      . " return e['background-image'] === 'var(--gradient-hero-fade)'"
       . " && e['background-clip'] === 'text'"
       . " && e['color'] === 'transparent'; })()",
       20000,
@@ -782,7 +779,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
       . " return [...document.querySelectorAll('style[data-daedalus-stylish-entity]')].some((tag) =>"
       . " tag.textContent.includes(scope)"
       . " && tag.textContent.includes('background-clip: text;')"
-      . " && tag.textContent.includes('var(--swatch-hero_fade)')); })()",
+      . " && tag.textContent.includes('var(--gradient-hero-fade)')); })()",
       20000,
       'The field-root recipe emitted as an @scope block in the entity\'s inline CSS.',
     );
@@ -794,7 +791,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // palette seams ride the setUp already paid for.
     // Back to the block: its entry is bare again after the recipe unpick,
     // so the Background well's gradient lane opens the BUILDER posture (no
-    // committed swatch reference to gate the edit-in-place session on)
+    // committed token reference to gate the edit-in-place session on)
     // over a fresh palette-seeded gradient.
     $session->executeScript("Drupal.Daedalus.Selection.select('$block_key');");
     $this->openLane($bg, 'gradient');
@@ -896,24 +893,25 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'The selection followed the dragged stop across the crossing, and the captured release added no stop.',
     );
 
-    // ——— Save-as-swatch from the builder. ———
-    // Naming the gradient and saving mints it site-wide; the edited
-    // layer's slot becomes the var() reference. The delivery pair (the
-    // materials delta seating the record in the store, plus the leader
-    // source's custom-property stamp) must resolve the fresh custom
-    // property on the canvas AND grow the widget vocabulary in THIS
-    // document; no reload anywhere near.
-    $this->typeIntoPanel('.daedalus-stylish-gradient__mint-name', 'Molten brass');
+    // ——— Save-as-token from the builder. ———
+    // Naming the gradient and saving mints it on the skin (save_material,
+    // kind token, no group: the server lands a gradient on the gradient
+    // scale); the edited layer's slot becomes the var() reference. The
+    // delivery pair (the materials delta seating the record in the store,
+    // plus the leader source's custom-property stamp) must resolve the
+    // fresh custom property on the canvas AND grow the widget vocabulary
+    // in THIS document; no reload anywhere near.
+    $this->typeIntoPanel('.daedalus-stylish-gradient__mint-name', 'molten-brass');
     $this->assertJsCondition(
       "document.querySelector('.daedalus-stylish-gradient__mint-save')?.disabled === false",
       20000,
-      'Naming the swatch armed the save gesture.',
+      'Naming the token armed the save gesture.',
     );
     $this->clickPanel('.daedalus-stylish-gradient__mint-save');
     $this->assertJsCondition(
-      "$entry?.default?.['background-image'] === 'var(--swatch-molten_brass)'",
+      "$entry?.default?.['background-image'] === 'var(--gradient-molten-brass)'",
       20000,
-      'The mint committed the fresh swatch reference in the literal\'s place.',
+      'The mint committed the fresh token reference in the literal\'s place: the gradient landed on the gradient scale.',
     );
     $this->assertJsCondition(
       "getComputedStyle(document.querySelector(\"$canvas\")).backgroundImage.includes('128, 0, 128')",
@@ -922,20 +920,20 @@ class GradientBehaviorTest extends WebDriverTestBase {
     );
     $this->assertJsCondition(
       "(() => { return !document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-gradient')"
-      . " && !!document.querySelector(\"$bg .daedalus-stylish-swatch-well--stop\"); })()",
+      . " && !!document.querySelector(\"$bg .daedalus-stylish-token-well--stop\"); })()",
       20000,
-      'The mint closed the builder popover and the well wears the fresh swatch stop.',
+      'The mint closed the builder popover and the well wears the fresh token stop.',
     );
     $this->openWell($bg);
     $this->assertJsCondition(
-      "document.querySelector(\"$chips button[aria-label='Molten brass']\")?.getAttribute('aria-selected') === 'true'",
+      "document.querySelector(\"$chips button[aria-label='molten-brass']\")?.getAttribute('aria-selected') === 'true'",
       20000,
-      'The minted swatch joined the widget vocabulary live, lit as the worn stop.',
+      'The minted token joined the widget vocabulary live, lit as the worn stop.',
     );
     $this->closeWell($bg);
 
     // ——— Palette apply on a second element. ———
-    // A second block through the same mutation batch. The minted swatch
+    // A second block through the same mutation batch. The minted token
     // must already be pickable vocabulary on its widget (which mounted
     // AFTER the mint, still without a reload), and its pick is the same
     // one-POST op round trip as any stop pick.
@@ -979,20 +977,20 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'The second block rendered on the canvas.',
     );
     $session->executeScript("Drupal.Daedalus.Selection.select('$second_key');");
-    $molten = "$chips button[aria-label='Molten brass']";
+    $molten = "$chips button[aria-label='molten-brass']";
     $this->openWell($bg);
     $this->assertJsCondition(
       "(() => { const stop = document.querySelector(\"$molten\");"
       . " return !!stop && stop.getAttribute('aria-selected') !== 'true'; })()",
       20000,
-      'The second element\'s Background widget offers the minted swatch, unworn.',
+      'The second element\'s Background widget offers the minted token, unworn.',
     );
     $posts = (int) $session->evaluateScript('window.__blueprintPosts');
     $this->clickPanel($molten);
     $this->assertJsCondition(
-      "$second_entry?.default?.['background-image'] === 'var(--swatch-molten_brass)'",
+      "$second_entry?.default?.['background-image'] === 'var(--gradient-molten-brass)'",
       20000,
-      'The palette apply committed the swatch reference on the second element.',
+      'The palette apply committed the token reference on the second element.',
     );
     $this->assertSame(
       $posts + 1,
@@ -1002,22 +1000,22 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "getComputedStyle(document.querySelector(\"$second_canvas\")).backgroundImage.includes('128, 0, 128')",
       20000,
-      'The second element wears the swatch gradient.',
+      'The second element wears the token\'s gradient.',
     );
 
-    // ——— Edit-in-place session over the worn swatch. ———
-    // Back on the first element the committed value is exactly the swatch
+    // ——— Edit-in-place session over the worn token. ———
+    // Back on the first element the committed value is exactly the token
     // reference, so the SAME lane now gates into the update session over
-    // the swatch's OWN value. Its preview rides the previewSwatch seam:
+    // the token's OWN value. Its preview rides the previewMaterial seam:
     // every wearer (the second element included) restyles live while the
     // session edits, Discard restores the stored value, and Update
-    // persists one revisioned save that restyles every wearer for good.
+    // persists one skin save that restyles every wearer for good.
     $session->executeScript("Drupal.Daedalus.Selection.select('$block_key');");
     $this->openLane($bg, 'gradient');
     $this->assertJsCondition(
-      "document.querySelector('.daedalus-stylish-gradient--session .daedalus-stylish-gradient__session-name')?.textContent === 'Molten brass'",
+      "document.querySelector('.daedalus-stylish-gradient--session .daedalus-stylish-gradient__session-name')?.textContent === 'molten-brass'",
       20000,
-      'The lane opened the edit-in-place session over the worn swatch (session chrome wearing its identity).',
+      'The lane opened the edit-in-place session over the worn token (session chrome wearing its identity).',
     );
     $this->typeIntoPanel($stop_color, '#22cc88');
     $this->assertJsCondition(
@@ -1030,7 +1028,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
       "(() => { return getComputedStyle(document.querySelector(\"$second_canvas\")).backgroundImage.includes('128, 0, 128')"
       . " && !document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-gradient'); })()",
       20000,
-      'Discard restored the stored swatch value on every wearer and closed the session.',
+      'Discard restored the stored token value on every wearer and closed the session.',
     );
     $this->openLane($bg, 'gradient');
     $this->assertNotNull(
@@ -1047,36 +1045,34 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "!document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-gradient')",
       20000,
-      'Update swatch committed and closed the session.',
+      'Update token committed and closed the session.',
     );
     $this->assertJsCondition(
       "(() => { return getComputedStyle(document.querySelector(\"$canvas\")).backgroundImage.includes('255, 170, 0')"
       . " && getComputedStyle(document.querySelector(\"$second_canvas\")).backgroundImage.includes('255, 170, 0'); })()",
       20000,
-      'Both wearers restyled to the updated swatch value without a reload.',
+      'Both wearers restyled to the updated token value without a reload.',
     );
     $this->assertJsCondition(
-      "$entry?.default?.['background-image'] === 'var(--swatch-molten_brass)'"
-      . " && $second_entry?.default?.['background-image'] === 'var(--swatch-molten_brass)'",
+      "$entry?.default?.['background-image'] === 'var(--gradient-molten-brass)'"
+      . " && $second_entry?.default?.['background-image'] === 'var(--gradient-molten-brass)'",
       20000,
-      'The wears still hold the reference, not a value: the update rode the swatch, the live link held.',
+      'The wears still hold the reference, not a value: the update rode the token, the live link held.',
     );
-    // The update was a real revisioned save: the swatch ENTITY carries the
-    // edited value (swatch writes are site content, never tempstore).
-    $swatch_storage = \Drupal::entityTypeManager()->getStorage('daedalus_swatch');
-    $swatch_storage->resetCache();
-    $minted_swatches = $swatch_storage->loadByProperties(['machine_name' => 'molten_brass']);
-    $minted = reset($minted_swatches);
-    $this->assertNotFalse($minted, 'The minted swatch persisted as a site-wide entity.');
-    $minted_value = $minted->getSwatchValue();
-    $this->assertIsString($minted_value, 'The builder minted a plain string swatch value.');
+    // The update was a real skin save: the SKIN carries the edited value
+    // (token writes are site content on the skin, never tempstore).
+    $skin_storage = \Drupal::entityTypeManager()->getStorage($skin->getEntityTypeId());
+    $skin_storage->resetCache([$skin->id()]);
+    $worn = $skin_storage->load($skin->id());
+    $minted_value = $worn->tokens()['gradient']['molten-brass']['value'] ?? NULL;
+    $this->assertIsString($minted_value, 'The builder minted a plain string token value on the gradient scale of the worn skin.');
     $this->assertStringContainsString(
       '#ffaa00',
       $minted_value,
-      'Update swatch persisted the edited value to the entity.',
+      'Update token persisted the edited value to the skin.',
     );
 
-    // ═════ Strict-site swatch authoring from the palette card. ═════
+    // ═════ Strict-site token authoring from the palette card. ═════
     // Strict governs CONSUMERS, never authors: the palette card is the
     // sanctioned extension point the strict posture funnels people
     // toward, so minting a LITERAL color there must work with the guide
@@ -1086,25 +1082,34 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // and the delivery extension growing the vocabulary in THIS
     // document): layers that node tests (the pure editors) and kernel
     // tests (the op) never see meet.
-    // To the Materials place's Palette section: the chrome row's Materials
-    // toggle, then the catalog segments (Variants, Palette), then the
-    // "+ New swatch" gesture (offered: the editor holds the recipe-shipped
-    // "create swatches" grant, the human authoring gate).
+    // To the Design system place's Skin tab: the chrome row's Design
+    // system toggle, then the first tab segment (Skin), then "+ New" and
+    // Token from its kind picker (offered: the editor holds the
+    // recipe-shipped "create skin materials" grant, the human authoring
+    // gate).
     $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-inspector__place');
-    $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-inspector__catalog .daedalus-ui-segment:nth-child(2)');
-    $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-palette__mint-open');
+    $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-inspector__catalog .daedalus-ui-segment:nth-child(1)');
+    $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-skin__new');
     $this->assertNotNull(
-      $assert_session->waitForElement('css', '.daedalus-stylish-palette-mint'),
-      'The "+ New swatch" gesture opened the mint card.',
+      $assert_session->waitForElement('css', '.daedalus-ui-menu'),
+      'The "+ New" kind picker opened.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Token').click();"
+    );
+    $this->assertNotNull(
+      $assert_session->waitForElement('css', '.daedalus-stylish-skin-mint--token'),
+      'The "+ New" › Token gesture opened the token mint card.',
     );
 
-    // The color kind's editor. The mint card seeds from the guide
-    // payload's first kind (server data, no contract on its order), so
-    // pick 'color' explicitly through the kind select's own change
-    // wiring when it landed elsewhere.
+    // The color scale's editor. The mint card seeds from the guide
+    // payload's first declared scale (server data, no contract on its
+    // order), so pick 'color' explicitly through the scale select's own
+    // change wiring when it landed elsewhere.
     $session->executeScript(<<<'JS'
       (() => {
-        const select = document.querySelector('.daedalus-stylish-palette-mint__identity select');
+        const select = document.querySelector('.daedalus-stylish-skin-mint--token select[aria-label="Scale"]');
         if (select && select.value !== 'color') {
           const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
           setter.call(select, 'color');
@@ -1112,10 +1117,10 @@ class GradientBehaviorTest extends WebDriverTestBase {
         }
       })();
       JS);
-    $picker = '.daedalus-stylish-palette-mint .daedalus-stylish-native-picker';
+    $picker = '.daedalus-stylish-skin-mint--token .daedalus-stylish-native-picker';
     $this->assertNotNull(
       $assert_session->waitForElement('css', $picker),
-      'The color kind mounted its value editor (the shared color field): the hidden native picker behind the face popover\'s color lane.',
+      'The color scale mounted its value editor (the shared color field): the hidden native picker behind the face popover\'s color lane.',
     );
 
     // The picker path, in the two-tick idiom: the input event previews
@@ -1125,29 +1130,29 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // fires.
     $this->typeIntoPanel($picker, '#3366cc');
     $this->assertJsCondition(
-      "document.querySelector('.daedalus-stylish-palette-mint .daedalus-stylish-color-field__text')?.value === '#3366cc'"
-      . " && getComputedStyle(document.querySelector('.daedalus-stylish-palette-mint .daedalus-stylish-color-field__face')).backgroundColor === 'rgb(51, 102, 204)'",
+      "document.querySelector('.daedalus-stylish-skin-mint--token .daedalus-stylish-color-field__text')?.value === '#3366cc'"
+      . " && getComputedStyle(document.querySelector('.daedalus-stylish-skin-mint--token .daedalus-stylish-color-field__face')).backgroundColor === 'rgb(51, 102, 204)'",
       20000,
       'The picker input drove the shared draft: the text input echoed the literal and the face repainted.',
     );
     $this->changePanel($picker);
 
-    // Name it and save: the palette card's mint gesture, one save_material
-    // op through the op queue, then the card closes and the list grows the
-    // row.
-    $this->typeIntoPanel('.daedalus-stylish-palette-mint .daedalus-stylish-library-card__label', 'Ember coral');
+    // Name it and save: the palette card's mint gesture (the name is the
+    // custom property's tail, so it speaks the token grammar), one
+    // save_material op through the op queue, then the card closes and the
+    // Color scale grows the row.
+    $this->typeIntoPanel('.daedalus-stylish-skin-mint--token input[aria-label="Token name"]', 'ember-coral');
     $this->assertJsCondition(
-      "document.querySelector('.daedalus-stylish-palette-mint .daedalus-stylish-library-card__action')?.disabled === false",
+      "document.querySelector('.daedalus-stylish-skin-mint__save')?.disabled === false",
       20000,
-      'Label plus value armed the Save swatch gesture.',
+      'Name plus value armed the Save token gesture.',
     );
-    $this->clickPanel('.daedalus-stylish-palette-mint .daedalus-stylish-library-card__action');
+    $this->clickPanel('.daedalus-stylish-skin-mint__save');
     $this->assertJsCondition(
-      "(() => { return !document.querySelector('.daedalus-stylish-palette-mint')"
-      . " && [...document.querySelectorAll('.daedalus-stylish-palette .daedalus-stylish-library__name')]"
-      . ".some((name) => name.textContent === 'Ember coral'); })()",
+      "(() => { return !document.querySelector('.daedalus-stylish-skin-mint--token')"
+      . " && !!document.querySelector('.daedalus-stylish-skin .daedalus-stylish-skin__row[data-token=\"color/ember-coral\"]'); })()",
       20000,
-      'The mint landed: the card closed and the palette list grew the new swatch row.',
+      'The mint landed: the card closed and the Color scale grew the new token row.',
     );
 
     // The confirmation rides the notify seam to the edit-mode messenger
@@ -1157,20 +1162,17 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "[...document.querySelectorAll('[data-drupal-messages] [data-drupal-message-id]')]"
       . ".some((message) => message.getAttribute('data-drupal-message-type') === 'status'"
-      . " && message.textContent.includes('Added the Ember coral color to the color palette.'))",
+      . " && message.textContent.includes('Added the ember-coral token to the'))",
       20000,
       'The mint confirmation landed in the edit-mode message display (notify → messenger).',
     );
 
-    // The literal persisted as a site-wide entity UNDER STRICT: the
-    // server accepted a plain hex, never demanding a var() reference,
-    // because authoring is not strict-gated.
-    $swatch_storage->resetCache();
-    $ember_swatches = $swatch_storage->loadByProperties(['machine_name' => 'ember_coral']);
-    $ember = reset($ember_swatches);
-    $this->assertNotFalse($ember, 'The palette mint persisted as a site-wide entity (machine name from the label).');
-    $this->assertSame('color', $ember->getKind(), 'The mint carried the color kind.');
-    $this->assertSame('#3366cc', $ember->getSwatchValue(), 'The strict site accepted the LITERAL color value.');
+    // The literal persisted on the worn skin UNDER STRICT: the server
+    // accepted a plain hex, never demanding a var() reference, because
+    // authoring is not strict-gated.
+    $skin_storage->resetCache([$skin->id()]);
+    $worn = $skin_storage->load($skin->id());
+    $this->assertSame('#3366cc', $worn->tokens()['color']['ember-coral']['value'] ?? NULL, 'The palette mint persisted on the skin\'s color scale, and the strict site accepted the LITERAL color value.');
 
     // And it is spendable vocabulary in the same document: back in the
     // styling place through the Basic mode segment (a mode click always
@@ -1180,7 +1182,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-inspector__ui-mode .daedalus-ui-segment:nth-child(1)');
     $this->openWell($bg);
     $this->assertJsCondition(
-      "(() => { const stop = document.querySelector(\"$chips button[aria-label='Ember coral']\");"
+      "(() => { const stop = document.querySelector(\"$chips button[aria-label='ember-coral']\");"
       . " return !!stop && stop.getAttribute('aria-selected') !== 'true'; })()",
       20000,
       'The minted color joined the widget vocabulary live, offered unworn.',
@@ -1227,7 +1229,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $assert_session->elementExists('css', '.ui-dialog-buttonpane')->pressButton('Insert selected');
 
     // The seam: the committed map after the op settles. The token and all
-    // three companions arrived TOGETHER (replacing the worn swatch
+    // three companions arrived TOGETHER (replacing the worn token
     // reference), and the batch was one POST.
     $this->assertJsCondition(
       "(() => { const e = $entry?.default ?? {};"
@@ -1253,7 +1255,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'The canvas wears the picked image with the seeded companions applied (cover, no-repeat).',
     );
     $this->assertJsCondition(
-      "!!document.querySelector(\"$bg .daedalus-stylish-swatch-well--media\")",
+      "!!document.querySelector(\"$bg .daedalus-stylish-token-well--media\")",
       20000,
       'The well wears the media face (the synthetic media stop, never the checker custom).',
     );
@@ -1288,13 +1290,13 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // The explicit-replacement rule over the grown family, both
     // directions. First wear a color so the media pick has something to
     // replace.
-    $ember_stop = "$chips button[aria-label='Ember coral']";
+    $ember_stop = "$chips button[aria-label='ember-coral']";
     $this->openWell($bg);
     $this->clickPanel($ember_stop);
     $this->assertJsCondition(
-      "$entry?.default?.['background-color'] === 'var(--swatch-ember_coral)'",
+      "$entry?.default?.['background-color'] === 'var(--color-ember-coral)'",
       20000,
-      'The color stop pick committed the swatch reference.',
+      'The color stop pick committed the token reference.',
     );
 
     // ——— Media pick over the worn color: the replacement rides the batch. ———
@@ -1326,7 +1328,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'Token, seeds, and the replacement null rode ONE blueprint POST.',
     );
     $this->assertJsCondition(
-      "!!document.querySelector(\"$bg .daedalus-stylish-swatch-well--media\")",
+      "!!document.querySelector(\"$bg .daedalus-stylish-token-well--media\")",
       20000,
       'The well wears the media face, not the buried-color custom checker.',
     );
@@ -1340,7 +1342,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $this->clickPanel($ember_stop);
     $this->assertJsCondition(
       "(() => { const e = $entry?.default ?? {};"
-      . " return e['background-color'] === 'var(--swatch-ember_coral)'"
+      . " return e['background-color'] === 'var(--color-ember-coral)'"
       . " && !('background-image' in e) && !('background-size' in e)"
       . " && !('background-repeat' in e) && !('background-position' in e); })()",
       20000,
@@ -1437,7 +1439,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // color row addresses a linked block's anchor first (the link-fill
     // candidate rule, BasicStylingBehaviorTest's Background step), so
     // the widget is not the root's door here; the ONE write target is
-    // the root entry, committing color: var(--swatch-ember_coral). The
+    // the root entry, committing color: var(--color-ember-coral). The
     // companion rule rides the entity's inline map CSS at zero weight
     // and must WIN against base:a on the anchor.
     $session->executeScript("Drupal.Daedalus.Selection.select('$text_key');");
@@ -1445,21 +1447,21 @@ class GradientBehaviorTest extends WebDriverTestBase {
       (() => {
         const Blueprint = Drupal.Daedalus.Blueprint;
         Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
-          operations: [{ op: 'update_style', key: '$text_key', properties: { color: 'var(--swatch-ember_coral)' } }],
+          operations: [{ op: 'update_style', key: '$text_key', properties: { color: 'var(--color-ember-coral)' } }],
         })).catch((error) => {
           window.__rootColorError = error.message;
         });
       })();
       JS);
     $this->assertJsCondition(
-      "$text_entry?.default?.['color'] === 'var(--swatch-ember_coral)'",
+      "$text_entry?.default?.['color'] === 'var(--color-ember-coral)'",
       20000,
-      'The root color write committed the swatch reference to the block ROOT entry (one write target, no part fork).',
+      'The root color write committed the token reference to the block ROOT entry (one write target, no part fork).',
     );
     $this->assertJsCondition(
       "[...document.querySelectorAll('style[data-daedalus-stylish-entity]')].some((tag) =>"
       . " tag.textContent.includes(':scope :where([" . ElementResolver::CLAIMS_CONTENT_ATTRIBUTE . "])')"
-      . " && tag.textContent.includes('var(--swatch-ember_coral)'))",
+      . " && tag.textContent.includes('var(--color-ember-coral)'))",
       20000,
       'The root entry emitted its co-target companion in the delivered inline map CSS.',
     );
@@ -1483,7 +1485,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $this->clickPanel("$chips $stop");
     $this->assertJsCondition(
       "(() => { const e = $text_entry?.default ?? {};"
-      . " return e['background-image'] === 'var(--swatch-hero_fade)'"
+      . " return e['background-image'] === 'var(--gradient-hero-fade)'"
       . " && e['background-clip'] === 'text'"
       . " && e['color'] === 'transparent'; })()",
       20000,

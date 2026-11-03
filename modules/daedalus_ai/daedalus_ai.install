@@ -18,3 +18,94 @@ function daedalus_ai_update_11101(): void {
     ->set('placeholder_image', '')
     ->save(TRUE);
 }
+
+/**
+ * Remove webdriver_url from daedalus_ai.settings.
+ *
+ * The headless renderer and its render_page tool left Daedalus AI: most
+ * sites have no headless Chrome to drive, so render-and-verify is hosting
+ * infrastructure, not part of the page builder. A site that renders keeps
+ * the endpoint in the renderer module's own settings.
+ */
+function daedalus_ai_update_11102(): void {
+  \Drupal::configFactory()->getEditable('daedalus_ai.settings')
+    ->clear('webdriver_url')
+    ->save(TRUE);
+}
+
+/**
+ * Remove the daedalus_ai_anthropic module from the site.
+ *
+ * Its subscribers became provider-neutral block producers in daedalus_ai
+ * (the context spine owns the reminder text), so the module left the
+ * package. A site that still enables it would name a module missing from
+ * disk; take it out of the extension registry and the schema registry the
+ * way an uninstall does.
+ */
+function daedalus_ai_update_11103(): void {
+  \Drupal::configFactory()->getEditable('core.extension')
+    ->clear('module.daedalus_ai_anthropic')
+    ->save();
+  \Drupal::keyValue('system.schema')->delete('daedalus_ai_anthropic');
+}
+
+/**
+ * Seed the curated model list (empty) in daedalus_ai.settings.
+ *
+ * Users holding "choose ai model" pick the chat's model from this list on
+ * the chat's menu; an empty list hides the choice, so an existing site
+ * changes nothing until an administrator curates models.
+ */
+function daedalus_ai_update_11104(): void {
+  $config = \Drupal::configFactory()->getEditable('daedalus_ai.settings');
+  if ($config->get('model_choices') === NULL) {
+    $config->set('model_choices', [])->save(TRUE);
+  }
+}
+
+/**
+ * Drop curated model rows whose provider is not the one the chat runs on.
+ *
+ * A choice switches the model, never the provider: every model_choices
+ * row must name the managed provider (the assistant's own, else the site's
+ * default chat provider), because the chat's accelerators, the transcript's
+ * opaque pair and the ledger's provider column all assume the spine's
+ * provider, and a row on another provider ran the chat off it silently. A
+ * foreign row is dropped rather than re-keyed, since its model id is only
+ * known to exist on the provider it was curated on; the settings form now
+ * offers the managed provider's models alone, so re-curating is one pick
+ * per row. Each dropped row is logged by provider and model.
+ */
+function daedalus_ai_update_11105(): string {
+  $config = \Drupal::configFactory()->getEditable('daedalus_ai.settings');
+  $rows = $config->get('model_choices');
+  if (!is_array($rows) || $rows === []) {
+    return 'No curated models; nothing to drop.';
+  }
+  try {
+    $managed = \Drupal::service('daedalus_ai.model_choice')->managedProvider();
+  }
+  catch (\RuntimeException $e) {
+    return 'The curated models were left as they are: ' . $e->getMessage();
+  }
+  $logger = \Drupal::logger('daedalus_ai');
+  $kept = [];
+  $dropped = 0;
+  foreach ($rows as $row) {
+    $provider = is_array($row) ? ($row['provider'] ?? NULL) : NULL;
+    if ($provider === $managed) {
+      $kept[] = $row;
+      continue;
+    }
+    $dropped++;
+    $logger->notice('Dropped the curated model @model of provider @provider: the chat runs on @managed, and a choice switches the model, never the provider.', [
+      '@model' => is_array($row) ? ($row['model'] ?? '(none)') : '(malformed row)',
+      '@provider' => is_string($provider) ? $provider : '(none)',
+      '@managed' => $managed,
+    ]);
+  }
+  if ($dropped > 0) {
+    $config->set('model_choices', array_values($kept))->save(TRUE);
+  }
+  return sprintf('Dropped %d curated model row(s) not on the managed provider "%s"; %d kept.', $dropped, $managed, count($kept));
+}

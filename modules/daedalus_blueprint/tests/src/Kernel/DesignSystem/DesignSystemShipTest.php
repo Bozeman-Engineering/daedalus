@@ -103,15 +103,9 @@ class DesignSystemShipTest extends BlueprintKernelTestBase {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_blueprint', 'daedalus_stylish']);
     // The vocabulary a skin definition validates against on the sync
@@ -272,18 +266,18 @@ class DesignSystemShipTest extends BlueprintKernelTestBase {
     // Active, so the sync right after reads the package instead of
     // deferring it (a package waits for its system's activation).
     $this->active()->activate('nebula');
-    $this->createVariant('band_look', 'nebula');
-    $blueprint = $this->createMemberBlueprint('Nebula band', 'nebula_band', ['band_look'], 'nebula');
-    \Drupal::service('daedalus_blueprint_library.manager')->adoptVariants($blueprint, ['band_look']);
+    $this->createVariant('section_look', 'nebula');
+    $blueprint = $this->createMemberBlueprint('Nebula section', 'nebula_section', ['section_look'], 'nebula');
+    \Drupal::service('daedalus_blueprint_library.manager')->adoptVariants($blueprint, ['section_look']);
     $this->createVariant('card_blue', 'nebula');
     $this->createSkin('dusk', 'nebula');
-    $this->createMemberBlueprint('Free band', 'free_band');
+    $this->createMemberBlueprint('Free section', 'free_section');
 
     $expected = [
       DesignSystemShip::KIND_UNIT => ['nebula' => DesignSystemShip::CREATED],
-      BlueprintShipper::KIND => ['nebula_band' => BlueprintShipper::CREATED],
+      BlueprintShipper::KIND => ['nebula_section' => BlueprintShipper::CREATED],
       'variant' => [
-        'band_look' => ShippedDefinitionsShipper::CREATED,
+        'section_look' => ShippedDefinitionsShipper::CREATED,
         'card_blue' => ShippedDefinitionsShipper::CREATED,
       ],
       'skin' => ['dusk' => ShippedDefinitionsShipper::CREATED],
@@ -292,17 +286,17 @@ class DesignSystemShipTest extends BlueprintKernelTestBase {
     $this->assertSame(self::TARGET, $plan->module());
     $this->assertSame($expected, $plan->outcomes());
     $this->assertFalse($plan->hasFailures());
-    $this->assertSame(self::TARGET . '.daedalus_blueprint.blueprints.nebula_band.yml', $plan->file(BlueprintShipper::KIND, 'nebula_band'));
-    $this->assertSame(self::TARGET . '.daedalus_stylish.variants.nebula_band.yml', $plan->file('variant', 'band_look'));
+    $this->assertSame(self::TARGET . '.daedalus_blueprint.blueprints.nebula_section.yml', $plan->file(BlueprintShipper::KIND, 'nebula_section'));
+    $this->assertSame(self::TARGET . '.daedalus_stylish.variants.nebula_section.yml', $plan->file('variant', 'section_look'));
     $this->assertSame(self::TARGET . '.daedalus_stylish.variants.card_blue.yml', $plan->file('variant', 'card_blue'));
     $this->assertSame('daedalus_blueprint.design_system.nebula.yml', $plan->file(DesignSystemShip::KIND_UNIT, 'nebula'));
     $this->assertCount(1, $plan->notes());
-    $this->assertStringContainsString('blueprint nebula_band graduates: the content blueprint "Nebula band"', $plan->notes()[0]);
+    $this->assertStringContainsString('blueprint nebula_section graduates: the content blueprint "Nebula section"', $plan->notes()[0]);
     // The dry run touched nothing.
     $this->assertFileDoesNotExist($this->unitFile(self::TARGET, 'nebula'));
-    $this->assertFileDoesNotExist($this->file('daedalus_blueprint.blueprints.nebula_band.yml'));
+    $this->assertFileDoesNotExist($this->file('daedalus_blueprint.blueprints.nebula_section.yml'));
     $this->assertInstanceOf(Blueprint::class, Blueprint::load($blueprint->id()));
-    $this->assertNull($this->loadVariant('band_look')->getProvider());
+    $this->assertNull($this->loadVariant('section_look')->getProvider());
 
     $report = $this->ship()->ship('nebula');
     $this->assertSame($expected, $report->outcomes());
@@ -331,25 +325,25 @@ class DesignSystemShipTest extends BlueprintKernelTestBase {
     // The blueprint lane: the file in discovery's envelope, the owned
     // variant with its key, the graduation, the global blueprint left
     // alone.
-    $written = Yaml::decode(file_get_contents($this->file('daedalus_blueprint.blueprints.nebula_band.yml')));
+    $written = Yaml::decode(file_get_contents($this->file('daedalus_blueprint.blueprints.nebula_section.yml')));
     $this->assertSame(['label', 'description', 'design_system', 'scope', 'subject', 'layout'], array_keys($written));
     $this->assertSame('nebula', $written['design_system']);
     $this->assertSame('block', $written['scope']);
     $this->assertSame('entity_test:entity_test', $written['subject']);
-    $this->assertSame([['variant' => 'band_look', 'fragment' => '']], $written['layout'][0]['styles']['']['variants']);
-    $band = Yaml::decode(file_get_contents($this->file('daedalus_stylish.variants.nebula_band.yml')));
-    $this->assertSame(['band_look'], array_keys($band));
-    $this->assertSame('nebula_band', $band['band_look']['blueprint']);
-    $this->assertSame('nebula', $band['band_look']['design_system']);
+    $this->assertSame([['variant' => 'section_look', 'fragment' => '']], $written['layout'][0]['styles']['']['variants']);
+    $section = Yaml::decode(file_get_contents($this->file('daedalus_stylish.variants.nebula_section.yml')));
+    $this->assertSame(['section_look'], array_keys($section));
+    $this->assertSame('nebula_section', $section['section_look']['blueprint']);
+    $this->assertSame('nebula', $section['section_look']['design_system']);
     $this->assertNull(Blueprint::load($blueprint->id()), 'The content blueprint graduated.');
     $this->assertCount(1, Blueprint::loadMultiple(), 'The global content blueprint stays.');
-    $served = \Drupal::service('daedalus_blueprint_library.discovery')->getBlueprint('nebula_band');
+    $served = \Drupal::service('daedalus_blueprint_library.discovery')->getBlueprint('nebula_section');
     $this->assertSame(BlueprintDiscoveryInterface::SOURCE_MODULE, $served['source']);
     $this->assertSame(self::TARGET, $served['provider']);
     $this->assertSame($written['layout'], $served['layout']);
-    $this->assertSame(self::TARGET, $this->loadVariant('band_look')->getProvider());
-    $this->assertSame('nebula_band', $this->loadVariant('band_look')->get('blueprint_file')->value);
-    $this->assertTrue($this->loadVariant('band_look')->get('blueprint')->isEmpty());
+    $this->assertSame(self::TARGET, $this->loadVariant('section_look')->getProvider());
+    $this->assertSame('nebula_section', $this->loadVariant('section_look')->get('blueprint_file')->value);
+    $this->assertTrue($this->loadVariant('section_look')->get('blueprint')->isEmpty());
 
     // The materials lane: the system's unshipped skin and variant adopted.
     $this->assertSame(['card_blue'], array_keys(Yaml::decode(file_get_contents($this->file('daedalus_stylish.variants.card_blue.yml')))));
@@ -363,7 +357,7 @@ class DesignSystemShipTest extends BlueprintKernelTestBase {
     // Per-id files sync in glob order, so the pin is order-free.
     $this->assertEquals([
       self::TARGET => [
-        'band_look' => ShippedDefinitionsImporter::UNCHANGED,
+        'section_look' => ShippedDefinitionsImporter::UNCHANGED,
         'card_blue' => ShippedDefinitionsImporter::UNCHANGED,
       ],
     ], $sync->report('variant')->outcomes());
@@ -372,7 +366,7 @@ class DesignSystemShipTest extends BlueprintKernelTestBase {
     $this->assertEquals([
       DesignSystemShip::KIND_UNIT => ['nebula' => ShipReport::UNCHANGED],
       'variant' => [
-        'band_look' => ShippedDefinitionsShipper::UNCHANGED,
+        'section_look' => ShippedDefinitionsShipper::UNCHANGED,
         'card_blue' => ShippedDefinitionsShipper::UNCHANGED,
       ],
       'skin' => ['dusk' => ShippedDefinitionsShipper::UNCHANGED],
@@ -395,22 +389,22 @@ class DesignSystemShipTest extends BlueprintKernelTestBase {
    */
   public function testRefusalFailsTheLineAlone(): void {
     DesignSystem::create(['id' => 'nebula', 'label' => 'Nebula', 'package' => self::TARGET])->save();
-    $this->createMemberBlueprint('Bad band', 'Bad band', [], 'nebula');
+    $this->createMemberBlueprint('Bad section', 'Bad section', [], 'nebula');
     $this->createVariant('card_blue', 'nebula');
     $this->createSkin('dusk', 'nebula');
 
     $report = $this->ship()->plan('nebula');
     $this->assertSame([
       DesignSystemShip::KIND_UNIT => ['nebula' => DesignSystemShip::CREATED],
-      BlueprintShipper::KIND => ['Bad band' => ShipReport::FAILED],
+      BlueprintShipper::KIND => ['Bad section' => ShipReport::FAILED],
       'skin' => ['dusk' => ShippedDefinitionsShipper::CREATED],
       'variant' => ['card_blue' => ShippedDefinitionsShipper::CREATED],
     ], $report->outcomes());
     $this->assertTrue($report->hasFailures());
-    $this->assertSame('BLUEPRINT_SHIP_INVALID_ID', $report->errors(BlueprintShipper::KIND, 'Bad band')[0]->getCode());
+    $this->assertSame('BLUEPRINT_SHIP_INVALID_ID', $report->errors(BlueprintShipper::KIND, 'Bad section')[0]->getCode());
     $this->assertSame([
-      self::TARGET . ': blueprint Bad band failed',
-      '  id [BLUEPRINT_SHIP_INVALID_ID]: "Bad band" is not a blueprint id.',
+      self::TARGET . ': blueprint Bad section failed',
+      '  id [BLUEPRINT_SHIP_INVALID_ID]: "Bad section" is not a blueprint id.',
       '    Hint: Blueprint ids are lower-case letters, digits, and underscores (the file name suffix).',
     ], $report->failureLines());
     $this->assertFileDoesNotExist($this->unitFile(self::TARGET, 'nebula'));
@@ -523,10 +517,10 @@ class DesignSystemShipTest extends BlueprintKernelTestBase {
   public function testCommand(): void {
     DesignSystem::create(['id' => 'nebula', 'label' => 'Nebula', 'package' => self::TARGET])->save();
     $this->createSkin('dusk', 'nebula');
-    $this->createMemberBlueprint('Nebula band', 'nebula_band', [], 'nebula');
+    $this->createMemberBlueprint('Nebula section', 'nebula_section', [], 'nebula');
     $expected = [
       self::TARGET . ': design_system nebula created',
-      self::TARGET . ': blueprint nebula_band created',
+      self::TARGET . ': blueprint nebula_section created',
       self::TARGET . ': skin dusk created',
     ];
 
@@ -534,29 +528,29 @@ class DesignSystemShipTest extends BlueprintKernelTestBase {
     $this->assertSame(Command::SUCCESS, $tester->execute(['system' => 'nebula', '--dry-run' => TRUE]));
     $lines = $this->lines($tester);
     $this->assertSame($expected, array_slice($lines, 0, 3));
-    $this->assertStringContainsString('blueprint nebula_band graduates', $lines[3]);
+    $this->assertStringContainsString('blueprint nebula_section graduates', $lines[3]);
     $this->assertStringContainsString('Dry run: nothing was written.', end($lines));
-    $this->assertFileDoesNotExist($this->file('daedalus_blueprint.blueprints.nebula_band.yml'));
+    $this->assertFileDoesNotExist($this->file('daedalus_blueprint.blueprints.nebula_section.yml'));
     $this->assertNull($this->loadSkin('dusk')->getProvider());
 
     $this->assertSame(Command::SUCCESS, $tester->execute(['system' => 'nebula'], ['interactive' => FALSE]));
     $lines = $this->lines($tester);
     $this->assertSame($expected, array_slice($lines, 0, 3));
-    $this->assertFileExists($this->file('daedalus_blueprint.blueprints.nebula_band.yml'));
+    $this->assertFileExists($this->file('daedalus_blueprint.blueprints.nebula_section.yml'));
     $this->assertFileExists($this->file('daedalus_stylish.skins.dusk.yml'));
     $this->assertSame(self::TARGET, $this->loadSkin('dusk')->getProvider());
     $this->assertSame([], Blueprint::loadMultiple(), 'The content blueprint graduated.');
 
     // A blueprint the lane refuses fails the run, its lines last; the
     // unit still reads.
-    $this->createMemberBlueprint('Bad band', 'Bad band', [], 'nebula');
+    $this->createMemberBlueprint('Bad section', 'Bad section', [], 'nebula');
     $tester = $this->tester();
     $this->assertSame(Command::FAILURE, $tester->execute(['system' => 'nebula'], ['interactive' => FALSE]));
     $lines = $this->lines($tester);
     $this->assertSame(self::TARGET . ': design_system nebula unchanged', $lines[0]);
     $this->assertSame(self::TARGET . ': skin dusk unchanged', $lines[1]);
-    $this->assertSame(self::TARGET . ': blueprint Bad band failed', $lines[2]);
-    $this->assertSame('id [BLUEPRINT_SHIP_INVALID_ID]: "Bad band" is not a blueprint id.', $lines[3]);
+    $this->assertSame(self::TARGET . ': blueprint Bad section failed', $lines[2]);
+    $this->assertSame('id [BLUEPRINT_SHIP_INVALID_ID]: "Bad section" is not a blueprint id.', $lines[3]);
 
     $tester = $this->tester();
     $this->assertSame(Command::FAILURE, $tester->execute(['system' => 'nope']));

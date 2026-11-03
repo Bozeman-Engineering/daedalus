@@ -14,17 +14,20 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * Publishing a workspace makes staged revisions the default WITHOUT firing
  * per-entity update hooks, so everything an entity save would have done
  * for a compiled stylesheet's material must be replayed here, once per
- * material family (swatches, animations, variants, skins). The shape is
+ * material family (variants, skins). The shape is
  * the same for all four:
  * - A material edited (or minted) inside a workspace is a staged revision:
  *   its saves fired the ordinary entity hooks, which recompiled against
  *   the LIVE revisions (no change), and the workspace preview read the
  *   staged CSS via the inline fallback (each stylesheet's
  *   workspaceInlineCss()). Publish is the moment the staged CSS must land
- *   in the shared compiled file: when the publish payload names the
+ *   in the shared compiled files: when the publish payload names the
  *   family's entity type, the identity map (resetRepository()) and the
- *   materials roster reset first, so the compile reads the post-publish
- *   live set, then the stylesheet compiles.
+ *   materials roster reset first, so the compiles read the post-publish
+ *   live set, then every stylesheet the family's save recompiles
+ *   compiles, in the order given (a skin publish is a law change, so
+ *   the skin family compiles the skin file then the variants file, as
+ *   _daedalus_skin_change() does; the variant family its own file).
  * - A SOURCE entity that gained or lost references inside a workspace
  *   carried them in staged revisions the usage tables deliberately ignore
  *   (default revisions only). Publish promotes them, so the published
@@ -37,10 +40,19 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  */
 abstract class StylesheetWorkspaceSubscriberBase implements EventSubscriberInterface {
 
+  /**
+   * The stylesheets the family's save recompiles, in compile order.
+   *
+   * @var \Drupal\daedalus_stylish\CompiledStylesheetBase[]
+   */
+  protected array $stylesheets;
+
   public function __construct(
-    protected CompiledStylesheetBase $stylesheet,
     protected MaterialsRosterBuilder $rosterBuilder,
-  ) {}
+    CompiledStylesheetBase ...$stylesheets,
+  ) {
+    $this->stylesheets = $stylesheets;
+  }
 
   /**
    * The material's entity type id in the publish payload.
@@ -77,7 +89,9 @@ abstract class StylesheetWorkspaceSubscriberBase implements EventSubscriberInter
     if (!empty($published[$this->entityTypeId()])) {
       $this->resetRepository();
       $this->rosterBuilder->reset();
-      $this->stylesheet->compile();
+      foreach ($this->stylesheets as $stylesheet) {
+        $stylesheet->compile();
+      }
     }
     $this->resyncUsage($published);
   }

@@ -44,6 +44,7 @@ class ConfigWriteAccessTest extends KernelTestBase {
     'user',
     'image',
     'daedalus_blueprint',
+    'filter',
     'daedalus_blueprint_config',
   ];
 

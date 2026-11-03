@@ -14,8 +14,8 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * Builds a host's canvas: the layout_builder_plus element over its storage.
  *
  * On an entity view build (the route entity's own render, which already
- * wears the main-entity wrapper) every field of the host leaves the build
- * and the element takes their place, the entity view staying the canvas
+ * wears the main-entity wrapper) every field of the host is emptied and
+ * the element takes their place, the entity view staying the canvas
  * root. On an empty build (a host with no entity view: a template
  * host, rendered for LoadEditablePage and the mutation re-render) the
  * element is the canvas root itself. A plain host (no document) renders
@@ -67,9 +67,18 @@ final class EditableUiBuilder implements EventSubscriberInterface {
     $entity_view = !empty($build['#attributes']['data-main-entity']);
     $fields = $host->fields();
     if ($entity_view && $fields !== NULL && $display !== NULL) {
-      // Override the entity build with the layout builder UI.
-      $field_names = array_keys($fields->getFieldDefinitions());
-      $build = array_diff_key($build, array_flip($field_names));
+      // Override the entity build with the layout builder UI: each field
+      // key present stays as an empty render array rather than leaving
+      // the build, because core's preprocess hooks read base-field
+      // elements by key (TaxonomyThemeHooks::preprocessTaxonomyTerm()
+      // reads $variables['elements']['name'] unguarded,
+      // TaxonomyThemeHooks.php:83, core issue 3015623) and an empty child
+      // renders nothing.
+      foreach (array_keys($fields->getFieldDefinitions()) as $field_name) {
+        if (array_key_exists($field_name, $build)) {
+          $build[$field_name] = [];
+        }
+      }
       unset($build['_layout_builder']);
     }
     $build['layout'] = [

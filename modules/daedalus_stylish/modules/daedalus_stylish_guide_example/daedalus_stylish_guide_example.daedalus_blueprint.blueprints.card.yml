@@ -11,7 +11,7 @@
 # reference fields (media) are omitted on purpose: absent fields
 # sample-populate at placement.
 label: Card
-description: 'A band of three cards: a Tint band at Standard rhythm holding a Columns row, each column a Card with a rounded image, an h3 title, one line of copy and a Link button. Reach for it for a row of features, services or team members; keep one card per column and never a Card in a Card.'
+description: 'A section of three cards: a Tint section at Standard rhythm holding a Columns row, each column a Card with a rounded image, an h3 title, one line of copy and a Link button. Reach for it for a row of features, services or team members; keep one card per column and never a Card in a Card.'
 icon: assets/blueprints/card.svg
 scope: block
 subject: 'node:page'
@@ -24,7 +24,7 @@ layout:
       '':
         variants:
           - container_site
-          - guide_band_tint
+          - guide_section_tint
           - guide_rhythm_standard
     children:
       -

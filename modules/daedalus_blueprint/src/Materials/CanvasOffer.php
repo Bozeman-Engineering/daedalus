@@ -27,8 +27,8 @@ use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
  * only the slots its template places, so it starts as a page blueprint
  * only when every root of that blueprint is a fill of one of those slots;
  * a whole page document is offered to the pages that own one whole. Every
- * other kind is offered on every host at every scope: tokens, swatches,
- * variants and animations ride whole, and their applicability is judged
+ * other kind is offered on every host at every scope: tokens, variants,
+ * animations and fonts ride whole, and their applicability is judged
  * where they apply.
  *
  * One predicate, both halves of the Add panel's delivery contract: the

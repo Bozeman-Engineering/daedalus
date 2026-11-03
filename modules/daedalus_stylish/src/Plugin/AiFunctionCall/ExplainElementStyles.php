@@ -15,6 +15,8 @@ use Drupal\daedalus_blueprint\BundleListBuilder;
 use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendResolver;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
+use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
+use Drupal\daedalus_blueprint\Tool\ParameterProse;
 use Drupal\daedalus_stylish\StyleMapValidator;
 use Drupal\daedalus_stylish\StyleStack;
 use Drupal\daedalus_ui\ElementModel\BlueprintElementAnnotator;
@@ -28,9 +30,10 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * styles a key in delivery order, bottom to top, in ONE numbered list,
  * the defaults floor (the declaration's own defaults, then the active
  * skin's for the element's scope) beneath the ancestor rules reaching
- * the element (a container's `> pb-text` color, the columns variant's `> *`
- * fill: the selector matcher over the blueprint tree decides which
- * ancestor entries land here), each rule a group of layers (the variants
+ * the element (a container's `> d-text` color, the columns variant's `> *`
+ * fill, the page's own `p` border: the selector matcher over the host's
+ * document tree, the entity above its sections, decides which ancestor
+ * entries land here), each rule a group of layers (the variants
  * the rule wears, delivered here beneath the rule's own values and named
  * as variants worn by the rule, never by this element) beneath the worn
  * variants beneath the element's own overrides, with each declaration
@@ -41,8 +44,8 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * like that" and "what would my override shadow" are one read instead of
  * a mental merge of the map, the variant library, the skin and the
  * delivery order. The skin's base:{tag} layer is the READ SUBJECT's: the
- * one element the key reads, its tag from the blueprint tree's markup
- * annotation (StyleStack::subjectTag()); a rule key ("{key}::> pb-text")
+ * one element the key reads, its tag from the document's markup
+ * annotation (StyleStack::subjectTag()); a rule key ("{key}::> d-text")
  * explains the rule itself, its entry over the variants it wears at
  * every match, floorless, since its matches have no one tag.
  *
@@ -59,26 +62,28 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
   id: 'daedalus_stylish:explain_element_styles',
   function_name: 'explain_element_styles',
   name: 'Explain Element Styles',
-  description: 'Explains an element\'s effective styles as its layer stack, one numbered list bottom to top: the defaults floor for the element\'s scope (its declaration\'s own defaults, then the active skin\'s), then every ancestor rule reaching the element (a container\'s "> pb-text" or "p" entry landing on this element or inside it), then each worn variant by label with its description in delivery order (a wearing a composition distributed onto the element says which composition it is worn via), then the element\'s own overrides, every property marked winning or lost to a higher layer; the skin\'s base:{tag} layer is the element\'s own tag\'s (a rule key explains the rule itself: its entry over the variants it wears, no tag floor). Read it before overriding a value a variant, an ancestor or the skin supplies, or when a style change does not show; staged changes included.',
+  description: 'Explains an element\'s effective styles as its layer stack, one numbered list bottom to top: the defaults floor for the element\'s scope (its declaration\'s own defaults, then the active skin\'s), then every ancestor rule reaching the element (a container\'s "> d-text" or "p" entry landing on this element or inside it), then each worn variant by label with its description in delivery order (a wearing a composition distributed onto the element says which composition it is worn via), then the element\'s own overrides, every property marked winning or lost to a higher layer; the skin\'s base:{tag} layer is the element\'s own tag\'s (a rule key explains the rule itself: its entry over the variants it wears, no tag floor). Read it before overriding a value a variant, an ancestor or the skin supplies, or when a style change does not show; staged changes included.',
   group: 'information_tools',
   context_definitions: [
     'entity_type' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Entity Type'),
       required: TRUE,
-      description: new TranslatableMarkup('The host entity type (e.g. node).'),
+      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+      description: new TranslatableMarkup(ParameterProse::ENTITY_TYPE),
     ),
     'entity_id' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Entity ID'),
       required: TRUE,
-      description: new TranslatableMarkup('The host entity ID.'),
+      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+      description: new TranslatableMarkup(ParameterProse::ENTITY_ID),
     ),
     'key' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Style map key'),
       required: TRUE,
-      description: new TranslatableMarkup("The element's selectable key (container:{uuid}, block:{component_uuid}, field:{entity_uuid}:{field_name}, ...), optionally followed by '::' and a relative selector (::.class-name a declared part, ::p its paragraphs, ::> * its children, ::> pb-text the text blocks among them). A rule key explains the rule itself, not one element: its entry over the variants it wears at every match."),
+      description: new TranslatableMarkup("The element's selectable key (container:{uuid}, block:{component_uuid}, field:{entity_uuid}:{field_name}, ...), optionally followed by '::' and a relative selector (::.class-name a declared part, ::p its paragraphs, ::> * its children, ::> d-text the text blocks among them). A rule key explains the rule itself, not one element: its entry over the variants it wears at every match."),
     ),
   ],
 )]
@@ -110,7 +115,7 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
   protected BlueprintBackendResolver $backendResolver;
 
   /**
-   * The element annotator: the `_element` facts and the lean tree.
+   * The element annotator: the `_element` facts on the blueprint's nodes.
    */
   protected BlueprintElementAnnotator $annotator;
 
@@ -175,35 +180,38 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
     $map = $host->styleMap();
 
     // The host resolves the key's scope (a block's bundle, a container's
-    // layout) for the floor, the way validation resolves it; its annotated
-    // tree answers which ancestor rules reach the key.
-    $this->setOutput($this->explain($map, $key, ['host' => $host], $this->tree($host)));
+    // layout) for the floor, the way validation resolves it; its document
+    // answers which ancestor rules reach the key.
+    $this->setOutput($this->explain($map, $key, ['host' => $host], $this->document($host)));
   }
 
   /**
-   * The host's lean node tree, annotated: the selector matcher's input.
+   * The host's document tree: the selector matcher's input.
    *
-   * The same tree the edit-mode client boots with (BlueprintMirror): the
-   * backend's serialized blueprint through daedalus_ui's annotator,
-   * whose `layout` carries each node's kind, address facts and resolved
-   * markup (the root tag a tag compound matches, the tags the prose
-   * carries). [] for a host no backend serializes.
+   * The same document the edit-mode client builds its matcher over
+   * (daedalus_ui's documentTree() over the blueprint mirror): the
+   * backend's serialized blueprint through daedalus_ui's annotator (each
+   * node's kind, address facts and resolved markup: the root tag a tag
+   * compound matches, the tags the prose carries), with the host entity
+   * above its sections (NodeTreeBuilder::document(), keyed by the host's
+   * uuid, which the blueprint itself never carries), so a rule written
+   * on the entity is the farthest ancestor layer of every element. [] for
+   * a host no backend serializes: no document, no ancestor tier.
    */
-  protected function tree(HostInterface $host): array {
+  protected function document(HostInterface $host): array {
     $entity = $host->entity();
     $backend = $this->backendResolver->resolveFor($entity);
     if ($backend === NULL) {
       return [];
     }
-    $blueprint = $this->annotator->annotate($backend->serialize($entity), $host, 'full');
-    return is_array($blueprint['layout'] ?? NULL) ? $blueprint['layout'] : [];
+    return NodeTreeBuilder::document($this->annotator->annotate($backend->serialize($entity), $host, 'full'), $host->uuid());
   }
 
   /**
    * Formats the key's stack (and its parts') for the model.
    */
-  protected function explain(array $map, string $key, array $context, array $tree): string {
-    $stack = $this->styleStack->stack($map, $key, $context, NULL, $tree);
+  protected function explain(array $map, string $key, array $context, array $document): string {
+    $stack = $this->styleStack->stack($map, $key, $context, NULL, $document);
     $suffixes = $this->styleStack->partSuffixes($map, $key);
 
     $worn = in_array(StyleStack::TIER_VARIANT, array_column($stack['layers'], 'tier'), TRUE);
@@ -219,7 +227,7 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
 
     $lines = [
       "Style stack for $key (scope {$stack['scope']}), bottom layer first; for any property the TOPMOST layer that sets it wins. The element's own properties are the top layer (overrides): editing writes there, and a lower layer's value shows through only where no higher layer sets the property.",
-      "The lowest layers are the defaults floor: the element's declaration's own defaults (the box facts its block type, block plugin, or layout ships; code, not editable), then the active skin's defaults for the element's scope over them. A floor value loses to every layer that sets its property and shows through only where none does. Above the floor sit the ancestor rules reaching this element (an ancestor's selector entry such as \"> pb-text\" or \"p\", edited at that ancestor's key) and the variants those rules wear (delivered here beneath the rule's own values; the rule wears them, this element does not), which every worn variant and own value of this element beats.",
+      "The lowest layers are the defaults floor: the element's declaration's own defaults (the box facts its block type, block plugin, or layout ships; code, not editable), then the active skin's defaults for the element's scope over them. A floor value loses to every layer that sets its property and shows through only where none does. Above the floor sit the ancestor rules reaching this element (an ancestor's selector entry such as \"> d-text\" or \"p\", edited at that ancestor's key) and the variants those rules wear (delivered here beneath the rule's own values; the rule wears them, this element does not), which every worn variant and own value of this element beats.",
       '',
     ];
     array_push($lines, ...$this->stackLines($stack));
@@ -227,7 +235,7 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
       $part_key = $key . $suffix;
       $lines[] = '';
       $lines[] = $this->suffixHeading($suffix) . " ($part_key):";
-      array_push($lines, ...$this->stackLines($this->styleStack->stack($map, $part_key, $context, NULL, $tree)));
+      array_push($lines, ...$this->stackLines($this->styleStack->stack($map, $part_key, $context, NULL, $document)));
     }
     return implode("\n", $lines);
   }
@@ -238,7 +246,7 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
    * A declared part ("::.class-name", one class compound reached by
    * descent) is a piece of the element itself; a generated box
    * ("::&::before" the element's own, "::.quote::after" a part's, "::>
-   * pb-text::before" each matched text block's) is a pseudo-element
+   * d-text::before" each matched text block's) is a pseudo-element
    * that exists only while the stack delivers `content` there (a box is
    * born with content: "" and disappears when that line is deleted);
    * every other selector (a tag tier, the children, a type, a chain) is
@@ -331,13 +339,13 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
   /**
    * The closing line placing the skin's base:{tag} tier.
    *
-   * The tier is keyed by the read subject's tag from the blueprint tree
-   * (StyleStack::subjectTag()), so when the subject's tag is one the skin
-   * carries a block for, the tier is a layer among the ones above and the
-   * line names it by number; otherwise the line says why none sits
-   * beneath: no skin, no base blocks, a subject whose tag the skin carries
-   * no block for (or that the tree names no tag for), or a rule, whose
-   * matches have no one tag.
+   * The tier is keyed by the read subject's tag from the document's
+   * markup annotation (StyleStack::subjectTag()), so when the subject's
+   * tag is one the skin carries a block for, the tier is a layer among
+   * the ones above and the line names it by number; otherwise the line
+   * says why none sits beneath: no skin, no base blocks, a subject whose
+   * tag the skin carries no block for (or that the document names no tag
+   * for), or a rule, whose matches have no one tag.
    */
   protected function baseTierLine(array $stack): string {
     if (!$stack['skin']) {
@@ -349,13 +357,13 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
     $tags = implode(', ', $stack['baseTags']);
     foreach ($stack['layers'] as $index => $layer) {
       if (str_starts_with((string) $layer['id'], 'skin:base:')) {
-        return sprintf("The active skin's base:{tag} defaults for %s resolve by the element's tag from the blueprint tree: %s is layer %d above.", $tags, $layer['scope'], $index + 1);
+        return sprintf("The active skin's base:{tag} defaults for %s resolve by the element's tag from the blueprint's markup annotation: %s is layer %d above.", $tags, $layer['scope'], $index + 1);
       }
     }
     if ($stack['relative'] !== '' && !$this->isPart($stack['relative'])) {
       return sprintf("The active skin's base:{tag} defaults for %s resolve by one element's tag; a rule's matches have no one tag, so none sits beneath these.", $tags);
     }
-    return sprintf("The active skin's base:{tag} defaults for %s resolve by the element's tag from the blueprint tree; this element's tag is none of them (or the tree names none), so none sits beneath these.", $tags);
+    return sprintf("The active skin's base:{tag} defaults for %s resolve by the element's tag from the blueprint's markup annotation; this element's tag is none of them (or the annotation names none), so none sits beneath these.", $tags);
   }
 
   /**
@@ -445,11 +453,12 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
    *
    * The owner is named by the layer's `owner`: the owner node's
    * `_element.name` minted by daedalus_ui's annotator and riding the
-   * tree (the element-naming spine; "Section" for an unrenamed page
-   * band, "Container" nested, the custom label when renamed), the same
-   * word every other surface reads. Own and worn layers carry it alike.
-   * A layer whose owner the tree names no word for reads "the parent
-   * element". The key is the one the rule is edited at.
+   * document (the element-naming spine; "Section" for an unrenamed
+   * section, "Container" nested, the custom label when renamed, the
+   * host's label for the entity root), the same word every other surface
+   * reads. Own and worn layers carry it alike. A layer whose owner the
+   * document names no word for reads "the parent element". The key is
+   * the one the rule is edited at.
    */
   protected function ancestorOwnerName(array $layer): string {
     return sprintf('%s (%s)', $layer['owner'] ?? 'the parent element', $layer['scope']);
@@ -459,12 +468,12 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
    * A worn ancestor layer's carrier in words: who wears the variant.
    *
    * The carrier is the layer's own `carrier` address, never the id: the
-   * rule whose entry wears the variant ("the rule "> pb-text" on
+   * rule whose entry wears the variant ("the rule "> d-text" on
    * Section (key)"), or the owner itself when its root wears a variant
-   * whose "::> pb-text" entry reaches this element ("Section (key) at
+   * whose "::> d-text" entry reaches this element ("Section (key) at
    * its root"). A rule's wear delivers at the rule's position or,
    * for the variant's own part entries, at a position continued under
-   * it (`pb-text .link`); the position is named when it differs from
+   * it (`d-text .link`); the position is named when it differs from
    * the carrier's, so the reader sees which of the rule's continued
    * positions the value arrived at.
    */

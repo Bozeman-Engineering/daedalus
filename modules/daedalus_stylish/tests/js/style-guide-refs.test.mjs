@@ -146,7 +146,7 @@ test('a node with no grants projects only value-bearing sections', () => {
 
 test('buildSections binds the grant at every placement depth', () => {
   // Placement curates offers and birth, never legality: the projection
-  // takes no depth, and a narrowed grant rows the same for a page band
+  // takes no depth, and a narrowed grant rows the same for a section
   // and a nested container.
   const container = { grants: { spacing: ['gap'] } };
   assert.equal(buildSections.length, 3, 'no depth argument exists');

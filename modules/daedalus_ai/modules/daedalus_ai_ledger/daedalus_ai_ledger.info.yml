@@ -1,0 +1,14 @@
+name: 'Daedalus AI Ledger'
+type: module
+description: 'Records every LLM leg as a priced usage row per user and conversation, and caps the site''s and each user''s spend over rolling or calendar windows.'
+package: Daedalus
+core_version_requirement: '>=11.3 <11.5'
+php: 8.1
+lifecycle: experimental
+configure: daedalus_ai_ledger.settings
+dependencies:
+  - daedalus:daedalus
+  # The usage reader, the capability interfaces and the Usage value live in
+  # daedalus_ai's provider seam; the ledger counts what they read.
+  - daedalus:daedalus_ai
+  - ai:ai

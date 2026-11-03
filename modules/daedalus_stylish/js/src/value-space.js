@@ -15,9 +15,9 @@
  * element's curated stops, else the tokens the skin marks offered, with
  * site-minted tokens following a curated row on open and guarded
  * systems and withheld on strict: style-guide.js scaleRow, the roster's
- * scaleStops() twin), then the materials store (color and gradient
- * swatches for color- and image-shaped properties, the published
- * animations for the keyframes-name property), then the property's one
+ * scaleStops() twin), then the materials store (the offered color- and
+ * gradient-scale tokens for color- and image-shaped properties, the
+ * published animations for the keyframes-name property), then the property's one
  * built-in table (widget-values.js fallbackFor); Basic and Advanced
  * read the same derivation, so a gap that is detented in one mode is
  * detented in the other.
@@ -169,7 +169,7 @@ export const valuesEqual = (a, b) => {
  *
  * A literal displays as itself. A var() reference resolves from the
  * materials ROSTER, never getComputedStyle (the panel DOM may sit outside
- * the token scope): a plain token/swatch value is one value everywhere; a
+ * the token scope): a plain token value is one value everywhere; a
  * condition-keyed value answers its cascade-winning entry among the keys
  * that apply within the editing compound ('default' always applies,
  * 'dark' applies at 'narrow+dark', the same structural order the
@@ -227,12 +227,11 @@ const referenceToken = (guide, materials, ref, variable) => {
   if (material === null) {
     return { ref: String(ref).trim(), kind: null, scale: null, name: variable };
   }
-  const token = material.record.kind === 'token';
   return {
     ref: material.ref,
     kind: material.record.kind,
-    scale: token ? material.scale : null,
-    name: token ? material.name : material.label,
+    scale: material.scale,
+    name: material.name,
   };
 };
 
@@ -313,8 +312,8 @@ const spaceUnit = (stops) => {
  *
  * Stops arrive from propertyStops (the constraint-honest vocabulary:
  * scale tokens, allowed literals, or the property's one fallback —
- * fallbackFor: the built-in table, the store's swatches for color and
- * image shapes, a keyword definition's keywords) and regroup by
+ * fallbackFor: the built-in table, the store's offered tokens for color
+ * and image shapes, a keyword definition's keywords) and regroup by
  * DISPLAY VALUE at the editing condition: tokens sharing one value
  * collapse into a single stop carrying the collision set. Stop shape:
  * - id: the widget stop table's id (propertyStops: a token's reference
@@ -330,8 +329,8 @@ const spaceUnit = (stops) => {
  *   name rides its tokens, and null when the label only respells the
  *   value.
  * - tokens: the collision set, [{ref, kind, scale, name}] (kind
- *   'token', 'swatch' or 'animation', scale null outside tokens, name
- *   the token name or the swatch's / animation's label); [] for a pure
+ *   'token' or 'animation', scale null outside tokens, name the token
+ *   name or the animation's label); [] for a pure
  *   literal stop. tokens[0] is the default capture; the provenance menu
  *   separates twins. In a keyframes-name space the animation's spelling
  *   is the stop's value and ref alike, and its label rides here.
@@ -344,8 +343,8 @@ const spaceUnit = (stops) => {
  *   as the face paint (record data, never a var() the browser would
  *   resolve; a literal stop paints as its value), its scheme pair (null
  *   for a single-valued material, so the face stays whole), the
- *   palette-side group label the grid sections by (a scale's label, a
- *   swatch kind's label; null for a curated literal), and the synthetic
+ *   palette-side group label the grid sections by (a scale's label;
+ *   null for a curated literal), and the synthetic
  *   media entry's flag + thumbnail. Numeric faces ignore them; the
  *   color field's grid and the wells paint from them.
  *
@@ -504,7 +503,7 @@ export const FACE_BUDGET = 5;
  * A stop's FACE: the short text a chip or a well shows for it. A
  * numeric stop faces as its display value whoever minted it (10px for
  * a radius token; numbers read); a non-numeric material stop faces as
- * the material's name (sm for a shadow token, Lime green for a swatch;
+ * the material's name (sm for a shadow token, accent for a color token;
  * shadow CSS and hex do not read); a curated literal faces as its label
  * twin where one exists (None over '0' or 'none', When visible over a
  * trigger range), else as its value.

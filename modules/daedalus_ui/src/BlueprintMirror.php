@@ -38,8 +38,8 @@ use Symfony\Component\HttpFoundation\RequestStack;
  *   subscriber strips the key from any settings command that still
  *   carries it.
  *
- * The site's MATERIALS roster (tokens, swatches, variants, blueprints,
- * animations) rides
+ * The site's MATERIALS roster (tokens, variants, blueprints,
+ * animations, fonts) rides
  * beside the mirror on the same seams, as `daedalusUi.materials`: the
  * page-load half of the materials delivery contract (daedalus_blueprint's
  * MaterialsDelivery), one record shape for every kind, so the client

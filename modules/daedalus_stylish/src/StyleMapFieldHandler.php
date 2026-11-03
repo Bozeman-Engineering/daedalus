@@ -23,6 +23,7 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyProse;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRoster;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
+use Drupal\daedalus_stylish\Vocabulary\VocabularyValueSpaces;
 
 /**
  * The daedalus_blueprint field handler for the style map.
@@ -38,12 +39,16 @@ use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
  * space by the site's materials (the hook-landed materials roster) plus
  * the applicability story, every line of it read from the vocabulary
  * roster (VocabularyRosterBuilder, the one derivation of "what may this
- * address style") and rendered by the one prose generator
- * (VocabularyProse): bindings (site-wide property -> value-space lines),
- * deviations (only the places that narrow below the bindings), the
- * stylable entries (what every declared place may style, by property
- * name, in every posture) and one guidance paragraph carrying the
- * standing procedure and the polarity sentence. It answers the
+ * address style") and its value spaces (VocabularyValueSpaces, the one
+ * derivation the dialect catalog carries for the brief too) and rendered
+ * by the one prose generator (VocabularyProse): bindings (site-wide
+ * property -> value-space lines), deviations (only the places that
+ * narrow below the bindings), the stylable entries (what every declared
+ * place may style, by property name, in every posture) and one guidance
+ * paragraph carrying the standing procedure and the polarity sentence.
+ * This handler's own words are its labels (kinds.container,
+ * block_types.text::.text-block-link, the map's key grammar) and its
+ * root set; the brief speaks dialect for the same places. It answers the
  * designer's question (what materials exist, what applies where), never
  * the validator's: per-property grammar stays a server guarantee taught
  * lazily by correctives. The enforcement mode is OPAQUE to the AI: the
@@ -65,6 +70,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     protected MaterialsRosterBuilder $rosterBuilder,
     protected VocabularyRosterBuilder $vocabulary,
     protected HostResolver $hostResolver,
+    protected VocabularyValueSpaces $valueSpaces,
   ) {}
 
   /**
@@ -156,7 +162,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     if ($handlers = $this->valueResolver->getHandlerGuidance()) {
       $input_tier = ' A property value may also be written in the input tier: a handled-value object dispatched on its marker key, or, on a media-capable property, a LIST of layers (plain CSS strings and handled objects) that joins into the one comma-separated stored value. Handled values resolve at write time; what is stored and read back is always the plain CSS string. Handled values on this site: ' . implode(' ', $handlers);
     }
-    return 'A style map: an object keyed by selectable key — the data-selectable value of a page element (entity:{uuid}, field:{uuid}:{field_name}, container:{uuid} — a Layout Builder section IS a container, and its regions are not addressable — block:{component_uuid}, block:{component_uuid}:{field_name}; append "::" and a relative selector to target inside the element: ::.class-name a declared part of the element, from the schema\'s anatomy trees (anatomy.kinds, anatomy.block_plugins, available_block_types[*].anatomy, available_layouts[*].anatomy), which model each element\'s markup shells; ::> * ALL its direct children at once; ::> pb-text the text blocks among them; ::p every paragraph inside it; ::&::before or ::&::after the element\'s own generated box, ::.class-name::after a part\'s, ::> pb-text::before each text block\'s (a box entry is born with content: "" at default, its existence switch: content takes "", none or one media reference url(\'media:<uuid>\') as the whole value and nothing else, since text belongs in a field; a content image shows at its own size, while background-image on the box sizes, positions and layers; content is refused anywhere but a box). ' . RelativeSelector::GRAMMAR . ' A "::" entry is a rule: its properties and its wear reach every element the selector matches under the key, never one element. The nearest element\'s own rule wins: a child\'s own entry beats an ancestor\'s children styles on conflict). Each entry may carry a "variants" reference list ({"variants": [{"variant": "variant_id", "fragment": ""}]}, ordered — later references take precedence, at most one reference per variant axis, and an element composes variants across axes; every reference is a {"variant": id, "fragment": slot-key} object — fragment "" wears the variant root, a non-empty fragment wears ONE fragment of a composition variant bound onto this element when the variant was applied to its container, and a fragment the variant no longer holds delivers nothing; a reference a composition variant\'s apply distributed onto this element also carries "via": that variant\'s id, the reference\'s provenance, so switching or removing the composition removes the reference while one applied directly to this element stays; never write fragment references or "via" by hand, apply the composition variant to the container instead; a RULE entry ("{key}::{selector}") wears a variant too, at every element it matches: the variant must be scoped for the rule\'s landing, the element its last compound names (::> pb-text wears text variants, ::a link variants; a part, ::> * and a subjectless compound land on no element and wear nothing), and a rule never wears a composition variant or a root-only axis) and/or condition-keyed CSS properties, e.g. {"default": {"padding": "2rem"}, "hover": {"background-color": "#eee"}} — "default" always applies, conditions on different axes combine with "+" into a compound that applies when every part does ("narrow+dark"; at most one condition per axis, any part order — writes normalize it), and an entry\'s own properties override its referenced variants. Values are plain semantic CSS; the field schema\'s style_guide key says what is valid on this site (the materials roster, the bindings and deviations lines, its guidance paragraph, and the valid condition names under conditions).' . $input_tier . ' This field\'s value in a read entity is the current styles; prefer the update_style, apply_variant, remove_variant, and detach_variant batch operations over writing the whole map — they validate one element\'s change precisely and leave the others untouched.';
+    return 'A style map: an object keyed by selectable key — the data-selectable value of a page element (entity:{uuid}, field:{uuid}:{field_name}, container:{uuid} — a Layout Builder section IS a container, and its regions are not addressable — block:{component_uuid}, block:{component_uuid}:{field_name}; append "::" and a relative selector to target inside the element: ::.class-name a declared part of the element, from the schema\'s anatomy trees (anatomy.kinds, anatomy.block_plugins, available_block_types[*].anatomy, available_layouts[*].anatomy), which model each element\'s markup shells; ::> * ALL its direct children at once; ::> d-text the text blocks among them; ::p every paragraph inside it; ::&::before or ::&::after the element\'s own generated box, ::.class-name::after a part\'s, ::> d-text::before each text block\'s (a box entry is born with content: "" at default, its existence switch: content takes "", none or one media reference url(\'media:<uuid>\') as the whole value and nothing else, since text belongs in a field; a content image shows at its own size, while background-image on the box sizes, positions and layers; content is refused anywhere but a generated box); ::li::marker, ::input::placeholder, ::&::selection, ::p::first-letter, ::p::first-line and any other pseudo-element the browser knows the same way, each stylable with the properties its specification allows and nothing else. ' . RelativeSelector::GRAMMAR . ' A published state belongs to the key\'s LAST compound only as the entry\'s condition (write {"hover": {...}} at "{key}::> d-text", never a "{key}::> d-text:hover" key); on any earlier compound it is selector text qualifying that compound ("{key}::li:hover > ul" the lists under hovered items, "{key}::&:hover > d-text" the children while the element is hovered), and a pseudo-class the site does not publish stays selector text wherever it stands ("{key}::a:visited"). Whether an undeclared tag, class, attribute or state is admitted on this site is the style guide\'s verdict by enforcement mode, never the grammar\'s. A "::" entry is a rule: its properties and its wear reach every element the selector matches under the key, never one element. The nearest element\'s own rule wins: a child\'s own entry beats an ancestor\'s children styles on conflict). Each entry may carry a "variants" reference list ({"variants": [{"variant": "variant_id", "fragment": ""}]}, ordered — later references take precedence, at most one reference per variant axis, and an element composes variants across axes; every reference is a {"variant": id, "fragment": slot-key} object — fragment "" wears the variant root, a non-empty fragment wears ONE fragment of a composition variant bound onto this element when the variant was applied to its container, and a fragment the variant no longer holds delivers nothing; a reference a composition variant\'s apply distributed onto this element also carries "via": that variant\'s id, the reference\'s provenance, so switching or removing the composition removes the reference while one applied directly to this element stays; never write fragment references or "via" by hand, apply the composition variant to the container instead; a RULE entry ("{key}::{selector}") wears a variant too, at every element it matches: the variant must be scoped for the rule\'s landing, the element its last compound names (::> d-text wears text variants, ::a link variants; a part, ::> * and a subjectless compound land on no element and wear nothing), and a rule never wears a composition variant or a root-only axis) and/or condition-keyed CSS properties, e.g. {"default": {"padding": "2rem"}, "hover": {"background-color": "#eee"}} — "default" always applies, conditions on different axes combine with "+" into a compound that applies when every part does ("narrow+dark"; at most one condition per axis, any part order — writes normalize it), and an entry\'s own properties override its referenced variants. Values are plain semantic CSS; the field schema\'s style_guide key says what is valid on this site (the materials roster, the bindings and deviations lines, its guidance paragraph, and the valid condition names under conditions). ' . $this->prose()->conditionSentence() . $input_tier . ' This field\'s value in a read entity is the current styles; prefer the update_style, apply_variant, remove_variant, and detach_variant batch operations over writing the whole map — they validate one element\'s change precisely and leave the others untouched.';
   }
 
   /**
@@ -172,13 +178,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
   public function getSchemaAdditions(FieldDefinitionInterface $definition): array {
     $theme = $this->declarations->siteTheme();
     $rosters = $this->rosters($theme);
-    $style_guide = [];
-    if ($bindings = $this->bindingLines($theme)) {
-      $style_guide['bindings'] = $bindings;
-    }
-    if ($deviations = $this->deviationLines($rosters, $theme)) {
-      $style_guide['deviations'] = $deviations;
-    }
+    $style_guide = $this->valueSpaceLines($rosters, $theme);
     $style_guide['stylable'] = $this->stylableEntries($rosters, $theme);
     $style_guide['guidance'] = $this->guidanceParagraph($theme);
     // The rich-text instance vocabulary rides only where the spine
@@ -230,8 +230,9 @@ class StyleMapFieldHandler extends FieldHandlerBase {
    * The guidance paragraph: the standing procedure plus the polarity.
    *
    * The designer-facing frame, stated once: the preference order over the
-   * materials (MaterialsProse, the one source the design system brief
-   * shares), the media-token value rule (derived: a site whose granted
+   * materials and the standing procedure when none fits (MaterialsProse,
+   * the one source the design system brief's doctrine line shares), the
+   * media-token value rule (derived: a site whose granted
    * sets carry no media-capable property is never taught the token), and
    * the polarity sentence saying what this site accepts (VocabularyProse,
    * the one source the design system brief's Law line shares). Everything
@@ -241,7 +242,7 @@ class StyleMapFieldHandler extends FieldHandlerBase {
    * start, listed under the schema's starts, never a material to place).
    */
   protected function guidanceParagraph(?string $theme): string {
-    $guidance = 'The site\'s materials (the named values and saved variants' . ($this->rosterBuilder->build()->blueprints(MaterialRecord::SCOPE_BLOCK) !== [] ? ', and the blueprints' : '') . ' under the schema\'s materials key) are the design language\'s pre-validated parts. ' . MaterialsProse::preferenceSentence() . ' Standing procedure: when no material fits, compose freely with blocks and styles; novel styling stays on this page; if something deserves to join the design system, propose it and let the user decide.';
+    $guidance = 'The site\'s materials (the named values and saved variants' . ($this->rosterBuilder->build()->blueprints(MaterialRecord::SCOPE_BLOCK) !== [] ? ', and the blueprints' : '') . ' under the schema\'s materials key) are the design language\'s pre-validated parts. ' . MaterialsProse::preferenceSentence() . ' ' . MaterialsProse::standingProcedureSentence();
     if ($media = $this->styleGuide->mediaProperties($theme)) {
       $guidance .= sprintf(' %s also accept%s an image media reference url(\'media:<uuid>\'): store the token, never a file URL (the file URL and its image-style derivative resolve at render); the token composes with gradients and layers wherever the property\'s own grammar takes them.', implode(', ', $media), count($media) > 1 ? '' : 's');
     }
@@ -256,23 +257,34 @@ class StyleMapFieldHandler extends FieldHandlerBase {
   }
 
   /**
-   * The bindings map: the site's own site-wide bindings, one line each.
+   * The bindings and deviations lines, the keys that open the fragment.
    *
-   * Every authored constraint_defaults block (StyleGuide::
-   * constraintDefaults()) rendered as a designer-facing value-space
-   * line, keyed by CSS property: "font-size: text values", not a
-   * constraint-grammar dump. The polarity sentence says whether these
-   * lines bind or advise; the lines themselves never do. Only what the
-   * site declares site-wide: a node's own block is that node's value
-   * space and rides the deviations lines.
+   * The site's value spaces (VocabularyValueSpaces: the site-wide
+   * bindings per property, and the deviations of the places this
+   * fragment covers, keyed by this fragment's labels) rendered by the one
+   * prose generator as designer-facing lines: "font-size: text values",
+   * "block_types.button: background-color limited to brand-1, brand-2",
+   * never a constraint-grammar dump. The polarity sentence says whether
+   * the lines bind or advise; the lines themselves never do. A site that
+   * binds nothing site-wide has no bindings key; one whose nodes narrow
+   * nothing below the bindings has no deviations key.
    *
-   * @return array<string, string>
-   *   Property => line; [] when the site declares no site-wide blocks.
+   * @param array<string, \Drupal\daedalus_stylish\Vocabulary\VocabularyRoster> $rosters
+   *   Label => roster (rosters()).
+   * @param string|null $theme
+   *   The theme the rosters were built for, or NULL for the default.
+   *
+   * @return array{bindings?: array<string, string>, deviations?: array<string, string>}
+   *   The two keys, each present only when it has lines.
    */
-  protected function bindingLines(?string $theme): array {
+  protected function valueSpaceLines(array $rosters, ?string $theme): array {
+    $bindings = $this->valueSpaces->bindings($theme);
     $lines = [];
-    foreach ($this->styleGuide->constraintDefaults($theme) as $property => $space) {
-      $lines[$property] = VocabularyProse::valueSpaceLine($space);
+    if ($binding_lines = $this->prose()->bindingLines($bindings)) {
+      $lines['bindings'] = $binding_lines;
+    }
+    if ($deviation_lines = $this->prose()->deviationLines($this->valueSpaces->deviations($rosters, $theme), $bindings)) {
+      $lines['deviations'] = $deviation_lines;
     }
     return $lines;
   }
@@ -280,25 +292,15 @@ class StyleMapFieldHandler extends FieldHandlerBase {
   /**
    * The roots this fragment's rosters cover, in teaching order.
    *
+   * The style map's are the universal roots (VocabularyValueSpaces::
+   * roots(): the universal kinds, then every declared block type, block
+   * plugin and layout); a scope-keyed lane narrows or widens the set.
+   *
    * @return \Drupal\daedalus_blueprint\Materials\Address[]
-   *   The root addresses: the universal kinds, then every declared block
-   *   type, block plugin and layout.
+   *   The root addresses.
    */
   protected function roots(?string $theme): array {
-    $roots = [];
-    foreach (PageBuilderDeclarations::KINDS as $kind) {
-      $roots[] = Address::kind($kind);
-    }
-    foreach ($this->styleGuide->getBlockTypes($theme) as $bundle) {
-      $roots[] = Address::blockType($bundle);
-    }
-    foreach ($this->styleGuide->getBlockPlugins($theme) as $plugin_id) {
-      $roots[] = Address::blockPlugin($plugin_id);
-    }
-    foreach ($this->styleGuide->getLayouts($theme) as $layout_id) {
-      $roots[] = Address::layout($layout_id);
-    }
-    return $roots;
+    return $this->valueSpaces->roots($theme);
   }
 
   /**
@@ -334,6 +336,10 @@ class StyleMapFieldHandler extends FieldHandlerBase {
   /**
    * The rosters this fragment teaches: every root and every place under it.
    *
+   * The walk is the value-space derivation's (VocabularyValueSpaces::
+   * rosters(), keyed by address); this fragment re-keys each roster by
+   * its own label, the map's key grammar.
+   *
    * @return array<string, \Drupal\daedalus_stylish\Vocabulary\VocabularyRoster>
    *   Label => roster: each root in teaching order, followed by its
    *   children pseudo-part and its declared parts (at any authored
@@ -341,71 +347,10 @@ class StyleMapFieldHandler extends FieldHandlerBase {
    */
   protected function rosters(?string $theme): array {
     $rosters = [];
-    foreach ($this->roots($theme) as $root) {
-      foreach ($this->addressesUnder($root, $theme) as $address) {
-        $rosters[$this->label($address)] = $this->vocabulary->build($address, $theme);
-      }
+    foreach ($this->valueSpaces->rosters($this->roots($theme), $theme) as $roster) {
+      $rosters[$this->label($roster->address())] = $roster;
     }
     return $rosters;
-  }
-
-  /**
-   * A root and every declared place under it, the roster deciding.
-   *
-   * @return \Drupal\daedalus_blueprint\Materials\Address[]
-   *   The root, its children pseudo-part when declared, then each part
-   *   with its own children pseudo-part when declared.
-   */
-  protected function addressesUnder(Address $root, ?string $theme): array {
-    $addresses = [$root];
-    $roster = $this->vocabulary->build($root, $theme);
-    if ($roster->childrenDeclared()) {
-      $addresses[] = Address::of($root->family, $root->id, '> *');
-    }
-    foreach (array_keys($roster->parts()) as $selector) {
-      $part = Address::of($root->family, $root->id, (string) $selector);
-      $addresses[] = $part;
-      if ($this->vocabulary->build($part, $theme)->childrenDeclared()) {
-        $addresses[] = Address::of($root->family, $root->id, $selector . ' > *');
-      }
-    }
-    return $addresses;
-  }
-
-  /**
-   * The deviations map: only the places that narrow below the bindings.
-   *
-   * Each place's value spaces (VocabularyRoster::valueSpaces(), the law
-   * the validator judges that address by) as ONE line at its label
-   * ("block_types.button: background-color limited to brand-1,
-   * brand-2"); a property whose space merely repeats the site's own
-   * binding stays silent. Empty (and absent from the fragment) on a site
-   * whose nodes constrain nothing beyond the bindings.
-   *
-   * @param array<string, \Drupal\daedalus_stylish\Vocabulary\VocabularyRoster> $rosters
-   *   Label => roster (rosters()).
-   * @param string|null $theme
-   *   The theme the rosters were built for, or NULL for the default.
-   *
-   * @return array<string, string>
-   *   Label => deviation line.
-   */
-  protected function deviationLines(array $rosters, ?string $theme): array {
-    $bindings = $this->styleGuide->constraintDefaults($theme);
-    $lines = [];
-    foreach ($rosters as $label => $roster) {
-      $phrases = [];
-      foreach ($roster->valueSpaces() as $property => $space) {
-        if (array_key_exists($property, $bindings) && $bindings[$property] == $space) {
-          continue;
-        }
-        $phrases[] = $property . ' ' . VocabularyProse::deviationPhrase($space, $bindings[$property] ?? NULL);
-      }
-      if ($phrases) {
-        $lines[$label] = implode('; ', $phrases);
-      }
-    }
-    return $lines;
   }
 
   /**
@@ -489,28 +434,34 @@ class StyleMapFieldHandler extends FieldHandlerBase {
     }
     $types[] = RelativeSelector::TYPE_CONTAINER;
     $types[] = RelativeSelector::TYPE_BLOCK;
-    return RelativeSelector::GRAMMAR . sprintf(' A type compound ("%s::> pb-text"; types: %s) styles against the named type\'s own entry, a tag compound ("%s::p") against the base tag\'s.', $key, implode(', ', $types), $key);
+    return RelativeSelector::GRAMMAR . sprintf(' A type compound ("%s::> d-text"; types: %s) styles against the named type\'s own entry, a tag compound ("%s::p") against the base tag\'s.', $key, implode(', ', $types), $key);
   }
 
   /**
-   * The valid condition vocabulary, with its CSS wrappers and axes.
+   * The published condition vocabulary, with its CSS wrappers and axes.
    *
-   * Condition names are a closed set (the condition type plugins); exposing
-   * the live table — thresholds included — lets an AI know exactly when
-   * each condition applies. The axis is the compound lane: conditions on
-   * different axes combine with "+" ("narrow+dark"), at most one per axis.
-   * A structural fact (fact: true) qualifies the addressed element by its
-   * place among its siblings: it is never an interaction state.
+   * The references (the condition type plugins' names): exposing the live
+   * table — thresholds included — lets an AI know exactly when each
+   * applies, and a style keyed by a name follows a threshold change.
+   * Whether a LITERAL the browser knows may stand beside them (a feature
+   * query, a supports test, a pseudo-class state, each its own canonical
+   * CSS as the key) is the enforcement mode's verdict, which the
+   * description's condition sentence states
+   * (VocabularyProse::conditionSentence()): strict admits the references
+   * alone, open and guarded the literal lane too. The axis is the
+   * compound lane: clauses on different axes combine with "+"
+   * ("narrow+dark"), at most one per axis, a literal's axis being its
+   * feature. Where an element sits among its siblings is never a
+   * condition: it is a position qualifier in the key's selector
+   * ("::&:first-child").
    *
    * @return array
-   *   Condition name => {wrapper, axis, fact?} ("always applies" for
-   *   default).
+   *   Condition name => {wrapper, axis} ("always applies" for default).
    */
   protected function conditionsSchema(): array {
     $conditions = ['default' => 'always applies'];
     foreach ($this->conditionTypes->getConditions() as $name => $definition) {
-      $conditions[$name] = ['wrapper' => $definition['wrapper'], 'axis' => $definition['axis']]
-        + (($definition['fact'] ?? FALSE) === TRUE ? ['fact' => TRUE] : []);
+      $conditions[$name] = ['wrapper' => $definition['wrapper'], 'axis' => $definition['axis']];
     }
     return $conditions;
   }

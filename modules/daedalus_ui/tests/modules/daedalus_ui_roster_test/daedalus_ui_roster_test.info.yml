@@ -1,0 +1,6 @@
+name: 'Daedalus UI Roster Test'
+type: module
+description: 'Contributes one column to the bundle roster through BundleRosterEvent, for the roster tests.'
+package: Testing
+dependencies:
+  - daedalus:daedalus_ui

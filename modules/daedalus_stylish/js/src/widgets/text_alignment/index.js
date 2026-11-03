@@ -40,6 +40,7 @@ const TextAlignment = ({
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
 }) => (
   <div className={widgetClasses('text-alignment', false)}>
     <ChoiceRow
@@ -60,6 +61,7 @@ const TextAlignment = ({
       disabledTitle={model.withheld?.['text-align'] ?? null}
       onPickCondition={onPickCondition}
       onOpenDocument={onOpenDocument}
+      law={law}
       onPreview={onPreview}
       onRelease={onRelease}
       onCommit={onCommit}

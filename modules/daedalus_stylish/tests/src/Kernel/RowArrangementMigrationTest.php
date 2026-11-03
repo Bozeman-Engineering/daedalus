@@ -21,7 +21,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * The primary fixture is a site recipe front-page hero exactly as it
  * shipped under the proportions model (container_lg + split_50_50 worn on
- * the root band) - real captured data, not a synthetic shape. Around it:
+ * the root section) - real captured data, not a synthetic shape. Around it:
  * unequal ratios becoming child flex-grow overrides in child order,
  * stepper-written explicit track overrides parsing by the stepper's own
  * minmax pattern (and shadowing a worn reference when both exist), track
@@ -47,7 +47,7 @@ class RowArrangementMigrationTest extends NestedStorageKernelTestBase {
   ];
 
   /**
-   * The daedalus_layout uuid of the captured front-page hero band.
+   * The daedalus_layout uuid of the captured front-page hero section.
    */
   protected const HERO_UUID = '09868d9b-a855-40f8-96fe-8afc921f885c';
 
@@ -67,11 +67,8 @@ class RowArrangementMigrationTest extends NestedStorageKernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and every compile and validation builds it.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
@@ -82,7 +79,7 @@ class RowArrangementMigrationTest extends NestedStorageKernelTestBase {
    * A site recipe front-page hero, as shipped pre-mode-+ share.
    *
    * Captured from a real shipped front-page node export before this
-   * migration rewrote the recipe: one container band holding a nested text
+   * migration rewrote the recipe: one container section holding a nested text
    * container and an image block, side by side via split_50_50.
    */
   protected function capturedHeroSection(): Section {

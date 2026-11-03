@@ -1,0 +1,48 @@
+/**
+ * The "AI is working" glow: the visible page's edges breathe in the
+ * selection color while the chat is busy. daedalus-ai-working.js mirrors
+ * the chat's busy state onto html.daedalus-ai-working; this file is the
+ * whole look.
+ *
+ * The overlay is a pseudo-element on the root, fixed and click-through,
+ * inset to core's displace offsets so it hugs the page the user sees: in
+ * Edit Mode it stops at the top bar and the sidebar rails, the way a
+ * browser's AI glow leaves its side panel unlit. It has no content and no
+ * interaction, so nothing is created or cleaned up. z-index sits under
+ * the rails (daedalus_ui sidebar.css: 100) and above page content.
+ */
+
+@keyframes daedalus-ai-working-breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+html.daedalus-ai-working::after {
+  position: fixed;
+  z-index: 99;
+  top: var(--drupal-displace-offset-top, 0px);
+  right: var(--drupal-displace-offset-right, 0px);
+  bottom: var(--drupal-displace-offset-bottom, 0px);
+  left: var(--drupal-displace-offset-left, 0px);
+  content: "";
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 2px var(--daedalus-selection, #0071e3),
+    inset 0 0 1.5rem 0 color-mix(in srgb, var(--daedalus-selection, #0071e3) 85%, transparent),
+    inset 0 0 5rem 0.5rem color-mix(in srgb, var(--daedalus-selection, #0071e3) 65%, transparent),
+    inset 0 0 10rem 1.5rem color-mix(in srgb, var(--daedalus-selection, #0071e3) 40%, transparent);
+  animation: daedalus-ai-working-breathe 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.daedalus-ai-working::after {
+    opacity: 0.85;
+    animation: none;
+  }
+}

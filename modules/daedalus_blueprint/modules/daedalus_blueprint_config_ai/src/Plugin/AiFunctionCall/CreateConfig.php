@@ -17,7 +17,7 @@ use Drupal\daedalus_blueprint_config\ConfigBlueprintBackend;
   id: 'daedalus_blueprint_config:create_config',
   function_name: 'eb_config_create',
   name: 'Create Config',
-  description: 'Creates a new config entity from a blueprint. Workflow: (1) Call eb_list_bundles to identify the entity type. (2) Call eb_config_read_schema for that type. (3) Present your plan to the user and wait for approval. (4) Call this tool. Format: {"entity_type": "image_style", "id": "my_style", "label": "My Style", "properties": {...}}.',
+  description: 'Creates a new config entity from a blueprint in the shape eb_config_read_schema prints for its type: {"entity_type": "image_style", "id": "my_style", "label": "My Style", "properties": {...}}.',
   group: 'modification_tools',
   context_definitions: [
     'blueprint' => new ContextDefinition(
@@ -51,7 +51,7 @@ class CreateConfig extends DaedalusBlueprintToolBase {
     }
 
     if (!$backend instanceof ConfigBlueprintBackend) {
-      $this->output = "This tool only works with config entities. '$entity_type' is a content entity — use create_entity instead.";
+      $this->output = "This tool only works with config entities. '$entity_type' is a content entity — use eb_create_entity instead.";
       return;
     }
 

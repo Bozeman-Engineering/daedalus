@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\daedalus_ui\ElementModel;
 
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Field\FieldItemInterface;
+use Drupal\Core\Field\Plugin\Field\FieldType\EntityReferenceItem;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\file\FileInterface;
 use Drupal\link\LinkItemInterface;
@@ -16,23 +18,54 @@ use Drupal\media\MediaInterface;
  * The INSTANCE tier of the page-elements model: a declaration
  * (PageBuilderDeclarations) says what a type CAN render as — data-decided
  * tags, conditional parts, ordered root forms — and this resolver computes
- * what THIS element IS rendering as from entity data alone. Every markup
- * variation the declarations can spell is a deterministic function of
- * entity data (a tag field's value, a url field's emptiness, the referenced
- * media's kind, the section's nesting depth), so the resolution needs no
- * DOM, runs no Twig, and issues no queries: (declaration, entity data,
- * depth) in, concrete tree out, the same answer for the same inputs on
- * every surface (server render, blueprint annotation, AI projection).
+ * what THIS element IS rendering as from the instance's data alone. Every
+ * markup variation the declarations can spell is a deterministic function
+ * of that data (a tag field's value, a url field's emptiness, the
+ * referenced media's kind, the section's nesting depth), so the resolution
+ * needs no DOM, runs no Twig, and issues no queries: (declaration, data
+ * facade, depth) in, concrete tree out, the same answer for the same inputs
+ * on every surface (server render, blueprint annotation, the AI's cards,
+ * the browser's live preview).
+ *
+ * The ONE computation is resolveData() over the DATA FACADE, the same
+ * input shape the client twin takes (js/edit_mode/blueprint/
+ * element-resolver.js). The facade is NULL (no entity: every data
+ * condition is FALSE, data-decided values resolve NULL) or a map of:
+ * - fields: {NAME: string|NULL} — a key EXISTS iff the content field is
+ *   non-empty (the {field: NAME} presence fact), and its value is the
+ *   string the markup prints for it (a tag field's value, a link's url) or
+ *   NULL when the field holds no printable string (a media reference).
+ *   The map holds EVERY non-empty content field of the element, because
+ *   the {empty: true} fact derives from it: empty means no keys, the
+ *   definition-based inventory (see ElementModel::contentFieldDefinitions)
+ *   read as a map. Only content fields are in it, so a {field: NAME}
+ *   condition names a configurable field; base fields are never content.
+ * - mediaKind: 'raster' | 'vector' | NULL — the referenced media's kind
+ *   (the {media: ...} fact); present only while the element references
+ *   media, NULL when that media resolves no file (neither kind can claim
+ *   it, the honest degenerate state).
+ * - empty: bool — the explicit emptiness fact for elements with no fields
+ *   of their own (a section is empty when it holds no components, a fact
+ *   only the caller walking the node or the regions build can answer).
+ *   When present it IS the {empty: true} answer; without it emptiness
+ *   derives from the fields inventory.
+ *
+ * resolve() is the ENTITY entry: readEntity() reads the entity (and the
+ * caller's emptiness input) into that facade, and resolveData() computes
+ * the tree; there is no second resolver, and a consumer with no entity in
+ * hand (the AI's cards sketching a form from a facade built to satisfy its
+ * conditions, the browser's twin previewing a gesture) feeds the facade
+ * straight in.
  *
  * The resolved tree, one node per concrete element:
  * - tag: the root's resolved tag name, or NULL when the declaration names
  *   none (bespoke markup the grammar describes no root for) or a
- *   data-decided tag cannot resolve (degenerate entity data).
+ *   data-decided tag cannot resolve (degenerate data).
  * - attributes: the root's declared attributes, resolved to literal
- *   strings ({field: NAME} values read the named field; a link field
- *   resolves to its URL). Only the matched root form carries declared root
- *   attributes; hoisted machine attributes (selection keys, editing
- *   attribution) are the renderer's business, never modeled here.
+ *   strings ({field: NAME} values read the facade's string for the named
+ *   field). Only the matched root form carries declared root attributes;
+ *   hoisted machine attributes (selection keys, editing attribution) are
+ *   the renderer's business, never modeled here.
  * - classes: part classes the root wears via the hoisting rule below.
  * - hoisted: the hoisted parts' keys — each still addresses an element,
  *   and that element is the root.
@@ -51,7 +84,7 @@ use Drupal\media\MediaInterface;
  *   A part whose `contains:` claims a `field:` slot carries the
  *   CLAIMS_CONTENT_ATTRIBUTE marker in its attributes: the anatomy fact
  *   "this element claims the block's field content" enters the markup
- *   spine here, once, so every consumer (server render, projection, CSS
+ *   spine here, once, so every consumer (server render, cards, CSS
  *   co-targeting) reads it from the markup instead of the element model.
  *   No field-type gating: inherited text properties are inert where no
  *   glyphs render, so a non-text claim stamps harmlessly. A HOISTED
@@ -70,14 +103,11 @@ use Drupal\media\MediaInterface;
  * media's kind (derived from the source FILE — svg by extension or mime is
  * vector, any other file raster — mirroring the render lanes, which branch
  * on the file so an svg reaching any media type takes the vector lane),
- * {empty: true} whether the element has no content — every content field
- * empty (the definition-based inventory, see
- * ElementModel::contentFieldDefinitions) for entity-backed elements, or
- * the caller's emptiness input for elements with no entity of their own (a
- * section's "no children" fact, fed by the annotator and the render from
- * the section node) — and {depth: root|nested} the depth handed in. A
- * ROOT FORM may compose several conditions in one map, resolved as an AND
- * (the container's empty-at-root form); parts carry one condition each.
+ * {empty: true} whether the element has no content (the facade's explicit
+ * fact, else an empty fields inventory) and {depth: root|nested} the depth
+ * handed in. A ROOT FORM may compose several conditions in one map,
+ * resolved as an AND (the container's empty-at-root form); parts carry one
+ * condition each.
  *
  * The hoisting rule (grammar v2): a part whose element coincides with its
  * root hoists its class onto the root, and the part key still addresses
@@ -101,15 +131,17 @@ use Drupal\media\MediaInterface;
  * composed conditions only on root forms) instead of re-checking them.
  *
  * The client twin (js/edit_mode/blueprint/element-resolver.js) mirrors
- * this resolution over a data facade so editing previews resolve the same
+ * resolveData() over the same facade so editing previews resolve the same
  * trees before any commit; ElementResolverTest::testClientTwinEquivalence
- * locks the pair together (the CssPrinter/printer.js pattern). Change the
- * semantics here and in the twin in the same commit, or the lock fails.
+ * locks the pair together (the CssPrinter/printer.js pattern), feeding
+ * each case's facade to both runtimes and the case's entity to resolve().
+ * Change the semantics here and in the twin in the same commit, or the
+ * lock fails.
  */
 final class ElementResolver {
 
   /**
-   * The root nesting depth: the section renders as a page band.
+   * The root nesting depth: the section renders as a real <section>.
    */
   public const DEPTH_ROOT = 'root';
 
@@ -132,7 +164,15 @@ final class ElementResolver {
   public const CLAIMS_CONTENT_ATTRIBUTE = 'data-claims-content';
 
   /**
-   * Resolves a declaration against entity data into a concrete tree.
+   * The media kinds a facade may carry (NULL is the degenerate third).
+   */
+  private const MEDIA_KINDS = ['raster', 'vector'];
+
+  /**
+   * Resolves a declaration against an entity's data into a concrete tree.
+   *
+   * The entity entry: readEntity() reads the entity into the data facade
+   * and resolveData() computes the tree.
    *
    * @param array $declaration
    *   The effective declaration (validated, kind-layered).
@@ -159,9 +199,37 @@ final class ElementResolver {
    *   as documented on the class.
    */
   public function resolve(array $declaration, ?FieldableEntityInterface $entity = NULL, string $depth = self::DEPTH_ROOT, ?bool $empty = NULL): array {
+    return $this->resolveData($declaration, $this->readEntity($entity, $empty), $depth);
+  }
+
+  /**
+   * Resolves a declaration against a data facade into a concrete tree.
+   *
+   * The one computation (see the class docblock for the facade and the
+   * tree); resolve() reaches it through readEntity(), the client twin
+   * mirrors it, and a consumer with no entity feeds a facade straight in.
+   *
+   * @param array $declaration
+   *   The effective declaration (validated, kind-layered).
+   * @param array|null $data
+   *   The data facade ({fields, mediaKind, empty}, every key optional), or
+   *   NULL for an element with no data at all.
+   * @param string $depth
+   *   The nesting depth (self::DEPTH_ROOT / self::DEPTH_NESTED).
+   *
+   * @return array
+   *   The resolved tree: {tag, attributes, classes, hoisted, parts, slots}.
+   *
+   * @throws \InvalidArgumentException
+   *   On an unknown depth or a malformed facade: both are caller bugs,
+   *   refused loudly rather than resolved into a tree the data cannot
+   *   vouch for.
+   */
+  public function resolveData(array $declaration, ?array $data, string $depth = self::DEPTH_ROOT): array {
     if ($depth !== self::DEPTH_ROOT && $depth !== self::DEPTH_NESTED) {
       throw new \InvalidArgumentException(sprintf('"%s" is not a nesting depth (expected "%s" or "%s").', $depth, self::DEPTH_ROOT, self::DEPTH_NESTED));
     }
+    $this->assertFacade($data);
     $resolved = [
       'tag' => NULL,
       'attributes' => [],
@@ -176,16 +244,16 @@ final class ElementResolver {
       // order exhaustive for declared data states; degenerate data outside
       // them (a media reference whose file is gone) matches no form and
       // the root honestly resolves undeclared.
-      $form = $this->matchForm($declaration['root']['forms'], $entity, $depth, $empty);
+      $form = $this->matchForm($declaration['root']['forms'], $data, $depth);
       if ($form !== NULL) {
-        $resolved['tag'] = $this->resolveTag($form['tag'] ?? NULL, $entity);
-        $resolved['attributes'] = $this->resolveAttributes($form['attributes'] ?? [], $entity);
+        $resolved['tag'] = $this->resolveTag($form['tag'] ?? NULL, $data);
+        $resolved['attributes'] = $this->resolveAttributes($form['attributes'] ?? [], $data);
       }
     }
     elseif (array_key_exists('tag', $declaration)) {
-      $resolved['tag'] = $this->resolveTag($declaration['tag'], $entity);
+      $resolved['tag'] = $this->resolveTag($declaration['tag'], $data);
     }
-    $resolved['parts'] = $this->resolveElements($declaration['elements'] ?? [], $entity, $depth, $empty, $form, $resolved, TRUE);
+    $resolved['parts'] = $this->resolveElements($declaration['elements'] ?? [], $data, $depth, $form, $resolved, TRUE);
     return $resolved;
   }
 
@@ -214,7 +282,111 @@ final class ElementResolver {
    *   The matched root form as declared, or NULL.
    */
   public function matchedRootForm(array $declaration, ?FieldableEntityInterface $entity = NULL, string $depth = self::DEPTH_ROOT, ?bool $empty = NULL): ?array {
-    return $this->matchForm($declaration['root']['forms'] ?? NULL, $entity, $depth, $empty);
+    return $this->matchedRootFormData($declaration, $this->readEntity($entity, $empty), $depth);
+  }
+
+  /**
+   * The root form a declaration resolves under, for a data facade.
+   *
+   * The facade entry of matchedRootForm(), the same first-match-wins
+   * answer resolveData() computes; a consumer sketching a form from a
+   * facade it built (the AI's cards) asks here whether the facade reaches
+   * the form it meant, instead of re-deciding the match itself.
+   *
+   * @param array $declaration
+   *   The effective declaration (validated, kind-layered).
+   * @param array|null $data
+   *   The data facade ({fields, mediaKind, empty}), or NULL.
+   * @param string $depth
+   *   The nesting depth (self::DEPTH_ROOT / self::DEPTH_NESTED).
+   *
+   * @return array|null
+   *   The matched root form as declared, or NULL when the declaration has
+   *   no root forms or none matches.
+   */
+  public function matchedRootFormData(array $declaration, ?array $data, string $depth = self::DEPTH_ROOT): ?array {
+    $this->assertFacade($data);
+    return $this->matchForm($declaration['root']['forms'] ?? NULL, $data, $depth);
+  }
+
+  /**
+   * Reads an entity (and the caller's emptiness input) into the facade.
+   *
+   * The entity side of the one computation: the facade resolveData() and
+   * the client twin take, derived from the entity exactly as the twin's
+   * contract documents it (see the class docblock), so an entity and the
+   * facade a client would derive for the same state resolve the same tree.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $entity
+   *   The entity, or NULL for an element with no entity of its own.
+   * @param bool|null $empty
+   *   The caller's emptiness input (see resolve()); NULL leaves emptiness
+   *   to the fields inventory.
+   *
+   * @return array|null
+   *   The facade, or NULL when there is neither an entity nor an emptiness
+   *   fact: nothing exists that the data cannot vouch for.
+   */
+  public function readEntity(?FieldableEntityInterface $entity, ?bool $empty = NULL): ?array {
+    if ($entity === NULL) {
+      return $empty === NULL ? NULL : ['empty' => $empty];
+    }
+    $data = ['fields' => []];
+    // Definition-based like every model inventory (see
+    // ElementModel::contentFieldDefinitions): the content fields are the
+    // bundle's FieldConfig fields minus structure (layout_section), and the
+    // {empty: true} fact is that none of them holds a value.
+    foreach ($entity->getFieldDefinitions() as $name => $definition) {
+      if (!$definition instanceof FieldConfig || $definition->getType() === 'layout_section') {
+        continue;
+      }
+      $items = $entity->get($name);
+      if ($items->isEmpty()) {
+        continue;
+      }
+      $item = $items->first();
+      $data['fields'][$name] = $this->printableValue($item);
+      if (!array_key_exists('mediaKind', $data) && $definition->getType() === 'entity_reference' && $definition->getSetting('target_type') === 'media') {
+        // The element's media rides its first non-empty media reference
+        // (the same field shape ElementModel::fieldPresentation treats as
+        // "the image"); its kind derives from the source file.
+        $media = $item->entity;
+        $data['mediaKind'] = $media instanceof MediaInterface ? $this->kindOfMedia($media) : NULL;
+      }
+    }
+    if ($empty !== NULL) {
+      $data['empty'] = $empty;
+    }
+    return $data;
+  }
+
+  /**
+   * Refuses a malformed facade loudly: a shape the twin never sends.
+   */
+  private function assertFacade(?array $data): void {
+    if ($data === NULL) {
+      return;
+    }
+    $unknown = array_diff(array_keys($data), ['fields', 'mediaKind', 'empty']);
+    if ($unknown !== []) {
+      throw new \InvalidArgumentException(sprintf('The data facade carries "%s"; its keys are fields, mediaKind and empty.', implode('", "', $unknown)));
+    }
+    if (array_key_exists('fields', $data)) {
+      if (!is_array($data['fields'])) {
+        throw new \InvalidArgumentException('The data facade\'s fields must be a map of field name to printable string or NULL.');
+      }
+      foreach ($data['fields'] as $name => $value) {
+        if (!is_string($name) || ($value !== NULL && !is_string($value))) {
+          throw new \InvalidArgumentException(sprintf('The data facade\'s field "%s" must hold a printable string or NULL.', $name));
+        }
+      }
+    }
+    if (array_key_exists('mediaKind', $data) && $data['mediaKind'] !== NULL && !in_array($data['mediaKind'], self::MEDIA_KINDS, TRUE)) {
+      throw new \InvalidArgumentException(sprintf('The data facade\'s mediaKind is %s; the media kinds are %s, or NULL for media resolving no file.', var_export($data['mediaKind'], TRUE), implode(' and ', self::MEDIA_KINDS)));
+    }
+    if (array_key_exists('empty', $data) && !is_bool($data['empty'])) {
+      throw new \InvalidArgumentException('The data facade\'s empty fact must be a boolean.');
+    }
   }
 
   /**
@@ -222,12 +394,10 @@ final class ElementResolver {
    *
    * @param mixed $elements
    *   The level's elements map as declared.
-   * @param \Drupal\Core\Entity\FieldableEntityInterface|null $entity
-   *   The entity whose data decides presence.
+   * @param array|null $data
+   *   The data facade deciding presence.
    * @param string $depth
    *   The nesting depth.
-   * @param bool|null $empty
-   *   The caller's emptiness input (see resolve()).
    * @param array|null $form
    *   The matched root form, for the coincidence hoisting rule; only the
    *   top level can coincide with the root.
@@ -240,7 +410,7 @@ final class ElementResolver {
    * @return array
    *   Present part nodes keyed by part key.
    */
-  private function resolveElements(mixed $elements, ?FieldableEntityInterface $entity, string $depth, ?bool $empty, ?array $form, array &$root, bool $top): array {
+  private function resolveElements(mixed $elements, ?array $data, string $depth, ?array $form, array &$root, bool $top): array {
     $parts = [];
     if (!is_array($elements)) {
       return $parts;
@@ -255,7 +425,7 @@ final class ElementResolver {
         // content; no concrete element resolves from it.
         continue;
       }
-      if (!$this->conditionHolds($part['present'] ?? NULL, $entity, $depth, $empty)) {
+      if (!$this->conditionHolds($part['present'] ?? NULL, $data, $depth)) {
         // A failed condition means the element does not exist: absent,
         // subtree included, never hoisted.
         continue;
@@ -267,20 +437,20 @@ final class ElementResolver {
       $part_form = NULL;
       $shape = $part;
       if (isset($part['forms'])) {
-        $part_form = $this->matchForm($part['forms'], $entity, $depth, $empty);
+        $part_form = $this->matchForm($part['forms'], $data, $depth);
         if ($part_form === NULL) {
           continue;
         }
         $shape = $part_form;
       }
-      if ($top && $form !== NULL && $this->coincides($shape, $form, $entity)) {
+      if ($top && $form !== NULL && $this->coincides($shape, $form, $data)) {
         // The matched root form resolved the part's own element as the
         // root: one element, class hoisted, key addressing the root.
         $this->hoist($key, $root);
-        $parts += $this->resolveElements($part['elements'] ?? [], $entity, $depth, $empty, NULL, $root, FALSE);
+        $parts += $this->resolveElements($part['elements'] ?? [], $data, $depth, NULL, $root, FALSE);
         continue;
       }
-      $attributes = $this->resolveAttributes($shape['attributes'] ?? [], $entity);
+      $attributes = $this->resolveAttributes($shape['attributes'] ?? [], $data);
       foreach ((array) ($part['contains'] ?? []) as $token) {
         $root['slots'][(string) $token] = $key;
         if (str_starts_with((string) $token, 'field:')) {
@@ -291,7 +461,7 @@ final class ElementResolver {
         }
       }
       $node = [
-        'tag' => $this->resolveTag($shape['tag'] ?? NULL, $entity),
+        'tag' => $this->resolveTag($shape['tag'] ?? NULL, $data),
         'attributes' => $attributes,
       ];
       if (is_string($part_form['label'] ?? NULL)) {
@@ -300,7 +470,7 @@ final class ElementResolver {
         // back to the declaration's part-level label.
         $node['label'] = $part_form['label'];
       }
-      $node['parts'] = $this->resolveElements($part['elements'] ?? [], $entity, $depth, $empty, NULL, $root, FALSE);
+      $node['parts'] = $this->resolveElements($part['elements'] ?? [], $data, $depth, NULL, $root, FALSE);
       $parts[$key] = $node;
     }
     return $parts;
@@ -319,7 +489,7 @@ final class ElementResolver {
    *
    * NULL when none matches.
    */
-  private function matchForm(mixed $forms, ?FieldableEntityInterface $entity, string $depth, ?bool $empty): ?array {
+  private function matchForm(mixed $forms, ?array $data, string $depth): ?array {
     if (!is_array($forms)) {
       return NULL;
     }
@@ -327,7 +497,7 @@ final class ElementResolver {
       if (!is_array($form)) {
         continue;
       }
-      if (!array_key_exists('present', $form) || $this->conditionHolds($form['present'], $entity, $depth, $empty)) {
+      if (!array_key_exists('present', $form) || $this->conditionHolds($form['present'], $data, $depth)) {
         return $form;
       }
     }
@@ -346,24 +516,23 @@ final class ElementResolver {
    * decided between matched forms (the root's svg form and the part's svg
    * form both say "the vector media render").
    */
-  private function coincides(array $shape, array $form, ?FieldableEntityInterface $entity): bool {
+  private function coincides(array $shape, array $form, ?array $data): bool {
     if (($shape['present'] ?? NULL) != ($form['present'] ?? NULL)) {
       return FALSE;
     }
-    $tag = $this->resolveTag($shape['tag'] ?? NULL, $entity);
-    return $tag !== NULL && $tag === $this->resolveTag($form['tag'] ?? NULL, $entity);
+    $tag = $this->resolveTag($shape['tag'] ?? NULL, $data);
+    return $tag !== NULL && $tag === $this->resolveTag($form['tag'] ?? NULL, $data);
   }
 
   /**
-   * Whether one present: condition map holds against the instance facts.
+   * Whether one present: condition map holds against the facade's facts.
    *
    * The closed vocabulary, every condition in the map required (root
    * forms may compose several as an AND; parts carry one, validated at
-   * build). No entity means every data condition is FALSE — nothing
-   * exists that the data cannot vouch for — except an emptiness the
-   * caller's input vouches for (a section's "no children" fact).
+   * build). No facade means every data condition is FALSE — nothing
+   * exists that the data cannot vouch for.
    */
-  private function conditionHolds(mixed $present, ?FieldableEntityInterface $entity, string $depth, ?bool $empty): bool {
+  private function conditionHolds(mixed $present, ?array $data, string $depth): bool {
     if ($present === NULL) {
       return TRUE;
     }
@@ -372,10 +541,14 @@ final class ElementResolver {
     }
     foreach ($present as $condition => $value) {
       $holds = match ($condition) {
-        'field' => $entity !== NULL && is_string($value) && $entity->hasField($value) && !$entity->get($value)->isEmpty(),
-        'media' => $entity !== NULL && $this->mediaKind($entity) === $value,
+        'field' => $data !== NULL && is_string($value) && array_key_exists($value, $data['fields'] ?? []),
+        'media' => $data !== NULL && ($data['mediaKind'] ?? NULL) === $value,
         'depth' => $depth === $value,
-        'empty' => $empty ?? ($entity !== NULL && $this->isEmptyOfContent($entity)),
+        // The facade's explicit emptiness fact wins (a section's "no
+        // components"); otherwise the fact derives from the inventory:
+        // the facade holds every non-empty content field, so no keys
+        // means no content at all.
+        'empty' => $data !== NULL && ($data['empty'] ?? (($data['fields'] ?? []) === [])),
         default => FALSE,
       };
       if (!$holds) {
@@ -386,18 +559,18 @@ final class ElementResolver {
   }
 
   /**
-   * Resolves a declared tag: a literal name, or the named field's value.
+   * Resolves a declared tag: a literal name, or the named field's string.
    *
    * @return string|null
    *   The tag name, or NULL when none is declared or the deciding field
-   *   holds no value.
+   *   holds no printable string.
    */
-  private function resolveTag(mixed $tag, ?FieldableEntityInterface $entity): ?string {
+  private function resolveTag(mixed $tag, ?array $data): ?string {
     if (is_string($tag)) {
       return $tag;
     }
     if (is_array($tag) && is_string($tag['field'] ?? NULL)) {
-      return $this->fieldValue($entity, $tag['field']);
+      return $data['fields'][$tag['field']] ?? NULL;
     }
     return NULL;
   }
@@ -405,10 +578,11 @@ final class ElementResolver {
   /**
    * Resolves a declared attributes map to literal string values.
    *
-   * A {field: NAME} value whose field holds nothing resolves to no
-   * attribute at all: an empty href would be a claim the data cannot back.
+   * A {field: NAME} value whose field holds no printable string resolves
+   * to no attribute at all: an empty href would be a claim the data cannot
+   * back.
    */
-  private function resolveAttributes(mixed $attributes, ?FieldableEntityInterface $entity): array {
+  private function resolveAttributes(mixed $attributes, ?array $data): array {
     $resolved = [];
     if (!is_array($attributes)) {
       return $resolved;
@@ -418,7 +592,7 @@ final class ElementResolver {
         $resolved[$name] = $value;
       }
       elseif (is_array($value) && is_string($value['field'] ?? NULL)) {
-        $field_value = $this->fieldValue($entity, $value['field']);
+        $field_value = $data['fields'][$value['field']] ?? NULL;
         if ($field_value !== NULL) {
           $resolved[$name] = $field_value;
         }
@@ -428,19 +602,19 @@ final class ElementResolver {
   }
 
   /**
-   * The named field's first value as the string markup prints.
+   * A non-empty field's first value as the string the markup prints.
    *
    * A link field resolves to its URL (what an href means), mirroring the
-   * composed templates' preprocess; anything else resolves its main
-   * property when scalar.
+   * composed templates' preprocess; a reference (media, file, image) holds
+   * no printable string, so it reads NULL (a target id is not markup);
+   * anything else resolves its main property when scalar.
    */
-  private function fieldValue(?FieldableEntityInterface $entity, string $name): ?string {
-    if ($entity === NULL || !$entity->hasField($name) || $entity->get($name)->isEmpty()) {
-      return NULL;
-    }
-    $item = $entity->get($name)->first();
+  private function printableValue(FieldItemInterface $item): ?string {
     if ($item instanceof LinkItemInterface) {
       return $item->getUrl()->toString();
+    }
+    if ($item instanceof EntityReferenceItem) {
+      return NULL;
     }
     $property = $item->getFieldDefinition()->getFieldStorageDefinition()->getMainPropertyName() ?? 'value';
     $value = $item->get($property)->getValue();
@@ -448,54 +622,12 @@ final class ElementResolver {
   }
 
   /**
-   * Whether the entity has no content at all (the {empty: true} fact).
-   *
-   * Definition-based like every model inventory (see
-   * ElementModel::contentFieldDefinitions): the content fields are the
-   * bundle's FieldConfig fields minus structure (layout_section), and empty
-   * means every one of them is.
-   */
-  private function isEmptyOfContent(FieldableEntityInterface $entity): bool {
-    foreach ($entity->getFieldDefinitions() as $name => $definition) {
-      if (!$definition instanceof FieldConfig || $definition->getType() === 'layout_section') {
-        continue;
-      }
-      if (!$entity->get($name)->isEmpty()) {
-        return FALSE;
-      }
-    }
-    return TRUE;
-  }
-
-  /**
-   * The referenced media's kind: 'raster', 'vector', or NULL for neither.
-   *
-   * The element's media rides its media reference field (the first
-   * non-empty entity_reference targeting media, the same field shape
-   * ElementModel::fieldPresentation treats as "the image"), and the kind
-   * derives from the source FILE, not the media bundle: svg by extension
-   * or mime is vector, any other file raster, so an svg reaching any media
-   * type resolves the same lane the render takes. Media resolving no file
-   * has no kind (NULL): neither condition can claim it.
-   */
-  private function mediaKind(FieldableEntityInterface $entity): ?string {
-    foreach ($entity->getFieldDefinitions() as $name => $definition) {
-      if ($definition->getType() !== 'entity_reference' || $definition->getSetting('target_type') !== 'media') {
-        continue;
-      }
-      if ($entity->get($name)->isEmpty()) {
-        continue;
-      }
-      $media = $entity->get($name)->first()->entity;
-      if ($media instanceof MediaInterface) {
-        return $this->kindOfMedia($media);
-      }
-    }
-    return NULL;
-  }
-
-  /**
    * One media entity's kind from its source file.
+   *
+   * Derived from the FILE, not the media bundle: svg by extension or mime
+   * is vector, any other file raster, so an svg reaching any media type
+   * resolves the same lane the render takes. Media resolving no file has
+   * no kind (NULL): neither condition can claim it.
    */
   private function kindOfMedia(MediaInterface $media): ?string {
     $source_field = $media->getSource()->getSourceFieldDefinition($media->bundle->entity);

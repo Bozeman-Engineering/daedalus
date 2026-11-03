@@ -66,7 +66,7 @@ export const listboxTarget = (ids, currentId, key) => {
 /**
  * The grid's sections: stops grouped by their palette-side `group` label,
  * first-seen order (the stop tables are already in offer order: scales in
- * declaration order, then swatch kinds, then gradient kinds).
+ * declaration order, the gradient scales after the color stops).
  *
  * Stops without a group (an `allowed:` list's literals) collect under the
  * null label; a grid with ONLY the null group renders headerless: a

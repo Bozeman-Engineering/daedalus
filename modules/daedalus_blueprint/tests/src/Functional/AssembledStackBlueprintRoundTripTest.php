@@ -32,9 +32,9 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * Why a plain Functional BrowserTestBase rather than a WebDriver/JS test: there
  * is no honest end-to-end AI-driven UI observation available in CI. The recipe
- * ships no API keys, so there is no LLM. The dev-tools prompt_capture provider
+ * ships no API keys, so there is no LLM. daedalus_ai_test's stub provider
  * returns a TOOL-FREE response, so it can never emit the function call that
- * would drive an eb_* tool; and its in-memory PromptCapture sink is readable
+ * would drive an eb_* tool; and its in-memory chat capture is readable
  * only in-process, never across the HTTP/WebDriver boundary. A WebDriver test
  * could therefore only assert that a chat bubble renders -- which proves the
  * chatbot mounts, not that a blueprint round-trips. So the faithful proof is to
@@ -154,8 +154,8 @@ class AssembledStackBlueprintRoundTripTest extends BrowserTestBase {
    *   proving the AI-style operation reached durable storage on the real model.
    *
    * What it deliberately does NOT do: there is no LLM, no agent loop, no chat
-   * UI, and no assertion about model output. prompt_capture cannot emit tool
-   * calls and its sink is in-process only, so a faithful AI-tool-driven JS test
+   * UI, and no assertion about model output. The stub provider cannot emit
+   * tool calls and its capture is in-process only, so a faithful AI-tool-driven JS test
    * is not achievable in CI; this proves everything up to (and the application
    * of) the JSON operation a real tool call would carry, which is the whole of
    * daedalus_blueprint's contract.

@@ -11,7 +11,6 @@ import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import {
   DEFAULT_VECTOR,
-  conditionAxisOrder,
   effectiveWidth,
   stateConditionNames,
   widthConditionFor,
@@ -19,27 +18,32 @@ import {
   conditionPose,
   poseableAxisConditions,
   styledConditions,
-  isFactCondition,
-  factConditionNames,
-  satisfiedFacts,
   conditionRenders,
+  stateQualifiers,
+  qualifierStates,
+  literalClauses,
 } from '../../js/src/editing-at.js';
+import {
+  conditionAxisOrder,
+  parseClause,
+} from '../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
 import { buildStack, deliveredEntry } from '../../js/src/style-stack.js';
 import { variantRecord } from './materials-fixture.mjs';
 
 // The shipped condition table's shape and order ((weight, id)-ordered, so
 // axes first-appear as state, width, scheme, motion), 'mobile' standing in
-// for the transitional @media width vocabulary the canvas cannot pose (no
-// band fact). The structured facts (band, preference) are what the model
-// reads; the wrapper strings ride along for the printer only.
+// for the transitional @media width vocabulary the canvas cannot pose (a
+// viewport query derives no band). The model reads the band and the
+// preference the clause grammar derives from each wrapper, never the
+// wrapper text itself.
 const CONDITIONS = {
   hover: { label: 'Hover', wrapper: ':hover', axis: 'state' },
   focus: { label: 'Focus', wrapper: ':focus', axis: 'state' },
-  narrow: { label: 'Narrow', wrapper: '@container (max-width: 767px)', axis: 'width', band: { max: 767 } },
-  medium: { label: 'Medium', wrapper: '@container (min-width: 768px) and (max-width: 1023px)', axis: 'width', band: { min: 768, max: 1023 } },
+  narrow: { label: 'Narrow', wrapper: '@container (max-width: 767px)', axis: 'width' },
+  medium: { label: 'Medium', wrapper: '@container (min-width: 768px) and (max-width: 1023px)', axis: 'width' },
   mobile: { label: 'Mobile', wrapper: '@media (max-width: 767px)', axis: 'width' },
-  dark: { label: 'Dark mode', wrapper: '@media (prefers-color-scheme: dark)', axis: 'scheme', preference: { feature: 'prefers-color-scheme', value: 'dark' } },
-  'reduced-motion': { label: 'Reduced motion', wrapper: '@media (prefers-reduced-motion: reduce)', axis: 'motion', preference: { feature: 'prefers-reduced-motion', value: 'reduce' } },
+  dark: { label: 'Dark mode', wrapper: '@media (prefers-color-scheme: dark)', axis: 'scheme' },
+  'reduced-motion': { label: 'Reduced motion', wrapper: '@media (prefers-reduced-motion: reduce)', axis: 'motion' },
 };
 
 test('axis order derives from first appearance, never hardcoded', () => {
@@ -67,15 +71,18 @@ test('effective width: posed wins, measured answers when unposed', () => {
   assert.equal(effectiveWidth(null), null);
 });
 
-test('preference parts read the structured fact, never the wrapper text', () => {
-  // A light-default site's twin vocabulary and a wrapper spelling the old
-  // regex would have misread: the fact decides.
+test('preference parts read the preference the clause grammar derives from the wrapper', () => {
+  // A light-default site's twin vocabulary, a wrapper with a media type
+  // before its feature and one spelled without the space: the derivation
+  // reads the feature test out of each.
   const conditions = {
-    light: { label: 'Light mode', wrapper: '@media screen and (prefers-color-scheme: light)', axis: 'scheme', preference: { feature: 'prefers-color-scheme', value: 'light' } },
-    dark: { label: 'Dark mode', wrapper: '@media (prefers-color-scheme:dark)', axis: 'scheme', preference: { feature: 'prefers-color-scheme', value: 'dark' } },
-    calm: { label: 'Calm', wrapper: '@media (prefers-reduced-motion: reduce)', axis: 'motion', preference: { feature: 'prefers-reduced-motion', value: 'reduce' } },
-    // A wrapper alone, no fact: unposable, and no forced value derives it.
-    dim: { label: 'Dim', wrapper: '@media (prefers-color-scheme: dark)', axis: 'scheme' },
+    light: { label: 'Light mode', wrapper: '@media screen and (prefers-color-scheme: light)', axis: 'scheme' },
+    dark: { label: 'Dark mode', wrapper: '@media (prefers-color-scheme:dark)', axis: 'scheme' },
+    calm: { label: 'Calm', wrapper: '@media (prefers-reduced-motion: reduce)', axis: 'motion' },
+    // A scheme-axis condition whose preference the emulation cannot force
+    // (no vector value makes "more" true): unposable, and no forced value
+    // derives it.
+    dim: { label: 'Dim', wrapper: '@media (prefers-contrast: more)', axis: 'scheme' },
   };
   assert.equal(vectorCondition({ scheme: 'light' }, null, conditions), 'light');
   assert.equal(vectorCondition({ scheme: 'dark' }, null, conditions), 'dark');
@@ -84,7 +91,7 @@ test('preference parts read the structured fact, never the wrapper text', () => 
   assert.deepEqual(conditionPose('calm', conditions).vector.motion, 'reduce');
   assert.equal(conditionPose('dim', conditions).complete, false);
   assert.deepEqual(poseableAxisConditions('scheme', conditions), ['light', 'dark']);
-  // Without any facts the vector's preference axes contribute nothing.
+  // A wrapper deriving no forceable preference contributes nothing.
   assert.equal(vectorCondition({ scheme: 'dark' }, null, { dim: conditions.dim }), 'default');
 });
 
@@ -247,138 +254,204 @@ test('the Styled-at chips read the map\'s stack: worn conditions beside the own,
   assert.deepEqual(styledConditions(deliveredEntry(buildStack(args))), ['medium', 'narrow', 'dark', 'hover']);
 });
 
+test('state qualifiers: a published state on a top-level compound, by compound, never inside :has() or :not()', () => {
+  // The reveal: hover on the `li`, compound 0; two states on two
+  // compounds in chain order; the anchor is compound 0.
+  assert.deepEqual(stateQualifiers('li:hover > ul', CONDITIONS), [{ index: 0, state: 'hover' }]);
+  assert.deepEqual(stateQualifiers('> d-text:hover a:focus', CONDITIONS), [
+    { index: 0, state: 'hover' },
+    { index: 1, state: 'focus' },
+  ]);
+  assert.deepEqual(stateQualifiers('&:hover > ul', CONDITIONS), [{ index: 0, state: 'hover' }]);
+  assert.deepEqual(stateQualifiers('a:focus:hover', CONDITIONS), [
+    { index: 0, state: 'focus' },
+    { index: 0, state: 'hover' },
+  ]);
+  // Not states: a position, a class, an attribute, an unpublished
+  // pseudo-class, a state inside :has() or :not() (no prefix to stamp).
+  assert.deepEqual(stateQualifiers('> *:first-child', CONDITIONS), []);
+  assert.deepEqual(stateQualifiers('li.active[aria-current="page"] > ul', CONDITIONS), []);
+  assert.deepEqual(stateQualifiers('a:visited', CONDITIONS), []);
+  assert.deepEqual(stateQualifiers('&:focus-within > ul', CONDITIONS), []);
+  assert.deepEqual(stateQualifiers('> d-text:has(a:hover)', CONDITIONS), []);
+  assert.deepEqual(stateQualifiers('> *:not(:hover)', CONDITIONS), []);
+  // A state inside an `:is()` member stands on the member's host
+  // compound and is found with that compound's index (the reveal
+  // `.menu-item:is(:focus-within, :hover) > ul` poses hover on its
+  // `.menu-item`; an unpublished member poses nothing); members in the
+  // grammar's sorted order; `:is()` under `:has()` still has no prefix.
+  assert.deepEqual(stateQualifiers('.menu-item:is(:focus-within, :hover) > ul', CONDITIONS), [
+    { index: 0, state: 'hover' },
+  ]);
+  assert.deepEqual(stateQualifiers('> d-text:is(:focus, :hover) a', CONDITIONS), [
+    { index: 0, state: 'focus' },
+    { index: 0, state: 'hover' },
+  ]);
+  assert.deepEqual(stateQualifiers('> d-text:has(*:is(a:hover, em))', CONDITIONS), []);
+  // The owner itself, no text, text outside the grammar: nothing.
+  assert.deepEqual(stateQualifiers(null, CONDITIONS), []);
+  assert.deepEqual(stateQualifiers('', CONDITIONS), []);
+  assert.deepEqual(stateQualifiers('div > > p', CONDITIONS), []);
+  // The state is the TABLE's name, found by wrapper, never the
+  // pseudo-class word; a pseudo wrapper off the state axis is no state.
+  const renamed = {
+    hovered: { label: 'Hovered', wrapper: ':hover', axis: 'state' },
+    odd: { label: 'Odd', wrapper: ':focus', axis: 'width' },
+  };
+  assert.deepEqual(stateQualifiers('li:hover > a:focus', renamed), [{ index: 0, state: 'hovered' }]);
+  assert.deepEqual(stateQualifiers('li:hover > ul', {}), []);
+  // The states a selector lives at, each once, in table order.
+  assert.deepEqual(qualifierStates('> d-text:focus a:hover', CONDITIONS), ['hover', 'focus']);
+  assert.deepEqual(qualifierStates('li:hover > ul:hover', CONDITIONS), ['hover']);
+  assert.deepEqual(qualifierStates('.menu-item:is(:focus-within, :hover) > ul', CONDITIONS), ['hover']);
+  assert.deepEqual(qualifierStates('> d-text', CONDITIONS), []);
+  assert.deepEqual(qualifierStates(null, CONDITIONS), []);
+});
 
-// The shipped table with the structural axis between state and width:
-// facts flagged by the payload, never posable.
-const WITH_FACTS = {
-  hover: CONDITIONS.hover,
-  focus: CONDITIONS.focus,
-  'first-child': { label: 'First child', wrapper: ':first-child', axis: 'structural', fact: true },
-  'last-child': { label: 'Last child', wrapper: ':last-child', axis: 'structural', fact: true },
-  'only-child': { label: 'Only child', wrapper: ':only-child', axis: 'structural', fact: true },
-  empty: { label: 'Empty', wrapper: ':empty', axis: 'structural', fact: true },
-  odd: { label: 'Odd', wrapper: ':nth-child(odd)', axis: 'structural', fact: true },
-  even: { label: 'Even', wrapper: ':nth-child(even)', axis: 'structural', fact: true },
-  narrow: CONDITIONS.narrow,
-  medium: CONDITIONS.medium,
-  dark: CONDITIONS.dark,
-  'reduced-motion': CONDITIONS['reduced-motion'],
+test('a row renders exactly when the canvas stands at its compound', () => {
+  // A pose: lit at its compound, nowhere else (a position is selector
+  // text, never a condition, so nothing but the pose decides).
+  assert.equal(conditionRenders('hover', 'hover'), true);
+  assert.equal(conditionRenders('hover', 'default'), false);
+  assert.equal(conditionRenders('hover', 'hover+narrow'), false);
+  assert.equal(conditionRenders('hover+narrow', 'hover+narrow'), true);
+  assert.equal(conditionRenders('narrow', 'hover+narrow'), false);
+  // 'default' is the absence of conditions: never lit.
+  assert.equal(conditionRenders('default', 'default'), false);
+  assert.equal(conditionRenders(null, 'hover'), false);
+});
+
+// ---------------------------------------------------------------------------
+// Literal clauses in use: the WHEN a site admitted beside its references.
+// ---------------------------------------------------------------------------
+
+const BAND = '@container (min-width: 400px) and (max-width: 480px)';
+const SECTION = 'container:11111111-1111-1111-1111-111111111111';
+const MAP = {
+  [SECTION]: {
+    default: { gap: '1rem' },
+    [BAND]: { gap: 'var(--space-8)' },
+    // An emptied block holds nothing: not in use.
+    '@container (min-width: 900px)': {},
+    // A literal equal to a published wrapper IS the reference, never a
+    // literal clause.
+    '@container (max-width: 767px)': { gap: '0' },
+  },
+  [`${SECTION}::> d-text`]: {
+    ':checked': { color: 'red' },
+    'hover+@media (prefers-contrast: more)': { color: 'blue' },
+  },
+  // Another element's rows are not this element's.
+  'block:22222222-2222-2222-2222-222222222222': {
+    '@supports (display: grid)': { display: 'grid' },
+  },
 };
+const LITERALS = literalClauses(MAP, SECTION, CONDITIONS);
 
-// The lean node tree (the blueprint's `layout`, selector-matcher.js's
-// input): a container section holding three blocks and an empty nested
-// section, a multi-region section holding one block per region wrapper.
-const LAYOUT = [
-  {
-    kind: 'container',
-    uuid: 'sec-1',
-    layout_id: 'daedalus_stylish_container',
-    children: [
-      { kind: 'block', uuid: 'blk-a', block_type: 'text' },
-      { kind: 'block', uuid: 'blk-b', block_type: 'text' },
-      { kind: 'block', uuid: 'blk-c', block_type: 'image' },
-      { kind: 'container', uuid: 'sec-nested', layout_id: 'daedalus_stylish_container', children: [] },
+test('literal clauses in use: the element\'s own and its rules\' literals, each once, map order', () => {
+  assert.deepEqual(
+    LITERALS.map(({ kind, text }) => [kind, text]),
+    [
+      ['literal', BAND],
+      ['literal', ':checked'],
+      ['literal', '@media (prefers-contrast: more)'],
     ],
-  },
-  {
-    kind: 'container',
-    uuid: 'sec-2',
-    layout_id: 'layout_twocol',
-    children: [
-      { kind: 'region', region: 'first', children: [{ kind: 'block', uuid: 'blk-d', block_type: 'text' }] },
-      {
-        kind: 'region',
-        region: 'second',
-        children: [
-          { kind: 'block', uuid: 'blk-e', block_type: 'text' },
-          { kind: 'block', uuid: 'blk-f', block_type: 'text' },
-        ],
-      },
-    ],
-  },
-];
-
-test('facts are the payload flag, listed apart from the state vocabulary', () => {
-  assert.equal(isFactCondition('first-child', WITH_FACTS), true);
-  assert.equal(isFactCondition('hover', WITH_FACTS), false);
-  assert.equal(isFactCondition('bogus', WITH_FACTS), false);
-  assert.deepEqual(factConditionNames(WITH_FACTS), ['first-child', 'last-child', 'only-child', 'empty', 'odd', 'even']);
-  assert.deepEqual(factConditionNames(CONDITIONS), []);
-  // The state vocabulary (the force-state menu) never carries a fact.
-  assert.deepEqual(stateConditionNames(WITH_FACTS), ['hover', 'focus']);
-  // The structural axis takes its canonical place between state and width.
-  assert.deepEqual(conditionAxisOrder(WITH_FACTS), ['state', 'structural', 'width', 'scheme', 'motion']);
+  );
+  // The band and the stamp ride the records the chip row and the ruler read.
+  assert.deepEqual(LITERALS[0].band, { min: 400, max: 480 });
+  assert.equal(LITERALS[1].form, 'pseudo');
+  // Nothing selected, nothing in use; a map without the key the same.
+  assert.deepEqual(literalClauses(MAP, null, CONDITIONS), []);
+  assert.deepEqual(literalClauses({}, SECTION, CONDITIONS), []);
 });
 
-test('a fact never derives from the vector: no pose reaches it', () => {
-  // A full pose with a forced state derives the same compound whether or
-  // not the table declares facts.
-  assert.equal(vectorCondition({ width: 375, scheme: 'dark', motion: 'auto' }, 'hover', WITH_FACTS), 'hover+narrow+dark');
-  // A fact handed as the force state is not a state: ignored.
-  assert.equal(vectorCondition({ width: null }, 'first-child', WITH_FACTS), 'default');
-  // The structural axis offers nothing to pose.
-  assert.deepEqual(poseableAxisConditions('structural', WITH_FACTS), []);
+test('a literal band in use is the write target where it holds, the reference elsewhere', () => {
+  // 440 sits inside narrow (≤767) AND the literal (400..480): the
+  // cascade delivers the literal last, so it is the write target.
+  assert.equal(widthConditionFor(440, CONDITIONS, LITERALS), BAND);
+  assert.equal(vectorCondition({ width: 440 }, null, CONDITIONS, LITERALS), BAND);
+  // Outside the literal's band the reference answers as before.
+  assert.equal(widthConditionFor(300, CONDITIONS, LITERALS), 'narrow');
+  assert.equal(widthConditionFor(800, CONDITIONS, LITERALS), 'medium');
+  // Without the literals in use (another element selected) 440 is narrow.
+  assert.equal(widthConditionFor(440, CONDITIONS), 'narrow');
+  // Two literals holding: the later in map order wins, as the cascade does.
+  const inner = parseClause('@container (min-width: 420px) and (max-width: 460px)', CONDITIONS);
+  assert.equal(widthConditionFor(440, CONDITIONS, [LITERALS[0], inner]), inner.text);
+  assert.equal(widthConditionFor(440, CONDITIONS, [inner, LITERALS[0]]), BAND);
+  // The compound spells canonically: the published state axis first,
+  // the literal width clause where the reference would stand.
+  assert.equal(
+    vectorCondition({ width: 440, scheme: 'dark' }, 'hover', CONDITIONS, LITERALS),
+    `hover+${BAND}+dark`,
+  );
 });
 
-test('driving to a compound skips its facts, complete', () => {
-  // A pure fact drives the canvas nowhere: the resting pose, complete
-  // (the fact is the selection's place, not a canvas axis).
-  assert.deepEqual(conditionPose('first-child', WITH_FACTS), {
-    vector: { ...DEFAULT_VECTOR },
+test('a literal state in use is posed by its stamp word', () => {
+  // The force state carries the stamp word the printed dual matches
+  // (`checked`); the write target is the clause's text.
+  assert.equal(vectorCondition(null, 'checked', CONDITIONS, LITERALS), ':checked');
+  // Not in use, the word is no state.
+  assert.equal(vectorCondition(null, 'checked', CONDITIONS), 'default');
+  // A published name still spells itself.
+  assert.equal(vectorCondition(null, 'hover', CONDITIONS, LITERALS), 'hover');
+});
+
+test('a literal preference in use answers to the emulation vector by its feature', () => {
+  // No published `light`: a literal light-scheme clause in use is what
+  // forcing light writes at; the preference's FEATURE decides, whatever
+  // axis name the clause carries.
+  const light = parseClause('@media (prefers-color-scheme: light)', CONDITIONS);
+  assert.equal(vectorCondition({ scheme: 'light' }, null, CONDITIONS, [light]), light.text);
+  // A published condition testing the same wins over a literal in use.
+  assert.equal(vectorCondition({ scheme: 'dark' }, null, CONDITIONS, [parseClause('@media (prefers-color-scheme: dark)', {})]), 'dark');
+  // A preference no vector axis emulates contributes nothing.
+  assert.equal(vectorCondition({ scheme: 'dark' }, null, CONDITIONS, [LITERALS[2]]), 'dark');
+});
+
+test('drive the canvas to a literal: the band\'s midpoint, the stamp word, the forced value', () => {
+  assert.deepEqual(conditionPose(BAND, CONDITIONS), {
+    vector: { width: 440, scheme: 'auto', motion: 'auto' },
     state: null,
     complete: true,
   });
-  // A mixed compound poses its posable parts and skips the fact.
-  assert.deepEqual(conditionPose('hover+odd+narrow', WITH_FACTS), {
-    vector: { ...DEFAULT_VECTOR, width: 384 },
+  assert.deepEqual(conditionPose(':checked', CONDITIONS), {
+    vector: { width: null, scheme: 'auto', motion: 'auto' },
+    state: 'checked',
+    complete: true,
+  });
+  assert.deepEqual(conditionPose('@media (prefers-color-scheme: light)', CONDITIONS).vector.scheme, 'light');
+  assert.deepEqual(conditionPose('@media (prefers-reduced-motion: no-preference)', CONDITIONS).vector.motion, 'full');
+  // The mixed compound poses every clause.
+  assert.deepEqual(conditionPose(`hover+${BAND}+dark`, CONDITIONS), {
+    vector: { width: 440, scheme: 'dark', motion: 'auto' },
     state: 'hover',
     complete: true,
   });
+  // What the canvas cannot pose: a @media width, a supports test, a
+  // preference no axis emulates, a state no stamp stands in for.
+  for (const clause of ['@media (min-width: 900px)', '@supports (display: grid)', '@media (prefers-contrast: more)', ':visited', ':target']) {
+    const pose = conditionPose(clause, CONDITIONS);
+    assert.equal(pose.complete, false, clause);
+    assert.equal(pose.state, null, clause);
+    assert.equal(pose.vector.width, null, clause);
+  }
 });
 
-test('satisfied facts read the sibling index from the blueprint tree', () => {
-  const facts = (key) => [...satisfiedFacts(LAYOUT, key, WITH_FACTS)].sort();
-  // Among a children section's four nodes: first, odd; middle even;
-  // the nested empty section is last, even, and empty.
-  assert.deepEqual(facts('block:blk-a'), ['first-child', 'odd']);
-  assert.deepEqual(facts('block:blk-b'), ['even']);
-  assert.deepEqual(facts('block:blk-c'), ['odd']);
-  assert.deepEqual(facts('container:sec-nested'), ['empty', 'even', 'last-child']);
-  // A region wrapper's nodes are one sibling list each: alone in a
-  // region is first, last, only, odd.
-  assert.deepEqual(facts('block:blk-d'), ['first-child', 'last-child', 'odd', 'only-child']);
-  assert.deepEqual(facts('block:blk-f'), ['even', 'last-child']);
-  // Root sections are siblings of one another; a block is never empty
-  // (the tree carries no content).
-  assert.deepEqual(facts('container:sec-1'), ['first-child', 'odd']);
-  assert.deepEqual(facts('container:sec-2'), ['even', 'last-child']);
-  // A selector key reads its owner's place; keys the tree does not carry
-  // satisfy nothing; a table without facts yields nothing.
-  assert.deepEqual(facts('block:blk-a::> *'), ['first-child', 'odd']);
-  assert.deepEqual(facts('entity:root'), []);
-  assert.deepEqual(facts('block:ghost'), []);
-  assert.deepEqual(facts(null), []);
-  assert.deepEqual([...satisfiedFacts(LAYOUT, 'block:blk-a', CONDITIONS)], []);
-  assert.deepEqual([...satisfiedFacts([], 'block:blk-a', WITH_FACTS)], []);
+test('drive then derive round-trips every posable literal in use', () => {
+  for (const clause of [BAND, ':checked', `hover+${BAND}+dark`]) {
+    const pose = conditionPose(clause, CONDITIONS);
+    assert.equal(pose.complete, true, clause);
+    assert.equal(vectorCondition(pose.vector, pose.state, CONDITIONS, LITERALS), clause);
+  }
+  // A literal row lights exactly when the canvas stands at it.
+  const posed = vectorCondition({ width: 440 }, null, CONDITIONS, LITERALS);
+  assert.equal(conditionRenders(BAND, posed), true);
+  assert.equal(conditionRenders('narrow', posed), false);
 });
 
-test('a row renders when its posable parts are posed and its facts hold', () => {
-  const satisfied = new Set(['first-child', 'odd']);
-  // A pure pose: lit exactly at its compound (the old rule).
-  assert.equal(conditionRenders('hover', 'hover', satisfied, WITH_FACTS), true);
-  assert.equal(conditionRenders('hover', 'default', satisfied, WITH_FACTS), false);
-  assert.equal(conditionRenders('hover', 'hover+narrow', satisfied, WITH_FACTS), false);
-  // A pure fact: lit when satisfied, at any pose; unlit otherwise.
-  assert.equal(conditionRenders('first-child', 'default', satisfied, WITH_FACTS), true);
-  assert.equal(conditionRenders('first-child', 'hover', satisfied, WITH_FACTS), false);
-  assert.equal(conditionRenders('last-child', 'default', satisfied, WITH_FACTS), false);
-  // A mixed compound needs both halves.
-  assert.equal(conditionRenders('hover+first-child', 'hover', satisfied, WITH_FACTS), true);
-  assert.equal(conditionRenders('hover+first-child', 'default', satisfied, WITH_FACTS), false);
-  assert.equal(conditionRenders('hover+even', 'hover', satisfied, WITH_FACTS), false);
-  assert.equal(conditionRenders('odd+narrow', 'narrow', satisfied, WITH_FACTS), true);
-  // 'default' is the absence of conditions: never lit.
-  assert.equal(conditionRenders('default', 'default', satisfied, WITH_FACTS), false);
-  // Without facts declared, a fact-looking part is just an unposed part.
-  assert.equal(conditionRenders('first-child', 'default', new Set(), CONDITIONS), false);
+test('the axis selects still offer the published references alone', () => {
+  // A literal in use is a chip entry (chip-row-model.js), never a
+  // published offer.
+  assert.deepEqual(poseableAxisConditions('width', CONDITIONS), ['narrow', 'medium']);
 });

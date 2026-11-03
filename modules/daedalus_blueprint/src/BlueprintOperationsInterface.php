@@ -182,6 +182,41 @@ interface BlueprintOperationsInterface {
   public function addSection(HostInterface $host, array $location, ?string $uuid = NULL, ?string $layout = NULL, array $layout_settings = [], ?string $blueprint = NULL, ?string $slot = NULL): BlueprintResult;
 
   /**
+   * Stamps an EXISTING element as a placement of a blueprint.
+   *
+   * The one writer of a provenance stamp after birth. A placement made from
+   * the palette is stamped at creation (addSection's $blueprint, add_element's
+   * additional data); the container a blueprint is SAVED or PUSHED from was
+   * born unstamped, and this writes the same fact onto it afterwards, because
+   * that container is the blueprint's first placement: the Update verb offers
+   * on it by the stamp, and the blueprint's owned looks apply inside it by
+   * the stamp (BlueprintVariantOwnershipChecker). The stamp lands in the
+   * storage the serializer reads for that element and the checker walks: a
+   * container at any depth is a section to the locator (a nested container's
+   * component uuid is its embedded section's), so it takes the section's
+   * third-party settings (LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, the
+   * uniform slot addSection's birth stamp uses at every depth); a block root
+   * is a component and takes its additional data (add_element's slot). An
+   * existing stamp is overwritten: the caller decides whether a stamped
+   * source is re-owned (a save) or left alone (a push). The write is staged
+   * on the host like any operation's, so it rides the batch's rollback and
+   * the caller's commit.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host carrying the element.
+   * @param string $uuid
+   *   The element's uuid (a section's daedalus_layout uuid or a component's).
+   * @param string $blueprint
+   *   The blueprint machine name the element is a placement of.
+   *
+   * @throws \InvalidArgumentException
+   *   When the host carries no such element, or the element is a paragraph
+   *   (never a placement). Both are programming errors: the caller has just
+   *   captured the element it names.
+   */
+  public function stampProvenance(HostInterface $host, string $uuid, string $blueprint): void;
+
+  /**
    * Removes an element by UUID.
    *
    * @param \Drupal\daedalus_blueprint\Host\HostInterface $host

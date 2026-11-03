@@ -3,11 +3,12 @@
  * lock.
  *
  * ElementResolverTest::testClientTwinEquivalence (PHPUnit) resolves the
- * same cases through the PHP ElementResolver — real entities, the real
- * layered declarations — and pipes each case's declaration, data facade,
- * and depth here as JSON on stdin:
+ * same cases through the PHP ElementResolver — its entity entry against
+ * real entities and its facade entry (resolveData()) against the same
+ * facade sent here, over the real layered declarations — and pipes each
+ * case's declaration, data facade, and depth here as JSON on stdin:
  *   {cases: [{declaration, data, depth}, ...]}
- * (the PHP side's emptiness input rides the facade as data.empty)
+ * (the entity entry's emptiness input rides the facade as data.empty)
  * stdout is a JSON array of the client twin's resolved trees; the test
  * asserts deep equality with the server's trees, so the two resolvers are
  * locked together (the CssPrinter/printer.js pattern): the live editing

@@ -60,9 +60,9 @@ const TITLE = {
 // A materials record in the delivery's shape (MaterialRecord::toArray()).
 const HERO = {
   kind: 'blueprint',
-  id: 'hero_band',
-  label: 'Hero band',
-  description: 'A band with a headline.',
+  id: 'hero_section',
+  label: 'Hero section',
+  description: 'A section with a headline.',
   icon: null,
   origin: 'user',
   updatable: true,
@@ -72,10 +72,10 @@ const HERO = {
 
 test('the blueprint id grammar: blueprint:ID, read both ways', () => {
   assert.equal(BLUEPRINT_PREFIX, 'blueprint:');
-  assert.equal(blueprintFaceId('hero_band'), 'blueprint:hero_band');
-  assert.equal(isBlueprintId('blueprint:hero_band'), true);
+  assert.equal(blueprintFaceId('hero_section'), 'blueprint:hero_section');
+  assert.equal(isBlueprintId('blueprint:hero_section'), true);
   assert.equal(isBlueprintId('inline_block:text'), false);
-  assert.equal(blueprintRecordId('blueprint:hero_band'), 'hero_band');
+  assert.equal(blueprintRecordId('blueprint:hero_section'), 'hero_section');
   assert.equal(blueprintRecordId('inline_block:text'), null);
 });
 
@@ -105,10 +105,10 @@ test('editable: learned from the answer for a block, from the record for a bluep
 
 test('a blueprint face carries the record under the face grammar', () => {
   const face = blueprintFace(HERO);
-  assert.equal(face.id, 'blueprint:hero_band');
+  assert.equal(face.id, 'blueprint:hero_section');
   assert.equal(face.kind, KIND_BLUEPRINT);
-  assert.equal(face.label, 'Hero band');
-  assert.equal(face.description, 'A band with a headline.');
+  assert.equal(face.label, 'Hero section');
+  assert.equal(face.description, 'A section with a headline.');
   assert.equal(face.icon, null);
   assert.deepEqual(face.groups, ['marketing', 'events']);
   assert.equal(face.favorite, true);
@@ -124,7 +124,7 @@ test('faceList: the blocks then the blueprints, each id once', () => {
   const faces = faceList([CONTAINER, TEXT, TITLE], [HERO]);
   assert.deepEqual(
     faces.map((face) => face.id),
-    [CONTAINER_ID, 'inline_block:text', 'field_block:node:page:title', 'blueprint:hero_band'],
+    [CONTAINER_ID, 'inline_block:text', 'field_block:node:page:title', 'blueprint:hero_section'],
   );
   // A repeated id keeps its first face.
   const twice = faceList([TEXT, { ...TEXT, label: 'Text again' }], []);
@@ -148,7 +148,7 @@ test('isFavorite: the editor\'s mark over the face\'s default', () => {
   assert.equal(isFavorite(text, { 'field_block:node:page:title': true }), true);
   // A blueprint's mark is read by the same rule under its face id.
   const hero = blueprintFace(HERO);
-  assert.equal(isFavorite(hero, { 'blueprint:hero_band': false }), false);
+  assert.equal(isFavorite(hero, { 'blueprint:hero_section': false }), false);
   // Marks are read as booleans whatever was stored.
   assert.equal(isFavorite(title, { 'field_block:node:page:title': 1 }), true);
   assert.equal(isFavorite(text, { 'inline_block:text': 0 }), false);
@@ -166,25 +166,25 @@ test('toggledMarks: a mark is written only where it differs from the default', (
   assert.deepEqual(removed, { 'inline_block:text': false });
   assert.deepEqual(toggledMarks(text, removed), {});
   // Other marks survive, and the given map is never mutated.
-  const marks = { 'blueprint:hero_band': false };
+  const marks = { 'blueprint:hero_section': false };
   const next = toggledMarks(title, marks);
-  assert.deepEqual(next, { 'blueprint:hero_band': false, 'field_block:node:page:title': true });
-  assert.deepEqual(marks, { 'blueprint:hero_band': false });
+  assert.deepEqual(next, { 'blueprint:hero_section': false, 'field_block:node:page:title': true });
+  assert.deepEqual(marks, { 'blueprint:hero_section': false });
 });
 
 test('newBlueprintIds: a blueprint record the store did not hold is new, under its face id', () => {
   const card = { ...HERO, id: 'card', label: 'Card', favorite: false };
   assert.deepEqual(newBlueprintIds([HERO], [HERO, card]), ['blueprint:card']);
   // Two minted in one delivery answer in the delivery's order.
-  const band = { ...HERO, id: 'band', label: 'Band', favorite: false };
-  assert.deepEqual(newBlueprintIds([HERO], [band, HERO, card]), ['blueprint:band', 'blueprint:card']);
+  const section = { ...HERO, id: 'section', label: 'Section', favorite: false };
+  assert.deepEqual(newBlueprintIds([HERO], [section, HERO, card]), ['blueprint:section', 'blueprint:card']);
   // A remove (a page-scope save, a deletion) is nothing new.
   assert.deepEqual(newBlueprintIds([HERO, card], [HERO]), []);
   assert.deepEqual(newBlueprintIds([HERO], []), []);
 });
 
 test('newBlueprintIds: an update upserts a held id and is not new', () => {
-  const updated = { ...HERO, label: 'Hero band, renamed', description: 'Edited.', favorite: true };
+  const updated = { ...HERO, label: 'Hero section, renamed', description: 'Edited.', favorite: true };
   assert.deepEqual(newBlueprintIds([HERO], [updated]), []);
   // The same id held and delivered, whatever else moved on the record.
   assert.deepEqual(newBlueprintIds([{ ...HERO, favorite: false }], [{ ...HERO, favorite: true }]), []);
@@ -201,8 +201,8 @@ test('newBlueprintIds: a block face never counts, in either list', () => {
 });
 
 test('newBlueprintIds: against nothing held every record is new, so the component seeds its baseline from the records at mount and never asks this of a boot', () => {
-  assert.deepEqual(newBlueprintIds([], [HERO]), ['blueprint:hero_band']);
-  assert.deepEqual(newBlueprintIds(undefined, [HERO]), ['blueprint:hero_band']);
+  assert.deepEqual(newBlueprintIds([], [HERO]), ['blueprint:hero_section']);
+  assert.deepEqual(newBlueprintIds(undefined, [HERO]), ['blueprint:hero_section']);
   // Seeded from what the mount read, the first delivery of the same set
   // is nothing new.
   assert.deepEqual(newBlueprintIds([HERO], [HERO]), []);

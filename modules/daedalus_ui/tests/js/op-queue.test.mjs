@@ -93,10 +93,10 @@ const record = (fields) => ({
 });
 const RECORDS = [
   record({ kind: 'token', id: 'color/accent', label: 'accent', value: { default: '#1475ad' }, group: 'color', spellings: { style: 'var(--color-accent)' }, origin: 'shipped' }),
-  record({ kind: 'swatch', id: 'lime_green', label: 'Lime green', value: '#4dff8c', group: 'color', spellings: { style: 'var(--swatch-lime_green)' } }),
+  record({ kind: 'token', id: 'color/lime-green', label: 'lime-green', value: '#4dff8c', group: 'color', spellings: { style: 'var(--color-lime-green)' } }),
   record({ kind: 'variant', id: 'button', label: 'Button', group: 'style', spellings: { class: 'button' }, scope: 'block_type:text', origin: 'shipped' }),
 ];
-const CORAL = record({ kind: 'swatch', id: 'coral', label: 'Coral', value: '#ff7f50', group: 'color', spellings: { style: 'var(--swatch-coral)' } });
+const CORAL = record({ kind: 'token', id: 'color/coral', label: 'coral', value: '#ff7f50', group: 'color', spellings: { style: 'var(--color-coral)' } });
 const SCOPE = 'node-uuid:en:live';
 
 /**
@@ -142,11 +142,11 @@ initMaterialsStore();
 initSelectionFacade();
 
 const materialsPosts = () => posted.filter((entry) => entry.name === `materials:${SCOPE}`);
-const swatchIds = () => store.getState().materials.records.swatch.map((entry) => entry.id);
+const tokenIds = () => store.getState().materials.records.token.map((entry) => entry.id);
 
 test('the store boots from the drupalSettings envelope beside the blueprint mirror', () => {
   assert.equal(store.getState().materials.booted, true);
-  assert.deepEqual(swatchIds(), ['lime_green']);
+  assert.deepEqual(tokenIds(), ['color/accent', 'color/lime-green']);
   assert.equal(store.getState().blueprint.root.uuid, 'root-uuid');
   // Re-attaching with the same envelope boots nothing (identity kept).
   const before = store.getState().materials.records;
@@ -166,7 +166,7 @@ test('applyResponse applies materials and history on a page payload', async () =
     history: { pointer: 3, can_undo: true, can_redo: false, entries: [{ seq: 3, label: 'Minted Coral' }] },
     materials: { upsert: [CORAL], remove: [] },
   });
-  assert.deepEqual(swatchIds(), ['coral', 'lime_green']);
+  assert.deepEqual(tokenIds(), ['color/accent', 'color/coral', 'color/lime-green']);
   assert.notEqual(store.getState().blueprint.blueprint, mirror);
   assert.equal(store.getState().blueprint.blueprint._probe.mutated, true);
   assert.equal(history.getState().pointer, 3);
@@ -195,9 +195,9 @@ test('a materials-only payload applies its delta and leaves the mirror alone', a
     markup: [],
     attachments: [],
     drupal_commands: [],
-    materials: { upsert: [], remove: [{ kind: 'swatch', id: 'lime_green' }] },
+    materials: { upsert: [], remove: [{ kind: 'token', id: 'color/lime-green' }] },
   });
-  assert.deepEqual(swatchIds(), ['coral']);
+  assert.deepEqual(tokenIds(), ['color/accent', 'color/coral']);
   assert.equal(store.getState().blueprint.blueprint, mirror);
   assert.equal(store.getState().blueprint.root, root);
 });
@@ -211,7 +211,7 @@ test('a payload for another entity applies its delta without replacing the mirro
     materials: { upsert: [{ ...CORAL, value: '#ff6f40' }], remove: [] },
   });
   assert.equal(store.getState().blueprint.blueprint, mirror);
-  assert.equal(store.getState().materials.records.swatch[0].value, '#ff6f40');
+  assert.equal(store.getState().materials.records.token.find((entry) => entry.id === 'color/coral').value, '#ff6f40');
 });
 
 test('a malformed delta fails loudly instead of being absorbed', async () => {
@@ -224,8 +224,8 @@ test('a malformed delta fails loudly instead of being absorbed', async () => {
 test('a delta relayed from another window is applied and not rung back', () => {
   const relayed = materialsPosts().length;
   const other = new FakeBroadcastChannel(`materials:${SCOPE}`);
-  other.postMessage({ upsert: [], remove: [{ kind: 'swatch', id: 'coral' }], type: 'delta' });
-  assert.deepEqual(swatchIds(), []);
+  other.postMessage({ upsert: [], remove: [{ kind: 'token', id: 'color/coral' }], type: 'delta' });
+  assert.deepEqual(tokenIds(), ['color/accent']);
   // The other window's own post is the only new frame: this window did not relay it.
   assert.equal(materialsPosts().length, relayed + 1);
   other.close();
@@ -233,14 +233,14 @@ test('a delta relayed from another window is applied and not rung back', () => {
 
 test('the facade reads from the store and binds the grammar to its roster', async () => {
   const { Materials } = Drupal.Daedalus;
-  assert.deepEqual(Materials.KINDS, ['token', 'swatch', 'variant', 'blueprint', 'animation', 'font']);
+  assert.deepEqual(Materials.KINDS, ['token', 'variant', 'blueprint', 'animation', 'font']);
   assert.equal(Materials.isBooted(), true);
   assert.equal(Materials.get('variant', 'button').label, 'Button');
-  assert.equal(Materials.has('swatch', 'coral'), false);
+  assert.equal(Materials.has('token', 'color/coral'), false);
   assert.equal(Materials.bySpelling('class', 'button').id, 'button');
   assert.deepEqual(Object.keys(Materials.spellings('style')), ['var(--color-accent)']);
   assert.equal(Materials.resolveValue('var(--color-accent)', Materials.SLOT.STYLE).kind, Materials.KIND.TOKEN);
-  assert.equal(Materials.resolveValue('var(--swatch-coral)', 'style').kind, Materials.KIND.UNKNOWN);
+  assert.equal(Materials.resolveValue('var(--color-coral)', 'style').kind, Materials.KIND.UNKNOWN);
   assert.equal(Materials.resolveValue('#fff', 'style').kind, Materials.KIND.LITERAL);
   assert.equal(Materials.canonical('var( --color-accent )', 'style'), 'var(--color-accent)');
   assert.equal(Materials.spell(Materials.get('variant', 'button'), 'class'), 'button');
@@ -248,10 +248,10 @@ test('the facade reads from the store and binds the grammar to its roster', asyn
   assert.equal(Materials.applicable(Materials.get('variant', 'button'), 'kind:container'), false);
 
   const changes = [];
-  const unsubscribe = Materials.onChange((roster) => changes.push(roster.ofKind('swatch').map((entry) => entry.id)));
+  const unsubscribe = Materials.onChange((roster) => changes.push(roster.ofKind('token').map((entry) => entry.id)));
   await applyResponse({ success: true, materials: { upsert: [CORAL], remove: [] } });
-  assert.deepEqual(changes, [['coral']]);
-  assert.equal(Materials.resolveValue('var(--swatch-coral)', 'style').record, Materials.get('swatch', 'coral'));
+  assert.deepEqual(changes, [['color/accent', 'color/coral']]);
+  assert.equal(Materials.resolveValue('var(--color-coral)', 'style').record, Materials.get('token', 'color/coral'));
   assert.equal(Materials.getRoster(), Materials.getRoster());
   // A selection change is not a materials change.
   Drupal.Daedalus.Selection.select('block:u1');
@@ -429,8 +429,8 @@ test('a markup swap revalidates the write address: an address whose key has no e
     // Seated through the slice: the facade's ancestry check has no
     // projection index to consult in this suite.
     store.dispatch(setTarget({ key: 'block:kept', selector: '.s-abc' }));
-    store.dispatch(setAddress({ key: 'container:gone', selector: '> pb-text' }));
-    assert.deepEqual(Selection.getAddress(), { key: 'container:gone', selector: '> pb-text' });
+    store.dispatch(setAddress({ key: 'container:gone', selector: '> d-text' }));
+    assert.deepEqual(Selection.getAddress(), { key: 'container:gone', selector: '> d-text' });
     await swap();
     assert.equal(Selection.getSelected(), 'block:kept');
     assert.deepEqual(Selection.getTarget(), { key: 'block:kept', selector: '.s-abc' }, 'the facet rides the kept element');
@@ -444,7 +444,7 @@ test('a markup swap revalidates the write address: an address whose key has no e
     assert.deepEqual(Selection.getAddress(), { key: 'container:kept', selector: 'li' });
     // A facet whose selector the grammar no longer reads clears, and the
     // address goes with it (dropping the facet drops the address).
-    store.dispatch(setTarget({ key: 'block:kept', selector: 'div > .loose' }));
+    store.dispatch(setTarget({ key: 'block:kept', selector: 'div > > .loose' }));
     store.dispatch(setAddress({ key: 'container:kept', selector: 'li' }));
     await swap();
     assert.equal(Selection.getTarget(), null);

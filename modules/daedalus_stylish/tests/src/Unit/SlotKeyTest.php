@@ -179,7 +179,7 @@ class SlotKeyTest extends UnitTestCase {
     $this->assertSame([['type' => 'container', 'index' => 1]], $slot->segments);
     $this->assertSame('.card > *', (string) SlotKey::parse('container(1)/block(text,1)::.card > *', 'container')->selector);
     $this->assertSame('p', (string) SlotKey::parse('::p', 'container')->selector);
-    $this->assertSame('> pb-text .link', (string) SlotKey::parse('::> pb-text .link', 'container')->selector);
+    $this->assertSame('> d-text .link', (string) SlotKey::parse('::> d-text .link', 'container')->selector);
 
     // The retired pseudo-part spelling and non-canonical spellings never
     // parse: the grammar admits one spelling.
@@ -203,7 +203,7 @@ class SlotKeyTest extends UnitTestCase {
       '::.daedalus-stylish-layout-container > *',
       'container(1)::> *',
       'container(1)/block(text,1)::.card > *',
-      '::> pb-text .link',
+      '::> d-text .link',
     ];
     foreach ($keys as $key) {
       $slot = SlotKey::parse($key, 'container');

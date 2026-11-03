@@ -435,7 +435,7 @@ final class OwnershipPolicy implements CapabilityPolicyInterface {
     if ($canvas === NULL || !InnerRender::fillsSlots($canvas)) {
       return NULL;
     }
-    return $this->innerRender->slotFiller($slot->slot(), $slot->holder, $canvas->subject());
+    return $this->innerRender->slotFiller($slot->slot(), $slot->holder, $canvas->subject())->fill;
   }
 
   /**

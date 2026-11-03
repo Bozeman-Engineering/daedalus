@@ -27,7 +27,16 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  * scripts may still construct a DialectCatalog directly.
  *
  * What the spine derives here:
- * - Block types: the placement-allowed inline block bundles, each with an
+ * - The placeable bundles: the inline block bundles the placement spine
+ *   allows site-wide (PlacementRestrictions::allowedInlineBlockBundles()
+ *   with no storage), asked ONCE per build and only when the site has
+ *   block types at all (a bare site, no block_content bundles, asks the
+ *   block plugin manager nothing, so the build never touches a table the
+ *   site has not installed). The answer rides the build event
+ *   (DialectCatalogBuildEvent::getPlaceableBundles()) so every subscriber
+ *   that cards or names the placeable set reads this one answer and never
+ *   asks the spine itself.
+ * - Block types: the placeable bundles, each with an
  *   ATTRIBUTE CONTRACT derived from its configurable single-value fields.
  *   The attribute base name is the field name minus 'field_' and minus a
  *   leading '{bundle}_', with '_' spelled '-' (field_text_tag -> tag,
@@ -44,13 +53,13 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  *   (string_long plain, text_long/text_with_summary rich with a 'format'
  *   attr carrying the handler's available_formats). A bundle with any
  *   field this contract cannot express stays UNDECLARED and prints/parses
- *   through the generic <pb-block type> form — coverage grows by
+ *   through the generic <d-block type> form — coverage grows by
  *   extending the contract, never by a lossy declaration (the printer
  *   refuses lossy prints).
  * - The container layout id: the first placement-allowed layout that is a
  *   container.
  *
- * The site's MATERIALS (tokens, swatches, variants, blueprints, animations) come
+ * The site's MATERIALS (tokens, variants, blueprints, animations, fonts) come
  * from the materials roster (MaterialsRosterBuilder over the tagged providers),
  * the one published set every material surface projects; the styling
  * DECLARATIONS the roster does not carry (each scope's axis order with the
@@ -94,9 +103,10 @@ class DialectCatalogBuilder {
       return $this->catalog;
     }
 
-    $block_types = $this->deriveBlockTypes();
+    $placeable = $this->placeableBundles();
+    $block_types = $this->deriveBlockTypes($placeable);
     $container_layout_id = $this->containerLayoutId();
-    $event = new DialectCatalogBuildEvent($block_types, $container_layout_id);
+    $event = new DialectCatalogBuildEvent($block_types, $container_layout_id, $placeable);
     $this->eventDispatcher->dispatch($event, DialectCatalogBuildEvent::EVENT_NAME);
 
     $this->catalog = new DialectCatalog(
@@ -104,16 +114,18 @@ class DialectCatalogBuilder {
       axes: $event->getAxes(),
       blockTypes: $block_types,
       conditions: $event->getConditions(),
-      facts: $event->getFacts(),
       selectors: $event->getSelectors(),
       instances: $event->getInstances(),
       stylable: $event->getStylable(),
       roster: $roster,
       prose: $event->getVocabularyProse(),
+      bindings: $event->getBindings(),
+      deviations: $event->getDeviations(),
       birthDefaults: $event->getBirthDefaults(),
       dressedTags: $event->getDressedTags(),
       skin: $event->getSkin(),
       groups: $event->getGroups(),
+      cards: $event->getCards(),
     );
     return $this->catalog;
   }
@@ -138,16 +150,35 @@ class DialectCatalogBuilder {
   }
 
   /**
-   * Derives the declared block types with their attribute contracts.
+   * The placeable inline block bundles, in bundle-info order.
+   *
+   * The one placement read of a catalog build. The guard comes first: a
+   * site with no block_content bundles asks the spine nothing, because
+   * the spine's answer runs core's block_content derivative discovery,
+   * which queries the block_content table a bare site (a kernel fixture
+   * that lists the module and installs no schema) does not have.
+   *
+   * @return string[]
+   *   The bundle machine names the spine allows site-wide.
    */
-  protected function deriveBlockTypes(): array {
+  protected function placeableBundles(): array {
     $bundles = $this->bundleInfo->getBundleInfo('block_content');
     if ($bundles === []) {
       return [];
     }
     $allowed = $this->placementRestrictions->allowedInlineBlockBundles(NULL);
+    return array_map(strval(...), array_keys(array_intersect_key($bundles, array_flip($allowed))));
+  }
+
+  /**
+   * Derives the declared block types with their attribute contracts.
+   *
+   * @param string[] $placeable
+   *   The placeable bundles (placeableBundles()).
+   */
+  protected function deriveBlockTypes(array $placeable): array {
     $types = [];
-    foreach (array_intersect_key($bundles, array_flip($allowed)) as $bundle => $info) {
+    foreach ($placeable as $bundle) {
       $contract = $this->deriveContract($bundle);
       if ($contract !== NULL) {
         $types[$bundle] = $contract;
@@ -255,7 +286,7 @@ class DialectCatalogBuilder {
 
         default:
           // A field type outside the contract: the bundle stays
-          // undeclared (generic <pb-block type> form) rather than
+          // undeclared (generic <d-block type> form) rather than
           // declared lossily.
           return NULL;
       }

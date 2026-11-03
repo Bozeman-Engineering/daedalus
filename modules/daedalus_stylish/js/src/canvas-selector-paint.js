@@ -12,7 +12,7 @@
  * preview of the selector's style reach. Every match lights up,
  * whatever the selector addresses (every instance of a declared part in
  * its owner's scope, every direct child for '> *', every text block for
- * '> pb-text', every anchor in a section for the ancestor rule
+ * '> d-text', every anchor in a section for the ancestor rule
  * `container:Y::a`), exactly the elements computed-read's
  * resolveTargets answers for the same (key, selector), since both query
  * the one printed target grammar. It survives re-renders with no

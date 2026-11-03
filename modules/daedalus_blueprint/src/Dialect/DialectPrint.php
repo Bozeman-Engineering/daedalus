@@ -85,8 +85,8 @@ final class DialectPrint {
     $lines = [self::READING_NOTES_HEADER];
     if (isset($kinds[DialectPrintNoteKind::Layout->value])) {
       $lines[] = $multi_region
-        ? '- A <pb-container> carrying data-layout is a section on that layout rather than the container: its children print directly under it, data-regions lists its regions and each child\'s data-region names the one it sits in. An insert or move into such a section names the region as at: {ref, position, region}; afterbegin or beforeend on it without a region is refused (REGION_REQUIRED), a region anywhere else is refused too (REGION_NOT_APPLICABLE), and nothing creates such a section.'
-        : '- A <pb-container> carrying data-layout is a section on that layout rather than the container, with one region, so its children print directly under it and at needs no region.';
+        ? '- A <d-container> carrying data-layout is a section on that layout rather than the container: its children print directly under it, data-regions lists its regions and each child\'s data-region names the one it sits in. An insert or move into such a section names the region as at: {ref, position, region}; afterbegin or beforeend on it without a region is refused (REGION_REQUIRED), a region anywhere else is refused too (REGION_NOT_APPLICABLE), and nothing creates such a section.'
+        : '- A <d-container> carrying data-layout is a section on that layout rather than the container, with one region, so its children print directly under it and at needs no region.';
     }
     if (isset($kinds[DialectPrintNoteKind::UnprintedField->value])) {
       $lines[] = '- data-unprinted names fields the element holds that the page language cannot spell: a set on the element keeps them, a replace rebuilds the element and loses them.';

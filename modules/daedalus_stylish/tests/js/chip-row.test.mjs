@@ -14,6 +14,7 @@ import {
   chipMenuItems,
   systemScheme,
 } from '../../js/src/chip-row-model.js';
+import { parseClause } from '../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
 
 // The shipped condition table's shape and order, 'mobile' standing in for
 // the @media width vocabulary the canvas cannot pose (the popout
@@ -21,11 +22,11 @@ import {
 const CONDITIONS = {
   hover: { label: 'Hover', wrapper: ':hover', axis: 'state' },
   focus: { label: 'Focus', wrapper: ':focus', axis: 'state' },
-  narrow: { label: 'Narrow', wrapper: '@container (max-width: 767px)', axis: 'width', band: { max: 767 } },
-  medium: { label: 'Medium', wrapper: '@container (min-width: 768px) and (max-width: 1023px)', axis: 'width', band: { min: 768, max: 1023 } },
+  narrow: { label: 'Narrow', wrapper: '@container (max-width: 767px)', axis: 'width' },
+  medium: { label: 'Medium', wrapper: '@container (min-width: 768px) and (max-width: 1023px)', axis: 'width' },
   mobile: { label: 'Mobile', wrapper: '@media (max-width: 767px)', axis: 'width' },
-  dark: { label: 'Dark mode', wrapper: '@media (prefers-color-scheme: dark)', axis: 'scheme', preference: { feature: 'prefers-color-scheme', value: 'dark' } },
-  'reduced-motion': { label: 'Reduced motion', wrapper: '@media (prefers-reduced-motion: reduce)', axis: 'motion', preference: { feature: 'prefers-reduced-motion', value: 'reduce' } },
+  dark: { label: 'Dark mode', wrapper: '@media (prefers-color-scheme: dark)', axis: 'scheme' },
+  'reduced-motion': { label: 'Reduced motion', wrapper: '@media (prefers-reduced-motion: reduce)', axis: 'motion' },
 };
 
 const REST = { width: null, scheme: 'auto', motion: 'auto' };
@@ -231,29 +232,65 @@ test('an unknown axis derives nothing', () => {
   assert.deepEqual(chipMenuItems('bogus', { vector: REST, conditions: CONDITIONS }), []);
 });
 
-test('structural facts have no chip and join no menu', () => {
-  const withFacts = {
-    hover: CONDITIONS.hover,
-    'first-child': { label: 'First child', wrapper: ':first-child', axis: 'structural', fact: true },
-    odd: { label: 'Odd', wrapper: ':nth-child(odd)', axis: 'structural', fact: true },
-    narrow: CONDITIONS.narrow,
-    dark: CONDITIONS.dark,
-  };
-  // The four canvas axes only, in row order: a fact is the element's
-  // place in the markup, which no pose can change.
+// ---------------------------------------------------------------------------
+// Literal clauses in use: a chip entry on their axis.
+// ---------------------------------------------------------------------------
+
+const BAND = '@container (min-width: 400px) and (max-width: 480px)';
+const LITERALS = [
+  parseClause(BAND, CONDITIONS),
+  parseClause(':checked', CONDITIONS),
+  // Not posable: never a chip entry.
+  parseClause(':visited', CONDITIONS),
+  parseClause('@media (min-width: 900px)', CONDITIONS),
+  parseClause('@supports (display: grid)', CONDITIONS),
+];
+
+test('a literal width band in use joins the width menu after the references, keyed by its text', () => {
+  const items = chipMenuItems('width', { vector: { ...REST, width: 440 }, conditions: CONDITIONS, literals: LITERALS });
+  assert.deepEqual(items.map((item) => item.key), ['', 'narrow', 'medium', BAND]);
+  const literal = items[3];
+  assert.deepEqual(literal.label, { kind: 'condition', name: BAND, label: BAND });
+  assert.deepEqual(literal.hint, { kind: 'range', min: 400, max: 480 });
+  assert.deepEqual(literal.action, { type: 'pose', axis: 'width', value: 440 });
+  // At 440 the literal is the write target (the cascade delivers it
+  // last), so it checks and Narrow does not; at 300 Narrow checks.
+  assert.deepEqual(items.filter((item) => item.checked).map((item) => item.key), [BAND]);
+  const narrow = chipMenuItems('width', { vector: { ...REST, width: 300 }, conditions: CONDITIONS, literals: LITERALS });
+  assert.deepEqual(narrow.filter((item) => item.checked).map((item) => item.key), ['narrow']);
+});
+
+test('the width face wears the literal in use where it is the write target', () => {
+  const chips = byAxis(chipFaces({ ...REST, width: 440 }, null, CONDITIONS, { literals: LITERALS }));
+  assert.deepEqual(chips.width.face, { kind: 'condition', name: BAND, label: BAND });
+  assert.equal(chips.width.lit, true);
+  // Without the literals (another element selected) 440 is Narrow.
+  assert.deepEqual(byAxis(chipFaces({ ...REST, width: 440 }, null, CONDITIONS, {})).width.face.name, 'narrow');
+});
+
+test('a literal state in use joins the state menu, posed by its stamp word and faced by its text', () => {
+  const items = chipMenuItems('state', { vector: REST, forceState: 'checked', conditions: CONDITIONS, literals: LITERALS });
+  assert.deepEqual(items.map((item) => [item.key, item.checked]), [
+    ['', false], ['hover', false], ['focus', false], ['checked', true],
+  ]);
+  assert.deepEqual(items[3].label, { kind: 'condition', name: 'checked', label: ':checked' });
+  assert.deepEqual(items[3].action, { type: 'force-state', state: 'checked' });
+  const chips = byAxis(chipFaces(REST, 'checked', CONDITIONS, { literals: LITERALS }));
+  assert.deepEqual(chips.state.face, { kind: 'condition', name: 'checked', label: ':checked' });
+  assert.equal(chips.state.lit, true);
+  // The stamp word is a state only while the literal is in use.
+  assert.equal(byAxis(chipFaces(REST, 'checked', CONDITIONS, {})).state.lit, false);
+});
+
+test('a literal state in use renders the state chip on a site publishing no states', () => {
+  const { hover, focus, ...noStates } = CONDITIONS;
   assert.deepEqual(
-    chipFaces(REST, null, withFacts, { hasSelection: true }).map((chip) => chip.axis),
+    chipFaces(REST, null, noStates, { literals: [parseClause(':checked', noStates)] }).map((chip) => chip.axis),
     ['state', 'width', 'scheme', 'motion'],
   );
-  // A fact handed as the force state lights nothing.
-  const chips = byAxis(chipFaces(REST, 'first-child', withFacts, { hasSelection: true }));
-  assert.deepEqual(chips.state.face, { kind: 'axis-name' });
-  assert.equal(chips.state.lit, false);
-  // The state menu offers the state vocabulary alone; the structural axis
-  // has no menu.
+  // An unposable literal alone renders none.
   assert.deepEqual(
-    chipMenuItems('state', { vector: REST, forceState: null, conditions: withFacts }).map((item) => item.key),
-    ['', 'hover'],
+    chipFaces(REST, null, noStates, { literals: [parseClause(':visited', noStates)] }).map((chip) => chip.axis),
+    ['width', 'scheme', 'motion'],
   );
-  assert.deepEqual(chipMenuItems('structural', { vector: REST, forceState: null, conditions: withFacts }), []);
 });

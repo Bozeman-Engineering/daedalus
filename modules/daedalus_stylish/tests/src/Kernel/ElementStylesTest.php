@@ -63,6 +63,7 @@ class ElementStylesTest extends KernelTestBase {
     'layout_builder',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -98,10 +99,7 @@ class ElementStylesTest extends KernelTestBase {
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
@@ -505,7 +503,7 @@ class ElementStylesTest extends KernelTestBase {
    * The layout plugin id is to sections what the bundle is to inline
    * blocks: with the host entity in context, a container:{uuid} key validates
    * against its layout's guide declaration (daedalus_stylish_guide_test declares
-   * layout_twocol_section with a .band-content part capped at
+   * layout_twocol_section with a .section-content part capped at
    * max-width 80rem) and captures a "layout:{layout_id}" variant scope,
    * degrading to the universal section kind without context.
    */
@@ -523,17 +521,17 @@ class ElementStylesTest extends KernelTestBase {
     // A rule key captures its LANDING, the element its last compound
     // names, and a part lands on no element scope (nothing wears there);
     // keyAddress() still answers the full address under the layout.
-    $this->assertNull($validator->captureScope("container:$section_uuid::.band-content", ['host' => $this->host($entity)]));
-    $this->assertSame('layout:layout_twocol_section::.band-content', (string) $validator->keyAddress("container:$section_uuid::.band-content", ['host' => $this->host($entity)]));
+    $this->assertNull($validator->captureScope("container:$section_uuid::.section-content", ['host' => $this->host($entity)]));
+    $this->assertSame('layout:layout_twocol_section::.section-content', (string) $validator->keyAddress("container:$section_uuid::.section-content", ['host' => $this->host($entity)]));
 
     // Per-layout declaration enforcement on the declared part.
     $errors = $validator->validate([
-      "container:$section_uuid::.band-content" => ['default' => ['max-width' => '85rem']],
+      "container:$section_uuid::.section-content" => ['default' => ['max-width' => '85rem']],
     ], ['host' => $this->host($entity)]);
     $this->assertCount(1, $errors);
     $this->assertSame('STYLE_VALUE_ABOVE_MAX', $errors[0]->getCode());
     $this->assertSame([], $validator->validate([
-      "container:$section_uuid::.band-content" => ['default' => ['max-width' => '60rem']],
+      "container:$section_uuid::.section-content" => ['default' => ['max-width' => '60rem']],
     ], ['host' => $this->host($entity)]));
 
     // The section family follows the one family rule: the kind is the

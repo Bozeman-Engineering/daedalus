@@ -1,16 +1,20 @@
-# Violates daedalus_stylish_guide_test's section declaration (padding max 4rem): the
-# importer must refuse the whole entry, loudly, through the same scope-only
-# validation seam every other variant write path rides.
-overflowing_section:
-  label: 'Overflowing section'
+# A structural defect: `pading` is not a property the container kind's
+# groups own (INVALID_STYLE_PROPERTY). The importer fails the sync on
+# structure only, through the same scope-only validation seam every other
+# variant write path rides, and lands nothing for this entry. A value the
+# site's law refuses (a padding over the guide's max) is NOT a sync failure:
+# the landing lane lands it as authored and the verdict
+# (VariantConformance) withholds it; ShippedSyncTest pins that face.
+misspelled_section:
+  label: 'Misspelled section'
   scope: 'kind:container'
   styles:
     '':
       default:
-        padding: '6rem'
+        pading: '1rem'
 
 # The definition AFTER the refused one: a tolerant sync records the failure
-# and still lands this entry, so one bad value never hides the rest of the
+# and still lands this entry, so one bad entry never hides the rest of the
 # file.
 fitting_section:
   label: 'Fitting section'

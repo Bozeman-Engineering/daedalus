@@ -5,29 +5,33 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
+use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
+use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
+use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Tests the palette AI surface: the swatch side of the materials values.
+ * Tests the palette AI surface: the skin's named values on the JSON door.
  *
- * Material rosters are never permission-gated: the published swatches
- * and the daedalus_swatch bundle description exist for every account
- * (entity access on the swatch write lane, not visibility, is the
- * permission model). Swatches ride the
- * materials fragment's swatches group (core's MaterialsSchema)
- * as the reserved `swatch` group — provenance-free beside the token
- * groups, keyed by the var() name a style value references, values as
- * stored — and the group is present exactly while published swatches
- * exist (grows-by-data: empty means absent, not an empty map). This pins
- * that group's shape, the published-only rule, the absence-when-empty
- * rule, the alter context's invalidation tags, and the ungated
- * bundle-list entry.
+ * Material rosters are never permission-gated: the active skin's tokens
+ * exist for every account (entity access on the skin's write lane, not
+ * visibility, is the permission model). The palette is tokens on the
+ * color and gradient scales, and they ride the materials fragment's
+ * `tokens` group (core's MaterialsSchema) by scale, keyed by the var()
+ * name a style value references, values as stored, each with its
+ * description when its author wrote one; the group is present exactly
+ * while the worn skin offers a token (grows-by-data: empty means absent,
+ * not an empty map). This pins that group's shape, the offered-only
+ * rule, the absence-when-empty rule and the alter context's invalidation
+ * tags.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
 class PaletteAiSurfaceTest extends KernelTestBase {
+
+  use DesignSystemActivationTrait;
+  use UserCreationTrait;
 
   /**
    * {@inheritdoc}
@@ -37,6 +41,7 @@ class PaletteAiSurfaceTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -54,14 +59,19 @@ class PaletteAiSurfaceTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('user');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     // The materials hook queries the variant and skin storages on the
     // same alter.
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
+    // Activating a design system syncs every enabled module's shipped
+    // definitions: the importers mirror references into the usage tables
+    // and switch to an administrative account.
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_skin_material_usage',
+    ]);
+    $this->setUpCurrentUser([], [], TRUE);
   }
 
   /**
@@ -83,50 +93,56 @@ class PaletteAiSurfaceTest extends KernelTestBase {
   }
 
   /**
-   * The swatch group lands ungated with the published vocabulary.
+   * The palette rides the tokens group, ungated, by scale.
    */
-  public function testSwatchGroup(): void {
-    $red = DaedalusStylishSwatch::create(['label' => 'Brand red', 'kind' => 'color']);
-    $red->setSwatchValue('#e94560')->save();
-    $fade = DaedalusStylishSwatch::create(['label' => 'Hero fade', 'kind' => 'gradient']);
-    $fade->setSwatchValue([
-      'default' => 'linear-gradient(135deg, #1a1a2e, var(--swatch-brand_red))',
-      'dark' => 'linear-gradient(135deg, #0a0a14, var(--swatch-brand_red))',
+  public function testPaletteTokens(): void {
+    $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora']);
+    $skin->setPackageTokens([
+      'color' => [
+        'brand-red' => '#e94560',
+        'ink' => ['value' => '#123456', 'offered' => FALSE],
+      ],
+      'gradient' => [
+        'hero-fade' => [
+          'value' => [
+            'default' => 'linear-gradient(135deg, #1a1a2e, var(--color-brand-red))',
+            'dark' => 'linear-gradient(135deg, #0a0a14, var(--color-brand-red))',
+          ],
+          'description' => 'The hero ground; never behind body copy.',
+        ],
+      ],
     ])->save();
-    $draft = DaedalusStylishSwatch::create(['label' => 'Unreleased', 'kind' => 'color']);
-    $draft->setSwatchValue('#123456')->setUnpublished()->save();
+    $this->activateSkin($skin);
 
     [$schema, $context] = $this->alteredSchema();
     $materials = $schema['materials'] ?? NULL;
     $this->assertIsArray($materials, 'The materials fragment landed on the schema.');
 
-    // The reference grammar and the fit rules ride the one description
-    // (the minting recipe and its permission posture are the styling
-    // skill's palette section, not the schema's); the old per-kind
-    // labels table is gone: a value's own shape says what it fits.
-    $this->assertStringContainsString('swatch', $materials['guidance']);
-    $this->assertStringContainsString('published palette swatches', $materials['guidance']);
+    // The reference grammar and the fit rules ride the one description;
+    // no per-kind labels table: a value's own shape says what it fits.
+    $this->assertStringContainsString('"tokens" are the design tokens the active skin mints', $materials['guidance']);
+    $this->assertStringContainsString('colors and gradients among them', $materials['guidance']);
     $this->assertStringNotContainsString('permission-gated', $materials['guidance']);
     $this->assertStringContainsString('Colors fit color-valued properties', $materials['guidance']);
     $this->assertArrayNotHasKey('kinds', $materials);
 
-    // Published swatches only, keyed by the derived variable (the one
-    // namespace rule), values as stored, with the label a person asks
-    // for and the kind saying what the value fits.
-    $swatches = $materials['swatches'];
-    $this->assertSame(['label' => 'Brand red', 'kind' => 'color', 'value' => '#e94560'], $swatches['--swatch-brand_red']);
-    $this->assertSame('gradient', $swatches['--swatch-hero_fade']['kind']);
+    // Offered tokens only, by scale, keyed by the derived custom property
+    // (the one spelling rule), values as stored, the description riding
+    // only when written.
+    $tokens = $materials['tokens'];
+    $this->assertSame(['value' => '#e94560'], $tokens['color']['--color-brand-red']);
+    $this->assertArrayNotHasKey('--color-ink', $tokens['color']);
     $this->assertSame(
       [
-        'default' => 'linear-gradient(135deg, #1a1a2e, var(--swatch-brand_red))',
-        'dark' => 'linear-gradient(135deg, #0a0a14, var(--swatch-brand_red))',
+        'default' => 'linear-gradient(135deg, #1a1a2e, var(--color-brand-red))',
+        'dark' => 'linear-gradient(135deg, #0a0a14, var(--color-brand-red))',
       ],
-      $swatches['--swatch-hero_fade']['value'],
+      $tokens['gradient']['--gradient-hero-fade']['value'],
     );
-    $this->assertArrayNotHasKey('--swatch-unreleased', $swatches);
+    $this->assertSame('The hero ground; never behind body copy.', $tokens['gradient']['--gradient-hero-fade']['description']);
 
-    // The published-swatch invalidation domain rides the alter context.
-    $this->assertContains('daedalus_swatch_list', $context['cache_tags']);
+    // The skin invalidation domain rides the alter context.
+    $this->assertContains('daedalus_skin_list', $context['cache_tags']);
 
     // The materials are the schema's own key; the field's style guide is
     // untouched.
@@ -137,43 +153,26 @@ class PaletteAiSurfaceTest extends KernelTestBase {
   }
 
   /**
-   * An empty palette means NO swatches group: empty is absent, grows-by-data.
+   * An empty palette means NO tokens group: empty is absent, grows-by-data.
    *
    * The fragment itself still lands (its guidance names the group and
-   * teaches the reference grammar), but the swatches group joins the
-   * fragment only with the first published swatch: an empty map under
-   * the reserved key would be vocabulary with nothing to say.
+   * teaches the reference grammar), but the tokens group joins the
+   * fragment only with the first offered token of the worn skin: an empty
+   * map under the key would be vocabulary with nothing to say.
    */
   public function testEmptyPalette(): void {
     [$schema] = $this->alteredSchema();
     $materials = $schema['materials'] ?? NULL;
-    $this->assertIsArray($materials, 'The fragment exists with no swatches: minting is part of the grammar.');
-    $this->assertArrayNotHasKey('swatches', $materials);
+    $this->assertIsArray($materials, 'The fragment exists with no skin: minting is part of the grammar.');
+    $this->assertArrayNotHasKey('tokens', $materials);
 
-    // An unpublished swatch is not vocabulary either: the group appears
-    // only with the first PUBLISHED swatch.
-    $draft = DaedalusStylishSwatch::create(['label' => 'Unreleased', 'kind' => 'color']);
-    $draft->setSwatchValue('#123456')->setUnpublished()->save();
+    // A token withheld from the AI is not vocabulary either: the group
+    // appears only with the first OFFERED token.
+    $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora']);
+    $skin->setPackageTokens(['color' => ['ink' => ['value' => '#123456', 'offered' => FALSE]]])->save();
+    $this->activateSkin($skin);
     [$schema] = $this->alteredSchema();
-    $this->assertArrayNotHasKey('swatches', $schema['materials']);
-  }
-
-  /**
-   * The daedalus_swatch is AI-visible ungated, with the routing description.
-   */
-  public function testBundleListEntry(): void {
-    $builder = $this->container->get('daedalus_blueprint.bundle_list_builder');
-    $visible = $builder->getVisibleBundles();
-    $this->assertArrayHasKey('daedalus_swatch', $visible);
-    $this->assertFalse($builder->isHidden('daedalus_swatch'));
-    $description = $visible['daedalus_swatch']['bundles']['daedalus_swatch']['description'];
-    $this->assertStringContainsString('var(--swatch-{machine_name})', $description);
-    // The routing is to the material gestures the brief's MINT line
-    // teaches, never to a skill (the styling skill is gone) or an entity
-    // write.
-    $this->assertStringContainsString('save_material', $description);
-    $this->assertStringContainsString('MINT line', $description);
-    $this->assertStringNotContainsString('skill', $description);
+    $this->assertArrayNotHasKey('tokens', $schema['materials']);
   }
 
 }

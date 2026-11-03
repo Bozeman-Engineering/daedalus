@@ -1,11 +1,15 @@
 /**
- * The lean node tree the selector matcher specs read: the shape the
- * delivered blueprint's `layout` carries (NodeTreeBuilder's kinds with
- * daedalus_ui's `_element` annotations), built by hand so the facts are
- * legible. SelectorMatcherTest (PHP) carries the same tree; the parity
- * lock pipes the PHP copy through selector-matcher-cases.mjs, this copy
- * pins the client-side reads on their own.
+ * The document tree the selector matcher specs read: the shape
+ * documentTree() derives from a delivered blueprint (one entity node,
+ * the host above its sections, with the blueprint's `layout`,
+ * NodeTreeBuilder's kinds carrying daedalus_ui's `_element` annotations,
+ * as its children), built by hand so the facts are legible.
+ * SelectorMatcherTest (PHP) carries the same document; the parity lock
+ * pipes the PHP copy through selector-matcher-cases.mjs, this copy pins
+ * the client-side reads on their own.
  *
+ * The root is the page "Welcome" (uuid `page`, a tagless entity markup,
+ * as the annotator usually stamps it), holding four sections.
  * Section A (a container layout): two text blocks (a paragraph root
  * whose prose links and emphasizes, a heading root), a formatted text
  * block (a div root holding paragraphs and links, three minted
@@ -19,14 +23,19 @@
  * link part rendering an anchor with a nested icon part, a note part
  * declaring no tag, a hoisted part), and a nested section F holding a
  * paragraph text block whose prose emphasizes and whose link part
- * renders an anchor. Section G (a container layout, "Band"): an ordered
- * band of two paragraph text blocks (the second with a link part
+ * renders an anchor. Section G (a container layout, "Section"): an ordered
+ * section of two paragraph text blocks (the second with a link part
  * rendering an anchor), a heading text block wearing a hoisted class,
  * an image block, and a nested section H holding an image block.
+ *
+ * KEYLESS is a second, small document whose root carries no uuid (a
+ * template host, the site frame): a section holding a paragraph text
+ * block, and an empty section. The root is structure nothing addresses.
  */
 const markup = (tag, tags = null) => ({ markup: tags ? { tag, tags } : { tag } });
 
-export const TREE = [
+// The blueprint's `layout`: the sections, as the serializer emits them.
+const LAYOUT = [
   {
     kind: 'container',
     uuid: 'sec-a',
@@ -130,7 +139,7 @@ export const TREE = [
     kind: 'container',
     uuid: 'sec-g',
     layout_id: 'daedalus_stylish_container',
-    label: 'Band',
+    label: 'Section',
     _element: markup('section'),
     children: [
       { kind: 'block', uuid: 't9', block_type: 'text', _element: markup('p') },
@@ -149,3 +158,55 @@ export const TREE = [
     ],
   },
 ];
+
+export const DOCUMENT = [
+  {
+    kind: 'entity',
+    uuid: 'page',
+    _element: { name: 'Welcome', type: 'Page', icon: '/icons/page.svg', markup: {} },
+    children: LAYOUT,
+  },
+];
+
+export const KEYLESS = [
+  {
+    kind: 'entity',
+    uuid: null,
+    _element: { name: 'Template', type: 'Template', icon: null, markup: {} },
+    children: [
+      {
+        kind: 'container',
+        uuid: 'sec-x',
+        layout_id: 'daedalus_stylish_container',
+        _element: markup('section'),
+        children: [{ kind: 'block', uuid: 'tx', block_type: 'text', _element: markup('p', ['a']) }],
+      },
+      { kind: 'container', uuid: 'sec-y', layout_id: 'daedalus_stylish_container', _element: markup('div'), children: [] },
+    ],
+  },
+];
+
+/**
+ * The style map the document is styled by, for the wear: the hero's first
+ * text block and the Section's heading wear Featured (the root
+ * fragment's plain variant class), the Section's second paragraph wears
+ * a distributed fragment of Card (the slot-encoded class) beside a
+ * reference that cannot be a class name (stamps nothing), the nested
+ * section H wears Featured too, the open render's body field
+ * (`block:t6:body`, a field record, not a node) wears Featured, and a
+ * RULE key wears Featured (no class: rule wear delivers inside the
+ * rule's own @scope). SelectorMatcherTest carries the same map.
+ */
+export const MAP = {
+  'block:t1': { variants: [{ variant: 'featured', fragment: '', via: null }], default: { color: 'red' } },
+  'block:t6:body': { variants: [{ variant: 'featured', fragment: '' }] },
+  'block:t10': {
+    variants: [
+      { variant: 'card', fragment: 'region(first)/block(text,1)', via: 'card' },
+      { variant: 'bad name', fragment: '' },
+    ],
+  },
+  'block:t11': { variants: [{ variant: 'featured', fragment: '' }] },
+  'container:sec-h': { variants: [{ variant: 'featured', fragment: '' }] },
+  'container:sec-g::> d-text': { variants: [{ variant: 'featured', fragment: '' }], default: { margin: '0' } },
+};

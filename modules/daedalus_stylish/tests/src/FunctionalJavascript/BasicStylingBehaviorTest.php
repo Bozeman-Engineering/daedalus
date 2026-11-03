@@ -6,7 +6,6 @@ namespace Drupal\Tests\daedalus_stylish\FunctionalJavascript;
 
 use Drupal\daedalus_blueprint_library\BlueprintInterface;
 use Drupal\daedalus_blueprint_library\Entity\Blueprint;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
 use Drupal\layout_builder\Section;
@@ -66,7 +65,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   resolveCandidates and the pipeline's key routing to the rendered
  *   panel and the op spine): a linked text block wearing `button`
  *   renders exactly ONE Background row on the block's own basic panel,
- *   lit with the anchor's variant fill on the swatch well's face, the
+ *   lit with the anchor's variant fill on the token well's face, the
  *   row hued in the button layer's color and its mark titled "#1a1a2e
  *   from Button", no part caption anywhere; a root background written
  *   through the op path leaves the row on the anchor and puts the inert
@@ -78,10 +77,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   the unlinked text block's Background row commits at the plain
  *   block key (the absent first candidate falls to the root); and a
  *   gradient pick on a fresh linked block whose root wears an authored
- *   band is ONE atomic batch of two update_style ops, the image placed
+ *   background is ONE atomic batch of two update_style ops, the image placed
  *   on the anchor (the set's box as a group, controls.js resolveGroup)
- *   and the root's band cleared (a removal lands where the value
- *   lives), the anchor painting the gradient and the band gone.
+ *   and the root's background cleared (a removal lands where the value
+ *   lives), the anchor painting the gradient and the background gone.
  *   controls.test.mjs pins the address rule and its group form; the
  *   served list, the rendered row, the routed op and the multi-key
  *   batch through the op path only meet in a browser.
@@ -90,7 +89,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   app.tree.registerRowFacts, drawn by daedalus_ui's page elements row,
  *   and the provider's doorway dispatching into the mounted Inspector
  *   through inspector-doors.js): with block C wearing `button` and
- *   carrying its own band, C's row draws two dots in its facts zone
+ *   carrying its own background, C's row draws two dots in its facts zone
  *   ("Wears Button", "Styled on itself: 1 declaration"), its row menu
  *   leads with "Edit Button", "Outline everything wearing it" and "Show
  *   its own styles in code" ahead of the element's verbs, and picking
@@ -124,7 +123,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   field over the value, whose typed settle commits the new literal
  *   through the widget's pick path and repaints the well and the canvas.
  *   The face and state models are node-tested (color-field-model,
- *   swatch-well-model, widget-gradients); the two mounts of one field
+ *   token-well-model, widget-gradients); the two mounts of one field
  *   feeding one map, and the painted face reading back from the map, only
  *   exist in a browser.
  * - Duplicate lands a styled clone without reload (seam: the duplicate
@@ -176,7 +175,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * - A color pick completes an unset border in one op (seam: three
  *   sub-controls feeding one map entry through the stroke completion
  *   rule, op to mirror to canvas): the Border row is color well +
- *   width field + style well over one stroke, and a swatch pick on an
+ *   width field + style well over one stroke, and a token pick on an
  *   unset border commits width, `border-style: solid` and the color
  *   together, the canvas wearing the whole stroke. strokeWrite is
  *   node-tested; the three mounts sharing one gesture and one dispatch
@@ -198,7 +197,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   outlines, mounts. The gate is a one-line model read; that the row
  *   appears through the settle-to-mirror-to-re-render round trip is
  *   wiring.
- * - The page spaces its bands through the layout root (two seams). First,
+ * - The page spaces its sections through the layout root (two seams). First,
  *   an element-bound kind control gating on the bound part's live child
  *   count: daedalus_edit binds the entity kind's `gap` control to
  *   `.daedalus-layout-layout`, the one element daedalus_layout renders around the root
@@ -207,13 +206,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   entity root's (whose one child box is the layout root itself). The
  *   binding in the payload, the part's presence, the count read off the
  *   rendered wrapper and the registry's gate are four layers that only
- *   agree in a browser: with two bands on the page the Gap row is offered
+ *   agree in a browser: with two sections on the page the Gap row is offered
  *   on the Page. Second, a part-keyed write landing through the
  *   entity's @scope tag onto a module-rendered element: a real stop
  *   pick commits `gap` at `entity:{uuid}::.daedalus-layout-layout` in one op,
  *   the entity root's own style tag prints the part rule, and the layout
  *   root's computed `row-gap` changes on the canvas without reload, the
- *   bands moving that far apart. The gate and the count are node-tested
+ *   sections moving that far apart. The gate and the count are node-tested
  *   and the binding Kernel-pinned; the declared flex column laying the gap out
  *   on the edit canvas exists only here.
  * - The write address: one link, every link in its section (seam: the
@@ -297,8 +296,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   preview handing its caller ONE object, {padding: value} -> the
  *   padding row's patchFor over that object -> basic-controls.js route
  *   -> source.preview -> the preview sheet's live slot on the canvas):
- *   with the band selected whole, a typed bare number in the open
- *   phase's detented Padding field paints every side of the band in
+ *   with the section selected whole, a typed bare number in the open
+ *   phase's detented Padding field paints every side of the section in
  *   the space's unit (the static rem label) before any settle, nothing
  *   dispatched, and the
  *   blur then commits ONE update_style with the same value and releases
@@ -320,7 +319,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   through the MEASURED root, seedAnchor) -> stepKeyGesture's anchor
  *   -> sideStepValue over the detented space -> applyGesture's preview
  *   through the ring's patch -> settleGesture's settleSpelling and ONE
- *   commit): a band wearing no own padding shows its gutter as the left
+ *   commit): a section wearing no own padding shows its gutter as the left
  *   cell's placeholder converted into the space's rem (olivero's 2rem
  *   gutter reads 2rem, never 32px) beneath a Padding row whose static
  *   label says rem; ArrowUp previews the cell one diagram grain (a
@@ -340,10 +339,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   hue, its hover words ("2rem from Site width") and its converted
  *   placeholder, then the side editor's `padding-right` write beating
  *   it on the canvas while the variant stays worn): the right cell of a
- *   band born by add_section reads the variant, not "computed from the
+ *   section born by add_section reads the variant, not "computed from the
  *   theme", a real click opens its editor EMPTY over the measurement
  *   as a placeholder (2 beside the rem label), and a typed 3 previews
- *   and commits padding-right: 3rem as ONE update_style, the band
+ *   and commits padding-right: 3rem as ONE update_style, the section
  *   computing 3rem on the right beside its own left while the map holds
  *   no padding-inline. The logical read and the measured-cell rule are
  *   node-pinned (box-model); the hue, the measurement and the write
@@ -361,8 +360,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   blueprint and two kind:container variants minted in PHP mid-scenario,
  *   one adopted by the blueprint through the manager's own road and one
  *   left unowned, then the blueprint placed on the page through the op
- *   path; the placed root's picker reads ['Owner band', 'Style', ...] in
- *   that order, the Owner band group holding exactly "Owned look" and the
+ *   path; the placed root's picker reads ['Owner section', 'Style', ...] in
+ *   that order, the Owner section group holding exactly "Owned look" and the
  *   Style group the unowned sibling and never the owned one. The grouping
  *   is node-pinned (variant-picker-model), the stamp kernel-pinned
  *   (BlueprintOwnedVariantTest); the stamp, the serialized key, the offer
@@ -446,10 +445,11 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    * package's skin and members under its own law, the way a recipe's
    * activation action does). The open phase switches back to olivero
    * in-scenario. Neither system's mode is set by the test. The fixture
-   * is whole as installed: the install batch waits for the installer and
+   * is whole as installed: every install batch syncs as it installs and
    * every activation syncs every module's shipped definitions, so the
    * globals (daedalus_stylish_layouts' `row`, the Layout axis the nested-container
-   * leg reads, among them) landed at the recipe's olivero activation.
+   * leg reads, among them) landed with their batches, withheld until the
+   * recipe's olivero activation minted the gutter they name.
    */
   protected function setUp(): void {
     $this->daedalusSetUp();
@@ -974,7 +974,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    * - Border stroke (open): the clone's Surface section renders the
    *   Border row as color well + width field + style well, every part
    *   unset, no chips inside the composite; a real pick of the accent
-   *   swatch in the color well's popover commits `border-width: 1px`
+   *   token in the color well's popover commits `border-width: 1px`
    *   (the first width stop), `border-style: solid` and
    *   `border-color: var(--color-accent)` in ONE op, the canvas block
    *   wears the accent-coloured solid hairline on every side, and the
@@ -996,7 +996,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    * - Page gap (open): the Page (the entity key) is selected; the edit
    *   canvas's layout root (daedalus_layout's #layout-builder wearing
    *   .daedalus-layout-layout, inside the entity root) holds exactly the two
-   *   bands (A from the strict phase, staged in tempstore across the
+   *   sections (A from the strict phase, staged in tempstore across the
    *   reload, and B) as its child boxes and computes the declared flex column;
    *   the Basic tab's Layout section renders the Gap row as the detented
    *   field with the stop picker's chevron (the suite binds gap to the
@@ -1009,7 +1009,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    *   at `entity:{uuid}::.daedalus-layout-layout` in ONE op through magnetic
    *   capture, the entity root's style tag holds the part rule, the
    *   layout root's computed row-gap reads the token's resolved length,
-   *   the bands sit that much further apart than before, and the field
+   *   the sections sit that much further apart than before, and the field
    *   wears 1 with rem as its static unit label and the blessed chrome.
    * - Background (open): a section with one LINKED text block (C) is
    *   placed and selected, and C wears the shipped `button` variant
@@ -1017,13 +1017,13 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    *   guide_example withholds its literal hex and em padding); the
    *   block's Basic panel renders exactly ONE row whose axis reads
    *   "Background" (daedalus_edit_text_block restates the kind's
-   *   `background` binding over `['.text-block-link', '']`), its swatch
+   *   `background` binding over `['.text-block-link', '']`), its token
    *   well in the literal face painted the button's #1a1a2e, the row
    *   hued in the button layer's color, its mark titled "#1a1a2e from
    *   Button", no part caption in the panel, and the map holding nothing
    *   at the part key; an update_style of background-color on C's ROOT
    *   through the op path leaves the row reading the anchor and puts
-   *   the inert "Also set on element" line (hinted with the band's
+   *   the inert "Also set on element" line (hinted with the root's
    *   value) in the row's menu while both boxes paint on the canvas;
    *   C's page elements row draws two dots ("Wears Button", "Styled on
    *   itself: 1 declaration"), its row menu leads with the three variant
@@ -1042,7 +1042,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    *   text block (D) is placed and selected, its Basic panel renders one
    *   Background row over the root alone, and the same accent pick
    *   commits ONE update_style at the plain block key.
-   * - Write address (open): a band with three LINKED text blocks (two
+   * - Write address (open): a section with three LINKED text blocks (two
    *   `p` roots, one `h3`) is placed; the first block's link PART is
    *   selected; the target chip's switcher reads "This link" at the
    *   own address, unlit, no write paint; a real click opens the menu
@@ -1071,7 +1071,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    *   the rule's entry beside its font-size and none on the link or the
    *   block, the bar renders one row naming Accent link, every anchor
    *   computes rgb(51, 102, 153) with letter-spacing 2px, and no
-   *   anchor or root carries a variant class; the Materials place shows
+   *   anchor or root carries a variant class; the Design system place shows
    *   the chip lit at "Every link in Section", the Quiet link row
    *   unfolds its card with Apply enabled at the styling target, and
    *   the click lands ONE apply_variant at container::a replacing the
@@ -1093,15 +1093,15 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
    *   the section (a)", a synthetic right-click on its row offers "Edit
    *   at the section (a)", and the pick seats container::a with the
    *   selection still the first link and the chip lit.
-   * - Owner heading (open): a `section` blueprint "Owner band" and two
+   * - Owner heading (open): a `section` blueprint "Owner section" and two
    *   kind:container variants are minted in PHP, "Owned look" adopted by
    *   the blueprint and "Plain look" left unowned; after a reload the
    *   blueprint is placed on the page through place_blueprint, the placed
-   *   root renders inside the main entity carrying the `owner_band`
+   *   root renders inside the main entity carrying the `owner_section`
    *   provenance stamp, and its wear bar's add row opens a picker whose
-   *   first two headed groups read "Owner band" then "Style", the owner
+   *   first two headed groups read "Owner section" then "Style", the owner
    *   group holding exactly Owned look and the Style group Plain look
-   *   and never Owned look; Escape closes it. The placed band stays.
+   *   and never Owned look; Escape closes it. The placed section stays.
    * - Header bindings (open, last): the editor gains daedalus_site_builder
    *   and loads the recipe's header blueprint on its own canvas (the
    *   mirror rooted on the header, the branding block inside the main
@@ -1663,7 +1663,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // Placement curates offers and birth, never legality: the container
     // kind grants the whole spacing group, so the one Spacing control
     // writes the uniform `padding` shorthand on a container nested inside
-    // the band and on the band itself. The seam only a browser sees: the
+    // the section and on the section itself. The seam only a browser sees: the
     // served grant (no depth projection) -> controlModels' granted subset
     // -> the padding row's shorthandGranted read, observed as WHAT the
     // control writes at both depths; the depth read still shapes OFFERS
@@ -1702,7 +1702,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // is the add row alone; the OFFER lives in the variant picker, whose
     // groups (Layout among them, never the root-only Width) beside the
     // mounted Layout section are the signature that the nested container,
-    // not the band or the block, is bound.
+    // not the section or the block, is bound.
     $session->executeScript("Drupal.Daedalus.Selection.select('container:$nested_uuid');");
     $this->assertJsCondition(
       "!!document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__layout')"
@@ -1753,34 +1753,34 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       'The nested container wears the shorthand on every side (the inline sides included).',
     );
 
-    // The band itself: the same control, the same stop picked, the same
+    // The section itself: the same control, the same stop picked, the same
     // shorthand written (the grant is the declaration's at every depth).
     $session->executeScript("Drupal.Daedalus.Selection.select('container:$section_a_uuid');");
     $worn_labels = "[...document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-wear-bar__row .daedalus-stylish-wear-bar__label')].map((label) => label.textContent.trim())";
     $this->assertJsCondition(
       "(() => { const labels = $worn_labels; return labels.includes('Width'); })()",
       20000,
-      'The band is bound (its wear bar shows the worn root-only Width row, the birth default).',
+      'The section is bound (its wear bar shows the worn root-only Width row, the birth default).',
     );
     $this->assertJsCondition(
       '!!document.querySelector(' . json_encode($padding_select) . ')'
       . ' && !document.querySelector(' . json_encode($padding_input) . ')',
       20000,
-      'The band\'s Spacing control renders its Padding row as the same closed dimension select, no text input.',
+      'The section\'s Spacing control renders its Padding row as the same closed dimension select, no text input.',
     );
     $this->pickPanelOption($padding_select, '2rem');
-    $band_key = "container:$section_a_uuid";
+    $section_key = "container:$section_a_uuid";
     $this->assertJsCondition(
-      "(() => { const entry = $map" . '[' . json_encode($band_key) . "]?.default ?? {};"
+      "(() => { const entry = $map" . '[' . json_encode($section_key) . "]?.default ?? {};"
       . " return entry.padding === 'var(--space-8)' && entry['padding-top'] === undefined && entry['padding-bottom'] === undefined; })()",
       20000,
-      'The band\'s padding row wrote the uniform `padding` shorthand as var(--space-8): the grant is the same at root depth.',
+      'The section\'s padding row wrote the uniform `padding` shorthand as var(--space-8): the grant is the same at root depth.',
     );
     $this->assertJsCondition(
-      "(() => { const style = getComputedStyle(document.querySelector(\"[data-selectable='$band_key']\"));"
+      "(() => { const style = getComputedStyle(document.querySelector(\"[data-selectable='$section_key']\"));"
       . " return style.paddingTop !== '0px' && style.paddingLeft === style.paddingTop && style.paddingRight === style.paddingTop; })()",
       20000,
-      'The band wears the shorthand on every side: its own padding masks the width variant\'s inline inset (a layer mask the inspector surfaces, never a withheld grant).',
+      'The section wears the shorthand on every side: its own padding masks the width variant\'s inline inset (a layer mask the inspector surfaces, never a withheld grant).',
     );
     // Back on the block for the open-flip steps below.
     $session->executeScript("Drupal.Daedalus.Selection.select('$block_a_key');");
@@ -1812,14 +1812,20 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       $variant->setStyles(['' => ['default' => ['color' => $link_variant['color'], 'letter-spacing' => $link_variant['letter-spacing']]]]);
       $variant->save();
     }
-    // One published gradient swatch for the Background replacement step:
-    // the client guide payload carries it as the widget's gradient stop
-    // and the compiled swatch stylesheet delivers its custom property, so
-    // it too is minted before the activation and the reload.
-    $swatch = DaedalusStylishSwatch::create(['label' => 'Hero fade', 'kind' => 'gradient']);
-    $swatch->setSwatchValue('linear-gradient(135deg, #e94560, #16213e)')->save();
-    $this->assertSame('hero_fade', $swatch->getMachineName(), 'The gradient swatch minted as --swatch-hero_fade.');
+    // One gradient token on the olivero skin for the Background
+    // replacement step: the materials roster carries it as the widget's
+    // gradient stop and the compiled skin file delivers its custom
+    // property (--gradient-hero-fade), so it too is minted before the
+    // activation and the reload. The mint lands in the shipped skin's
+    // site layer, the lane every site-minted token takes.
     $this->activateSkin('olivero', 'olivero');
+    $token_manager = \Drupal::service('daedalus_stylish.skin_material_manager');
+    $token_manager->mint($token_manager->activeSkin(), 'gradient', 'hero-fade', 'linear-gradient(135deg, #e94560, #16213e)');
+    $this->assertSame(
+      'linear-gradient(135deg, #e94560, #16213e)',
+      $token_manager->activeSkin()->tokens()['gradient']['hero-fade']['value'],
+      'The gradient token minted on the olivero skin as --gradient-hero-fade.',
+    );
     $this->assertSame(
       'open',
       \Drupal::service('daedalus_stylish.style_guide')->enforcement(),
@@ -1997,12 +2003,12 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $color_field_xpath = '//details[contains(@class, "daedalus-stylish-inspector__section")]//span[contains(@class, "daedalus-stylish-color-field")][.//input[@aria-label = "Text color"]]';
     $this->clickPanelXpath($color_field_xpath . '/button[contains(@class, "daedalus-stylish-color-field__well")]');
     $this->assertNotNull(
-      $assert_session->waitForElement('css', '.daedalus-ui-popover .daedalus-stylish-swatch-popover .daedalus-stylish-palette-lanes'),
+      $assert_session->waitForElement('css', '.daedalus-ui-popover .daedalus-stylish-token-popover .daedalus-stylish-palette-lanes'),
       'The face opened the palette popover with the lane row after the groups.',
     );
-    $this->clickPanelXpath('//div[contains(@class, "daedalus-ui-popover")]//div[contains(@class, "daedalus-stylish-swatch-popover")]//button[contains(@class, "daedalus-stylish-palette-lane--color")]');
+    $this->clickPanelXpath('//div[contains(@class, "daedalus-ui-popover")]//div[contains(@class, "daedalus-stylish-token-popover")]//button[contains(@class, "daedalus-stylish-palette-lane--color")]');
     $this->assertJsCondition(
-      "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-swatch-popover')",
+      "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-token-popover')",
       20000,
       'The color lane closed the popover.',
     );
@@ -2047,16 +2053,16 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // marker), never the "?" custom face.
     $this->switchMode('Basic');
     $widget = self::TEXT_COLOR_WIDGET;
-    $well = "$widget .daedalus-stylish-inspector__widget-row .daedalus-stylish-inspector__widget-value > .daedalus-stylish-swatch-well";
+    $well = "$widget .daedalus-stylish-inspector__widget-row .daedalus-stylish-inspector__widget-value > .daedalus-stylish-token-well";
     $this->assertNotNull(
-      $assert_session->waitForElement('css', "$well.daedalus-stylish-swatch-well--literal"),
+      $assert_session->waitForElement('css', "$well.daedalus-stylish-token-well--literal"),
       'The text_color well wears the literal face for the committed custom color.',
     );
     $this->assertJsCondition(
       "(() => { const well = document.querySelector(" . json_encode($well) . ');'
-      . " const face = well?.querySelector('.daedalus-stylish-swatch-well__face');"
+      . " const face = well?.querySelector('.daedalus-stylish-token-well__face');"
       . " return !!face && getComputedStyle(face).backgroundColor === 'rgb(255, 136, 0)'"
-      . " && !well.classList.contains('daedalus-stylish-swatch-well--custom'); })()",
+      . " && !well.classList.contains('daedalus-stylish-token-well--custom'); })()",
       20000,
       'The literal face is painted with the committed color itself, not the checker \"?\".',
     );
@@ -2080,21 +2086,21 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $widget_height = (float) $session->evaluateScript($widget_height_js);
     $this->clickPanel($well);
     $this->assertNotNull(
-      $assert_session->waitForElement('css', '.daedalus-ui-popover .daedalus-stylish-swatch-popover .daedalus-stylish-palette-lane--color'),
+      $assert_session->waitForElement('css', '.daedalus-ui-popover .daedalus-stylish-token-popover .daedalus-stylish-palette-lane--color'),
       'The well opened its popover with the color lane after the palette.',
     );
     $this->assertJsCondition(
       "(() => { const popover = document.querySelector('.daedalus-ui-popover');"
       . " return !!popover && popover.parentElement === document.body"
       . " && !document.getElementById('daedalus_stylish_inspector').contains(popover)"
-      . " && !!popover.querySelector('.daedalus-stylish-swatch-popover')"
+      . " && !!popover.querySelector('.daedalus-stylish-token-popover')"
       . " && Math.abs($widget_height_js - $widget_height) < 1; })()",
       20000,
       'The open popover is a body child on the floating surface, not a descendant of the inspector, and the widget did not grow: the rows below stay put.',
     );
     $this->clickPanel('.daedalus-ui-popover .daedalus-stylish-palette-lane--color');
     $this->assertJsCondition(
-      "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-swatch-popover')",
+      "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-token-popover')",
       20000,
       'The color lane closed the well popover.',
     );
@@ -2102,8 +2108,8 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->typeIntoPanel($widget_picker, '#0a55f0');
     $this->assertJsCondition(
       "(() => { const well = document.querySelector(" . json_encode($well) . ');'
-      . " const face = well?.querySelector('.daedalus-stylish-swatch-well__face');"
-      . " return !!well && well.classList.contains('daedalus-stylish-swatch-well--literal')"
+      . " const face = well?.querySelector('.daedalus-stylish-token-well__face');"
+      . " return !!well && well.classList.contains('daedalus-stylish-token-well--literal')"
       . " && !!face && getComputedStyle(face).backgroundColor === 'rgb(10, 85, 240)'"
       . ' && ' . $map . '[' . json_encode($block_b_key) . "]?.default?.color === '#ff8800'; })()",
       20000,
@@ -2123,11 +2129,11 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
 
     // Reopening the well offers the mint row: a literal is worn on an
     // open space under the editor's grant (mintOffered, the color
-    // field's gate), so save-as-swatch lives inside the popover.
+    // field's gate), so save-as-token lives inside the popover.
     $this->clickPanel($well);
     $this->assertNotNull(
-      $assert_session->waitForElement('css', '.daedalus-ui-popover .daedalus-stylish-swatch-popover .daedalus-stylish-mint-row .daedalus-stylish-mint-row__save'),
-      'Reopening the well offered the save-as-swatch mint row over the worn literal.',
+      $assert_session->waitForElement('css', '.daedalus-ui-popover .daedalus-stylish-token-popover .daedalus-stylish-mint-row .daedalus-stylish-mint-row__save'),
+      'Reopening the well offered the save-as-token mint row over the worn literal.',
     );
 
     // ----- shift+v opens the variant picker for the selection. -----
@@ -2139,7 +2145,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // popover is open at a time.
     $this->pressKeyOnFocused('Escape');
     $this->assertJsCondition(
-      "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-swatch-popover')",
+      "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-token-popover')",
       20000,
       'Escape closed the well\'s popover.',
     );
@@ -2473,11 +2479,11 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     );
     $this->assertJsCondition(
       "(() => { const row = $border_row_js; if (!row) { return false; }"
-      . " const color = row.querySelector('.daedalus-stylish-stroke-row__part--color .daedalus-stylish-swatch-well');"
-      . " const style = row.querySelector('.daedalus-stylish-stroke-row__part--style .daedalus-stylish-swatch-well');"
+      . " const color = row.querySelector('.daedalus-stylish-stroke-row__part--color .daedalus-stylish-token-well');"
+      . " const style = row.querySelector('.daedalus-stylish-stroke-row__part--style .daedalus-stylish-token-well');"
       . " const entry = $map" . '[' . json_encode($clone_key) . "]?.default ?? {};"
-      . " return !!color && color.classList.contains('daedalus-stylish-swatch-well--unset')"
-      . " && !!style && style.classList.contains('daedalus-stylish-swatch-well--unset')"
+      . " return !!color && color.classList.contains('daedalus-stylish-token-well--unset')"
+      . " && !!style && style.classList.contains('daedalus-stylish-token-well--unset')"
       . " && row.querySelector('input[aria-label=\"Border\"]').value === ''"
       . " && !row.querySelector('.daedalus-stylish-inspector__segment')"
       . " && entry['border-width'] === undefined && entry['border-style'] === undefined && entry['border-color'] === undefined; })()",
@@ -2504,13 +2510,13 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->assertMatchesRegularExpression('/^rgb\(/', $border_facts['accent'], 'The accent token resolves to a color inside the clone.');
     // A REAL click on the color well opens its popover (the palette grid
     // over the skin's color tokens), and a REAL pick of the accent
-    // swatch commits the COMPLETED stroke.
-    $this->clickPanelXpath($border_row_xpath . '//span[contains(@class, "daedalus-stylish-stroke-row__part--color")]/button[contains(@class, "daedalus-stylish-swatch-well")]');
-    $accent_stop_xpath = '//div[contains(@class, "daedalus-ui-popover")]//div[contains(@class, "daedalus-stylish-swatch-popover")]'
+    // token commits the COMPLETED stroke.
+    $this->clickPanelXpath($border_row_xpath . '//span[contains(@class, "daedalus-stylish-stroke-row__part--color")]/button[contains(@class, "daedalus-stylish-token-well")]');
+    $accent_stop_xpath = '//div[contains(@class, "daedalus-ui-popover")]//div[contains(@class, "daedalus-stylish-token-popover")]'
       . '//button[contains(@class, "daedalus-stylish-palette-grid__stop")][translate(@aria-label, "ACCENT", "accent") = "accent"]';
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', $accent_stop_xpath),
-      'The Border color well opened the palette popover offering the accent swatch.',
+      'The Border color well opened the palette popover offering the accent token.',
     );
     $this->clickPanelXpath($accent_stop_xpath);
     $this->assertJsCondition(
@@ -2534,10 +2540,10 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "(() => { const row = $border_row_js; if (!row) { return false; }"
       . " const input = row.querySelector('input[aria-label=\"Border\"]');"
-      . " return row.querySelector('.daedalus-stylish-stroke-row__part--color .daedalus-stylish-swatch-well').classList.contains('daedalus-stylish-swatch-well--stop')"
-      . " && row.querySelector('.daedalus-stylish-stroke-row__part--style .daedalus-stylish-swatch-well').classList.contains('daedalus-stylish-swatch-well--stop')"
+      . " return row.querySelector('.daedalus-stylish-stroke-row__part--color .daedalus-stylish-token-well').classList.contains('daedalus-stylish-token-well--stop')"
+      . " && row.querySelector('.daedalus-stylish-stroke-row__part--style .daedalus-stylish-token-well').classList.contains('daedalus-stylish-token-well--stop')"
       . " && input.value === '1' && input.closest('.daedalus-stylish-dimension').querySelector('.daedalus-stylish-dimension__unit-label').textContent === 'px'"
-      . " && !document.querySelector('.daedalus-ui-popover .daedalus-stylish-swatch-popover'); })()",
+      . " && !document.querySelector('.daedalus-ui-popover .daedalus-stylish-token-popover'); })()",
       20000,
       'The popover closed and the row wears the completed stroke: the color and style wells light their stops and the width field reads 1 beside its static px label (the stroke widths name px).',
     );
@@ -2706,7 +2712,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       'The canvas clone wears the solid 2px outline without reload.',
     );
 
-    // ----- The page spaces its bands through the layout root. -----
+    // ----- The page spaces its sections through the layout root. -----
     // Seam one: an element-bound kind control gating on the bound part's
     // live child count. daedalus_edit binds the entity kind's `gap` control
     // to `.daedalus-layout-layout`, the layout root daedalus_layout renders around the
@@ -2714,7 +2720,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // #layout-builder are the same declared part), and the gap widget's
     // gate reads that part's OWN child boxes (self.partChildCount), never
     // the entity root's, whose one child box is the layout root itself.
-    // The page holds two bands: section A from the strict phase, staged
+    // The page holds two sections: section A from the strict phase, staged
     // in tempstore across the enforcement reload, and section B. Pinned
     // first, so the row's presence below is the gate opening on a real
     // count and never an unknown context degrading to an offer.
@@ -2733,14 +2739,14 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       . " && getComputedStyle(root).display === 'flex'"
       . " && getComputedStyle(root).flexDirection === 'column'; })()",
       20000,
-      'The edit canvas renders the layout root (daedalus_layout\'s #layout-builder wearing .daedalus-layout-layout) inside the entity root, holding exactly the two bands as its child boxes and laid out as the declared flex column.',
+      'The edit canvas renders the layout root (daedalus_layout\'s #layout-builder wearing .daedalus-layout-layout) inside the entity root, holding exactly the two sections as its child boxes and laid out as the declared flex column.',
     );
     $gap_widget = '#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--gap';
     $gap_input = "$gap_widget input[aria-label='Gap']";
     $gap_chevron = "$gap_input + .daedalus-stylish-stop-menu__chevron";
     $this->assertNotNull(
       $assert_session->waitForElement('css', $gap_input),
-      'The Page\'s Basic tab renders the Gap row: the element-bound kind control passed its presence gate and its bound part\'s two-band count.',
+      'The Page\'s Basic tab renders the Gap row: the element-bound kind control passed its presence gate and its bound part\'s two-section count.',
     );
     $this->assertJsCondition(
       '(() => { const widget = document.querySelector(' . json_encode($gap_widget) . ');'
@@ -2755,11 +2761,11 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
 
     // Seam two: a part-keyed write landing through the entity's @scope
     // tag onto the module-rendered element. Pre-commit facts: the layout
-    // root's computed row-gap and the distance between the two bands, so
+    // root's computed row-gap and the distance between the two sections, so
     // the restyle below is observable as canvas geometry, not only as a
     // computed string.
-    $bands_apart_js = '(() => { const rects = [document.querySelector(' . json_encode($section_a) . '), document.querySelector(' . json_encode($section_b) . ')]'
-      . ' .map((band) => band.getBoundingClientRect()).sort((a, b) => a.top - b.top);'
+    $sections_apart_js = '(() => { const rects = [document.querySelector(' . json_encode($section_a) . '), document.querySelector(' . json_encode($section_b) . ')]'
+      . ' .map((section) => section.getBoundingClientRect()).sort((a, b) => a.top - b.top);'
       . ' return rects[1].top - rects[0].bottom; })()';
     // The md token's resolved length is measured by a probe inside the
     // layout root (the one place var(--space-md) means anything), so the
@@ -2773,10 +2779,10 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
         root.append(probe);
         const tokenGap = getComputedStyle(probe).paddingTop;
         probe.remove();
-        return JSON.stringify({ tokenGap, rowGap: getComputedStyle(root).rowGap, apart: $bands_apart_js });
+        return JSON.stringify({ tokenGap, rowGap: getComputedStyle(root).rowGap, apart: $sections_apart_js });
       })()
       JS), TRUE);
-    $this->assertIsArray($gap_facts, 'The md token\'s length, the layout root\'s row-gap and the bands\' distance were measured before the pick.');
+    $this->assertIsArray($gap_facts, 'The md token\'s length, the layout root\'s row-gap and the sections\' distance were measured before the pick.');
     $this->assertMatchesRegularExpression('/^\d+(\.\d+)?px$/', $gap_facts['tokenGap'], 'The md space token resolves to a length inside the layout root.');
     $this->assertNotSame($gap_facts['tokenGap'], $gap_facts['rowGap'], 'The layout root does not already wear the md gap, so the pick below is observable.');
     // A REAL click on the chevron opens the shared menu over the space
@@ -2829,9 +2835,9 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       '(() => { const root = document.querySelector(' . json_encode($layout_root) . ');'
       . ' return !!root && getComputedStyle(root).rowGap === ' . json_encode($gap_facts['tokenGap'])
-      . " && Math.abs($bands_apart_js - (" . json_encode((float) $gap_facts['apart']) . ' + ' . json_encode($token_gap) . ')) < 1; })()',
+      . " && Math.abs($sections_apart_js - (" . json_encode((float) $gap_facts['apart']) . ' + ' . json_encode($token_gap) . ')) < 1; })()',
       20000,
-      'The layout root computes the md token\'s row-gap and the two bands sit that much further apart on the canvas without reload: the declared flex column laid the page gap out.',
+      'The layout root computes the md token\'s row-gap and the two sections sit that much further apart on the canvas without reload: the declared flex column laid the page gap out.',
     );
     $this->assertJsCondition(
       '(() => { const input = document.querySelector(' . json_encode($gap_input) . ');'
@@ -2904,7 +2910,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $background_row_js = "($background_rows_js)[0]";
     $background_well_xpath = '//div[@id = "daedalus_stylish_inspector"]//*[contains(@class, "daedalus-stylish-inspector__widget--background")]'
       . '//*[contains(@class, "daedalus-stylish-inspector__widget-row")][.//*[contains(@class, "daedalus-stylish-inspector__widget-axis") and normalize-space() = "Background"]]'
-      . '//button[contains(@class, "daedalus-stylish-swatch-well")]';
+      . '//button[contains(@class, "daedalus-stylish-token-well")]';
     $this->assertJsCondition(
       "($background_rows_js).length === 1",
       20000,
@@ -2917,12 +2923,12 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     );
     $this->assertJsCondition(
       "(() => { const row = $background_row_js; if (!row) { return false; }"
-      . " const well = row.querySelector('button.daedalus-stylish-swatch-well');"
-      . " const face = well?.querySelector('.daedalus-stylish-swatch-well__face');"
-      . " return !!well && well.classList.contains('daedalus-stylish-swatch-well--literal')"
+      . " const well = row.querySelector('button.daedalus-stylish-token-well');"
+      . " const face = well?.querySelector('.daedalus-stylish-token-well__face');"
+      . " return !!well && well.classList.contains('daedalus-stylish-token-well--literal')"
       . " && !!face && getComputedStyle(face).backgroundColor === 'rgb(26, 26, 46)'; })()",
       20000,
-      'Background: the row\'s swatch well wears the literal face painted the button\'s #1a1a2e (rgb(26, 26, 46)): the rule resolved background-color to the anchor, whose stack lit the root\'s reference layer at .text-block-link.',
+      'Background: the row\'s token well wears the literal face painted the button\'s #1a1a2e (rgb(26, 26, 46)): the rule resolved background-color to the anchor, whose stack lit the root\'s reference layer at .text-block-link.',
     );
     $this->assertJsCondition(
       "($background_row_js)?.style.getPropertyValue('--daedalus-stylish-origin').trim() === " . json_encode(self::layerColor('button')),
@@ -2946,7 +2952,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // same property; the rule keeps the row on the first (the anchor)
     // and the read carries the other box as `alsoOn` (controls.js
     // resolveCandidates) into the origin and the row menu's inert
-    // "Also set on element" line, hinted with the band's value, so the
+    // "Also set on element" line, hinted with the root's value, so the
     // hidden value surfaces honestly on the row that flattened it (no
     // section-header chip). The menu opens through the shared row menu
     // hook on a synthetic right-click; an outside pointerdown dismisses
@@ -2976,27 +2982,27 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
         Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
           operations: [{ op: 'update_style', key: '$block_c_key', properties: { 'background-color': '#ff0000' } }],
         })).catch((error) => {
-          window.__rootBandError = error.message;
+          window.__rootBackgroundError = error.message;
         });
       })();
       JS);
     $this->assertJsCondition(
-      'window.__rootBandError !== undefined || ' . $map . '[' . json_encode($block_c_key) . "]?.default?.['background-color'] === '#ff0000'",
+      'window.__rootBackgroundError !== undefined || ' . $map . '[' . json_encode($block_c_key) . "]?.default?.['background-color'] === '#ff0000'",
       20000,
-      'Background: the root band write resolved.',
+      'Background: the root background write resolved.',
     );
-    $root_band_error = $session->evaluateScript('window.__rootBandError ?? null');
-    $this->assertNull($root_band_error, 'Background: writing background-color on the block root failed: ' . ($root_band_error ?? ''));
+    $root_background_error = $session->evaluateScript('window.__rootBackgroundError ?? null');
+    $this->assertNull($root_background_error, 'Background: writing background-color on the block root failed: ' . ($root_background_error ?? ''));
     $this->assertJsCondition(
       "(() => { const rows = $background_rows_js; if (rows.length !== 1) { return false; }"
-      . " const face = rows[0].querySelector('button.daedalus-stylish-swatch-well .daedalus-stylish-swatch-well__face');"
+      . " const face = rows[0].querySelector('button.daedalus-stylish-token-well .daedalus-stylish-token-well__face');"
       . " const mark = rows[0].querySelector('.daedalus-stylish-inspector__mark');"
       . " return !!face && getComputedStyle(face).backgroundColor === 'rgb(26, 26, 46)'"
       . " && !!mark && mark.title === '#1a1a2e from Button'"
       . " && mark.classList.contains('daedalus-stylish-inspector__mark--here')"
       . " && mark.style.getPropertyValue('--daedalus-stylish-origin').trim() === " . json_encode(self::layerColor('button')) . '; })()',
       20000,
-      'Background: the one row still reads the anchor (the button\'s #1a1a2e, its mark titled from Button, filled in the button hue since the variant\'s block is the posed Base), never the root\'s band: authored-first keeps list order between two authored candidates.',
+      'Background: the one row still reads the anchor (the button\'s #1a1a2e, its mark titled from Button, filled in the button hue since the variant\'s block is the posed Base), never the root\'s background: authored-first keeps list order between two authored candidates.',
     );
     $session->executeScript($open_background_menu_js);
     $this->assertJsCondition(
@@ -3004,7 +3010,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       . " return document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === '#1a1a2e from Button'"
       . " && items.some(([label, hint, disabled]) => label === 'Also set on element' && hint === '#ff0000' && disabled === 'true'); })()",
       20000,
-      'Background: the row menu carries the inert "Also set on element" line hinted with the band\'s #ff0000 under the anchor\'s header: the root\'s authored band is the second authored candidate the row does not show (resolveCandidates\' alsoOn, through the origin into rowMenu).',
+      'Background: the row menu carries the inert "Also set on element" line hinted with the root\'s #ff0000 under the anchor\'s header: the root\'s authored background is the second authored candidate the row does not show (resolveCandidates\' alsoOn, through the origin into rowMenu).',
     );
     $session->executeScript($dismiss_menu_js);
     $this->assertJsCondition(
@@ -3016,7 +3022,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       "(() => { const block = document.querySelector(\"$canvas_c\"); const link = block?.querySelector('a.text-block-link');"
       . " return !!link && getComputedStyle(block).backgroundColor === 'rgb(255, 0, 0)' && getComputedStyle(link).backgroundColor === 'rgb(26, 26, 46)'; })()",
       20000,
-      'Background: both boxes paint on the canvas (the root\'s red band, the anchor\'s dark pill): the menu line names a value that really paints, the honesty rule\'s reason.',
+      'Background: both boxes paint on the canvas (the root\'s red background, the anchor\'s dark pill): the menu line names a value that really paints, the honesty rule\'s reason.',
     );
 
     // ----- Variant dots and their doorway (the page elements row). -----
@@ -3028,7 +3034,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // halves are node-pinned (variantFacts and variantDoorways in this
     // module's row-facts.test.mjs, the registry and the menu composer in
     // daedalus_ui's); only a browser holds both bundles. Block C wears
-    // the button variant and carries its own background band, so its
+    // the button variant and carries its own background, so its
     // row says both: a dot per worn variant first, the element's own
     // dot after. The selection is C already, so the tree's reveal rule
     // drew its row.
@@ -3080,13 +3086,13 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       'Variant doorway: Discard dropped the parked session and the Basic panel is back on C with its one Background row.',
     );
 
-    // Undo the root band (the timeline's last step), so the pick below
+    // Undo the root background (the timeline's last step), so the pick below
     // lands on a block whose only authored background is the anchor's.
     $session->executeScript('Drupal.Daedalus.History.undo();');
     $this->assertJsCondition(
       $map . '[' . json_encode($block_c_key) . "]?.default?.['background-color'] === undefined",
       20000,
-      'Background: undo cleared the root band from the map.',
+      'Background: undo cleared the root background from the map.',
     );
     $session->executeScript("Drupal.Daedalus.Selection.select('$block_c_key');");
     $this->assertJsCondition(
@@ -3223,7 +3229,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // Seam three: write where you read. Pre-commit facts: the accent
     // token resolved inside the block (the color the anchor will wear).
     // A REAL click on the row's well opens the palette popover, and a
-    // REAL pick of the accent swatch commits ONE update_style at the
+    // REAL pick of the accent token commits ONE update_style at the
     // PART key, the candidate the row read from, carrying
     // background-color alone (backgroundPick over an unset image), and
     // the root gets nothing.
@@ -3235,7 +3241,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->clickPanelXpath($background_well_xpath);
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', $accent_stop_xpath),
-      'Background: the row\'s well opened the palette popover offering the accent swatch.',
+      'Background: the row\'s well opened the palette popover offering the accent token.',
     );
     $this->clickPanelXpath($accent_stop_xpath);
     $this->assertJsCondition(
@@ -3257,9 +3263,9 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     );
     $this->assertJsCondition(
       "(() => { const row = $background_row_js; if (!row) { return false; }"
-      . " const well = row.querySelector('button.daedalus-stylish-swatch-well');"
-      . " return !!well && well.classList.contains('daedalus-stylish-swatch-well--stop')"
-      . " && !document.querySelector('.daedalus-ui-popover .daedalus-stylish-swatch-popover'); })()",
+      . " const well = row.querySelector('button.daedalus-stylish-token-well');"
+      . " return !!well && well.classList.contains('daedalus-stylish-token-well--stop')"
+      . " && !document.querySelector('.daedalus-ui-popover .daedalus-stylish-token-popover'); })()",
       20000,
       'Background: the popover closed on the pick and the row\'s well lights the accent stop: the row reads back its own write.',
     );
@@ -3289,7 +3295,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->clickPanelXpath($background_well_xpath);
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', $accent_stop_xpath),
-      'Background: the unlinked block\'s well opened the palette popover offering the accent swatch.',
+      'Background: the unlinked block\'s well opened the palette popover offering the accent token.',
     );
     $this->clickPanelXpath($accent_stop_xpath);
     $this->assertJsCondition(
@@ -3315,13 +3321,13 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // address rule asked for the set) and a null member (a removal)
     // lands where the value lives (write where you read, per property),
     // so a background REPLACEMENT on a linked block whose root wears an
-    // authored band spans two boxes: the gradient pick's image means the
+    // authored background spans two boxes: the gradient pick's image means the
     // anchor (nothing authored for it anywhere: first present) while the
-    // band it replaces is cleared on the root. The pipeline joins the
+    // background it replaces is cleared on the root. The pipeline joins the
     // two keys in ONE atomic mutate() batch (compoundOperations) under
     // one undo label; the batch through the real op path and the canvas
-    // repaint (the anchor painting the gradient, the band gone) exist
-    // only here. A fresh linked block, so the root's band is the only
+    // repaint (the anchor painting the gradient, the background gone) exist
+    // only here. A fresh linked block, so the root's background is the only
     // authored background on either box (block C's anchor wears the
     // button and its accent pick).
     $block_f_uuid = $uuid_service->generate();
@@ -3336,44 +3342,44 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
         Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
           operations: [{ op: 'update_style', key: '$block_f_key', properties: { 'background-color': '#ff0000' } }],
         })).catch((error) => {
-          window.__replacementBandError = error.message;
+          window.__replacementBackgroundError = error.message;
         });
       })();
       JS);
     $this->assertJsCondition(
-      'window.__replacementBandError !== undefined || ' . $map . '[' . json_encode($block_f_key) . "]?.default?.['background-color'] === '#ff0000'",
+      'window.__replacementBackgroundError !== undefined || ' . $map . '[' . json_encode($block_f_key) . "]?.default?.['background-color'] === '#ff0000'",
       20000,
-      'Replacement: the root band write resolved.',
+      'Replacement: the root background write resolved.',
     );
-    $replacement_band_error = $session->evaluateScript('window.__replacementBandError ?? null');
-    $this->assertNull($replacement_band_error, 'Replacement: writing background-color on the fresh linked block\'s root failed: ' . ($replacement_band_error ?? ''));
+    $replacement_background_error = $session->evaluateScript('window.__replacementBackgroundError ?? null');
+    $this->assertNull($replacement_background_error, 'Replacement: writing background-color on the fresh linked block\'s root failed: ' . ($replacement_background_error ?? ''));
     $session->executeScript("Drupal.Daedalus.Selection.select('$block_f_key');");
     $this->assertJsCondition(
       "(() => { const rows = $background_rows_js; if (rows.length !== 1) { return false; }"
-      . " const face = rows[0].querySelector('button.daedalus-stylish-swatch-well .daedalus-stylish-swatch-well__face');"
+      . " const face = rows[0].querySelector('button.daedalus-stylish-token-well .daedalus-stylish-token-well__face');"
       . " return !!face && getComputedStyle(face).backgroundColor === 'rgb(255, 0, 0)'; })()",
       20000,
-      'Replacement: the fresh linked block\'s one Background row reads the root\'s authored band (rgb(255, 0, 0)) on its well face: the band is the only authored value on either box.',
+      'Replacement: the fresh linked block\'s one Background row reads the root\'s authored background (rgb(255, 0, 0)) on its well face: the background is the only authored value on either box.',
     );
-    $hero_fade_stop_xpath = '//div[contains(@class, "daedalus-ui-popover")]//div[contains(@class, "daedalus-stylish-swatch-popover")]'
-      . '//button[contains(@class, "daedalus-stylish-palette-grid__stop")][@aria-label = "Hero fade"]';
+    $hero_fade_stop_xpath = '//div[contains(@class, "daedalus-ui-popover")]//div[contains(@class, "daedalus-stylish-token-popover")]'
+      . '//button[contains(@class, "daedalus-stylish-palette-grid__stop")][@aria-label = "hero-fade"]';
     $this->recordOps();
     $this->clickPanelXpath($background_well_xpath);
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', $hero_fade_stop_xpath),
-      'Replacement: the row\'s well opened the palette popover offering the gradient swatch as a stop.',
+      'Replacement: the row\'s well opened the palette popover offering the gradient token as a stop.',
     );
     $this->clickPanelXpath($hero_fade_stop_xpath);
     $this->assertJsCondition(
-      $map . '[' . json_encode($link_f_key) . "]?.default?.['background-image'] === 'var(--swatch-hero_fade)'"
+      $map . '[' . json_encode($link_f_key) . "]?.default?.['background-image'] === 'var(--gradient-hero-fade)'"
       . ' && ' . $map . '[' . json_encode($block_f_key) . "]?.default?.['background-color'] === undefined"
       . ' && ' . $map . '[' . json_encode($link_f_key) . "]?.default?.['background-color'] === undefined",
       20000,
-      'Replacement: the gradient pick placed background-image: var(--swatch-hero_fade) on the anchor (the set\'s box as a group) and cleared the root\'s background-color (the removal, where the band lived); the anchor got no color.',
+      'Replacement: the gradient pick placed background-image: var(--gradient-hero-fade) on the anchor (the set\'s box as a group) and cleared the root\'s background-color (the removal, where the background lived); the anchor got no color.',
     );
     $this->assertOneBatch(
       [
-        [$link_f_key, ['background-image' => 'var(--swatch-hero_fade)']],
+        [$link_f_key, ['background-image' => 'var(--gradient-hero-fade)']],
         [$block_f_key, ['background-color' => NULL]],
       ],
       'Replacement: the pick was ONE mutate() batch of exactly two update_style ops, the image on the PART key and the null on the ROOT key, each carrying its property alone.',
@@ -3383,13 +3389,13 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       . " return !!block && !!link && getComputedStyle(link).backgroundImage.includes('linear-gradient')"
       . " && getComputedStyle(block).backgroundColor === 'rgba(0, 0, 0, 0)'; })()",
       20000,
-      'Replacement: the canvas repainted without reload: the anchor paints the swatch gradient and the root\'s band is gone.',
+      'Replacement: the canvas repainted without reload: the anchor paints the token\'s gradient and the root\'s background is gone.',
     );
     $this->assertJsCondition(
       "(() => { const row = $background_row_js; if (!row) { return false; }"
-      . " const well = row.querySelector('button.daedalus-stylish-swatch-well');"
-      . " return !!well && well.classList.contains('daedalus-stylish-swatch-well--stop')"
-      . " && !document.querySelector('.daedalus-ui-popover .daedalus-stylish-swatch-popover'); })()",
+      . " const well = row.querySelector('button.daedalus-stylish-token-well');"
+      . " return !!well && well.classList.contains('daedalus-stylish-token-well--stop')"
+      . " && !document.querySelector('.daedalus-ui-popover .daedalus-stylish-token-popover'); })()",
       20000,
       'Replacement: the popover closed on the pick and the row\'s well lights the gradient stop: the row reads back the anchor\'s image, the box the group resolved to.',
     );
@@ -3409,7 +3415,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // rebase rule and the editable-layer rule are node-tested
     // (write-address, controls, style-stack); the chip, the menu, the
     // paint and the disabled posture over one real write exist only
-    // here. The fixture: a new band holding three LINKED text blocks
+    // here. The fixture: a new section holding three LINKED text blocks
     // (two `p` roots and one `h3` root, so the tag rule's reach into a
     // heading-rooted block is on the canvas too), placed through the op
     // spine; the site's demo container carries no linked siblings, so
@@ -3459,10 +3465,10 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       "window.__addressPlacementError !== undefined"
       . " || (($anchors_js).every((anchor) => !!anchor) && JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()).includes('$link_3'))",
       20000,
-      'Write address: the band of three linked text blocks placed and rendered, each with its anchor.',
+      'Write address: the section of three linked text blocks placed and rendered, each with its anchor.',
     );
     $address_placement_error = $session->evaluateScript('window.__addressPlacementError ?? null');
-    $this->assertNull($address_placement_error, 'Write address: placing the linked band failed: ' . ($address_placement_error ?? ''));
+    $this->assertNull($address_placement_error, 'Write address: placing the linked section failed: ' . ($address_placement_error ?? ''));
     $container_e_key = "container:$section_e_uuid";
     $tag_rule_key = "$container_e_key::a";
     $block_e1_key = "block:$link_1";
@@ -3471,7 +3477,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $write_paint_js = "document.querySelector('style[data-daedalus-stylish-selector-paint=\"write\"]')";
     $menu_items_js = "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
       . ".map((item) => [item.querySelector('.daedalus-ui-menu__label')?.textContent.trim(), item.querySelector('.daedalus-ui-menu__hint')?.textContent.trim() ?? null, item.getAttribute('aria-checked')])";
-    $background_well = '#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--background button.daedalus-stylish-swatch-well';
+    $background_well = '#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--background button.daedalus-stylish-token-well';
     $corners_input = "#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--corners-border input[aria-label='Corners']";
     // The bare element first: the subject line's chip is always rendered
     // (the line keeps one shape), reading "This element" at the block's
@@ -3601,7 +3607,11 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // carries no label, and the base `a` tag reads its shipped word
     // (StyleGuide::BASE_TAG_LABELS served as the guide's tagLabels; no
     // instance namespace words it); the chained shapes carry the text
-    // block's part word.
+    // block's part word. The host entity is the farthest ancestor (the
+    // matcher reads the document tree, the page above its sections), so
+    // it mints last, worded by the page's label: its tag rule and its
+    // type-and-part box, never a `> d-text` box (the page's children are
+    // sections, so that chain reaches nothing).
     $this->clickPanel($address_chip);
     $this->assertJsCondition(
       "!!document.querySelector('.daedalus-ui-menu') && document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__header')?.textContent.trim() === 'Style this at'",
@@ -3615,10 +3625,12 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
         ['Every link in Section', 'new rule', 'false'],
         ['Text block links directly in Section', 'new rule', 'false'],
         ['Text block links in Section', 'new rule', 'false'],
+        ['Every link in Basic styling page', 'new rule', 'false'],
+        ['Text block links in Basic styling page', 'new rule', 'false'],
         ['Copy key', NULL, NULL],
       ],
       json_decode((string) $session->evaluateScript("JSON.stringify($menu_items_js)"), TRUE),
-      'Write address: the menu lists the link\'s address set in order (the own key checked, "This element" as the way back to the bare element while the part facet stands, then the three mintable addresses on the section, each hinted "new rule"), the tag rule labelled "Every link in Section", and no generated-box doorway: basic mode mounts no rows at a box, so it offers none (advanced and code do); "Copy key" closes the menu after the separator (the subject word\'s copy gesture, unchecked: not an address).',
+      'Write address: the menu lists the link\'s address set in order (the own key checked, "This element" as the way back to the bare element while the part facet stands, then the three mintable addresses on the section, then the two on the page, the farthest ancestor, each hinted "new rule"), the tag rule labelled "Every link in Section", and no generated-box doorway: basic mode mounts no rows at a box, so it offers none (advanced and code do); "Copy key" closes the menu after the separator (the subject word\'s copy gesture, unchecked: not an address).',
     );
     // The menu previews before it picks: the entry under the pointer is
     // the primitive's active item, and the chip hands its pair to the
@@ -3767,7 +3779,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // rule as the inherited origin on its mark.
     $this->clickPanel($address_chip);
     $this->assertJsCondition(
-      "(() => { const items = $menu_items_js; return items.length === 6"
+      "(() => { const items = $menu_items_js; return items.length === 8"
       . " && items[0][0] === 'This link' && items[0][2] === 'false'"
       . " && items[1][0] === 'This element' && items[1][2] === 'false'"
       . " && items[2][0] === 'Every link in Section' && items[2][1] === null && items[2][2] === 'true'; })()",
@@ -3890,17 +3902,18 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       'Rule wear: every anchor in the section computes the variant\'s color and letter-spacing without reload, the h3-rooted block\'s included: the rule delivers the wear to every match.',
     );
     $this->assertJsCondition(
-      "(() => { const band = document.querySelector(\"[data-selectable='$container_e_key']\");"
-      . " return !!band && !band.className.includes('daedalus-stylish-variant--') && !band.querySelector('[class*=\"daedalus-stylish-variant--\"]'); })()",
+      "(() => { const section = document.querySelector(\"[data-selectable='$container_e_key']\");"
+      . " return !!section && !section.className.includes('daedalus-stylish-variant--') && !section.querySelector('[class*=\"daedalus-stylish-variant--\"]'); })()",
       20000,
-      'Rule wear: no element in the band carries a variant class: a rule\'s wear is delivered inside its @scope, never stamped.',
+      'Rule wear: no element in the section carries a variant class: a rule\'s wear is delivered inside its @scope, never stamped.',
     );
-    // The Materials place: the target chip renders there too, still the
-    // rule, and the catalog's cards read the same target: Accent link's
-    // Apply is withheld as already worn AT THE RULE (the block wears
-    // nothing), Quiet link's is ready, and its click applies at the rule,
-    // replacing Accent link on the axis.
+    // The Design system place, its Variants tab: the target chip renders
+    // there too, still the rule, and the cards read the same target:
+    // Accent link's Apply is withheld as already worn AT THE RULE (the
+    // block wears nothing), Quiet link's is ready, and its click applies
+    // at the rule, replacing Accent link on the axis.
     $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-inspector__place');
+    $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-inspector__catalog .daedalus-ui-segment:nth-child(2)');
     $library_row_js = static fn (string $label) => "Array.from(document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-library__row'))"
       . ".find((row) => row.querySelector('.daedalus-stylish-library__name')?.textContent.trim() === " . json_encode($label) . ')';
     $this->assertJsCondition(
@@ -3911,7 +3924,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       . " && chip.querySelector('.daedalus-stylish-inspector__address-label')?.textContent.trim() === 'Every link in Section'"
       . ' && !!' . $library_row_js('Accent link') . ' && !!' . $library_row_js('Quiet link') . '; })()',
       20000,
-      'Rule wear: the Materials place shows the target chip lit at "Every link in Section" and lists both link variants.',
+      'Rule wear: the Design system place\'s Variants tab shows the target chip lit at "Every link in Section" and lists both link variants.',
     );
     $apply_button = '#daedalus_stylish_inspector .daedalus-stylish-library-card__action--apply';
     $session->executeScript($library_row_js('Accent link') . '.click();');
@@ -4104,17 +4117,17 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // {padding: value} -> the padding row's patchFor over that object
     // (uniformCommit: the shorthand alone while no own longhand stands)
     // -> basic-controls.js route -> source.preview -> the preview
-    // sheet's live slot inline on the band. The hook and the row are
+    // sheet's live slot inline on the section. The hook and the row are
     // node-tested apart (use-gesture's shape, padding-row's patch), but
     // the callback shape crosses from the hook to the component and only
     // the browser runs both: a handler still destructuring the old
     // (name, value) pair reads an undefined value and paints nothing
-    // until blur. The band is selected whole (select() drops the rule
+    // until blur. The section is selected whole (select() drops the rule
     // target with it), and under the open phase its Padding row over
     // olivero's rem space ladder is the detented field.
     $session->executeScript("Drupal.Daedalus.Selection.select('$container_e_key');");
     $padding_field = "#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--spacing input[aria-label='Padding']";
-    $band_js = "document.querySelector(\"[data-selectable='$container_e_key']\")";
+    $section_js = "document.querySelector(\"[data-selectable='$container_e_key']\")";
     $preview_sheet_js = "(document.querySelector('style[data-daedalus-stylish-preview]')?.textContent ?? '')";
     $this->assertJsCondition(
       '(() => { const input = document.querySelector(' . json_encode($padding_field) . ');'
@@ -4124,19 +4137,19 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       . ' && ' . $map . '[' . json_encode($container_e_key) . ']?.default?.padding === undefined'
       . " && $preview_sheet_js === ''; })()",
       20000,
-      'Padding preview: selecting the band whole dropped the rule target, its Basic Padding row renders as the detented field with rem as its static unit label (no select: the space names its unit), the band wears no own padding, and the preview sheet is empty before the gesture.',
+      'Padding preview: selecting the section whole dropped the rule target, its Basic Padding row renders as the detented field with rem as its static unit label (no select: the space names its unit), the section wears no own padding, and the preview sheet is empty before the gesture.',
     );
     $this->recordOps();
     $this->typeIntoPanel($padding_field, '2.75');
     $expected_padding_js = "(parseFloat(getComputedStyle(document.documentElement).fontSize) * 2.75) + 'px'";
     $this->assertJsCondition(
-      "(() => { const style = getComputedStyle($band_js); const sheet = $preview_sheet_js;"
+      "(() => { const style = getComputedStyle($section_js); const sheet = $preview_sheet_js;"
       . " return style.paddingTop === $expected_padding_js"
       . ' && style.paddingRight === style.paddingTop && style.paddingBottom === style.paddingTop && style.paddingLeft === style.paddingTop'
       . " && sheet.includes('--daedalus-stylish-live-') && sheet.includes('padding')"
       . ' && document.querySelector(' . json_encode($padding_field) . ").value === '2.75'; })()",
       20000,
-      'Padding preview: the input event alone painted the band, every side computing 2.75rem through the preview sheet\'s live slot while the field echoes the draft: the field\'s preview reached the row\'s patch as one object, mid-gesture, before any settle.',
+      'Padding preview: the input event alone painted the section, every side computing 2.75rem through the preview sheet\'s live slot while the field echoes the draft: the field\'s preview reached the row\'s patch as one object, mid-gesture, before any settle.',
     );
     $this->assertSame(
       0,
@@ -4147,15 +4160,15 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->assertOneOp(
       $container_e_key,
       ['padding' => '2.75rem'],
-      'Padding preview: the blur settled ONE update_style at the band carrying the typed value in the space\'s unit (2.75rem matches no space stop, so it stays a literal).',
+      'Padding preview: the blur settled ONE update_style at the section carrying the typed value in the space\'s unit (2.75rem matches no space stop, so it stays a literal).',
     );
     $this->assertJsCondition(
-      "(() => { const style = getComputedStyle($band_js);"
+      "(() => { const style = getComputedStyle($section_js);"
       . ' return ' . $map . '[' . json_encode($container_e_key) . "]?.default?.padding === '2.75rem'"
       . " && style.paddingTop === $expected_padding_js"
       . " && $preview_sheet_js === ''; })()",
       20000,
-      'Padding preview: the settled op landed padding: 2.75rem in the map, the band computes it from the entity tag alone, and the preview sheet released its slot.',
+      'Padding preview: the settled op landed padding: 2.75rem in the map, the section computes it from the entity tag alone, and the preview sheet released its slot.',
     );
 
     // ----- An unset ring cell under rem steps in rem, seeded. -----
@@ -4173,7 +4186,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // carries exist only here: before the seed rule this cell read its
     // px placeholder as its own anchor and wrote px beneath a row whose
     // select said rem, and until the conversion rule it printed that px
-    // whole beside the rem select. Band D wears no own padding; born by
+    // whole beside the rem select. Section D wears no own padding; born by
     // add_section it wears the Site width variant, whose
     // `padding-inline: max(var(--space-gutter), ...)` gives the left
     // cell its gutter, so the cell shows that measurement converted
@@ -4184,20 +4197,20 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // there would magnetize to its reference). The step rides the
     // keyboard like the border ring's: arrows run the pointer scrub's
     // gesture and settle path.
-    $band_d_key = "container:$section_d_uuid";
-    $band_d_js = "document.querySelector(\"[data-selectable='$band_d_key']\")";
+    $section_d_key = "container:$section_d_uuid";
+    $section_d_js = "document.querySelector(\"[data-selectable='$section_d_key']\")";
     $root_px_js = 'parseFloat(getComputedStyle(document.documentElement).fontSize)';
-    $session->executeScript("Drupal.Daedalus.Selection.select('$band_d_key');");
+    $session->executeScript("Drupal.Daedalus.Selection.select('$section_d_key');");
     $this->clickPanel("#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--spacing button[aria-label='Edit padding per side']");
     $left_cell_xpath = '//div[contains(@class, "daedalus-stylish-boxmodel__ring--padding")]'
       . '//button[contains(@class, "daedalus-stylish-boxmodel__cell")][starts-with(@aria-label, "Padding left:")]';
     $left_cell_js = 'document.evaluate(' . json_encode($left_cell_xpath) . ', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue';
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', $left_cell_xpath),
-      'Ring seed: the pencil opened the padding ring beneath band D\'s Padding row, with a left cell.',
+      'Ring seed: the pencil opened the padding ring beneath section D\'s Padding row, with a left cell.',
     );
     $this->assertJsCondition(
-      "(() => { const cell = $left_cell_js; const px = getComputedStyle($band_d_js).paddingLeft;"
+      "(() => { const cell = $left_cell_js; const px = getComputedStyle($section_d_js).paddingLeft;"
       . ' const input = document.querySelector(' . json_encode($padding_field) . ');'
       . " const field = input?.closest('.daedalus-stylish-dimension');"
       . " return !!cell && !!field && Math.abs(parseFloat(px) - 2 * $root_px_js) < 0.05"
@@ -4208,11 +4221,11 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       . " && cell.title.startsWith('2rem from Site width') && cell.title.includes('Drag sideways to change')"
       . " && field.querySelector('.daedalus-stylish-dimension__unit-label')?.textContent === 'rem'"
       . " && !field.querySelector('.daedalus-stylish-dimension__unit-well')"
-      . ' && ' . $map . '[' . json_encode($band_d_key) . "]?.default?.['padding-left'] === undefined"
-      . ' && ' . $map . '[' . json_encode($band_d_key) . "]?.default?.padding === undefined"
+      . ' && ' . $map . '[' . json_encode($section_d_key) . "]?.default?.['padding-left'] === undefined"
+      . ' && ' . $map . '[' . json_encode($section_d_key) . "]?.default?.padding === undefined"
       . " && $preview_sheet_js === ''; })()",
       20000,
-      'Ring seed: band D\'s left cell reads the Site width variant\'s gutter (computing 2rem at the root) as 2rem in the variant\'s hue, titled "2rem from Site width", scrubbable and not opaque, beneath a Padding row whose static label says rem (no select), the band wearing no own padding and the preview sheet empty.',
+      'Ring seed: section D\'s left cell reads the Site width variant\'s gutter (computing 2rem at the root) as 2rem in the variant\'s hue, titled "2rem from Site width", scrubbable and not opaque, beneath a Padding row whose static label says rem (no select), the section wearing no own padding and the preview sheet empty.',
     );
     // The seed the cell takes: 2rem (the 32px measurement through the
     // measured 16px root, at the ring's tenths), then one diagram grain
@@ -4231,9 +4244,9 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       "(() => { const cell = $left_cell_js; const sheet = $preview_sheet_js;"
       . " return !!cell && cell.getAttribute('aria-label') === $stepped_label"
       . " && sheet.includes('--daedalus-stylish-live-')"
-      . " && Math.abs(parseFloat(getComputedStyle($band_d_js).paddingLeft) - $stepped * $root_px_js) < 0.05; })()",
+      . " && Math.abs(parseFloat(getComputedStyle($section_d_js).paddingLeft) - $stepped * $root_px_js) < 0.05; })()",
       20000,
-      'Ring seed: ArrowUp previewed the left cell in REM, one tenth above the placeholder converted through the measured root (2.1rem: never 0.1rem from zero, never px from the placeholder), the band computing it through the live slot.',
+      'Ring seed: ArrowUp previewed the left cell in REM, one tenth above the placeholder converted through the measured root (2.1rem: never 0.1rem from zero, never px from the placeholder), the section computing it through the live slot.',
     );
     $this->assertSame(
       0,
@@ -4244,13 +4257,13 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       "($left_cell_js).dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowUp', bubbles: true, cancelable: true }));"
     );
     $this->assertOneOp(
-      $band_d_key,
+      $section_d_key,
       ['padding-left' => $stepped_text],
-      'Ring seed: the release was ONE update_style at band D carrying padding-left as the rem literal the seed and one grain produce (no own shorthand to expand, no stop to capture).',
+      'Ring seed: the release was ONE update_style at section D carrying padding-left as the rem literal the seed and one grain produce (no own shorthand to expand, no stop to capture).',
     );
     $this->assertJsCondition(
       "(() => { const cell = $left_cell_js;"
-      . ' return ' . $map . '[' . json_encode($band_d_key) . "]?.default?.['padding-left'] === " . json_encode($stepped_text)
+      . ' return ' . $map . '[' . json_encode($section_d_key) . "]?.default?.['padding-left'] === " . json_encode($stepped_text)
       . " && !!cell && cell.getAttribute('aria-label') === $stepped_label"
       . " && cell.classList.contains('daedalus-stylish-boxmodel__cell--authored')"
       . " && $preview_sheet_js === ''; })()",
@@ -4270,7 +4283,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // the measurement and the write meet only in the browser: before
     // the logical read the same cell read "computed from the theme"
     // (false: the variant) with the canvas's px as its number, and a
-    // per-side write silently defeated the site width. Band D's left
+    // per-side write silently defeated the site width. Section D's left
     // side is now its own (the step above), so the right cell is the
     // variant's beside an authored left: an own per-side padding beats
     // the worn width variant and the ring says nothing special about it
@@ -4285,11 +4298,11 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $top_cell_js = 'document.evaluate(' . json_encode($top_cell_xpath) . ', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue';
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', $right_cell_xpath),
-      'Site width: the padding ring is still open beneath band D\'s Padding row, with a right cell.',
+      'Site width: the padding ring is still open beneath section D\'s Padding row, with a right cell.',
     );
     $this->assertJsCondition(
       "(() => { const right = $right_cell_js; const left = $left_cell_js; const top = $top_cell_js;"
-      . " const px = getComputedStyle($band_d_js).paddingRight;"
+      . " const px = getComputedStyle($section_d_js).paddingRight;"
       . " return !!right && !!left && !!top && Math.abs(parseFloat(px) - 2 * $root_px_js) < 0.05"
       . " && right.getAttribute('aria-label') === 'Padding right: 2rem (from Site width)'"
       . " && right.textContent.trim() === '2rem'"
@@ -4322,13 +4335,13 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->recordOps();
     $this->typeIntoPanel($editor_input, '3');
     $this->assertJsCondition(
-      "(() => { const style = getComputedStyle($band_d_js); const sheet = $preview_sheet_js;"
+      "(() => { const style = getComputedStyle($section_d_js); const sheet = $preview_sheet_js;"
       . " return Math.abs(parseFloat(style.paddingRight) - 3 * $root_px_js) < 0.05"
       . " && Math.abs(parseFloat(style.paddingLeft) - $stepped * $root_px_js) < 0.05"
       . " && sheet.includes('--daedalus-stylish-live-') && sheet.includes('padding-right')"
       . ' && document.querySelector(' . json_encode($editor_input) . ").value === '3'; })()",
       20000,
-      'Site width: typing 3 into the side editor previewed padding-right as 3rem on the band through the live slot (the physical longhand over the variant\'s padding-inline), the left side keeping its own 2.1rem, before any settle.',
+      'Site width: typing 3 into the side editor previewed padding-right as 3rem on the section through the live slot (the physical longhand over the variant\'s padding-inline), the left side keeping its own 2.1rem, before any settle.',
     );
     $this->assertSame(
       0,
@@ -4337,21 +4350,21 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     );
     $this->blurPanel($editor_input);
     $this->assertOneOp(
-      $band_d_key,
+      $section_d_key,
       ['padding-right' => '3rem'],
-      'Site width: the blur settled ONE update_style at band D carrying padding-right: 3rem, the physical longhand in the space\'s unit (3rem matches no olivero stop, so it stays a literal), never a padding-inline of the band\'s own.',
+      'Site width: the blur settled ONE update_style at section D carrying padding-right: 3rem, the physical longhand in the space\'s unit (3rem matches no olivero stop, so it stays a literal), never a padding-inline of the section\'s own.',
     );
     $this->assertJsCondition(
-      "(() => { const style = getComputedStyle($band_d_js); const right = $right_cell_js;"
-      . ' return ' . $map . '[' . json_encode($band_d_key) . "]?.default?.['padding-right'] === '3rem'"
-      . ' && ' . $map . '[' . json_encode($band_d_key) . "]?.default?.['padding-inline'] === undefined"
+      "(() => { const style = getComputedStyle($section_d_js); const right = $right_cell_js;"
+      . ' return ' . $map . '[' . json_encode($section_d_key) . "]?.default?.['padding-right'] === '3rem'"
+      . ' && ' . $map . '[' . json_encode($section_d_key) . "]?.default?.['padding-inline'] === undefined"
       . " && Math.abs(parseFloat(style.paddingRight) - 3 * $root_px_js) < 0.05"
       . " && Math.abs(parseFloat(style.paddingLeft) - $stepped * $root_px_js) < 0.05"
       . " && !!right && right.getAttribute('aria-label') === 'Padding right: 3rem (set here)'"
       . " && right.classList.contains('daedalus-stylish-boxmodel__cell--authored')"
       . " && $preview_sheet_js === ''; })()",
       20000,
-      'Site width: the map holds padding-right: 3rem and no padding-inline (the variant stays worn beneath, beaten on that side by the own longhand), the band computes 3rem on the right and its own 2.1rem on the left from the entity tag alone, the cell wears it authored, and the preview sheet released its slot.',
+      'Site width: the map holds padding-right: 3rem and no padding-inline (the variant stays worn beneath, beaten on that side by the own longhand), the section computes 3rem on the right and its own 2.1rem on the left from the entity tag alone, the cell wears it authored, and the preview sheet released its slot.',
     );
 
     // ----- The value column: one edge, three surfaces. -----
@@ -4467,19 +4480,19 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     // guide_example's strict vocabulary and the offer gate.
     $owner_section = new Section('daedalus_stylish_container');
     $owner_section->setThirdPartySetting('daedalus_layout', 'uuid', $uuid_service->generate());
-    $owner_band = Blueprint::create([
+    $owner_section = Blueprint::create([
       'type' => 'section',
-      'label' => 'Owner band',
-      'machine_name' => 'owner_band',
-      'description' => 'A band owning one curated look.',
+      'label' => 'Owner section',
+      'machine_name' => 'owner_section',
+      'description' => 'A section owning one curated look.',
       'scope' => 'block',
       'subject_type' => 'node',
       'subject_bundle' => 'page',
       'status' => 1,
       'layout_builder__layout' => [$owner_section],
     ]);
-    $owner_band->save();
-    $this->assertSame('owner_band', $owner_band->getMachineName(), 'Owner heading: the section blueprint minted as owner_band (the machine name IS its roster id and the provenance stamp a placement carries).');
+    $owner_section->save();
+    $this->assertSame('owner_section', $owner_section->getMachineName(), 'Owner heading: the section blueprint minted as owner_section (the machine name IS its roster id and the provenance stamp a placement carries).');
     foreach ([
       ['label' => 'Owned look', 'machine_name' => 'owned_look', 'background-color' => 'aliceblue'],
       ['label' => 'Plain look', 'machine_name' => 'plain_look', 'background-color' => 'honeydew'],
@@ -4491,13 +4504,13 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
         'styles' => ['' => ['default' => ['background-color' => $look['background-color']]]],
       ])->save();
     }
-    \Drupal::service('daedalus_blueprint_library.manager')->adoptVariants($owner_band, ['owned_look']);
+    \Drupal::service('daedalus_blueprint_library.manager')->adoptVariants($owner_section, ['owned_look']);
     $owned_look = \Drupal::entityTypeManager()->getStorage('daedalus_variant')->loadByProperties(['machine_name' => 'owned_look']);
     $owned_look = reset($owned_look);
     $this->assertSame(
-      (int) $owner_band->id(),
+      (int) $owner_section->id(),
       (int) $owned_look->get(BlueprintInterface::OWNER_FIELD)->target_id,
-      'Owner heading: adoptVariants set the owned look\'s content-lane owner to the Owner band blueprint (the roster resolves it to the owner\'s machine name as owned_by).',
+      'Owner heading: adoptVariants set the owned look\'s content-lane owner to the Owner section blueprint (the roster resolves it to the owner\'s machine name as owned_by).',
     );
     // The roster the store boots from is the page load's (the variant
     // list tag and the blueprint discovery tag both invalidated by the
@@ -4518,7 +4531,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
           operations: [
             {
               op: 'place_blueprint',
-              blueprint: 'owner_band',
+              blueprint: 'owner_section',
               uuid: '$placed_uuid',
               location: { anchor: Blueprint.getRoot().uuid, placement: 'inside' },
             },
@@ -4530,16 +4543,16 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       JS);
     $this->assertNotNull(
       $assert_session->waitForElement('css', "[data-main-entity] [data-selectable='$placed_key']", 20000),
-      'Owner heading: place_blueprint rendered the Owner band\'s root inside the main entity under the operation\'s own uuid (the placement grammar\'s optimistic seam). Error: ' . ($session->evaluateScript('window.__ownerPlaceError ?? null') ?? 'none'),
+      'Owner heading: place_blueprint rendered the Owner section\'s root inside the main entity under the operation\'s own uuid (the placement grammar\'s optimistic seam). Error: ' . ($session->evaluateScript('window.__ownerPlaceError ?? null') ?? 'none'),
     );
     $this->assertJsCondition(
       "(() => { const Blueprint = Drupal.Daedalus.Blueprint;"
       . " const node = Blueprint.componentForUuid(Blueprint.getBlueprint(), '$placed_uuid');"
-      . " return !!node && node.blueprint === 'owner_band'; })()",
+      . " return !!node && node.blueprint === 'owner_section'; })()",
       20000,
-      'Owner heading: the placed root carries its provenance in the mirror (the node\'s `blueprint` key names owner_band): the birth stamp the serializer surfaced, the read blueprintProvenance stands on.',
+      'Owner heading: the placed root carries its provenance in the mirror (the node\'s `blueprint` key names owner_section): the birth stamp the serializer surfaced, the read blueprintProvenance stands on.',
     );
-    // The placed band wears nothing (the blueprint's root carried no
+    // The placed section wears nothing (the blueprint's root carried no
     // styles), so its bar is the add row alone and the OFFER is the
     // picker's.
     $session->executeScript("Drupal.Daedalus.Selection.select('$placed_key');");
@@ -4561,22 +4574,22 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       })()
       JS;
     $this->assertJsCondition(
-      "(() => { const groups = $picker_groups_js; return groups.length >= 2 && groups[0].label === 'Owner band' && groups[1].label === 'Style'; })()",
+      "(() => { const groups = $picker_groups_js; return groups.length >= 2 && groups[0].label === 'Owner section' && groups[1].label === 'Style'; })()",
       20000,
-      'Owner heading: the picker\'s headed groups read Owner band FIRST, ahead of the generic Style group (pickerGroups files the owned look under its owner, labelled from the roster\'s blueprint record, before the axis\'s own group).',
+      'Owner heading: the picker\'s headed groups read Owner section FIRST, ahead of the generic Style group (pickerGroups files the owned look under its owner, labelled from the roster\'s blueprint record, before the axis\'s own group).',
     );
     $groups = json_decode((string) $session->evaluateScript('JSON.stringify(' . $picker_groups_js . ')'), TRUE);
     $labels = array_column($groups, 'label');
-    $this->assertSame(['Owner band', 'Style'], array_slice($labels, 0, 2), 'Owner heading: the owner group leads and the Style group follows. Groups: ' . implode(', ', $labels) . '.');
-    $this->assertSame(['Owned look'], $groups[0]['options'], 'Owner heading: the Owner band group holds exactly the one adopted look (ownershipOffers: the selection\'s provenance IS the owner).');
+    $this->assertSame(['Owner section', 'Style'], array_slice($labels, 0, 2), 'Owner heading: the owner group leads and the Style group follows. Groups: ' . implode(', ', $labels) . '.');
+    $this->assertSame(['Owned look'], $groups[0]['options'], 'Owner heading: the Owner section group holds exactly the one adopted look (ownershipOffers: the selection\'s provenance IS the owner).');
     $this->assertContains('Plain look', $groups[1]['options'], 'Owner heading: the Style group holds the unowned sibling (an unowned variant offers wherever its scope matches).');
     $this->assertNotContains('Owned look', $groups[1]['options'], 'Owner heading: the Style group never lists the owned look (one group per record: the owner heading is where it lives).');
-    $this->assertSame(1, count(array_filter($groups, static fn (array $group) => $group['label'] === 'Owner band')), 'Owner heading: one owner group (the group key is axis:owner, unique per owner).');
+    $this->assertSame(1, count(array_filter($groups, static fn (array $group) => $group['label'] === 'Owner section')), 'Owner heading: one owner group (the group key is axis:owner, unique per owner).');
     $this->pressKeyOnFocused('Escape');
     $this->assertJsCondition(
       "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-variant-picker')",
       20000,
-      'Owner heading: Escape closed the placed root\'s variant picker (the placed band stays; nothing below depends on the page\'s shape).',
+      'Owner heading: Escape closed the placed root\'s variant picker (the placed section stays; nothing below depends on the page\'s shape).',
     );
 
     // ----- Header bindings: the theme's part candidate on its canvas. -----

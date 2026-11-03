@@ -1,0 +1,8 @@
+name: 'Daedalus Config Category Test'
+type: module
+description: 'One menu link under each Daedalus config sub-category, so the door has children to list: core''s overview controller hides a sub-category with no reachable link, and the root module ships the categories alone.'
+package: Testing
+core_version_requirement: ^11
+hidden: true
+dependencies:
+  - daedalus:daedalus

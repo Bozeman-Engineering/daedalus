@@ -13,6 +13,7 @@ use Drupal\layout_builder\SectionComponent;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
+use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\daedalus\Traits\NodeSuitesTrait;
@@ -37,35 +38,38 @@ use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
  *
  * The client side reads what the browser reads: the ClientStyleGuide
  * payload (declared and skin defaults, the served axes), the roster's
- * delivery records, the blueprint's uuid tables and the annotated lean
- * node tree (the ancestor tier's input on both sides), so the test
- * exercises the production data path. The host entity's layout resolves
- * the block to its bundle and the section to its layout on the server;
- * the uuid tables carry the same facts to the client. The host nests: a
- * container section holds the two-column section holding the block, so
- * the container's rules reach the block by descent and the two-column
- * section's `> * > *` through its region wrapper, while its `> *` stops
- * at the regions. The block's anatomy is declared: a paragraph root, a
+ * delivery records, the blueprint's uuid tables and the document tree
+ * (NodeTreeBuilder::document() over the annotated blueprint, the host
+ * entity above its sections: the ancestor tier's input on both sides),
+ * so the test exercises the production data path. The host entity's
+ * layout resolves the block to its bundle and the section to its layout
+ * on the server; the uuid tables carry the same facts to the client. The
+ * host nests: the page holds a container section holding the two-column
+ * section holding the block, so the page's `p` rule reaches every
+ * paragraph-rooted block as the farthest ancestor layer, the container's
+ * rules reach the block by descent and the two-column section's
+ * `> * > *` through its region wrapper, while its `> *` stops at the
+ * regions. The block's anatomy is declared: a paragraph root, a
  * link part rendering an anchor (the container's `a` rule reaches it, at
  * the part key and at the block's tag tier) and the quote part declaring
  * no tag (unknown, reached by nothing). Two more testimonial blocks
- * follow the two-column section in the container, a band of three
+ * follow the two-column section in the container, a section of three
  * children: the container's `> p + p` rule reaches the last alone (the
- * only p-root after a p-root) and its `> *` rule's `not-last-child`
- * block folds on every child but the last. Wear at a rule reads as a
- * GROUP in a member's ancestor tier: the container's `> pb-testimonial`
- * rule wears two looks over its own padding (three layers at the band's
+ * only p-root after a p-root) and its `> *:not(:last-child)` rule
+ * reaches every child but the last. Wear at a rule reads as a
+ * GROUP in a member's ancestor tier: the container's `> d-testimonial`
+ * rule wears two looks over its own padding (three layers at the section's
  * blocks, the worn ones naming the variant and the rule as carrier),
  * one look's quote entry continues under the rule to the blocks' quote
  * parts (a worn layer carried by the rule, the own layer riding empty),
- * and the two-column section's `> * > pb-testimonial` rule only wears
+ * and the two-column section's `> * > d-testimonial` rule only wears
  * (a group whose own layer rides empty). Generated boxes are addresses
  * of their own: the block's `&::before` reads its root's wearings at the
  * box beneath its own lines (a look's stored `::&::before` fragment
- * delivers there) and takes the container's `pb-testimonial::before`
+ * delivers there) and takes the container's `d-testimonial::before`
  * rule (never a pseudo-free rule, never the other box), a look's box
- * fragment worn at the container's `> pb-testimonial` rule continues
- * under it as `> pb-testimonial::before` at the band's blocks' boxes (a
+ * fragment worn at the container's `> d-testimonial` rule continues
+ * under it as `> d-testimonial::before` at the section's blocks' boxes (a
  * group the rule carries, listed before the map's own box rules), the
  * container's `a::before` rule reaches the link part's box and the
  * block's `a::before` tier, and a box has no floor and no base layer
@@ -94,6 +98,7 @@ class StackEquivalenceTest extends KernelTestBase {
     'layout_builder',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -105,7 +110,7 @@ class StackEquivalenceTest extends KernelTestBase {
     // The container layout the outer section nests the two-column one in.
     'daedalus_stylish_layouts',
     // The testimonial block type (an emphasis axis, a quote part) and the
-    // two-column layout (a band part) the refinement scopes resolve to.
+    // two-column layout (a section part) the refinement scopes resolve to.
     'daedalus_stylish_guide_test',
     // Injects declared defaults from state: the declared tier's
     // in-fixture source for both a kind and a refinement scope.
@@ -153,6 +158,11 @@ class StackEquivalenceTest extends KernelTestBase {
   protected const BARE = 'dddddddd-1111-4000-8000-000000000004';
 
   /**
+   * The host entity's uuid (the document's root node, above the sections).
+   */
+  protected const HOST = '99999999-1111-4000-8000-000000000007';
+
+  /**
    * The stored conditions every case reads lines at.
    */
   protected const CONDITIONS = ['default', 'hover', 'narrow', 'dark', 'narrow+dark'];
@@ -167,17 +177,11 @@ class StackEquivalenceTest extends KernelTestBase {
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
@@ -201,7 +205,7 @@ class StackEquivalenceTest extends KernelTestBase {
 
     // The declared tier: a composed container kind with a display default,
     // and the testimonial refinement with root and part defaults, a
-    // paragraph root tag (the tree fact a `p` compound matches) and a
+    // paragraph root tag (the annotation fact a `p` compound matches) and a
     // link part rendering an anchor (the guide_test quote part declares
     // no tag: the annotation carries it as NULL, the unknown).
     $this->container->get('state')->set('daedalus_stylish_control_test.kinds', [
@@ -267,7 +271,9 @@ class StackEquivalenceTest extends KernelTestBase {
     $this->createVariant('card_left', 'Card Left', 'kind:container', [
       '' => ['default' => ['gap' => '2rem']],
     ]);
-    $this->createVariant('row', 'Row', 'block_type:testimonial', [
+    // Not 'row': the default theme's save above synced the enabled modules'
+    // shipped globals, and daedalus_stylish_layouts ships a row.
+    $this->createVariant('wide_row', 'Wide Row', 'block_type:testimonial', [
       '' => ['default' => ['display' => 'flex']],
     ]);
     $this->createVariant('plain_row', 'Plain Row', 'block_type:testimonial', [
@@ -318,7 +324,14 @@ class StackEquivalenceTest extends KernelTestBase {
     $section_key = 'container:' . self::SECTION;
     $outer_key = 'container:' . self::OUTER;
     $loose_key = 'block:' . self::LOOSE;
+    $entity_key = 'entity:' . self::HOST;
     $map = [
+      // The page's own rule: the host entity is the document's root, so
+      // its `p` rule reaches every paragraph-rooted block on the page
+      // (and the block's `::p` tier where its prose carries paragraphs)
+      // as the farthest ancestor layer; never a container or a part
+      // rendering another tag.
+      "$entity_key::p" => ['default' => ['border' => '2px solid red']],
       // Two worn references, one a distributed fragment, stored out of
       // delivery order; own overrides at two conditions.
       $block_key => [
@@ -343,36 +356,36 @@ class StackEquivalenceTest extends KernelTestBase {
       "$section_key::> *" => ['default' => ['flex-grow' => '1'], 'narrow' => ['flex-grow' => '0']],
       // The ancestor rules: the two-column section reaches its block
       // through the region wrapper (`> * > *`), never by `> *`; the outer
-      // container reaches the block by descent (a type compound with a
-      // structural fact the block satisfies and one it does not), its
-      // three children by `> *` (the negated fact folding on every child
-      // but the last), the nested section by `> pb-container` and the
-      // last child alone by `> p + p` (the only p-root after a p-root).
+      // container reaches the block by descent (a type compound, and the
+      // position-qualified rules beside it that the block's place
+      // satisfies or not), its three children by `> *` (the negated
+      // position reaching every child but the last), the nested section
+      // by `> d-container` and the last child alone by `> p + p` (the
+      // only p-root after a p-root).
       "$section_key::> * > *" => ['default' => ['flex-basis' => '0']],
       // A rule that only wears: the two-column section's testimonial
-      // children (through the region wrapper) take the Row look with no
+      // children (through the region wrapper) take the Wide Row look with no
       // entry lines of the rule's own.
-      "$section_key::> * > pb-testimonial" => ['variants' => [['variant' => 'row', 'fragment' => '']]],
-      "$outer_key::> *" => ['default' => ['margin' => '0'], 'not-last-child' => ['margin-bottom' => '24px']],
+      "$section_key::> * > d-testimonial" => ['variants' => [['variant' => 'wide_row', 'fragment' => '']]],
+      "$outer_key::> *" => ['default' => ['margin' => '0']],
+      "$outer_key::> *:not(:last-child)" => ['default' => ['margin-bottom' => '24px']],
       "$outer_key::> p + p" => ['default' => ['margin-top' => '40px']],
-      "$outer_key::pb-testimonial" => [
-        'default' => ['color' => 'teal', 'padding' => '4px'],
-        'first-child' => ['outline' => '1px solid', 'padding' => '5px'],
-        'last-child' => ['color' => 'black'],
-        'hover+only-child' => ['color' => 'white'],
-      ],
-      "$outer_key::> pb-container" => ['default' => ['margin' => '1rem']],
+      "$outer_key::d-testimonial" => ['default' => ['color' => 'teal', 'padding' => '4px']],
+      "$outer_key::d-testimonial:first-child" => ['default' => ['outline' => '1px solid', 'padding' => '5px']],
+      "$outer_key::d-testimonial:last-child" => ['default' => ['color' => 'black']],
+      "$outer_key::d-testimonial:only-child" => ['hover' => ['color' => 'white']],
+      "$outer_key::> d-container" => ['default' => ['margin' => '1rem']],
       // The outer container's `a` rule reaches the block's link part (the
       // anchor it renders) and the block's own `::a` tier, never its
       // tagless quote part.
       "$outer_key::a" => ['default' => ['font-size' => '30px']],
-      // Wear at a rule: the outer container's `> pb-testimonial` rule
+      // Wear at a rule: the outer container's `> d-testimonial` rule
       // wears two testimonial looks (stored out of delivery order) over
       // its own padding; sleek's quote entry continues under the rule
       // to the two direct testimonial children's quote parts, and its
-      // box fragment continues as `> pb-testimonial::before` to their
+      // box fragment continues as `> d-testimonial::before` to their
       // `&::before` boxes.
-      "$outer_key::> pb-testimonial" => [
+      "$outer_key::> d-testimonial" => [
         'variants' => [
           ['variant' => 'loud', 'fragment' => ''],
           ['variant' => 'sleek', 'fragment' => ''],
@@ -380,14 +393,15 @@ class StackEquivalenceTest extends KernelTestBase {
         'default' => ['padding' => '6px'],
       ],
       // Rules for generated boxes: the descent rule's `::before` box
-      // (with a structural fact the nested block satisfies and the band
-      // does not) reaches every testimonial's `&::before` and no
-      // pseudo-free key; the direct children's `::after` box reaches the
-      // band's `&::after` alone, never their `&::before`; the `a` rule's
-      // `::before` box reaches the link part's box and the block's own
-      // `::a::before` tier.
-      "$outer_key::pb-testimonial::before" => ['default' => ['background-color' => 'teal'], 'first-child' => ['width' => '2rem']],
-      "$outer_key::> pb-testimonial::after" => ['default' => ['content' => '""', 'inset' => '0']],
+      // (and its position-qualified twin, which the nested block's place
+      // satisfies and the section's does not) reaches every testimonial's
+      // `&::before` and no pseudo-free key; the direct children's
+      // `::after` box reaches the section's `&::after` alone, never their
+      // `&::before`; the `a` rule's `::before` box reaches the link part's
+      // box and the block's own `::a::before` tier.
+      "$outer_key::d-testimonial::before" => ['default' => ['background-color' => 'teal']],
+      "$outer_key::d-testimonial:first-child::before" => ['default' => ['width' => '2rem']],
+      "$outer_key::> d-testimonial::after" => ['default' => ['content' => '""', 'inset' => '0']],
       "$outer_key::a::before" => ['default' => ['content' => '""', 'margin-right' => '4px']],
       // A stale reference, a via wearing whose origin resolves, and one
       // whose origin is gone; stored stale-first so the unplaceable
@@ -395,34 +409,42 @@ class StackEquivalenceTest extends KernelTestBase {
       $loose_key => [
         'variants' => [
           ['variant' => 'ghost', 'fragment' => ''],
-          ['variant' => 'row', 'fragment' => '', 'via' => 'card_left'],
+          ['variant' => 'wide_row', 'fragment' => '', 'via' => 'card_left'],
           ['variant' => 'plain_row', 'fragment' => '', 'via' => 'gone'],
         ],
       ],
     ];
     $entity = EntityTest::create([
+      'uuid' => self::HOST,
       'name' => 'host',
       'layout_builder__layout' => [$outer],
       DaedalusStylishFieldManager::FIELD_NAME => json_encode($map),
     ]);
     $entity->save();
     $stored = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first()->getStyleMap();
-    // The annotated lean tree, exactly as the explain tool and the client
-    // mirror carry it.
+    // The document tree, exactly as the explain tool and the client
+    // build it: the annotated blueprint with the host above its sections.
     $backend = $this->container->get('daedalus_blueprint.backend_resolver')->resolve('entity_test');
-    $tree = $this->container->get('daedalus_ui.element_annotator')->annotate($backend->serialize($entity), $this->host($entity), 'full')['layout'];
-    $this->assertSame([self::OUTER], array_column($tree, 'uuid'));
-    $this->assertSame([self::SECTION, self::AFTER_SECTION, self::AFTER_P], array_column($tree[0]['children'], 'uuid'));
-    $block_markup = $tree[0]['children'][0]['children'][0]['children'][0]['_element']['markup'];
+    $document = NodeTreeBuilder::document(
+      $this->container->get('daedalus_ui.element_annotator')->annotate($backend->serialize($entity), $this->host($entity), 'full'),
+      $this->host($entity)->uuid(),
+    );
+    $this->assertSame(['entity'], array_column($document, 'kind'));
+    $this->assertSame([self::HOST], array_column($document, 'uuid'));
+    $this->assertSame('host', $document[0]['_element']['name']);
+    $layout = $document[0]['children'];
+    $this->assertSame([self::OUTER], array_column($layout, 'uuid'));
+    $this->assertSame([self::SECTION, self::AFTER_SECTION, self::AFTER_P], array_column($layout[0]['children'], 'uuid'));
+    $block_markup = $layout[0]['children'][0]['children'][0]['children'][0]['_element']['markup'];
     $this->assertSame('p', $block_markup['tag']);
     $this->assertSame('a', $block_markup['parts']['.testimonial__link']['tag']);
     $this->assertNull($block_markup['parts']['.testimonial__quote']['tag']);
-    $this->assertSame('p', $tree[0]['children'][2]['_element']['markup']['tag']);
+    $this->assertSame('p', $layout[0]['children'][2]['_element']['markup']['tag']);
 
-    // Every key reads its base layer from the tree's annotation: the
+    // Every key reads its base layer from the document's annotation: the
     // block's p root, the link part's a, nothing for the tagless quote
-    // part, the tag tiers, the chains and the bare block the tree does
-    // not carry.
+    // part, the tag tiers, the chains and the bare block the document
+    // does not carry.
     $cases = [
       $block_key,
       "$block_key::.testimonial__quote",
@@ -431,21 +453,21 @@ class StackEquivalenceTest extends KernelTestBase {
       "$section_key::> *",
       $outer_key,
       $loose_key,
-      'entity:' . $entity->uuid(),
+      $entity_key,
       'block:' . self::BARE,
       "$block_key::.testimonial__link",
       "$block_key::a",
       $after_section_key,
       $after_p_key,
-      "$outer_key::> pb-testimonial",
-      "$outer_key::> pb-testimonial .testimonial__quote",
+      "$outer_key::> d-testimonial",
+      "$outer_key::> d-testimonial .testimonial__quote",
       "$after_section_key::.testimonial__quote",
       // The generated boxes: the nested block's own (the descent rule's
       // box, the root's wearings read at the box with Sleek's stored
-      // box fragment delivering, its own lines), the band's first
+      // box fragment delivering, its own lines), the section's first
       // block's before (Sleek's box fragment continued under the
-      // `> pb-testimonial` rule as a group, then the descent rule's box
-      // with its fact dropped) and after (the children rule's box
+      // `> d-testimonial` rule as a group, then the descent rule's box
+      // without its position-qualified twin) and after (the children rule's box
       // alone), the link part's box and the block's `a::before` tier.
       "$block_key::&::before",
       "$after_section_key::&::before",
@@ -466,7 +488,7 @@ class StackEquivalenceTest extends KernelTestBase {
       $stack_service = $this->container->get('daedalus_stylish.style_stack');
       $answers = [];
       foreach ($cases as $key) {
-        $stack = $stack_service->stack($stored, $key, ['host' => $this->host($entity)], NULL, $tree);
+        $stack = $stack_service->stack($stored, $key, ['host' => $this->host($entity)], NULL, $document);
         $lines = [];
         foreach (self::CONDITIONS as $condition) {
           $lines[$condition] = $stack_service->linesAt($stack, $condition);
@@ -480,7 +502,7 @@ class StackEquivalenceTest extends KernelTestBase {
         'variants' => array_values(array_map(static fn ($record) => $record->toArray(), $roster->variants())),
         'blockTypes' => [self::BLOCK => 'testimonial', self::AFTER_SECTION => 'testimonial', self::AFTER_P => 'testimonial'],
         'sectionLayouts' => [self::SECTION => 'layout_twocol_section', self::OUTER => 'daedalus_stylish_container'],
-        'tree' => $tree,
+        'document' => $document,
         'cases' => array_map(static fn (string $key): array => [
           'key' => $key,
           'map' => $stored,
@@ -507,21 +529,27 @@ class StackEquivalenceTest extends KernelTestBase {
     // for is present on the PHP side.
     $ids = static fn (array $answer): array => array_column($answer['stack']['layers'], 'id');
     // The skinned root: both floor tiers per scope, the base layer for
-    // the tree's rendered tag (the block's p root), the ancestor rules
-    // reaching the block (the outer container's by descent, farthest
-    // first, then the nested section's through its region wrapper, its
-    // wear-only rule as a group of the worn layer and an empty own
-    // layer; its `> *` stops at the regions), the references in delivery
-    // order (style root, style fragment, emphasis), the own layer on top.
+    // the document's rendered tag (the block's p root), the ancestor
+    // rules reaching the block (the page's `p` rule first: the entity is
+    // the farthest ancestor of everything on the page; then the outer
+    // container's by descent, then the nested section's through its
+    // region wrapper, its wear-only rule as a group of the worn layer and
+    // an empty own layer; its `> *` stops at the regions), the references
+    // in delivery order (style root, style fragment, emphasis), the own
+    // layer on top.
     $this->assertSame([
       'declared:block_type:testimonial',
       'skin:base:p',
       'skin:kind:block',
       'skin:block_type:testimonial',
-      "ancestor:$outer_key::pb-testimonial",
+      "ancestor:$entity_key::p",
+      "ancestor:$outer_key::d-testimonial",
+      "ancestor:$outer_key::d-testimonial:first-child",
+      "ancestor:$outer_key::d-testimonial:last-child",
+      "ancestor:$outer_key::d-testimonial:only-child",
       "ancestor:$section_key::> * > *",
-      "ancestor:$section_key::> * > pb-testimonial|row",
-      "ancestor:$section_key::> * > pb-testimonial",
+      "ancestor:$section_key::> * > d-testimonial|wide_row",
+      "ancestor:$section_key::> * > d-testimonial",
       'variant:sleek',
       'variant:duo',
       'variant:loud',
@@ -530,12 +558,32 @@ class StackEquivalenceTest extends KernelTestBase {
     $this->assertSame('block_type:testimonial', $php[0][0]['stack']['scope']);
     $this->assertSame(['h2', 'p', 'a'], $php[0][0]['stack']['baseTags']);
     $this->assertTrue($php[0][0]['stack']['skin']);
-    // The ancestor layer: the block is alone in its region, so the
-    // first-child block folds into default (its padding beats the plain
-    // block's) and the last-child and only-child blocks fold too; the
-    // hover+only-child compound delivers at hover.
+    // The page's layer first: the entity is the farthest ancestor, its
+    // rule named by the host's label (the annotator's root name) and
+    // scoped to the entity key, with the same shape as any own layer.
     $this->assertSame([
-      'id' => "ancestor:$outer_key::pb-testimonial",
+      'id' => "ancestor:$entity_key::p",
+      'tier' => 'ancestor',
+      'scope' => $entity_key,
+      'variant' => NULL,
+      'fragment' => NULL,
+      'via' => NULL,
+      'viaLabel' => NULL,
+      'label' => 'host',
+      'owner' => 'host',
+      'description' => NULL,
+      'axis' => NULL,
+      'resolved' => TRUE,
+      'editable' => FALSE,
+      'carrier' => NULL,
+      'styles' => ['default' => ['border' => '2px solid red']],
+    ], $php[0][0]['stack']['layers'][4]);
+    // The ancestor layers: the block is alone in its region, so the
+    // descent rule and each of its three position-qualified twins
+    // (first, last, only) reach it, one layer each in map order, nothing
+    // folded; the only-child rule delivers at hover.
+    $this->assertSame([
+      'id' => "ancestor:$outer_key::d-testimonial",
       'tier' => 'ancestor',
       'scope' => $outer_key,
       'variant' => NULL,
@@ -549,46 +597,48 @@ class StackEquivalenceTest extends KernelTestBase {
       'resolved' => TRUE,
       'editable' => FALSE,
       'carrier' => NULL,
-      'styles' => [
-        'default' => ['color' => 'black', 'padding' => '5px', 'outline' => '1px solid'],
-        'hover' => ['color' => 'white'],
-      ],
-    ], $php[0][0]['stack']['layers'][4]);
-    $this->assertSame(['default' => ['flex-basis' => '0']], $php[0][0]['stack']['layers'][5]['styles']);
-    // The wear-only rule's group: the worn layer carries Row's identity
+      'styles' => ['default' => ['color' => 'teal', 'padding' => '4px']],
+    ], $php[0][0]['stack']['layers'][5]);
+    $this->assertSame(['default' => ['outline' => '1px solid', 'padding' => '5px']], $php[0][0]['stack']['layers'][6]['styles']);
+    $this->assertSame(['default' => ['color' => 'black']], $php[0][0]['stack']['layers'][7]['styles']);
+    $this->assertSame(['hover' => ['color' => 'white']], $php[0][0]['stack']['layers'][8]['styles']);
+    $this->assertSame("ancestor:$outer_key::d-testimonial:only-child", $php[0][0]['stack']['layers'][8]['id']);
+    $this->assertSame(['default' => ['flex-basis' => '0']], $php[0][0]['stack']['layers'][9]['styles']);
+    // The wear-only rule's group: the worn layer carries Wide Row's identity
     // as its own wearing would, scoped to the owner, its carrier the
     // rule; the own layer rides the group with no styles (the rule
     // exists; the map carries no lines there).
     $this->assertSame([
-      'id' => "ancestor:$section_key::> * > pb-testimonial|row",
+      'id' => "ancestor:$section_key::> * > d-testimonial|wide_row",
       'tier' => 'ancestor',
       'scope' => $section_key,
-      'variant' => 'row',
+      'variant' => 'wide_row',
       'fragment' => '',
       'via' => NULL,
       'viaLabel' => NULL,
-      'label' => 'Row',
-      'description' => 'The Row look.',
+      'label' => 'Wide Row',
+      'description' => 'The Wide Row look.',
       'axis' => 'style',
       'resolved' => TRUE,
       'editable' => FALSE,
-      'carrier' => ['key' => $section_key, 'selector' => '> * > pb-testimonial'],
+      'carrier' => ['key' => $section_key, 'selector' => '> * > d-testimonial'],
       'styles' => ['default' => ['display' => 'flex']],
       'owner' => 'Container',
-    ], $php[0][0]['stack']['layers'][6]);
-    $this->assertSame([], $php[0][0]['stack']['layers'][7]['styles']);
-    $this->assertNull($php[0][0]['stack']['layers'][7]['variant']);
-    $this->assertNull($php[0][0]['stack']['layers'][7]['carrier']);
+    ], $php[0][0]['stack']['layers'][10]);
+    $this->assertSame([], $php[0][0]['stack']['layers'][11]['styles']);
+    $this->assertNull($php[0][0]['stack']['layers'][11]['variant']);
+    $this->assertNull($php[0][0]['stack']['layers'][11]['carrier']);
     // The block's own wearings name the root as their carrier.
-    $this->assertSame(['key' => $block_key, 'selector' => NULL], $php[0][0]['stack']['layers'][8]['carrier']);
-    $this->assertSame('block(testimonial,1)', $php[0][0]['stack']['layers'][9]['fragment']);
-    $this->assertSame(['default' => ['color' => 'red'], 'narrow' => ['padding' => '0']], $php[0][0]['stack']['layers'][9]['styles']);
-    $this->assertSame('The Sleek look.', $php[0][0]['stack']['layers'][8]['description']);
-    $this->assertContains(['layer' => 8, 'property' => 'padding', 'value' => '1rem', 'lost' => TRUE, 'winner' => 11], $php[0][0]['lines']['default']);
-    $this->assertContains(['layer' => 4, 'property' => 'color', 'value' => 'black', 'lost' => TRUE, 'winner' => 9], $php[0][0]['lines']['default']);
-    $this->assertContains(['layer' => 4, 'property' => 'outline', 'value' => '1px solid', 'lost' => FALSE, 'winner' => NULL], $php[0][0]['lines']['default']);
-    $this->assertContains(['layer' => 6, 'property' => 'display', 'value' => 'flex', 'lost' => FALSE, 'winner' => NULL], $php[0][0]['lines']['default']);
-    $this->assertContains(['layer' => 11, 'property' => 'padding', 'value' => '0', 'lost' => FALSE, 'winner' => NULL], $php[0][0]['lines']['narrow+dark']);
+    $this->assertSame(['key' => $block_key, 'selector' => NULL], $php[0][0]['stack']['layers'][12]['carrier']);
+    $this->assertSame('block(testimonial,1)', $php[0][0]['stack']['layers'][13]['fragment']);
+    $this->assertSame(['default' => ['color' => 'red'], 'narrow' => ['padding' => '0']], $php[0][0]['stack']['layers'][13]['styles']);
+    $this->assertSame('The Sleek look.', $php[0][0]['stack']['layers'][12]['description']);
+    $this->assertContains(['layer' => 12, 'property' => 'padding', 'value' => '1rem', 'lost' => TRUE, 'winner' => 15], $php[0][0]['lines']['default']);
+    $this->assertContains(['layer' => 5, 'property' => 'color', 'value' => 'teal', 'lost' => TRUE, 'winner' => 13], $php[0][0]['lines']['default']);
+    $this->assertContains(['layer' => 7, 'property' => 'color', 'value' => 'black', 'lost' => TRUE, 'winner' => 13], $php[0][0]['lines']['default']);
+    $this->assertContains(['layer' => 6, 'property' => 'outline', 'value' => '1px solid', 'lost' => FALSE, 'winner' => NULL], $php[0][0]['lines']['default']);
+    $this->assertContains(['layer' => 10, 'property' => 'display', 'value' => 'flex', 'lost' => FALSE, 'winner' => NULL], $php[0][0]['lines']['default']);
+    $this->assertContains(['layer' => 15, 'property' => 'padding', 'value' => '0', 'lost' => FALSE, 'winner' => NULL], $php[0][0]['lines']['narrow+dark']);
     // The part key: the tiers' part blocks, no base layer (the quote
     // part declares no tag: the subject's tag is unknown, never the
     // root's), the same references at the part's relative position.
@@ -616,35 +666,40 @@ class StackEquivalenceTest extends KernelTestBase {
     $this->assertSame(['key' => $section_key, 'selector' => NULL], $php[0][4]['stack']['layers'][0]['carrier']);
     // The nested section root: kind and refinement blocks of both tiers,
     // then the outer container's rules reaching it (`> *` and
-    // `> pb-container`, in the outer key's suffix order; `pb-testimonial`
+    // `> d-container`, in the outer key's suffix order; `d-testimonial`
     // never), then its wearing and its own entry.
     $this->assertSame([
       'declared:kind:container',
       'skin:kind:container',
       'skin:layout:layout_twocol_section',
       "ancestor:$outer_key::> *",
-      "ancestor:$outer_key::> pb-container",
+      "ancestor:$outer_key::> *:not(:last-child)",
+      "ancestor:$outer_key::> d-container",
       'variant:duo',
       'element',
     ], $ids($php[0][3]));
     // The nested section is the container's first of three children: the
-    // `> *` rule's not-last-child block folds into its default.
-    $this->assertSame(['default' => ['margin' => '0', 'margin-bottom' => '24px']], $php[0][3]['stack']['layers'][3]['styles']);
-    $this->assertContains(['layer' => 3, 'property' => 'margin', 'value' => '0', 'lost' => TRUE, 'winner' => 4], $php[0][3]['lines']['default']);
+    // `> *:not(:last-child)` rule reaches it as a layer of its own.
+    $this->assertSame(['default' => ['margin' => '0']], $php[0][3]['stack']['layers'][3]['styles']);
+    $this->assertSame(['default' => ['margin-bottom' => '24px']], $php[0][3]['stack']['layers'][4]['styles']);
+    $this->assertContains(['layer' => 3, 'property' => 'margin', 'value' => '0', 'lost' => TRUE, 'winner' => 5], $php[0][3]['lines']['default']);
     // The outer container: a root section, no ancestors.
     $outer_ids = $ids($php[0][5]);
     $this->assertSame('layout:daedalus_stylish_container', $php[0][5]['stack']['scope']);
     $this->assertSame([], array_filter($outer_ids, static fn (string $id): bool => str_starts_with($id, 'ancestor:')));
     $this->assertSame('element', end($outer_ids));
     // The loose block: stale last, via origins resolved and stale.
-    $this->assertSame(['skin:kind:block', 'variant:row', 'variant:plain_row', 'variant:ghost', 'element'], $ids($php[0][6]));
+    $this->assertSame(['skin:kind:block', 'variant:wide_row', 'variant:plain_row', 'variant:ghost', 'element'], $ids($php[0][6]));
     $this->assertSame([TRUE, TRUE, TRUE, FALSE, TRUE], array_column($php[0][6]['stack']['layers'], 'resolved'));
     $this->assertSame([NULL, 'Card Left', NULL, NULL, NULL], array_column($php[0][6]['stack']['layers'], 'viaLabel'));
     $this->assertSame([NULL, 'card_left', 'gone', NULL, NULL], array_column($php[0][6]['stack']['layers'], 'via'));
-    // The entity and the bare block: the own layer alone, or the floor
-    // beneath an empty own layer (no base layer: the tree carries no
-    // node for the bare block, so its tag is unknown).
+    // The entity (the document's root: no ancestors, a tagless entity
+    // kind, so no base layer; its own `p` rule is a suffix of its key,
+    // never a layer of it) and the bare block: the own layer alone, or
+    // the floor beneath an empty own layer (no base layer: the document
+    // carries no node for the bare block, so its tag is unknown).
     $this->assertSame(['element'], $ids($php[0][7]));
+    $this->assertSame('entity:' . self::HOST, $php[0][7]['stack']['rootKey']);
     $this->assertSame(['skin:kind:block', 'element'], $ids($php[0][8]));
     $this->assertSame([], $php[0][8]['stack']['layers'][1]['styles']);
     // The link part: the skin's base:a block for the part's declared tag
@@ -687,17 +742,17 @@ class StackEquivalenceTest extends KernelTestBase {
     // inside it: the same rule is its ancestor layer too.
     $this->assertContains("ancestor:$outer_key::a", $ids($php[0][10]));
     $this->assertSame('::a', $php[0][10]['stack']['relative']);
-    // The band after the nested section: both blocks take the `> *` rule
-    // and the descent `pb-testimonial` rule; the sibling rule `> p + p`
+    // The section after the nested section: both blocks take the `> *` rule
+    // and the descent `d-testimonial` rule; the sibling rule `> p + p`
     // reaches the last child alone (its previous sibling is a p-root; the
-    // block after the section has none), and the `> *` rule's
-    // not-last-child block folds on the middle child, never the last,
-    // whose pb-testimonial layer folds the last-child block instead.
+    // block after the section has none), and the `> *:not(:last-child)`
+    // rule reaches the middle child, never the last, whose place the
+    // `d-testimonial:last-child` rule reaches instead.
     $ancestor_ids = static fn (array $answer): array => array_values(array_filter($ids($answer), static fn (string $id): bool => str_starts_with($id, 'ancestor:')));
-    $this->assertSame(["ancestor:$outer_key::> *", "ancestor:$outer_key::pb-testimonial", "ancestor:$outer_key::> pb-testimonial|sleek", "ancestor:$outer_key::> pb-testimonial|loud", "ancestor:$outer_key::> pb-testimonial"], $ancestor_ids($php[0][11]));
-    $this->assertSame(["ancestor:$outer_key::> *", "ancestor:$outer_key::> p + p", "ancestor:$outer_key::pb-testimonial", "ancestor:$outer_key::> pb-testimonial|sleek", "ancestor:$outer_key::> pb-testimonial|loud", "ancestor:$outer_key::> pb-testimonial"], $ancestor_ids($php[0][12]));
+    $this->assertSame(["ancestor:$entity_key::p", "ancestor:$outer_key::> *", "ancestor:$outer_key::> *:not(:last-child)", "ancestor:$outer_key::d-testimonial", "ancestor:$outer_key::> d-testimonial|sleek", "ancestor:$outer_key::> d-testimonial|loud", "ancestor:$outer_key::> d-testimonial"], $ancestor_ids($php[0][11]));
+    $this->assertSame(["ancestor:$entity_key::p", "ancestor:$outer_key::> *", "ancestor:$outer_key::> p + p", "ancestor:$outer_key::d-testimonial", "ancestor:$outer_key::d-testimonial:last-child", "ancestor:$outer_key::> d-testimonial|sleek", "ancestor:$outer_key::> d-testimonial|loud", "ancestor:$outer_key::> d-testimonial"], $ancestor_ids($php[0][12]));
     $layer = static fn (array $answer, string $id): array => array_values(array_filter($answer['stack']['layers'], static fn (array $layer): bool => $layer['id'] === $id))[0];
-    // Wear at the `> pb-testimonial` rule: the rule's own stack folds its
+    // Wear at the `> d-testimonial` rule: the rule's own stack folds its
     // two worn looks (style axis first) beneath its entry, each naming
     // the rule as its carrier; a direct child's ancestor tier holds the
     // rule as a group, the two looks with their identity (carried by
@@ -707,10 +762,10 @@ class StackEquivalenceTest extends KernelTestBase {
     // the continued key reads it as its own wear.
     $this->assertSame(['variant:sleek', 'variant:loud', 'element'], $ids($php[0][13]));
     $this->assertSame(['default' => ['padding' => '1rem', 'background-color' => '#ffffff'], 'hover' => ['background-color' => '#eeeeee']], $php[0][13]['stack']['layers'][0]['styles']);
-    $rule_carrier = ['key' => $outer_key, 'selector' => '> pb-testimonial'];
+    $rule_carrier = ['key' => $outer_key, 'selector' => '> d-testimonial'];
     $this->assertSame([$rule_carrier, $rule_carrier, NULL], array_column($php[0][13]['stack']['layers'], 'carrier'));
     $this->assertSame([
-      'id' => "ancestor:$outer_key::> pb-testimonial|sleek",
+      'id' => "ancestor:$outer_key::> d-testimonial|sleek",
       'tier' => 'ancestor',
       'scope' => $outer_key,
       'variant' => 'sleek',
@@ -725,14 +780,14 @@ class StackEquivalenceTest extends KernelTestBase {
       'carrier' => $rule_carrier,
       'styles' => ['default' => ['padding' => '1rem', 'background-color' => '#ffffff'], 'hover' => ['background-color' => '#eeeeee']],
       'owner' => 'Section',
-    ], $layer($php[0][11], "ancestor:$outer_key::> pb-testimonial|sleek"));
-    $this->assertSame('emphasis', $layer($php[0][11], "ancestor:$outer_key::> pb-testimonial|loud")['axis']);
-    $this->assertSame(['default' => ['padding' => '2rem', 'font-weight' => 'bold'], 'dark' => ['color' => '#eeeeee']], $layer($php[0][11], "ancestor:$outer_key::> pb-testimonial|loud")['styles']);
-    $this->assertSame(['default' => ['padding' => '6px']], $layer($php[0][11], "ancestor:$outer_key::> pb-testimonial")['styles']);
+    ], $layer($php[0][11], "ancestor:$outer_key::> d-testimonial|sleek"));
+    $this->assertSame('emphasis', $layer($php[0][11], "ancestor:$outer_key::> d-testimonial|loud")['axis']);
+    $this->assertSame(['default' => ['padding' => '2rem', 'font-weight' => 'bold'], 'dark' => ['color' => '#eeeeee']], $layer($php[0][11], "ancestor:$outer_key::> d-testimonial|loud")['styles']);
+    $this->assertSame(['default' => ['padding' => '6px']], $layer($php[0][11], "ancestor:$outer_key::> d-testimonial")['styles']);
     // Own beats worn inside the group by order: the rule's padding wins
     // over both looks'; loud's font-weight and sleek's background stand.
-    $sleek_layer = array_search("ancestor:$outer_key::> pb-testimonial|sleek", $ids($php[0][11]), TRUE);
-    $rule_layer = array_search("ancestor:$outer_key::> pb-testimonial", $ids($php[0][11]), TRUE);
+    $sleek_layer = array_search("ancestor:$outer_key::> d-testimonial|sleek", $ids($php[0][11]), TRUE);
+    $rule_layer = array_search("ancestor:$outer_key::> d-testimonial", $ids($php[0][11]), TRUE);
     $this->assertContains(['layer' => $sleek_layer, 'property' => 'padding', 'value' => '1rem', 'lost' => TRUE, 'winner' => $rule_layer], $php[0][11]['lines']['default']);
     $this->assertContains(['layer' => $sleek_layer, 'property' => 'background-color', 'value' => '#ffffff', 'lost' => FALSE, 'winner' => NULL], $php[0][11]['lines']['default']);
     // The member wears nothing of its own: no variant-tier layer, the
@@ -745,34 +800,37 @@ class StackEquivalenceTest extends KernelTestBase {
     $this->assertSame([
       'declared:block_type:testimonial',
       'skin:block_type:testimonial',
-      "ancestor:$outer_key::> pb-testimonial .testimonial__quote|sleek",
-      "ancestor:$outer_key::> pb-testimonial .testimonial__quote",
+      "ancestor:$outer_key::> d-testimonial .testimonial__quote|sleek",
+      "ancestor:$outer_key::> d-testimonial .testimonial__quote",
       'element',
     ], $ids($php[0][15]));
-    $this->assertSame(['default' => ['font-size' => '1.5rem']], $layer($php[0][15], "ancestor:$outer_key::> pb-testimonial .testimonial__quote|sleek")['styles']);
-    $this->assertSame($rule_carrier, $layer($php[0][15], "ancestor:$outer_key::> pb-testimonial .testimonial__quote|sleek")['carrier']);
-    $this->assertSame([], $layer($php[0][15], "ancestor:$outer_key::> pb-testimonial .testimonial__quote")['styles']);
-    $this->assertSame(['default' => ['margin' => '0', 'margin-bottom' => '24px']], $layer($php[0][11], "ancestor:$outer_key::> *")['styles']);
+    $this->assertSame(['default' => ['font-size' => '1.5rem']], $layer($php[0][15], "ancestor:$outer_key::> d-testimonial .testimonial__quote|sleek")['styles']);
+    $this->assertSame($rule_carrier, $layer($php[0][15], "ancestor:$outer_key::> d-testimonial .testimonial__quote|sleek")['carrier']);
+    $this->assertSame([], $layer($php[0][15], "ancestor:$outer_key::> d-testimonial .testimonial__quote")['styles']);
+    $this->assertSame(['default' => ['margin' => '0']], $layer($php[0][11], "ancestor:$outer_key::> *")['styles']);
+    $this->assertSame(['default' => ['margin-bottom' => '24px']], $layer($php[0][11], "ancestor:$outer_key::> *:not(:last-child)")['styles']);
     $this->assertSame(['default' => ['margin' => '0']], $layer($php[0][12], "ancestor:$outer_key::> *")['styles']);
     $this->assertSame(['default' => ['margin-top' => '40px']], $layer($php[0][12], "ancestor:$outer_key::> p + p")['styles']);
-    $this->assertSame(['default' => ['color' => 'teal', 'padding' => '4px']], $layer($php[0][11], "ancestor:$outer_key::pb-testimonial")['styles']);
-    $this->assertSame(['default' => ['color' => 'black', 'padding' => '4px']], $layer($php[0][12], "ancestor:$outer_key::pb-testimonial")['styles']);
+    $this->assertSame(['default' => ['color' => 'teal', 'padding' => '4px']], $layer($php[0][11], "ancestor:$outer_key::d-testimonial")['styles']);
+    $this->assertSame(['default' => ['color' => 'teal', 'padding' => '4px']], $layer($php[0][12], "ancestor:$outer_key::d-testimonial")['styles']);
+    $this->assertSame(['default' => ['color' => 'black']], $layer($php[0][12], "ancestor:$outer_key::d-testimonial:last-child")['styles']);
     $sibling_layer = array_search("ancestor:$outer_key::> p + p", $ids($php[0][12]), TRUE);
     $this->assertContains(['layer' => $sibling_layer, 'property' => 'margin-top', 'value' => '40px', 'lost' => FALSE, 'winner' => NULL], $php[0][12]['lines']['default']);
     $this->assertSame($ancestor_ids($php[0][12]), $ancestor_ids($php[1][12]));
     // The generated boxes. The nested block's own `&::before`: no floor
     // of any tier (no tier block at the box, and a box renders as no tag,
-    // so no base layer), the container's `pb-testimonial::before` rule
-    // reaching it by descent with its first-child block folded (the
-    // block is alone in its region), never its pseudo-free
-    // `pb-testimonial` rule nor its `> pb-testimonial::after` box, nor
+    // so no base layer), the container's `d-testimonial::before` rule
+    // reaching it by descent and its `d-testimonial:first-child::before`
+    // twin (the block is alone in its region), never its pseudo-free
+    // `d-testimonial` rule nor its `> d-testimonial::after` box, nor
     // the nested section's pseudo-free rules, nor the outer container's
-    // `> pb-testimonial` rule (the block is no direct child); then the
+    // `> d-testimonial` rule (the block is no direct child); then the
     // root's wearings read at the box (each a layer: Sleek delivers its
     // stored box fragment there, the other two nothing) and the own
     // lines on top.
-    $pseudo_rule = "ancestor:$outer_key::pb-testimonial::before";
-    $this->assertSame([$pseudo_rule, 'variant:sleek', 'variant:duo', 'variant:loud', 'element'], $ids($php[0][16]));
+    $pseudo_rule = "ancestor:$outer_key::d-testimonial::before";
+    $first_rule = "ancestor:$outer_key::d-testimonial:first-child::before";
+    $this->assertSame([$pseudo_rule, $first_rule, 'variant:sleek', 'variant:duo', 'variant:loud', 'element'], $ids($php[0][16]));
     $this->assertSame('::&::before', $php[0][16]['stack']['relative']);
     $this->assertSame('block_type:testimonial', $php[0][16]['stack']['scope']);
     $this->assertSame([
@@ -790,44 +848,46 @@ class StackEquivalenceTest extends KernelTestBase {
       'resolved' => TRUE,
       'editable' => FALSE,
       'carrier' => NULL,
-      'styles' => ['default' => ['background-color' => 'teal', 'width' => '2rem']],
+      'styles' => ['default' => ['background-color' => 'teal']],
     ], $php[0][16]['stack']['layers'][0]);
+    $this->assertSame(['default' => ['width' => '2rem']], $php[0][16]['stack']['layers'][1]['styles']);
+    $this->assertSame($first_rule, $php[0][16]['stack']['layers'][1]['id']);
     // The root's wearings at the box carry the root as their carrier;
     // Sleek's layer is its stored `::&::before` fragment, the box's own
     // wear beating the descent rule's background and losing its content
     // to the own line.
-    $this->assertSame(['key' => $block_key, 'selector' => NULL], $php[0][16]['stack']['layers'][1]['carrier']);
-    $this->assertSame('sleek', $php[0][16]['stack']['layers'][1]['variant']);
+    $this->assertSame(['key' => $block_key, 'selector' => NULL], $php[0][16]['stack']['layers'][2]['carrier']);
+    $this->assertSame('sleek', $php[0][16]['stack']['layers'][2]['variant']);
     $sleek_box = ['default' => ['content' => '""', 'background-color' => 'gold'], 'hover' => ['background-color' => 'goldenrod']];
-    $this->assertSame([$sleek_box, [], []], array_column(array_slice($php[0][16]['stack']['layers'], 1, 3), 'styles'));
-    $this->assertSame(['default' => ['content' => '""', 'width' => '1rem']], $php[0][16]['stack']['layers'][4]['styles']);
+    $this->assertSame([$sleek_box, [], []], array_column(array_slice($php[0][16]['stack']['layers'], 2, 3), 'styles'));
+    $this->assertSame(['default' => ['content' => '""', 'width' => '1rem']], $php[0][16]['stack']['layers'][5]['styles']);
     $this->assertSame([
-      ['layer' => 0, 'property' => 'background-color', 'value' => 'teal', 'lost' => TRUE, 'winner' => 1],
-      ['layer' => 0, 'property' => 'width', 'value' => '2rem', 'lost' => TRUE, 'winner' => 4],
-      ['layer' => 1, 'property' => 'content', 'value' => '""', 'lost' => TRUE, 'winner' => 4],
-      ['layer' => 1, 'property' => 'background-color', 'value' => 'gold', 'lost' => FALSE, 'winner' => NULL],
-      ['layer' => 4, 'property' => 'content', 'value' => '""', 'lost' => FALSE, 'winner' => NULL],
-      ['layer' => 4, 'property' => 'width', 'value' => '1rem', 'lost' => FALSE, 'winner' => NULL],
+      ['layer' => 0, 'property' => 'background-color', 'value' => 'teal', 'lost' => TRUE, 'winner' => 2],
+      ['layer' => 1, 'property' => 'width', 'value' => '2rem', 'lost' => TRUE, 'winner' => 5],
+      ['layer' => 2, 'property' => 'content', 'value' => '""', 'lost' => TRUE, 'winner' => 5],
+      ['layer' => 2, 'property' => 'background-color', 'value' => 'gold', 'lost' => FALSE, 'winner' => NULL],
+      ['layer' => 5, 'property' => 'content', 'value' => '""', 'lost' => FALSE, 'winner' => NULL],
+      ['layer' => 5, 'property' => 'width', 'value' => '1rem', 'lost' => FALSE, 'winner' => NULL],
     ], $php[0][16]['lines']['default']);
     $this->assertSame([
-      ['layer' => 1, 'property' => 'background-color', 'value' => 'goldenrod', 'lost' => FALSE, 'winner' => NULL],
+      ['layer' => 2, 'property' => 'background-color', 'value' => 'goldenrod', 'lost' => FALSE, 'winner' => NULL],
     ], $php[0][16]['lines']['hover']);
     // The box is floorless whatever the skin says: the same stack with
     // the design system gone.
     $this->assertSame($ids($php[0][16]), $ids($php[1][16]));
-    // The band's first block's `&::before`: Sleek's box fragment, worn
-    // at the outer container's `> pb-testimonial` rule, continues under
-    // the rule as `> pb-testimonial::before` (the anchor binds to the
+    // The section's first block's `&::before`: Sleek's box fragment, worn
+    // at the outer container's `> d-testimonial` rule, continues under
+    // the rule as `> d-testimonial::before` (the anchor binds to the
     // rule's landing) and reaches the direct child's box as a group the
     // RULE carries (the worn layer with Sleek's identity, the own layer
     // riding empty: the map holds no lines at the continued key), listed
     // before the map's own descent box (a continued worn box precedes the
-    // map's suffixes), whose first-child block drops (the block is the
-    // container's middle child) and whose background beats the continued
-    // gold by that order; the direct children's pseudo-free rule and its
+    // map's suffixes), whose `:first-child` twin never reaches it (the
+    // block is the container's middle child) and whose background beats
+    // the continued gold by that order; the direct children's pseudo-free rule and its
     // `::after` box never. The block wears nothing of its own and owns no
     // lines at its box.
-    $continued_box = "ancestor:$outer_key::> pb-testimonial::before";
+    $continued_box = "ancestor:$outer_key::> d-testimonial::before";
     $this->assertSame(["$continued_box|sleek", $continued_box, $pseudo_rule, 'element'], $ids($php[0][17]));
     $this->assertSame([
       'id' => "$continued_box|sleek",
@@ -861,14 +921,14 @@ class StackEquivalenceTest extends KernelTestBase {
       ['layer' => 0, 'property' => 'background-color', 'value' => 'goldenrod', 'lost' => FALSE, 'winner' => NULL],
     ], $php[0][17]['lines']['hover']);
     $this->assertSame($ids($php[0][17]), $ids($php[1][17]));
-    // The fragment never leaks into a pseudo-free key: the band's blocks'
+    // The fragment never leaks into a pseudo-free key: the section's blocks'
     // own ancestor tiers hold the rule's pseudo-free group alone (pinned
     // above), and the box's continued group is nowhere in them.
     $this->assertNotContains("$continued_box|sleek", $ids($php[0][11]));
     $this->assertNotContains($continued_box, $ids($php[0][12]));
     // The same block's `&::after`: the children rule's `::after` box
     // alone; every `::before` rule and box is another box's.
-    $this->assertSame(["ancestor:$outer_key::> pb-testimonial::after", 'element'], $ids($php[0][18]));
+    $this->assertSame(["ancestor:$outer_key::> d-testimonial::after", 'element'], $ids($php[0][18]));
     $this->assertSame(['default' => ['content' => '""', 'inset' => '0']], $php[0][18]['stack']['layers'][0]['styles']);
     // The link part's `::before` box: no base layer though the part
     // renders as `a` and the skin carries base:a (the box is no anchor),
@@ -886,10 +946,14 @@ class StackEquivalenceTest extends KernelTestBase {
     $this->assertSame([], $php[1][0]['stack']['baseTags']);
     $this->assertSame([
       'declared:block_type:testimonial',
-      "ancestor:$outer_key::pb-testimonial",
+      "ancestor:$entity_key::p",
+      "ancestor:$outer_key::d-testimonial",
+      "ancestor:$outer_key::d-testimonial:first-child",
+      "ancestor:$outer_key::d-testimonial:last-child",
+      "ancestor:$outer_key::d-testimonial:only-child",
       "ancestor:$section_key::> * > *",
-      "ancestor:$section_key::> * > pb-testimonial|row",
-      "ancestor:$section_key::> * > pb-testimonial",
+      "ancestor:$section_key::> * > d-testimonial|wide_row",
+      "ancestor:$section_key::> * > d-testimonial",
       'variant:sleek',
       'variant:duo',
       'variant:loud',

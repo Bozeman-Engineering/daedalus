@@ -29,6 +29,7 @@ class DiscoverCommandTest extends KernelTestBase {
   protected static $modules = [
     'system',
     'daedalus_blueprint',
+    'filter',
     'user',
     'field',
     'layout_discovery',

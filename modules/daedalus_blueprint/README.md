@@ -111,15 +111,20 @@ module that packages one ships it as
 a site builder creates one at `/admin/appearance/design-systems`. The site
 activates ONE (`daedalus_blueprint.settings` `active_design_system`, through the
 listing, the drush command, or config), and the materials roster offers the
-active system's members plus the global materials (those of no system). A
+active system's members plus the global materials (those of no system). The
+roster is memoized per request and every law change resets it; the reset
+reaches every provider (`MaterialsProviderInterface::reset()`), so a memo a
+provider keeps about its records' inputs (daedalus_stylish's conformance
+verdict) is forgotten with the roster. A
 `save_material` mint joins the active system unless it passes `global: true`.
 A package cannot be uninstalled while its system is active or still has
 members, and the active system cannot be deleted.
 
 ### The distro lock (developer sites)
 
-Materials a package ships (variants, swatches, animations and fonts synced
-from its files, a skin's package layer, blueprints read from files) are
+Materials a package ships (variants synced from its files, a skin's
+package layer with its tokens, animations and fonts, blueprints read from
+files) are
 read-only on a site: the package's files are their one author, and a site
 that wrote into them would drift away from every future sync. The site
 forks a material instead ("Copy as my variant", "Copy as my skin") or
@@ -143,40 +148,6 @@ a setting rather than a permission because writable module directories are
 an environment property: a development site needs no role setup, and a
 production administrator cannot lift a lock that protects production. Roster
 records are cached, so rebuild caches (`drush cr`) after flipping it.
-
-### Tailing the AI log (`daedalus_blueprint_ai`)
-
-`drush daedalus-blueprint:ai-tail` (alias `dd-blueprint-tail`) follows the `ai_log` table the
-`ai_logging` module writes. Every LLM call logs the whole conversation so far,
-so following one page-building thread raw means reading the same history on
-every row. By default the command prints what each row adds: an `ai_agents`
-runner is one thread, the thread's first row prints its whole prompt, and each
-later row prints only its new messages under
-`[+N messages since #id, H already printed]` (a rewritten history prints whole
-with `[transcript diverged from #id; printed whole]`; rows outside any thread,
-such as image generation, print whole). Base64 blobs collapse to their first
-64 characters plus a byte count wherever they sit. `--full` restores the raw
-dump: the whole prompt of every row as the model received it, every byte.
-
-```bash
-# Follow the log: 5 recent rows, then poll every 2 seconds.
-drush dd-blueprint-tail
-
-# Print the 10 most recent rows and exit.
-drush dd-blueprint-tail --no-follow --limit=10
-
-# The raw dump: whole prompts, no dedupe, no base64 collapse.
-drush dd-blueprint-tail --full
-
-# Only rows carrying a tag value (joins ai_log__tags).
-drush dd-blueprint-tail --tag=ai_agents
-
-# The last 3 messages of what each row prints; -m5 for five (no space).
-drush dd-blueprint-tail -m
-
-# Add the system prompt, tools, configuration and extra data sections.
-drush dd-blueprint-tail --all
-```
 
 ### Custom field handlers
 
@@ -271,7 +242,7 @@ container nodes in display order, every node declaring its `kind`.
   `LayoutSerializer::slotOf()`), a slot fills once per document
   (`BLUEPRINT_SLOT_DUPLICATE`), the section stays in the root flow
   (`BLUEPRINT_SLOT_NESTED`), and the dialect spells it
-  `<pb-slot name="id">`.
+  `<d-slot name="id">`.
 - A **block**: `{kind: 'block', uuid, blueprint?, block_type | plugin_id |
   field, label?, label_rendered?, view_mode?, block_fields?,
   configuration?, styles?}`. An inline block carries its bundle, its
@@ -284,20 +255,20 @@ container nodes in display order, every node declaring its `kind`.
   bundle (`DocumentInstantiator`, refusing `FIELD_NOT_ON_HOST` with the
   subject's placeable fields when it cannot), so one tree fits every host
   that has the field; the formatter is its `configuration`. The dialect
-  spells it `<pb-block field="body"/>`, `read_schema` lists the bundle's
+  spells it `<d-block field="body"/>`, `read_schema` lists the bundle's
   placeable fields under `available_fields`, and the base plugin every
   field block styles under is `block_plugin:field_block`
   (`NodeTreeBuilder::pluginBase()`, mirrored by the client twins).
 - A **linked** node: `{kind: 'linked', uuid, blueprint, styles?}`. A
   saved blueprint shown by reference (the
   `daedalus_blueprint_linked:{machine_name}` block, one derivative per
-  published block-scope blueprint entity): its one fact is the blueprint
+  block-scope blueprint entity, published or not): its one fact is the blueprint
   it shows, whose document renders live inside the node through the
   render primitive (`InnerRender`) under the page's own contexts, so a
   field block in the blueprint shows the page's field and an edit of the
   blueprint reaches every page linking it. No children, no plugin id, no
   provenance (nothing was copied); its styles are the placement's own
-  box, block-keyed. The dialect spells it `<pb-linked blueprint="id"/>`;
+  box, block-keyed. The dialect spells it `<d-linked blueprint="id"/>`;
   writing one lands `add_element` of the linked block, where the op door
   judges the fit (`BLUEPRINT_DOES_NOT_FIT`) for every road. Its content
   is foreign on the page: `content` is refused `FOREIGN_DOCUMENT` with a
@@ -496,6 +467,65 @@ and a surface ignores an id the site does not declare (a shipped
 blueprint from a package whose groups this site lacks files under no
 group).
 
+### The AI context budget
+
+What the site shares with the AI as materials has one meter and one
+guard, `MaterialsBudget`. Every material of every kind carries "Offer
+to the AI" (`MaterialRecord::$offered`; the roster's `offered()` view is
+what the cached brief and the schema project), and nothing else decides
+what the model is shown; the budget is what the sharing adds up to.
+Each renderer that already produces the material lines the model reads
+registers as a weight source (`MaterialsWeightSourceInterface`, tag
+`daedalus_blueprint.materials_weight_source`): the schema's materials
+fragment here (`MaterialsSchema::weights()`: each kind's group as that
+kind's characters, the guidance and the group index as the system's)
+and the cached design system brief in `daedalus_blueprint_ai`
+(`DialectCatalogPrompt::weights()`: the section built as attributed
+lines, a material's own lines and the headings over one kind its kind's,
+the grammar, the doctrine and the group index the system's). Never a
+second renderer and never a re-render per material: the weights are a
+by-product of the one render the model is served. `reading()` sums them
+against the settings' budget (`daedalus_blueprint.settings`:
+`ai_context_budget_tokens`, the ceiling; `ai_context_characters_per_token`,
+the ratio) into a `BudgetReading` (characters by kind, the system
+figure, the total, the estimated tokens, the fraction, `over`), cached on
+the sources' metadata and the config's. Measurement is local and cheap:
+characters at a fixed ratio, labelled an estimate, no provider call and
+no tokenizer; the ratio is the one number a site tunes against its
+ledger's billed prompt sizes. Past the budget, sharing more is refused:
+`assertRoom()` throws `AI_CONTEXT_FULL` with the reading as context and
+a hint naming what to do and the usage dialog's path
+(`MaterialsBudget::DIALOG_PATH`), one wording on every door, and the
+providers call it on an offered capture and on an update turning
+`offered` or `favorite` on, so the AI's ops and every dialog answer
+alike; a capture passing `offered: false` goes through. The check reads
+the current reading, never a predicted delta. The permission `view ai
+context usage` (`MaterialsBudget::PERMISSION`) opens the reading's two
+doors: `daedalus_blueprint.ai_context_reading` (JSON,
+`BudgetReading::toArray()`, the spine's API; no chat consumer today) and
+`daedalus_blueprint.ai_context` at `MaterialsBudget::DIALOG_PATH` (the
+usage display: theme `daedalus_blueprint_ai_context`, a stacked bar of
+the whole budget with one segment per kind present plus the system and
+the free remainder, a legend with characters and estimated tokens per
+segment, the active design system's name; opened in core's modal by
+every door, a page of its own at the path the refusal hint names). The
+doors are the "Offer to the AI" controls and the chat: beside the
+stylish cards' toggle and the blueprint dialogs' toggle
+(`BlueprintSaveDialog`: save-as, save-page-as, update, details) a link
+"See what the AI holds", and in the chat kebab one action row, "Design
+system size" (no caption, no meter: a meter there read as the
+conversation's own context usage). All open through the
+daedalus popup's one opener, `Drupal.Daedalus.openModal` (daedalus_ui's
+`modal` library, `js/modal.js`): the links wear `data-daedalus-modal`
+(with `data-daedalus-modal-class="daedalus-ai-context-dialog"`, the
+display's class on the popup) and are caught at the document, the kebab
+calls the opener with its URL, so the popup's shape lives once and this
+spine module ships no JS door; each surface hands its door the URL by
+route name (drupalSettings for the bundles and the chat, the rendered
+href for the dialogs), never a path the client spells. The
+budget and the ratio are edited on `daedalus_blueprint_ai`'s settings
+form, a consumer of the spine's object.
+
 ### Pages, templates and the AI
 
 The AI tools (`daedalus_blueprint_ai`) agree on one meaning of "page". On
@@ -581,7 +611,7 @@ BLUEPRINTS block is the model's index of the BLOCK blueprints the roster
 offers the AI: one line per SITE FAVORITE (`MaterialRecord::$favorite`,
 the default the Add panel lists under Favorites for everyone; an editor's
 own marks never reach a text cached for every user), saying how it is
-placed (`<pb-blueprint name="id"/>`), whether it is top-level only and,
+placed (`<d-blueprint name="id"/>`), whether it is top-level only and,
 for a saved one, the `entity_id` to read its body on demand, with the
 looks it owns beneath it; then a GROUPS index, one line per declared
 group that holds an offered block blueprint, in declaration order (id,
@@ -646,19 +676,18 @@ chooser's cards and the schema take the answer as handed), present only
 when at least one fits (the two reserved starts ride `page_create`'s
 description). The BLOCK blueprints the bundle's host is offered, the
 same answer the Add panel gives on a canvas of that bundle, reach the
-model as an index, since a blueprint's entry prints its whole body and a
-site designed for a hundred cannot pay a hundred prints per read:
-`materials.groups` is the site's group vocabulary with how many offered
-block blueprints each holds (every declared group, a zero count
+model in full: `materials.blueprints` holds every one of them, each
+entry its whole body, and `materials.groups` is the site's group
+vocabulary with how many each holds (every declared group, a zero count
 included, since the vocabulary is also the ids `update_material`'s
-`groups` takes, then `ungrouped` while it holds any), and
-`materials.blueprints` holds the SITE FAVORITES in full. One group is
-read in full on demand: `eb_read_schema`'s optional `group` (a declared
-id, or `ungrouped`) puts that group's offered block blueprints in place
-of the favorites, narrowed AFTER the cached schema is read (the cache
-key never carries a group); an unknown id answers a corrective naming
-the ids, and a bundle whose schema carries no materials refuses the
-parameter. A schema read with no bundle host keeps block scope
+`groups` takes, then `ungrouped` while it holds any). Sharing is the one
+lever and the AI context budget its ceiling; a site favorite is the Add
+panel's listing and means nothing here. One group is read alone on
+demand: `eb_read_schema`'s optional `group` (a declared id, or
+`ungrouped`) puts that group's shared block blueprints in place of the
+whole set, narrowed AFTER the cached schema is read (the cache key never
+carries a group); an unknown id answers a corrective naming the ids, and
+a bundle whose schema carries no materials refuses the parameter. A schema read with no bundle host keeps block scope
 unfiltered by fit.
 
 ## Capabilities: what an actor may do

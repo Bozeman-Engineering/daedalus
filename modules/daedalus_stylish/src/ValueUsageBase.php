@@ -17,7 +17,7 @@ use Drupal\daedalus_stylish\Entity\MachineNameInterface;
 /**
  * A value-usage table: which source entities reference which materials.
  *
- * A VALUE material (a swatch, an animation, a token) is referenced INSIDE
+ * A VALUE material (a token, an animation, a font) is referenced INSIDE
  * CSS VALUES, not by a structured list (a map entry's "variants" list, which
  * VariantUsage mirrors on its own narrower shape: map hosts only, two
  * lookup forms, no source column). CSS values live in THREE stores, so a
@@ -28,10 +28,10 @@ use Drupal\daedalus_stylish\Entity\MachineNameInterface;
  *   VariantUsage tracks, HostResolver's).
  * - 'variant': daedalus_variant styles (a variant's property values may
  *   reference the material).
- * - 'skin': daedalus_skin site defaults, plus its tokens for a material
- *   whose reference form can live in a property-less token value
- *   (scanTokens()). The skin is the entity a rewrite saves, whichever
- *   field carried the reference.
+ * - 'skin': daedalus_skin defaults, plus its tokens and animations for a
+ *   material whose reference form can live in a property-less token value
+ *   or a keyframe step (scanTokens(), scanAnimations()). The skin is the
+ *   entity a rewrite saves, whichever field carried the reference.
  *
  * Rows are (material, source, entity_type, entity_id): one row per
  * distinct referenced machine name per source entity. The material column
@@ -56,7 +56,8 @@ use Drupal\daedalus_stylish\Entity\MachineNameInterface;
  * shared, so the tables can never disagree on what a source is. Counts and
  * work lists are keyed by the column's value (countReferencesTo(),
  * referencesTo()); the entity twins read them through the entity's machine
- * name, the token twin through the token's custom property.
+ * name, the skin material twin through the token's custom property or
+ * the animation's keyframes name.
  */
 abstract class ValueUsageBase {
 
@@ -107,6 +108,19 @@ abstract class ValueUsageBase {
    *   The material names the tokens reference.
    */
   protected function scanTokens(array $tokens): array {
+    return [];
+  }
+
+  /**
+   * The material names a skin's animation steps reference.
+   *
+   * scanTokens()'s twin for the skin's motion section: a keyframe step's
+   * values may reference a token through var(); the skeleton reads none.
+   *
+   * @return string[]
+   *   The material names the steps reference.
+   */
+  protected function scanAnimations(array $animations): array {
     return [];
   }
 
@@ -269,8 +283,8 @@ abstract class ValueUsageBase {
   /**
    * Replaces one custom property's var() expressions in a CSS value.
    *
-   * The write direction of the var() grammar the two var() twins share
-   * (swatches and tokens both deliver as custom properties), the
+   * The write direction of the var() grammar (every token delivers as a
+   * custom property), the
    * delete-in-use batch's one substitution rule: every var() whose custom
    * property is the given variable is replaced WHOLE (fallback included,
    * since the reference is gone, not unresolved) by the literal, and
@@ -283,7 +297,7 @@ abstract class ValueUsageBase {
    * @param string $value
    *   The CSS value.
    * @param string $variable
-   *   The custom property, leading dashes included ("--swatch-hero").
+   *   The custom property, leading dashes included ("--color-hero").
    * @param string $literal
    *   What each var() of it becomes.
    */
@@ -429,6 +443,8 @@ abstract class ValueUsageBase {
       self::SOURCE_SKIN => [
         ...$this->scanTokens($entity->packageTokens()),
         ...$this->scanTokens($entity->siteTokens()),
+        ...$this->scanAnimations($entity->packageAnimations()),
+        ...$this->scanAnimations($entity->siteAnimations()),
         ...$this->scanDefaults($entity->packageDefaults()),
         ...$this->scanDefaults($entity->siteDefaults()),
       ],

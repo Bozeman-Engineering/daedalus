@@ -11,7 +11,7 @@ import { widgetClasses } from '../lib/widget-classes.js';
  *
  * The page-level Gap control: daedalus_edit binds it on the entity kind to
  * the layout root daedalus_layout renders (`element: '.daedalus-layout-layout'`), so the
- * page spaces its root bands the way a container spaces its children;
+ * page spaces its sections the way a container spaces its children;
  * the row's write lands at `entity:{uuid}::.daedalus-layout-layout`, the same
  * part-keyed address the AI writes, through the ordinary widget contract
  * (one op per pick, the field contract on the open surface). The value
@@ -23,11 +23,11 @@ import { widgetClasses } from '../lib/widget-classes.js';
  * declaration, so the guide holds the bound part to the whole family and
  * a longhand the AI wrote keeps the control offered through the value-set
  * override), but the row reads and writes the shorthand alone: one row,
- * one rhythm between bands.
+ * one rhythm between sections.
  *
  * Gated on the BOUND element laying out more than one child box
  * (boundGapGate over self.partChildCount, the part's own children as the
- * canvas shows them): a gap between one band is a no-op a lay user
+ * canvas shows them): a gap between one section is a no-op a lay user
  * cannot see, so the row HIDES rather than disables. The presence gate
  * runs first (an entity with no sections renders no layout root, and the
  * model says so), a committed gap keeps the row whatever the canvas
@@ -37,7 +37,7 @@ import { widgetClasses } from '../lib/widget-classes.js';
  * spacing story, so a Padding row there would be meaningless air inside a
  * box that only arranges.
  */
-const Gap = ({ model, guide, materials, source, onPreview, onRelease, onCommit, onPickCondition = null, onOpenDocument = null }) => (
+const Gap = ({ model, guide, materials, source, onPreview, onRelease, onCommit, onPickCondition = null, onOpenDocument = null, law = {} }) => (
   <div className={widgetClasses('gap', false)}>
     <ChoiceRow
       guide={guide}
@@ -56,6 +56,7 @@ const Gap = ({ model, guide, materials, source, onPreview, onRelease, onCommit, 
       disabledTitle={model.withheld?.gap ?? null}
       onPickCondition={onPickCondition}
       onOpenDocument={onOpenDocument}
+      law={law}
       onPreview={onPreview}
       onRelease={onRelease}
       onCommit={onCommit}

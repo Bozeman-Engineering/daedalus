@@ -1,6 +1,6 @@
 name: 'Daedalus Stylish fonts test'
 type: module
-description: 'Ships default fonts, with their files under assets/fonts/, for testing the type disk lane.'
+description: 'Ships a skin carrying fonts, with their files under assets/fonts/, for testing the skins disk lane''s fonts tier.'
 package: Testing
 core_version_requirement: '*'
 hidden: true

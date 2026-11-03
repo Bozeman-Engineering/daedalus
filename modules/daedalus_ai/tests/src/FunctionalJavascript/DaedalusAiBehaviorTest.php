@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_ai\FunctionalJavascript;
 
 use Drupal\block_content\Entity\BlockContentType;
+use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
@@ -170,6 +171,11 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
     foreach (['create basic block content', 'edit any basic block content', 'delete any basic block content'] as $permission) {
       $editor->grantPermission($permission);
     }
+    // The kebab's "Design system size" row is the permission's alone (the
+    // materials budget's spine permission, daedalus_blueprint); the
+    // recipe's editor role does not carry it as shipped (the grant is the
+    // recipe's own follow-up), so the scenario grants it here.
+    $editor->grantPermission(MaterialsBudget::PERMISSION);
     $editor->save();
   }
 
@@ -189,15 +195,21 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
    *   daedalus_ui's SidebarManager (the deterministic equivalent of its
    *   toggle button; there is no DaedalusAi TOOL, no tool opens the chat).
    *   The #daedalus_ai panel renders a single long-lived <deep-chat> element plus
-   *   the header chrome (title, options menu button with its On brand styling
-   *   checked item and Clear History, close).
+   *   the header chrome (title, options menu button with its Clear History
+   *   item, close).
    *   This is real cross-module DOM wiring (daedalus_ui Sidebar plugin +
    *   ai_chatbot deep-chat element) reachable only in a browser. It
    *   deliberately stops at the DOM: it does not type a message, assert
    *   any AI response or restored history content, or exercise the Clear
-   *   History action, because prompt_capture returns a tool-free response
+   *   History action, because the stub provider returns a tool-free response
    *   in-process and
    *   cannot drive the drupal_commands pipeline across the WebDriver boundary.
+   * - the kebab's "Design system size" row (seam: daedalus_blueprint's
+   *   materials budget reached through the chat): the sidebar hands the
+   *   kebab the spine's dialog route for a user holding "view ai context
+   *   usage", the row opens the usage display (the bar by kind) in core's
+   *   modal through the spine's one opener. Three modules and a modal
+   *   that only meet in a browser.
    * - chat chips: the chat LIVE-FOLLOWS the ONE selection spine: a
    *   selection renders a chip in the chat panel, and dismissing the chip
    *   deselects the element on the page. No AI-owned selection state exists.
@@ -277,6 +289,77 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
       'Exactly one long-lived <deep-chat> element exists in the sidebar.',
     );
 
+    // The "AI is working" signal (daedalus-ai-working.js) mirrors the chat's
+    // busy state onto <html class="daedalus-ai-working">, which the edge
+    // glow paints. The seam is the two public marks every lane already
+    // leaves, read on the macrotask after any shadow-DOM mutation: ai_chatbot's
+    // deepChatToggle.processing flag (the continuation loop, the follow-up and
+    // deferred lanes) and deep-chat's own loading-button class (a typed turn's
+    // first leg). Drive each mark the way its lane does rather than racing a
+    // stub turn: a lane raises the flag, disables submit and adds a message in
+    // one tick, then updates the message and releases both in one tick.
+    $session->executeScript(<<<'JS'
+      const chat = document.querySelector('deep-chat');
+      Drupal.behaviors.deepChatToggle.processing = true;
+      chat.disableSubmitButton(true);
+      chat.addMessage({ role: 'ai', html: '<p>working</p>' });
+      JS);
+    $this->assertJsCondition(
+      "document.documentElement.classList.contains('daedalus-ai-working')",
+      10000,
+      'A lane holding the chat (processing flag, submit disabled) marks <html> as working.',
+    );
+    $session->executeScript(<<<'JS'
+      const chat = document.querySelector('deep-chat');
+      chat.updateMessage({ role: 'ai', html: '<p>done</p>' }, chat.getMessages().length - 1);
+      Drupal.behaviors.deepChatToggle.processing = false;
+      chat.disableSubmitButton(false);
+      JS);
+    $this->assertJsCondition(
+      "!document.documentElement.classList.contains('daedalus-ai-working')",
+      10000,
+      'The lane releasing the chat clears the working mark.',
+    );
+    $session->executeScript(<<<'JS'
+      document.querySelector('deep-chat').shadowRoot
+        .querySelector('.input-button.inside-right').classList.add('loading-button');
+      JS);
+    $this->assertJsCondition(
+      "document.documentElement.classList.contains('daedalus-ai-working')",
+      10000,
+      "deep-chat's own in-flight request (the loading-button class) marks <html> as working.",
+    );
+    $session->executeScript(<<<'JS'
+      document.querySelector('deep-chat').shadowRoot
+        .querySelector('.input-button.inside-right').classList.remove('loading-button');
+      JS);
+    $this->assertJsCondition(
+      "!document.documentElement.classList.contains('daedalus-ai-working')",
+      10000,
+      'The request finishing clears the working mark.',
+    );
+
+    // Both chat interceptors on the element are daedalus_ai's wrappers, not
+    // ai_chatbot's bare ones. ai_chatbot assigns its interceptors inside
+    // Drupal.aiDeepchat.whenNeeded().then(), after behaviors return, and
+    // daedalus_ai wraps them through Drupal.Daedalus.AiInterceptors.install
+    // on that same promise; a wrapper installed any earlier is silently
+    // replaced and every later leg (the request context, the mutation
+    // response, drupal_commands) loses its hook without an error anywhere.
+    // Asserting here, before any turn, makes that rug-pull fail on one line.
+    $this->assertJsCondition(
+      "(() => { const chat = document.querySelector('deep-chat');"
+      . " return typeof chat.requestInterceptor === 'function' && /FormData/.test(chat.requestInterceptor.toString()); })()",
+      20000,
+      "The deep-chat requestInterceptor is daedalus_ai's context-manager wrapper (its source carries FormData); ai_chatbot assigned its interceptor after ours and overwrote it.",
+    );
+    $this->assertJsCondition(
+      "(() => { const chat = document.querySelector('deep-chat');"
+      . " return typeof chat.responseInterceptor === 'function' && /blueprint_responses/.test(chat.responseInterceptor.toString()); })()",
+      20000,
+      "The deep-chat responseInterceptor is daedalus_ai's command-processor wrapper (its source carries blueprint_responses); ai_chatbot assigned its interceptor after ours and overwrote it.",
+    );
+
     // The header chrome the user interacts with is present: the assistant
     // title,
     // the options kebab, and the close control the shared header grammar
@@ -308,42 +391,6 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
       "The end-aligned chat menu's right edge sits at the kebab's right edge, hanging inward over the panel.",
     );
 
-    // The menu's first item is the design posture declaration, "On brand
-    // styling": a checked item (the primitive's menuitemcheckbox), off by
-    // default (workshopping), whose state rides every chat turn as the
-    // design_posture context (the seam: chat menu ->
-    // daedalus-ai-design-posture.js -> the context manager's collect() -> the
-    // request body, across modules). The context manager arrives with the
-    // deep-chat library, so the assertion waits for it too.
-    $this->assertJsCondition(
-      "(() => { const item = document.querySelector('.daedalus-ui-popover > .daedalus-ui-menu [role=\"menuitemcheckbox\"]');"
-      . " return item !== null && item.querySelector('.daedalus-ui-menu__label').textContent.trim() === 'On brand styling'"
-      . " && item.getAttribute('aria-checked') === 'false'"
-      . " && !!window.Drupal.Daedalus.AiContext && Drupal.Daedalus.AiContext.collect().design_posture === 'workshopping'; })()",
-      20000,
-      'The chat menu lists On brand styling as an unchecked item and the collected design_posture context is workshopping.',
-    );
-    // One activation flips the posture: the menu closes first (any
-    // activation does), the collected context reads on_brand, and the
-    // reopened menu shows the item checked. The reopen leaves the menu
-    // open where the Clear History steps below expect it.
-    $session->executeScript("document.querySelector('.daedalus-ui-popover > .daedalus-ui-menu [role=\"menuitemcheckbox\"]').click();");
-    $this->assertJsCondition(
-      "!document.querySelector('.daedalus-ui-popover')"
-      . " && document.querySelector('#daedalus_ai .daedalus-ai-chat-menu-button').getAttribute('aria-expanded') === 'false'"
-      . " && Drupal.Daedalus.AiContext.collect().design_posture === 'on_brand'",
-      20000,
-      'Activating On brand styling closed the menu and flipped the collected design_posture to on_brand.',
-    );
-    $session->executeScript("(() => { const kebab = document.querySelector('#daedalus_ai .daedalus-ai-chat-menu-button'); kebab.focus(); kebab.click(); })();");
-    $this->assertJsCondition(
-      "(() => { const item = document.querySelector('.daedalus-ui-popover > .daedalus-ui-menu [role=\"menuitemcheckbox\"]');"
-      . " return item !== null && item.getAttribute('aria-checked') === 'true'"
-      . " && document.querySelector('#daedalus_ai .daedalus-ai-chat-menu-button').getAttribute('aria-expanded') === 'true'; })()",
-      20000,
-      'The reopened chat menu shows On brand styling checked.',
-    );
-
     // Clearing is destructive, so the item is the menu's two-step confirm:
     // one activation arms it (the label swaps) and clears nothing.
     $session->executeScript("document.querySelector('.daedalus-ui-popover .daedalus-ui-menu__item--danger').click();");
@@ -363,6 +410,140 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
       . " && document.activeElement === document.querySelector('#daedalus_ai .daedalus-ai-chat-menu-button')",
       20000,
       'Escape closed the chat menu and its surface and returned focus to the kebab.',
+    );
+
+    // ----- THE DESIGN SYSTEM SIZE ROW: the kebab's door to what the site
+    // shares with the AI as materials, against the budget
+    // (daedalus_blueprint's materials budget). The sidebar handed the
+    // kebab the spine's dialog route because the editor holds "view ai
+    // context usage" (granted in setUp); reopening the kebab builds the
+    // row from it: one action row, no caption and no meter (a meter here
+    // read as the conversation's own context usage, which it is not; the
+    // figure lives in the dialog). The reading is pinned against the
+    // route's own answer, never a figure the fixture cannot know.
+    $this->assertJsCondition(
+      "typeof drupalSettings.daedalus_ai.contextDialogUrl === 'string' && typeof drupalSettings.daedalus_ai.contextUrl === 'undefined' && !!(window.Drupal.Daedalus && typeof Drupal.Daedalus.openModal === 'function')",
+      20000,
+      'The sidebar handed the kebab the dialog route alone, with the daedalus popup\'s one opener.',
+    );
+    $session->executeScript("(() => { const kebab = document.querySelector('#daedalus_ai .daedalus-ai-chat-menu-button'); kebab.focus(); kebab.click(); })();");
+    $this->assertJsCondition(
+      "(() => { const menu = document.querySelector('.daedalus-ui-popover > .daedalus-ui-menu'); if (!menu) { return false; }"
+      . " const captions = [...menu.querySelectorAll('.daedalus-ui-menu__header')].map((el) => el.textContent.trim());"
+      . " const labels = [...menu.querySelectorAll('button.daedalus-ui-menu__item .daedalus-ui-menu__label')].map((el) => el.textContent.trim());"
+      . " return !captions.includes('Design system size') && !menu.querySelector('.daedalus-ui-menu__item--meter') && labels.includes('Design system size'); })()",
+      20000,
+      'The kebab carries the Design system size row: an action row, no caption, no meter.',
+    );
+    // Activating the row runs it (the menu closes, as after any item) and
+    // the design system size opens in core's modal through the daedalus
+    // popup's one opener: the bar of the whole budget with the system
+    // segment and the free remainder (the recipe's product shares well
+    // under the default budget), titled by the route, and under it the
+    // form: one collapsed section per kind with a box per record.
+    $session->executeScript("[...document.querySelectorAll('.daedalus-ui-popover button.daedalus-ui-menu__item')].find((item) => item.querySelector('.daedalus-ui-menu__label').textContent.trim() === 'Design system size').click();");
+    $this->assertJsCondition(
+      "(() => { const modal = document.querySelector('#drupal-modal'); if (!modal) { return false; }"
+      . " const dialog = modal.closest('.ui-dialog');"
+      . " const form = modal.querySelector('#daedalus-blueprint-ai-context form.daedalus-ai-context-form');"
+      . " return !document.querySelector('.daedalus-ui-popover') && !!dialog && dialog.classList.contains('daedalus-ai-context-dialog')"
+      . " && dialog.querySelector('.ui-dialog-title').textContent.trim() === 'Design system size'"
+      . " && !!modal.querySelector('.daedalus-ai-context .daedalus-ai-context__bar [data-kind=\"system\"]')"
+      . " && !!modal.querySelector('.daedalus-ai-context__bar [data-kind=\"free\"]')"
+      . " && !modal.querySelector('.daedalus-ai-context--over')"
+      . " && !!form && form.querySelectorAll('details.daedalus-ai-context-form__kind[data-kind]').length > 0"
+      . " && [...form.querySelectorAll('details.daedalus-ai-context-form__kind')].every((section) => !section.open)"
+      . " && !!form.querySelector('.daedalus-ai-context-form__kind input[type=\"checkbox\"]'); })()",
+      20000,
+      'The row closed the menu and opened the design system size in core\'s modal: the bar with the system segment and the free remainder, and the form\'s kind sections, collapsed, with a box per record.',
+    );
+    // A box is the record's `offered` flag with the record's own weight
+    // beside its label. Unticking one and saving writes through its
+    // kind's provider and rebuilds the form over the fresh reading: the
+    // box comes back unticked without a figure, that kind's segment is
+    // narrower, and the section it sits in reopens. The leg picks the
+    // first enabled, ticked box carrying a figure (a record whose own
+    // lines render), so the shrink is real whichever kind the fixture
+    // offers first; Save is the pane button core's dialog behavior hoists
+    // from the form (its handler replays mousedown, mouseup and click on
+    // the hidden original), else the form's own submit, pressed the same
+    // way: core binds a submit button's AJAX on mousedown and swallows a
+    // bare click, so a click alone sends nothing. Ticking it back and
+    // saving shares the record again, so the rest of the scenario finds
+    // the roster as shipped.
+    $session->executeScript(<<<JS
+      (() => {
+        const modal = document.querySelector('#drupal-modal');
+        const box = [...modal.querySelectorAll('.daedalus-ai-context-form__kind input[type="checkbox"]')]
+          .find((input) => input.checked && !input.disabled && !!modal.querySelector('label[for="' + input.id + '"] .daedalus-ai-context-form__weight'));
+        if (!box) {
+          throw new Error('No enabled, ticked box with a figure in the design system size form.');
+        }
+        const section = box.closest('.daedalus-ai-context-form__kind');
+        const kind = section.getAttribute('data-kind');
+        const segment = modal.querySelector('.daedalus-ai-context__bar [data-kind="' + kind + '"]');
+        window.__aiContextPick = { kind, name: box.name, width: parseFloat(segment.style.width) };
+        section.open = true;
+        box.click();
+      })();
+      JS);
+    $save = <<<JS
+      (() => {
+        const dialog = document.querySelector('#drupal-modal').closest('.ui-dialog');
+        const paneButton = [...dialog.querySelectorAll('.ui-dialog-buttonpane button')]
+          .find((button) => button.textContent.trim() === 'Save');
+        if (paneButton) {
+          paneButton.click();
+          return;
+        }
+        const submit = dialog.querySelector('#daedalus-blueprint-ai-context input[type="submit"][value="Save"]');
+        if (!submit) {
+          throw new Error('Save not found in the design system size dialog.');
+        }
+        ['mousedown', 'mouseup', 'click'].forEach((type) => submit.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true })));
+      })();
+      JS;
+    $session->executeScript($save);
+    $this->assertJsCondition(
+      "(() => { const modal = document.querySelector('#drupal-modal'); const pick = window.__aiContextPick; if (!modal || !pick) { return false; }"
+      . " const box = modal.querySelector('input[type=\"checkbox\"][name=\"' + pick.name + '\"]');"
+      . " const segment = modal.querySelector('.daedalus-ai-context__bar [data-kind=\"' + pick.kind + '\"]');"
+      . " const width = segment ? parseFloat(segment.style.width) : 0;"
+      . " return !!box && !box.checked && !modal.querySelector('label[for=\"' + box.id + '\"] .daedalus-ai-context-form__weight')"
+      . " && width < pick.width && !modal.querySelector('.messages--error')"
+      . " && box.closest('.daedalus-ai-context-form__kind').open; })()",
+      20000,
+      'Save turned the record\'s offered flag off through its provider and rebuilt the form over the fresh reading: the box unticked without a figure, its kind\'s segment narrower, its section reopened.',
+    );
+    $session->executeScript("document.querySelector('#drupal-modal').querySelector('input[type=\"checkbox\"][name=\"' + window.__aiContextPick.name + '\"]').click();");
+    $session->executeScript($save);
+    $this->assertJsCondition(
+      "(() => { const modal = document.querySelector('#drupal-modal'); const pick = window.__aiContextPick; if (!modal) { return false; }"
+      . " const box = modal.querySelector('input[type=\"checkbox\"][name=\"' + pick.name + '\"]');"
+      . " const segment = modal.querySelector('.daedalus-ai-context__bar [data-kind=\"' + pick.kind + '\"]');"
+      . " return !!box && box.checked && !!modal.querySelector('label[for=\"' + box.id + '\"] .daedalus-ai-context-form__weight')"
+      . " && !!segment && parseFloat(segment.style.width) === pick.width && !modal.querySelector('.messages--error'); })()",
+      20000,
+      'Ticking it back and saving shared the record again: the box ticked with its figure, the segment at its first width.',
+    );
+    // Closing the modal leaves the page as it was (core removes the
+    // dialog element with its content). Core sizes a modal on a debounced
+    // window handler 20 ms after it opens (dialog.position.js: resetSize
+    // turns the 95% max height into pixels on the content element); a
+    // close landing before that timer fires leaves it to run on the
+    // removed dialog, a console error no user can produce. So the leg
+    // waits for the settled size, then closes through the title bar's
+    // button, the user's gesture.
+    $this->assertJsCondition(
+      "document.querySelector('#drupal-modal').style.maxHeight.endsWith('px')",
+      20000,
+      'Core sized the modal: its autoResize settled.',
+    );
+    $this->getSession()->getPage()->find('css', '.daedalus-ai-context-dialog .ui-dialog-titlebar-close')->click();
+    $this->assertJsCondition(
+      "!document.querySelector('.daedalus-ai-context') && document.querySelector('#daedalus_ai .daedalus-ai-chat-menu-button').getAttribute('aria-expanded') === 'false'",
+      20000,
+      'Closing the modal removed the display; the kebab reads closed.',
     );
 
     // The selection facade (the spine's, in daedalus_ui's app bundle) and
@@ -626,7 +807,7 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
     // field carries {_file: "hero.svg"} and the canvas renders the minted
     // vector media (the media's source file IS the held file). The endpoint
     // speaks the JSON door only (it carries no dialect catalog, so the page
-    // language's <pb-image file="hero.svg"> cannot ride it); the JSON
+    // language's <d-image file="hero.svg"> cannot ride it); the JSON
     // door's add_element op anchors after the block the fixture placed.
     // The write happens in the browser's session (the staged copy is the
     // browser user's tempstore), applied through the app's one
@@ -640,7 +821,7 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
         fetch(Drupal.url('session/token'), {credentials: 'same-origin'})
           .then(function (r) { return r.text(); })
           .then(function (token) {
-            return fetch(Drupal.url('daedalus-blueprint/node/$nid'), {
+            return fetch(Drupal.url('daedalus-blueprint/node/$nid') + '?navigationMode=edit', {
               method: 'POST',
               credentials: 'same-origin',
               headers: {'Content-Type': 'application/json', 'X-CSRF-Token': token},
@@ -735,14 +916,6 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
       JS);
 
     $nid = $node->id();
-
-    // SKIPPED past this point: the legs below read fields inside an inline
-    // block by their block:<component uuid>:<field> key, but the page
-    // builder does not render inline blocks through a block template, so
-    // daedalus_ui's InlineBlockFieldKeys rewrite never fires and the
-    // fields keep field:<block_content uuid>:<field>. Product bug, not this
-    // test's. Remove the skip when the rewrite lands.
-    $this->markTestSkipped('Inline-block field keys are not rewritten to block:<component>:<field>.');
 
     // ----- KEPT BEHAVIOR 2 (the mutation-response contract): an AI edit
     // updates the page and highlights what changed. In production a persisted
@@ -933,7 +1106,7 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
         fetch(Drupal.url('session/token'), {credentials: 'same-origin'})
           .then(function (r) { return r.text(); })
           .then(function (token) {
-            return fetch(Drupal.url('daedalus-blueprint/node/$nid'), {
+            return fetch(Drupal.url('daedalus-blueprint/node/$nid') + '?navigationMode=edit', {
               method: 'POST',
               credentials: 'same-origin',
               headers: {'Content-Type': 'application/json', 'X-CSRF-Token': token},

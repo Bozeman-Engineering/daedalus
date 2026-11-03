@@ -14,7 +14,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *
  * Shows which skin the site wears beside the library of looks it could
  * wear. The list is read-only apart from delete: a skin is authored and
- * chosen on the canvas (the Palette's skin section and its skin card),
+ * chosen on the canvas (the Skin tab and its skin card),
  * never through an admin form.
  */
 class DaedalusStylishSkinListBuilder extends EntityListBuilder {

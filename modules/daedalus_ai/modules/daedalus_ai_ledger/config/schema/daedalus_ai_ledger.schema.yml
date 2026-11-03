@@ -1,0 +1,51 @@
+daedalus_ai_ledger.settings:
+  type: config_object
+  label: 'Daedalus AI Ledger settings'
+  mapping:
+    prices:
+      type: sequence
+      label: 'Price table'
+      sequence:
+        type: mapping
+        label: 'Model prices, USD per million tokens'
+        mapping:
+          model:
+            type: string
+            label: 'Model id'
+          input:
+            type: float
+            label: 'Uncached input'
+          output:
+            type: float
+            label: 'Output'
+          cache_read:
+            type: float
+            label: 'Cache read'
+          cache_write:
+            type: float
+            label: 'Cache write'
+          per_call:
+            type: float
+            label: 'USD per call'
+    caps:
+      type: sequence
+      label: 'Spend windows'
+      sequence:
+        type: mapping
+        label: 'Window'
+        mapping:
+          scope:
+            type: string
+            label: 'Whose legs the window sums: site or user'
+          period:
+            type: string
+            label: 'The period as an ISO 8601 duration'
+          usd:
+            type: float
+            label: 'Cap in USD'
+          anchor:
+            type: string
+            label: 'The date the boundaries step from (Y-m-d), or empty to roll'
+    retention_days:
+      type: integer
+      label: 'Days of rows to keep; 0 keeps every row'

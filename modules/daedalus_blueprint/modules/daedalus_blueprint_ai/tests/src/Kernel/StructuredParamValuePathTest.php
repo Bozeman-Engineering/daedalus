@@ -26,6 +26,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   DaedalusBlueprintToolBase::setContextValue() converts the throw into a
  *   corrective tool result the model can re-send from. The exception must
  *   never escape.
+ * - Invented parameter: a name the tool never declared (Haiku sent
+ *   page_edit's 'save' to eb_create_entity). getContextDefinition() throws
+ *   ContextException before any value is set, and ai_agents replays every
+ *   stored argument through setContextValue() when it rebuilds the agent
+ *   between legs, so the same guard converts it into a corrective naming
+ *   the unknown parameter and the ones the tool declares.
  *
  * Both structured shapes are exercised: the object-shaped blueprint params
  * and the array-shaped eb_edit.operations (an indexed array riding the same
@@ -163,6 +169,27 @@ class StructuredParamValuePathTest extends BlueprintKernelTestBase {
     ]);
     $this->assertStringContainsString("Invalid value for the 'operations' parameter", $output);
     $this->assertSame('Untouched host', $this->reloadName($entity->id()));
+  }
+
+  /**
+   * Tests an invented parameter yields a corrective result, not an exception.
+   *
+   * Replays what Haiku sent: a valid blueprint plus 'save', which is
+   * page_edit's parameter and nothing eb_create_entity declares. The
+   * corrective must name the unknown parameter and the declared ones, and
+   * the guard must bail before the blueprint is ever acted on, so nothing
+   * is created.
+   */
+  public function testInventedParameterEmitsCorrectiveNotException(): void {
+    $storage = $this->entityTypeManager->getStorage('entity_test');
+    $before = count($storage->loadMultiple());
+    $output = $this->runTool('eb_create_entity', [
+      'blueprint' => $this->blueprint('Invented parameter host'),
+      'save' => TRUE,
+    ]);
+    $this->assertStringContainsString("Unknown parameter 'save': eb_create_entity has no such parameter (it declares: blueprint).", $output);
+    $this->assertStringNotContainsString('success', $output, 'eb_create_entity did not proceed past the guard.');
+    $this->assertCount($before, $storage->loadMultiple(), 'The invented parameter created nothing.');
   }
 
   /**

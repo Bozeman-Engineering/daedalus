@@ -182,6 +182,10 @@ services:
   # the service by id.
   daedalus_layout.form_alter.bundle_edit:
     class: Drupal\daedalus_layout\Form\BundleEditFormAlter
+  # The same setting mirrored on daedalus_ui's bundle roster (the tab's
+  # read-only second door) as the Starting designs column.
+  daedalus_layout.bundle_roster.starting_designs:
+    class: Drupal\daedalus_layout\EventSubscriber\StartingDesignsColumn
   daedalus_layout.start_chooser:
     class: Drupal\daedalus_layout\Form\StartChooser
 

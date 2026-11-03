@@ -1,0 +1,14 @@
+daedalus_ai_upstream.settings:
+  type: config_object
+  label: 'Daedalus AI Upstream settings'
+  mapping:
+    replay_thinking:
+      type: boolean
+      label: 'Replay thinking blocks on assistant turns'
+    thinking_display:
+      type: string
+      label: 'How the thinking blocks of a response display (omitted or summarized)'
+      constraints:
+        Choice:
+          - omitted
+          - summarized

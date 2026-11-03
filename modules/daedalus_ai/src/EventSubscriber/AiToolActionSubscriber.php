@@ -107,7 +107,7 @@ class AiToolActionSubscriber implements EventSubscriberInterface {
   protected function handleEntityPersisted(AiToolActionEvent $event): void {
     $context = $event->getContext();
     $host = $context['host'] ?? NULL;
-    // A config result (a swatch, a variant: site-wide material with no
+    // A config result (a variant, an animation: site-wide material with no
     // page) carries no host: nowhere to navigate, nothing to refresh; its
     // mint reaches the client as the turn's materials delta (MutatedTurn),
     // which the entity hooks recorded when the tool persisted it.

@@ -8,6 +8,7 @@ use Drupal\Component\Plugin\PluginBase;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\Extension\ModuleExtensionList;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\Core\Template\Attribute;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -69,6 +70,38 @@ abstract class ModePluginBase extends PluginBase implements ModeInterface, Conta
         'icon_text' => $this->label(),
         'toolbar_state' => $toolbar_state,
         'mode' => $this->t('@label', ['@label' => $this->label()]),
+      ],
+    ];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function buildModeExitButton(): array {
+    $mode_id = $this->getPluginId();
+    $title = $this->t('Exit @label', ['@label' => $this->label()]);
+    $classes = ['daedalus-ui-mode-button', 'daedalus-ui-mode-exit', 'toolbar-button'];
+    // The same active state the entry carries: daedalus-ui.js adds and
+    // removes `active` on every [data-mode] at once, so the server-rendered
+    // pair must agree before the client's first toggle.
+    if ($this->daedalusUi->getMode() === $mode_id) {
+      $classes[] = 'active';
+    }
+    return [
+      '#type' => 'inline_template',
+      '#template' => "<button{{ attributes }}>{{ icon('daedalus_ui', icon_id, { class: 'toolbar-button__icon', size: 20 }) }}<span class='toolbar-button__label'>{{ label }}</span></button>",
+      '#context' => [
+        'attributes' => new Attribute([
+          'type' => 'button',
+          'class' => $classes,
+          'data-mode' => $mode_id,
+          'aria-label' => $title,
+          // Icon-only below full density; the tooltip spine then names the
+          // gesture, not the word on the button.
+          'data-daedalus-ui-tooltip' => $title,
+        ]),
+        'icon_id' => basename($this->getIconPath(), '.svg'),
+        'label' => $this->t('Done'),
       ],
     ];
   }

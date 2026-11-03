@@ -7,10 +7,7 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 use Drupal\Component\Serialization\Yaml;
 use Drupal\Core\Test\TestDatabase;
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\daedalus_stylish\AnimationShipper;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishAnimation;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_blueprint\DesignSystem\ShipReport;
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
@@ -18,12 +15,8 @@ use Drupal\daedalus_stylish\Ship;
 use Drupal\daedalus_stylish\ShippedDefinitionsImporter;
 use Drupal\daedalus_stylish\ShippedDefinitionsShipper;
 use Drupal\daedalus_stylish\ShippedSync;
-use Drupal\daedalus_stylish\FontShipper;
 use Drupal\daedalus_stylish\SkinShipper;
-use Drupal\daedalus_stylish\SwatchShipper;
-use Drupal\daedalus_stylish\DaedalusStylishAnimationInterface;
 use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
-use Drupal\daedalus_stylish\DaedalusStylishSwatchInterface;
 use Drupal\daedalus_stylish\DaedalusStylishVariantInterface;
 use Drupal\daedalus_stylish\VariantShipper;
 use Drupal\Tests\user\Traits\UserCreationTrait;
@@ -33,7 +26,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the ship orchestrator: the materials lane of a package ship.
  *
- * Ship runs the kind shippers (fonts, animations, swatches, skins,
+ * Ship runs the kind shippers (skins with their animations and fonts,
  * variants) over one module: with no
  * names every per-id file is rebuilt whole from the current entities (keys
  * the shipper does not emit carried, entries whose entity is gone dropped,
@@ -89,6 +82,7 @@ class DaedalusStylishShipTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -136,15 +130,9 @@ class DaedalusStylishShipTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     // The vocabulary a definition syncing back through an importer
@@ -248,61 +236,6 @@ class DaedalusStylishShipTest extends KernelTestBase {
   }
 
   /**
-   * Loads a swatch by machine name, bypassing access.
-   */
-  protected function loadSwatch(string $machine_name): ?DaedalusStylishSwatchInterface {
-    $storage = \Drupal::entityTypeManager()->getStorage('daedalus_swatch');
-    $storage->resetCache();
-    $swatches = $storage->loadByProperties(['machine_name' => $machine_name]);
-    $swatch = reset($swatches) ?: NULL;
-    assert($swatch === NULL || $swatch instanceof DaedalusStylishSwatchInterface);
-    return $swatch;
-  }
-
-  /**
-   * Loads an animation by machine name, bypassing access.
-   */
-  protected function loadAnimation(string $machine_name): ?DaedalusStylishAnimationInterface {
-    $storage = \Drupal::entityTypeManager()->getStorage('daedalus_animation');
-    $storage->resetCache();
-    $animations = $storage->loadByProperties(['machine_name' => $machine_name]);
-    $animation = reset($animations) ?: NULL;
-    assert($animation === NULL || $animation instanceof DaedalusStylishAnimationInterface);
-    return $animation;
-  }
-
-  /**
-   * Saves a site-created color swatch.
-   */
-  protected function createSwatch(string $machine_name, string $value = '#0000ff'): DaedalusStylishSwatchInterface {
-    $swatch = DaedalusStylishSwatch::create([
-      'label' => ucfirst(str_replace('_', ' ', $machine_name)),
-      'machine_name' => $machine_name,
-      'kind' => 'color',
-    ]);
-    assert($swatch instanceof DaedalusStylishSwatchInterface);
-    $swatch->setSwatchValue($value);
-    $swatch->save();
-    return $swatch;
-  }
-
-  /**
-   * Saves a site-created animation.
-   *
-   * Named site_* because daedalus_stylish itself ships fade_in and rise.
-   */
-  protected function createAnimation(string $machine_name): DaedalusStylishAnimationInterface {
-    $animation = DaedalusStylishAnimation::create([
-      'label' => ucfirst(str_replace('_', ' ', $machine_name)),
-      'machine_name' => $machine_name,
-    ]);
-    assert($animation instanceof DaedalusStylishAnimationInterface);
-    $animation->setSteps(['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']]);
-    $animation->save();
-    return $animation;
-  }
-
-  /**
    * Saves a site-created skin.
    */
   protected function createSkin(string $machine_name): DaedalusStylishSkinInterface {
@@ -365,10 +298,7 @@ class DaedalusStylishShipTest extends KernelTestBase {
    */
   public function testShippersKeyedByKind(): void {
     $shippers = $this->ship()->shippers();
-    $this->assertSame(['font', 'animation', 'swatch', 'skin', 'variant'], array_keys($shippers));
-    $this->assertInstanceOf(FontShipper::class, $shippers['font']);
-    $this->assertInstanceOf(AnimationShipper::class, $shippers['animation']);
-    $this->assertInstanceOf(SwatchShipper::class, $shippers['swatch']);
+    $this->assertSame(['skin', 'variant'], array_keys($shippers));
     $this->assertInstanceOf(SkinShipper::class, $shippers['skin']);
     $this->assertInstanceOf(VariantShipper::class, $shippers['variant']);
   }
@@ -558,56 +488,42 @@ class DaedalusStylishShipTest extends KernelTestBase {
    * reads UNCHANGED; a name already in one of the module's per-id files
    * rebuilds that file (never a second one); a name another module ships,
    * or that no entity carries, is refused with the shipper's own error
-   * while the other kind still ships. Every kind rides the one road: a
-   * swatch and an animation adopt beside the skin and the variant, in the
-   * sync's kind order.
+   * while the other kind still ships. Every kind rides the one road: the
+   * skin adopts beside the variant, in the sync's kind order, carrying its
+   * animations inside its own definition.
    */
   public function testNamedAdoption(): void {
     $this->createVariant('card_blue');
-    $this->createSkin('dusk');
-    $this->createSwatch('brand_blue');
-    $this->createAnimation('site_fade');
-    $names = ['variant' => ['card_blue'], 'skin' => ['dusk'], 'swatch' => ['brand_blue'], 'animation' => ['site_fade']];
+    $this->createSkin('dusk')->setPackageAnimations(['site_fade' => ['steps' => ['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']]]])->save();
+    $names = ['variant' => ['card_blue'], 'skin' => ['dusk']];
 
     $planned = $this->ship()->plan(self::TARGET, $names);
     $this->assertSame([
-      'animation' => ['site_fade' => ShippedDefinitionsShipper::CREATED],
-      'swatch' => ['brand_blue' => ShippedDefinitionsShipper::CREATED],
       'skin' => ['dusk' => ShippedDefinitionsShipper::CREATED],
       'variant' => ['card_blue' => ShippedDefinitionsShipper::CREATED],
     ], $planned->outcomes());
     $this->assertFileDoesNotExist($this->file('daedalus_stylish.variants.card_blue.yml'));
     $this->assertFileDoesNotExist($this->file('daedalus_stylish.skins.dusk.yml'));
-    $this->assertFileDoesNotExist($this->file('daedalus_stylish.swatches.brand_blue.yml'));
-    $this->assertFileDoesNotExist($this->file('daedalus_stylish.animations.site_fade.yml'));
     $this->assertNull($this->loadVariant('card_blue')->getProvider());
 
     $report = $this->ship()->ship(self::TARGET, $names);
     $this->assertSame($planned->outcomes(), $report->outcomes());
     $this->assertSame(['card_blue'], array_keys($this->entries('daedalus_stylish.variants.card_blue.yml')));
     $this->assertSame(['dusk'], array_keys($this->entries('daedalus_stylish.skins.dusk.yml')));
-    $this->assertSame(['brand_blue'], array_keys($this->entries('daedalus_stylish.swatches.brand_blue.yml')));
-    $this->assertSame('#0000ff', $this->entries('daedalus_stylish.swatches.brand_blue.yml')['brand_blue']['value']);
-    $this->assertSame(['site_fade'], array_keys($this->entries('daedalus_stylish.animations.site_fade.yml')));
+    $this->assertSame(['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']], $this->entries('daedalus_stylish.skins.dusk.yml')['dusk']['animations']['site_fade']['steps'], 'The skin ships its animation inside its own definition.');
     $this->assertSame(self::TARGET, $this->loadVariant('card_blue')->getProvider());
     $this->assertSame(self::TARGET, $this->loadSkin('dusk')->getProvider());
-    $this->assertSame(self::TARGET, $this->loadSwatch('brand_blue')->getProvider());
-    $this->assertSame(self::TARGET, $this->loadAnimation('site_fade')->getProvider());
     $this->assertTrue($this->loadVariant('card_blue')->isPublished());
     $sync = $this->sync()->sync([self::TARGET]);
     $this->assertSame([self::TARGET => ['dusk' => ShippedDefinitionsImporter::UNCHANGED]], $sync->report('skin')->outcomes());
     $this->assertSame([self::TARGET => ['card_blue' => ShippedDefinitionsImporter::UNCHANGED]], $sync->report('variant')->outcomes());
-    $this->assertSame([self::TARGET => ['brand_blue' => ShippedDefinitionsImporter::UNCHANGED]], $sync->report('swatch')->outcomes());
-    $this->assertSame([self::TARGET => ['site_fade' => ShippedDefinitionsImporter::UNCHANGED]], $sync->report('animation')->outcomes());
 
     // A name already this module's rebuilds the file that holds it.
     $this->editVariant('card_blue');
     $this->assertSame(['variant' => ['card_blue' => ShippedDefinitionsShipper::UPDATED]], $this->ship()->ship(self::TARGET, ['variant' => ['card_blue']])->outcomes());
     $this->assertSame(self::EDITED_STYLES, $this->entries('daedalus_stylish.variants.card_blue.yml')['card_blue']['styles']);
     $this->assertSame([
-      'daedalus_stylish.animations.site_fade.yml',
       'daedalus_stylish.skins.dusk.yml',
-      'daedalus_stylish.swatches.brand_blue.yml',
       'daedalus_stylish.variants.card_blue.yml',
     ], array_map(static fn (string $path): string => substr(basename($path), strlen(self::TARGET) + 1), glob($this->targetPath . '/*.daedalus_stylish.*.yml')));
 
@@ -677,11 +593,7 @@ class DaedalusStylishShipTest extends KernelTestBase {
     $card_blue = $this->createVariant('card_blue');
     $card_blue->setDesignSystem('dusk_system')->save();
     $dusk = $this->createSkin('dusk');
-    $dusk->setDesignSystem('dusk_system')->setUnpublished()->save();
-    $brand_blue = $this->createSwatch('brand_blue');
-    $brand_blue->setDesignSystem('dusk_system')->save();
-    $site_fade = $this->createAnimation('site_fade');
-    $site_fade->setDesignSystem('dusk_system')->save();
+    $dusk->setDesignSystem('dusk_system')->setPackageAnimations(['site_fade' => ['steps' => ['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']]]])->setUnpublished()->save();
     $this->createVariant('free_look');
     $other = $this->createVariant('other_look');
     $other->setDesignSystem('other_system')->save();
@@ -692,8 +604,6 @@ class DaedalusStylishShipTest extends KernelTestBase {
 
     $expected = [
       'skin' => ['dusk' => ShippedDefinitionsShipper::CREATED],
-      'animation' => ['site_fade' => ShippedDefinitionsShipper::CREATED],
-      'swatch' => ['brand_blue' => ShippedDefinitionsShipper::CREATED],
       'variant' => [
         'hand_section' => ShipReport::MODIFIED,
         'card_left' => ShippedDefinitionsShipper::UPDATED,
@@ -713,19 +623,16 @@ class DaedalusStylishShipTest extends KernelTestBase {
     $this->assertEquals($expected, $report->outcomes());
     $this->assertSame(self::EDITED_STYLES, $this->entries('daedalus_stylish.variants.card.yml')['card_left']['styles']);
     $this->assertSame([
-      'daedalus_stylish.animations.site_fade.yml',
       'daedalus_stylish.skins.dusk.yml',
-      'daedalus_stylish.swatches.brand_blue.yml',
       'daedalus_stylish.variants.card.yml',
       'daedalus_stylish.variants.card_blue.yml',
       'daedalus_stylish.variants.yml',
     ], array_map(static fn (string $path): string => substr(basename($path), strlen(self::TARGET) + 1), glob($this->targetPath . '/*.daedalus_stylish.*.yml')));
     $this->assertSame('dusk_system', $this->entries('daedalus_stylish.skins.dusk.yml')['dusk']['design_system']);
+    $this->assertSame(['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']], $this->entries('daedalus_stylish.skins.dusk.yml')['dusk']['animations']['site_fade']['steps'], 'The member skin ships its animation inside its own definition.');
     $adopted = [
       'card_blue' => 'loadVariant',
       'dusk' => 'loadSkin',
-      'brand_blue' => 'loadSwatch',
-      'site_fade' => 'loadAnimation',
     ];
     foreach ($adopted as $name => $load) {
       $this->assertSame(self::TARGET, $this->$load($name)->getProvider(), "$name is adopted.");
@@ -750,8 +657,6 @@ class DaedalusStylishShipTest extends KernelTestBase {
     $this->ship()->shipPackage($system, self::TARGET, $again);
     $this->assertEquals([
       'skin' => ['dusk' => ShippedDefinitionsShipper::UNCHANGED],
-      'animation' => ['site_fade' => ShippedDefinitionsShipper::UNCHANGED],
-      'swatch' => ['brand_blue' => ShippedDefinitionsShipper::UNCHANGED],
       'variant' => [
         'hand_section' => ShipReport::MODIFIED,
         'card_left' => ShippedDefinitionsShipper::UNCHANGED,

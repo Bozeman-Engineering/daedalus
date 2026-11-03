@@ -12,6 +12,7 @@ use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
+use Drupal\daedalus_stylish\Vocabulary\VocabularyValueSpaces;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
 
 /**
@@ -62,6 +63,8 @@ class SkinTokensFieldHandler extends StyleMapFieldHandler {
    *   The vocabulary roster builder.
    * @param \Drupal\daedalus_blueprint\Host\HostResolver $hostResolver
    *   The host resolver: the style map field's owner is the map's host.
+   * @param \Drupal\daedalus_stylish\Vocabulary\VocabularyValueSpaces $valueSpaces
+   *   The value spaces the fragment prints (bindings, deviations).
    * @param \Closure $importer
    *   Service closure resolving the skin importer, the distro lock's disk
    *   read (does the provider ship this skin right now?). Lazy because
@@ -81,10 +84,11 @@ class SkinTokensFieldHandler extends StyleMapFieldHandler {
     MaterialsRosterBuilder $rosterBuilder,
     VocabularyRosterBuilder $vocabulary,
     HostResolver $hostResolver,
+    VocabularyValueSpaces $valueSpaces,
     protected \Closure $importer,
     protected DistroLock $distroLock,
   ) {
-    parent::__construct($validator, $styleGuide, $declarations, $conditionTypes, $valueResolver, $rosterBuilder, $vocabulary, $hostResolver);
+    parent::__construct($validator, $styleGuide, $declarations, $conditionTypes, $valueResolver, $rosterBuilder, $vocabulary, $hostResolver, $valueSpaces);
   }
 
   /**

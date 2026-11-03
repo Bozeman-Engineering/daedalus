@@ -35,7 +35,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  *   section (position, not kind), its key stamps at its own root, and the
  *   house default is as right inside a section as it is on a page row.
  *   The depth-aware exceptions: axes the declaration qualifies
- *   {axis: {depth: root}} (StyleGuide::rootOnlyAxes()) are page-band
+ *   {axis: {depth: root}} (StyleGuide::rootOnlyAxes()) are section
  *   business, so for NESTED sections they are skipped when defaulting on
  *   add; and a depth-qualified default entry ({variant: name, depth:
  *   root}, resolved by StyleGuide::defaultVariants()) skips nested adds
@@ -51,14 +51,14 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  *   references and custom style blocks copy alike; the clone starts
  *   styled exactly like its source.
  * - ROOT-ONLY WEAR FOLLOWS DEPTH ON MOVE: a container's root-only wear
- *   (width on the shipped container: page-band business) is a fact of
+ *   (width on the shipped container: section business) is a fact of
  *   its depth, never a memory. move_element landing a section at nested
  *   depth strips every root reference whose roster record is root-only
  *   (MaterialRecord::rootOnly(), the one stamp the picker, the dialect and
  *   RootOnlyVariantChecker read); every-depth wear and the entry's own
  *   styles stay, and an entry the strip empties is dropped. A section
  *   coming out to root is redressed with its layout's root defaults on
- *   the axes it does not already wear (a band re-rooted comes back
+ *   the axes it does not already wear (a section re-rooted comes back
  *   wearing the house width, never the width it had before it nested). A
  *   root-to-root move touches nothing: a reorder never restyles.
  *   Components wear no root-only axis, so their moves are ignored.
@@ -299,7 +299,7 @@ class ElementStylesSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Stamps the layout's root defaults on the axes a re-rooted band lacks.
+   * Stamps the layout's root defaults on the axes a re-rooted section lacks.
    *
    * @return array|null
    *   The rewritten map, or NULL when every defaulted axis was already
@@ -349,7 +349,7 @@ class ElementStylesSubscriber implements EventSubscriberInterface {
    *   Whether the section sits nested inside another section's region.
    *   Root-only axes ({axis: {depth: root}} in the declaration) resolve to
    *   no default at nested depth: a nested section is always constrained
-   *   by its parent container, so page-band axes have nothing to default
+   *   by its parent container, so section axes have nothing to default
    *   there. Depth-qualified default entries ({variant: name, depth:
    *   root}) skip nested depth the same way with their axis still offered.
    *

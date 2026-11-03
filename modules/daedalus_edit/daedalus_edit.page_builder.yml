@@ -31,8 +31,8 @@ entity:
     # theme's outermost element (title and submitted footer included), a
     # gesture basic mode does not offer; the spacing grant above stays for
     # advanced mode and the AI. The page's air is its Gap below.
-    # Swatch row over background-color; a theme's `allowed:` palette on
-    # background-color becomes the swatches. No dynamic gate: any box
+    # Color row over background-color; a theme's `allowed:` palette on
+    # background-color becomes the stops. No dynamic gate: any box
     # can carry a surface color.
     background:
       label: 'Background'
@@ -41,7 +41,7 @@ entity:
     # the root sections (declared as entity anatomy in
     # daedalus_layout.page_builder.yml, granted spacing + layout by daedalus_stylish's
     # layer). The page is the top of the container tree: air between its
-    # bands is the layout root's gap, the same rhythm a container's gap
+    # sections is the layout root's gap, the same rhythm a container's gap
     # gives its children. The dedicated gap widget (not spacing_scale,
     # whose Padding row is meaningless on the root) gates on the bound
     # part's live child-box count, so a one-section page shows no row.
@@ -120,8 +120,8 @@ field:
     typography:
       label: 'Typography'
       widget: typography
-    # Swatch row over color; a theme's `allowed:` palette on color becomes
-    # the swatches. Same hasText gate as typography.
+    # Color row over color; a theme's `allowed:` palette on color becomes
+    # the stops. Same hasText gate as typography.
     text_color:
       label: 'Text color'
       widget: text_color
@@ -162,12 +162,12 @@ block:
     typography:
       label: 'Typography'
       widget: typography
-    # Swatch row over color; a theme's `allowed:` palette on color becomes
-    # the swatches. Same hasText gate as typography.
+    # Color row over color; a theme's `allowed:` palette on color becomes
+    # the stops. Same hasText gate as typography.
     text_color:
       label: 'Text color'
       widget: text_color
-    # Swatch row over background-color, same palette story as text
+    # Color row over background-color, same palette story as text
     # color; no dynamic gate (any box can carry a surface color).
     background:
       label: 'Background'

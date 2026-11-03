@@ -10,7 +10,9 @@ use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
+use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_stylish\CssPrinter;
+use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\VariantStylesheet;
@@ -61,6 +63,7 @@ class VariantStylesheetTest extends KernelTestBase {
     'layout_builder',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -86,18 +89,12 @@ class VariantStylesheetTest extends KernelTestBase {
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
-    // Variants are a swatch-usage source: publish resyncs their rows.
+    // Variants are a value-usage source: publish resyncs their rows.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->setUpCurrentUser([], ['view test entity']);
@@ -117,6 +114,23 @@ class VariantStylesheetTest extends KernelTestBase {
     $variant->setStyles($styles);
     $variant->save();
     return $variant;
+  }
+
+  /**
+   * Creates and saves a skin (which compiles via hook_entity_insert()).
+   *
+   * SkinStylesheetTest::createSkin()'s shape: a global skin with package
+   * tokens; the test names it as the active system's default_skin so its
+   * save is the worn skin's (the AI's mint).
+   */
+  protected function createSkin(string $machine_name, array $tokens): DaedalusStylishSkin {
+    $skin = DaedalusStylishSkin::create([
+      'label' => $machine_name,
+      'machine_name' => $machine_name,
+      'status' => TRUE,
+    ]);
+    $skin->setPackageTokens($tokens)->save();
+    return $skin;
   }
 
   /**
@@ -230,12 +244,11 @@ class VariantStylesheetTest extends KernelTestBase {
     // ONE constant rule, no per-element containment.
     $this->assertSame(1, substr_count($css, 'container-type'));
 
-    // The kill switch gates the rule out of the next compile (a settings
-    // change reaches the file on the next variant save; the accepted
-    // staleness class, see DefaultsSettingsSubscriber); the @container blocks
+    // The kill switch gates the rule out of the file: the settings save
+    // is a law change and recompiles the file in the same request, no
+    // variant write (DefaultsSettingsSubscriber); the @container blocks
     // themselves stay.
     $this->config('daedalus_stylish.settings')->set('container_roots', FALSE)->save();
-    $variant->save();
     $css = file_get_contents($this->stylesheetUri());
     $this->assertStringNotContainsString('container-type', $css);
     $this->assertStringContainsString('@container (max-width: 767px)', $css);
@@ -845,9 +858,9 @@ class VariantStylesheetTest extends KernelTestBase {
    * born legal under guarded law and refused under strict law is withheld
    * from the roster the moment the site turns strict (VariantConformance),
    * with no write to the variant. Every delivery tier reads the roster,
-   * so the compiled file omits its block on the next compile (the
-   * enforcement save recompiles the defaults file only; the next variant
-   * save carries the verdict, the accepted staleness class), edit mode
+   * so the compiled file omits its block the moment the law changes (the
+   * enforcement save is a law change and recompiles the file in that
+   * request; no variant write carries the verdict there), edit mode
    * prints nothing for it, and a host map still wearing it delivers
    * deterministically: the reference survives in the map, its class
    * stamps after every placed one exactly like any stale reference, and
@@ -860,7 +873,7 @@ class VariantStylesheetTest extends KernelTestBase {
     // legal under guarded law (recognition and grammar) and refused under
     // strict law (the closed world).
     $ink = $this->createVariant('raw_ink', ['' => ['default' => ['color' => 'teal']]]);
-    $pad = $this->createVariant('tidy_pad', ['' => ['default' => ['padding' => '2rem']]]);
+    $this->createVariant('tidy_pad', ['' => ['default' => ['padding' => '2rem']]]);
     $css = file_get_contents($this->stylesheetUri());
     $this->assertStringContainsString('.daedalus-stylish-variant--raw_ink', $css);
     $this->assertStringContainsString('color: teal;', $css);
@@ -877,11 +890,10 @@ class VariantStylesheetTest extends KernelTestBase {
     $entity->set(DaedalusStylishFieldManager::FIELD_NAME, json_encode($map));
     $entity->save();
 
-    // Strict law. The next variant save (any variant) compiles the judged
-    // set: its hook resets the repository, the verdict and the roster
-    // before the compile reads them.
+    // Strict law. The enforcement edit is a law change: the verdict and
+    // the roster forget the open-law answer and the file is recompiled
+    // from the fresh verdict, in this request, with no variant written.
     $this->enforce('strict');
-    $pad->save();
     $css = file_get_contents($this->stylesheetUri());
     $this->assertStringNotContainsString('raw_ink', $css);
     $this->assertStringNotContainsString($ink->uuid(), $css);
@@ -939,6 +951,76 @@ class VariantStylesheetTest extends KernelTestBase {
   }
 
   /**
+   * A law change recompiles the variants file, with no variant write.
+   *
+   * The compiled file is a projection of the conformance verdict, and the
+   * verdict changes whenever the law it judges under changes. Three law
+   * changes, each in its own request slice with no variant saved: the
+   * worn skin minting a token a withheld variant references (the AI's
+   * mint, a fresh install's skin landing), enforcement edited to open
+   * (a literal strict law refuses is admitted) and back to strict (it is
+   * withheld again). After each, the verdict answers for the new law in
+   * the same request (its memo forgotten with the roster's), the roster
+   * carries what it offers, and the file carries exactly the roster's
+   * set. Before this held, only a variant save or a design-system sweep
+   * recompiled the file and the verdict's memo outlived a skin write, so
+   * a minted token never reached Live until some unrelated variant save.
+   */
+  public function testLawChangeRecompilesTheVariantsFile(): void {
+    // A strict site whose system names the skin before it exists (a
+    // recipe's config lands before its content; a site builder names the
+    // skin the AI mints on).
+    $this->activateSkin('law_skin');
+    $this->enforce('strict');
+    // A literal-valued variant keeps the file present throughout; the
+    // gutter variant wears a token nothing has minted, so strict law
+    // withholds it (STYLE_TOKEN_NOT_MINTED); the ink literal is refused by
+    // strict law's closed world (the guide's block kind grants spacing
+    // only) and admitted by open law.
+    $this->createVariant('plain_pad', ['' => ['default' => ['padding' => '2rem']]]);
+    $this->createVariant('gutter_pad', ['' => ['default' => ['padding' => 'var(--space-gutter)']]]);
+    $this->createVariant('raw_ink', ['' => ['default' => ['color' => 'teal']]]);
+    $conformance = $this->container->get('daedalus_stylish.variant_conformance');
+    $builder = $this->container->get('daedalus_blueprint.materials_roster_builder');
+    $this->assertArrayHasKey('gutter_pad', $conformance->withheld());
+    $this->assertArrayHasKey('raw_ink', $conformance->withheld());
+    $this->assertFalse($builder->build()->has(MaterialKind::Variant, 'gutter_pad'));
+    $css = file_get_contents($this->stylesheetUri());
+    $this->assertStringContainsString('.daedalus-stylish-variant--plain_pad', $css);
+    $this->assertStringNotContainsString('gutter_pad', $css);
+    $this->assertStringNotContainsString('raw_ink', $css);
+
+    // The worn skin mints the token: a skin save, nothing else. The token
+    // reference prints verbatim in the variants file (the skin file
+    // supplies the value).
+    $this->createSkin('law_skin', ['space' => ['gutter' => '2rem']]);
+    $this->assertArrayNotHasKey('gutter_pad', $conformance->withheld(), 'the mint offers the variant in the request that minted');
+    $this->assertTrue($builder->build()->has(MaterialKind::Variant, 'gutter_pad'), 'the roster carries the variant after the mint');
+    $css = file_get_contents($this->stylesheetUri());
+    $this->assertStringContainsString('.daedalus-stylish-variant--gutter_pad', $css, 'the skin save recompiled the variants file');
+    $this->assertStringContainsString('padding: var(--space-gutter);', $css);
+    $this->assertStringNotContainsString('raw_ink', $css);
+
+    // Enforcement to open: the literal is admitted, and the file follows.
+    $this->enforce('open');
+    $this->assertArrayNotHasKey('raw_ink', $conformance->withheld(), 'open law admits the literal');
+    $this->assertTrue($builder->build()->has(MaterialKind::Variant, 'raw_ink'));
+    $css = file_get_contents($this->stylesheetUri());
+    $this->assertStringContainsString('.daedalus-stylish-variant--raw_ink', $css, 'the enforcement edit to open recompiled the variants file');
+    $this->assertStringContainsString('color: teal;', $css);
+    $this->assertStringContainsString('.daedalus-stylish-variant--gutter_pad', $css);
+
+    // Back to strict: the literal leaves, the minted reference stays.
+    $this->enforce('strict');
+    $this->assertArrayHasKey('raw_ink', $conformance->withheld(), 'strict law withholds the literal again');
+    $this->assertFalse($builder->build()->has(MaterialKind::Variant, 'raw_ink'));
+    $css = file_get_contents($this->stylesheetUri());
+    $this->assertStringNotContainsString('raw_ink', $css, 'the enforcement edit to strict recompiled the variants file');
+    $this->assertStringNotContainsString('teal', $css);
+    $this->assertStringContainsString('.daedalus-stylish-variant--gutter_pad', $css);
+  }
+
+  /**
    * A layered entry's own overrides print after its variant CSS.
    *
    * Inside the entity's authoritative tag both land at the same scope root
@@ -972,8 +1054,9 @@ class VariantStylesheetTest extends KernelTestBase {
    * fragment inside the OWNER's @scope with each suffix continued under
    * the rule by descent (the root entry at the rule's targets, a part at
    * `{rule} .part`, the children at `{rule} > *`), the same text in edit
-   * mode and live, never a class; a suffix the rule's grammar refuses (a
-   * class under a tag rule) prints nothing; the rule's own properties
+   * mode and live, never a class; a part under a tag rule continues by
+   * descent too (`:where(a) .icon`, a class qualifies any compound); the
+   * rule's own properties
    * print after what it wears (own beats worn by order); the workspace
    * fallback skips rule keys (its class-rooted CSS would reach nothing);
    * and the worn variant's tag bubbles.
@@ -992,7 +1075,7 @@ class VariantStylesheetTest extends KernelTestBase {
     $entity = EntityTest::create(['name' => 'rule-wear']);
     $entity->save();
     $map = [
-      "container:$section_uuid::> pb-text" => [
+      "container:$section_uuid::> d-text" => [
         'variants' => [['variant' => 'text_soft', 'fragment' => '']],
         'default' => ['padding' => '2rem'],
       ],
@@ -1005,7 +1088,8 @@ class VariantStylesheetTest extends KernelTestBase {
     $expected_rule_css = $rule
       . "\n@scope ([data-selectable=\"container:$section_uuid\"]) {\n  :where(:scope) > :where([data-element=\"block_type:text\"]) .link {\n    font-weight: 700;\n  }\n}"
       . "\n@scope ([data-selectable=\"container:$section_uuid\"]) {\n  :where(:scope) > [data-element=\"block_type:text\"] > * {\n    margin: 0;\n  }\n}"
-      . "\n@scope ([data-selectable=\"container:$section_uuid\"]) {\n  a {\n    color: red;\n  }\n}";
+      . "\n@scope ([data-selectable=\"container:$section_uuid\"]) {\n  a {\n    color: red;\n  }\n}"
+      . "\n@scope ([data-selectable=\"container:$section_uuid\"]) {\n  :where(a) .icon {\n    margin: 0;\n  }\n}";
     $tags = [];
     $this->assertSame($expected_rule_css, $this->container->get('daedalus_stylish.variant_stylesheet')->ruleWearCss($map, $tags));
     $this->assertContains("daedalus_variant:{$text_variant->id()}", $tags);
@@ -1018,10 +1102,9 @@ class VariantStylesheetTest extends KernelTestBase {
       $css = (string) $element['#value'];
       $this->assertStringContainsString($expected_rule_css, $css, $mode ?? 'live');
       // Own beats worn by order: the rule's own padding prints after the
-      // worn one. Never a class root, never the refused part.
+      // worn one. Never a class root.
       $this->assertLessThan(strpos($css, 'padding: 2rem;'), strpos($css, 'padding: 1rem;'), $mode ?? 'live');
       $this->assertStringNotContainsString('.daedalus-stylish-variant--', $css, $mode ?? 'live');
-      $this->assertStringNotContainsString('.icon', $css, $mode ?? 'live');
       $this->assertContains("daedalus_variant:{$text_variant->id()}", $element['#cache']['tags'], $mode ?? 'live');
     }
 
@@ -1057,17 +1140,18 @@ class VariantStylesheetTest extends KernelTestBase {
     $entity->save();
     $map = [
       "block:$block_uuid" => ['default' => ['padding' => '2rem']],
-      "container:$section_uuid::> pb-text" => ['default' => ['margin' => '0']],
+      "container:$section_uuid::> d-text" => ['default' => ['margin' => '0']],
     ];
     $entity->set(DaedalusStylishFieldManager::FIELD_NAME, json_encode($map));
     $entity->save();
 
     $builder = $this->container->get('daedalus_blueprint.materials_roster_builder');
-    // The roster's tags that are the roster's alone: the three entity
-    // lists its records read (the config tags beside them are owed by the
+    // The roster's tags that are the roster's alone: the two entity
+    // lists its records read (the skin list carries the skin's tokens,
+    // animations and fonts; the config tags beside them are owed by the
     // render in its own right, for the condition thresholds and the
     // container-roots switch).
-    $list_tags = ['daedalus_variant_list', 'daedalus_swatch_list', 'daedalus_animation_list'];
+    $list_tags = ['daedalus_variant_list', 'daedalus_skin_list'];
     $this->assertSame([], array_diff($list_tags, $builder->cacheMetadata()->getCacheTags()));
     $memo = new \ReflectionProperty($builder, 'memo');
     // The variant's save compiled the file over a built roster; drop it so

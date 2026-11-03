@@ -11,14 +11,15 @@
  */
 import { strict as assert } from 'node:assert';
 import {
-  animationReference, schemeCondition, schemeDisplayValue, swatchReference, tokenDisplayValue, tokenReference,
+  animationReference, schemeCondition, schemeDisplayValue, tokenDisplayValue, tokenReference,
 } from '../../js/src/style-guide.js';
 import {
-  animationOf, animationOptions, animationSpelling, customProperty, materialOf, paintValue, scaleTokens, styleReference, swatchOptions, tokenOptions,
+  animationOf, animationOptions, animationSpelling, customProperty, gradientTokenOf, materialOf, paintValue, scaleTokens, styleReference, tokenOptions,
 } from '../../js/src/materials.js';
 import { validateValue } from '../../js/src/code/validate-value.js';
 import { analyzeIsland } from '../../js/src/code/island.js';
-import { EMPTY_MATERIALS, animationRecord, materialsFrom, roster, swatchRecord, tokenRecord } from './materials-fixture.mjs';
+import { tokenEditorKind, tokenPaintsFace, tokenSeed } from '../../js/src/skin-model.js';
+import { EMPTY_MATERIALS, animationRecord, materialsFrom, roster, tokenRecord } from './materials-fixture.mjs';
 
 // The guide's token DECLARATIONS: scales as ClientStyleGuide serves them
 // (prefix RESOLVED); the tokens themselves are roster records (below).
@@ -26,11 +27,14 @@ const tokenScales = {
   space: { label: 'Space', shape: 'dimension', prefix: 'space' },
   color: { label: 'Color', shape: 'color', prefix: 'color' },
   transition: { label: 'Transition', shape: 'text', prefix: 'trans' },
+  gradient: { label: 'Gradient', shape: 'gradient', prefix: 'gradient' },
 };
+const PLUM_VEIL = 'radial-gradient(circle at 30% 20%, #6b2d5c, #1a1a2e)';
 const tokens = {
   space: { 4: '1rem', gutter: '2.5rem' },
   color: { accent: { default: '#1a1a2e', dark: '#e8e8f0' } },
   transition: { fast: '150ms ease' },
+  gradient: { 'plum-veil': PLUM_VEIL },
 };
 // The condition vocabulary names the scheme axis ('dark' is only a scheme
 // key because the guide says so).
@@ -99,6 +103,11 @@ assert.deepEqual(scaleTokens(guide, tokenMaterials, 'transition').map(strip), [
 assert.deepEqual(scaleTokens(guide, tokenMaterials, 'color').map(strip), [
   { scale: 'color', scaleLabel: 'Color', shape: 'color', name: 'accent', ref: 'var(--color-accent)', value: '#1a1a2e', valueDark: '#e8e8f0' },
 ]);
+// A gradient-shaped scale rides the same projection: the shape is the
+// scale's, the value the gradient whole.
+assert.deepEqual(scaleTokens(guide, tokenMaterials, 'gradient').map(strip), [
+  { scale: 'gradient', scaleLabel: 'Gradient', shape: 'gradient', name: 'plum-veil', ref: 'var(--gradient-plum-veil)', value: PLUM_VEIL, valueDark: null },
+]);
 // The entry carries its record (the store's own object).
 assert.equal(scaleTokens(guide, tokenMaterials, 'space')[0].record, tokenMaterials.get('token', 'space/4'));
 // Undeclared scale or nothing rostered: empty, never a throw.
@@ -115,9 +124,10 @@ assert.deepEqual(tokenOptions(guide, stray, ['dimension']), []);
 
 // --- tokenOptions: roster order, shape filtering. ---
 assert.deepEqual(tokenOptions(guide, tokenMaterials).map((token) => token.ref), [
-  'var(--space-4)', 'var(--space-gutter)', 'var(--color-accent)', 'var(--trans-fast)',
+  'var(--space-4)', 'var(--space-gutter)', 'var(--color-accent)', 'var(--trans-fast)', 'var(--gradient-plum-veil)',
 ]);
 assert.deepEqual(tokenOptions(guide, tokenMaterials, ['color']).map((token) => token.ref), ['var(--color-accent)']);
+assert.deepEqual(tokenOptions(guide, tokenMaterials, ['gradient']).map((token) => token.ref), ['var(--gradient-plum-veil)']);
 assert.equal(tokenOptions(guide, tokenMaterials, ['color'])[0].scaleLabel, 'Color');
 // The raw scheme pair rides through the shape-filtered aggregate too.
 assert.equal(tokenOptions(guide, tokenMaterials, ['color'])[0].valueDark, '#e8e8f0');
@@ -127,6 +137,32 @@ assert.deepEqual(tokenOptions(guide, tokenMaterials, ['keyword']), []);
 assert.deepEqual(tokenReference('--space-4', tokenScales), { scale: 'space', name: '4' });
 assert.deepEqual(tokenReference('--trans-fast', tokenScales), { scale: 'transition', name: 'fast' });
 assert.deepEqual(tokenReference('--color-accent-hover', tokenScales), { scale: 'color', name: 'accent-hover' });
+assert.deepEqual(tokenReference('--gradient-plum-veil', tokenScales), { scale: 'gradient', name: 'plum-veil' });
+
+// --- tokenEditorKind / tokenSeed / tokenPaintsFace: the editor by shape. ---
+// The palette mounts one value editor per scale shape: the color field,
+// the gradient builder, the stack editor for the scale font-family binds
+// to, the text editor for the rest.
+const boundGuide = { ...guide, constraintDefaults: { 'font-family': { scale: 'transition' } } };
+assert.equal(tokenEditorKind(guide, 'color', 'color'), 'color');
+assert.equal(tokenEditorKind(guide, 'gradient', 'gradient'), 'gradient');
+assert.equal(tokenEditorKind(guide, 'space', 'dimension'), 'text');
+assert.equal(tokenEditorKind(guide, 'transition', 'text'), 'text');
+assert.equal(tokenEditorKind(boundGuide, 'transition', 'text'), 'stack', 'the bound scale edits as a stack');
+assert.equal(tokenEditorKind(boundGuide, 'gradient', 'gradient'), 'gradient', 'the shape decides before the binding');
+assert.equal(tokenEditorKind(guide, null, null), 'text');
+assert.equal(tokenEditorKind(undefined, 'space', 'dimension'), 'text');
+// The seed: the color kind's neutral, the builder's default gradient, nothing.
+assert.equal(tokenSeed('color', guide, tokenMaterials), '#808080');
+assert.match(tokenSeed('gradient', guide, tokenMaterials), /^linear-gradient\(/);
+assert.match(tokenSeed('gradient', {}, EMPTY_MATERIALS), /^linear-gradient\(/, 'a bare guide still seeds a gradient');
+assert.equal(tokenSeed('dimension', guide, tokenMaterials), '');
+assert.equal(tokenSeed(null, guide, tokenMaterials), '');
+// A face paints for the backgrounds a chip can wear.
+assert.equal(tokenPaintsFace('color'), true);
+assert.equal(tokenPaintsFace('gradient'), true);
+assert.equal(tokenPaintsFace('dimension'), false);
+assert.equal(tokenPaintsFace(null), false);
 // Outside every declared prefix: not a token reference.
 assert.equal(tokenReference('--daedalus-ui-accent', tokenScales), null);
 // The bare prefix is not a token (no name tail).
@@ -175,52 +211,52 @@ assert.deepEqual(validateValue('padding', 'calc(var(--space-4) * 2)', definition
 violations = validateValue('padding', 'var(--space-9)', definition, { allowed: ['var(--space-9)'] }, strict);
 assert.equal(violations[0]?.code, 'STYLE_TOKEN_NOT_MINTED');
 
-// The swatch half: published swatches as the roster carries them (label
-// order) plus the guide's kind vocabulary.
-const swatchKinds = { color: { label: 'Colors' }, gradient: { label: 'Gradients' } };
-const swatches = [
-  swatchRecord('brand_red', 'color', '#b91c1c', 'Brand red'),
-  swatchRecord('hero_fade', 'gradient', { default: 'linear-gradient(#000, #fff)', dark: 'linear-gradient(#fff, #000)' }, 'Hero fade'),
+// The palette half: site-minted color and gradient tokens beside the
+// shipped ones, as the roster carries them (declared scale order, then
+// stored order).
+const palette = [
+  tokenRecord('color', 'brand-red', '#b91c1c', 'color', { origin: 'user' }),
+  tokenRecord('gradient', 'hero-fade', { default: 'linear-gradient(#000, #fff)', dark: 'linear-gradient(#fff, #000)' }, 'gradient', { origin: 'user' }),
 ];
-const paletteGuide = { ...guide, swatchKinds };
-const materials = roster(tokenMaterials.all(), swatches);
+const paletteGuide = guide;
+const materials = roster(tokenMaterials.all(), palette);
 
-// --- swatchOptions: kind filtering, display values, kind labels. ---
-assert.deepEqual(swatchOptions(paletteGuide, materials).map((swatch) => swatch.ref), [
-  'var(--swatch-brand_red)', 'var(--swatch-hero_fade)',
+// --- tokenOptions over the palette: shape filtering, display values. ---
+// Roster order is the store's: the shipped tokens as delivered, then the
+// site mints in the order they landed.
+assert.deepEqual(tokenOptions(paletteGuide, materials, ['color', 'gradient']).map((token) => token.ref), [
+  'var(--color-accent)', 'var(--gradient-plum-veil)', 'var(--color-brand-red)', 'var(--gradient-hero-fade)',
 ]);
-assert.deepEqual(swatchOptions(paletteGuide, materials, ['gradient']).map(strip), [{
-  name: 'hero_fade',
-  label: 'Hero fade',
-  kind: 'gradient',
-  kindLabel: 'Gradients',
-  ref: 'var(--swatch-hero_fade)',
+assert.deepEqual(tokenOptions(paletteGuide, materials, ['gradient']).map(strip).at(-1), {
+  scale: 'gradient',
+  scaleLabel: 'Gradient',
+  shape: 'gradient',
+  name: 'hero-fade',
+  ref: 'var(--gradient-hero-fade)',
   value: 'linear-gradient(#000, #fff)',
   valueDark: 'linear-gradient(#fff, #000)',
-}]);
-// A single-valued swatch has no pair.
-assert.equal(swatchOptions(paletteGuide, materials, ['color'])[0].valueDark, null);
-assert.deepEqual(swatchOptions(paletteGuide, materials, ['shadow']), []);
-// A kind the guide does not declare labels as itself.
-assert.equal(swatchOptions(guide, materials, ['gradient'])[0].kindLabel, 'gradient');
-// No swatches rostered: empty, never a throw.
-assert.deepEqual(swatchOptions(paletteGuide, tokenMaterials), []);
-assert.deepEqual(swatchOptions(undefined, EMPTY_MATERIALS, ['color']), []);
+});
+// A single-valued token has no pair.
+assert.equal(tokenOptions(paletteGuide, materials, ['color']).at(-1).valueDark, null);
+assert.deepEqual(tokenOptions(paletteGuide, materials, ['shadow']), []);
 
-// --- swatchReference: the reserved-namespace twin, for the lint. ---
-assert.equal(swatchReference('--swatch-brand_red'), 'brand_red');
-assert.equal(swatchReference('--swatch-x'), 'x');
-// The bare prefix is not a swatch (no name tail); outside the namespace is
-// not a swatch reference (scale prefixes can never extend 'swatch').
-assert.equal(swatchReference('--swatch-'), null);
-assert.equal(swatchReference('--swatch'), null);
-assert.equal(swatchReference('--color-accent'), null);
+// --- gradientTokenOf: the chip gate, a token on a gradient-shaped scale. ---
+assert.equal(gradientTokenOf(paletteGuide, materials, 'var(--gradient-hero-fade)')?.name, 'hero-fade');
+assert.equal(gradientTokenOf(paletteGuide, materials, '  VAR(--gradient-plum-veil)  ')?.name, 'plum-veil');
+// A color token, a foreign var(), a literal, a layered value: never a gate.
+assert.equal(gradientTokenOf(paletteGuide, materials, 'var(--color-brand-red)'), null);
+assert.equal(gradientTokenOf(paletteGuide, materials, 'var(--unknown)'), null);
+assert.equal(gradientTokenOf(paletteGuide, materials, 'linear-gradient(#000, #fff)'), null);
+assert.equal(gradientTokenOf(paletteGuide, materials, "var(--gradient-hero-fade), url('media:abc')"), null);
+assert.equal(gradientTokenOf(paletteGuide, materials, null), null);
+// The shape is the guide's declaration: without it no token gates.
+assert.equal(gradientTokenOf({}, materials, 'var(--gradient-hero-fade)'), null);
 
 // --- materialOf: the grammar's whole-value read as a picker entry. ---
-assert.equal(materialOf(paletteGuide, materials, 'var(--swatch-brand_red)').record.kind, 'swatch');
-assert.equal(materialOf(paletteGuide, materials, 'var(--swatch-brand_red)').value, '#b91c1c');
+assert.equal(materialOf(paletteGuide, materials, 'var(--color-brand-red)').record.kind, 'token');
+assert.equal(materialOf(paletteGuide, materials, 'var(--color-brand-red)').value, '#b91c1c');
 // Condition-keyed values answer their default entry (tokenDisplayValue).
-assert.equal(materialOf(paletteGuide, materials, 'var(--swatch-hero_fade)').value, 'linear-gradient(#000, #fff)');
+assert.equal(materialOf(paletteGuide, materials, 'var(--gradient-hero-fade)').value, 'linear-gradient(#000, #fff)');
 assert.equal(materialOf(paletteGuide, materials, 'var(--color-accent)').record.kind, 'token');
 assert.equal(materialOf(paletteGuide, materials, 'var(--color-accent)').name, 'accent');
 // Whitespace and the var keyword's case are tolerated; the NAME is exact.
@@ -234,35 +270,36 @@ assert.equal(materialOf(paletteGuide, materials, 'calc(var(--space-4) * 2)'), nu
 assert.equal(materialOf(paletteGuide, materials, '#1a1a2e'), null);
 
 // --- paintValue: the one face-paint rule, default and scheme halves. ---
-assert.equal(paintValue(paletteGuide, materials, 'var(--swatch-brand_red)'), '#b91c1c');
+assert.equal(paintValue(paletteGuide, materials, 'var(--color-brand-red)'), '#b91c1c');
 assert.equal(paintValue(paletteGuide, materials, 'var(--color-accent)'), '#1a1a2e');
 // The scheme pass paints a paired token's dark entry, and falls back to
 // the default for single-valued entries.
 assert.equal(paintValue(paletteGuide, materials, 'var(--color-accent)', true), '#e8e8f0');
-assert.equal(paintValue(paletteGuide, materials, 'var(--swatch-brand_red)', true), '#b91c1c');
-assert.equal(paintValue(paletteGuide, materials, 'var(--swatch-hero_fade)', true), 'linear-gradient(#fff, #000)');
+assert.equal(paintValue(paletteGuide, materials, 'var(--color-brand-red)', true), '#b91c1c');
+assert.equal(paintValue(paletteGuide, materials, 'var(--gradient-hero-fade)', true), 'linear-gradient(#fff, #000)');
 // References inside a compound paint in place, fallbacks included;
 // unknown references stay verbatim.
-assert.equal(paintValue(paletteGuide, materials, 'linear-gradient(var(--color-accent), var(--swatch-brand_red, red))'), 'linear-gradient(#1a1a2e, #b91c1c)');
+assert.equal(paintValue(paletteGuide, materials, 'linear-gradient(var(--color-accent), var(--color-brand-red, red))'), 'linear-gradient(#1a1a2e, #b91c1c)');
 assert.equal(paintValue(paletteGuide, materials, 'var(--daedalus-ui-x)'), 'var(--daedalus-ui-x)');
 // Without a conditions table 'dark' is not a scheme key, so nothing pairs.
-assert.equal(paintValue({ ...paletteGuide, conditions: undefined }, materials, 'var(--swatch-hero_fade)', true), 'linear-gradient(#000, #fff)');
+assert.equal(paintValue({ ...paletteGuide, conditions: undefined }, materials, 'var(--gradient-hero-fade)', true), 'linear-gradient(#000, #fff)');
 
-// --- validateValue: the published-swatch check on var() pass-through. ---
-const permissiveSwatches = { ...permissive, materials };
-const strictSwatches = { ...strict, materials };
-assert.deepEqual(validateValue('color', 'var(--swatch-brand_red)', { label: 'Color', type: 'color' }, null, strictSwatches), []);
-// Unpublished in the swatch namespace: warning permissive, error strict —
-// the exact posture of the minted-token twin.
-violations = validateValue('color', 'var(--swatch-missing)', { label: 'Color', type: 'color' }, null, permissiveSwatches);
+// --- validateValue: the minted check covers the palette scales too. ---
+const permissivePalette = { ...permissive, materials };
+const strictPalette = { ...strict, materials };
+assert.deepEqual(validateValue('color', 'var(--color-brand-red)', { label: 'Color', type: 'color' }, null, strictPalette), []);
+assert.deepEqual(validateValue('background-image', 'var(--gradient-hero-fade)', { label: 'Image', type: 'text', media: true }, null, strictPalette), []);
+// Unminted on the gradient scale: warning permissive, error strict, the
+// one posture (there is no second namespace).
+violations = validateValue('background-image', 'var(--gradient-missing)', { label: 'Image', type: 'text', media: true }, null, permissivePalette);
 assert.equal(violations.length, 1);
-assert.equal(violations[0].code, 'STYLE_SWATCH_NOT_PUBLISHED');
+assert.equal(violations[0].code, 'STYLE_TOKEN_NOT_MINTED');
 assert.equal(violations[0].severity, 'warning');
-violations = validateValue('color', 'var(--swatch-missing)', { label: 'Color', type: 'color' }, null, strictSwatches);
+violations = validateValue('background-image', 'var(--gradient-missing)', { label: 'Image', type: 'text', media: true }, null, strictPalette);
 assert.equal(violations[0].severity, 'error');
-// The check runs even when no token scales are declared (the swatch
-// namespace is reserved site-wide, not a scale).
-assert.equal(validateValue('color', 'var(--swatch-missing)', { label: 'Color', type: 'color' }, null, { guide: {}, materials, closed: true })[0].code, 'STYLE_SWATCH_NOT_PUBLISHED');
+// A variable in no declared namespace passes even on a strict guide that
+// declares nothing: the spine owns only its declared prefixes.
+assert.deepEqual(validateValue('color', 'var(--theme-missing)', { label: 'Color', type: 'color' }, null, { guide: {}, materials, closed: true }), []);
 
 // --- analyzeIsland: the warn/strict split at the island boundary. ---
 const islandGuide = (closed) => ({
@@ -275,7 +312,6 @@ const islandGuide = (closed) => ({
   },
   conditions: {},
   tokenScales,
-  swatchKinds,
 });
 const declaration = { grants: { spacing: ['padding'] } };
 
@@ -297,16 +333,16 @@ analysis = analyzeIsland('padding: var(--space-4);', { guide: islandGuide(true),
 assert.equal(analysis.declarations[0].valid, true);
 assert.deepEqual(analysis.diagnostics, []);
 
-// The swatch twin at the island boundary: an unpublished swatch reference
-// warns permissive, errors strict; a published one is clean on both.
-analysis = analyzeIsland('padding: var(--swatch-missing);', { guide: islandGuide(false), materials, declaration });
+// The palette scales at the island boundary: an unminted gradient
+// reference warns permissive, errors strict; a minted one is clean on both.
+analysis = analyzeIsland('padding: var(--gradient-missing);', { guide: islandGuide(false), materials, declaration });
 assert.equal(analysis.declarations[0].valid, true);
 assert.equal(analysis.diagnostics[0].severity, 'warning');
-assert.equal(analysis.diagnostics[0].code, 'STYLE_SWATCH_NOT_PUBLISHED');
-analysis = analyzeIsland('padding: var(--swatch-missing);', { guide: islandGuide(true), materials, declaration });
+assert.equal(analysis.diagnostics[0].code, 'STYLE_TOKEN_NOT_MINTED');
+analysis = analyzeIsland('padding: var(--gradient-missing);', { guide: islandGuide(true), materials, declaration });
 assert.equal(analysis.declarations[0].valid, false);
 assert.equal(analysis.diagnostics[0].severity, 'error');
-analysis = analyzeIsland('padding: var(--swatch-brand_red);', { guide: islandGuide(true), materials, declaration });
+analysis = analyzeIsland('padding: var(--color-brand-red);', { guide: islandGuide(true), materials, declaration });
 assert.equal(analysis.declarations[0].valid, true);
 assert.deepEqual(analysis.diagnostics, []);
 
@@ -319,7 +355,7 @@ const animations = [
   animationRecord('fade_in', 'Fade in', FADE_STEPS, { description: 'Fade the element in.', origin: 'shipped' }),
   animationRecord('rise', 'Rise', RISE_STEPS),
 ];
-const motionMaterials = roster(tokenMaterials.all(), swatches, animations);
+const motionMaterials = roster(tokenMaterials.all(), palette, animations);
 
 // --- animationSpelling: the record's keyframes ident, read back. ---
 assert.equal(animationSpelling(motionMaterials.get('animation', 'fade_in')), 'motion-fade_in');
@@ -370,7 +406,7 @@ assert.deepEqual(validateValue('animation-name', 'motion-fade_in', animationName
 assert.deepEqual(validateValue('animation-name', 'none', animationName, null, strictMotion), []);
 assert.deepEqual(validateValue('animation-name', 'motion-fade_in, motion-rise', animationName, null, strictMotion), []);
 // Unpublished in the motion namespace: warning permissive, error strict,
-// the exact posture of the swatch twin.
+// the exact posture of the token twin.
 violations = validateValue('animation-name', 'motion-missing', animationName, null, permissiveMotion);
 assert.equal(violations.length, 1);
 assert.equal(violations[0].code, 'STYLE_ANIMATION_NOT_PUBLISHED');

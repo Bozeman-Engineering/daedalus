@@ -2,9 +2,9 @@
  * The material gesture family on the client: save_material and
  * update_material over the state source's batch commit.
  *
- * Every UI verb that writes a token, a swatch, an animation or a variant
- * (the palette's mint cards and value editors, the gradient builder's and
- * the color field's "Save as swatch", the push bar's save and update
+ * Every UI verb that writes a token, an animation or a variant (the
+ * palette's mint card and value editors, the gradient builder's and the
+ * color field's "Save as token", the push bar's save and update
  * sessions) submits the SAME page-language op the AI submits
  * (daedalus_blueprint's MaterialGestureOperationHandler), through
  * `source.commitBatch()`: the
@@ -17,9 +17,15 @@
  *
  * The record comes back in the response's `materials.upsert`; there is no
  * per-gesture echo payload. A mint's machine name is derived server-side
- * from its label (a token's label IS its name, its id "{scale}/{name}"),
- * so a save resolves the record by kind (the one record of that kind the
- * batch wrote) and an update by id.
+ * from its label (a token's label IS its name, its id "{scale}/{name}",
+ * and its scale may be the server's inference), so a save resolves the
+ * record as the one of its kind the roster did not hold before the commit,
+ * and an update by id. By novelty, not "the one record of the kind in the
+ * delta": a skin write's delta carries EVERY material the active skin
+ * holds (daedalus_stylish's skin hook touches each id the skin carried
+ * before and carries now, upsert vs remove resolved against the fresh
+ * roster), so a token, animation or font mint arrives beside its skin's
+ * standing records.
  */
 
 /**
@@ -28,7 +34,7 @@
  * @param {?object} payload
  *   A mutation response (or a gesture route's response body).
  * @param {string} kind
- *   The material kind ('token' | 'swatch' | 'variant' | 'animation' |
+ *   The material kind ('token' | 'variant' | 'animation' | 'font' |
  *   'blueprint').
  * @param {?string} [id]
  *   The record id when the gesture named one (an update, a route on a
@@ -42,13 +48,36 @@ export const respondedMaterial = (payload, kind, id = null) =>
     (record) => record.kind === kind && (id === null || record.id === id),
   ) ?? null;
 
-const submit = (source, operation, label) =>
-  source.commitBatch({ operations: [operation], label }).then((payload) => {
-    const record = respondedMaterial(
-      payload,
-      operation.kind,
-      operation.op === 'save_material' ? null : operation.id,
-    );
+/**
+ * The record a mint's response carries: the upserted record of the kind
+ * that the roster did not hold before the commit.
+ *
+ * @param {?object} payload
+ *   A mutation response.
+ * @param {string} kind
+ *   The material kind.
+ * @param {{has: function(string, string): boolean}} before
+ *   The materials roster as it stood before the commit (the source's
+ *   `getMaterials()` answer, a snapshot whose identity changes with the
+ *   records).
+ *
+ * @return {?object}
+ *   The minted record, or null when the delta carries no record of the
+ *   kind the roster lacked.
+ */
+export const mintedMaterial = (payload, kind, before) =>
+  (payload?.materials?.upsert ?? []).find(
+    (record) => record.kind === kind && !before.has(kind, record.id),
+  ) ?? null;
+
+const submit = (source, operation, label) => {
+  const before =
+    operation.op === 'save_material' ? source.getMaterials() : null;
+  return source.commitBatch({ operations: [operation], label }).then((payload) => {
+    const record =
+      operation.op === 'save_material'
+        ? mintedMaterial(payload, operation.kind, before)
+        : respondedMaterial(payload, operation.kind, operation.id);
     if (!record) {
       // A settled write always answers its record: the change set is fed by
       // the entity hooks every material save runs. Loud, like assertDelta.
@@ -58,6 +87,7 @@ const submit = (source, operation, label) =>
     }
     return record;
   });
+};
 
 /**
  * Mints a material: `save_material {kind, label, ...}`.
@@ -65,9 +95,9 @@ const submit = (source, operation, label) =>
  * @param {object} source
  *   The state source (leader or satellite).
  * @param {object} gesture
- *   {kind, label} plus the kind's own keys (a token's group, the scale,
- *   with its value, description and offered; a swatch's value and group; a
- *   variant's key, styles, group and owned_by). Keys whose value is
+ *   {kind, label} plus the kind's own keys (a token's value, with its
+ *   group, the scale, description and offered; a variant's key, styles,
+ *   group and owned_by). Keys whose value is
  *   undefined are dropped.
  * @param {string} label
  *   The history-entry label.

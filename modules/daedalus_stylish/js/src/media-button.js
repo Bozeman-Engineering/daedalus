@@ -17,7 +17,7 @@ import { h } from 'preact';
 
 /**
  * The photo glyph (frame, sun, mountains): the chip's empty face, and
- * the swatch well's honest face for a media value whose thumbnail the
+ * the token well's honest face for a media value whose thumbnail the
  * client URL table cannot answer.
  *
  * @param {object} props

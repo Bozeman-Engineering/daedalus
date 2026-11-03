@@ -11,12 +11,18 @@
  * disagreement between the DOM and the annotation through the suite's
  * debug logging channel. It re-renders nothing and answers no questions.
  *
- * Disagreements are not all bugs: mid-gesture content (typing before blur
- * commits, a client-side link preview) is legitimately ahead of the model
- * until its op round-trips, and editor chrome (CKEditor's fake-selection
- * clone) can wear content classes. The log line is the diagnostic, a
- * mismatch that persists across a mutation response is model drift; one
- * that resolves on commit is the gesture in flight.
+ * The annotation it verifies against is the EFFECTIVE one (partPresence
+ * reads the effective blueprint): a structural preview (a tag picked, a
+ * link added through the composed-edit preview) drafts its resolved
+ * markup into the blueprint slice before the op round-trips, so the
+ * canvas and the model agree mid-gesture and the preview is not drift.
+ * Disagreements are still not all bugs: rich-text CONTENT (typing in a
+ * formatted text block mints carriers no client walk drafts) is
+ * legitimately ahead of the model until its op round-trips, and editor
+ * chrome (CKEditor's fake-selection clone) can wear content classes. The
+ * log line is the diagnostic: a mismatch that persists across a mutation
+ * response is model drift; one that resolves on commit is the gesture in
+ * flight.
  *
  * Everything is gated on the logger being enabled
  * (Drupal.Daedalus.logging.enable('daedalus_ui')), so the

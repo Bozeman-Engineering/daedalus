@@ -33,6 +33,7 @@ class InspectorPopoutPageVariantTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',

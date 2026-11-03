@@ -303,6 +303,28 @@ class StructuralValidatorTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * Tests that a type with no bundle key needs no bundle: the type is it.
+   */
+  public function testBundleImpliedForTypeWithoutBundleKey(): void {
+    $this->assertSame([], $this->validator->validate([
+      'entity_type' => 'entity_test_no_bundle',
+      'fields' => ['name' => 'Implied'],
+    ]));
+    $this->assertSame('entity_test_no_bundle', $this->validator->impliedBundle('entity_test_no_bundle', NULL));
+    $this->assertSame('entity_test_no_bundle', $this->validator->impliedBundle('entity_test_no_bundle', ''));
+
+    // A bundle the blueprint names is judged as written, and a type with a
+    // bundle key still needs one named.
+    $errors = $this->validator->validate([
+      'entity_type' => 'entity_test_no_bundle',
+      'bundle' => 'nonexistent',
+    ]);
+    $this->assertCount(1, $errors);
+    $this->assertSame('INVALID_BUNDLE', $errors[0]->getCode());
+    $this->assertNull($this->validator->impliedBundle('entity_test', NULL));
+  }
+
+  /**
    * Tests that invalid bundle prevents field validation.
    */
   public function testInvalidBundleBailsEarly(): void {

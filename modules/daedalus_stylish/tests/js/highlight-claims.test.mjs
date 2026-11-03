@@ -105,7 +105,7 @@ test('highlightClaimsFor binds one stack per source and wipes it on a target mov
   // address now and goes.
   claims.claim('row', spec(['gap']));
   targetListener(
-    { selected: 'block:b1', target: { key: 'container:c1', selector: '> pb-text' } },
+    { selected: 'block:b1', target: { key: 'container:c1', selector: '> d-text' } },
     { selected: 'block:b1', target: null },
   );
   assert.equal(applied.at(-1), null);
@@ -114,10 +114,10 @@ test('highlightClaimsFor binds one stack per source and wipes it on a target mov
   assert.equal(applied.at(-1), null);
   assert.equal(applied.length, 2);
   // A selection move arrives on the same subscription and wipes too.
-  claims.claim('row', { key: 'container:c1', selector: '> pb-text', properties: ['gap'] });
+  claims.claim('row', { key: 'container:c1', selector: '> d-text', properties: ['gap'] });
   targetListener(
     { selected: 'block:other', target: null },
-    { selected: 'block:b1', target: { key: 'container:c1', selector: '> pb-text' } },
+    { selected: 'block:b1', target: { key: 'container:c1', selector: '> d-text' } },
   );
   assert.equal(applied.at(-1), null);
   assert.equal(applied.length, 4);

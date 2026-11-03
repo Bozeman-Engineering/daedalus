@@ -9,7 +9,6 @@ use Drupal\ai_agents\PluginInterfaces\AiAgentInterface;
 use Drupal\ai_assistant_api\Event\AiAssistantPassContextToAgentEvent;
 use Drupal\daedalus_ai\EventSubscriber\TokenPropagationSubscriber;
 use Drupal\daedalus_ai\RouteEntityResolver;
-use Drupal\daedalus_blueprint\CurrentEntityContext;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
@@ -24,9 +23,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * - AiAssistantPassContextToAgentEvent (onPassContext): captures the client's
  *   view_mode and resolves the client's current_route to its canonical entity,
- *   recording entity_type/id/uuid/bundle/label AND handing the entity's
- *   type + bundle to daedalus_blueprint's CurrentEntityContext (the shared holder
- *   AI tools/skills read, since they cannot see the agent's prompt).
+ *   recording the host's facts (entity_type/id/uuid/bundle/label, the kind,
+ *   the verdict) for the prompt build.
  * - BuildSystemPromptEvent (onBuildSystemPrompt): writes the captured view mode
  *   and entity context onto the event's tokens so the agent (and its
  *   sub-agents) inherit them.
@@ -41,11 +39,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   enforces this; here we confirm the subscriber honors the NULL result and
  *   emits no entity token (view_mode, which is not entity-bound, survives).
  *
- * The subscriber is built directly from a fresh RouteEntityResolver and a fresh
- * CurrentEntityContext per scenario (daedalus_ai is not enabled; its info.yml drags
- * the full AI stack), mirroring the sibling ContextResolverTest which already
- * pins RouteEntityResolver's own contract. A fresh subscriber + context per
- * scenario keeps the subscriber's request-scoped captured state isolated.
+ * The subscriber is built directly from a fresh RouteEntityResolver per
+ * scenario (daedalus_ai is not enabled; its info.yml drags the full AI stack),
+ * mirroring the sibling ContextResolverTest which already pins
+ * RouteEntityResolver's own contract. A fresh subscriber per scenario keeps
+ * the subscriber's request-scoped captured state isolated.
  *
  * Scenario A's token assertion is the only exhaustive pin of
  * RouteEntityResolver::describe()'s key set (the two readers of the token read
@@ -116,18 +114,11 @@ class TokenPropagationSubscriberTest extends KernelTestBase {
     $path = '/entity_test/' . $entity->id();
 
     // Scenario A: capture from the context event, propagate to the prompt.
-    $context = new CurrentEntityContext();
-    $subscriber = $this->subscriber($context);
+    $subscriber = $this->subscriber();
     $subscriber->onPassContext($this->contextEvent([
       'view_mode' => 'teaser',
       'current_route' => $path,
     ]));
-
-    // The current entity's type + bundle are handed to daedalus_blueprint so AI
-    // tools and skills can resolve page context they cannot read off the agent.
-    $this->assertTrue($context->hasEntity());
-    $this->assertSame('entity_test', $context->getEntityTypeId());
-    $this->assertSame('entity_test', $context->getBundle());
 
     // onBuildSystemPrompt writes the captured values onto a fresh event.
     $prompt = $this->promptEvent();
@@ -162,10 +153,8 @@ class TokenPropagationSubscriberTest extends KernelTestBase {
       'current_view_mode' => 'full',
       'current_entity_context' => ['entity_type' => 'node', 'entity_id' => 7],
     ];
-    $fresh_context = new CurrentEntityContext();
-    $fresh_subscriber = $this->subscriber($fresh_context);
+    $fresh_subscriber = $this->subscriber();
     $fresh_subscriber->onPassContext($this->contextEvent([]));
-    $this->assertFalse($fresh_context->hasEntity(), 'An empty context captures nothing.');
 
     $inherited_prompt = $this->promptEvent($inherited);
     $fresh_subscriber->onBuildSystemPrompt($inherited_prompt);
@@ -184,17 +173,14 @@ class TokenPropagationSubscriberTest extends KernelTestBase {
     $private->save();
     // A user without 'view test entity' cannot view entity_test entities.
     $this->setUpCurrentUser([], []);
-    $denied_context = new CurrentEntityContext();
-    $denied_subscriber = $this->subscriber($denied_context);
+    $denied_subscriber = $this->subscriber();
     $denied_subscriber->onPassContext($this->contextEvent([
       'view_mode' => 'teaser',
       'current_route' => '/entity_test/' . $private->id(),
     ]));
 
     // view_mode is not entity-bound, so it is still captured; the entity is
-    // not, and daedalus_blueprint is never told about it.
-    $this->assertFalse($denied_context->hasEntity(), 'An unviewable entity is not handed to daedalus_blueprint.');
-
+    // not.
     $denied_prompt = $this->promptEvent();
     $denied_subscriber->onBuildSystemPrompt($denied_prompt);
     $denied_tokens = $denied_prompt->getTokens();
@@ -207,15 +193,12 @@ class TokenPropagationSubscriberTest extends KernelTestBase {
   }
 
   /**
-   * Builds a subscriber with a fresh route resolver and the given context.
-   *
-   * @param \Drupal\daedalus_blueprint\CurrentEntityContext $context
-   *   The current-entity holder the subscriber should populate.
+   * Builds a subscriber with a fresh route resolver.
    *
    * @return \Drupal\daedalus_ai\EventSubscriber\TokenPropagationSubscriber
    *   A subscriber wired to real collaborators, isolated per scenario.
    */
-  private function subscriber(CurrentEntityContext $context): TokenPropagationSubscriber {
+  private function subscriber(): TokenPropagationSubscriber {
     return new TokenPropagationSubscriber(
       new RouteEntityResolver(
         $this->container->get('path.validator'),
@@ -224,7 +207,6 @@ class TokenPropagationSubscriberTest extends KernelTestBase {
         $this->container->get('daedalus_ui.ui'),
         $this->container->get('daedalus_blueprint.verdict_stamper'),
       ),
-      $context,
     );
   }
 

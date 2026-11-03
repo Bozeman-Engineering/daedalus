@@ -13,16 +13,21 @@
  * above is short, stays above clamped when neither fits; the default
  * side is 'below' and unchanged by the grammar's arrival); the explicit
  * side and align grammars (anything but 'below'/'above' or
- * 'start'/'end' throws). The plain-DOM
- * host (js/popover/popover.js) measures and applies this; its dismissal,
- * Escape, and focus-return are DOM concerns covered by the FJS tier.
+ * 'start'/'end' throws); the menu flyout's placement (flyoutPosition:
+ * beside the row to the right with its first row level with the row,
+ * flipped left when the right would leave the viewport and the left
+ * fits, clamped vertically, the oversized clamp when neither side fits,
+ * the gap and inset as parameters). The plain-DOM
+ * host (js/popover/popover.js) measures and applies this, and the menu
+ * host (js/menu/menu.js) applies the flyout's; dismissal, Escape, and
+ * focus-return are DOM concerns covered by the FJS tier.
  *
  * Run with `node --test tests/js/*.test.mjs` from the module root.
  */
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
-const { clampPosition, anchoredPosition } = await import('../../js/popover/placement.js');
+const { clampPosition, anchoredPosition, flyoutPosition } = await import('../../js/popover/placement.js');
 
 const viewport = { viewportWidth: 1000, viewportHeight: 800 };
 const size = { width: 200, height: 150 };
@@ -237,5 +242,74 @@ test('anchored: align is an explicit grammar; anything else throws', () => {
   assert.throws(
     () => anchoredPosition({ rect, align: null, ...size, ...viewport }),
     /aligns 'start' or 'end'/,
+  );
+});
+
+// The menu flyout: beside its row.
+test('flyout: to the right of the row, its first row level with the row (the inset), no gap by default', () => {
+  const rect = { left: 100, right: 300, top: 200, bottom: 226 };
+  assert.deepEqual(
+    flyoutPosition({ rect, ...size, ...viewport }),
+    { left: 300, top: 196, side: 'right' },
+    'left edge at the row\'s right edge; top pulled up by the default 4px inset',
+  );
+  assert.deepEqual(
+    flyoutPosition({ rect, ...size, ...viewport, inset: 5, gap: 2 }),
+    { left: 302, top: 195, side: 'right' },
+    'the inset and the gap are parameters',
+  );
+});
+
+test('flyout: flips left when the right would leave the viewport and the left fits', () => {
+  // A menu hanging near the right edge: 850 + 200 + 4 > 1000.
+  const rect = { left: 650, right: 850, top: 200, bottom: 226 };
+  assert.deepEqual(
+    flyoutPosition({ rect, ...size, ...viewport }),
+    { left: 650 - 200, top: 196, side: 'left' },
+    'the flyout\'s right edge at the row\'s left edge',
+  );
+  assert.deepEqual(
+    flyoutPosition({ rect, ...size, ...viewport, gap: 2 }),
+    { left: 650 - 2 - 200, top: 196, side: 'left' },
+    'the gap applies on the left side too',
+  );
+  // The threshold counts the margin: right + gap + width + margin <=
+  // viewportWidth; 796 + 0 + 200 + 4 = 1000 fits exactly.
+  assert.deepEqual(
+    flyoutPosition({ rect: { left: 596, right: 796, top: 200, bottom: 226 }, ...size, ...viewport }),
+    { left: 796, top: 196, side: 'right' },
+    'fits right exactly',
+  );
+  assert.deepEqual(
+    flyoutPosition({ rect: { left: 597, right: 797, top: 200, bottom: 226 }, ...size, ...viewport }),
+    { left: 397, top: 196, side: 'left' },
+    'one pixel short on the right, room on the left: flips',
+  );
+});
+
+test('flyout: clamps vertically, never past the top margin, pulled up at the bottom', () => {
+  assert.deepEqual(
+    flyoutPosition({ rect: { left: 100, right: 300, top: 2, bottom: 28 }, ...size, ...viewport }),
+    { left: 300, top: 4, side: 'right' },
+    'a row at the very top: the flyout starts at the margin',
+  );
+  assert.deepEqual(
+    flyoutPosition({ rect: { left: 100, right: 300, top: 740, bottom: 766 }, ...size, ...viewport }),
+    { left: 300, top: 800 - 150 - 4, side: 'right' },
+    'a row near the bottom: the flyout is pulled up to fit',
+  );
+});
+
+test('flyout: when neither side fits it stays right and clamps like any surface', () => {
+  const rect = { left: 100, right: 300, top: 200, bottom: 226 };
+  assert.deepEqual(
+    flyoutPosition({ rect, width: 800, height: 150, ...viewport }),
+    { left: 1000 - 800 - 4, top: 196, side: 'right' },
+    'too wide for either side: pulled in from the right edge',
+  );
+  assert.deepEqual(
+    flyoutPosition({ rect, width: 2000, height: 2000, ...viewport }),
+    { left: 4, top: 4, side: 'right' },
+    'an oversized flyout pins to the top-left margin',
   );
 });

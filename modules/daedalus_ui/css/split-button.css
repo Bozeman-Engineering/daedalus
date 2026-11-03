@@ -1,4 +1,4 @@
-/* The top bar's split control (ButtonBuilderTrait::buildSplitButton()): a
+/* The selection chip's split control (selection-frame.js GroupControl): a
    main button and a menu caret reading as one pill. The caret opens the
    shared menu primitive (daedalus_ui/menu), so the control carries no
    dropdown of its own; a caret with nothing to list renders hidden. */

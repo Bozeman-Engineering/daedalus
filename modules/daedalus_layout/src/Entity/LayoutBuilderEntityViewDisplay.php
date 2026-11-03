@@ -45,7 +45,7 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
    * swapping this list out), whose container wears the same class.
    * Core returns the sections as bare siblings keyed by delta and the
    * theme's entity template wraps {{ content }} however it likes, so
-   * nothing the suite owned was the box that lays out the page's bands: a
+   * nothing the suite owned was the box that lays out the page's sections: a
    * gap between them (the container model's "a box arranges its children",
    * reaching the page) had no element to act on. The section list is
    * markup daedalus_layout builds, so daedalus_layout gives it its box: the list itself

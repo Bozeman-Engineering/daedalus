@@ -1,7 +1,7 @@
 # Resolver-exercising declarations, mirroring the shipped variation shapes.
 #
 # The container kind mirrors the one-box container: NO parts, a multi-form
-# root swapping on depth (section as a page band, div nested) and on
+# root swapping on depth (section at root, div nested) and on
 # emptiness (the empty forms compose depth AND empty in one present map —
 # the root-form AND lane — and carry the drop-affordance attribute), so
 # the resolver's depth conditions, the caller-fed emptiness input, and

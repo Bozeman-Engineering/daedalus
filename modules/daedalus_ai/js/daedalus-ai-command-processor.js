@@ -2,8 +2,14 @@
  * @file
  * Processes Drupal AJAX commands and mutation payloads from DeepChat responses.
  *
- * Wraps DeepChat's responseInterceptor to extract two payload kinds from
- * every response (initial and agent loop continuations):
+ * Wraps DeepChat's responseInterceptor through
+ * Drupal.Daedalus.AiInterceptors.install() (daedalus-ai-interceptors.js),
+ * the one road that waits for ai_chatbot to assign its interceptor (its
+ * should_continue handling, which runs after ours) and refuses to wrap
+ * nothing; installing at behavior attach wrapped nothing and was then
+ * overwritten, so every mutation payload below was dropped. The wrapper
+ * extracts two payload kinds from every response (initial and agent loop
+ * continuations):
  * - drupal_commands: AJAX side effects (open-link, workspace toolbar,
  *   trigger-deferred), executed via Drupal's AJAX command system.
  * - blueprint_responses: mutation-response payloads for whatever the AI
@@ -26,66 +32,77 @@
 
     /**
      * Installs the response interceptor on DeepChat.
+     *
+     * Drupal.Daedalus.AiInterceptors.install() guarantees the interceptor
+     * ai_chatbot assigned is there to wrap and marks `installed` once the
+     * wrapper is on the element.
+     *
+     * @param {HTMLElement} deepchat
+     *   The <deep-chat> element.
+     *
+     * @return {Promise<void>}
+     *   The helper's promise: resolved once the wrapper is installed.
      */
-    install() {
-      const deepchat = document.querySelector('deep-chat');
-      if (!deepchat || this.installed) {
-        return;
-      }
-
-      const existingInterceptor = deepchat.responseInterceptor;
-      deepchat.responseInterceptor = (response) => {
-        if (response.drupal_commands) {
-          log('commands', 'Processing drupal_commands from response', {
-            count: response.drupal_commands.length,
-          });
-          const ajax = Drupal.ajax({ url: '' });
-          ajax.success(response.drupal_commands, 'success');
-          delete response.drupal_commands;
-        }
-        if (response.blueprint_responses) {
-          const payloads = response.blueprint_responses;
-          delete response.blueprint_responses;
-          // The applyResponse facade only exists where the edit-mode app
-          // booted. Without it there is nothing to swap (and playing the
-          // payload's attachments outside the app would be all risk, no
-          // reward), so the payloads are dropped: the change is staged in
-          // tempstore and appears on the next edit-mode load.
-          const applyResponse = Drupal.Daedalus?.Blueprint?.applyResponse;
-          if (applyResponse) {
-            log('commands', 'Applying blueprint_responses from response', {
-              count: payloads.length,
+    install(deepchat) {
+      return Drupal.Daedalus.AiInterceptors.install(
+        deepchat,
+        'responseInterceptor',
+        (existingInterceptor) => (response) => {
+          if (response.drupal_commands) {
+            log('commands', 'Processing drupal_commands from response', {
+              count: response.drupal_commands.length,
             });
-            payloads
-              .reduce(
-                (chain, payload) => chain.then(() => applyResponse(payload)),
-                Promise.resolve(),
-              )
-              .catch((error) => {
-                log('commands', 'Applying a blueprint response failed', error);
-              });
+            const ajax = Drupal.ajax({ url: '' });
+            ajax.success(response.drupal_commands, 'success');
+            delete response.drupal_commands;
           }
-        }
-        const result = existingInterceptor
-          ? existingInterceptor(response)
-          : response;
+          if (response.blueprint_responses) {
+            const payloads = response.blueprint_responses;
+            delete response.blueprint_responses;
+            // The applyResponse facade only exists where the edit-mode app
+            // booted. Without it there is nothing to swap (and playing the
+            // payload's attachments outside the app would be all risk, no
+            // reward), so the payloads are dropped: the change is staged in
+            // tempstore and appears on the next edit-mode load.
+            const applyResponse = Drupal.Daedalus?.Blueprint?.applyResponse;
+            if (applyResponse) {
+              log('commands', 'Applying blueprint_responses from response', {
+                count: payloads.length,
+              });
+              payloads
+                .reduce(
+                  (chain, payload) => chain.then(() => applyResponse(payload)),
+                  Promise.resolve(),
+                )
+                .catch((error) => {
+                  log(
+                    'commands',
+                    'Applying a blueprint response failed',
+                    error,
+                  );
+                });
+            }
+          }
+          const result = existingInterceptor(response);
 
-        deepchat.dispatchEvent(
-          new CustomEvent('daedalusAiDeepChatResponse', {
-            detail: { response: result },
-          }),
-        );
+          deepchat.dispatchEvent(
+            new CustomEvent('daedalusAiDeepChatResponse', {
+              detail: { response: result },
+            }),
+          );
 
-        return result;
-      };
-      this.installed = true;
+          return result;
+        },
+      ).then(() => {
+        this.installed = true;
+      });
     },
   };
 
   Drupal.behaviors.daedalusAiCommandProcessor = {
     attach(context) {
-      once('daedalus-ai-commands', 'deep-chat', context).forEach(() => {
-        Drupal.Daedalus.AiCommands.install();
+      once('daedalus-ai-commands', 'deep-chat', context).forEach((deepchat) => {
+        Drupal.Daedalus.AiCommands.install(deepchat);
       });
     },
   };

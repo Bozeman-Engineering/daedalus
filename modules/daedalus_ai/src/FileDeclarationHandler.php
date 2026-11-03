@@ -12,7 +12,7 @@ use Drupal\daedalus_ui\File\FileLaneException;
 /**
  * Saves bytes the model authors in a batch and holds them for its thread.
  *
- * The page language's file op and a document's <pb-file> declaration reach
+ * The page language's file op and a document's <d-file> declaration reach
  * this seam from the DOM operation handler. The bytes go through the one
  * file lane (validators, the FileValidationEvent chain with the SVG
  * sanitizer, the size ceiling) as a temporary file into the attachment

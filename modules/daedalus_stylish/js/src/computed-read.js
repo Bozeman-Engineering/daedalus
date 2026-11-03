@@ -2,6 +2,7 @@ import { CHROME_SELECTOR } from './layout-context.js';
 import { parseKey } from './style-guide.js';
 import { hostTargets, donutLimit } from './printer.js';
 import { parseSelector } from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
+import { OWNER, reach } from '../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
 
 /**
  * THE shared canvas computed-read seam.
@@ -90,12 +91,20 @@ export const resolveRoot = (key) => {
  * Resolves the canvas elements a style target actually hits.
  *
  * Without a selector the target is the scope-root element itself (zero
- * or one match). With one, every match of the printed targets inside the
- * scope root (printer.js scopeTargets: the same selectors the delivered
- * CSS carries, so what is read is exactly what the rules hit): a part
- * class can match several elements, `> pb-text` every text block child,
- * and every consumer of this read must handle all of them (tint every
- * match; placeholder from the first). Container-owned entries honor the
+ * or one match). With one, every match of the printed targets of its
+ * STRUCTURAL REACH inside the scope root (the digester's reach: the
+ * selector with its posable state qualifiers stripped, then printer.js
+ * hostTargets, the same selectors the delivered CSS carries): a part
+ * class can match several elements, `> d-text` every text block child,
+ * and a reveal rule (`li:hover > ul`) resolves to every `ul` under an
+ * `li`, the elements the rule hits once its state holds, which is what
+ * the bands measure, the rings cover and the pose stamps (nothing on
+ * the canvas is hovered while the designer looks at the panel). The
+ * guide's condition table says which pseudo-classes are posable states;
+ * without one nothing is stripped and a state-qualified selector hits
+ * only what really holds. Every consumer of this read must handle every
+ * match (tint every match; placeholder from the first). Container-owned
+ * entries honor the
  * printers' donut exactly as their CSS does (donutLimit): a part-first
  * selector's matches inside a nested container or block root are out of
  * scope, shifted by the levels the part reaches by `>`; a tag or type
@@ -112,15 +121,19 @@ export const resolveRoot = (key) => {
  *   The style target's selectable key (the style-map entry's key). Keys
  *   are stamped on the canvas verbatim, so the key IS the scope root.
  * @param {?string} selector
- *   The canonical relative selector ('.quote', '> *', '> pb-text',
- *   '&::before'), or null for the whole element.
+ *   The canonical relative selector ('.quote', '> *', '> d-text',
+ *   '&::before', 'li:hover > ul'), or null for the whole element.
+ * @param {Object} conditions
+ *   guide.conditions (name -> {wrapper, axis}): the posable states the
+ *   reach strips. Omitted, no pseudo-class is a state.
  *
  * @return {Element[]}
  *   The live matches (a box's hosts), the root first when it matches,
- *   then document order. Empty when the root is not in the canvas or
- *   the selector is not in the grammar.
+ *   then document order. Empty when the root is not in the canvas, the
+ *   selector is not in the grammar, or nothing addressable is left
+ *   once the states are stripped (`*:hover > ul`).
  */
-export const resolveTargets = (key, selector = null) => {
+export const resolveTargets = (key, selector = null, conditions = {}) => {
   const root = resolveRoot(key);
   if (!root) {
     return [];
@@ -128,14 +141,21 @@ export const resolveTargets = (key, selector = null) => {
   if (!selector) {
     return [root];
   }
+  const structural = reach(selector, { conditions });
+  if (structural === null) {
+    return [];
+  }
+  if (structural === OWNER) {
+    return [root];
+  }
   let targets;
   try {
-    targets = hostTargets(selector);
+    targets = hostTargets(structural, conditions);
   } catch {
     return [];
   }
   const limit =
-    parseKey(key)?.kind === 'container' ? donutLimit(selector) : null;
+    parseKey(key)?.kind === 'container' ? donutLimit(structural) : null;
   // The donut's depth: how many child levels below a nested root the
   // limit sits (0 for the standard donut).
   const levels = limit === null ? -1 : (limit.match(/ > \*/g) ?? []).length;

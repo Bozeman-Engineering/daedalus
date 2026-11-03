@@ -47,6 +47,7 @@ class BlueprintEntityTest extends KernelTestBase {
     'layout_discovery',
     'layout_builder',
     'daedalus_blueprint',
+    'filter',
     'daedalus_blueprint_library',
   ];
 
@@ -156,7 +157,7 @@ class BlueprintEntityTest extends KernelTestBase {
     $page = $this->createBlueprint(['machine_name' => 'landing', 'scope' => 'page', 'layout_builder__layout' => $two]);
     $this->assertCount(2, Blueprint::load($page->id())->get('layout_builder__layout')->getSections(), 'A page blueprint takes several roots.');
 
-    $one = $this->createBlueprint(['machine_name' => 'band', 'layout_builder__layout' => [new Section('layout_onecol')]]);
+    $one = $this->createBlueprint(['machine_name' => 'section', 'layout_builder__layout' => [new Section('layout_onecol')]]);
     $this->assertCount(1, Blueprint::load($one->id())->get('layout_builder__layout')->getSections(), 'A block blueprint takes one root.');
     $this->assertSame('block', $one->getScope());
   }
@@ -173,12 +174,12 @@ class BlueprintEntityTest extends KernelTestBase {
     $blueprint = $this->createBlueprint();
     $this->assertSame([], $blueprint->getGroups(), 'A blueprint is in no group by default.');
 
-    $blueprint->setGroups(['heroes', 'bands'])->save();
+    $blueprint->setGroups(['heroes', 'sections'])->save();
     $first_revision_id = $blueprint->getRevisionId();
-    $this->assertSame(['heroes', 'bands'], Blueprint::load($blueprint->id())->getGroups());
+    $this->assertSame(['heroes', 'sections'], Blueprint::load($blueprint->id())->getGroups());
 
-    $created = $this->createBlueprint(['machine_name' => 'band', 'groups' => ['bands']]);
-    $this->assertSame(['bands'], Blueprint::load($created->id())->getGroups(), 'The field takes a list on create.');
+    $created = $this->createBlueprint(['machine_name' => 'section', 'groups' => ['sections']]);
+    $this->assertSame(['sections'], Blueprint::load($created->id())->getGroups(), 'The field takes a list on create.');
 
     $blueprint->setGroups([])->save();
     $this->assertSame([], Blueprint::load($blueprint->id())->getGroups(), 'An empty list files it under no group.');
@@ -186,7 +187,7 @@ class BlueprintEntityTest extends KernelTestBase {
     assert($storage instanceof RevisionableStorageInterface);
     $old = $storage->loadRevision($first_revision_id);
     assert($old instanceof Blueprint);
-    $this->assertSame(['heroes', 'bands'], $old->getGroups(), 'Groups are revisioned with the details.');
+    $this->assertSame(['heroes', 'sections'], $old->getGroups(), 'Groups are revisioned with the details.');
   }
 
   /**
@@ -204,7 +205,7 @@ class BlueprintEntityTest extends KernelTestBase {
     $first_revision_id = $blueprint->getRevisionId();
     $this->assertTrue(Blueprint::load($blueprint->id())->isFavorite());
 
-    $created = $this->createBlueprint(['machine_name' => 'band', 'favorite' => TRUE]);
+    $created = $this->createBlueprint(['machine_name' => 'section', 'favorite' => TRUE]);
     $this->assertTrue(Blueprint::load($created->id())->isFavorite(), 'The field takes the flag on create.');
 
     $blueprint->setFavorite(FALSE)->save();

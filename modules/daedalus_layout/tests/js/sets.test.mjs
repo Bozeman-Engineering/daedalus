@@ -48,7 +48,7 @@ const record = (id, label, extra = {}) => ({
 
 // The vocabulary in declaration order; "legal" holds nothing here.
 const GROUPS = [
-  { id: 'marketing', label: 'Marketing', description: 'Bands that sell.' },
+  { id: 'marketing', label: 'Marketing', description: 'Sections that sell.' },
   { id: 'newsletter', label: 'Newsletter', description: '' },
   { id: 'legal', label: 'Legal', description: '' },
 ];
@@ -64,10 +64,10 @@ const BLOCKS = [
   block('views_block:recent-block_1', 'Lists', 'Recent content'),
 ];
 const RECORDS = [
-  record('hero_band', 'Hero band', { favorite: true, groups: ['marketing'] }),
+  record('hero_section', 'Hero section', { favorite: true, groups: ['marketing'] }),
   record('feature_trio', 'Feature trio', { groups: ['marketing'] }),
-  record('band_10', 'Band 10', { groups: ['newsletter'] }),
-  record('band_2', 'band 2', { groups: ['newsletter'] }),
+  record('section_10', 'Section 10', { groups: ['newsletter'] }),
+  record('section_2', 'section 2', { groups: ['newsletter'] }),
   record('aside', 'Aside'),
 ];
 const FACES = faceList(BLOCKS, RECORDS);
@@ -84,12 +84,12 @@ test('the sets, in order: Favorites, the groups that hold anything, All', () => 
   assert.ok(!sets.some((set) => set.id === groupSetId('legal')));
   assert.deepEqual(sets.map((set) => set.label), ['Favorites', 'Marketing', 'Newsletter', 'All']);
   // A group carries its description.
-  assert.equal(sets[1].description, 'Bands that sell.');
+  assert.equal(sets[1].description, 'Sections that sell.');
 });
 
 test('Favorites: the defaults in label order, the Container leading', () => {
   const [favorites] = buildSets(FACES, GROUPS, null);
-  assert.deepEqual(ids(favorites), [CONTAINER_ID, 'blueprint:hero_band', 'inline_block:image', 'inline_block:text']);
+  assert.deepEqual(ids(favorites), [CONTAINER_ID, 'blueprint:hero_section', 'inline_block:image', 'inline_block:text']);
   assert.equal(favorites.count, 4);
 });
 
@@ -100,7 +100,7 @@ test('Favorites: the editor\'s marks over the defaults', () => {
     'blueprint:aside': true,
   };
   const [favorites] = buildSets(FACES, GROUPS, marks);
-  assert.deepEqual(ids(favorites), [CONTAINER_ID, 'blueprint:aside', 'blueprint:hero_band', 'inline_block:text', 'field_block:node:page:title']);
+  assert.deepEqual(ids(favorites), [CONTAINER_ID, 'blueprint:aside', 'blueprint:hero_section', 'inline_block:text', 'field_block:node:page:title']);
   // A FALSE mark removes the Container too, like any default.
   const [none] = buildSets(FACES, GROUPS, { ...marks, [CONTAINER_ID]: false });
   assert.ok(!ids(none).includes(CONTAINER_ID));
@@ -117,11 +117,12 @@ test('Favorites is drawn when empty, with a count of 0', () => {
 test('a group holds blocks and blueprints alike, in label order, with its count', () => {
   const sets = buildSets(FACES, GROUPS, null);
   const marketing = sets.find((set) => set.id === groupSetId('marketing'));
-  assert.deepEqual(ids(marketing), ['blueprint:feature_trio', 'blueprint:hero_band', 'inline_block:text']);
+  assert.deepEqual(ids(marketing), ['blueprint:feature_trio', 'blueprint:hero_section', 'inline_block:text']);
   assert.equal(marketing.count, 3);
-  // Natural order inside a group: band 2 before Band 10.
+  // Natural order inside a group: section 2 before Section 10 (after
+  // the signup, whose label sorts first).
   const newsletter = sets.find((set) => set.id === groupSetId('newsletter'));
-  assert.deepEqual(ids(newsletter), ['blueprint:band_2', 'blueprint:band_10', 'inline_block:signup']);
+  assert.deepEqual(ids(newsletter), ['inline_block:signup', 'blueprint:section_2', 'blueprint:section_10']);
 });
 
 test('an undeclared group id files a face nowhere', () => {
@@ -150,7 +151,7 @@ test('All holds everything once, nested as Basics, Blueprints, then the categori
   );
   // Each kind in label order; the Container leads nothing but Favorites.
   assert.deepEqual(ids(all.children[0]), [CONTAINER_ID, 'inline_block:image', 'inline_block:signup', 'inline_block:text']);
-  assert.deepEqual(ids(all.children[1]), ['blueprint:aside', 'blueprint:band_2', 'blueprint:band_10', 'blueprint:feature_trio', 'blueprint:hero_band']);
+  assert.deepEqual(ids(all.children[1]), ['blueprint:aside', 'blueprint:feature_trio', 'blueprint:hero_section', 'blueprint:section_2', 'blueprint:section_10']);
   assert.deepEqual(ids(all.children[2]), ['field_block:node:page:body', 'field_block:node:page:title']);
   // Every face is in exactly one kind.
   const inKinds = all.children.flatMap(ids);

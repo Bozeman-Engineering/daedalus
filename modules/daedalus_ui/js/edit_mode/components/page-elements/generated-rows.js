@@ -19,16 +19,19 @@
  * part (page-elements-tree.js PartRow); the canvas paints the box through
  * the behavior's selectorFor.
  *
- * The behavior's answer is memoized here on what it reads: the blueprint
- * mirror (the style map and the tree ride it), the materials record set
- * (a worn look's box fragment can flip a box) and the behavior itself (a
- * registration after boot changes the answer). generated(key) builds the
- * box's full style stack twice per call, so the tree and the index, which
- * both ask for every keyed row on every mirror replacement, read one
- * answer per key per source, never one per render.
+ * The behavior's answer is memoized here on what it reads: the effective
+ * blueprint (the style map and the tree ride it; effective-blueprint.js,
+ * so a composed edit's draft re-derives it like a mirror replacement),
+ * the materials record set (a worn look's box fragment can flip a box)
+ * and the behavior itself (a registration after boot changes the
+ * answer). generated(key) builds the box's full style stack twice per
+ * call, so the tree and the index, which both ask for every keyed row on
+ * every mirror replacement, read one answer per key per source, never
+ * one per render.
  */
 
 import store from '../../store/store';
+import { effectiveBlueprint } from '../../blueprint/effective-blueprint';
 import { getPartBehavior } from './view-registry';
 import { MARKUP_VIEW_ID } from './markup-view';
 import { boxGlyph } from './row-glyphs';
@@ -53,7 +56,7 @@ export const generatedRows = (key) => {
     return [];
   }
   const state = store.getState();
-  const mirror = state.blueprint.blueprint;
+  const mirror = effectiveBlueprint(state);
   const records = state.materials.records;
   if (
     source?.mirror !== mirror ||

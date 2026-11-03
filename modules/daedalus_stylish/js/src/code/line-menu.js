@@ -122,7 +122,7 @@ const carrierRule = (carrier) =>
  * opens the variant's session anchored at the carrier (a value a worn
  * variant delivers is edited at the carrier, never at the position it
  * lands at, the provenance row's reading); a declared run opens the
- * Materials place's Law tab at its declaring scope (the row menu's
+ * Design system place's Law tab at its declaring scope (the row menu's
  * declared doorway, a law document through the same openDocument); the
  * own run has no doorway, and neither has an ancestor rule's own run
  * (the rule's seat is its rule island's header; see the file docblock).

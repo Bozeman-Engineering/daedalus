@@ -1,34 +1,51 @@
+/**
+ * @file
+ * The Edit Mode top bar: the quiet bar.
+ *
+ * No boxes. Every control is a monochrome glyph at reduced weight (its text
+ * color mixed toward the background, never opacity: the toggles carry
+ * data-daedalus-ui-conceal, and reveal.css drives THEIR opacity). An open
+ * panel's toggle, and the menu trigger while its menu stands, come up to
+ * full ink on a raised tile (the chrome's active-toggle surface,
+ * --daedalus-toggle-active, with the segmented control's shadow), at
+ * every density: icon-only, ink alone against the 72% glyphs was too
+ * faint a cue, and the flat toggle wash too close to the bar. The one solid
+ * element is Save while changes are staged, ink with the background's
+ * text; "Saved" is barely there. Done is ink. The bar is monochrome on
+ * purpose: the selection blue (--daedalus-selection) belongs to the
+ * canvas selection and the selector-related chrome, and the bar spends
+ * none of it, so a blue anywhere on screen always means "selected".
+ * The document sentence in the middle names the host, with its kind as
+ * a muted suffix after a dash.
+ *
+ * The buttons are core navigation's .toolbar-button component; the states
+ * are expressed by repointing the component's own custom properties
+ * (--toolbar-button-color, -hover-*, -focus-color, -bg) at the chrome
+ * palette (variables.css), so both color schemes follow for free.
+ */
 :is(#extra-specificity-hack, [data-drupal-admin-styles]),
 html {
   #edit-mode-top-bar {
     --admin-toolbar-font-family: var(--daedalus-font);
-    --toolbar-button-color: var(--daedalus-text);
+    /* The quiet glyph: the text color pulled 28% toward the background. */
+    --toolbar-button-color: color-mix(in srgb, var(--daedalus-text) 72%, var(--daedalus-background));
     --toolbar-button-hover-color: var(--daedalus-text);
-    --toolbar-button-hover-bg: var(--daedalus-selection-background);
+    /* The bar's hover is the neutral toggle surface, not the chrome's
+       selection wash: no blue in the bar (see the file comment). */
+    --toolbar-button-hover-bg: var(--daedalus-toggle-background);
+    --toolbar-button-focus-color: var(--daedalus-text);
+    --toolbar-button-bg: transparent;
     /* The z-index needs to be higher than &.ck-toolbar-container in Daedalus Edit's ckeditor.css */
     z-index: 1261;
     height: var(--daedalus-top-bar-height);
     user-select: none;
-    /* Buttons read core's toolbar-button custom properties; repoint them at
-       the scheme-aware palette so labels, icons (fill: currentColor), and
-       hover states follow the active color scheme. The font var covers
-       core components (tooltips, buttons) that read it directly. */
     color: var(--daedalus-text);
     font-family: var(--daedalus-font);
-    .active {
-      color: var(--daedalus-selection-text);
-      background-color: var(--daedalus-ui-main-color);
-      &::before {
-        background-color: var(--daedalus-selection-text);
-      }
-    }
-    .daedalus-ui-mode-button.active {
-      background-color: var(--daedalus-ui-secondary-color);
-    }
-    /* Three zones: panel toggles pinned to the edges, document actions
-       spaced evenly across the middle. Each zone overrides core's
-       .top-bar__content (display: grid; width: 100%) — with flex-basis auto,
-       that width would blow every zone up to the full bar. */
+    font-size: var(--daedalus-font-size);
+    /* Three zones: panel toggles pinned to the edges, the document sentence
+       centered in the middle. Each zone overrides core's .top-bar__content
+       (display: grid; width: 100%) — with flex-basis auto, that width would
+       blow every zone up to the full bar. */
     .top-bar__left-toggles {
       display: flex;
       flex: 0 0 auto;
@@ -36,11 +53,13 @@ html {
       justify-content: flex-start;
       width: auto;
     }
-    /* The document actions spread across the remaining middle space. */
     .top-bar__global {
       display: flex;
       flex: 1 1 auto;
       align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      min-width: 0;
       width: auto;
     }
     .top-bar__right-toggles {
@@ -51,14 +70,25 @@ html {
       width: auto;
     }
     .toolbar-button {
+      gap: 0.4rem;
       white-space: nowrap;
-    }
-    /* Core rounds at --admin-toolbar-space-8; the chrome rounds on its own
-       token. The split control's two halves keep their directional corners
-       (split-button.css); this higher-specificity rule must not flatten
-       them. */
-    .toolbar-button:not(.daedalus-ui-split-button__main, .daedalus-ui-split-button__caret) {
+      /* Core rounds at --admin-toolbar-space-8 and sets its labels in the
+         variable font's bold; the chrome rounds on its own token and keeps
+         the bar's words quiet. */
       border-radius: var(--daedalus-border-radius);
+      font-size: inherit;
+      font-weight: 500;
+      line-height: 1.3;
+      font-variation-settings: normal;
+    }
+    .toolbar-button__icon,
+    .toolbar-button__caret {
+      flex: none;
+      fill: currentColor;
+    }
+    .toolbar-button__caret {
+      margin-inline-start: -0.15rem;
+      color: var(--daedalus-text-muted);
     }
 
     /* Icon-only by default: the label hides and rides the chrome tooltip
@@ -66,9 +96,109 @@ html {
     .toolbar-button__label {
       display: none;
     }
-    .top-bar__left {
-      justify-content: flex-start;
+
+    /* An open panel's toggle, and the trigger of the open menu. */
+    [data-sidebar-button-for].active,
+    .daedalus-ui-menu-trigger[aria-expanded="true"] {
+      --toolbar-button-color: var(--daedalus-text);
+      --toolbar-button-hover-color: var(--daedalus-text);
+      --toolbar-button-focus-color: var(--daedalus-text);
+      --toolbar-button-bg: var(--daedalus-toggle-active);
+      --toolbar-button-hover-bg: var(--daedalus-toggle-active);
+      /* The same lift the chrome's active segments wear (the media
+         library skin, the Styles panel's tabs): a white tile on the light
+         bar reads by its edge, not its fill. */
+      box-shadow: 0 1px 2px rgb(0, 0, 0, 0.15);
     }
+
+    /* The mark reads as the wordmark when its label is inline. */
+    .daedalus-ui-menu-trigger .toolbar-button__label {
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    /* The document sentence: the host's title, the kind as a muted suffix
+       after a dash (a template, a blueprint, the site frame; a page says
+       nothing). It shrinks before the zones do, ellipsized. */
+    .daedalus-ui-document {
+      overflow: hidden;
+      min-width: 0;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .daedalus-ui-document__title {
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+    .daedalus-ui-kind {
+      color: var(--daedalus-text-muted);
+      &::before {
+        content: "\2014";
+        margin-inline: 0.45rem;
+      }
+    }
+
+    /* Save is the unsaved-changes indicator: a pill, solid ink with a dot
+       while changes are staged, muted text and no dot once saved. Its label
+       is not a .toolbar-button__label on purpose (Edit::buildTopBar()): it
+       stays inline at every density, so the pill always reads. */
+    .daedalus-ui-save {
+      flex: none;
+      gap: 0.45rem;
+      height: 1.625rem;
+      padding-block: 0;
+      padding-inline: 0.7rem;
+      border-radius: 999px;
+      font-size: var(--daedalus-font-size-small);
+      font-weight: 600;
+      transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
+      &[data-daedalus-ui-saved="false"] {
+        --toolbar-button-color: var(--daedalus-background);
+        --toolbar-button-hover-color: var(--daedalus-background);
+        --toolbar-button-focus-color: var(--daedalus-background);
+        --toolbar-button-bg: var(--daedalus-text);
+        --toolbar-button-hover-bg: color-mix(in srgb, var(--daedalus-text) 82%, var(--daedalus-background));
+        padding-inline-start: 0.6rem;
+        &::before {
+          width: 0.4375rem;
+          height: 0.4375rem;
+          content: "";
+          border-radius: 50%;
+          background: currentColor;
+          box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 28%, transparent);
+        }
+      }
+      &[data-daedalus-ui-saved="true"] {
+        --toolbar-button-color: var(--daedalus-text-muted);
+        font-weight: 500;
+      }
+    }
+
+    /* Done: ink, no fill. The exit shares .daedalus-ui-mode-button
+       and the `active` class with the entry in core's bar (daedalus-ui.js
+       syncs the pair), and navigation.css fills the entry solid when active;
+       this higher-specificity rule keeps the exit quiet in every state. */
+    .daedalus-ui-mode-exit {
+      --toolbar-button-color: var(--daedalus-text);
+      --toolbar-button-hover-color: var(--daedalus-text);
+      --toolbar-button-focus-color: var(--daedalus-text);
+      &,
+      &.active,
+      &.active:hover:focus {
+        color: var(--toolbar-button-color);
+        background-color: transparent;
+      }
+      &:hover,
+      &.active:hover {
+        background-color: var(--toolbar-button-hover-bg);
+      }
+      .toolbar-button__label {
+        font-weight: 600;
+      }
+    }
+
     &.top-bar {
       /* Hidden unless this mode is active; the sidebar-width inset is gone
          with the navigation sidebar takeover. */
@@ -106,8 +236,10 @@ html {
        serving the labels on its own (it shows the pill exactly while the
        inline label is hidden, whatever hid it). */
     @media (min-width: 90rem) {
-      html:not([data-daedalus-ui-chrome-density="minimal"], [data-daedalus-ui-chrome-density="clean"]) & .toolbar-button__label {
-        display: inline;
+      html:not([data-daedalus-ui-chrome-density="minimal"], [data-daedalus-ui-chrome-density="clean"]) & {
+        .toolbar-button__label {
+          display: inline;
+        }
       }
     }
   }
@@ -126,13 +258,15 @@ html {
      for the navigation rail. */
   .top-bar__content .toolbar-button {
     min-height: 0;
-    padding: 0.2rem;
+    padding: 0.2rem 0.3rem;
   }
 
-  /* Core's toolbar-button paints a 2px blue outline on hover; the chrome's
-     hover treatment is the selection wash and nothing else (variables.css).
-     Keyboard focus keeps its ring (:focus-visible). */
-  #edit-mode-top-bar .toolbar-button:hover:not(:focus-visible) {
+  /* Core's toolbar-button paints a 2px blue outline on hover and on every
+     focus; the chrome's hover treatment is the selection wash and nothing
+     else (variables.css), and only keyboard focus keeps its ring
+     (:focus-visible). */
+  #edit-mode-top-bar .toolbar-button:hover:not(:focus-visible),
+  #edit-mode-top-bar .toolbar-button:focus:not(:focus-visible) {
     outline: none;
   }
 }
@@ -146,15 +280,6 @@ html:not([data-daedalus-ui-mode="edit"]) #edit-mode-top-bar {
   border: 0 !important;
 }
 
-.top-bar-icon {
-  width: 30px;
-  /* Sized to the bar (--daedalus-top-bar-height), a density choice:
-     off the icon ramp by design. */
-  height: 30px;
-  cursor: pointer;
-  background-repeat: no-repeat;
-  background-position: center center;
-}
 /* Core pushes the page canvas down by --admin-toolbar-top-bar-height for
    its own top bar (top-bar.css: .top-bar:has(…) ~ .dialog-off-canvas-main-
    canvas). Hiding that bar in-mode doesn't stop :has()/~ matching, so the
@@ -166,11 +291,15 @@ html[data-daedalus-ui-mode="edit"] {
   --admin-toolbar-top-bar-height: var(--daedalus-top-bar-height);
 }
 
-/* An open panel's toggle stays visible at clean density: the lit switch is
-   orientation for what's on screen, not clutter. reveal.css wraps its
-   concealment in :where() precisely so an ordinary exception like this
-   outranks it. */
-#edit-mode-top-bar .active[data-daedalus-ui-conceal] {
+/* At clean density the toggles and the menu trigger conceal (the attribute
+   is the server's; reveal.css hides them until the pointer nears); the
+   document sentence, Save and Done carry no attribute and never conceal.
+   An open panel's toggle and the trigger of a standing menu stay visible:
+   the lit switch is orientation for what's on screen, not clutter.
+   reveal.css wraps its concealment in :where() precisely so an ordinary
+   exception like this outranks it. */
+#edit-mode-top-bar .active[data-daedalus-ui-conceal],
+#edit-mode-top-bar [aria-expanded="true"][data-daedalus-ui-conceal] {
   visibility: visible;
   pointer-events: auto;
   opacity: 1;

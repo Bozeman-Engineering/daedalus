@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { styledConditions } from './editing-at.js';
+import { qualifierStates, styledConditions } from './editing-at.js';
 import { deliveredEntry } from './style-stack.js';
 
 /**
@@ -13,14 +13,26 @@ import { deliveredEntry } from './style-stack.js';
  * editing session's document overlaid as its layer), so variant-supplied
  * conditions count and the skin's and the declaration's do not: this row
  * is the map of where styles already live, and the tiers beneath the map
- * are not its conditions to drive to. Clicking a chip drives the canvas
- * there, including Default, the way back. A condition the canvas cannot
- * fully pose (a site-provided viewport @media width condition) drives what
- * it can and stays editable in full through the code view. The chip row
- * above is the pose surface (where the canvas stands).
+ * are not its conditions to drive to. A rule qualified by a state on one
+ * of its compounds (`li:hover > ul`, the reveal) lives at that state as
+ * much as a conditioned entry lives at its condition, so the target's
+ * selector contributes its qualifier states (editing-at.js
+ * qualifierStates) beside the entry's own. Clicking a chip drives the
+ * canvas there, including Default, the way back; a qualifier state's
+ * drive poses it, and the force state stamps the compound it stands on
+ * (force-state.js), so the designer sees the reveal. A condition the
+ * canvas cannot fully pose (a site-provided viewport @media width
+ * condition) drives what it can and stays editable in full through the
+ * code view. The chip row above is the pose surface (where the canvas
+ * stands).
  */
-export const StyledAt = ({ stack, condition, onDrive }) => {
+export const StyledAt = ({ stack, selector = null, conditions = {}, condition, onDrive }) => {
   const styled = stack ? styledConditions(deliveredEntry(stack)) : [];
+  qualifierStates(selector, conditions).forEach((name) => {
+    if (!styled.includes(name)) {
+      styled.push(name);
+    }
+  });
   if (styled.length === 0) {
     return null;
   }

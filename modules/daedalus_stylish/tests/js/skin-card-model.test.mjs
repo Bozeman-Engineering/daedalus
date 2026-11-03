@@ -47,11 +47,11 @@ const source = (machine_name, label, design_system, extra = {}) => ({
 });
 
 // Every skin on the site by label: aurora's four members, a global skin
-// (carbon), and two other systems' shipped skins.
+// (slate), and two other systems' shipped skins.
 const SOURCES = [
   source('aurora', 'Aurora', 'aurora', { provider: 'aurora_pkg', design_system_label: 'Aurora' }),
   source('bare', 'Bare', 'aurora', { design_system_label: 'Aurora' }),
-  source('carbon', 'Carbon', null, { provider: 'daedalus_stylish_carbon_skin' }),
+  source('slate', 'Slate', null, { provider: 'slate_skin' }),
   source('dusk', 'Dusk', 'aurora', { design_system_label: 'Aurora' }),
   source('night', 'Night', 'aurora', { design_system_label: 'Aurora' }),
   source('olivero', 'Olivero', 'olivero', { provider: 'daedalus_stylish_olivero_skin', design_system_label: 'Olivero' }),
@@ -207,7 +207,7 @@ test('copySources: every skin on the site grouped by system, the worn skin first
       system: null,
       label: null,
       skins: [
-        { reference: 'carbon', label: 'Carbon', provider: 'daedalus_stylish_carbon_skin', worn: false },
+        { reference: 'slate', label: 'Slate', provider: 'slate_skin', worn: false },
       ],
     },
     {
@@ -236,12 +236,12 @@ test('copySources: every skin on the site grouped by system, the worn skin first
   assert.equal(dusk[0].skins[1].worn, false);
   // A global skin worn (through default_skin, unjudged) hoists the global
   // group first; the other groups keep read order.
-  const carbon = copySources({ ...READ, worn: 'carbon' });
+  const slate = copySources({ ...READ, worn: 'slate' });
   assert.deepEqual(
-    carbon.map((group) => group.system),
+    slate.map((group) => group.system),
     [null, 'aurora', 'olivero', 'starter'],
   );
-  assert.equal(carbon[0].skins[0].worn, true);
+  assert.equal(slate[0].skins[0].worn, true);
   // Nothing worn: read order, nothing flagged.
   const fresh = copySources(FRESH);
   assert.deepEqual(

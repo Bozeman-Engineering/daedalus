@@ -40,6 +40,7 @@ import { instanceRows } from './instance-rows';
 import { generatedRows, withGeneratedRows } from './generated-rows';
 import { depictedRows, reachOver } from './reach';
 import { initMarkupVerification } from './markup-verify';
+import { effectiveBlueprint } from '../../blueprint/effective-blueprint';
 import {
   partPlacement,
   rootTag,
@@ -181,7 +182,7 @@ const RowIcon = ({ url }) =>
  * row count (tree-outline.js foldedRowCount: what the fold hides), then
  * the Markup view's tag fact (the element tag the row rendered as, no
  * angle brackets). Rendered only with something to say, so a bare row's
- * name runs to the edge. A fact's `title` is its words; the swatch itself
+ * name runs to the edge. A fact's `title` is its words; the spot itself
  * is decorative.
  */
 const RowFacts = ({ facts, count = null, tag }) =>
@@ -686,7 +687,7 @@ const TreeRow = ({ node, provider, depth }) => {
   // label) and anchors the unchanged-commit no-op.
   const rootTitle = useSelector((state) => {
     const value = rootEditTarget
-      ? state.blueprint.blueprint?.fields?.[rootEditTarget]
+      ? effectiveBlueprint(state)?.fields?.[rootEditTarget]
       : null;
     return typeof value === 'string' ? value : null;
   });
@@ -1163,7 +1164,10 @@ const Outline = ({ tree, provider }) => {
  */
 const PageElementsTree = ({ showMenuSlot }) => {
   const root = useSelector((state) => state.blueprint.root);
-  const blueprint = useSelector((state) => state.blueprint.blueprint);
+  // The EFFECTIVE tree (effective-blueprint.js): the mirror with an open
+  // composed edit's drafted markup over the edited node, so the rows'
+  // tag facts and shell parts follow the gesture before its op lands.
+  const blueprint = useSelector((state) => effectiveBlueprint(state));
   // View providers register at any point after mount, and a provider's
   // model announcements (a contrib view's own liveness) fan through
   // the registry — both re-read here on announcement. Subscribing to the

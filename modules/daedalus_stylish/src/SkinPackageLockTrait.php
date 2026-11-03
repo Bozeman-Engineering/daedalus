@@ -12,7 +12,7 @@ use Drupal\daedalus_blueprint\Result\BlueprintError;
  * A skin's package layer (tokens, defaults) is what a module ships and
  * the payload sync hashes: on a consuming site the disk is its one author,
  * so a blueprint-lane write addressing it refuses while the distro lock
- * holds (DistroLock), exactly as the variant, swatch and animation
+ * holds (DistroLock), exactly as the variant, animation and font
  * handlers refuse theirs. The site's own changes to a shipped skin live in
  * the site layer (site_tokens, site_defaults), written by the token
  * operations and update_default, so nothing a consuming site does is lost

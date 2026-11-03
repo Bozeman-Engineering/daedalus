@@ -46,6 +46,10 @@ class NestedSectionDeliveryTest extends NestedStorageKernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
+    // Importing daedalus_stylish's config saves its settings, a law change
+    // that recompiles the variants file over these storages.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
     // Live renders only: no editing permission, demand-driven stamping.

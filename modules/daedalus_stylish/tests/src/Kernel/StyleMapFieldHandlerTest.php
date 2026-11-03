@@ -45,6 +45,7 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -76,22 +77,16 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('daedalus_variant');
     // The guidance reads the materials roster, whose daedalus_stylish provider
-    // queries the swatch and skin storages too.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // queries the animation, font and skin storages too.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-* and var() references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -163,7 +158,7 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
   public function testStructuralValidation(): void {
     $result = $this->deserialize([
       'bogus:123' => ['default' => []],
-      "container:{$this->uuid}::.two .classes" => ['default' => []],
+      "container:{$this->uuid}::>" => ['default' => []],
       "block:{$this->uuid}" => 'not-an-entry',
       // The dead single-reference grammar gets its own corrective error.
       "entity:{$this->uuid}" => ['variant' => 'cta_bold', 'default' => []],
@@ -173,7 +168,7 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     $prefix = 'fields.' . DaedalusStylishFieldManager::FIELD_NAME;
     $codes = $this->errorCodes($result);
     $this->assertSame(['INVALID_STYLE_KEY'], $codes["$prefix.bogus:123"]);
-    $this->assertSame(['INVALID_STYLE_KEY'], $codes["$prefix.container:{$this->uuid}::.two .classes"]);
+    $this->assertSame(['INVALID_STYLE_KEY'], $codes["$prefix.container:{$this->uuid}::>"]);
     $this->assertSame(['INVALID_STYLE_ENTRY'], $codes["$prefix.block:{$this->uuid}"]);
     $this->assertSame(['INVALID_STYLE_ENTRY'], $codes["$prefix.entity:{$this->uuid}.variant"]);
     $this->assertSame(['INVALID_STYLE_CONDITION'], $codes["$prefix.field:{$this->uuid}:field_body.Hover!"]);
@@ -424,8 +419,30 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
       'block_plugins.fancy_menu' => 'font-size at most 1.5rem',
       'block_plugins.fancy_menu::.menu-item' => 'font-size at most 1.25rem',
       'layouts.layout_twocol_section' => $padding . '; max-width at most 90rem',
-      'layouts.layout_twocol_section::.band-content' => 'max-width at most 80rem',
+      'layouts.layout_twocol_section::.section-content' => 'max-width at most 80rem',
     ], $guide['deviations']);
+
+    // The seam: the dialect catalog carries the same value spaces as data
+    // (the site-wide bindings, the deviations keyed by address print),
+    // handed over on the build event from the one derivation
+    // (VocabularyValueSpaces) this fragment prints from, and the one prose
+    // generator renders them to these very lines; the brief and this door
+    // cannot drift apart.
+    $catalog = $this->container->get('daedalus_blueprint.dialect_catalog_builder')->build();
+    $prose = $catalog->vocabularyProse();
+    $this->assertSame($this->container->get('daedalus_stylish.style_guide')->constraintDefaults(), $catalog->bindings());
+    $this->assertSame($guide['bindings'], $prose->bindingLines($catalog->bindings()));
+    $this->assertSame([
+      'kind:container',
+      'block_type:testimonial',
+      'block_type:testimonial::.testimonial__quote',
+      'block_plugin:fancy_menu',
+      'block_plugin:fancy_menu::.menu-item',
+      'layout:layout_twocol_section',
+      'layout:layout_twocol_section::.section-content',
+    ], array_keys($catalog->deviations()));
+    $this->assertSame(array_values($guide['deviations']), array_values($prose->deviationLines($catalog->deviations(), $catalog->bindings())));
+    $this->assertSame(['max-width' => ['max' => '80rem']], $catalog->deviations()['layout:layout_twocol_section::.section-content']);
 
     // language: the preference order with the mint gate (MaterialsProse,
     // the one source the cached styling pointer shares; minting is never
@@ -528,8 +545,8 @@ class StyleMapFieldHandlerTest extends KernelTestBase {
     $this->assertStringContainsString('font-size', $entries['block_types.testimonial']);
     $this->assertStringContainsString('font-size', $entries['block_types.testimonial::.testimonial__quote']);
     $this->assertStringContainsString('max-width', $entries['layouts.layout_twocol_section']);
-    $this->assertStringContainsString('max-width', $entries['layouts.layout_twocol_section::.band-content']);
-    $this->assertArrayHasKey('layouts.layout_twocol_section::.band-content > *', $entries);
+    $this->assertStringContainsString('max-width', $entries['layouts.layout_twocol_section::.section-content']);
+    $this->assertArrayHasKey('layouts.layout_twocol_section::.section-content > *', $entries);
     $this->assertArrayNotHasKey('layouts.layout_onecol', $entries, 'A layout restating the container kind is omitted.');
 
     // Constraint law still reads from bindings + deviations, same lines

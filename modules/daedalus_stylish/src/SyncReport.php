@@ -10,7 +10,7 @@ use Drupal\daedalus_blueprint\DesignSystem\ShipReport;
  * What one sync of shipped definitions did, per module and machine name.
  *
  * ShippedDefinitionsImporter::sync() returns one, stamped with the kind it
- * synced (variant, skin, swatch, animation): every definition it read
+ * synced (variant, skin): every definition it read
  * gets an outcome (created, updated, unchanged, kept), and every definition
  * or file it could not take gets FAILED plus the structured errors that
  * refused it. A failure never stops the run: the next definition in the
@@ -22,8 +22,12 @@ use Drupal\daedalus_blueprint\DesignSystem\ShipReport;
  * A module that packages a design system is DEFERRED as a whole while its
  * system is not the active one (its definitions are not read, let alone
  * validated): they land at the system's activation, under its own law.
- * A deferral is neither an outcome nor a failure; it is recorded per
- * module with the system it waits for.
+ * A kind the default theme gates (skins) is deferred for every module
+ * shipping it while system.theme names a theme that is not installed:
+ * it lands when the theme does. A deferral is neither an outcome nor a
+ * failure; it is recorded per module with what it waits for, the design
+ * system (defer()) or the default theme (deferForTheme()), each read by
+ * its own getter so the command prints each wait in its own sentence.
  *
  * Every consumer speaks this one report: the sync command prints it and
  * exits non-zero on failures, update hooks fail the update on failures,
@@ -44,7 +48,7 @@ final class SyncReport {
   ) {}
 
   /**
-   * The kind synced: 'variant', 'skin', 'swatch', or 'animation'.
+   * The kind synced: 'variant' or 'skin'.
    */
   public function kind(): string {
     return $this->kind;
@@ -87,10 +91,40 @@ final class SyncReport {
    * The deferred modules, keyed by module: the design system each awaits.
    *
    * @return array<string, string>
-   *   Empty when every module in the set was read.
+   *   Empty when no module in the set waits for its system.
    */
   public function deferred(): array {
     return $this->deferred;
+  }
+
+  /**
+   * The modules deferred for the default theme, keyed by module: the theme.
+   *
+   * @var array<string, string>
+   */
+  protected array $deferredForTheme = [];
+
+  /**
+   * Records a module's deferral: this kind waits for the default theme.
+   *
+   * @param string $module
+   *   The module shipping the kind.
+   * @param string $theme
+   *   The default theme system.theme names, not installed yet; its landing
+   *   syncs the kind.
+   */
+  public function deferForTheme(string $module, string $theme): void {
+    $this->deferredForTheme[$module] = $theme;
+  }
+
+  /**
+   * The modules deferred for the default theme, keyed by module: the theme.
+   *
+   * @return array<string, string>
+   *   Empty when the kind waits for no theme.
+   */
+  public function deferredForTheme(): array {
+    return $this->deferredForTheme;
   }
 
   /**
@@ -172,7 +206,7 @@ final class SyncReport {
    * Whether the sync saw nothing at all: no file read, no module deferred.
    */
   public function isEmpty(): bool {
-    return $this->outcomes === [] && $this->deferred === [];
+    return $this->outcomes === [] && $this->deferred === [] && $this->deferredForTheme === [];
   }
 
   /**

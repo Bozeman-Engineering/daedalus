@@ -3,10 +3,10 @@ import { spaceClosed, valueSpaceFor } from '../../value-space.js';
 import { colorFace, literalSettle } from '../../color-field-model.js';
 import { useColorLane } from '../../native-picker.js';
 import { useMintRow } from '../../mint-row.js';
-import { useSwatchWell } from './swatch-well.js';
+import { useTokenWell } from './token-well.js';
 
 /**
- * The color well: one swatch well over a color property's value space,
+ * The color well: one token well over a color property's value space,
  * with the color lane and the mint row wired beneath it.
  *
  * The assembly every color-bearing basic widget mounts (text_color over
@@ -30,16 +30,16 @@ import { useSwatchWell } from './swatch-well.js';
  *   color chooser over the property's value: the hidden picker's input
  *   events stage the draft (the well repaints its literal face live and
  *   the canvas previews, no commit), and its change event settles
- *   through the literal settle rule (literalSettle: a swatch's own hex
- *   captures the swatch) as the explicit replacement a stop pick is.
+ *   through the literal settle rule (literalSettle: a token's own hex
+ *   captures the token) as the explicit replacement a stop pick is.
  *   Offered exactly while the property's space is OPEN (value-space.js
  *   spaceClosed): a closed space commits stops only, which the grid
  *   already offers.
- * - Save-as-swatch is the popover's mint row (mint-row.js useMintRow)
+ * - Save-as-token is the popover's mint row (mint-row.js useMintRow)
  *   under the gate the color field uses (mintOffered: the grant, an
  *   open space, a literal worn); the minted reference settles through
  *   the same pick door a stop takes.
- * - The well and its popover (swatch-well.js useSwatchWell) carry the
+ * - The well and its popover (token-well.js useTokenWell) carry the
  *   consumer's lanes AFTER the color lane, and the mint row beneath.
  *
  * Every write leaves through ONE door, `onPick(stop, appended)`: a grid
@@ -76,7 +76,7 @@ import { useSwatchWell } from './swatch-well.js';
  *   a settled literal's preview spelling.
  * @param {Function} options.state
  *   Called with the color stop table; returns the well's mapped state
- *   ({selected, custom, value, ...}, useSwatchWell's `state`).
+ *   ({selected, custom, value, ...}, useTokenWell's `state`).
  * @param {Array} [options.stops]
  *   The consumer's own stops, appended after the color stops.
  * @param {Function} options.onPick
@@ -86,11 +86,11 @@ import { useSwatchWell } from './swatch-well.js';
  * @param {Array} [options.lanes]
  *   The consumer's lanes, after the color lane.
  * @param {boolean} [options.canMint]
- *   The save-as-swatch grant.
+ *   The save-as-token grant.
  * @param {?object} [options.source]
  *   The state source the mint commits through (required with canMint).
  * @param {boolean} [options.disabled]
- *   useSwatchWell's inert posture (the write address withholds the
+ *   useTokenWell's inert posture (the write address withholds the
  *   property), `disabledTitle` its reason; the color lane's picker
  *   closes with it.
  * @param {?string} [options.disabledTitle]
@@ -168,7 +168,7 @@ export const useColorWell = ({
     source,
     onSettle: (reference) => onPick({ value: reference }, false),
   });
-  const { well, popover } = useSwatchWell({
+  const { well, popover } = useTokenWell({
     stops: [...colorStops, ...stops],
     state: mapped,
     custom: mapped.custom ? mapped.value : null,

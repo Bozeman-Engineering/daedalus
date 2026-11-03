@@ -8,6 +8,7 @@ import {
   projectionIndex,
   projectionRoot,
 } from '../components/page-elements/projection-index';
+import { effectiveBlueprint } from '../blueprint/effective-blueprint';
 import {
   getDragSource,
   beginExternalDrag,
@@ -164,10 +165,11 @@ const nearestGapIndex = (gaps, near) => {
 
 /**
  * Watches the store while lifted: a selection change (the user clicked
- * elsewhere), a mode change (Edit Mode left), or a blueprint
- * replacement (a mutation re-rendered the page — the enumerated gaps are
- * stale) cancels the lift. Unsubscribed BEFORE a drop commits, so the
- * drop's own mutation never reads as a cancel.
+ * elsewhere), a mode change (Edit Mode left), or an effective-blueprint
+ * change (a mutation re-rendered the page, or a composed edit drafted its
+ * markup — the enumerated gaps are stale) cancels the lift. Unsubscribed
+ * BEFORE a drop commits, so the drop's own mutation never reads as a
+ * cancel.
  */
 let unwatch = null;
 
@@ -175,7 +177,7 @@ const watchStore = () => {
   const snapshot = (state) => ({
     selectedKey: state.selection.selectedKey,
     mode: state.mode.mode,
-    blueprint: state.blueprint.blueprint,
+    blueprint: effectiveBlueprint(state),
   });
   let previous = snapshot(store.getState());
   unwatch = store.subscribe(() => {

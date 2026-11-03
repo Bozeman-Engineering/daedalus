@@ -1,18 +1,30 @@
-import { parseKey } from './style-guide.js';
+import { conditionForPseudoClass, parseKey } from './style-guide.js';
 import { parseSlotKey, rootKindForScope, fragmentStyles } from './slot-key.js';
 import { cascadeOrder } from './condition-cascade.js';
+import {
+  CONTAINER,
+  PSEUDO,
+  UNKNOWN,
+  clausePosable,
+  clauseStamp,
+  parseCompound,
+} from '../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
 import { CLAIMS_CONTENT_ATTRIBUTE } from '../../../daedalus_ui/js/edit_mode/blueprint/element-resolver.js';
 import {
+  ANCHOR_KIND,
   CHILD,
   DESCENDANT,
   HAS,
+  IS,
   NEXT,
+  NOT,
   SUBSEQUENT,
   SUFFIX,
   TYPE,
   UNIVERSAL,
   isPartFirst,
   parseSelector,
+  printQualifier,
   splitKey,
   typeSelector,
   under as rebase,
@@ -30,18 +42,18 @@ import {
  * one printer and you change both.
  *
  * The condition wrapper table is not duplicated here: it arrives in the
- * style guide payload (guide.conditions, each {label, wrapper, axis,
- * fact?}) straight from the server's ConditionTypePluginManager, live
+ * style guide payload (guide.conditions, each {label, wrapper, axis})
+ * straight from the server's ConditionTypePluginManager, live
  * thresholds included, so the two printers dispatch on the same data.
  * Compound "a+b" condition keys compose their parts' wrappers exactly like
- * the server (a posable state as an :is() with the force-state dual, a
- * structural fact bare). Like the PHP printer this is
+ * the server (a state as an :is() with the force-state dual). Like the
+ * PHP printer this is
  * an emit gate — the text lands inside a <style> element, so unsafe pieces
  * are dropped, never emitted.
  */
 
-// The underscore is a legal CSS ident character, present in custom property
-// names derived from machine names (--swatch-brand_red); this is a charset
+// The underscore is a legal CSS ident character, present in a theme's own
+// custom property names (--my_theme-accent); this is a charset
 // hygiene gate, not a vocabulary check. Mirrors CssPrinter.php's
 // printDeclarations() gate, byte for byte.
 const PROPERTY_PATTERN = /^-{0,2}[A-Za-z][A-Za-z0-9_-]*$/;
@@ -140,7 +152,10 @@ export const donutLimit = (selector) => {
   if (!isPartFirst(selector)) {
     return null;
   }
-  const rest = parseSelector(selector).compounds.slice(1);
+  // The part stands first, or right behind the qualified anchor (the
+  // owner itself, no level of its own).
+  const { compounds } = parseSelector(selector);
+  const rest = compounds.slice(compounds[0].kind === ANCHOR_KIND ? 2 : 1);
   if (rest.some((compound) => compound.combinator !== CHILD)) {
     return null;
   }
@@ -187,24 +202,73 @@ const renderCombinator = (compound) =>
     : ` ${COMBINATOR_SYMBOLS[compound.combinator]} `;
 
 /**
- * Prints a compound's qualifiers, each at zero weight (CssPrinter mirror):
- * every argument compound inside :where(), the argument's combinators
- * bare, its lead glued to its space. The server printer owns the
- * rationale.
+ * The force-state dual of a posable state (CssPrinter::forceStateDual
+ * mirror): the pseudo-class OR the editor's data-force-state stamp, so
+ * the stored styles render under a pose without the real interaction,
+ * at the pseudo-class's own weight. The ONE spelling behind the
+ * condition suffix on an entry's target (printEntry) and a pseudo-class
+ * qualifier at its compound (renderQualifiers). The server printer owns
+ * the rationale; the texts must stay byte-identical.
  */
-const renderQualifiers = (compound) =>
+const forceStateDual = (wrapper, condition) =>
+  `:is(${wrapper}, [data-force-state~="${condition}"])`;
+
+/**
+ * Prints a compound's qualifiers, each at its compound and at zero weight
+ * (CssPrinter mirror): every `:has()` / `:not()` argument compound inside
+ * :where(), the argument's combinators bare, its lead glued to its space;
+ * every other qualifier inside its own :where() in the grammar's
+ * canonical spelling (`:where(.active)`, `:where([aria-expanded="true"])`,
+ * `:where(:first-child)`, `:not(:where(:last-child))`), a pseudo-class
+ * spelling a published state as the force-state dual inside the :where()
+ * (`:where(:is(:hover, [data-force-state~="hover"]))`), any other
+ * pseudo-class bare; an `:is()` inside its own :where() with its members
+ * bare inside it, each by the same rules (`:where(:is(:is(:focus-within,
+ * […]), :is(:hover, […])))`, `*:where(:is(h1, h2))`). Inside such a
+ * member (`inWhere`) nothing wraps: the one :where() has zeroed it all.
+ * The server printer owns the rationale.
+ */
+const renderQualifiers = (compound, conditions, inWhere = false) =>
   compound.qualifiers
-    .map((qualifier) =>
-      qualifier.name === HAS
-        ? `:has(${renderArgument(qualifier.argument)})`
-        : `:not(${renderCompound(qualifier.argument, false)})`,
-    )
+    .map((qualifier) => {
+      if (qualifier.name === HAS) {
+        return `:has(${renderArgument(qualifier.argument, conditions, inWhere)})`;
+      }
+      if (qualifier.name === NOT) {
+        return `:not(${renderCompound(qualifier.argument, false, conditions, inWhere)})`;
+      }
+      return inWhere
+        ? renderQualifier(qualifier, conditions)
+        : `:where(${renderQualifier(qualifier, conditions)})`;
+    })
     .join('');
 
 /**
- * Prints a `:has()` argument: its lead, then each compound in :where().
+ * The zero-weight print's inside for one qualifier that is no `:has()` or
+ * `:not()` (CssPrinter::renderQualifier mirror): `:is()` over its members
+ * printed bare inside the :where(), the force-state dual for a posable
+ * state, else the grammar's own spelling. Only a bare pseudo-class can
+ * spell a state: a class and an attribute carry their argument, and so
+ * does the nth family.
  */
-const renderArgument = (compounds) => {
+const renderQualifier = (qualifier, conditions) => {
+  if (qualifier.name === IS) {
+    return `:is(${qualifier.argument.map((member) => renderCompound(member, true, conditions, true)).join(', ')})`;
+  }
+  if (qualifier.argument === null) {
+    const condition = conditionForPseudoClass(conditions, qualifier.name);
+    if (condition !== null) {
+      return forceStateDual(`:${qualifier.name}`, condition);
+    }
+  }
+  return printQualifier(qualifier);
+};
+
+/**
+ * Prints a `:has()` argument: its lead, then each compound in :where()
+ * (bare inside an `:is()` member, `inWhere`).
+ */
+const renderArgument = (compounds, conditions, inWhere = false) => {
   const lead =
     compounds[0].combinator === DESCENDANT
       ? ''
@@ -212,7 +276,7 @@ const renderArgument = (compounds) => {
   return compounds
     .map(
       (compound, i) =>
-        `${i === 0 ? lead : renderCombinator(compound)}${renderCompound(compound, false)}`,
+        `${i === 0 ? lead : renderCombinator(compound)}${renderCompound(compound, false, conditions, inWhere)}`,
     )
     .join('');
 };
@@ -220,29 +284,48 @@ const renderArgument = (compounds) => {
 /**
  * Prints one compound: its subject, bare when it carries the weight, else
  * in :where(), then its qualifiers. `*` prints bare (it weighs nothing);
- * an implied subject (inside `:not()`) prints nothing.
+ * an implied subject (inside `:not()` or an `:is()` member) prints
+ * nothing; the qualified anchor is the scoping root (`:scope`). Inside a
+ * :where() already (`inWhere`: an `:is()` member and everything it holds)
+ * the subject prints bare and the qualifiers unwrapped.
  */
-const renderCompound = (compound, bare) => {
+const renderCompound = (compound, bare, conditions, inWhere = false) => {
   if (compound.kind === null) {
-    return renderQualifiers(compound);
+    return renderQualifiers(compound, conditions, inWhere);
   }
   if (compound.kind === UNIVERSAL) {
-    return `*${renderQualifiers(compound)}`;
+    return `*${renderQualifiers(compound, conditions, inWhere)}`;
   }
-  const printed =
-    compound.kind === TYPE ? typeSelector(compound.name) : compound.name;
-  return `${bare ? printed : `:where(${printed})`}${renderQualifiers(compound)}`;
+  let printed = compound.name;
+  if (compound.kind === TYPE) {
+    printed = typeSelector(compound.name);
+  } else if (compound.kind === ANCHOR_KIND) {
+    printed = ':scope';
+  }
+  return `${bare || inWhere ? printed : `:where(${printed})`}${renderQualifiers(compound, conditions, inWhere)}`;
+};
+
+/**
+ * The `:scope` link of a chain (CssPrinter::scopeLink mirror): bare when
+ * it carries the weight, else inside :where(); the qualified anchor's
+ * print when the owner stands first, the plain scoping root otherwise.
+ */
+const scopeLink = (compounds, bare, conditions) => {
+  if (compounds[0].kind === ANCHOR_KIND) {
+    return renderCompound(compounds[0], bare, conditions);
+  }
+  return bare ? ':scope' : ':where(:scope)';
 };
 
 /**
  * Prints the chain from one compound on, each behind its combinator.
  */
-const renderTail = (compounds, carrier, from) =>
+const renderTail = (compounds, carrier, from, conditions) =>
   compounds
     .map((compound, i) =>
       i < from
         ? ''
-        : `${renderCombinator(compound)}${renderCompound(compound, i === carrier)}`,
+        : `${renderCombinator(compound)}${renderCompound(compound, i === carrier, conditions)}`,
     )
     .join('');
 
@@ -261,7 +344,14 @@ const renderTail = (compounds, carrier, from) =>
  * on the last weighted compound; the dual is skipped when the part's next
  * compound is a sibling, the scope root having no sibling inside itself).
  * A sibling combinator prints like `>`; a compound's qualifiers print on
- * it at zero weight (renderQualifiers). A terminal pseudo-element glues
+ * it at zero weight (renderQualifiers: a class, an attribute, a position
+ * or a pseudo-class each inside its own :where(), a published state as
+ * the force-state dual). The qualified anchor
+ * (`&:first-child`, `&:not(:last-child) > *`) is the owner standing
+ * first: it prints as the `:scope` link itself with its qualifiers glued
+ * on, bare or in :where() by the same discipline, and a part behind it
+ * keeps its hoisted dual on the anchor's print
+ * (`:scope:where(:first-child).quote`). A terminal pseudo-element glues
  * onto every target after the last compound's qualifiers (the part dual
  * on both halves), the owner's anchor (`&::before`) being the scoping
  * root's own box (`:scope::before`); :where() cannot wrap a
@@ -273,12 +363,16 @@ const renderTail = (compounds, carrier, from) =>
  *
  * @param {?string} selector
  *   The key's canonical relative selector, or null for the root.
+ * @param {object} conditions
+ *   The condition table (guide.conditions): a pseudo-class qualifier that
+ *   spells one of its states prints the force-state dual. Without a table
+ *   no pseudo-class is a published state and every one prints bare.
  *
  * @return {string[]}
  */
-export const scopeTargets = (selector) => {
+export const scopeTargets = (selector, conditions = {}) => {
   const pseudo = pseudoTail(selector);
-  return hostTargets(selector).map((host) => `${host}${pseudo}`);
+  return hostTargets(selector, conditions).map((host) => `${host}${pseudo}`);
 };
 
 /**
@@ -302,10 +396,12 @@ const pseudoTail = (selector) => {
  *
  * @param {?string} selector
  *   The key's canonical relative selector, or null for the root.
+ * @param {object} conditions
+ *   The condition table, as scopeTargets takes it.
  *
  * @return {string[]}
  */
-export const hostTargets = (selector) => {
+export const hostTargets = (selector, conditions = {}) => {
   if (selector === null) {
     return [':scope'];
   }
@@ -314,20 +410,24 @@ export const hostTargets = (selector) => {
     return [':scope'];
   }
   const carrier = lastWeighted(compounds, 0);
+  // A descendant-led chain, or the qualified anchor (which prints as the
+  // :scope link, renderCompound).
   const main = compounds[0].combinator === CHILD
-    ? `${carrier === -1 ? ':scope' : ':where(:scope)'}${renderTail(compounds, carrier, 0)}`
-    : `${renderCompound(compounds[0], carrier === 0)}${renderTail(compounds, carrier, 1)}`;
+    ? `${scopeLink(compounds, carrier === -1, conditions)}${renderTail(compounds, carrier, 0, conditions)}`
+    : `${renderCompound(compounds[0], carrier === 0, conditions)}${renderTail(compounds, carrier, 1, conditions)}`;
   if (!isPartFirst(selector)) {
     return [main];
   }
-  if (compounds.length === 1) {
-    return [`:scope${compounds[0].name}${renderQualifiers(compounds[0])}`, main];
+  // The part stands first, or right behind the qualified anchor.
+  const part = compounds[0].kind === ANCHOR_KIND ? 1 : 0;
+  if (compounds.length === part + 1) {
+    return [`${scopeLink(compounds, true, conditions)}${compounds[part].name}${renderQualifiers(compounds[part], conditions)}`, main];
   }
-  if (isSibling(compounds[1])) {
+  if (isSibling(compounds[part + 1])) {
     return [main];
   }
-  const restCarrier = lastWeighted(compounds, 1);
-  const dual = `${restCarrier === -1 ? ':scope' : ':where(:scope)'}:where(${compounds[0].name})${renderQualifiers(compounds[0])}${renderTail(compounds, restCarrier, 1)}`;
+  const restCarrier = lastWeighted(compounds, part + 1);
+  const dual = `${scopeLink(compounds, restCarrier === -1, conditions)}:where(${compounds[part].name})${renderQualifiers(compounds[part], conditions)}${renderTail(compounds, restCarrier, part + 1, conditions)}`;
   return [dual, main];
 };
 
@@ -432,7 +532,7 @@ const holdsAnimation = (properties) => {
  *   The @scope prelude selector, e.g. '[data-selectable="block:{uuid}"]'.
  * @param {?string} selector
  *   The key's canonical relative selector ('.quote', 'p', '> *',
- *   '> pb-text .link', '&::before', '> pb-text::after'), or null when
+ *   '> d-text .link', '&::before', '> d-text::after'), or null when
  *   the entry styles the scope root itself. Its targets are
  *   scopeTargets()'s, the condition suffixes composed on the hosts
  *   before the pseudo-element.
@@ -454,7 +554,7 @@ export const printEntry = (
   conditions,
   scopeLimit = null,
 ) => {
-  const targets = hostTargets(selector);
+  const targets = hostTargets(selector, conditions);
   // The terminal pseudo-element prints LAST on every target: after the
   // condition suffixes (the state holds on the host) and after the
   // hold's :not() (the runtime stamps the host); nothing composes behind
@@ -481,32 +581,31 @@ export const printEntry = (
       return;
     }
     // "default" applies unconditionally; every other condition key — a
-    // single condition or an "a+b" compound — maps each part to a wrapper
-    // from the guide payload and COMPOSES them: pseudo-class suffixes
-    // append to the target selector, at-rules nest around the rule in part
-    // order (outermost first). A key with any unknown part prints nothing —
-    // same emit-gate posture as the PHP printer.
+    // single clause or an "a+b" compound — reads through the clause
+    // grammar (condition-clause.js over the guide payload's table) and
+    // COMPOSES its clauses' CSS: a pseudo-class clause appends to the
+    // target selector, an at-rule clause nests around the rule in clause
+    // order (outermost first); a reference prints its published wrapper,
+    // a literal its own canonical text. A key with any unknown clause
+    // prints nothing — same emit-gate posture as the PHP printer.
     let suffixes = '';
     const atRules = [];
     if (condition !== 'default') {
       let unknown = false;
-      condition.split('+').forEach((part) => {
-        const wrapper = conditions?.[part]?.wrapper ?? null;
-        if (wrapper === null) {
+      parseCompound(condition, conditions ?? {}).forEach((clause) => {
+        if (clause.kind === UNKNOWN) {
           unknown = true;
-        } else if (wrapper.startsWith(':')) {
-          // A structural fact (fact: true, ':first-child') prints bare:
-          // nothing the editor does can force it. Every other pseudo-class
-          // condition also matches the editor's forced state
-          // (data-force-state, the inspector's DevTools-style :hov) — see
-          // the PHP printer for the full rationale; the texts must stay
-          // byte-identical.
-          suffixes +=
-            conditions?.[part]?.fact === true
-              ? wrapper
-              : `:is(${wrapper}, [data-force-state~="${part}"])`;
+        } else if (clause.form === PSEUDO) {
+          // A pseudo-class clause is a state (position is selector
+          // grammar, printed at its compound): a posable one prints the
+          // force-state dual with the word the stamp carries, an
+          // unposable one bare (forceStateDual; the PHP printer owns the
+          // rationale, the texts must stay byte-identical).
+          suffixes += clausePosable(clause)
+            ? forceStateDual(clause.css, clauseStamp(clause))
+            : clause.css;
         } else {
-          atRules.push(wrapper);
+          atRules.push(clause.css);
         }
       });
       if (unknown) {
@@ -758,12 +857,11 @@ export const mapUsesContainerConditions = (map, conditions) =>
       if (condition === 'variants') {
         return false;
       }
-      // Compound-aware, like the server: "narrow+dark" uses containers.
-      return condition
-        .split('+')
-        .some((part) =>
-          (conditions?.[part]?.wrapper ?? '').startsWith('@container'),
-        );
+      // Compound-aware, like the server: "narrow+dark" uses containers,
+      // and so does a literal container clause.
+      return parseCompound(condition, conditions ?? {}).some(
+        (clause) => clause.form === CONTAINER,
+      );
     });
   });
 

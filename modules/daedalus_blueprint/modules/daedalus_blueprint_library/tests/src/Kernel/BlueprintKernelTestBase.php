@@ -92,7 +92,11 @@ abstract class BlueprintKernelTestBase extends KernelTestBase {
     // field ship as the module's install config.
     $this->installEntitySchema('blueprint');
     $this->installSchema('layout_builder', ['inline_block_usage']);
-    $this->installConfig(['filter', 'block_content', 'image', 'file', 'media', 'daedalus_blueprint_library']);
+    // daedalus_blueprint.settings ships the AI context budget that
+    // MaterialsBudget reads on every gesture that shares (a capture, an
+    // update turning offered on); without the config the
+    // reading throws the run-the-updates LogicException.
+    $this->installConfig(['filter', 'block_content', 'image', 'file', 'media', 'daedalus_blueprint', 'daedalus_blueprint_library']);
     $this->setUpCurrentUser([], static::$permissions, TRUE);
 
     $this->createBlockContentType('basic');
@@ -142,7 +146,7 @@ abstract class BlueprintKernelTestBase extends KernelTestBase {
    * @param bool $with_roster
    *   TRUE to carry the live materials roster (the blueprints saved so
    *   far), rebuilt from storage, so a fragment can spell blueprint="" or
-   *   <pb-blueprint name=""> against it.
+   *   <d-blueprint name=""> against it.
    */
   protected function dialectOptions(bool $with_roster = FALSE): array {
     $roster = NULL;

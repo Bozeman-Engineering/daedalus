@@ -42,6 +42,7 @@ class DaedalusStylishVariantTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -73,10 +74,7 @@ class DaedalusStylishVariantTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('daedalus_variant');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->uuid = $this->container->get('uuid')->generate();
@@ -513,8 +511,8 @@ class DaedalusStylishVariantTest extends KernelTestBase {
   public function testFragmentReferenceValidation(): void {
     $validator = $this->container->get('daedalus_stylish.style_map_validator');
     $comp = DaedalusStylishVariant::create([
-      'label' => 'Hero band',
-      'machine_name' => 'hero_band',
+      'label' => 'Hero section',
+      'machine_name' => 'hero_section',
       'scope' => 'layout:layout_twocol_section',
     ]);
     $comp->setStyles([
@@ -527,26 +525,26 @@ class DaedalusStylishVariantTest extends KernelTestBase {
 
     // A bound fragment reference is a pure lookup key: it validates on any
     // carrier with no scope match against the carrying element.
-    $ref = ['variant' => 'hero_band', 'fragment' => 'block(testimonial,1)'];
+    $ref = ['variant' => 'hero_section', 'fragment' => 'block(testimonial,1)'];
     $this->assertSame([], $validator->validate([$block_key => ['variants' => [$ref]]]));
 
     // A fragment the variant no longer holds is valid but inert.
     $this->assertSame([], $validator->validate([
-      $block_key => ['variants' => [['variant' => 'hero_band', 'fragment' => 'block(testimonial,2)']]],
+      $block_key => ['variants' => [['variant' => 'hero_section', 'fragment' => 'block(testimonial,2)']]],
     ]));
 
     // The "" fragment is the variant root: it validates as a direct
     // wearing, scope match included.
     $this->assertSame([], $validator->validate([
-      $section_key => ['variants' => [['variant' => 'hero_band', 'fragment' => '']]],
+      $section_key => ['variants' => [['variant' => 'hero_section', 'fragment' => '']]],
     ]));
-    $errors = $validator->validate([$block_key => ['variants' => [['variant' => 'hero_band', 'fragment' => '']]]]);
+    $errors = $validator->validate([$block_key => ['variants' => [['variant' => 'hero_section', 'fragment' => '']]]]);
     $this->assertSame('STYLE_VARIANT_SCOPE_MISMATCH', $errors[0]->getCode());
 
     // The fragment must parse against the variant scope's root kind:
     // container roots open at their children, never fields.
     $errors = $validator->validate([
-      $block_key => ['variants' => [['variant' => 'hero_band', 'fragment' => 'field(field_quote)']]],
+      $block_key => ['variants' => [['variant' => 'hero_section', 'fragment' => 'field(field_quote)']]],
     ]);
     $this->assertCount(1, $errors);
     $this->assertSame('INVALID_STYLE_FRAGMENT', $errors[0]->getCode());
@@ -565,10 +563,10 @@ class DaedalusStylishVariantTest extends KernelTestBase {
     // One shape, no shorthand: exactly {"variant", "fragment"}, both
     // strings, the variant non-empty.
     $malformed = [
-      ['variant' => 'hero_band'],
-      ['variant' => 'hero_band', 'fragment' => '', 'extra' => TRUE],
+      ['variant' => 'hero_section'],
+      ['variant' => 'hero_section', 'fragment' => '', 'extra' => TRUE],
       ['variant' => '', 'fragment' => ''],
-      ['variant' => 'hero_band', 'fragment' => 5],
+      ['variant' => 'hero_section', 'fragment' => 5],
       ['fragment' => ''],
     ];
     foreach ($malformed as $reference) {
@@ -593,29 +591,29 @@ class DaedalusStylishVariantTest extends KernelTestBase {
     ]));
     // Same kind, same axis: two fragment references conflict exactly as
     // two root references do.
-    $band_two = DaedalusStylishVariant::create([
-      'label' => 'Band two',
-      'machine_name' => 'band_two',
+    $section_two = DaedalusStylishVariant::create([
+      'label' => 'Section two',
+      'machine_name' => 'section_two',
       'scope' => 'layout:layout_twocol_section',
     ]);
-    $band_two->setStyles(['block(testimonial,1)' => ['default' => ['font-size' => '2rem']]]);
-    $band_two->save();
+    $section_two->setStyles(['block(testimonial,1)' => ['default' => ['font-size' => '2rem']]]);
+    $section_two->save();
     $errors = $validator->validate([
-      $block_key => ['variants' => [$ref, ['variant' => 'band_two', 'fragment' => 'block(testimonial,1)']]],
+      $block_key => ['variants' => [$ref, ['variant' => 'section_two', 'fragment' => 'block(testimonial,1)']]],
     ]);
     $this->assertCount(1, $errors);
     $this->assertSame('STYLE_VARIANT_AXIS_CONFLICT', $errors[0]->getCode());
     $this->assertSame("$block_key.variants.1", $errors[0]->getPath());
     $this->assertSame('style', $errors[0]->getContext()['axis']);
-    $this->assertSame('hero_band', $errors[0]->getContext()['conflicting_reference']);
+    $this->assertSame('hero_section', $errors[0]->getContext()['conflicting_reference']);
 
     // An element wears at most one fragment of a variant: the duplicate
     // rule keys on the variant regardless of fragment.
     $errors = $validator->validate([
       $section_key => [
         'variants' => [
-          ['variant' => 'hero_band', 'fragment' => ''],
-          ['variant' => 'hero_band', 'fragment' => 'block(testimonial,1)'],
+          ['variant' => 'hero_section', 'fragment' => ''],
+          ['variant' => 'hero_section', 'fragment' => 'block(testimonial,1)'],
         ],
       ],
     ]);

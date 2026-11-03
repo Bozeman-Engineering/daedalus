@@ -50,9 +50,6 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -65,12 +62,12 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
     $cases = [
       'container:x' => 'container:x',
       'container:x::>' => 'container:x::> *',
-      'container:x::.band::>' => 'container:x::.band > *',
+      'container:x::.section::>' => 'container:x::.section > *',
       'container:x::ul::>' => 'container:x::ul > *',
       'container:x::> *' => 'container:x::> *',
-      'container:x::.band > *' => 'container:x::.band > *',
+      'container:x::.section > *' => 'container:x::.section > *',
       'container:x::>*' => 'container:x::> *',
-      'container:x::.band  >  *' => 'container:x::.band > *',
+      'container:x::.section  >  *' => 'container:x::.section > *',
       'container(1)::>' => 'container(1)::> *',
       '::>' => '::> *',
       '::.s-a1::>' => '::.s-a1 > *',
@@ -132,9 +129,9 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
         'default' => ['padding-top' => '5rem'],
       ],
       "container:$uuid::>" => ['default' => ['min-width' => '0']],
-      "container:$uuid::.band::>" => ['default' => ['flex-grow' => '1'], 'narrow' => ['flex-grow' => '0']],
+      "container:$uuid::.section::>" => ['default' => ['flex-grow' => '1'], 'narrow' => ['flex-grow' => '0']],
       "container:$uuid::p" => ['default' => ['color' => 'red']],
-      "container:$uuid::> pb-text" => ['default' => ['color' => 'blue']],
+      "container:$uuid::> d-text" => ['default' => ['color' => 'blue']],
     ]);
 
     $this->walkHosts();
@@ -142,12 +139,12 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
     $this->assertSame([
       "container:$uuid",
       "container:$uuid::> *",
-      "container:$uuid::.band > *",
+      "container:$uuid::.section > *",
       "container:$uuid::p",
-      "container:$uuid::> pb-text",
+      "container:$uuid::> d-text",
     ], array_keys($map));
     $this->assertSame(['default' => ['min-width' => '0']], $map["container:$uuid::> *"]);
-    $this->assertSame(['default' => ['flex-grow' => '1'], 'narrow' => ['flex-grow' => '0']], $map["container:$uuid::.band > *"]);
+    $this->assertSame(['default' => ['flex-grow' => '1'], 'narrow' => ['flex-grow' => '0']], $map["container:$uuid::.section > *"]);
     $this->assertSame('container(1)::> *', $map["container:$uuid"]['variants'][1]['fragment']);
 
     // Idempotence: a second walk changes nothing.
@@ -176,8 +173,8 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
    */
   public function testVariantsConverge(): void {
     $variant = DaedalusStylishVariant::create([
-      'label' => 'My band',
-      'machine_name' => 'my_band',
+      'label' => 'My section',
+      'machine_name' => 'my_section',
       'scope' => 'kind:container',
       'axis' => 'style',
       'status' => TRUE,
@@ -185,12 +182,12 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
     $variant->setStyles([
       '' => ['default' => ['background-color' => 'aliceblue']],
       '::>' => ['default' => ['min-width' => '0']],
-      'container(1)::.band::>' => ['default' => ['gap' => '1rem']],
+      'container(1)::.section::>' => ['default' => ['gap' => '1rem']],
       'block(text,1)' => ['variants' => [['variant' => 'pull', 'fragment' => '::>']]],
     ]);
     $variant->save();
     $first_revision_id = $variant->getRevisionId();
-    $variant->setStyles(['::.band::>' => ['default' => ['padding-top' => '6rem']]]);
+    $variant->setStyles(['::.section::>' => ['default' => ['padding-top' => '6rem']]]);
     $variant->setNewRevision(TRUE);
     $variant->save();
 
@@ -211,13 +208,13 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
     $storage = $this->entityTypeManager->getStorage('daedalus_variant');
     $storage->resetCache();
 
-    $this->assertSame(['::.band > *' => ['default' => ['padding-top' => '6rem']]], $storage->loadUnchanged($variant->id())->getStyles());
+    $this->assertSame(['::.section > *' => ['default' => ['padding-top' => '6rem']]], $storage->loadUnchanged($variant->id())->getStyles());
     /** @var \Drupal\daedalus_stylish\DaedalusStylishVariantInterface $first */
     $first = $storage->loadRevision($first_revision_id);
     $this->assertSame([
       '' => ['default' => ['background-color' => 'aliceblue']],
       '::> *' => ['default' => ['min-width' => '0']],
-      'container(1)::.band > *' => ['default' => ['gap' => '1rem']],
+      'container(1)::.section > *' => ['default' => ['gap' => '1rem']],
       'block(text,1)' => ['variants' => [['variant' => 'pull', 'fragment' => '::> *']]],
     ], $first->getStyles());
 
@@ -238,7 +235,7 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
       'kind:container' => [
         '' => ['default' => ['background-color' => 'white']],
         '::>' => ['default' => ['min-width' => '0']],
-        '::.band::>' => ['default' => ['flex' => '1']],
+        '::.section::>' => ['default' => ['flex' => '1']],
       ],
       'base:h2' => ['' => ['default' => ['font-size' => '2rem']]],
     ]);
@@ -246,6 +243,8 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
 
     $shipped_data = [
       'tokens' => [],
+      'animations' => [],
+      'fonts' => [],
       'defaults' => ['kind:container' => ['::>' => ['default' => ['max-width' => '90rem']]]],
     ];
     $shipped = DaedalusStylishSkin::create(['label' => 'Shipped', 'machine_name' => 'shipped_skin', 'status' => TRUE]);
@@ -262,7 +261,7 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
       'kind:container' => [
         '' => ['default' => ['background-color' => 'white']],
         '::> *' => ['default' => ['min-width' => '0']],
-        '::.band > *' => ['default' => ['flex' => '1']],
+        '::.section > *' => ['default' => ['flex' => '1']],
       ],
       'base:h2' => ['' => ['default' => ['font-size' => '2rem']]],
     ], $storage->loadUnchanged($skin->id())->packageDefaults());

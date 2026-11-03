@@ -65,9 +65,9 @@ class PageReadTest extends BlueprintKernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     // The real blueprint provider teaches the blueprint gesture here; the
-    // fixture keeps its swatch gesture only (two providers teaching one
+    // fixture keeps its token gesture only (two providers teaching one
     // kind is refused by the roster builder).
-    TestMaterialsProvider::$gestureLines = [MaterialKind::Swatch->value => 'value'];
+    TestMaterialsProvider::$gestureLines = [MaterialKind::Token->value => 'value'];
     $this->enableLayoutBuilder();
     $this->installEntitySchema('file');
     $this->installSchema('file', ['file_usage']);
@@ -76,7 +76,7 @@ class PageReadTest extends BlueprintKernelTestBase {
     $this->installConfig(['image', 'file', 'media', 'daedalus_blueprint_library']);
 
     // A declared text block type: tag (list_string) and a plain body, so
-    // the print carries <pb-text tag="h2">...</pb-text>.
+    // the print carries <d-text tag="h2">...</d-text>.
     $this->createBlockContentType('text', 'Text');
     $this->createBlockField('field_text_tag', 'list_string', 'text', ['allowed_values' => ['h2' => 'h2', 'h3' => 'h3']]);
     $this->createBlockField('field_text_text', 'string_long', 'text');
@@ -158,8 +158,8 @@ class PageReadTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString("\n  name: 'Fielded page'\n", $output);
     $this->assertStringContainsString("\n  field_subtitle: 'A subtitle'\n", $output);
     $this->assertStringContainsString("\n  field_count: '3'\n", $output);
-    $this->assertMatchesRegularExpression('/^fields:\n(  .*\n)+<pb-container>\n/', $output, 'The block ends where the document begins.');
-    $this->assertStringEndsWith("</pb-container>\n", $output);
+    $this->assertMatchesRegularExpression('/^fields:\n(  .*\n)+<d-container>\n/', $output, 'The block ends where the document begins.');
+    $this->assertStringEndsWith("</d-container>\n", $output);
     $this->assertSame(1, substr_count($output, 'fields:'), 'One block; the fields do not ride inside the print.');
   }
 
@@ -190,7 +190,7 @@ class PageReadTest extends BlueprintKernelTestBase {
    * A placed field block reads as the field it names, never a plugin id.
    *
    * Core stores the placement as field_block:{type}:{bundle}:{field}; the
-   * read spells <pb-block field="name"/>, the one spelling page_create
+   * read spells <d-block field="name"/>, the one spelling page_create
    * takes back on any bundle that has the field.
    */
   public function testFieldBlockReadsAsItsField(): void {
@@ -211,7 +211,7 @@ class PageReadTest extends BlueprintKernelTestBase {
     $output = $this->read(['entity_type' => 'entity_test', 'entity_id' => (string) $page->id()]);
 
     $this->assertStringNotContainsString('Error', $output);
-    $this->assertMatchesRegularExpression('/<pb-block id="' . preg_quote($uuid, '/') . '"( data-can="[^"]*")? field="name" \/>/', $output);
+    $this->assertMatchesRegularExpression('/<d-block id="' . preg_quote($uuid, '/') . '"( data-can="[^"]*")? field="name" \/>/', $output);
     $this->assertStringNotContainsString('plugin=', $output);
     $this->assertStringNotContainsString('field_block:', $output);
   }
@@ -249,17 +249,17 @@ class PageReadTest extends BlueprintKernelTestBase {
     $this->assertStringNotContainsString('Error', $output);
     $this->assertStringStartsWith("fields:\n", $output, 'The fields block still heads the read.');
     $this->assertMatchesRegularExpression('/^fields:\n(  .*\n)+Reading notes:\n- /', $output, 'The reading notes follow the fields and head the document.');
-    $this->assertStringContainsString("\n- A <pb-container> carrying data-layout is a section on that layout rather than the container: its children print directly under it, data-regions lists its regions and each child's data-region names the one it sits in. An insert or move into such a section names the region as at: {ref, position, region}; afterbegin or beforeend on it without a region is refused (REGION_REQUIRED), a region anywhere else is refused too (REGION_NOT_APPLICABLE), and nothing creates such a section.\n", $output, 'The layout sentence teaches the region address and both refusals.');
-    $this->assertStringContainsString("\n- data-unprinted names fields the element holds that the page language cannot spell: a set on the element keeps them, a replace rebuilds the element and loses them.\n\n<pb-container", $output, 'The unprinted-field sentence closes the notes; a blank line separates them from the document.');
+    $this->assertStringContainsString("\n- A <d-container> carrying data-layout is a section on that layout rather than the container: its children print directly under it, data-regions lists its regions and each child's data-region names the one it sits in. An insert or move into such a section names the region as at: {ref, position, region}; afterbegin or beforeend on it without a region is refused (REGION_REQUIRED), a region anywhere else is refused too (REGION_NOT_APPLICABLE), and nothing creates such a section.\n", $output, 'The layout sentence teaches the region address and both refusals.');
+    $this->assertStringContainsString("\n- data-unprinted names fields the element holds that the page language cannot spell: a set on the element keeps them, a replace rebuilds the element and loses them.\n\n<d-container", $output, 'The unprinted-field sentence closes the notes; a blank line separates them from the document.');
     $this->assertStringNotContainsString('data-partial names', $output, 'No partial field, no partial-field sentence.');
     $this->assertStringNotContainsString('/* comment */', $output, 'No style gap, no unprinted-style sentence.');
     $this->assertSame(1, substr_count($output, 'Reading notes:'), 'The notes head the print once.');
     $this->assertSame(1, substr_count($output, 'at: {ref, position, region}'));
-    $this->assertMatchesRegularExpression('/\n\n<pb-container( id="[^"]*")?( data-can="[^"]*")? data-layout="layout_twocol_section" data-regions="first second">\n/', $output, 'The section carries its layout and region names as facts.');
-    $this->assertMatchesRegularExpression('/\n  <pb-block id="' . preg_quote($card_uuid, '/') . '"( data-can="[^"]*")? data-region="first" data-unprinted="field_card_items" type="card" \/>\n/', $output, 'The undeclared block names its unspellable field and its region.');
-    $this->assertMatchesRegularExpression('/\n  <pb-text id="' . preg_quote($right_uuid, '/') . '"( data-can="[^"]*")? data-region="second" tag="h2">Right<\/pb-text>\n/', $output, 'The declared block in the second region prints as itself, its region a fact.');
+    $this->assertMatchesRegularExpression('/\n\n<d-container( id="[^"]*")?( data-can="[^"]*")? data-layout="layout_twocol_section" data-regions="first second">\n/', $output, 'The section carries its layout and region names as facts.');
+    $this->assertMatchesRegularExpression('/\n  <d-block id="' . preg_quote($card_uuid, '/') . '"( data-can="[^"]*")? data-region="first" data-unprinted="field_card_items" type="card" \/>\n/', $output, 'The undeclared block names its unspellable field and its region.');
+    $this->assertMatchesRegularExpression('/\n  <d-text id="' . preg_quote($right_uuid, '/') . '"( data-can="[^"]*")? data-region="second" tag="h2">Right<\/d-text>\n/', $output, 'The declared block in the second region prints as itself, its region a fact.');
     $this->assertStringNotContainsString('Plans', $output, 'The unspellable value is named, never printed.');
-    $this->assertStringEndsWith("</pb-container>\n", $output);
+    $this->assertStringEndsWith("</d-container>\n", $output);
   }
 
   /**
@@ -289,10 +289,10 @@ class PageReadTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString("\n  subject_type: entity_test\n", $output);
     $this->assertStringContainsString("\n  subject_bundle: entity_test\n", $output);
     $this->assertStringNotContainsString('layout_builder__layout', $output, 'The document is printed, never carried as a field.');
-    $this->assertStringContainsString("\n<pb-container name=\"Card\">\n", $output);
-    $this->assertMatchesRegularExpression('/<pb-text id="[0-9a-f-]{36}" tag="h2">Card title<\/pb-text>/', $output, 'The body prints with ids: it is edited in place.');
-    $this->assertMatchesRegularExpression('/<pb-text id="[0-9a-f-]{36}">Read more &amp; learn<\/pb-text>/', $output);
-    $this->assertStringEndsWith("</pb-container>\n", $output);
+    $this->assertStringContainsString("\n<d-container name=\"Card\">\n", $output);
+    $this->assertMatchesRegularExpression('/<d-text id="[0-9a-f-]{36}" tag="h2">Card title<\/d-text>/', $output, 'The body prints with ids: it is edited in place.');
+    $this->assertMatchesRegularExpression('/<d-text id="[0-9a-f-]{36}">Read more &amp; learn<\/d-text>/', $output);
+    $this->assertStringEndsWith("</d-container>\n", $output);
     $this->assertStringNotContainsString('<style>', $output);
 
     // The record carries the same document as an id-less fragment (the

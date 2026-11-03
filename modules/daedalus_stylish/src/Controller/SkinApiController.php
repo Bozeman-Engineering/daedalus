@@ -6,7 +6,7 @@ namespace Drupal\daedalus_stylish\Controller;
 
 use Drupal\daedalus_blueprint\Materials\MaterialsChangeSet;
 use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
-use Drupal\daedalus_stylish\DefaultsStylesheet;
+use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\daedalus_stylish\Exception\SkinValidationException;
 use Drupal\daedalus_stylish\SkinManager;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -45,7 +45,7 @@ final class SkinApiController extends GestureApiControllerBase {
 
   public function __construct(
     private readonly SkinManager $skinManager,
-    private readonly DefaultsStylesheet $defaultsStylesheet,
+    private readonly SkinStylesheet $defaultsStylesheet,
     MaterialsChangeSet $materialsChangeSet,
   ) {
     parent::__construct($materialsChangeSet);
@@ -57,7 +57,7 @@ final class SkinApiController extends GestureApiControllerBase {
   public static function create(ContainerInterface $container): static {
     return new static(
       $container->get('daedalus_stylish.skin_manager'),
-      $container->get('daedalus_stylish.defaults_stylesheet'),
+      $container->get('daedalus_stylish.skin_stylesheet'),
       $container->get('daedalus_blueprint.materials_change_set'),
     );
   }
@@ -82,7 +82,7 @@ final class SkinApiController extends GestureApiControllerBase {
    * skin's defaults as stored, the merge of both layers, exactly the
    * guide payload's skinDefaults (ClientStyleGuide: the inspector's
    * provenance source, which a push of update_default ops rewrites);
-   * `css` is the defaults stylesheet's current text (DefaultsStylesheet::
+   * `css` is the defaults stylesheet's current text (SkinStylesheet::
    * css(): the declared tier, the skin's tokens and its defaults, what
    * the compiled file holds, or inside a workspace the staged revision's
    * print the page inlines), which the client stamps on the canvas so

@@ -207,8 +207,8 @@ class BlueprintEndpointTest extends BrowserTestBase {
     $uuid = $this->container->get('uuid')->generate();
     $styled = $this->createStyledHost($uuid, [
       "container:$uuid" => ['default' => ['color' => 'red'], 'hover' => ['color' => 'blue']],
-      "container:$uuid::> pb-text" => ['default' => ['gap' => '1rem']],
-      "container:$uuid::> pb-text .link" => ['default' => ['padding' => '0']],
+      "container:$uuid::> d-text" => ['default' => ['gap' => '1rem']],
+      "container:$uuid::> d-text .link" => ['default' => ['padding' => '0']],
       "container:$uuid::> *" => ['default' => ['margin' => '0']],
     ]);
     $styled_base = '/daedalus-blueprint/entity_test/' . $styled->id();
@@ -222,18 +222,18 @@ class BlueprintEndpointTest extends BrowserTestBase {
       "  /* Section: Welcome */\n"
       . "  #$uuid { color: red; }\n"
       . "  #$uuid:hover { color: blue; }\n"
-      . "  #$uuid > pb-text { gap: 1rem; }\n"
-      . "  #$uuid > pb-text .link { padding: 0; }\n"
+      . "  #$uuid > d-text { gap: 1rem; }\n"
+      . "  #$uuid > d-text .link { padding: 0; }\n"
       . "  #$uuid > * { margin: 0; }\n",
       (string) $response->getBody(),
     );
 
-    $response = $this->getCss($styled_base, ['mode' => 'css', 'uuid' => $uuid, 'selector' => '> pb-text']);
+    $response = $this->getCss($styled_base, ['mode' => 'css', 'uuid' => $uuid, 'selector' => '> d-text']);
     $this->assertSame(200, $response->getStatusCode());
     $this->assertSame(
       "  /* Section: Welcome */\n"
-      . "  #$uuid > pb-text { gap: 1rem; }\n"
-      . "  #$uuid > pb-text .link { padding: 0; }\n",
+      . "  #$uuid > d-text { gap: 1rem; }\n"
+      . "  #$uuid > d-text .link { padding: 0; }\n",
       (string) $response->getBody(),
     );
   }
@@ -281,11 +281,15 @@ class BlueprintEndpointTest extends BrowserTestBase {
       ['key' => "container:$uuid::> *", 'condition' => 'default', 'properties' => ['margin' => '0']],
     ], $payload['entries']);
 
-    $response = $this->postOperations(['key' => "container:$uuid", 'css' => "color: blue;\n&:sparkle { color: green; }"], $token, $url);
+    // A refusal the digester owns structurally (a functional pseudo-element
+    // addresses nothing here); vocabulary (`&:sparkle`) parses at the door
+    // and is the validator's to refuse at the write.
+    $response = $this->postOperations(['key' => "container:$uuid", 'css' => "color: blue;\n&::part(label) { color: green; }"], $token, $url);
     $this->assertSame(200, $response->getStatusCode());
     $payload = json_decode((string) $response->getBody(), TRUE);
-    $this->assertSame('UNKNOWN_STATE', $payload['errors'][0]['code']);
+    $this->assertSame('BAD_SELECTOR', $payload['errors'][0]['code']);
     $this->assertSame(2, $payload['errors'][0]['context']['line']);
+    $this->assertStringStartsWith('Style a pseudo-element by its bare name', $payload['errors'][0]['hint']);
     $this->assertSame([['key' => "container:$uuid", 'condition' => 'default', 'properties' => ['color' => 'blue']]], $payload['entries']);
 
     \Drupal::entityTypeManager()->getStorage('entity_test')->resetCache([$styled->id()]);

@@ -160,7 +160,7 @@ test('childCount: element children only, chrome excluded', () => {
 test('childCount: box-less elements never count as child boxes', () => {
   // The entity root as the canvas renders it: daedalus_stylish's inline stylesheet
   // beside the layout root. A grid gap ignores the style tag, so the
-  // counter must too, or a one-band page would open the gap gate.
+  // counter must too, or a one-section page would open the gap gate.
   const entity = el({
     childNodes: [
       el({ tag: 'style', attrs: { 'data-daedalus-stylish-entity': '' }, childNodes: [text('.x { gap: 1rem }')] }),
@@ -186,16 +186,16 @@ test('childCount: box-less elements never count as child boxes', () => {
 test('selfFacts: partChildCount counts each declared part\'s OWN child boxes', () => {
   // The page as the canvas renders it: the entity root holds daedalus_stylish's
   // inline stylesheet beside the layout root, the layout root holds the
-  // bands (and, mid-drag, the placeholder). The entity root's own count
-  // is 1 (the wrapper); the bound part's is the band count, the fact the
+  // sections (and, mid-drag, the placeholder). The entity root's own count
+  // is 1 (the wrapper); the bound part's is the section count, the fact the
   // page's Gap gate reads. Chrome and box-less children are skipped
   // exactly as childCount skips them.
-  const page = (bands) => {
+  const page = (sections) => {
     const layoutRoot = el({
       classes: ['daedalus-layout-layout'],
       childNodes: [
         el({ classes: ['daedalus-ui-drop-placeholder'] }),
-        ...bands.map((id) => el({ tag: 'section', attrs: { 'data-selectable': `container:${id}` } })),
+        ...sections.map((id) => el({ tag: 'section', attrs: { 'data-selectable': `container:${id}` } })),
       ],
     });
     return el({
@@ -209,7 +209,7 @@ test('selfFacts: partChildCount counts each declared part\'s OWN child boxes', (
   const two = selfFacts(page(['s1', 's2']), page([]).computed, { '.daedalus-layout-layout': true }, ['.daedalus-layout-layout']);
   assert.equal(two.childCount, 1);
   assert.deepEqual(two.partChildCount, { '.daedalus-layout-layout': 2 });
-  // A one-band page: the wrapper's own one child, never climbed through
+  // A one-section page: the wrapper's own one child, never climbed through
   // to the entity root or resolved through a flow container.
   const one = selfFacts(page(['s1']), page([]).computed, { '.daedalus-layout-layout': true }, ['.daedalus-layout-layout']);
   assert.deepEqual(one.partChildCount, { '.daedalus-layout-layout': 1 });
@@ -224,7 +224,7 @@ test('selfFacts: partChildCount counts each declared part\'s OWN child boxes', (
 test('selfFacts: partChildCount reads the part\'s FIRST match, the placeholder read\'s rule', () => {
   // A block with two fields, each wearing the field shell: the first
   // .field__items in document order answers, as the canvas placeholder
-  // read and the bands' first match do.
+  // read and the sections' first match do.
   const block = el({
     attrs: { 'data-selectable': 'block:aaaa' },
     childNodes: [
@@ -271,7 +271,7 @@ test('hasTextNode: a stylesheet or script body is not page text', () => {
   });
   assert.equal(hasTextNode(entity), false);
   // Real text beside the style tag still counts.
-  entity.childNodes.push(el({ childNodes: [text('Band copy')] }));
+  entity.childNodes.push(el({ childNodes: [text('Section copy')] }));
   assert.equal(hasTextNode(entity), true);
 });
 

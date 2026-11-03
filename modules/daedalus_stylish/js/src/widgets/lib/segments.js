@@ -6,7 +6,7 @@ import { h } from 'preact';
  * Renders ONLY the input surface: the label line and the row's mark are
  * the row's (choice-row.js). For a small CLOSED vocabulary
  * only (alignment, a spacing scale): an open vocabulary like the palette
- * belongs behind the swatch well (swatch-well.js), where the enumeration
+ * belongs behind the token well (token-well.js), where the enumeration
  * lives in a popover instead of the row. Segment semantics:
  * - Clicking the lit stop toggles it OFF (onPick(null) = unset). It never
  *   rewrites an alias to the canonical value — the honesty rule's "never

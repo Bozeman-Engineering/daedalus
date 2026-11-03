@@ -63,3 +63,12 @@ entity:
     # overriding with NULL.
     title:
       element: false
+    # label is a blueprint's palette name (daedalus_blueprint_library's
+    # Blueprint entity): form-only metadata with no view display options
+    # and no canvas render, so nothing answers to its key when a blueprint
+    # is edited in isolation. The same shape as title: the root row
+    # presents and renames it (edit_target), so the declaration removes the
+    # field's own row without vetoing the root rule. Same caveat as title:
+    # any root entity type with a field named "label" is covered.
+    label:
+      element: false

@@ -3,7 +3,7 @@
  * Label order: the one order every set of the Add panel shows.
  *
  * Natural and case-insensitive, as core already sorts the block
- * categories' labels (strnatcasecmp): "Band 2" before "Band 10",
+ * categories' labels (strnatcasecmp): "Section 2" before "Section 10",
  * "image" beside "Image". Inside Favorites, inside each group, inside
  * each kind under All, and in a search's answer. Nothing is ordered by
  * hand and nothing carries a weight: at a hundred blueprints a

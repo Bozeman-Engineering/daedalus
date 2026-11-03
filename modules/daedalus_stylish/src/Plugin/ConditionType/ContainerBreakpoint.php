@@ -67,12 +67,10 @@ final class ContainerBreakpoint extends ConditionTypeBase implements ContainerFa
       'narrow' => [
         'label' => $this->t('Narrow'),
         'wrapper' => sprintf('@container (max-width: %dpx)', $narrow),
-        'band' => ['max' => $narrow],
       ],
       'medium' => [
         'label' => $this->t('Medium'),
         'wrapper' => sprintf('@container (min-width: %dpx) and (max-width: %dpx)', $narrow + 1, $medium),
-        'band' => ['min' => $narrow + 1, 'max' => $medium],
       ],
     ];
   }

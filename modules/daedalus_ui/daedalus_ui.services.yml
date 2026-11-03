@@ -124,6 +124,11 @@ services:
       - '@file.upload_handler'
       - '@file_system'
       - '@entity_type.manager'
+      # The lane canonicalises every filename itself (core's full posture,
+      # independent of file.settings): the transliteration in the content
+      # language is the one step that needs a service.
+      - '@transliteration'
+      - '@language_manager'
   Drupal\daedalus_ui\File\FileLane: '@daedalus_ui.file_lane'
 
   # Upload-time SVG sanitizer: rewrites SVG uploads in place during file
@@ -226,7 +231,7 @@ services:
   # this instance renders — matched root form, present parts, hoisted
   # classes, slot claims. Pure and deterministic: no DOM, no Twig, no
   # queries; every consumer of instance markup (the generative renderer,
-  # blueprint annotation, the AI projection) resolves through here.
+  # blueprint annotation, the AI's render cards) resolves through here.
   daedalus_ui.element_resolver:
     class: Drupal\daedalus_ui\ElementModel\ElementResolver
   Drupal\daedalus_ui\ElementModel\ElementResolver: '@daedalus_ui.element_resolver'
@@ -275,34 +280,13 @@ services:
   daedalus_ui.event_subscriber.blueprint_element_annotations:
     class: Drupal\daedalus_ui\EventSubscriber\BlueprintElementAnnotations
 
-  # The HTML print format of the element model, plugged into
-  # daedalus_blueprint's markup-projection socket: the annotated blueprint's
-  # `_element.markup` trees printed as key-annotated HTML for the AI read
-  # boundary. The spine owns the seam; this module owns the model, so the
-  # dependency points here → daedalus_blueprint, never back.
-  daedalus_ui.html_projector:
-    class: Drupal\daedalus_ui\ElementModel\HtmlProjector
-    tags:
-      - { name: daedalus_blueprint.markup_projector }
-  Drupal\daedalus_ui\ElementModel\HtmlProjector: '@daedalus_ui.html_projector'
-
-  # The schema anatomy's auto-rendered example markup (the readers are
-  # small models, which follow concrete examples over abstract grammar):
-  # sample data
-  # (field_sample_value when installed, bare entities otherwise) through
-  # the element resolver, printed by the HTML projector. Never
-  # hand-written, so the examples cannot drift from the render.
-  daedalus_ui.anatomy_examples:
-    class: Drupal\daedalus_ui\ElementModel\AnatomyExamples
-    arguments:
-      - '@daedalus_ui.page_builder_declarations'
-      - '@daedalus_ui.element_resolver'
-      - '@daedalus_ui.element_model'
-      - '@daedalus_ui.html_projector'
-      - '@entity_type.manager'
-      - '@entity_type.bundle.info'
-      - '@?field_sample_value.generator'
-  Drupal\daedalus_ui\ElementModel\AnatomyExamples: '@daedalus_ui.anatomy_examples'
+  # The render cards: what each dialect element renders as (dialect writes
+  # paired with the resolved HTML each renders as), derived from the
+  # layered declarations and contributed to the dialect catalog on its
+  # build event. The AI's one read of the markup model; the cached prompt
+  # and the schema print it from the catalog, never from here.
+  daedalus_ui.event_subscriber.element_cards:
+    class: Drupal\daedalus_ui\EventSubscriber\ElementCardsSubscriber
 
   daedalus_ui.outbound_path_processor:
     class: Drupal\daedalus_ui\PathProcessor\DaedalusUiOutboundPathProcessor

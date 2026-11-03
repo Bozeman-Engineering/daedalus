@@ -1,6 +1,6 @@
 import { parse as parseCss } from 'css-tree';
 import { WRAPPER, preludeParts } from './prelude.js';
-import { canonicalSelector } from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
+import { UNKNOWN_WRAPPER, digest } from '../../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
 
 /**
  * The paste door's pure half: text with structure, read through the spine.
@@ -22,11 +22,15 @@ import { canonicalSelector } from '../../../../daedalus_ui/js/edit_mode/material
  * Why csstree plus a brace scan: in the declarationList context csstree
  * reads `&:hover { }` as a Rule and `@wrapper { }` as an Atrule, but a
  * block whose prelude is not nesting sugar (`#id { }`, `.quote { }`,
- * `> pb-text { }`, `p { }`) becomes one Raw node that swallows every
- * declaration after it. The scan splits such a Raw at its first balanced
- * block when the prelude is a selector the grammar knows (a `#id` root or
- * a canonical relative selector), and the tail is read again, so the
- * declarations beside a pasted block stay declarations.
+ * `> d-text { }`, `p { }`) becomes one Raw node that swallows every
+ * declaration after it, and a block whose prelude carries a colon
+ * (`a:hover { }`, `li:hover > ul { }`) one Declaration (`a: hover { … }`)
+ * swallowing the same. The scan splits such a node at its first balanced
+ * block when the prelude is one the door can read (a `#id` root the door
+ * re-roots, or a prelude the digester reads: selector-digest.js digest,
+ * the one reader every door shares), and the tail is read again, so the
+ * declarations beside a pasted block stay declarations; a declaration's
+ * value never holds a `{`, so the brace is the tell.
  */
 
 /**
@@ -58,18 +62,25 @@ const closingBrace = (text, open) => {
 
 /**
  * Whether a prelude names a block the door can read: a copied `#id`
- * root, nesting sugar (`&…`, a leading `:`), or a relative selector in
- * the grammar's canonical reach (`> pb-text`, `.quote`, `p`).
+ * root (the door re-roots it), or a prelude the digester reads (nesting
+ * sugar, a relative selector, a list it folds into one `:is()` rule, a
+ * state on any compound, an `@wrapper`); an unpublished `@` prelude is
+ * a block too, since the door answers it with the corrective naming the
+ * published wrappers. Only the digester's refusal is read: the one
+ * selector it answers is the door's to land. The digester judges the
+ * shape alone here (no condition table): the door is the authority on
+ * what the block means.
  */
 const blockPrelude = (prelude) => {
   const text = prelude.trim();
   if (text === '' || text.includes(';')) {
     return false;
   }
-  if (ID_PRELUDE.test(text) || text.startsWith('&') || text.startsWith(':') || text.startsWith('@')) {
+  if (ID_PRELUDE.test(text)) {
     return true;
   }
-  return canonicalSelector(text) !== null;
+  const { refusal } = digest(text);
+  return refusal === null || refusal.code === UNKNOWN_WRAPPER;
 };
 
 /**
@@ -156,7 +167,10 @@ const chunksFrom = (text, base) => {
       if (chunk) {
         chunks.push({ ...chunk, from: chunk.from + base, to: chunk.to + base });
       }
-    } else if (node.type === 'Raw') {
+    } else if (
+      node.type === 'Raw' ||
+      (node.type === 'Declaration' && text.slice(node.loc.start.offset, node.loc.end.offset).includes('{'))
+    ) {
       const chunk = rawChunk(text, node.loc.start.offset, node.loc.end.offset);
       if (chunk) {
         chunks.push({ ...chunk, from: chunk.from + base, to: chunk.to + base });
@@ -293,7 +307,7 @@ export const entriesToOps = (entries = [], wear = []) => {
  * The document slot a returned entry stages at, for a document island
  * anchored at `mapKey` whose slot is `slot`: the island's own slot for
  * its own key, the slot continued by the entry's tail for a key the
- * paste nested under it (`::> pb-text` under an element key, ` > a`
+ * paste nested under it (`::> d-text` under an element key, ` > a`
  * under a rule key), null for a key outside the island (a stranger the
  * door rooted elsewhere; the caller refuses it).
  *

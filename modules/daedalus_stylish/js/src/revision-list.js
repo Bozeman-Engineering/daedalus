@@ -11,7 +11,7 @@ export const revisionDate = (created) =>
 /**
  * A material's revision history under its lifecycle card: one row per
  * revision as the revisions route lists them, the current one marked and
- * every other one a restore chip. The variant, swatch and animation cards
+ * every other one a restore chip. The variant and animation cards
  * wear this one face; each hands in its own `onRestore`, since confirming
  * a restore is the card's gesture (its usage read, its material's wording,
  * its API), and the list only offers the row.

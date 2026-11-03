@@ -22,7 +22,7 @@ namespace Drupal\daedalus_blueprint\Utility;
  *
  * The underscore prefix is the grammar's reserved vocabulary (see
  * StructuralValidator); a request carries no other keys. It is an op-time
- * word only: a whole blueprint (create_entity, a full update) carries
+ * word only: a whole blueprint (eb_create_entity, a full update) carries
  * values, and Phase A refuses the request there.
  */
 final class SampleRequest {

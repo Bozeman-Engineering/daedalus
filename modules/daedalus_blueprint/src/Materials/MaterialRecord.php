@@ -9,8 +9,8 @@ namespace Drupal\daedalus_blueprint\Materials;
  *
  * The typed record every material-facing surface projects from. Nothing
  * here is new data: each field already lives on some entity or file
- * (skin tokens, daedalus_swatch, daedalus_variant, blueprint,
- * daedalus_animation); the record is
+ * (skin tokens, animations and fonts, daedalus_variant, blueprint); the
+ * record is
  * the one shape those sources are read INTO, so the catalog, the cached
  * prompt, the schema, the validators, the client store and the delivery
  * CSS all read the same facts instead of walking the entities on their
@@ -19,22 +19,22 @@ namespace Drupal\daedalus_blueprint\Materials;
  *
  * Fields by kind (NULL / [] / '' where a kind has nothing to say):
  * - kind, id, label: every record. The id is the kind-local identity a
- *   consumer speaks (a swatch or variant machine name, a blueprint id, a
+ *   consumer speaks (a variant machine name, a blueprint id, a
  *   token's "{scale}/{name}" since token names repeat across scales).
  * - description: variants and blueprints (the when-to-reach-for-this
  *   text); '' elsewhere.
- * - value: tokens and swatches (a CSS string or a condition-keyed map
+ * - value: tokens (a CSS string or a condition-keyed map
  *   whose 'default' always applies); variants carry their element-relative
  *   style map (relative key => condition => property => value), which the
  *   client's layer math needs for live preview and no prompt or schema
  *   surface prints; NULL for blueprints, whose payload is a subtree.
  * - group: the kind-local grouping consumers sort under: a token's
- *   scale, a swatch's kind (color, gradient), a variant's axis, a
+ *   scale, a variant's axis, a
  *   blueprint's type (its bundle, the permission axis: section,
  *   site_chrome, or a type the site added).
  * - spellings: slot => the string that references this material in that
  *   slot (see the SLOT_* constants). Contributed by the provider, the
- *   one place that knows "--swatch-" or that a width-axis variant spells
+ *   one place that knows a scale's prefix or that a width-axis variant spells
  *   as an attribute; the value grammar is an index over these. An axis
  *   attribute slot carries the record's scope (attrSlot()), so the same
  *   attribute value on two scopes is two spellings, never a collision.
@@ -132,8 +132,9 @@ namespace Drupal\daedalus_blueprint\Materials;
  *   `favorite` key of its file envelope or its entity field): the
  *   default an offering surface lists under Favorites for everyone,
  *   over which each editor keeps their own marks. FALSE for every other
- *   kind. A listing fact and nothing else: no operation, fit or
- *   placement rule reads it. Delivered (toArray()), like groups.
+ *   kind. A listing fact and nothing else: no operation, fit,
+ *   placement rule or AI surface reads it (sharing is `offered`).
+ *   Delivered (toArray()), like groups.
  * - styles: blueprints, the definition's page-level (node-less) style
  *   entries: what the document says about ITS OWN root (the entity: and
  *   field: keys and their rule forms, NodeTreeBuilder::nodelessStyles()),
@@ -163,9 +164,9 @@ final class MaterialRecord {
   public const ORIGINS = [self::ORIGIN_SHIPPED, self::ORIGIN_USER, self::ORIGIN_AI];
 
   /**
-   * The style slot: a CSS declaration's value (tokens and swatches).
+   * The style slot: a CSS declaration's value (tokens).
    *
-   * The spelling is what a value writes: "var(--swatch-lime_green)".
+   * The spelling is what a value writes: "var(--color-accent)".
    */
   public const SLOT_STYLE = 'style';
 
@@ -239,7 +240,7 @@ final class MaterialRecord {
    * authored one, and never a depth verdict: the provider that writes it
    * knows nothing about axes; MaterialsRoster::applicable() resolves the
    * ids against the variant records in the same roster and calls the
-   * blueprint a page band when any of them is root-only.
+   * blueprint a section when any of them is root-only.
    */
   public const APPLIES_WEARS = 'wears';
 

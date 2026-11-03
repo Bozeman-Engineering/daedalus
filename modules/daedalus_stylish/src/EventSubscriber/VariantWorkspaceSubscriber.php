@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish\EventSubscriber;
 
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
-use Drupal\daedalus_stylish\VariantConformance;
 use Drupal\daedalus_stylish\VariantRepository;
 use Drupal\daedalus_stylish\VariantStylesheet;
 use Drupal\daedalus_stylish\VariantUsage;
@@ -16,7 +15,9 @@ use Drupal\daedalus_stylish\VariantUsage;
  * The variant instance of StylesheetWorkspaceSubscriberBase (which owns
  * the rationale): staged variant revisions land in the compiled variants
  * file, and the published hosts' variant references resync into the usage
- * table (VariantUsage::resyncHosts()).
+ * table (VariantUsage::resyncHosts()). The conformance verdict's request
+ * memo is not reset here: the base's roster reset cascades to the
+ * providers, and daedalus_stylish's forgets the verdict there.
  */
 final class VariantWorkspaceSubscriber extends StylesheetWorkspaceSubscriberBase {
 
@@ -25,9 +26,8 @@ final class VariantWorkspaceSubscriber extends StylesheetWorkspaceSubscriberBase
     protected VariantUsage $variantUsage,
     protected VariantRepository $variantRepository,
     MaterialsRosterBuilder $rosterBuilder,
-    protected VariantConformance $conformance,
   ) {
-    parent::__construct($variantStylesheet, $rosterBuilder);
+    parent::__construct($rosterBuilder, $variantStylesheet);
   }
 
   /**
@@ -42,9 +42,6 @@ final class VariantWorkspaceSubscriber extends StylesheetWorkspaceSubscriberBase
    */
   protected function resetRepository(): void {
     $this->variantRepository->reset();
-    // The verdict memoizes with the repository: the published revisions
-    // are judged afresh under the current law.
-    $this->conformance->reset();
   }
 
   /**

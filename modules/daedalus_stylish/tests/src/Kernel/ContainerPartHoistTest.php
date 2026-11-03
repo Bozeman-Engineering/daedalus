@@ -50,11 +50,8 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and every compile and validation builds it.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -140,8 +137,8 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
    */
   public function testVariantHoist(): void {
     $variant = DaedalusStylishVariant::create([
-      'label' => 'My band',
-      'machine_name' => 'my_band',
+      'label' => 'My section',
+      'machine_name' => 'my_section',
       'scope' => 'kind:container',
       'axis' => 'style',
       'status' => TRUE,
@@ -214,6 +211,8 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
 
     $shipped_data = [
       'tokens' => [],
+      'animations' => [],
+      'fonts' => [],
       'defaults' => ['kind:container' => [ContainerMigration::CONTAINER_PART => ['default' => ['max-width' => '90rem']]]],
     ];
     $shipped = DaedalusStylishSkin::create(['label' => 'Shipped', 'machine_name' => 'shipped_skin', 'status' => TRUE]);

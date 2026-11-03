@@ -6,7 +6,9 @@ namespace Drupal\Tests\daedalus_blueprint_library\Kernel;
 
 use Drupal\Core\Cache\Cache;
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
+use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
+use Drupal\daedalus_blueprint\Result\TargetType;
 use Drupal\daedalus_blueprint_library\BlueprintDiscovery;
 use Drupal\daedalus_blueprint_library\BlueprintManager;
 use Drupal\daedalus_blueprint_library\BlueprintOperationHandler;
@@ -14,6 +16,7 @@ use Drupal\daedalus_blueprint_library\Controller\BlueprintApiController;
 use Drupal\daedalus_blueprint_library\Entity\Blueprint;
 use Drupal\daedalus_blueprint_library\Exception\BlueprintGestureException;
 use Drupal\daedalus_layout\Controller\BlueprintSaveDialog;
+use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\VariantImporter;
@@ -56,17 +59,11 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
     // Variant references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
   }
@@ -199,7 +196,7 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
         'kind' => 'blueprint',
         'element' => $root_section,
         'label' => 'Aurora quote',
-        'description' => 'A styled band.',
+        'description' => 'A styled section.',
         'adopt_variants' => ['aurora_look'],
       ],
     ]);
@@ -216,7 +213,7 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
         'kind' => 'blueprint',
         'element' => $root_section,
         'label' => 'Plain quote',
-        'description' => 'A band for every system.',
+        'description' => 'A section for every system.',
         'adopt_variants' => ['plain_look'],
         'global' => TRUE,
       ],
@@ -277,21 +274,21 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
    */
   public function testUpdateBlueprintOpAdopts(): void {
     $this->createVariant('late_look');
-    $this->createOwningBlueprint('Band');
+    $this->createOwningBlueprint('Section');
     ['entity' => $entity, 'root_section' => $root_section] = $this->createHost();
 
     $result = $this->operations()->batchOperations($this->host($entity), [
       [
         'op' => 'update_material',
         'kind' => 'blueprint',
-        'id' => 'band',
+        'id' => 'section',
         'element' => $root_section,
         'adopt_variants' => ['late_look'],
       ],
     ]);
     $this->assertBatchSuccess($result);
 
-    $blueprint = $this->loadBlueprint('band');
+    $blueprint = $this->loadBlueprint('section');
     $this->assertSame((int) $blueprint->id(), (int) $this->loadVariant('late_look')->get('blueprint')->target_id);
   }
 
@@ -450,12 +447,12 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString('copy it as your own variant', $error->getHint());
 
     // At update: the same refusal rides the update lane.
-    $this->createOwningBlueprint('Band');
+    $this->createOwningBlueprint('Section');
     $result = $this->operations()->batchOperations($this->host($entity), [
       [
         'op' => 'update_material',
         'kind' => 'blueprint',
-        'id' => 'band',
+        'id' => 'section',
         'element' => $root_section,
         'adopt_variants' => ['shipped_offer'],
       ],
@@ -556,34 +553,34 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
    * The blueprint save op adopts through the spine, end to end.
    */
   public function testSaveBlueprintOpAdopts(): void {
-    $this->createVariant('band_look');
+    $this->createVariant('section_look');
     ['entity' => $entity, 'root_section' => $root_section] = $this->createHost();
 
     $result = $this->operations()->batchOperations($this->host($entity), [
-      ['op' => 'apply_variant', 'key' => "container:$root_section", 'variant' => 'band_look'],
+      ['op' => 'apply_variant', 'key' => "container:$root_section", 'variant' => 'section_look'],
       [
         'op' => 'save_material',
         'kind' => 'blueprint',
         'element' => $root_section,
-        'label' => 'Band',
-        'description' => 'A styled band.',
-        'adopt_variants' => ['band_look'],
+        'label' => 'Section',
+        'description' => 'A styled section.',
+        'adopt_variants' => ['section_look'],
       ],
     ]);
     $this->assertBatchSuccess($result);
 
-    $blueprint = $this->loadBlueprint('band');
-    $variant = $this->loadVariant('band_look');
+    $blueprint = $this->loadBlueprint('section');
+    $variant = $this->loadVariant('section_look');
     $this->assertSame((int) $blueprint->id(), (int) $variant->get('blueprint')->target_id);
     // The blueprint's own root wears the look it captured.
-    $this->assertSame([['variant' => 'band_look', 'fragment' => '']], $this->definitionOf($blueprint)[0]['styles']['']['variants']);
+    $this->assertSame([['variant' => 'section_look', 'fragment' => '']], $this->definitionOf($blueprint)[0]['styles']['']['variants']);
 
     // The variant payload annotates ownership for the picker's offering
     // filter; deleting the owner flips the annotation to orphaned (offered
     // nowhere; wearers keep rendering because delivery reads the styles,
     // never the owner).
     $payload = $this->container->get('daedalus_stylish.variant_manager')->variantPayload($variant);
-    $this->assertSame('band', $payload['blueprint']);
+    $this->assertSame('section', $payload['blueprint']);
     $this->assertFalse($payload['blueprint_orphaned']);
 
     $blueprint->delete();
@@ -593,6 +590,129 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     $payload = $this->container->get('daedalus_stylish.variant_manager')->variantPayload($variant);
     $this->assertNull($payload['blueprint']);
     $this->assertTrue($payload['blueprint_orphaned']);
+  }
+
+  /**
+   * A save stamps its source container as the blueprint's first placement.
+   *
+   * Kris's sequence: save a blueprint from a container, make a look from
+   * it, adopt the look through the update verb, apply the look where it
+   * was made. Before the stamp the last step refused
+   * (VARIANT_OWNED_BY_BLUEPRINT): the source carried no provenance, so
+   * neither the Update verb nor the owned-variant gate knew it as a
+   * placement. The gesture lane now writes the stamp through the spine
+   * (BlueprintManager keeps reading only), into the storage the element's
+   * depth uses (a top-level section's third-party settings, a nested
+   * container's wrapper component), and names the container as a target
+   * so the response re-renders it. A page-scope save has no placement root
+   * and stamps nothing; a push from an unstamped container stamps it, a
+   * push from a container another blueprint stamped leaves it alone.
+   */
+  public function testSaveStampsTheSource(): void {
+    ['entity' => $entity, 'root_section' => $root_section] = $this->createHost();
+    $nested = \Drupal::service('uuid')->generate();
+    $result = $this->operations()->batchOperations($this->host($entity), [
+      ['op' => 'add_section', 'location' => ['anchor' => $root_section, 'placement' => 'inside'], 'uuid' => $nested],
+    ]);
+    $this->assertBatchSuccess($result);
+    $stamp_of = fn (string $uuid): ?string => $this->operations()->getElement($this->host($entity), $uuid)['blueprint'] ?? NULL;
+    $this->assertNull($stamp_of($root_section));
+    $this->assertNull($stamp_of($nested));
+
+    // Top-level: the section's third-party settings carry the stamp, the
+    // spine reads it back, and the batch's targets name the container.
+    $result = $this->operations()->batchOperations($this->host($entity), [
+      [
+        'op' => 'save_material',
+        'kind' => 'blueprint',
+        'element' => $root_section,
+        'label' => 'Section',
+        'description' => 'A section.',
+      ],
+    ]);
+    $this->assertBatchSuccess($result);
+    $this->assertSame([['uuid' => $root_section, 'field_name' => TargetType::RESTRUCTURED]], $result->getTargets());
+    $this->assertSame('section', $entity->get('layout_builder__layout')->getSection(0)->getThirdPartySetting(BlueprintOperationHandler::PROVENANCE_KEY, 'blueprint'));
+    $this->assertSame('section', $stamp_of($root_section));
+    // The blueprint's own document is a definition, never a placement: the
+    // stamp lives on the page alone.
+    $this->assertArrayNotHasKey('blueprint', $this->definitionOf($this->loadBlueprint('section'))[0]);
+
+    // Nested: a container is a section at every depth, so the embedded
+    // section's third-party settings carry the stamp (add_section's own
+    // slot), bubbled into the wrapper component's configuration; the root's
+    // stamp stands (nested stamps shadow, they do not replace).
+    $result = $this->operations()->batchOperations($this->host($entity), [
+      [
+        'op' => 'save_material',
+        'kind' => 'blueprint',
+        'element' => $nested,
+        'label' => 'Inner section',
+        'description' => 'A nested section.',
+      ],
+    ]);
+    $this->assertBatchSuccess($result);
+    $this->assertSame([['uuid' => $nested, 'field_name' => TargetType::RESTRUCTURED]], $result->getTargets());
+    $wrapper = $entity->get('layout_builder__layout')->getSection(0)->getComponent($nested);
+    $this->assertSame('inner_section', SectionBlock::embeddedSection($wrapper)->getThirdPartySetting(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, 'blueprint'));
+    $this->assertSame('inner_section', $stamp_of($nested));
+    $this->assertSame('section', $stamp_of($root_section));
+
+    // Page scope: the whole document was captured; nothing is a placement.
+    $result = $this->operations()->batchOperations($this->host($entity), [
+      [
+        'op' => 'save_material',
+        'kind' => 'blueprint',
+        'element' => $entity->uuid(),
+        'label' => 'Whole page',
+        'description' => 'The document.',
+      ],
+    ]);
+    $this->assertBatchSuccess($result);
+    $this->assertSame([], $result->getTargets());
+    $this->assertSame('section', $stamp_of($root_section));
+    $this->assertSame('inner_section', $stamp_of($nested));
+
+    // Kris's step 6: a look adopted through the update verb applies on the
+    // container the blueprint was saved from. The push leaves the existing
+    // stamp alone and names no target.
+    $this->createVariant('big_look');
+    $result = $this->operations()->batchOperations($this->host($entity), [
+      [
+        'op' => 'update_material',
+        'kind' => 'blueprint',
+        'id' => 'section',
+        'element' => $root_section,
+        'adopt_variants' => ['big_look'],
+      ],
+    ]);
+    $this->assertBatchSuccess($result);
+    $this->assertSame([], $result->getTargets());
+    $this->assertSame((int) $this->loadBlueprint('section')->id(), (int) $this->loadVariant('big_look')->get('blueprint')->target_id);
+    $result = $this->operations()->batchOperations($this->host($entity), [
+      ['op' => 'apply_variant', 'key' => "container:$root_section", 'variant' => 'big_look'],
+    ]);
+    $this->assertBatchSuccess($result);
+    $map = json_decode((string) $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->value, TRUE);
+    $this->assertSame([['variant' => 'big_look', 'fragment' => '']], $map["container:$root_section"]['variants']);
+
+    // A push from an UNSTAMPED container stamps it as a placement of the
+    // pushed-into blueprint; a later push into another blueprint does not
+    // re-own it.
+    ['entity' => $other, 'root_section' => $other_root] = $this->createHost();
+    $result = $this->operations()->batchOperations($this->host($other), [
+      ['op' => 'update_material', 'kind' => 'blueprint', 'id' => 'section', 'element' => $other_root],
+    ]);
+    $this->assertBatchSuccess($result);
+    $this->assertSame([['uuid' => $other_root, 'field_name' => TargetType::RESTRUCTURED]], $result->getTargets());
+    $this->assertSame('section', $this->operations()->getElement($this->host($other), $other_root)['blueprint']);
+    $this->createOwningBlueprint('Rival');
+    $result = $this->operations()->batchOperations($this->host($other), [
+      ['op' => 'update_material', 'kind' => 'blueprint', 'id' => 'rival', 'element' => $other_root],
+    ]);
+    $this->assertBatchSuccess($result);
+    $this->assertSame([], $result->getTargets());
+    $this->assertSame('section', $this->operations()->getElement($this->host($other), $other_root)['blueprint']);
   }
 
   /**
@@ -814,7 +934,7 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
       'scope' => 'layout:layout_onecol',
       'styles' => ['' => ['default' => ['background-color' => 'aliceblue']]],
     ])->save();
-    $blueprint = $this->createOwningBlueprint('Owner band', ['owned_look']);
+    $blueprint = $this->createOwningBlueprint('Owner section', ['owned_look']);
     $this->container->get('daedalus_blueprint_library.manager')->adoptVariants($blueprint, ['owned_look']);
 
     ['entity' => $entity] = $this->createHost();
@@ -822,7 +942,7 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     $result = $this->operations()->batchOperations($this->host($entity), [
       [
         'op' => 'place_blueprint',
-        'blueprint' => 'owner_band',
+        'blueprint' => 'owner_section',
         'uuid' => $root,
         'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside'],
       ],
@@ -830,7 +950,7 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     $this->assertBatchSuccess($result);
 
     // The placed root carries its provenance stamp, born with the section.
-    $this->assertSame('owner_band', $entity->get('layout_builder__layout')->getSection(1)->getThirdPartySetting(BlueprintOperationHandler::PROVENANCE_KEY, 'blueprint'));
+    $this->assertSame('owner_section', $entity->get('layout_builder__layout')->getSection(1)->getThirdPartySetting(BlueprintOperationHandler::PROVENANCE_KEY, 'blueprint'));
 
     // The blueprint's own owned look landed through the real apply lane.
     $map = json_decode((string) $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->value, TRUE);
@@ -897,6 +1017,96 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
       ['op' => 'apply_variant', 'key' => "container:$root_section", 'variant' => 'free_look'],
     ]);
     $this->assertBatchSuccess($result);
+  }
+
+  /**
+   * The apply gate: a blueprint's own canvas is its own placement.
+   *
+   * Kris's step 7: a look adopted into a blueprint refused on the
+   * blueprint's OWN canvas (VARIANT_OWNED_BY_BLUEPRINT), because the
+   * capture strips every provenance stamp from the document (a blueprint
+   * is a definition, never a placement of itself) and the walk read "no
+   * stamp" as "outside every placement". An unstamped element found on a
+   * BlueprintHost now answers the host's machine name, root and nested
+   * alike; a stamped nested placement on that canvas still shadows it;
+   * another blueprint's canvas still refuses; an orphan still refuses
+   * everywhere. The gate's degraded posture (no layout, unknown uuid) is
+   * untouched: self-provenance is a fallback for an element the canvas
+   * CARRIES, never for one it does not.
+   */
+  public function testOwnedVariantAppliesOnOwnCanvas(): void {
+    $manager = $this->container->get('daedalus_blueprint_library.manager');
+    $this->createVariant('self_look');
+    $owner = $this->createOwningBlueprint('Self owner');
+    $manager->adoptVariants($owner, ['self_look']);
+    $this->createOwningBlueprint('Other');
+
+    // The owner's own canvas, as the canvas route hosts it: the root
+    // container carries no stamp, and the look applies there.
+    $host = $this->host($this->loadBlueprint('self_owner'));
+    $root = $this->container->get('daedalus_blueprint.node_tree_builder')->build($host)[0]['uuid'];
+    $this->assertNull($this->operations()->getElement($host, $root)['blueprint'] ?? NULL);
+    $result = $this->operations()->batchOperations($host, [
+      ['op' => 'apply_variant', 'key' => "container:$root", 'variant' => 'self_look'],
+    ]);
+    $this->assertBatchSuccess($result);
+    $this->assertSame([['variant' => 'self_look', 'fragment' => '']], $host->styleMap()["container:$root"]['variants']);
+
+    // A nested element of the canvas inherits the self-provenance too, and
+    // a nested placement of ANOTHER blueprint keeps its own stamp: the
+    // stamp shadows the canvas, as a nested stamp shadows a root's.
+    $uuid = $this->container->get('uuid');
+    $inner = $uuid->generate();
+    $placed = $uuid->generate();
+    $result = $this->operations()->batchOperations($host, [
+      ['op' => 'add_section', 'location' => ['anchor' => $root, 'placement' => 'inside'], 'uuid' => $inner],
+      [
+        'op' => 'add_section',
+        'location' => ['anchor' => $root, 'placement' => 'inside'],
+        'uuid' => $placed,
+        'blueprint' => 'other',
+      ],
+      ['op' => 'apply_variant', 'key' => "container:$inner", 'variant' => 'self_look'],
+    ]);
+    $this->assertBatchSuccess($result);
+    $this->assertSame([['variant' => 'self_look', 'fragment' => '']], $host->styleMap()["container:$inner"]['variants']);
+    $result = $this->operations()->batchOperations($host, [
+      ['op' => 'apply_variant', 'key' => "container:$placed", 'variant' => 'self_look'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame('VARIANT_OWNED_BY_BLUEPRINT', $result->getErrors()[0]->getCode());
+    $this->assertSame('self_owner', $result->getErrors()[0]->getContext()['blueprint']);
+
+    // Another blueprint's canvas is not the owner's placement.
+    $other_host = $this->host($this->loadBlueprint('other'));
+    $other_root = $this->container->get('daedalus_blueprint.node_tree_builder')->build($other_host)[0]['uuid'];
+    $result = $this->operations()->batchOperations($other_host, [
+      ['op' => 'apply_variant', 'key' => "container:$other_root", 'variant' => 'self_look'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame('VARIANT_OWNED_BY_BLUEPRINT', $result->getErrors()[0]->getCode());
+    $this->assertSame('self_owner', $result->getErrors()[0]->getContext()['blueprint']);
+
+    // An orphan refuses on a blueprint canvas as everywhere else: there is
+    // no canvas left that could be its owner's.
+    $this->createVariant('doomed_self_look');
+    $doomed = $this->createOwningBlueprint('Doomed self');
+    $manager->adoptVariants($doomed, ['doomed_self_look']);
+    $doomed->delete();
+    $this->container->get('entity_type.manager')->getStorage('daedalus_variant')->resetCache();
+    $result = $this->operations()->batchOperations($other_host, [
+      ['op' => 'apply_variant', 'key' => "container:$other_root", 'variant' => 'doomed_self_look'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame('VARIANT_OWNER_ORPHANED', $result->getErrors()[0]->getCode());
+
+    // The canvas's own provenance is a fallback for what the canvas
+    // carries: an element it does not is still unprovenanced, refused.
+    $result = $this->operations()->batchOperations($host, [
+      ['op' => 'apply_variant', 'key' => 'container:' . $uuid->generate(), 'variant' => 'self_look'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame('VARIANT_OWNED_BY_BLUEPRINT', $result->getErrors()[0]->getCode());
   }
 
   /**
@@ -1053,13 +1263,13 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     $build = BlueprintSaveDialog::create($this->container)->details(new Request(['blueprint' => $blueprint->getMachineName()]));
     $this->assertArrayNotHasKey('groups_field', $build);
 
-    // The site declares groups (the fixture's heroes and bands) and the
+    // The site declares groups (the fixture's heroes and sections) and the
     // blueprint carries one of them beside an id the site does not
     // declare: the declared ones render labelled, the stored undeclared id
     // renders checked under its id, so saving never drops it silently.
     $this->enableModules(['daedalus_layout_site_groups_test']);
     $this->container->get('daedalus_ui.page_builder_declarations')->resetCache();
-    $blueprint->setGroups(['bands', 'retired_group'])->save();
+    $blueprint->setGroups(['sections', 'retired_group'])->save();
 
     $build = BlueprintSaveDialog::create($this->container)->details(new Request(['blueprint' => $blueprint->getMachineName()]));
     $this->assertSame('block', $build['scope_field']['value']['#attributes']['data-blueprint-scope']);
@@ -1074,14 +1284,14 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     $this->assertSame(['entity_test:entity_test', 'node:retired'], array_column($hosts, 'value'));
     $this->assertSame([TRUE, TRUE], array_column($hosts, 'checked'));
     $groups = array_map(static fn (array $item): array => $item['#context'], $build['groups_field']['items']);
-    $this->assertSame(['heroes', 'bands', 'retired_group'], array_column($groups, 'value'));
-    $this->assertSame(['Heroes', 'Bands', 'retired_group'], array_column($groups, 'label'));
+    $this->assertSame(['heroes', 'sections', 'retired_group'], array_column($groups, 'value'));
+    $this->assertSame(['Heroes', 'Sections', 'retired_group'], array_column($groups, 'label'));
     $this->assertSame([FALSE, TRUE, TRUE], array_column($groups, 'checked'));
     // The favorite: one checkbox carrying the stored flag, off here.
     $this->assertFalse($build['favorite_field']['input']['#context']['checked']);
     $html = (string) $this->container->get('renderer')->renderInIsolation($build);
     $this->assertStringContainsString(BlueprintSaveDialog::BUNDLE_ATTRIBUTE . '="node:retired" checked', $html);
-    $this->assertStringContainsString(BlueprintSaveDialog::GROUP_ATTRIBUTE . '="bands" checked', $html);
+    $this->assertStringContainsString(BlueprintSaveDialog::GROUP_ATTRIBUTE . '="sections" checked', $html);
     $this->assertStringContainsString(BlueprintSaveDialog::GROUP_ATTRIBUTE . '="heroes"/>', $html);
     $this->assertStringContainsString('value="entity_test:entity_test" selected', $html);
     $this->assertStringContainsString(BlueprintSaveDialog::FAVORITE_ATTRIBUTE . '/> Favorite', $html);

@@ -57,8 +57,8 @@ root:
 # state's meaning: a linked block with nothing authored on either box
 # addresses the anchor, so a background pick makes a pill (text width),
 # which is what a text block with a background almost always means; a
-# band on a linked heading is advanced mode's. The order never hides a
-# painting value: an authored root band outranks the anchor's tier
+# full-width background on a linked heading is advanced mode's. The order never hides a
+# painting value: an authored root background outranks the anchor's tier
 # defaults, and a second authored value on the other box rides the row's
 # read as `alsoOn` and shows in the row's menu as an inert "Also set on
 # element" (or "Also set on link") line hinted with that box's value,

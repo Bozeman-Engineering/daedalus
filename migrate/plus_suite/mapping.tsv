@@ -53,27 +53,28 @@ id	edit_plus_image_block	daedalus_edit_image_block
 id	edit_plus_page	daedalus_edit_page	
 id	entity_blueprint_api	daedalus_blueprint_api	
 id	entity_blueprint_ai	daedalus_blueprint_ai	
-id	entity_blueprint_ai_anthropic	daedalus_blueprint_ai_anthropic	
-id	entity_blueprint_ai_dev_tools	daedalus_blueprint_ai_dev_tools	
-id	entity_blueprint_ai_log_repair	daedalus_blueprint_ai_log_repair	
+id	entity_blueprint_ai_anthropic	daedalus_blueprint_ai_anthropic	deleted module (2026-10-19, its subscribers moved into daedalus_blueprint_ai): the renamer drops it from core.extension as a name with no twin on disk
+forbid	entity_blueprint_ai_dev_tools		deleted module; the prompt audit and tool capture moved to bz_diagnostics (bz-diagnostics:prompt-audit, bz-diagnostics:tool-capture); any hit is a leftover reference to delete by hand
+forbid	entity_blueprint_ai_log_repair		deleted module; the log repair moved to bz_diagnostics; any hit is a leftover reference to delete by hand
 id	entity_blueprint_config	daedalus_blueprint_config	
 id	entity_blueprint_config_ai	daedalus_blueprint_config_ai	
-id	ai_plus_anthropic	daedalus_ai_anthropic	
+id	ai_plus_anthropic	daedalus_ai_anthropic	deleted module (2026-10-19, its subscribers are daedalus_ai's block producers): the renamer drops it from core.extension as a name with no twin on disk
 id	ai_plus_gemini	daedalus_ai_gemini	
 id	stylish_layouts	daedalus_stylish_layouts	
-id	stylish_carbon	daedalus_stylish_carbon	
+id	stylish_carbon	daedalus_stylish_carbon	deleted module (2026-11-02, the Carbon design system is gone): the renamer drops it from core.extension as a name with no twin on disk
 id	stylish_discover	daedalus_stylish_discover	
 id	stylish_starter_skin	daedalus_stylish_starter_skin	
 id	stylish_olivero_skin	daedalus_stylish_olivero_skin	
 id	stylish_guide_example	daedalus_stylish_guide_example	
 id	stylish_layers	daedalus_stylish_layers	
 # --- content entity types (base tables, revision tables, *_usage, *_list,
-# --- the skin_tokens/variant_styles/swatch_value/animation_steps plugins and
-# --- entity-derived config follow by prefix); design_system stays.
+# --- the skin_tokens/variant_styles plugins and entity-derived config
+# --- follow by prefix); design_system stays. The old suite's named-value,
+# --- animation and font entity types have no twin: daedalus holds those
+# --- materials on the skin, so their stored rows stay untranslated and a
+# --- migrated site reinstalls its materials from the shipped files.
 id	stylish_skin	daedalus_skin	entity type; stylish_skins_test (plural) is a module and rides `stylish`
 id	stylish_variant	daedalus_variant	entity type
-id	stylish_swatch	daedalus_swatch	entity type
-id	stylish_animation	daedalus_animation	entity type
 # --- PHP namespaces, listed for the counts (the id rule reaches them anyway).
 id	Drupal\navigation_plus	Drupal\daedalus_ui	
 id	Drupal\lb_plus	Drupal\daedalus_layout	
@@ -229,7 +230,7 @@ id	plus_suite_sample_values	daedalus_sample_values
 id	plus_suite_styling	daedalus_styling	
 id	plus_suite_text_block	daedalus_text_block	
 id	plus_suite_themes	daedalus_themes	
-id	plus_suite_ai_anthropic	daedalus_ai_anthropic	
+id	plus_suite_ai_anthropic	daedalus_ai_anthropic	deleted module (2026-10-19, its subscribers are daedalus_ai's block producers): the renamer drops it from core.extension as a name with no twin on disk
 id	plus_suite_ai_gemini	daedalus_ai_gemini	
 id	plus_suite_ai	daedalus_ai	the umbrella AI ingredient and the bare word in prose
 id	plus_suite	daedalus	the umbrella ingredient, the ai_agent/ai_assistant config id, @group, prose
@@ -297,11 +298,11 @@ prefix	np-	daedalus-ui-	.np-frame -> .daedalus-ui-frame, data-np-tooltip, --np-s
 regex	(?<![A-Za-z0-9_])np(?=[A-Z])	daedalusUi	the dataset key of a data-np-* attribute (mount.dataset.npTreeMounted)
 id	ebdsa	dd-blueprint-activate	drush daedalus-blueprint:design-system:activate
 id	ebsc	dd-blueprint-schema	drush daedalus-blueprint:schema
-id	ebtc	dd-blueprint-capture	drush daedalus-blueprint:tool-capture
+forbid	ebtc		deleted alias; the tool capture is bz_diagnostics' drush bz-diagnostics:tool-capture
 id	ebd	dd-blueprint-deserialize	drush daedalus-blueprint:deserialize
 id	ebs	dd-blueprint-serialize	drush daedalus-blueprint:serialize
-id	ait	dd-blueprint-tail	drush daedalus-blueprint:ai-tail
-id	pau	dd-blueprint-audit	drush daedalus-blueprint:prompt-audit
+forbid	ait		deleted alias here; the tail is bz_diagnostics' drush bz-diagnostics:tail (alias ait)
+forbid	pau		deleted alias; the prompt audit is bz_diagnostics' drush bz-diagnostics:prompt-audit
 # --- plus-suite-to-daedalus-migration (2026-09-19): the rows a site's persisted
 # --- state needs beyond the code rename. The lb_plus permission row above
 # --- (`administer layout builder + configuration`) is the migration's too:

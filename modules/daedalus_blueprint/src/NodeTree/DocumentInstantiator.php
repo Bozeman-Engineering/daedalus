@@ -52,7 +52,7 @@ use Drupal\layout_builder\Section;
  *   with the subject's placeable fields as the corrective) with the
  *   formatter's own keys as its bag; label_rendered is the one spelling
  *   for a shown label (core's label_display stays inside storage),
- * - a BLUEPRINT node (the page language's <pb-blueprint>) becomes an
+ * - a BLUEPRINT node (the page language's <d-blueprint>) becomes an
  *   place_blueprint op, which comes back through here,
  * - REGION nodes group a multi-region layout's named slots; their children
  *   land with the region name in the location,
@@ -1113,7 +1113,7 @@ class DocumentInstantiator {
   /**
    * Expands a blueprint reference node into place_blueprint.
    *
-   * The page language's <pb-blueprint name="..."/>: the placement comes back
+   * The page language's <d-blueprint name="..."/>: the placement comes back
    * through here when the blueprint handler expands the definition.
    */
   protected function expandBlueprintNode(array $node, array $location, string $path, array &$state, ?string $uuid = NULL): ?string {
@@ -1142,15 +1142,16 @@ class DocumentInstantiator {
   /**
    * Expands a linked node into the add_element placing the linked block.
    *
-   * `{kind: linked, blueprint: name}` (the dialect's <pb-linked
+   * `{kind: linked, blueprint: name}` (the dialect's <d-linked
    * blueprint="name"/>) is the blueprint shown by reference: one block
    * component, daedalus_blueprint_linked:{name}, whose plugin derives per
-   * published block-scope blueprint entity (LinkedBlueprintDeriver), so a
-   * name that is no such blueprint is the op door's INVALID_PLUGIN_ID, and
-   * whether the blueprint fits the host is judged there too, once, for
-   * every road into the document (BlueprintOperations, the linked fit
-   * gate). The node carries no provenance and no children; its styles
-   * are the placement's own box, block-keyed.
+   * block-scope blueprint entity, published or not
+   * (LinkedBlueprintDeriver), so a name no such entity carries is the op
+   * door's INVALID_PLUGIN_ID, and whether the blueprint is published and
+   * fits the host is judged there too, once, for every road into the
+   * document (BlueprintOperations, the linked fit gate). The node carries
+   * no provenance and no children; its styles are the placement's own
+   * box, block-keyed.
    */
   protected function expandLinkedNode(array $node, array $location, string $path, array &$state, ?string $uuid = NULL): ?string {
     if ($unknown = array_diff(array_keys($node), self::LINKED_KEYS)) {
@@ -1360,7 +1361,7 @@ class DocumentInstantiator {
       }
       else {
         $hint = $container
-          ? "A container's styles key by '' for the container itself and '::' plus a relative selector ('::.class-name' a part, '::> *' its children, '::> pb-text' the text blocks among them) for what is inside it."
+          ? "A container's styles key by '' for the container itself and '::' plus a relative selector ('::.class-name' a part, '::> *' its children, '::> d-text' the text blocks among them) for what is inside it."
           : "A block's styles key by '' for the block itself, ':field_name' for a field, and '::' plus a relative selector ('::.class-name' a part, '::p' its paragraphs) for what is inside it.";
         $state['errors'][] = new BlueprintError($entry_path, $state['code'], sprintf('"%s" is not an element-relative style key.', $relative), [], $hint);
         continue;

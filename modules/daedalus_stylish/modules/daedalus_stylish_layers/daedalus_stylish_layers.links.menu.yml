@@ -1,0 +1,10 @@
+# The cascade layer settings form's one door: the Styling sub-category of the
+# Daedalus config category (Configuration » Daedalus » Styling), the root
+# module's door, after daedalus_stylish's Styling form. SETTINGS.md at the
+# daedalus repo root rosters it.
+daedalus_stylish_layers.settings:
+  title: 'Cascade layer'
+  description: 'Whether the site''s CSS is wrapped in a cascade layer so styling wins structurally, and the layer''s name.'
+  parent: daedalus.admin_config_styling
+  route_name: daedalus_stylish_layers.settings
+  weight: -5

@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\Request;
 /**
  * The shared JSON envelope of the daedalus_stylish gesture endpoints.
  *
- * Variant and swatch gestures answer in one error shape — {errors:
+ * Variant, token and animation gestures answer in one error shape — {errors:
  * [{path, code, message, hint}]}, the blueprint error list — so the client
  * transport (gesture-transport.js) reports every failure identically,
  * whichever entity the gesture touched, and every WRITE answers with the
@@ -81,7 +81,7 @@ abstract class GestureApiControllerBase extends ControllerBase {
    *
    * Typed on the spine's MaterialGestureException: the one structured
    * error contract the material gesture family speaks, which daedalus_stylish's
-   * variant and swatch exceptions extend.
+   * variant, token and animation exceptions extend.
    */
   protected function unprocessable(MaterialGestureException $exception, int $status = 422): JsonResponse {
     return new JsonResponse(['errors' => $exception->getErrorsAsArrays()], $status);

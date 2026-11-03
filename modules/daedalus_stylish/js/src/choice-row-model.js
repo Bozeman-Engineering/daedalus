@@ -240,6 +240,10 @@ export const scrubbable = (space, surface) =>
  *   arrives through (originOf); a caller without the table passes none.
  * @param {object} [input.sectionLayouts]
  *   section uuid → layout id, likewise.
+ * @param {object} [input.law]
+ *   The law gate ({canView}, drupalSettings.daedalusStylish.law): the
+ *   declared tier's doorway exists only under it (originOf); a caller
+ *   without the gate gets a declaration named and no doorway.
  *
  * @return {object}
  *   originOf()'s shape: {layer, tier, reference, color, atPose,
@@ -254,6 +258,7 @@ export const originFor = ({
   read = null,
   blockTypes = {},
   sectionLayouts = {},
+  law = {},
 }) => {
   const conditions = guide?.conditions ?? {};
   const faceOf = (raw) =>
@@ -269,5 +274,6 @@ export const originFor = ({
     blockTypes,
     sectionLayouts,
     faceOf,
+    law,
   });
 };

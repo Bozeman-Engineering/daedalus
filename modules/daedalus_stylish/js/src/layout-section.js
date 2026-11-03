@@ -269,8 +269,8 @@ const PresetChips = ({
  * What every root-bound row of this section reads its value-space and
  * origin facts from: the blueprint's type rosters (the root's
  * declaration lookup) and the container root's layer stack (buildStack,
- * the same model a control model carries, the root's tag from the tree
- * keying the skin's base:{tag} block), so a value the worn row
+ * the same model a control model carries, the root's tag from the
+ * document keying the skin's base:{tag} block), so a value the worn row
  * variant supplies wears that variant's hue on the row's mark and the
  * row menu opens it at the delivering condition.
  *
@@ -297,14 +297,17 @@ const rootFacts = (
 ) => {
   const blockTypes = source.getBlockTypes?.() ?? {};
   const sectionLayouts = source.getSectionLayouts?.() ?? {};
-  const tree = source.getTree?.() ?? null;
+  // The axis vocabulary's depth read walks the layout (the sections at
+  // the top); the stack and the address judge read the document (the
+  // host entity above them), null before a satellite's first broadcast.
   const axes = axisVocabulary(
     guide,
     selected,
     blockTypes,
     sectionLayouts,
-    tree ?? [],
+    source.getTree?.() ?? [],
   );
+  const document = source.getDocument?.() ?? null;
   // Under a write address the rows' editable layer is that rule's
   // ancestor layer in the container's stack (the inspector's rows read
   // the same way), so a value the container's own entry shadows wears
@@ -317,7 +320,7 @@ const rootFacts = (
     axes,
     blockTypes,
     sectionLayouts,
-    tree,
+    document,
     editable: writeAddress,
   });
   const withheld = writeAddress
@@ -327,7 +330,7 @@ const rootFacts = (
         properties,
         blockTypes,
         sectionLayouts,
-        tree,
+        document,
       })
     : {};
   return { blockTypes, sectionLayouts, stack, withheld };
@@ -380,6 +383,7 @@ const AlignmentRows = ({
   conditions,
   onPickCondition,
   onOpenDocument,
+  law = {},
 }) => {
   const axes = alignmentAxes(state.mode);
   const { blockTypes, sectionLayouts, stack, withheld } = rootFacts(
@@ -449,6 +453,7 @@ const AlignmentRows = ({
             }}
             onPickCondition={onPickCondition}
             onOpenDocument={onOpenDocument}
+            law={law}
             onPreview={(properties) =>
               Object.entries(properties).forEach(([property, value]) =>
                 source.preview(target, condition, property, value),
@@ -513,6 +518,7 @@ const GapRow = ({
   conditions,
   onPickCondition,
   onOpenDocument,
+  law = {},
 }) => {
   const { blockTypes, sectionLayouts, stack, withheld } = rootFacts(
     source,
@@ -550,6 +556,7 @@ const GapRow = ({
       disabledTitle={withheld.gap ?? null}
       onPickCondition={onPickCondition}
       onOpenDocument={onOpenDocument}
+      law={law}
       onPreview={(properties) =>
         batchFor(properties.gap ?? null).forEach((operation) => {
           Object.entries(operation.properties).forEach(([name, next]) => {
@@ -661,6 +668,7 @@ export const LayoutSection = ({
   condition = 'default',
   writeAddress = null,
   onOpenDocument = null,
+  law = {},
   onPickCondition = null,
   children: bound = null,
 }) => {
@@ -726,11 +734,11 @@ export const LayoutSection = ({
       return;
     }
     if (!removal.empty) {
-      // The child's minted type word (the tree node's `_element.type`).
-      const nodeTree = source.getTree?.() ?? null;
+      // The child's minted type word (the document node's `_element.type`).
+      const document = source.getDocument?.() ?? null;
       const label =
-        (Array.isArray(nodeTree)
-          ? createMatcher(nodeTree).facts(removal.key)?.type
+        (Array.isArray(document)
+          ? createMatcher(document).facts(removal.key)?.type
           : null) ?? Drupal.t('Element');
       const confirmed = await Drupal.Daedalus.dialog.confirm({
         message: Drupal.t('Remove "!label" and its content?', {
@@ -890,6 +898,7 @@ export const LayoutSection = ({
             conditions={conditions}
             onPickCondition={onPickCondition}
             onOpenDocument={onOpenDocument}
+            law={law}
           />
           <GapRow
             source={source}
@@ -904,6 +913,7 @@ export const LayoutSection = ({
             conditions={conditions}
             onPickCondition={onPickCondition}
             onOpenDocument={onOpenDocument}
+            law={law}
           />
         </Fragment>
       )}

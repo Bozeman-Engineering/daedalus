@@ -228,7 +228,7 @@ const buildApp = () => ({
       return Drupal.Daedalus.Drag.builders;
     },
     // The one depth read for a target's location (gaps.js): whether it
-    // lands in the root flow, a page band's position.
+    // lands in the root flow, a section's position.
     isRootFlowLocation: (location) =>
       Drupal.Daedalus.Drag.isRootFlowLocation(location),
     // The controller's drop gate (drag-controller.js dropAllowed): insert

@@ -146,7 +146,7 @@ class PageToolsTemplateTest extends BlueprintKernelTestBase {
     // entity) supplies the field_block derivative the display stores.
     $insert = [
       'op' => 'insert',
-      'html' => '<pb-container id="band"><pb-block field="name"/></pb-container>',
+      'html' => '<d-container id="section"><d-block field="name"/></d-container>',
       'at' => ['ref' => 'root', 'position' => 'beforeend'],
     ];
     $output = $this->runTool('page_edit', [
@@ -171,8 +171,8 @@ class PageToolsTemplateTest extends BlueprintKernelTestBase {
       'ops' => [
         [
           'op' => 'insert',
-          'html' => '<pb-block plugin="system_powered_by_block"/>',
-          'at' => ['ref' => 'band', 'position' => 'beforeend'],
+          'html' => '<d-block plugin="system_powered_by_block"/>',
+          'at' => ['ref' => 'section', 'position' => 'beforeend'],
         ],
       ],
       'save' => TRUE,
@@ -210,7 +210,7 @@ class PageToolsTemplateTest extends BlueprintKernelTestBase {
     $create = $this->runTool('page_create', [
       'entity_type' => 'entity_view_display',
       'bundle' => 'entity_view_display',
-      'layout' => '<pb-container id="band"></pb-container>',
+      'layout' => '<d-container id="section"></d-container>',
     ]);
     $this->assertStringContainsString('born by enabling Layout Builder', $create);
     $this->assertStringContainsString('page_edit', $create);
@@ -236,7 +236,7 @@ class PageToolsTemplateTest extends BlueprintKernelTestBase {
     $this->assertSame('Unknown or hidden bundle: entity_test/entity_test.', $this->runTool('page_edit', [
       'entity_type' => 'entity_view_display',
       'entity_id' => self::DISPLAY_ID,
-      'ops' => [['op' => 'remove', 'ref' => 'band']],
+      'ops' => [['op' => 'remove', 'ref' => 'section']],
     ]));
   }
 
@@ -277,11 +277,11 @@ class PageToolsTemplateTest extends BlueprintKernelTestBase {
     $notice = 'The layout of this entity_test belongs to the template entity_view_display ' . self::DISPLAY_ID . ', which it renders but does not own. Edit this entity_test\'s own fields here; edit its layout on the template: run the operation against entity_view_display ' . self::DISPLAY_ID . '.';
     $this->assertStringStartsWith($notice . "\nfields:\n", $output, 'The read says where the layout is edited, then answers the page\'s own fields.');
     $this->assertStringContainsString("\n  name: 'Plain page'\n", $output, 'The fields block carries the page\'s own field value.');
-    $this->assertMatchesRegularExpression('/\nfields:\n(  .*\n)+<pb-container id="' . preg_quote($section_uuid, '/') . '"/', $output, 'The fields block sits between the notice and the print.');
+    $this->assertMatchesRegularExpression('/\nfields:\n(  .*\n)+<d-container id="' . preg_quote($section_uuid, '/') . '"/', $output, 'The fields block sits between the notice and the print.');
     $this->assertStringNotContainsString('_form_only', $output, 'Empty fields are stubs, and stubs are stripped.');
-    $this->assertStringContainsString('<pb-container id="' . $section_uuid . '" data-can="">', $output, 'The template container is marked: nothing may be done to it on this page.');
-    $this->assertStringContainsString('<pb-block id="' . $block_uuid . '" data-can="" plugin="system_powered_by_block" />', $output, 'The template block is marked.');
-    $this->assertStringContainsString('<pb-block id="' . $field_block_uuid . '" data-can="content" field="name" />', $output, 'A field block presenting the page\'s own field keeps content, and prints the field it names.');
+    $this->assertStringContainsString('<d-container id="' . $section_uuid . '" data-can="">', $output, 'The template container is marked: nothing may be done to it on this page.');
+    $this->assertStringContainsString('<d-block id="' . $block_uuid . '" data-can="" plugin="system_powered_by_block" />', $output, 'The template block is marked.');
+    $this->assertStringContainsString('<d-block id="' . $field_block_uuid . '" data-can="content" field="name" />', $output, 'A field block presenting the page\'s own field keeps content, and prints the field it names.');
 
     // The template itself reads unmarked (its elements are its own) and
     // with no fields block: a template has no fields of its own.
@@ -291,7 +291,7 @@ class PageToolsTemplateTest extends BlueprintKernelTestBase {
     ]);
     $this->assertStringNotContainsString('data-can', $output);
     $this->assertStringNotContainsString('fields:', $output, 'A template answers no fields.');
-    $this->assertStringStartsWith('<pb-container id="' . $section_uuid . '">', $output);
+    $this->assertStringStartsWith('<d-container id="' . $section_uuid . '">', $output);
   }
 
   /**

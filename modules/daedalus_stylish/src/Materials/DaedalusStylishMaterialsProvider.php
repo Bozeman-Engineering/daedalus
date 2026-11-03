@@ -15,45 +15,40 @@ use Drupal\daedalus_blueprint\Materials\MaterialGestureOperationHandler;
 use Drupal\daedalus_blueprint\Materials\MaterialGestureResult;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
+use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
+use Drupal\daedalus_blueprint\Materials\MaterialsChangeSet;
 use Drupal\daedalus_blueprint\Materials\MaterialsProviderInterface;
 use Drupal\daedalus_blueprint\Materials\ValueGrammar;
 use Drupal\daedalus_blueprint\Materials\ValueKind;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinAnimationsItem;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinFontsItem;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
-use Drupal\daedalus_stylish\AnimationManager;
-use Drupal\daedalus_stylish\AnimationRepository;
 use Drupal\daedalus_stylish\ClientStyleGuide;
 use Drupal\daedalus_stylish\SkinManager;
 use Drupal\daedalus_stylish\StyleEntry;
 use Drupal\daedalus_stylish\StyleGuide;
 use Drupal\daedalus_stylish\StyleMapValidator;
-use Drupal\daedalus_stylish\DaedalusStylishAnimationInterface;
-use Drupal\daedalus_stylish\DaedalusStylishFontInterface;
-use Drupal\daedalus_stylish\FontManager;
-use Drupal\daedalus_stylish\FontRepository;
 use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
-use Drupal\daedalus_stylish\DaedalusStylishSwatchInterface;
 use Drupal\daedalus_stylish\DaedalusStylishVariantInterface;
-use Drupal\daedalus_stylish\SwatchManager;
-use Drupal\daedalus_stylish\SwatchRepository;
-use Drupal\daedalus_stylish\TokenManager;
+use Drupal\daedalus_stylish\SkinMaterialManager;
 use Drupal\daedalus_stylish\VariantCapture;
 use Drupal\daedalus_stylish\VariantConformance;
 use Drupal\daedalus_stylish\VariantManager;
 use Drupal\daedalus_stylish\VariantRepository;
 
 /**
- * Daedalus Stylish's materials: tokens, swatches, variants, animations, fonts.
+ * Daedalus Stylish's materials: tokens, variants, animations, fonts.
  *
- * The active skin's tokens, the swatches, the variants, the animations and
- * the fonts, each carrying its design-system membership.
+ * The active skin's tokens, the variants, the animations and the fonts,
+ * each carrying its design-system membership.
  *
- * The ONE place daedalus_stylish's five material kinds are read into roster
+ * The ONE place daedalus_stylish's four material kinds are read into roster
  * records; every material surface (catalog, prompt, schema, validators,
  * client payload, delivery CSS) projects from the roster instead of
- * walking the skin, the swatch storage, the variant storage and the
- * animation storage on its own. Sources and orders are the ones their
+ * walking the skin, the variant storage and the animation storage on its
+ * own. Sources and orders are the ones their
  * consumers already agree on:
  * - tokens: the active PUBLISHED skin's minted tokens on the declared
  *   scales, in declared scale order then stored token order (the
@@ -61,10 +56,9 @@ use Drupal\daedalus_stylish\VariantRepository;
  *   scale order), id "{scale}/{name}" (names repeat across scales),
  *   group the scale, value as stored; the style spelling is var() over
  *   the one variable derivation (StyleGuide::tokenVariable()). An
- *   unpublished active skin delivers nothing, so it rosters nothing.
- * - swatches: SwatchRepository::publishedSwatches() (label, then machine
- *   name), group the swatch kind, value as stored; the style spelling is
- *   var() over the reserved namespace (StyleGuide::swatchVariable()).
+ *   unpublished active skin delivers nothing, so it rosters nothing. A
+ *   palette color or gradient is a token on the color or gradient scale;
+ *   there is no second named-value store.
  * - variants: VariantRepository::publishedVariants() (weight, label, then
  *   machine name) minus the ones the site's current law refuses
  *   (VariantConformance, see records()), group the axis, value the
@@ -87,7 +81,7 @@ use Drupal\daedalus_stylish\VariantRepository;
  *   scope's declaration does not carry is refused loudly (the variant entity
  *   refuses to save one, so only a declaration edit can orphan a variant, and
  *   declaration edits fail loud everywhere else in the style guide).
- * - animations: AnimationRepository::publishedAnimations() (label then
+ * - animations: the active skin's animations as worn (stored order; see
  *   machine name, the compiled keyframes file's order, so delivery and
  *   validation cannot disagree), value the steps map as stored (canonical
  *   offsets; the editor and the preview print read it, the prompt and the
@@ -95,7 +89,7 @@ use Drupal\daedalus_stylish\VariantRepository;
  *   the property-scoped animation slot (StyleGuide::animationName(),
  *   motion-{name}), never var(): a keyframes name is a custom-ident.
  *
- * A swatch's, variant's or animation's origin is its entity's origin field
+ * A variant's or animation's origin is its entity's origin field
  * (shipped, stamped by the importer; user or ai, stamped by the lane that
  * minted it); a token's is its layer's: shipped when a module ships the
  * skin and its package layer holds the name, user otherwise (a token the
@@ -104,22 +98,25 @@ use Drupal\daedalus_stylish\VariantRepository;
  * the client's scaleRow): a site-minted token follows a curated row's
  * stops on open and guarded systems and is withheld there on strict.
  *
- * The token, swatch, variant and animation gestures (save_material /
- * update_material / remove_material with kind token, swatch, variant or
+ * The token, animation and variant gestures (save_material /
+ * update_material / remove_material with kind token, variant or
  * animation) dispatch here from the op spine; the palette's, the
- * Materials section's and the inspector's gestures and the swatch,
+ * Materials section's and the inspector's gestures and the token,
  * variant and animation routes (adapters) reach the same methods. The
  * provider owns the lane end to end: the permission grade per verb
- * (create / update / delete tokens, swatches, variants and animations,
- * or the administer grade; a token's administer grade is "administer
- * skins", the skin being its entity), capture from the host's staged
- * state (a swatch from the literal value an element wears for a
- * property, a variant from the element's whole look through
- * VariantCapture; a token and an animation are always given outright,
- * a token is a fact of the active skin and a keyframes block lives on no
- * element), the AI-minting governance gate for the AI's token, swatch
- * and animation mints (daedalus_stylish.settings ai_minting, the same
- * gate the blueprint create lane enforces), and the origin stamp. The
+ * (create / update / delete tokens, variants and animations, or the
+ * administer grade; a token's administer grade is "administer skins",
+ * the skin being its entity), capture from the host's staged state (a
+ * token from the literal value an element wears for a property, landing
+ * on the first declared scale whose shape fits it, a variant from the
+ * element's whole look through VariantCapture; an animation is always
+ * given outright, a keyframes block lives on no element), the
+ * AI-minting governance gate for the AI's token, animation and font
+ * mints (daedalus_stylish.settings ai_minting, the same
+ * gate the blueprint create lane enforces) with its advertisement
+ * (mintPosture(): the closed-gate sentence the brief's MINT line and
+ * the JSON door's materials guidance both state), and the origin
+ * stamp. The
  * managers are the one implementation behind both doors; they arrive as
  * closures because the dependency is circular by construction (they
  * validate through StyleMapValidator, whose universe is the roster this
@@ -128,6 +125,17 @@ use Drupal\daedalus_stylish\VariantRepository;
  * site, or in its one layer when the skin is the site's own or the
  * developer gate lifts the distro lock (SkinManager::writesSiteLayer(),
  * the one rule every skin write reads).
+ *
+ * A gesture that would share more with the AI answers the AI context
+ * budget (MaterialsBudget::assertRoom(), one wording on every door): an
+ * offered mint of any kind (the default; `offered: false` mints for the
+ * UI alone and passes) and an update turning `offered` on where it was
+ * off are refused while the site is full (requireRoom()). The guard
+ * refuses sharing, never saving: a mint withheld from the AI, a face or
+ * value edit, and an update re-stating a flag already on go through,
+ * and the check reads the current reading, never a predicted delta. The
+ * five Api controllers are adapters over these methods, so the cards'
+ * toggle and the AI's op meet the same refusal.
  */
 final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterface {
 
@@ -135,21 +143,25 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
    * The keys update_material may change per kind.
    */
   private const TOKEN_UPDATE_KEYS = ['value', 'description', 'offered'];
-  private const SWATCH_UPDATE_KEYS = ['label', 'value', 'description', 'offered'];
   private const VARIANT_UPDATE_KEYS = ['label', 'description', 'weight', 'offered', 'element', 'styles'];
-  private const ANIMATION_UPDATE_KEYS = ['label', 'description', 'steps', 'offered'];
-  private const FONT_UPDATE_KEYS = ['label', 'family', 'faces', 'description', 'offered'];
+  private const ANIMATION_UPDATE_KEYS = ['description', 'steps', 'offered'];
+  private const FONT_UPDATE_KEYS = ['family', 'faces', 'description', 'offered'];
+
+  /**
+   * The closed-minting posture, the one text both doors advertise.
+   *
+   * Names the three gated lanes and the entity shortcuts around them, and
+   * what to offer instead, so the model is told before it is refused
+   * (an honest advertisement beats discovery by refusal).
+   */
+  public const AI_MINTING_CLOSED = 'AI minting is DISABLED on this site (daedalus_stylish.settings ai_minting): never save_material a token, an animation or a font; offer the skin\'s minted tokens, animations and fonts or a literal value instead.';
 
   public function __construct(
     protected StyleGuide $styleGuide,
     protected SkinManager $skinManager,
     protected PageBuilderDeclarations $declarations,
-    protected SwatchRepository $swatchRepository,
     protected VariantRepository $variantRepository,
-    protected AnimationRepository $animationRepository,
-    protected \Closure $swatchManager,
     protected \Closure $variantManager,
-    protected \Closure $animationManager,
     protected \Closure $variantCapture,
     protected AccountProxyInterface $currentUser,
     protected ConfigFactoryInterface $configFactory,
@@ -158,9 +170,8 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
     protected \Closure $rosterBuilder,
     protected VariantConformance $conformance,
     protected DistroLock $distroLock,
-    protected \Closure $tokenManager,
-    protected FontRepository $fontRepository,
-    protected \Closure $fontManager,
+    protected \Closure $skinMaterialManager,
+    protected \Closure $budget,
   ) {}
 
   /**
@@ -195,7 +206,6 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
     $theme = $this->declarations->siteTheme();
     return [
       ...$this->tokens($theme),
-      ...$this->swatches(),
       ...$this->variants($theme),
       ...$this->animations(),
       ...$this->fonts(),
@@ -208,16 +218,27 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   public function cacheMetadata(): CacheableMetadata {
     // The client guide's domain (the declarations the spellings and scales
     // derive from, daedalus_stylish.settings with the active-skin pointer, the
-    // default theme, the skin list) plus the three entity lists the
-    // records read: any swatch, variant or animation save, publish or
-    // delete busts the roster.
+    // default theme, the skin list: the skin's tokens, animations and
+    // fonts ride it) plus the one entity list the records read: any
+    // variant save, publish or delete busts the roster.
     return (new CacheableMetadata())->addCacheTags([
       ...ClientStyleGuide::CACHE_TAGS,
-      'daedalus_swatch_list',
       'daedalus_variant_list',
-      'daedalus_animation_list',
-      'daedalus_font_list',
     ]);
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * The one per-request memo behind records() is the conformance verdict
+   * (which variants the current law withholds), so the roster's reset
+   * forgets it here: a skin write, an enforcement edit or a variant save
+   * resets the roster, and the next records() judges afresh. Without the
+   * cascade the verdict outlived a skin write and the next roster, and
+   * the compiled variants file with it, printed the pre-skin verdict.
+   */
+  public function reset(): void {
+    $this->conformance->reset();
   }
 
   /**
@@ -225,16 +246,42 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
    *
    * A token's line names the scale (group) and the name (label): a token
    * is minted on a declared scale of the active skin, and its name is the
-   * custom property's tail, never derived from a human label.
+   * custom property's tail, never derived from a human label. Its value
+   * is given outright or captured from an element (the literal it wears
+   * for a property); the scale may be left to the value's shape.
    */
   public function gestureLines(): array {
     return [
-      MaterialKind::Token->value => 'group (the scale), label (the token name: lowercase, digits, hyphens), value; description, offered?; then reference it by its var() spelling',
-      MaterialKind::Swatch->value => 'value, or element + property; description',
+      MaterialKind::Token->value => 'label (the token name: lowercase, digits, hyphens), value or element + property (the literal the element wears); group (the scale; omitted, the first declared scale whose shape fits the value), description, offered?; then reference it by its var() spelling',
       MaterialKind::Variant->value => 'element, description, group: axis?; then wear it',
-      MaterialKind::Animation->value => 'steps {"0%": {...}, "100%": {...}}, description; then wear it as animation-name',
-      MaterialKind::Font->value => 'family, faces [{weight, style, source: {file: uuid}}] (uploaded font files), description; then name the family in a font-family stack',
+      MaterialKind::Animation->value => 'label (the animation name: lowercase, digits, hyphens or underscores), steps {"0%": {...}, "100%": {...}}, description, offered?; then wear it as animation-name: motion-{name}',
+      MaterialKind::Font->value => 'label (the font name: lowercase, digits, hyphens or underscores), family (the name stacks reference), faces [{weight, style, source: {file: uuid}}] (uploaded font files), description, offered?; then name the family in a font-family stack',
     ];
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * The closed-minting sentence, stated here and nowhere else: the
+   * brief's MINT line carries it through the roster builder and
+   * MaterialsGateHooks lands it on the JSON door's materials guidance.
+   * The variant lane is not gated (a variant is a look over the
+   * vocabulary, not an extension of it), so the sentence names the three
+   * lanes aiMintingClosed() refuses.
+   */
+  public function mintPosture(): ?string {
+    return $this->aiMintingClosed() ? self::AI_MINTING_CLOSED : NULL;
+  }
+
+  /**
+   * Whether the site closed AI minting (daedalus_stylish.settings ai_minting).
+   *
+   * The one predicate behind the posture and the three gated lanes: only
+   * an explicit FALSE closes the gate (a site predating the key keeps the
+   * open lane until the post_update seeds it).
+   */
+  protected function aiMintingClosed(): bool {
+    return $this->configFactory->get('daedalus_stylish.settings')->get('ai_minting') === FALSE;
   }
 
   /**
@@ -243,8 +290,7 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   public function capture(MaterialKind $kind, array $operation, ?HostInterface $host, array $options): MaterialGestureResult {
     $origin = $options[MaterialGestureOperationHandler::ORIGIN_OPTION] ?? MaterialRecord::ORIGIN_USER;
     return match ($kind) {
-      MaterialKind::Token => $this->captureToken($operation, $origin),
-      MaterialKind::Swatch => $this->captureSwatch($operation, $host, $origin),
+      MaterialKind::Token => $this->captureToken($operation, $host, $origin),
       MaterialKind::Variant => $this->captureVariant($operation, $host, $origin),
       MaterialKind::Animation => $this->captureAnimation($operation, $origin),
       MaterialKind::Font => $this->captureFont($operation, $origin),
@@ -258,7 +304,6 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   public function update(MaterialKind $kind, string $id, array $operation, ?HostInterface $host, array $options): MaterialGestureResult {
     return match ($kind) {
       MaterialKind::Token => $this->updateToken($id, $operation),
-      MaterialKind::Swatch => $this->updateSwatch($id, $operation),
       MaterialKind::Variant => $this->updateVariant($id, $operation, $host),
       MaterialKind::Animation => $this->updateAnimation($id, $operation),
       MaterialKind::Font => $this->updateFont($id, $operation),
@@ -273,7 +318,6 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
     $stage_batch = (bool) ($options[MaterialGestureOperationHandler::BATCH_OPTION] ?? FALSE);
     return match ($kind) {
       MaterialKind::Token => $this->removeToken($id, $stage_batch),
-      MaterialKind::Swatch => $this->removeSwatch($id, $stage_batch),
       MaterialKind::Variant => $this->removeVariant($id, $stage_batch),
       MaterialKind::Animation => $this->removeAnimation($id, $stage_batch),
       MaterialKind::Font => $this->removeFont($id, $stage_batch),
@@ -284,35 +328,35 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   /**
    * Mints a token on the active skin (save_material).
    *
-   * Operation shape: {kind: token, group, label, value, description?,
-   * offered?}.
+   * Operation shape: {kind: token, label, value | element + property,
+   * group?, description?, offered?}.
    *
-   * The group is the declared scale the token is minted on and the label
-   * its name (the custom property's tail, StyleMapValidator::TOKEN_NAME):
-   * a token has no human label apart from its name, and the name is data
-   * the writer means exactly, so nothing is derived or suffixed. The
-   * value is always given outright (a token is a fact of the skin, not of
-   * any element). No "global" key: a token's membership is its skin's.
-   * The AI's mint meets the ai_minting governance gate exactly as the
-   * swatch and animation mints do. Which layer the token lands in is the
-   * skin manager's call (SkinManager::writesSiteLayer()).
+   * The label is the token's name (the custom property's tail,
+   * StyleMapValidator::TOKEN_NAME): a token has no human label apart
+   * from its name, and the name is data the writer means exactly, so
+   * nothing is derived or suffixed. The value is given outright (a CSS
+   * value or a condition-keyed map) or captured from the selection: the
+   * literal an element wears for a property in its own default layer (a
+   * reference is already a material, and a value the element inherits is
+   * not the element's to save). The group is the declared scale the token
+   * is minted on; left out, the token lands on the first declared scale
+   * whose shape fits the value (color for a color, gradient for a
+   * gradient), so a capture from the canvas needs no scale named. No
+   * "global" key: a token's membership is its skin's. The AI's mint meets
+   * the ai_minting governance gate exactly as the animation and font
+   * mints do. Which layer the token lands in is the skin manager's call
+   * (SkinManager::writesSiteLayer()).
    */
-  protected function captureToken(array $operation, string $origin): MaterialGestureResult {
-    $this->requirePermission('create tokens', 'administer skins', 'Minting tokens requires the "create tokens" permission.');
+  protected function captureToken(array $operation, ?HostInterface $host, string $origin): MaterialGestureResult {
+    $this->requirePermission('create skin materials', 'administer skins', 'Minting tokens requires the "create skin materials" permission.');
     if (array_key_exists('global', $operation)) {
       throw new MaterialGestureException([
         new BlueprintError('global', 'INVALID_PARAMETER', 'A token takes no "global" key: it belongs to the active skin, whose membership it shares.', [], 'Omit "global"; a token is offered whenever its skin is worn.'),
       ]);
     }
-    if ($origin === MaterialRecord::ORIGIN_AI && $this->configFactory->get('daedalus_stylish.settings')->get('ai_minting') === FALSE) {
+    if ($origin === MaterialRecord::ORIGIN_AI && $this->aiMintingClosed()) {
       throw new MaterialGestureException([
-        new BlueprintError('value', 'STYLE_TOKEN_AI_MINTING_DISABLED', 'AI token minting is disabled on this site.', [], 'Reference a minted token or use a literal value instead of saving a token; a person with the "create tokens" permission can mint it in the palette, or an administrator can enable ai_minting in daedalus_stylish.settings.'),
-      ]);
-    }
-    $scale = $operation['group'] ?? NULL;
-    if (!is_string($scale) || $scale === '') {
-      throw new MaterialGestureException([
-        new BlueprintError('group', 'MISSING_PARAMETER', 'A token is minted on a scale: pass "group".', [], 'Pass "group" as a declared token scale (the roster groups tokens by it: space, color, text, ...).'),
+        new BlueprintError('value', 'STYLE_TOKEN_AI_MINTING_DISABLED', 'AI token minting is disabled on this site.', [], 'Reference a minted token or use a literal value instead of saving a token; a person with the "create skin materials" permission can mint it in the skin tab, or an administrator can enable ai_minting in daedalus_stylish.settings.'),
       ]);
     }
     $name = $operation['label'] ?? NULL;
@@ -322,11 +366,23 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
       ]);
     }
     $value = $operation['value'] ?? NULL;
+    if ($value === NULL && isset($operation['element'])) {
+      $value = $this->literalWorn($host, (string) $operation['element'], $operation['property'] ?? NULL);
+    }
     if (!is_string($value) && !is_array($value)) {
       throw new MaterialGestureException([
-        new BlueprintError('value', 'MISSING_PARAMETER', 'A token needs a value: pass "value".', [], 'Pass a CSS value ("1.25rem", or {"default": "#e94560", "dark": "#f87171"}) that fits the scale\'s shape.'),
+        new BlueprintError('value', 'MISSING_PARAMETER', 'A token needs a value: pass "value", or "element" and "property" to capture the value an element wears.', [], 'Pass a CSS value ("1.25rem", "#e94560", or {"default": "#e94560", "dark": "#f87171"}) that fits the scale\'s shape, or name the element (id or alias) and the property whose literal value to save.'),
       ]);
     }
+    $scale = $operation['group'] ?? NULL;
+    if ($scale !== NULL && (!is_string($scale) || $scale === '')) {
+      throw new MaterialGestureException([
+        new BlueprintError('group', 'INVALID_PARAMETER', 'group must be a declared token scale name.', [], 'Pass "group" as a declared token scale (the roster groups tokens by it: space, color, gradient, ...), or omit it to mint on the first declared scale whose shape fits the value.'),
+      ]);
+    }
+    $scale ??= $this->skinMaterialManager()->scaleFor($value) ?? throw new MaterialGestureException([
+      new BlueprintError('group', 'STYLE_TOKEN_SCALE_UNFIT', 'No declared token scale\'s shape fits the value.', ['scales' => array_keys($this->styleGuide->getTokenScales($this->declarations->siteTheme()))], 'Pass "group" as the declared scale to mint on, with a value that fits its shape (a color on the color scale, a gradient on the gradient scale, a length on a dimension scale).'),
+    ]);
     $description = $operation['description'] ?? '';
     if (!is_scalar($description)) {
       throw new MaterialGestureException([
@@ -334,8 +390,9 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
       ]);
     }
     $offered = $this->offeredFlag($operation) ?? TRUE;
-    $skin = $this->tokenManager()->activeSkin();
-    $this->tokenManager()->mint($skin, $scale, $name, $value, (string) $description, $offered);
+    $this->requireRoom($offered);
+    $skin = $this->skinMaterialManager()->activeSkin();
+    $this->skinMaterialManager()->mint($skin, $scale, $name, $value, (string) $description, $offered);
     return new MaterialGestureResult(MaterialKind::Token, "$scale/$name", [], $skin);
   }
 
@@ -347,7 +404,7 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
    * exactly what the site layer stores over the package's record.
    */
   protected function updateToken(string $id, array $operation): MaterialGestureResult {
-    $this->requirePermission('update tokens', 'administer skins', 'Updating tokens requires the "update tokens" permission.');
+    $this->requirePermission('update skin materials', 'administer skins', 'Updating tokens requires the "update skin materials" permission.');
     [$skin, $scale, $name] = $this->tokenAddress($id);
     $changes = array_intersect_key($operation, array_flip(self::TOKEN_UPDATE_KEYS));
     $value = $changes['value'] ?? NULL;
@@ -357,7 +414,9 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
         new BlueprintError($description !== NULL && !is_scalar($description) ? 'description' : 'value', 'INVALID_PARAMETER', 'description must be text; value a CSS value or a condition-keyed map.', [], 'Pass "description" as text, "value" as "1.25rem" or {"default": ..., "dark": ...}.'),
       ]);
     }
-    $this->tokenManager()->update($skin, $scale, $name, $value, $description === NULL ? NULL : (string) $description, $this->offeredFlag($changes));
+    $offered = $this->offeredFlag($changes);
+    $this->requireRoom($offered, (bool) $this->skinMaterialManager()->resolve($skin, $scale, $name)->record['offered']);
+    $this->skinMaterialManager()->update($skin, $scale, $name, $value, $description === NULL ? NULL : (string) $description, $offered);
     return new MaterialGestureResult(MaterialKind::Token, $id, [], $skin);
   }
 
@@ -370,14 +429,14 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
    * touched refuses. The result carries the skin while the token still
    * exists (revealed, or its removal staged) and nothing once it is gone.
    * A REFERENCED token is the usage lane's: the route lane stages the
-   * rewrite-then-delete batch (TokenManager::deleteToken()), the op spine
+   * rewrite-then-delete batch (SkinMaterialManager::deleteToken()), the op spine
    * refuses with the count.
    */
   protected function removeToken(string $id, bool $stage_batch): MaterialGestureResult {
-    $this->requirePermission('delete tokens', 'administer skins', 'Deleting tokens requires the "delete tokens" permission.', 'delete tokens in use');
+    $this->requirePermission('delete skin materials', 'administer skins', 'Deleting tokens requires the "delete skin materials" permission.', 'delete skin materials in use');
     [$skin, $scale, $name] = $this->tokenAddress($id);
-    $staged = $this->tokenManager()->deleteToken($skin, $scale, $name, $stage_batch);
-    $exists = $staged > 0 || $this->tokenManager()->has($skin, $scale, $name);
+    $staged = $this->skinMaterialManager()->deleteToken($skin, $scale, $name, $stage_batch);
+    $exists = $staged > 0 || $this->skinMaterialManager()->has($skin, $scale, $name);
     return new MaterialGestureResult(MaterialKind::Token, $id, [], $exists ? $skin : NULL, $staged);
   }
 
@@ -391,99 +450,12 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
    *   When no skin is active, or the id names no token the skin mints.
    */
   protected function tokenAddress(string $id): array {
-    $skin = $this->tokenManager()->activeSkin();
-    $parts = TokenManager::parseId($id);
-    if ($parts === NULL || !$this->tokenManager()->has($skin, $parts[0], $parts[1])) {
+    $skin = $this->skinMaterialManager()->activeSkin();
+    $parts = SkinMaterialManager::parseId($id);
+    if ($parts === NULL || !$this->skinMaterialManager()->has($skin, $parts[0], $parts[1])) {
       throw new MaterialGestureException([$this->notFound(MaterialKind::Token, $id)]);
     }
     return [$skin, $parts[0], $parts[1]];
-  }
-
-  /**
-   * Saves a swatch (save_material).
-   *
-   * Operation shape: {kind: swatch, label, value | element + property, group?,
-   * description?}.
-   *
-   * The value is given outright (a CSS value or a condition-keyed map) or
-   * captured from the selection: the literal an element wears for a
-   * property in its own default layer (a reference is already a material,
-   * and a value the element inherits is not the element's to save). The
-   * group is the swatch kind: color by default, gradient when named or
-   * when the value is a gradient function. The description is the
-   * swatch's face in the design system brief (when to reach for it). The
-   * AI's mint meets the ai_minting governance gate exactly as the
-   * blueprint create lane does.
-   * The mint joins the active design system unless "global": true opts
-   * it out (the membership rule every capture shares, see globalOptOut()).
-   */
-  protected function captureSwatch(array $operation, ?HostInterface $host, string $origin): MaterialGestureResult {
-    $this->requirePermission('create swatches', 'administer swatches', 'Minting swatches requires the "create swatches" permission.');
-    $global = $this->globalOptOut($operation);
-    if ($origin === MaterialRecord::ORIGIN_AI && $this->configFactory->get('daedalus_stylish.settings')->get('ai_minting') === FALSE) {
-      throw new MaterialGestureException([
-        new BlueprintError('value', 'STYLE_SWATCH_AI_MINTING_DISABLED', 'AI swatch minting is disabled on this site.', [], 'Reference a published palette swatch or use a literal value instead of saving a swatch; a person with the "create swatches" permission can mint it in the palette, or an administrator can enable ai_minting in daedalus_stylish.settings.'),
-      ]);
-    }
-    $value = $operation['value'] ?? NULL;
-    if ($value === NULL && isset($operation['element'])) {
-      $value = $this->literalWorn($host, (string) $operation['element'], $operation['property'] ?? NULL);
-    }
-    if (!is_string($value) && !is_array($value)) {
-      throw new MaterialGestureException([
-        new BlueprintError('value', 'MISSING_PARAMETER', 'A swatch needs a value: pass "value", or "element" and "property" to capture the value an element wears.', [], 'Pass a CSS value ("#e94560", or {"default": "#e94560", "dark": "#f87171"}), or name the element (id or alias) and the property whose literal value to save.'),
-      ]);
-    }
-    $group = $operation['group'] ?? NULL;
-    if ($group !== NULL && !is_string($group)) {
-      throw new MaterialGestureException([
-        new BlueprintError('group', 'INVALID_PARAMETER', 'group must be a swatch kind name.', [], 'Pass "color" (the default) or "gradient", or omit the key.'),
-      ]);
-    }
-    $group ??= $this->inferSwatchKind($value);
-    $description = $operation['description'] ?? '';
-    if (!is_scalar($description)) {
-      throw new MaterialGestureException([
-        new BlueprintError('description', 'INVALID_PARAMETER', 'description must be text.', [], 'Pass "description" as a sentence on when to reach for the value, or omit it.'),
-      ]);
-    }
-    $swatch = $this->swatchManager()->mint(is_scalar($operation['label'] ?? NULL) ? (string) $operation['label'] : '', $group, $value, $origin, $global, (string) $description, $this->offeredFlag($operation) ?? TRUE);
-    return new MaterialGestureResult(MaterialKind::Swatch, $swatch->getMachineName(), [], $swatch);
-  }
-
-  /**
-   * Updates a swatch (update_material).
-   *
-   * Operation shape: {kind: swatch, id, label?, value?, description?,
-   * offered?}.
-   */
-  protected function updateSwatch(string $id, array $operation): MaterialGestureResult {
-    $this->requirePermission('update swatches', 'administer swatches', 'Updating swatches requires the "update swatches" permission.');
-    $swatch = $this->swatchManager()->loadSwatch($id) ?? throw new MaterialGestureException([$this->notFound(MaterialKind::Swatch, $id)]);
-    $changes = array_intersect_key($operation, array_flip(self::SWATCH_UPDATE_KEYS));
-    $label = $changes['label'] ?? NULL;
-    $value = $changes['value'] ?? NULL;
-    $description = $changes['description'] ?? NULL;
-    if (($label !== NULL && !is_string($label)) || ($value !== NULL && !is_string($value) && !is_array($value)) || ($description !== NULL && !is_scalar($description))) {
-      throw new MaterialGestureException([
-        new BlueprintError($label !== NULL && !is_string($label) ? 'label' : ($description !== NULL && !is_scalar($description) ? 'description' : 'value'), 'INVALID_PARAMETER', 'label and description must be text; value a CSS value or a condition-keyed map.', [], 'Pass "label" and "description" as text, "value" as "#e94560" or {"default": ..., "dark": ...}.'),
-      ]);
-    }
-    $this->swatchManager()->update($swatch, $label, $value, $description === NULL ? NULL : (string) $description, $this->offeredFlag($changes));
-    return new MaterialGestureResult(MaterialKind::Swatch, $swatch->getMachineName(), [], $swatch);
-  }
-
-  /**
-   * Removes a swatch (remove_material).
-   *
-   * Operation shape: {kind: swatch, id}.
-   */
-  protected function removeSwatch(string $id, bool $stage_batch): MaterialGestureResult {
-    $this->requirePermission('delete swatches', 'administer swatches', 'Deleting swatches requires the "delete swatches" permission.', 'delete swatches in use');
-    $swatch = $this->swatchManager()->loadSwatch($id) ?? throw new MaterialGestureException([$this->notFound(MaterialKind::Swatch, $id)]);
-    $machine_name = $swatch->getMachineName();
-    $staged = $this->swatchManager()->deleteSwatch($swatch, $stage_batch);
-    return new MaterialGestureResult(MaterialKind::Swatch, $machine_name, [], $staged > 0 ? $swatch : NULL, $staged);
   }
 
   /**
@@ -522,6 +494,8 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
         new BlueprintError('description', 'INVALID_PARAMETER', 'description must be text, weight a number, owned_by a blueprint id.', [], 'Pass "description" as a sentence on when to reach for the look, "weight" as an integer, "owned_by" as a blueprint id or omit it.'),
       ]);
     }
+    $offered = $this->offeredFlag($operation) ?? TRUE;
+    $this->requireRoom($offered);
     $variant = $this->variantManager()->saveAsVariant(
       is_scalar($operation['label'] ?? NULL) ? (string) $operation['label'] : '',
       $key,
@@ -533,7 +507,7 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
       (string) $description,
       (int) $weight,
       $global,
-      $this->offeredFlag($operation) ?? TRUE,
+      $offered,
     );
     return new MaterialGestureResult(MaterialKind::Variant, $variant->getMachineName(), [], $variant);
   }
@@ -585,6 +559,7 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
     $description = $changes['description'] ?? NULL;
     $weight = $changes['weight'] ?? NULL;
     $offered = $this->offeredFlag($changes);
+    $this->requireRoom($offered, $variant->isOffered());
     if ($label !== NULL || $description !== NULL || $weight !== NULL || $offered !== NULL) {
       if (($label !== NULL && !is_string($label)) || ($description !== NULL && !is_scalar($description)) || ($weight !== NULL && !is_numeric($weight))) {
         throw new MaterialGestureException([
@@ -612,20 +587,34 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   /**
    * Saves an animation (save_material).
    *
-   * Operation shape: {kind: animation, label, steps, description?, offered?}.
-   *
-   * The steps are always given outright: a keyframes block lives on no
-   * element, so there is nothing to capture from a selection. The AI's
-   * mint meets the ai_minting governance gate exactly as the blueprint
-   * create lane does (the same setting gates swatches), and joins the
-   * active design system unless "global": true opts it out.
+   * Operation shape: {kind: animation, label, steps, description?,
+   * offered?}. The token mint's twin for the skin's motion section: the
+   * label IS the name (the keyframes ident tail, SkinAnimationsItem::NAME:
+   * an animation has no human label apart from its name, exactly as a
+   * token), the steps are always given outright (a keyframes block lives
+   * on no element, so there is nothing to capture from a selection), and
+   * the record lands on the ACTIVE skin in the layer the skin manager
+   * names (SkinManager::writesSiteLayer()). No "global" key: an
+   * animation's membership is its skin's. The AI's mint meets the
+   * ai_minting governance gate exactly as the token and font mints do, and
+   * so does the font mint.
    */
   protected function captureAnimation(array $operation, string $origin): MaterialGestureResult {
-    $this->requirePermission('create animations', 'administer animations', 'Minting animations requires the "create animations" permission.');
-    $global = $this->globalOptOut($operation);
-    if ($origin === MaterialRecord::ORIGIN_AI && $this->configFactory->get('daedalus_stylish.settings')->get('ai_minting') === FALSE) {
+    $this->requirePermission('create skin materials', 'administer skins', 'Minting animations requires the "create skin materials" permission.');
+    if (array_key_exists('global', $operation)) {
       throw new MaterialGestureException([
-        new BlueprintError('steps', 'STYLE_ANIMATION_AI_MINTING_DISABLED', 'AI animation minting is disabled on this site.', [], 'Wear a published animation from the MATERIALS roster instead of saving one; a person with the "create animations" permission can mint it in the Materials section, or an administrator can enable ai_minting in daedalus_stylish.settings.'),
+        new BlueprintError('global', 'INVALID_PARAMETER', 'An animation takes no "global" key: it belongs to the active skin, whose membership it shares.', [], 'Omit "global"; an animation is offered whenever its skin is worn.'),
+      ]);
+    }
+    if ($origin === MaterialRecord::ORIGIN_AI && $this->aiMintingClosed()) {
+      throw new MaterialGestureException([
+        new BlueprintError('steps', 'STYLE_ANIMATION_AI_MINTING_DISABLED', 'AI animation minting is disabled on this site.', [], 'Wear an animation from the MATERIALS roster instead of saving one; a person with the "create skin materials" permission can mint it in the skin tab, or an administrator can enable ai_minting in daedalus_stylish.settings.'),
+      ]);
+    }
+    $name = $operation['label'] ?? NULL;
+    if (!is_string($name) || $name === '') {
+      throw new MaterialGestureException([
+        new BlueprintError('label', 'MISSING_PARAMETER', 'An animation needs a name: pass "label".', [], 'Pass "label" as the animation name, the tail of its keyframes name motion-{name} ("fade_in", "rise": lowercase letters, digits, inner hyphens or underscores).'),
       ]);
     }
     $steps = $operation['steps'] ?? NULL;
@@ -640,65 +629,109 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
         new BlueprintError('description', 'INVALID_PARAMETER', 'description must be text.', [], 'Pass "description" as a sentence on when to reach for the motion, or omit it.'),
       ]);
     }
-    $animation = $this->animationManager()->mint(is_scalar($operation['label'] ?? NULL) ? (string) $operation['label'] : '', $steps, (string) $description, $origin, $global, $this->offeredFlag($operation) ?? TRUE);
-    return new MaterialGestureResult(MaterialKind::Animation, $animation->getMachineName(), [], $animation);
+    $offered = $this->offeredFlag($operation) ?? TRUE;
+    $this->requireRoom($offered);
+    $skin = $this->skinMaterialManager()->activeSkin();
+    $this->skinMaterialManager()->mintAnimation($skin, $name, $steps, (string) $description, $offered);
+    return new MaterialGestureResult(MaterialKind::Animation, $name, [], $skin);
   }
 
   /**
    * Updates an animation (update_material).
    *
-   * Operation shape: {kind: animation, id, label?, description?, steps?,
-   * offered?}.
+   * Operation shape: {kind: animation, id, steps?, description?,
+   * offered?}. On a consuming site the facts given are exactly what the
+   * site layer stores over the package's record. The name is identity
+   * (the keyframes ident tail): renaming is the skin material route's
+   * gesture, since a worn animation's rename stages a batch the op spine
+   * cannot drive.
    */
   protected function updateAnimation(string $id, array $operation): MaterialGestureResult {
-    $this->requirePermission('update animations', 'administer animations', 'Updating animations requires the "update animations" permission.');
-    $animation = $this->animationManager()->loadAnimation($id) ?? throw new MaterialGestureException([$this->notFound(MaterialKind::Animation, $id)]);
+    $this->requirePermission('update skin materials', 'administer skins', 'Updating animations requires the "update skin materials" permission.');
+    $skin = $this->animationAddress($id);
     $changes = array_intersect_key($operation, array_flip(self::ANIMATION_UPDATE_KEYS));
-    $label = $changes['label'] ?? NULL;
     $description = $changes['description'] ?? NULL;
     $steps = $changes['steps'] ?? NULL;
-    if (($label !== NULL && !is_string($label)) || ($description !== NULL && !is_scalar($description)) || ($steps !== NULL && !is_array($steps))) {
+    if (($description !== NULL && !is_scalar($description)) || ($steps !== NULL && !is_array($steps))) {
       throw new MaterialGestureException([
-        new BlueprintError($label !== NULL && !is_string($label) ? 'label' : ($description !== NULL && !is_scalar($description) ? 'description' : 'steps'), 'INVALID_PARAMETER', 'label and description must be text; steps an object keyed by offset.', [], 'Pass "label" and "description" as text, "steps" as {"0%": {...}, "100%": {...}}.'),
+        new BlueprintError($description !== NULL && !is_scalar($description) ? 'description' : 'steps', 'INVALID_PARAMETER', 'description must be text; steps an object keyed by offset.', [], 'Pass "description" as text, "steps" as {"0%": {...}, "100%": {...}}.'),
       ]);
     }
-    $this->animationManager()->update($animation, $label, $steps, $description === NULL ? NULL : (string) $description, $this->offeredFlag($changes));
-    return new MaterialGestureResult(MaterialKind::Animation, $animation->getMachineName(), [], $animation);
+    $offered = $this->offeredFlag($changes);
+    $this->requireRoom($offered, (bool) $this->skinMaterialManager()->resolveAnimation($skin, $id)->record['offered']);
+    $this->skinMaterialManager()->updateAnimation($skin, $id, $steps, $description === NULL ? NULL : (string) $description, $offered);
+    return new MaterialGestureResult(MaterialKind::Animation, $id, [], $skin);
   }
 
   /**
    * Removes an animation (remove_material).
    *
-   * Operation shape: {kind: animation, id}.
+   * Operation shape: {kind: animation, id}. The token removal's twin: on a
+   * consuming site the site's record goes (a site-minted animation is
+   * deleted, a site override reveals the package's); a shipped animation
+   * the site never touched refuses. A WORN animation is the usage lane's:
+   * the route lane stages the rewrite-then-delete batch
+   * (SkinMaterialManager::deleteAnimation()), the op spine refuses with
+   * the count.
    */
   protected function removeAnimation(string $id, bool $stage_batch): MaterialGestureResult {
-    $this->requirePermission('delete animations', 'administer animations', 'Deleting animations requires the "delete animations" permission.', 'delete animations in use');
-    $animation = $this->animationManager()->loadAnimation($id) ?? throw new MaterialGestureException([$this->notFound(MaterialKind::Animation, $id)]);
-    $machine_name = $animation->getMachineName();
-    $staged = $this->animationManager()->deleteAnimation($animation, $stage_batch);
-    return new MaterialGestureResult(MaterialKind::Animation, $machine_name, [], $staged > 0 ? $animation : NULL, $staged);
+    $this->requirePermission('delete skin materials', 'administer skins', 'Deleting animations requires the "delete skin materials" permission.', 'delete skin materials in use');
+    $skin = $this->animationAddress($id);
+    $staged = $this->skinMaterialManager()->deleteAnimation($skin, $id, $stage_batch);
+    $exists = $staged > 0 || $this->skinMaterialManager()->hasAnimation($skin, $id);
+    return new MaterialGestureResult(MaterialKind::Animation, $id, [], $exists ? $skin : NULL, $staged);
+  }
+
+  /**
+   * Resolves an animation id to the active skin that mints it.
+   *
+   * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
+   *   When no skin is active, or the id names no animation the skin mints.
+   */
+  protected function animationAddress(string $id): DaedalusStylishSkinInterface {
+    $skin = $this->skinMaterialManager()->activeSkin();
+    if (!$this->skinMaterialManager()->hasAnimation($skin, $id)) {
+      throw new MaterialGestureException([$this->notFound(MaterialKind::Animation, $id)]);
+    }
+    return $skin;
   }
 
   /**
    * Saves a font (save_material).
    *
-   * Operation shape: {kind: font, label, family?, faces, description?,
-   * offered?, global?}.
-   *
-   * The faces are always given outright (a family lives on no element,
-   * so there is nothing to capture from a selection), each naming an
-   * uploaded font file through its typed source. The family defaults to
-   * the label: a font called "Inter" is the family "Inter" unless the
-   * writer says otherwise. The AI's mint meets the ai_minting governance
-   * gate exactly as the other mints do, and joins the active design
-   * system unless "global": true opts it out.
+   * Operation shape: {kind: font, label, family, faces, description?,
+   * offered?}. The animation mint's twin for the skin's type section: the
+   * label IS the name (the roster id, SkinFontsItem::NAME: a font has no
+   * human label apart from its name, exactly as a token), the family is
+   * what a font-family stack references ("Inter"), and the faces are
+   * always given outright (a family lives on no element, so there is
+   * nothing to capture from a selection), each naming an uploaded font
+   * file through its typed source; the record lands on the ACTIVE skin in
+   * the layer the skin manager names (SkinManager::writesSiteLayer()). No
+   * "global" key: a font's membership is its skin's. The AI's mint meets
+   * the ai_minting governance gate exactly as the other mints do.
    */
   protected function captureFont(array $operation, string $origin): MaterialGestureResult {
-    $this->requirePermission('create fonts', 'administer fonts', 'Minting fonts requires the "create fonts" permission.');
-    $global = $this->globalOptOut($operation);
-    if ($origin === MaterialRecord::ORIGIN_AI && $this->configFactory->get('daedalus_stylish.settings')->get('ai_minting') === FALSE) {
+    $this->requirePermission('create skin materials', 'administer skins', 'Minting fonts requires the "create skin materials" permission.');
+    if (array_key_exists('global', $operation)) {
       throw new MaterialGestureException([
-        new BlueprintError('faces', 'STYLE_FONT_AI_MINTING_DISABLED', 'AI font minting is disabled on this site.', [], 'Name a published family from the FONTS roster instead of saving one; a person with the "create fonts" permission can mint it in the Materials section, or an administrator can enable ai_minting in daedalus_stylish.settings.'),
+        new BlueprintError('global', 'INVALID_PARAMETER', 'A font takes no "global" key: it belongs to the active skin, whose membership it shares.', [], 'Omit "global"; a font is offered whenever its skin is worn.'),
+      ]);
+    }
+    if ($origin === MaterialRecord::ORIGIN_AI && $this->aiMintingClosed()) {
+      throw new MaterialGestureException([
+        new BlueprintError('faces', 'STYLE_FONT_AI_MINTING_DISABLED', 'AI font minting is disabled on this site.', [], 'Name a family from the FONTS roster instead of saving one; a person with the "create skin materials" permission can mint it in the skin tab, or an administrator can enable ai_minting in daedalus_stylish.settings.'),
+      ]);
+    }
+    $name = $operation['label'] ?? NULL;
+    if (!is_string($name) || $name === '') {
+      throw new MaterialGestureException([
+        new BlueprintError('label', 'MISSING_PARAMETER', 'A font needs a name: pass "label".', [], 'Pass "label" as the font name, the roster id ("inter", "display_serif": lowercase letters, digits, inner hyphens or underscores); the family stacks reference is "family".'),
+      ]);
+    }
+    if (!array_key_exists('family', $operation)) {
+      throw new MaterialGestureException([
+        new BlueprintError('family', 'MISSING_PARAMETER', 'A font needs a family: the name font-family stacks reference.', [], 'Pass "family" as the typeface\'s name ("Inter", "Source Serif"); the compiled @font-face quotes it and a stack names it quoted.'),
       ]);
     }
     $faces = $operation['faces'] ?? NULL;
@@ -713,52 +746,75 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
         new BlueprintError('description', 'INVALID_PARAMETER', 'description must be text.', [], 'Pass "description" as a sentence on when to reach for the family, or omit it.'),
       ]);
     }
-    $label = is_scalar($operation['label'] ?? NULL) ? (string) $operation['label'] : '';
-    $family = array_key_exists('family', $operation) ? $operation['family'] : $label;
-    $font = $this->fontManager()->mint($label, $family, $faces, (string) $description, $origin, $global, $this->offeredFlag($operation) ?? TRUE);
-    return new MaterialGestureResult(MaterialKind::Font, $font->getMachineName(), [], $font);
+    $offered = $this->offeredFlag($operation) ?? TRUE;
+    $this->requireRoom($offered);
+    $skin = $this->skinMaterialManager()->activeSkin();
+    $this->skinMaterialManager()->mintFont($skin, $name, $operation['family'], $faces, (string) $description, $offered);
+    return new MaterialGestureResult(MaterialKind::Font, $name, [], $skin);
   }
 
   /**
    * Updates a font (update_material).
    *
-   * Operation shape: {kind: font, id, label?, family?, faces?,
-   * description?, offered?}.
+   * Operation shape: {kind: font, id, family?, faces?, description?,
+   * offered?}. On a consuming site the facts given are exactly what the
+   * site layer stores over the package's record. The name is identity
+   * (the roster id): renaming is the skin material route's gesture.
    */
   protected function updateFont(string $id, array $operation): MaterialGestureResult {
-    $this->requirePermission('update fonts', 'administer fonts', 'Updating fonts requires the "update fonts" permission.');
-    $font = $this->fontManager()->loadFont($id) ?? throw new MaterialGestureException([$this->notFound(MaterialKind::Font, $id)]);
+    $this->requirePermission('update skin materials', 'administer skins', 'Updating fonts requires the "update skin materials" permission.');
+    $skin = $this->fontAddress($id);
     $changes = array_intersect_key($operation, array_flip(self::FONT_UPDATE_KEYS));
-    $label = $changes['label'] ?? NULL;
     $family = $changes['family'] ?? NULL;
     $description = $changes['description'] ?? NULL;
     $faces = $changes['faces'] ?? NULL;
-    if (($label !== NULL && !is_string($label)) || ($family !== NULL && !is_scalar($family)) || ($description !== NULL && !is_scalar($description)) || ($faces !== NULL && !is_array($faces))) {
+    if (($family !== NULL && !is_scalar($family)) || ($description !== NULL && !is_scalar($description)) || ($faces !== NULL && !is_array($faces))) {
       $path = match (TRUE) {
-        $label !== NULL && !is_string($label) => 'label',
         $family !== NULL && !is_scalar($family) => 'family',
         $description !== NULL && !is_scalar($description) => 'description',
         default => 'faces',
       };
       throw new MaterialGestureException([
-        new BlueprintError($path, 'INVALID_PARAMETER', 'label, family and description must be text; faces a list of faces.', [], 'Pass "label", "family" and "description" as text, "faces" as [{"weight", "style", "source": {"file": "<uuid>"}}].'),
+        new BlueprintError($path, 'INVALID_PARAMETER', 'family and description must be text; faces a list of faces.', [], 'Pass "family" and "description" as text, "faces" as [{"weight", "style", "source": {"file": "<uuid>"}}].'),
       ]);
     }
-    $this->fontManager()->update($font, $label, $family === NULL ? NULL : (string) $family, $faces, $description === NULL ? NULL : (string) $description, $this->offeredFlag($changes));
-    return new MaterialGestureResult(MaterialKind::Font, $font->getMachineName(), [], $font);
+    $offered = $this->offeredFlag($changes);
+    $this->requireRoom($offered, (bool) $this->skinMaterialManager()->resolveFont($skin, $id)->record['offered']);
+    $this->skinMaterialManager()->updateFont($skin, $id, $family === NULL ? NULL : (string) $family, $faces, $description === NULL ? NULL : (string) $description, $offered);
+    return new MaterialGestureResult(MaterialKind::Font, $id, [], $skin);
   }
 
   /**
    * Removes a font (remove_material).
    *
-   * Operation shape: {kind: font, id}.
+   * Operation shape: {kind: font, id}. The animation removal's twin: on a
+   * consuming site the site's record goes (a site-minted font is deleted,
+   * a site override reveals the package's); a shipped font the site never
+   * touched refuses. A NAMED font (its family in a stack) is the usage
+   * lane's: the route lane stages the rewrite-then-delete batch
+   * (SkinMaterialManager::deleteFont()), the op spine refuses with the
+   * count.
    */
   protected function removeFont(string $id, bool $stage_batch): MaterialGestureResult {
-    $this->requirePermission('delete fonts', 'administer fonts', 'Deleting fonts requires the "delete fonts" permission.', 'delete fonts in use');
-    $font = $this->fontManager()->loadFont($id) ?? throw new MaterialGestureException([$this->notFound(MaterialKind::Font, $id)]);
-    $machine_name = $font->getMachineName();
-    $staged = $this->fontManager()->deleteFont($font, $stage_batch);
-    return new MaterialGestureResult(MaterialKind::Font, $machine_name, [], $staged > 0 ? $font : NULL, $staged);
+    $this->requirePermission('delete skin materials', 'administer skins', 'Deleting fonts requires the "delete skin materials" permission.', 'delete skin materials in use');
+    $skin = $this->fontAddress($id);
+    $staged = $this->skinMaterialManager()->deleteFont($skin, $id, $stage_batch);
+    $exists = $staged > 0 || $this->skinMaterialManager()->hasFont($skin, $id);
+    return new MaterialGestureResult(MaterialKind::Font, $id, [], $exists ? $skin : NULL, $staged);
+  }
+
+  /**
+   * Resolves a font id to the active skin that mints it.
+   *
+   * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
+   *   When no skin is active, or the id names no font the skin mints.
+   */
+  protected function fontAddress(string $id): DaedalusStylishSkinInterface {
+    $skin = $this->skinMaterialManager()->activeSkin();
+    if (!$this->skinMaterialManager()->hasFont($skin, $id)) {
+      throw new MaterialGestureException([$this->notFound(MaterialKind::Font, $id)]);
+    }
+    return $skin;
   }
 
   /**
@@ -807,6 +863,37 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   }
 
   /**
+   * Refuses a gesture that turns `offered` on while the site is full.
+   *
+   * The AI context budget's guard (MaterialsBudget::assertRoom(), the
+   * refusal at path `offered`): a mint asks with its flag (TRUE unless
+   * the operation withholds), an update with the flag it carries against
+   * the stored one, so only a change that shares MORE answers the
+   * budget; NULL (an update leaving the flag alone) and FALSE never do.
+   *
+   * @param bool|null $offered
+   *   The flag the gesture carries (offeredFlag(), TRUE by default on a
+   *   mint).
+   * @param bool $stored
+   *   The flag as stored; FALSE for a mint, which has nothing stored yet.
+   *
+   * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
+   *   AI_CONTEXT_FULL, when the flag turns on and the site is full.
+   */
+  protected function requireRoom(?bool $offered, bool $stored = FALSE): void {
+    if ($offered === TRUE && !$stored) {
+      $this->budget()->assertRoom('offered');
+    }
+  }
+
+  /**
+   * The AI context budget: the guard every sharing gesture answers.
+   */
+  protected function budget(): MaterialsBudget {
+    return ($this->budget)();
+  }
+
+  /**
    * The literal value an element wears for a property, from its own layer.
    *
    * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
@@ -814,7 +901,7 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   protected function literalWorn(?HostInterface $host, string $element, mixed $property): string {
     if (!is_string($property) || $property === '') {
       throw new MaterialGestureException([
-        new BlueprintError('property', 'MISSING_PARAMETER', 'Capturing a swatch from an element needs the CSS property to read.', [], 'Pass "property" (background-color, color, background-image, ...) beside "element".'),
+        new BlueprintError('property', 'MISSING_PARAMETER', 'Capturing a token from an element needs the CSS property to read.', [], 'Pass "property" (background-color, color, background-image, ...) beside "element".'),
       ]);
     }
     $key = $this->keyFor($host, $element);
@@ -822,7 +909,7 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
     $value = $map[$key]['default'][$property] ?? NULL;
     if (!is_string($value) || $value === '') {
       throw new MaterialGestureException([
-        new BlueprintError('property', 'MATERIAL_CAPTURE_FAILED', sprintf('The element wears no %s of its own.', $property), ['key' => $key], 'A swatch captures a value the element itself declares in its default layer; style the element with the value first, or pass "value" outright.'),
+        new BlueprintError('property', 'MATERIAL_CAPTURE_FAILED', sprintf('The element wears no %s of its own.', $property), ['key' => $key], 'A capture saves a value the element itself declares in its default layer; style the element with the value first, or pass "value" outright.'),
       ]);
     }
     $reference = $this->valueGrammar->resolve($value, MaterialRecord::SLOT_STYLE, ($this->rosterBuilder)()->build());
@@ -831,18 +918,10 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
         new BlueprintError('property', 'MATERIAL_CAPTURE_FAILED', sprintf('The element\'s %s is %s, not a literal value.', $property, $value), [
           'key' => $key,
           'value' => $value,
-        ], 'Only an inline literal becomes a swatch; this value already names a material (or a media/generated value).'),
+        ], 'Only an inline literal becomes a token; this value already names a material (or a media/generated value).'),
       ]);
     }
     return $value;
-  }
-
-  /**
-   * The swatch kind a value implies: gradient functions, else color.
-   */
-  protected function inferSwatchKind(string|array $value): string {
-    $sample = is_array($value) ? ($value['default'] ?? reset($value)) : $value;
-    return is_string($sample) && preg_match('/-gradient\s*\(/i', $sample) === 1 ? 'gradient' : 'color';
   }
 
   /**
@@ -936,7 +1015,6 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   protected function notFound(MaterialKind $kind, string $id): BlueprintError {
     $code = match ($kind) {
       MaterialKind::Token => 'STYLE_TOKEN_NOT_FOUND',
-      MaterialKind::Swatch => 'STYLE_SWATCH_NOT_FOUND',
       MaterialKind::Variant => 'STYLE_VARIANT_NOT_FOUND',
       MaterialKind::Animation => 'STYLE_ANIMATION_NOT_FOUND',
       MaterialKind::Font => 'STYLE_FONT_NOT_FOUND',
@@ -948,15 +1026,8 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   /**
    * The token manager (a closure: the dependency is circular).
    */
-  protected function tokenManager(): TokenManager {
-    return ($this->tokenManager)();
-  }
-
-  /**
-   * The swatch manager (a closure: the dependency is circular).
-   */
-  protected function swatchManager(): SwatchManager {
-    return ($this->swatchManager)();
+  protected function skinMaterialManager(): SkinMaterialManager {
+    return ($this->skinMaterialManager)();
   }
 
   /**
@@ -964,20 +1035,6 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
    */
   protected function variantManager(): VariantManager {
     return ($this->variantManager)();
-  }
-
-  /**
-   * The animation manager (a closure: the dependency is circular).
-   */
-  protected function animationManager(): AnimationManager {
-    return ($this->animationManager)();
-  }
-
-  /**
-   * The font manager (a closure: the dependency is circular).
-   */
-  protected function fontManager(): FontManager {
-    return ($this->fontManager)();
   }
 
   /**
@@ -1039,9 +1096,9 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
    * Whether a variant scope's elements have a dialect tag of their own.
    *
    * A declared non-style axis on such a scope spells as an attribute on
-   * that tag: the container kind on <pb-container>, the block kind on
-   * every block form, a block type on its <pb-{type}> (or its generic
-   * form), a base block plugin on its <pb-block plugin>. A layout scope
+   * that tag: the container kind on <d-container>, the block kind on
+   * every block form, a block type on its <d-{type}> (or its generic
+   * form), a base block plugin on its <d-block plugin>. A layout scope
    * (a section layout beside the container) and a base:{tag} treatment
    * have no tag of their own, so their axes stay JSON-only.
    */
@@ -1109,13 +1166,38 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   }
 
   /**
+   * Records every published variant's id on the request's change set.
+   *
+   * The law-change sites' read (a skin write, an enforcement edit, a
+   * skin choice, the design-system sweep): the conformance verdict is a
+   * projection of the law, so a law change can flip any variant between
+   * withheld and offered, and an open editor must learn the flips on the
+   * response's materials delta the way it learns a variant save. The
+   * ids are the judge's universe (unjudgedRecords(): every published
+   * variant, members of inactive systems included), never the roster's
+   * judged set, and the delta resolves each against the fresh roster
+   * after the reset: offered to an upsert, withheld or inactive to a
+   * remove. Broad on purpose: an unchanged verdict rides as identical
+   * upserts, wire noise the client's resolver absorbs; diffing the
+   * verdict before and after would need the pre-reset memo kept across
+   * the reset, a refinement for when the noise matters.
+   */
+  public function touchVariants(MaterialsChangeSet $change_set): void {
+    foreach ($this->unjudgedRecords() as $record) {
+      if ($record->kind === MaterialKind::Variant) {
+        $change_set->touch(MaterialKind::Variant, $record->id);
+      }
+    }
+  }
+
+  /**
    * The active published skin's minted tokens on declared scales.
    *
    * A token record is always `updatable`, shipped or not: a consuming
    * site's write to a shipped token lands in the skin's site layer over
    * the package's record, never in the package's, so the distro lock
    * (updatable() for the other kinds) refuses nothing here. What the lock
-   * does refuse for a token is its removal (TokenManager::deleteToken()).
+   * does refuse for a token is its removal (SkinMaterialManager::deleteToken()).
    * The origin is per token: shipped when the skin is shipped and its
    * package layer holds the name (a site override over it keeps the
    * shipped origin, the package still ships the token), user for a
@@ -1191,38 +1273,16 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
    * Whether a record of the given origin may be written by the update gesture.
    *
    * The `updatable` record flag is the distro lock as the client and the
-   * AI read it: a shipped swatch, variant or animation is locked while the
-   * lock holds (a consuming site) and updatable once the developer gate
-   * lifts it (DistroLock); a token never reads it (see tokens(): its
-   * site layer takes the write). Origin is the record fact the flag keys on
+   * AI read it: a shipped variant is locked while the lock holds (a
+   * consuming site) and updatable once the developer gate lifts it
+   * (DistroLock); a skin material never reads it (see tokens(): its site
+   * layer takes the write). Origin is the record fact the flag keys on
    * (the entity carries a provider), the same fact the client's shipped
    * gestures (revert, copy) read. Records are cached under the roster's
    * tags, so a flag flip needs a cache rebuild to reach the client.
    */
   protected function updatable(string $origin): bool {
     return !($origin === MaterialRecord::ORIGIN_SHIPPED && $this->distroLock->holds());
-  }
-
-  /**
-   * The published swatches, label order.
-   *
-   * @return \Drupal\daedalus_blueprint\Materials\MaterialRecord[]
-   *   One record per published swatch.
-   */
-  protected function swatches(): array {
-    return array_map(fn (DaedalusStylishSwatchInterface $swatch): MaterialRecord => new MaterialRecord(
-      kind: MaterialKind::Swatch,
-      id: $swatch->getMachineName(),
-      label: (string) $swatch->label(),
-      description: $swatch->getDescription(),
-      value: $swatch->getSwatchValue(),
-      group: $swatch->getKind(),
-      spellings: [MaterialRecord::SLOT_STYLE => 'var(' . StyleGuide::swatchVariable($swatch->getMachineName()) . ')'],
-      origin: $swatch->getOrigin(),
-      updatable: $this->updatable($swatch->getOrigin()),
-      designSystem: $swatch->getDesignSystem(),
-      offered: $swatch->isOffered(),
-    ), $this->swatchRepository->publishedSwatches());
   }
 
   /**
@@ -1265,57 +1325,92 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   }
 
   /**
-   * The published animations, label-then-machine-name order.
+   * The active published skin's animations, in stored order.
    *
-   * The same read the compiled keyframes file makes
-   * (AnimationRepository::publishedAnimations()), so what validates and
-   * what delivers are one set in one order.
+   * The tokens read's twin for the skin's motion section: the same read
+   * the compiled skin file makes (the skin's animations as worn), so what
+   * validates and what delivers are one set in one order. An animation
+   * record is always `updatable`, shipped or not: a consuming site's
+   * write lands in the skin's site layer over the package's record (see
+   * tokens()). The origin is per animation: shipped when the skin is
+   * shipped and its package layer holds the name, user otherwise. The
+   * spelling is the property-scoped animation slot
+   * (StyleGuide::animationName()), never var().
    *
    * @return \Drupal\daedalus_blueprint\Materials\MaterialRecord[]
-   *   One record per published animation.
+   *   One record per animation, stored order.
    */
   protected function animations(): array {
-    return array_map(fn (DaedalusStylishAnimationInterface $animation): MaterialRecord => new MaterialRecord(
-      kind: MaterialKind::Animation,
-      id: $animation->getMachineName(),
-      label: (string) $animation->label(),
-      description: $animation->getDescription(),
-      value: $animation->getSteps(),
-      spellings: [MaterialRecord::SLOT_ANIMATION => StyleGuide::animationName($animation->getMachineName())],
-      origin: $animation->getOrigin(),
-      updatable: $this->updatable($animation->getOrigin()),
-      designSystem: $animation->getDesignSystem(),
-      offered: $animation->isOffered(),
-    ), $this->animationRepository->publishedAnimations());
+    $skin = $this->skinManager->loadActiveSkin();
+    if ($skin === NULL || !$skin->isPublished()) {
+      return [];
+    }
+    $package = $skin->isShipped() ? $skin->packageAnimations() : [];
+    $design_system = $skin->getDesignSystem();
+    $records = [];
+    foreach ($skin->animations() as $name => $record) {
+      $name = (string) $name;
+      if (!SkinAnimationsItem::isRecord($record)) {
+        throw new \UnexpectedValueException(sprintf('The stored animation %s of the "%s" skin is not a record; a skin stores {steps, description, offered} per animation.', $name, $skin->getMachineName()));
+      }
+      $records[] = new MaterialRecord(
+        kind: MaterialKind::Animation,
+        id: $name,
+        label: $name,
+        description: $record['description'],
+        value: $record['steps'],
+        spellings: [MaterialRecord::SLOT_ANIMATION => StyleGuide::animationName($name)],
+        origin: isset($package[$name]) ? MaterialRecord::ORIGIN_SHIPPED : MaterialRecord::ORIGIN_USER,
+        designSystem: $design_system,
+        offered: $record['offered'],
+      );
+    }
+    return $records;
   }
 
   /**
-   * The published fonts, label-then-machine-name order.
+   * The active published skin's fonts, in stored order.
    *
-   * The same read the compiled @font-face file makes
-   * (FontRepository::publishedFonts()), so what the roster offers and
-   * what delivers are one set in one order. The value is {family, faces}
-   * (the family a stack names, the faces the family ships); the spelling
-   * is the quoted family in the property-scoped font slot
-   * (StyleGuide::fontFamily()), never var(): a family is a string
-   * component of a font-family stack.
+   * The animations read's twin for the skin's type section: the same read
+   * the compiled skin file makes (the skin's fonts as worn), so what the
+   * roster offers and what delivers are one set in one order. The value
+   * is {family, faces} (the family a stack names, the faces the family
+   * ships); the spelling is the quoted family in the property-scoped font
+   * slot (StyleGuide::fontFamily()), never var(): a family is a string
+   * component of a font-family stack. A font record is always
+   * `updatable`, shipped or not (see tokens()); the origin is per font:
+   * shipped when the skin is shipped and its package layer holds the name,
+   * user otherwise.
    *
    * @return \Drupal\daedalus_blueprint\Materials\MaterialRecord[]
-   *   One record per published font.
+   *   One record per font, stored order.
    */
   protected function fonts(): array {
-    return array_map(fn (DaedalusStylishFontInterface $font): MaterialRecord => new MaterialRecord(
-      kind: MaterialKind::Font,
-      id: $font->getMachineName(),
-      label: (string) $font->label(),
-      description: $font->getDescription(),
-      value: ['family' => $font->getFamily(), 'faces' => $font->getFaces()],
-      spellings: [MaterialRecord::SLOT_FONT => StyleGuide::fontFamily($font->getFamily())],
-      origin: $font->getOrigin(),
-      updatable: $this->updatable($font->getOrigin()),
-      designSystem: $font->getDesignSystem(),
-      offered: $font->isOffered(),
-    ), $this->fontRepository->publishedFonts());
+    $skin = $this->skinManager->loadActiveSkin();
+    if ($skin === NULL || !$skin->isPublished()) {
+      return [];
+    }
+    $package = $skin->isShipped() ? $skin->packageFonts() : [];
+    $design_system = $skin->getDesignSystem();
+    $records = [];
+    foreach ($skin->fonts() as $name => $record) {
+      $name = (string) $name;
+      if (!SkinFontsItem::isRecord($record)) {
+        throw new \UnexpectedValueException(sprintf('The stored font %s of the "%s" skin is not a record; a skin stores {family, faces, description, offered} per font.', $name, $skin->getMachineName()));
+      }
+      $records[] = new MaterialRecord(
+        kind: MaterialKind::Font,
+        id: $name,
+        label: $name,
+        description: (string) $record['description'],
+        value: ['family' => $record['family'], 'faces' => $record['faces']],
+        spellings: [MaterialRecord::SLOT_FONT => StyleGuide::fontFamily((string) $record['family'])],
+        origin: isset($package[$name]) ? MaterialRecord::ORIGIN_SHIPPED : MaterialRecord::ORIGIN_USER,
+        designSystem: $design_system,
+        offered: (bool) $record['offered'],
+      );
+    }
+    return $records;
   }
 
   /**

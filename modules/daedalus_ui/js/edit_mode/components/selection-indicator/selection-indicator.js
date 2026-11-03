@@ -8,6 +8,7 @@ import { projectionIndex } from '../page-elements/projection-index';
 import { reachPredicate } from '../page-elements/reach';
 import { labelFor } from '../../selection/label-for-key';
 import { ancestryOf } from '../../selection/ancestry';
+import { effectiveBlueprint } from '../../blueprint/effective-blueprint';
 
 /**
  * The selection indicator: breadcrumb + chips, two projections of the
@@ -181,11 +182,12 @@ const SelectionIndicator = () => {
   const mode = useSelector((state) => state.mode.mode);
   const dragActive = useSelector((state) => state.drag.active);
   const dropContainerKey = useSelector((state) => state.drag.dropContainerKey);
-  // Re-render on mirror replacement so labels and ancestry re-derive from
-  // the fresh projection (the index itself is read at render time), and
-  // on a view flip so the trail re-derives from the rows now drawn (the
-  // reach predicate is taken at render time too).
-  useSelector((state) => state.blueprint.blueprint);
+  // Re-render on an effective-blueprint change (a mirror replacement or a
+  // composed edit's draft) so labels and ancestry re-derive from the
+  // fresh projection (the index itself is read at render time), and on a
+  // view flip so the trail re-derives from the rows now drawn (the reach
+  // predicate is taken at render time too).
+  useSelector((state) => effectiveBlueprint(state));
   useSelector((state) => state.view.views);
 
   // A drag or lift owns the indicator: the breadcrumb

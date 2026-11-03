@@ -22,8 +22,9 @@ use Drupal\file\FileUsage\FileUsageInterface;
  * (module daedalus_ai, type thread, id the thread), which core answers by
  * making the file permanent (a used file is permanent) so temporary-file
  * garbage collection cannot take it while the thread lives, and a name
- * (the saved filename, or the name a declaration gave) recorded as the
- * file's alias in the dialect's alias layer for that conversation, which
+ * (the lane's clean filename, renamed on collision, or the name a
+ * declaration gave) recorded as the file's alias in the dialect's alias
+ * layer for that conversation, which
  * is how the model addresses it afterwards (`view_file("hero.svg")`,
  * `file="hero.svg"`, `url('file:hero.svg')`). The model never sees a file
  * uuid; a name resolves only for the file's owner, never for an arbitrary
@@ -93,7 +94,8 @@ final class Attachments {
    *   The conversation's thread id.
    *
    * @return string
-   *   The name the file answers to in this conversation: its saved filename.
+   *   The name the file answers to in this conversation: the lane's clean
+   *   filename (renamed on collision).
    */
   public function attach(FileInterface $file, string $thread): string {
     $name = $this->hold($file, $thread);
@@ -118,7 +120,8 @@ final class Attachments {
    *   The conversation's thread id.
    * @param string|null $name
    *   The name to hold the file under (a declaration's own name, whatever
-   *   the lane saved it as), or NULL for the saved filename.
+   *   the lane saved it as), or NULL for the lane's clean filename (renamed
+   *   on collision).
    *
    * @return string
    *   The name the file answers to in this conversation.

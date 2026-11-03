@@ -37,10 +37,10 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * single file; a machine name shipped in two of one module's files is a
  * developer error (FAILED on the sync report under the file's name, an
  * exception for the loud reader). One grammar for every importer: skins,
- * swatches, and animations gain the per-id form by construction.
+ * skins gain the per-id form by construction.
  *
- * Activation belongs to ShippedSync, which runs the five importers in
- * dependency order (fonts, animations, swatches, skins, variants) on every cache
+ * Activation belongs to ShippedSync, which runs the four importers in
+ * dependency order (skins, variants) on every cache
  * rebuild (hook_rebuild(), so `drush cr` brings a pulled package live), on
  * module install (hook_modules_installed()), and by hand through
  * `drush daedalus_stylish:sync [MODULE]`. Each importer's sync() stays public
@@ -56,13 +56,38 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * or still on disk as install config); a module that packages no system
  * ships global materials. A member validates in its
  * own system's universe (the field handlers pass the membership to
- * StyleMapValidator) but under the SITE's law, and a package's law (the
- * guide stratum its files declare) layers only while its system is
- * active. So a package syncs only while its system is the active one
- * (ActiveDesignSystem::packagedSystemOf(), which knows a package from
- * the moment its module is installed, before its system's config lands);
- * inactive, it is deferred whole, and the activation lands it under its
- * own law in one run.
+ * StyleMapValidator), and a package's stratum (the guide declarations
+ * its files layer: axes, parts, scales) layers only while its system is
+ * active. So a package syncs only while its system is the active one,
+ * landed and named by the pointer (ActiveDesignSystem::load();
+ * packagedSystemOf() knows a package from the moment its module is
+ * installed, before its system's config lands); inactive or not yet
+ * landed, it is deferred whole, and the system becoming active (its
+ * activation, or its config landing under a pointer that already names
+ * it, config import's order) lands it under its own stratum in one run.
+ *
+ * What a definition can FAIL on is structure alone: the file grammar, an
+ * unknown scope, part, axis or design system, an unrecognized property or
+ * selector word, a dangling, mis-scoped or cyclic reference, a collision.
+ * The site's LAW (strict's closed property world, bound scales, minted
+ * tokens) is never the sync's refusal: the variant styles field handler
+ * validates a shipped_sync write on the validator's landing lane
+ * (StyleMapValidator::withLandingLane()), the definition lands published,
+ * and the roster's verdict (VariantConformance) withholds it while the
+ * law of the day refuses its values and offers it again when the law
+ * changes, with no re-sync. A module's literal global is not the site's
+ * act. Skins are the exception by design: SkinImporter validates a skin's
+ * defaults against its own tokens and the default theme's guide and
+ * refuses loudly, because a skin's defaults are the look itself, not an
+ * offer the roster judges. That guide is the site's only once the
+ * default theme is installed (its chain declares the parts and groups a
+ * skin's chrome defaults address), so while system.theme names a default
+ * theme that is not installed yet (the installer's window: core's stark
+ * until the config phase imports system.theme) the skins kind waits
+ * (themeAwaited()) the way a package waits for its system, and the
+ * theme's landing (the default's save or the named theme's install) syncs
+ * it (ShippedSync::onDefaultThemeChanged()). A default theme that is not
+ * named is no wait: the law is whatever the installed declarations say.
  */
 abstract class ShippedDefinitionsImporter {
 
@@ -124,7 +149,7 @@ abstract class ShippedDefinitionsImporter {
   ) {}
 
   /**
-   * The kind's noun: 'variant', 'skin', 'swatch', 'animation', or 'font'.
+   * The kind's noun: 'variant' or 'skin'.
    *
    * The word every report, log line, and command line names a definition
    * by (`MODULE: KIND NAME outcome`), and the key ShippedSync files the
@@ -140,6 +165,30 @@ abstract class ShippedDefinitionsImporter {
    * in its messages; the importer stays the one owner of the string.
    */
   abstract public function fileSuffix(): string;
+
+  /**
+   * The entity type this kind lands on: 'daedalus_variant' or 'daedalus_skin'.
+   *
+   * The storage every read and write of the lane goes through, and the
+   * type whose pending entity definition updates make the rebuild sync
+   * unsafe (ShippedSync::onRebuild() guards on the kinds' own types only).
+   */
+  abstract public function entityTypeId(): string;
+
+  /**
+   * The default theme this kind waits for, or NULL when it waits for none.
+   *
+   * A kind validated against the default theme's guide (skins: their
+   * defaults address the parts and groups the theme chain declares)
+   * answers the default theme's name while system.theme names one that is
+   * not installed (the installer's stark window; a running site cannot
+   * uninstall its default theme), and sync() defers every module shipping
+   * the kind until it lands. A kind the theme does not gate answers NULL,
+   * the base's answer.
+   */
+  public function themeAwaited(): ?string {
+    return NULL;
+  }
 
   /**
    * The per-id shipped file's suffix, e.g. 'daedalus_stylish.variants.card.yml'.
@@ -314,7 +363,7 @@ abstract class ShippedDefinitionsImporter {
    * @return bool
    *   Whether the flag changed.
    */
-  protected function syncOffered(DaedalusStylishVariantInterface|DaedalusStylishSwatchInterface|DaedalusStylishAnimationInterface|DaedalusStylishFontInterface $entity, array $definition): bool {
+  protected function syncOffered(DaedalusStylishVariantInterface $entity, array $definition): bool {
     $offered = ($definition['ai'] ?? TRUE) !== FALSE;
     if ($entity->isOffered() === $offered) {
       return FALSE;
@@ -349,6 +398,27 @@ abstract class ShippedDefinitionsImporter {
   }
 
   /**
+   * The files of this kind a module ships, in read order.
+   *
+   * The single file MODULE.{suffix} first, then every per-id file
+   * MODULE.{suffix minus .yml}.ID.yml in name order; only files that exist.
+   *
+   * @return string[]
+   *   Absolute paths. Empty when the module is not enabled or ships no
+   *   file of this kind: the module is not a provider of it.
+   */
+  protected function shippedFiles(string $module): array {
+    $extensions = $this->moduleHandler->getModuleList();
+    if (!isset($extensions[$module])) {
+      return [];
+    }
+    $path = $extensions[$module]->getPath();
+    $files = array_values($this->perIdFiles($module));
+    array_unshift($files, "$path/$module.{$this->fileSuffix()}");
+    return array_values(array_filter($files, 'is_file'));
+  }
+
+  /**
    * Reads a module's shipped files, collecting file-level failures.
    *
    * The single file MODULE.{suffix} first, then every per-id file
@@ -366,20 +436,10 @@ abstract class ShippedDefinitionsImporter {
    *   by the failing file's base name.
    */
   protected function readShippedFiles(string $module): array {
-    $extensions = $this->moduleHandler->getModuleList();
-    if (!isset($extensions[$module])) {
-      return [[], []];
-    }
-    $path = $extensions[$module]->getPath();
-    $files = array_values($this->perIdFiles($module));
-    array_unshift($files, "$path/$module.{$this->fileSuffix()}");
     $definitions = [];
     $sources = [];
     $failures = [];
-    foreach ($files as $file) {
-      if (!is_file($file)) {
-        continue;
-      }
+    foreach ($this->shippedFiles($module) as $file) {
       $basename = basename($file);
       try {
         $decoded = Yaml::decode(file_get_contents($file)) ?? [];
@@ -412,14 +472,19 @@ abstract class ShippedDefinitionsImporter {
    * Imports new and syncs changed shipped definitions.
    *
    * Tolerant and complete: every definition of every module in the set is
-   * attempted, and a definition that cannot import (malformed, failing
-   * spine validation, colliding with an entity its module does not ship)
-   * is recorded FAILED with its errors while the rest of the file lands.
-   * The one module the run does not read is a design-system package whose
-   * system is not the active one: it is DEFERRED on the report (its
-   * definitions validate only under the law its own system layers) and
-   * lands at the system's activation.
-   * Nothing the disk lane can refuse throws out of here; callers read the
+   * attempted, and a definition that cannot import (malformed, failing the
+   * spine's structural validation, colliding with an entity its module
+   * does not ship) is recorded FAILED with its errors while the rest of
+   * the file lands. A definition the site's law refuses is not a failure:
+   * it lands CREATED / UPDATED like any other and the roster's verdict
+   * withholds it (see the class doc). Two waits are not reads either: a
+   * design-system package whose system is not the active one is DEFERRED
+   * on the report (its definitions are structured by the stratum its own
+   * system layers) and lands when its system becomes active; and a kind
+   * that waits for the default theme (themeAwaited(): the skins kind
+   * while system.theme names a theme not installed) defers every module
+   * shipping it, recorded with the theme it waits for, and lands when the
+   * theme does. Nothing the disk lane can refuse throws out of here; callers read the
    * report, and the sync command, the update hooks and the rebuild log
    * each surface its failures in their own medium. ShippedSync runs the
    * five kinds in dependency order; call one kind's sync() directly only
@@ -436,16 +501,32 @@ abstract class ShippedDefinitionsImporter {
   public function sync(?array $modules = NULL): SyncReport {
     $report = new SyncReport($this->kind());
     $queue = [];
-    $active = $this->activeDesignSystem->activeId();
+    // Active means landed: a pointer naming a system whose config has not
+    // arrived is no system yet (config import writes the pointer, simple
+    // config, as the module installs and imports the entity afterwards),
+    // so the package waits for the entity and lands when it does
+    // (DesignSystemSwitchSubscriber). load() is the one definition of
+    // active the rest of the suite reads.
+    $active = $this->activeDesignSystem->load()?->id();
     foreach ($modules ?? array_keys($this->moduleHandler->getModuleList()) as $module) {
-      // A package's definitions sync only under its own law: the guide's
-      // design-system stratum (axes, scales, bindings) layers only while
-      // the system is active, and its skin mints the tokens its variants
-      // name, so a member read while the system is inactive fails on its
-      // own package. Deferred whole; the activation lands it.
+      // A package's definitions sync only under its own stratum: the
+      // guide's design-system layer (axes, parts, scales) exists only
+      // while the system is active, so a member read while it is inactive
+      // is structurally wrong on its own package (an axis or part the
+      // active site never declared). Deferred whole; the system becoming
+      // active lands it.
       $system = $this->activeDesignSystem->packagedSystemOf($module);
       if ($system !== NULL && $system !== $active) {
         $report->defer($module, $system);
+        continue;
+      }
+      // The kind's own wait: a default theme named but not installed (the
+      // skins kind validates against its guide). Recorded only for a
+      // module that ships the kind, so the report reads as the command
+      // prints it: a shipping module waits, a non-provider is silent.
+      $theme = $this->themeAwaited();
+      if ($theme !== NULL && $this->shippedFiles($module) !== []) {
+        $report->deferForTheme($module, $theme);
         continue;
       }
       [$definitions, $failures] = $this->readShippedFiles($module);

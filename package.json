@@ -8,6 +8,7 @@
     "build:prod": "webpack --config modules/daedalus_ui/webpack.config.js --config modules/daedalus_stylish/webpack.config.js --config modules/daedalus_explode/webpack.config.js --config modules/daedalus_layout/webpack.config.js --mode production",
     "watch:prod": "webpack --config modules/daedalus_ui/webpack.config.js --config modules/daedalus_stylish/webpack.config.js --config modules/daedalus_explode/webpack.config.js --config modules/daedalus_layout/webpack.config.js --watch --mode production",
     "generate:wide-properties": "node modules/daedalus_stylish/js/src/tools/generate-wide-properties.mjs",
+    "generate:wide-selectors": "node modules/daedalus_stylish/js/src/tools/generate-wide-selectors.mjs",
     "vendor-update": "drush daedalus_edit:update-ckeditor-version; npm install; drush daedalus_edit:move-library"
   },
   "dependencies": {
@@ -19,7 +20,9 @@
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.43.5",
     "@reduxjs/toolkit": "^2.7.0",
+    "@webref/css": "8.7.8",
     "css-tree": "^3.2.1",
+    "html-tag-names": "2.1.0",
     "lodash": "^4.17.21",
     "mdn-data": "2.27.1",
     "preact": "^10.26.5",

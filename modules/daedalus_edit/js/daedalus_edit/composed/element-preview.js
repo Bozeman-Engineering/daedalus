@@ -11,6 +11,18 @@
  * it, so the preview cannot drift from what the commit's markup swap will
  * deliver.
  *
+ * The preview reaches the MODEL as well as the DOM. After the morph the
+ * new tree is handed to Drupal.Daedalus.Blueprint.draftMarkup under the
+ * edited element's selectable key: the blueprint slice's draft slot (a
+ * sibling of the mirror, never a write into it), which every reader of
+ * the effective tree lays over the one node being edited. The
+ * page-elements panel's tag fact and part rows, the styling inspector's
+ * part offering and write address, and the verification observer thus
+ * follow the gesture live instead of one round trip behind the canvas;
+ * the next mirror replacement (the gesture's own commit landing) clears
+ * the draft. This is the ONE call site: both composed editors preview
+ * through applyResolved, so neither editor dispatches to the store.
+ *
  * Identity is tracked by MODEL KEY, not by element: the root ('') and each
  * part key map to physical elements on both sides, and an element carries
  * its unmodeled attributes with it wherever its key moves. That makes the
@@ -319,4 +331,15 @@ export function applyResolved(
   });
 
   dead.forEach((element) => element.remove());
+
+  // The model follows the canvas: the previewed tree becomes the draft
+  // markup of the edited node, so every reader of the effective blueprint
+  // sees the shape the morph just produced. After the morph on purpose:
+  // the store deep-freezes what it is handed, and the morph above read
+  // `newTree` as plain data. An unaddressed render (no selectable key)
+  // has no node in the tree to draft over.
+  const key = EditableElement.selectableKey;
+  if (key !== null) {
+    Drupal.Daedalus.Blueprint.draftMarkup(key, newTree);
+  }
 }

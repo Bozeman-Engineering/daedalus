@@ -47,7 +47,7 @@ class SkinTokensItem extends StyleMapItem {
    * The keys of a token record, in stored order.
    *
    * - value: a CSS string, or a condition-keyed map whose 'default' entry
-   *   always applies (the one value model tokens and swatches share).
+   *   always applies (the one value model every token shares).
    * - description: the token's reasoning, the prose the AI and the
    *   palette read; '' when nobody wrote one.
    * - offered: whether rows bound to the token's scale offer it as one of
@@ -107,17 +107,43 @@ class SkinTokensItem extends StyleMapItem {
    * order, and any key outside RECORD_KEYS rides along for the validator
    * to refuse (INVALID_TOKEN_RECORD). Anything else is a bare value and
    * wraps: a string, a condition-keyed map, or a malformed value the
-   * validator refuses at "{scale}.{name}.value".
+   * validator refuses at "{scale}.{name}.value". Either way the value
+   * passes through canonicalizeValue(): a number is a spelling of a CSS
+   * value, and the store holds the string.
    */
   public static function canonicalizeToken(mixed $token): array {
     if (is_array($token) && array_key_exists('value', $token)) {
       return [
-        'value' => $token['value'],
+        'value' => static::canonicalizeValue($token['value']),
         'description' => $token['description'] ?? '',
         'offered' => $token['offered'] ?? TRUE,
       ] + $token;
     }
-    return ['value' => $token, 'description' => '', 'offered' => TRUE];
+    return ['value' => static::canonicalizeValue($token), 'description' => '', 'offered' => TRUE];
+  }
+
+  /**
+   * Canonicalizes one token value: a number becomes its string.
+   *
+   * A CSS value is text; "400", "1.5" and "0" are the stored spellings
+   * of the numbers a JSON writer (the AI's entity door, a hand-written
+   * file) may send. Every reader types a value as string|array
+   * (MaterialRecord, the condition normalizer, the delivery variables),
+   * so the one door canonicalizes. A condition-keyed map canonicalizes
+   * each entry; anything else is left for the validator to refuse.
+   */
+  public static function canonicalizeValue(mixed $value): mixed {
+    if (is_int($value) || is_float($value)) {
+      return (string) $value;
+    }
+    if (is_array($value) && !array_is_list($value)) {
+      foreach ($value as $condition => $conditioned) {
+        if (is_int($conditioned) || is_float($conditioned)) {
+          $value[$condition] = (string) $conditioned;
+        }
+      }
+    }
+    return $value;
   }
 
   /**
@@ -202,7 +228,9 @@ class SkinTokensItem extends StyleMapItem {
    * order rows and the roster read. Both inputs are stores, canonical by
    * construction: a scale that is not a map of names, a site entry that
    * is not a record, or a site-minted token that states no value is
-   * corrupt and fails loudly.
+   * corrupt and fails loudly. An empty array is the empty map (PHP spells
+   * both `[]`): a scale the package does not carry at all is the site's
+   * alone, minted whole.
    *
    * @param array $package
    *   The package layer, full records (this type's store).
@@ -218,11 +246,11 @@ class SkinTokensItem extends StyleMapItem {
   public static function mergeLayers(array $package, array $site): array {
     $merged = $package;
     foreach ($site as $scale => $names) {
-      if (!is_array($names) || array_is_list($names)) {
+      if (!is_array($names) || ($names !== [] && array_is_list($names))) {
         throw new \UnexpectedValueException(sprintf('The site layer\'s "%s" scale is not a map of token names.', $scale));
       }
       $base = $merged[$scale] ?? [];
-      if (!is_array($base) || array_is_list($base)) {
+      if (!is_array($base) || ($base !== [] && array_is_list($base))) {
         throw new \UnexpectedValueException(sprintf('The package layer\'s "%s" scale is not a map of token names.', $scale));
       }
       foreach ($names as $name => $record) {

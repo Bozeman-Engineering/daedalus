@@ -14,7 +14,7 @@ use Drupal\image\Entity\ImageStyle;
 use Drupal\layout_builder\SectionComponent;
 use Drupal\media\Entity\Media;
 use Drupal\daedalus_blueprint\Materials\Address;
-use Drupal\daedalus_stylish\DefaultsStylesheet;
+use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\daedalus_ui\Render\ElementAddress;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
@@ -117,9 +117,6 @@ class ImageBlockComposedRenderTest extends BlueprintKernelTestBase {
     // schemas must exist before the first such save.
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     // The composed render derives its src through an image style, and
     // derivative generation resolves the default toolkit from system.image,
     // which only exists once system's shipped config is installed.
@@ -524,7 +521,7 @@ class ImageBlockComposedRenderTest extends BlueprintKernelTestBase {
    * on the placement build (daedalus_ui LayoutBuilderBlockAttributes) and
    * reaches the composed root through the hoisted bag, which is exactly
    * the seam this pins for this bundle. The mechanism itself is
-   * daedalus_stylish's coverage (DefaultsStylesheetTest).
+   * daedalus_stylish's coverage (SkinStylesheetTest).
    */
   public function testDeclaredDefaultsDeliverAndStampTheRoot(): void {
     $this->installConfig(['daedalus_stylish']);
@@ -540,12 +537,12 @@ class ImageBlockComposedRenderTest extends BlueprintKernelTestBase {
       'The declaration ships the linked root and the picture as block boxes.',
     );
 
-    $this->container->get('daedalus_stylish.defaults_stylesheet')->compile();
-    $uri = \Drupal::state()->get(DefaultsStylesheet::STATE_KEY);
+    $this->container->get('daedalus_stylish.skin_stylesheet')->compile();
+    $uri = \Drupal::state()->get(SkinStylesheet::STATE_KEY);
     $this->assertIsString($uri, 'The defaults stylesheet compiles with no skin.');
     $css = file_get_contents($uri);
-    $selector = DefaultsStylesheet::elementSelector(Address::fromString('block_type:image'));
-    $this->assertSame(':where(.' . DefaultsStylesheet::SCOPE_CLASS . ' [' . ElementAddress::ATTRIBUTE . '="block_type:image"])', $selector);
+    $selector = SkinStylesheet::elementSelector(Address::fromString('block_type:image'));
+    $this->assertSame(':where(.' . SkinStylesheet::SCOPE_CLASS . ' [' . ElementAddress::ATTRIBUTE . '="block_type:image"])', $selector);
     $this->assertStringContainsString($selector . " {\n  display: block;\n  width: fit-content;\n}", $css, 'The root rule prints bare at the bundle address.');
     $this->assertStringContainsString($selector . " :where(.image-block-image) {\n  display: block;\n}", $css, 'The part rule prints as a :where() descendant.');
 

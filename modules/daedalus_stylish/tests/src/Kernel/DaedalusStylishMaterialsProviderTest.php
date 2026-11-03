@@ -7,40 +7,47 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\MaterialGestureException;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
+use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishAnimation;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider;
+use Drupal\Tests\daedalus\Traits\AiContextRefusalTrait;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Tests the materials provider: tokens, swatches, variants, animations.
+ * Tests the materials provider: tokens, animations, fonts, variants.
  *
  * Pins what the roster carries for each of daedalus_stylish's kinds and where it
  * comes from: tokens from the active skin on declared scales (undeclared
- * scales dropped, no skin means no tokens), swatches from the published
- * set in label order, variants from the published set weight-then-label
+ * scales dropped, no skin means no tokens; a capture with no scale named
+ * lands on the first declared scale whose shape fits the value), variants
+ * from the published set weight-then-label
  * with spellings derived from the declarations (class for the style
  * axis, an attribute on the element's tag for a declared axis of the
  * container kind, the block kind, a block type or a block plugin, none
  * for a layout's or a base tag's axes), the root-only depth fact,
- * animations from the published set in label order spelled in the
+ * animations from the active skin in stored order spelled in the
  * animation slot, and the provider's cache domain; and that a material
- * write mid-request resets the memo.
+ * write mid-request resets the memo. The AI context budget's guard on
+ * the gestures: while the site is full, an offered mint of any kind and
+ * an update turning `offered` on are refused with the one wording, and
+ * a mint withheld from the AI, a face edit, and a flag re-stated go
+ * through.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
 class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
 
+  use AiContextRefusalTrait;
   use DesignSystemActivationTrait;
   use UserCreationTrait;
 
@@ -52,6 +59,7 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -71,27 +79,22 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-*, var() and family references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
       'token_scales' => [
         'space' => ['label' => 'Space', 'shape' => 'dimension'],
         'color' => ['label' => 'Color', 'shape' => 'color'],
+        'gradient' => ['label' => 'Gradient', 'shape' => 'gradient'],
       ],
     ]);
     $this->container->get('state')->set('daedalus_stylish_control_test.kinds', [
@@ -137,58 +140,46 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     $this->installConfig(['daedalus_blueprint']);
     DesignSystem::create(['id' => 'aurora', 'label' => 'Aurora', 'default_skin' => 'aurora'])->save();
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora', 'design_system' => 'aurora']);
-    $skin->setPackageTokens(['space' => ['gutter' => '2rem']])->save();
-    $swatch = DaedalusStylishSwatch::create(['label' => 'Aurora accent', 'kind' => 'color', 'design_system' => 'aurora']);
-    $swatch->setSwatchValue('#6941c6');
-    $swatch->save();
-    $global_swatch = DaedalusStylishSwatch::create(['label' => 'Ink', 'kind' => 'color']);
-    $global_swatch->setSwatchValue('#111111');
-    $global_swatch->save();
+    $skin->setPackageTokens(['space' => ['gutter' => '2rem']]);
+    $skin->setPackageAnimations(['aurora_fade' => ['from' => ['opacity' => '0'], 'to' => ['opacity' => '1']]]);
+    $skin->save();
     $this->createVariant([
-      'label' => 'Aurora band',
-      'machine_name' => 'aurora_band',
+      'label' => 'Aurora section',
+      'machine_name' => 'aurora_section',
       'scope' => 'kind:container',
       'design_system' => 'aurora',
     ]);
-    $this->createVariant(['label' => 'Band', 'machine_name' => 'band', 'scope' => 'kind:container']);
-    $animation = DaedalusStylishAnimation::create([
-      'label' => 'Aurora fade',
-      'machine_name' => 'aurora_fade',
-      'design_system' => 'aurora',
-    ]);
-    $animation->setSteps(['from' => ['opacity' => '0'], 'to' => ['opacity' => '1']]);
-    $animation->save();
+    $this->createVariant(['label' => 'Section', 'machine_name' => 'section', 'scope' => 'kind:container']);
 
     // No active system: the global records alone. No system means no
-    // active skin, and the provider serves the ACTIVE skin's tokens only
-    // (token ids are not skin-qualified), so a system's token records
-    // exist only while it is active; its other members are readable
-    // through members() at any time.
+    // active skin, and the provider serves the ACTIVE skin's tokens and
+    // animations only (their ids are not skin-qualified), so a system's
+    // skin material records exist only while it is active; its other
+    // members are readable through members() at any time.
     $roster = $this->roster();
     $this->assertSame([], array_keys($roster->tokens()));
-    $this->assertSame(['ink'], array_keys($roster->swatches()));
-    $this->assertSame(['band'], array_keys($roster->variants()));
+    $this->assertSame(['section'], array_keys($roster->variants()));
     $this->assertSame([], array_keys($roster->animations()));
-    $this->assertNull($roster->get(MaterialKind::Variant, 'band')->designSystem);
+    $this->assertNull($roster->get(MaterialKind::Variant, 'section')->designSystem);
     $builder = $this->container->get('daedalus_blueprint.materials_roster_builder');
     $members = static fn () => array_map(static fn (MaterialRecord $record): string => $record->kind->value . ':' . $record->id, $builder->members('aurora'));
-    $this->assertSame(['swatch:aurora_accent', 'variant:aurora_band', 'animation:aurora_fade'], $members());
+    $this->assertSame(['variant:aurora_section'], $members());
 
     // Aurora active: its members join the global ones, membership on the
-    // record and its array shape. The activation syncs every enabled
-    // module, so the suite's shipped block variants and animations (global
-    // materials) join the roster here too.
+    // record and its array shape; the skin's tokens and animations are
+    // the system's materials now. The suite ships no global motion, so
+    // nothing else joins on the activation's sync.
     $this->container->get(ActiveDesignSystem::SERVICE_ID)->activate('aurora');
     $roster = $this->roster();
     $this->assertSame(['space/gutter'], array_keys($roster->tokens()));
-    $this->assertSame(['token:space/gutter', 'swatch:aurora_accent', 'variant:aurora_band', 'animation:aurora_fade'], $members());
+    $this->assertSame(['token:space/gutter', 'variant:aurora_section', 'animation:aurora_fade'], $members());
     $this->assertSame('aurora', $roster->get(MaterialKind::Token, 'space/gutter')->designSystem);
-    $this->assertSame(['aurora_accent', 'ink'], array_keys($roster->swatches()));
-    $this->assertSame(['aurora_band', 'band', 'block_fade_in', 'block_lift', 'block_rise', 'block_scale_in'], array_keys($roster->variants()));
-    $this->assertSame(['aurora_fade', 'fade_in', 'pulse', 'rise', 'scale_in', 'spin'], array_keys($roster->animations()));
-    $this->assertSame('aurora', $roster->get(MaterialKind::Variant, 'aurora_band')->toArray()['design_system']);
-    $this->assertFalse($roster->get(MaterialKind::Swatch, 'aurora_accent')->isGlobal());
-    $this->assertTrue($roster->get(MaterialKind::Swatch, 'ink')->isGlobal());
+    $this->assertSame('aurora', $roster->get(MaterialKind::Animation, 'aurora_fade')->designSystem);
+    $this->assertSame(['aurora_section', 'section'], array_keys($roster->variants()));
+    $this->assertSame(['aurora_fade'], array_keys($roster->animations()));
+    $this->assertSame('aurora', $roster->get(MaterialKind::Variant, 'aurora_section')->toArray()['design_system']);
+    $this->assertFalse($roster->get(MaterialKind::Token, 'space/gutter')->isGlobal());
+    $this->assertTrue($roster->get(MaterialKind::Variant, 'section')->isGlobal());
 
     // A membership naming no design system never saves.
     $this->expectException(EntityStorageException::class);
@@ -215,7 +206,7 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     $skin->setPackageTokens([
       'space' => [
         '4' => '1rem',
-        'gutter' => ['value' => '1.5rem', 'description' => 'The band gutter.', 'offered' => FALSE],
+        'gutter' => ['value' => '1.5rem', 'description' => 'The section gutter.', 'offered' => FALSE],
       ],
       'color' => ['accent' => ['default' => '#1a1a2e', 'dark' => '#e8e8f0']],
       // Not a declared scale: never a material.
@@ -235,7 +226,7 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     $this->assertSame(MaterialRecord::ORIGIN_USER, $four->origin);
     $gutter = $tokens['space/gutter'];
     $this->assertSame('1.5rem', $gutter->value);
-    $this->assertSame('The band gutter.', $gutter->description);
+    $this->assertSame('The section gutter.', $gutter->description);
     $this->assertFalse($gutter->offered);
     $this->assertSame(['space/4', 'color/accent'], array_keys($this->roster()->offered()->tokens()), 'the offered view leaves the unoffered token out');
     $accent = $tokens['color/accent'];
@@ -245,53 +236,66 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
   }
 
   /**
-   * Swatches: the published set in label order, the reserved namespace.
+   * A token capture lands on the first declared scale whose shape fits.
+   *
+   * The capture rule: a value with no `group` names its scale by shape in
+   * declared order (a color on the color scale, a gradient on the
+   * gradient scale, a length on the space scale), an explicit group wins,
+   * and a value no declared scale admits refuses at group, naming the
+   * scales. The element capture (the literal an element wears) rides the
+   * same path through the batch door (MaterialCaptureTest).
    */
-  public function testSwatches(): void {
-    foreach ([['Lime green', '#4dff8c'], ['Brand red', '#e94560']] as [$label, $value]) {
-      $swatch = DaedalusStylishSwatch::create(['label' => $label, 'kind' => 'color']);
-      $swatch->setSwatchValue($value);
-      $swatch->save();
-    }
-    $draft = DaedalusStylishSwatch::create(['label' => 'Unreleased', 'kind' => 'color']);
-    $draft->setSwatchValue('#000000');
-    $draft->setUnpublished();
-    $draft->save();
+  public function testTokenCaptureInfersTheScale(): void {
+    $this->installConfig(['daedalus_blueprint']);
+    $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
+    $skin->setPackageTokens(['space' => ['4' => '1rem']])->save();
+    $this->activateSkin($skin);
+    $provider = $this->container->get('daedalus_stylish.materials_provider');
+    $tokens = $this->container->get('daedalus_stylish.skin_material_manager');
 
-    $swatches = $this->roster()->swatches();
-    $this->assertSame(['brand_red', 'lime_green'], array_keys($swatches));
-    $lime = $swatches['lime_green'];
-    $this->assertSame('Lime green', $lime->label);
-    $this->assertSame('color', $lime->group);
-    $this->assertSame('#4dff8c', $lime->value);
-    $this->assertSame(['style' => 'var(--swatch-lime_green)'], $lime->spellings);
-    $this->assertTrue($lime->published);
-    $this->assertSame(MaterialRecord::ORIGIN_USER, $lime->origin);
-    $this->assertSame('lime_green', $this->roster()->bySpelling('style', 'var(--swatch-lime_green)')?->id);
+    $this->assertSame('color/brand-red', $provider->capture(MaterialKind::Token, ['label' => 'brand-red', 'value' => '#b91c1c'], NULL, [])->id);
+    $this->assertSame('gradient/hero-fade', $provider->capture(MaterialKind::Token, ['label' => 'hero-fade', 'value' => 'linear-gradient(90deg, #b91c1c, #fbbf24)'], NULL, [])->id);
+    $this->assertSame('space/8', $provider->capture(MaterialKind::Token, ['label' => '8', 'value' => '2rem'], NULL, [])->id);
+    $this->assertSame('color/signal', $provider->capture(MaterialKind::Token, ['group' => 'color', 'label' => 'signal', 'value' => '#ff5500'], NULL, [])->id);
+    $active = $tokens->activeSkin();
+    $this->assertSame('#b91c1c', $tokens->resolve($active, 'color', 'brand-red')->record['value']);
+    $this->assertSame('linear-gradient(90deg, #b91c1c, #fbbf24)', $tokens->resolve($active, 'gradient', 'hero-fade')->record['value']);
+    $this->assertSame(['space/4', 'space/8', 'color/brand-red', 'color/signal', 'gradient/hero-fade'], array_keys($this->roster()->tokens()));
+    $this->assertSame('var(--gradient-hero-fade)', $this->roster()->tokens()['gradient/hero-fade']->spelling('style'));
+
+    // A compound fits none of the declared shapes (a length is one
+    // component, a bare word is a named color, a gradient is a function):
+    // refused at group, the declared scales in the context so the caller
+    // can name one.
+    try {
+      $provider->capture(MaterialKind::Token, ['label' => 'nope', 'value' => '1px solid red'], NULL, []);
+      $this->fail('Expected STYLE_TOKEN_SCALE_UNFIT.');
+    }
+    catch (MaterialGestureException $exception) {
+      $error = $exception->getErrors()[0];
+      $this->assertSame(['group', 'STYLE_TOKEN_SCALE_UNFIT'], [$error->getPath(), $error->getCode()]);
+      $this->assertSame(['space', 'color', 'gradient'], $error->getContext()['scales']);
+    }
+    $this->assertFalse($tokens->has($active, 'color', 'nope'));
   }
 
   /**
-   * Animations: the published set in label order, the motion namespace.
+   * Animations: the active skin's records in stored order, the motion namespace.
    */
   public function testAnimations(): void {
-    foreach ([['Rise', 'rise'], ['Fade in', 'fade_in']] as [$label, $name]) {
-      $animation = DaedalusStylishAnimation::create([
-        'label' => $label,
-        'machine_name' => $name,
-        'description' => "$label motion.",
-      ]);
-      $animation->setSteps(['to' => ['opacity' => '1'], 'from' => ['opacity' => '0']]);
-      $animation->save();
-    }
-    $draft = DaedalusStylishAnimation::create(['label' => 'Unreleased']);
-    $draft->setSteps(['0%' => ['opacity' => '0']]);
-    $draft->setUnpublished();
-    $draft->save();
+    $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
+    $skin->setPackageAnimations([
+      'rise' => ['steps' => ['to' => ['opacity' => '1'], 'from' => ['opacity' => '0']], 'description' => 'Rise motion.'],
+      'fade_in' => ['steps' => ['to' => ['opacity' => '1'], 'from' => ['opacity' => '0']], 'description' => 'Fade in motion.', 'offered' => FALSE],
+    ]);
+    $skin->save();
+    $this->assertSame([], array_keys($this->roster()->animations()), 'An inactive skin\'s animations are not materials.');
+    $this->activateSkin($skin);
 
     $animations = $this->roster()->animations();
-    $this->assertSame(['fade_in', 'rise'], array_keys($animations));
+    $this->assertSame(['rise', 'fade_in'], array_keys($animations), 'The skin\'s stored order, the compiled skin file\'s order.');
     $fade = $animations['fade_in'];
-    $this->assertSame('Fade in', $fade->label);
+    $this->assertSame('fade_in', $fade->label, 'An animation has no label apart from its name.');
     $this->assertSame('Fade in motion.', $fade->description);
     $this->assertNull($fade->group);
     // The value is the canonical steps map (the record's shape the schema
@@ -300,10 +304,11 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     // The spelling is the property-scoped animation slot, never var().
     $this->assertSame(['animation' => 'motion-fade_in'], $fade->spellings);
     $this->assertTrue($fade->published);
-    $this->assertSame(MaterialRecord::ORIGIN_USER, $fade->origin);
+    $this->assertFalse($fade->offered);
+    $this->assertTrue($animations['rise']->offered);
+    $this->assertSame(MaterialRecord::ORIGIN_USER, $fade->origin, 'The site\'s own skin mints user materials.');
+    $this->assertTrue($fade->updatable);
     $this->assertSame('fade_in', $this->roster()->bySpelling('animation', 'motion-fade_in')?->id);
-    // The roster order is the compiled keyframes file's order.
-    $this->assertSame(['fade_in', 'rise'], array_map(static fn ($animation) => $animation->getMachineName(), $this->container->get('daedalus_stylish.animation_repository')->publishedAnimations()));
   }
 
   /**
@@ -494,9 +499,7 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     $tags = $before->getCacheableMetadata()->getCacheTags();
     $domain = [
       'daedalus_skin_list',
-      'daedalus_swatch_list',
       'daedalus_variant_list',
-      'daedalus_animation_list',
       'config:daedalus_stylish.settings',
       'config:system.theme',
       'daedalus_ui_page_builder',
@@ -504,51 +507,49 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     foreach ($domain as $tag) {
       $this->assertContains($tag, $tags);
     }
-    $this->assertSame([], $before->swatches());
+    $this->assertSame([], $before->variants());
 
-    // A swatch mint mid-request: the next build sees it without an
+    // A variant save mid-request: the next build sees it without an
     // explicit reset (the entity hooks reset the memo).
-    $swatch = DaedalusStylishSwatch::create(['label' => 'Lime green', 'kind' => 'color']);
-    $swatch->setSwatchValue('#4dff8c');
-    $swatch->save();
+    $this->createVariant(['label' => 'Button', 'machine_name' => 'button', 'scope' => 'block_type:text']);
     $after = $builder->build();
     $this->assertNotSame($before, $after);
-    $this->assertSame(['lime_green'], array_keys($after->swatches()));
+    $this->assertSame(['button'], array_keys($after->variants()));
 
-    // Same for a variant save and a skin activation.
-    $this->createVariant(['label' => 'Button', 'machine_name' => 'button', 'scope' => 'block_type:text']);
-    $this->assertSame(['button'], array_keys($builder->build()->variants()));
+    // Same for a skin activation and a token mint on the active skin.
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
     $skin->setPackageTokens(['space' => ['4' => '1rem']])->save();
     $this->assertSame([], $builder->build()->tokens(), 'A saved skin is not the active one yet.');
     $this->activateSkin($skin);
     $this->assertSame(['space/4'], array_keys($builder->build()->tokens()), 'Activating a skin resets the memo.');
     $this->assertSame(MaterialKind::Token, $builder->build()->get(MaterialKind::Token, 'space/4')->kind);
+    $tokens = $this->container->get('daedalus_stylish.skin_material_manager');
+    $tokens->mint($tokens->activeSkin(), 'color', 'lime-green', '#4dff8c');
+    $this->assertSame(['space/4', 'color/lime-green'], array_keys($builder->build()->tokens()), 'A token mint resets the memo.');
 
-    // And an animation save (beside the suite's shipped animations, which
-    // the activation above landed).
-    $animation = DaedalusStylishAnimation::create(['label' => 'Drift']);
-    $animation->setSteps(['0%' => ['opacity' => '0']]);
-    $animation->save();
-    $this->assertSame(['drift', 'fade_in', 'pulse', 'rise', 'scale_in', 'spin'], array_keys($builder->build()->animations()));
+    // And an animation mint on the skin (the suite ships no motion of its
+    // own, so the skin's is the whole set).
+    $tokens->mintAnimation($tokens->activeSkin(), 'drift', ['0%' => ['opacity' => '0']]);
+    $this->assertSame(['drift'], array_keys($builder->build()->animations()), 'An animation mint resets the memo.');
   }
 
   /**
    * The updatable flag is the distro lock as the client reads it.
    *
-   * A shipped swatch, variant or animation record is not updatable while
-   * the lock holds (a consuming site) and updatable once the developer
-   * gate lifts it (`$settings['daedalus_blueprint_developer'] = TRUE`); a
-   * site-minted material is updatable either way. The client's locked()
-   * and the update gesture read this one flag.
+   * A shipped variant record is not updatable while the lock holds (a
+   * consuming site) and updatable once the developer gate lifts it
+   * (`$settings['daedalus_blueprint_developer'] = TRUE`); a site-minted
+   * material is updatable either way, and so is a shipped skin's token or
+   * animation (a consuming site's write lands in the skin's site layer).
+   * The client's locked() and the update gesture read this one flag.
    */
   public function testUpdatableFollowsTheDistroLock(): void {
-    $shipped_swatch = DaedalusStylishSwatch::create(['label' => 'Brand red', 'kind' => 'color']);
-    $shipped_swatch->setSwatchValue('#e94560');
-    $shipped_swatch->setShippedSource('daedalus_stylish', ['kind' => 'color', 'value' => '#e94560']);
-    $shipped_swatch->save();
-    $mine = DaedalusStylishSwatch::create(['label' => 'Lime green', 'kind' => 'color']);
-    $mine->setSwatchValue('#4dff8c');
+    $mine = DaedalusStylishVariant::create([
+      'label' => 'Mine',
+      'machine_name' => 'container_mine',
+      'scope' => 'kind:container',
+      'styles' => ['' => ['default' => ['padding' => '2rem']]],
+    ]);
     $mine->save();
     $shipped_variant = DaedalusStylishVariant::create([
       'label' => 'Airy',
@@ -558,31 +559,90 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     ]);
     $shipped_variant->setShippedSource('daedalus_stylish', ['' => ['default' => ['padding' => '1rem']]]);
     $shipped_variant->save();
-    $shipped_animation = DaedalusStylishAnimation::create(['label' => 'Fade in']);
-    $shipped_animation->setSteps(['from' => ['opacity' => '0'], 'to' => ['opacity' => '1']]);
-    $shipped_animation->setShippedSource('daedalus_stylish', [
-      'steps' => ['from' => ['opacity' => '0'], 'to' => ['opacity' => '1']],
-    ]);
-    $shipped_animation->save();
+    $shipped_skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora']);
+    $shipped_skin->setPackageAnimations(['fade_in' => ['from' => ['opacity' => '0'], 'to' => ['opacity' => '1']]]);
+    $shipped_skin->setShippedSource('daedalus_stylish', ['tokens' => [], 'animations' => $shipped_skin->packageAnimations(), 'fonts' => [], 'defaults' => []]);
+    $shipped_skin->save();
+    $this->activateSkin($shipped_skin);
 
     $roster = $this->roster();
-    $this->assertSame(MaterialRecord::ORIGIN_SHIPPED, $roster->swatches()['brand_red']->origin);
-    $this->assertFalse($roster->swatches()['brand_red']->updatable);
-    $this->assertTrue($roster->swatches()['lime_green']->updatable);
+    $this->assertSame(MaterialRecord::ORIGIN_SHIPPED, $roster->variants()['container_airy']->origin);
     $this->assertFalse($roster->variants()['container_airy']->updatable);
-    $this->assertFalse($roster->animations()['fade_in']->updatable);
-    $this->assertFalse($roster->swatches()['brand_red']->toArray()['updatable']);
+    $this->assertTrue($roster->variants()['container_mine']->updatable);
+    $this->assertSame(MaterialRecord::ORIGIN_SHIPPED, $roster->animations()['fade_in']->origin);
+    $this->assertTrue($roster->animations()['fade_in']->updatable, 'A shipped animation takes a site record over it.');
+    $this->assertFalse($roster->variants()['container_airy']->toArray()['updatable']);
 
     // The gate lifts the lock for every shipped kind at once; the records
     // keep their shipped origin (the fork and revert gestures still read
     // it).
     $this->setSetting('daedalus_blueprint_developer', TRUE);
     $roster = $this->roster();
-    $this->assertSame(MaterialRecord::ORIGIN_SHIPPED, $roster->swatches()['brand_red']->origin);
-    $this->assertTrue($roster->swatches()['brand_red']->updatable);
-    $this->assertTrue($roster->swatches()['lime_green']->updatable);
+    $this->assertSame(MaterialRecord::ORIGIN_SHIPPED, $roster->variants()['container_airy']->origin);
     $this->assertTrue($roster->variants()['container_airy']->updatable);
+    $this->assertTrue($roster->variants()['container_mine']->updatable);
     $this->assertTrue($roster->animations()['fade_in']->updatable);
+  }
+
+  /**
+   * The budget guards sharing: an offered mint, `offered` turning on.
+   *
+   * The guard refuses sharing, never saving: with the budget set tiny,
+   * an offered mint of a token and an animation is refused with
+   * the one AI_CONTEXT_FULL wording at path `offered` (the reading as
+   * context, the dialog's path in the hint); the same mints withheld
+   * from the AI go through; an update turning `offered` on where it was
+   * off is refused (the token's stored record read like the entities'
+   * flag), while a value or face edit, an update keeping the flag off,
+   * and an update re-stating a flag already on (the cards re-send it)
+   * pass; with room again the same update shares.
+   */
+  public function testBudgetGuardsSharing(): void {
+    $this->installConfig(['daedalus_blueprint']);
+    $provider = $this->container->get('daedalus_stylish.materials_provider');
+    $budget = $this->container->get('daedalus_blueprint.materials_budget');
+    $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
+    $skin->setPackageTokens(['space' => ['4' => '1rem']])->save();
+    $this->activateSkin($skin);
+    $tokens = $this->container->get('daedalus_stylish.skin_material_manager');
+
+    // Room: an offered mint goes through.
+    $provider->capture(MaterialKind::Token, ['group' => 'space', 'label' => '2', 'value' => '0.5rem'], NULL, []);
+    $this->assertTrue($tokens->resolve($tokens->activeSkin(), 'space', '2')->record['offered']);
+
+    $this->config('daedalus_blueprint.settings')->set(MaterialsBudget::KEY_BUDGET, 1)->save();
+    $reading = $budget->reading();
+    $this->assertTrue($reading->over);
+
+    // Full: an offered mint of any kind is refused, and nothing is minted.
+    $fade = ['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']];
+    $eight_op = ['group' => 'space', 'label' => '8', 'value' => '2rem'];
+    $fade_op = ['label' => 'fade', 'steps' => $fade];
+    $this->assertRefusedAsFull(fn () => $provider->capture(MaterialKind::Token, $eight_op, NULL, []), $reading);
+    $this->assertRefusedAsFull(fn () => $provider->capture(MaterialKind::Animation, $fade_op, NULL, []), $reading);
+    $this->assertFalse($tokens->has($tokens->activeSkin(), 'space', '8'));
+
+    // A mint withheld from the AI shares nothing and passes.
+    $provider->capture(MaterialKind::Token, $eight_op + ['offered' => FALSE], NULL, []);
+    $this->assertFalse($tokens->resolve($tokens->activeSkin(), 'space', '8')->record['offered']);
+    $provider->capture(MaterialKind::Animation, $fade_op + ['offered' => FALSE], NULL, []);
+
+    // Full: turning offered on is refused at `offered`; everything else
+    // updates, a flag already on included.
+    $share = ['offered' => TRUE];
+    $this->assertRefusedAsFull(fn () => $provider->update(MaterialKind::Token, 'space/8', $share + ['value' => '3rem'], NULL, []), $reading);
+    $this->assertRefusedAsFull(fn () => $provider->update(MaterialKind::Animation, 'fade', $share, NULL, []), $reading);
+    $this->assertSame('2rem', $tokens->resolve($tokens->activeSkin(), 'space', '8')->record['value'], 'A refused update writes nothing.');
+    $provider->update(MaterialKind::Token, 'space/8', ['value' => '2.5rem'], NULL, []);
+    $this->assertSame('2.5rem', $tokens->resolve($tokens->activeSkin(), 'space', '8')->record['value']);
+    $provider->update(MaterialKind::Token, 'space/4', ['offered' => TRUE, 'description' => 'The unit.'], NULL, []);
+    $this->assertSame('The unit.', $tokens->resolve($tokens->activeSkin(), 'space', '4')->record['description']);
+
+    // Room again: the same updates share.
+    $this->config('daedalus_blueprint.settings')->set(MaterialsBudget::KEY_BUDGET, MaterialsBudget::INSTALL_DEFAULTS[MaterialsBudget::KEY_BUDGET])->save();
+    $this->assertFalse($budget->reading()->over);
+    $provider->update(MaterialKind::Token, 'space/8', ['offered' => TRUE], NULL, []);
+    $this->assertTrue($tokens->resolve($tokens->activeSkin(), 'space', '8')->record['offered']);
   }
 
 }

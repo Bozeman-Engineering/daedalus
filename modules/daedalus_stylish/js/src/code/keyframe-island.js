@@ -17,7 +17,7 @@ import {
   printStep,
   settledStep,
   stepDeclaration,
-} from '../animations-model.js';
+} from '../skin-model.js';
 
 /**
  * One keyframe step's island: the declarations of one (animation,
@@ -28,13 +28,13 @@ import {
  * diffs against worn variants into update_style ops, its cursor stitches
  * through the page's island chain. A keyframe step is none of that: one
  * declarations map on an animation's offset, owned by the keyframes
- * SESSION (animations.js) whose Update commits every step at once. So
+ * SESSION (keyframes-editor.js) whose Save commits every step at once. So
  * this is the thin fork the plan allowed: the same surface
  * (island-surface.js: printed by default, one live CodeMirror editor
  * while it holds the cursor, wake on pointerdown, park on blur), the
  * same language, completions (the guide's offer under the universal
  * vocabulary) and lint (the island analysis plus the keyframe-only
- * rules, animations-model.js analyzeStep), and a state model of its own:
+ * rules, skin-model.js analyzeStep), and a state model of its own:
  * per settle (a terminating semicolon, 400 ms of quiet, the cursor
  * leaving a line, blur) the buffer's valid declarations become the
  * step's map and the session hears them (onSettle), staging nothing on

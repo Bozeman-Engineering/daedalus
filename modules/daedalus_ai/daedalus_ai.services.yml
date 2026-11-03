@@ -42,14 +42,6 @@ services:
       $router: '@router.no_access_checks'
   Drupal\daedalus_ai\RouteEntityResolver: '@daedalus_ai.route_entity_resolver'
 
-  # Drives headless Chrome over the plain WebDriver wire protocol to render
-  # pages posed at a canvas state vector for the AI's render_page tool.
-  daedalus_ai.headless_renderer:
-    class: Drupal\daedalus_ai\Render\HeadlessRenderer
-    arguments:
-      $httpClient: '@http_client'
-  Drupal\daedalus_ai\Render\HeadlessRenderer: '@daedalus_ai.headless_renderer'
-
   daedalus_ai.image_generation_gate:
     class: Drupal\daedalus_ai\ImageGenerationGate
   Drupal\daedalus_ai\ImageGenerationGate: '@daedalus_ai.image_generation_gate'
@@ -79,25 +71,6 @@ services:
     arguments:
       $appRoot: '%app.root%'
   Drupal\daedalus_ai\PendingMedia\PendingMediaMinter: '@daedalus_ai.pending_media_minter'
-
-  # The style grammar's generation surface: `_generate` as a first-class
-  # handled value on daedalus_stylish's style-value seam, resolving to the canonical
-  # url('media:<uuid>') token over the same mint+job capability the field
-  # grammar uses. Soft wiring: without daedalus_stylish the tag is never collected
-  # and the service never instantiates, so no hard dependency exists.
-  daedalus_ai.style_value_handler.generate:
-    class: Drupal\daedalus_ai\StyleValue\GenerateStyleValueHandler
-    tags:
-      - { name: daedalus_stylish.style_value_handler }
-
-  # The style grammar's file surface: `_file` as a handled value on the
-  # same seam (the dialect's url('file:<name>') lands here), resolving the
-  # conversation's held file to the canonical url('media:<uuid>') token
-  # through the shared minter. Soft wiring like the generate handler.
-  daedalus_ai.style_value_handler.file:
-    class: Drupal\daedalus_ai\StyleValue\FileStyleValueHandler
-    tags:
-      - { name: daedalus_stylish.style_value_handler }
 
   # Request-scoped: collects the turn's pending generations ({media uuid,
   # write target} pairs) and flushes them as ONE TriggerDeferredCommand on
@@ -138,7 +111,7 @@ services:
       - '@daedalus_blueprint_api.mutation_response_builder'
       - '@current_route_match'
       - '@daedalus_ui.ui'
-      # The turn's materials delta (a swatch or variant an AI tool minted)
+      # The turn's materials delta (a variant or animation an AI tool minted)
       # and the history timeline its tempstore writes extended ride every
       # payload; history is optional the way the blueprint endpoint's is.
       - '@daedalus_blueprint.materials_change_set'
@@ -212,7 +185,7 @@ services:
   Drupal\daedalus_ai\Attachments: '@daedalus_ai.attachments'
 
   # Bytes the model authors in a batch (the page language's file op and a
-  # document's <pb-file> declaration): saved through daedalus_ui's file lane
+  # document's <d-file> declaration): saved through daedalus_ui's file lane
   # as a temporary file narrowed to the textual kinds, and held by the
   # conversation under the declared name on the alias overlay the batch
   # settles (Attachments::hold(), never persist()).
@@ -222,3 +195,49 @@ services:
       $lane: '@daedalus_ui.file_lane'
     tags:
       - { name: daedalus_blueprint.file_declaration_handler }
+
+  # The one read of a leg's usage for every consumer (the ledger, the
+  # segment window): DTO, then output metadata, then raw output, so drupal/ai
+  # 1.4 and 1.5 shapes and the Anthropic 1.3 provider's metadata-only cache
+  # write all answer through the same API.
+  daedalus_ai.usage_reader:
+    class: Drupal\daedalus_ai\Provider\UsageReader
+  Drupal\daedalus_ai\Provider\UsageReader: '@daedalus_ai.usage_reader'
+
+  # The block producers: each answers the memory runner's ContextBlocksEvent
+  # with one kind of per-turn block (the body only; the transcript renderer
+  # owns the header, the wrapper and the placement). Provider-neutral: the
+  # same blocks render for every provider.
+  daedalus_ai.context.current_page:
+    class: Drupal\daedalus_ai\Context\CurrentPageBlockProducer
+
+  daedalus_ai.context.print:
+    class: Drupal\daedalus_ai\Context\PrintBlockProducer
+
+  daedalus_ai.context.selection:
+    class: Drupal\daedalus_ai\Context\SelectionBlockProducer
+
+  # The turn's attached files, resolved through the attachment store and
+  # delivered with the event: an ATTACHMENTS block naming each file,
+  # textual bodies inlined, images and PDFs as the turn's files.
+  daedalus_ai.context.attachments:
+    class: Drupal\daedalus_ai\Context\AttachmentsBlockProducer
+    arguments:
+      $logger: '@logger.channel.daedalus_ai'
+
+  # The Selection Scope and Context Tags protocols on the cached system
+  # prompt, and the loop-count notice stripped from it.
+  daedalus_ai.context_protocol_subscriber:
+    class: Drupal\daedalus_ai\EventSubscriber\ContextProtocolSubscriber
+
+  # The curated model list and a user's choice from it: the one reader of
+  # the daedalus_ai/model editor preference, which validates the stored key
+  # against the list and the permission (the lane accepts any string), and
+  # the one resolution of the managed provider (the assistant's, else the
+  # site's default chat provider) every curated row must name.
+  daedalus_ai.model_choice:
+    class: Drupal\daedalus_ai\ModelChoice
+    arguments:
+      $logger: '@logger.channel.daedalus_ai'
+      $aiProvider: '@ai.provider'
+  Drupal\daedalus_ai\ModelChoice: '@daedalus_ai.model_choice'

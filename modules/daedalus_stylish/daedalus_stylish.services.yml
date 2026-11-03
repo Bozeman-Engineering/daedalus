@@ -16,9 +16,6 @@ services:
   plugin.manager.daedalus_stylish_control_widget:
     class: Drupal\daedalus_stylish\ControlWidgetPluginManager
     parent: default_plugin_manager
-  plugin.manager.daedalus_swatch_kind:
-    class: Drupal\daedalus_stylish\SwatchKindPluginManager
-    parent: default_plugin_manager
   plugin.manager.daedalus_stylish_condition_type:
     class: Drupal\daedalus_stylish\ConditionTypePluginManager
     arguments:
@@ -44,6 +41,9 @@ services:
       # Lazy for the same reason: the roster builder injects this guide,
       # and resetCache() drops its memo with the declarations.
       - !service_closure '@daedalus_stylish.vocabulary_roster'
+      # The build check of a declaration's pseudo section keys by the
+      # pseudo-elements the browser knows.
+      - '@daedalus_stylish.wide_selectors'
   # The vocabulary roster: what one address may style, resolved once per
   # request from the layered declarations and the enforcement mode (the
   # twin of daedalus_blueprint.materials_roster_builder).
@@ -58,9 +58,45 @@ services:
       # The applicable materials are read from the materials roster at
       # call time, so this memo needs no workspace key.
       - '@daedalus_blueprint.materials_roster_builder'
+      - '@daedalus_stylish.wide_selectors'
+      - '@daedalus_stylish.pseudo_vocabularies'
+  # The per-pseudo-element vocabularies (data/pseudo-vocabularies.json, the
+  # one server reader): the properties the browser styles on ::marker,
+  # ::placeholder, ::selection, ::first-letter and ::first-line. The roster
+  # grants a table pseudo-element from it; the validator refuses a property
+  # outside it in every mode, as the browser would ignore it.
+  daedalus_stylish.pseudo_vocabularies:
+    class: Drupal\daedalus_stylish\Vocabulary\PseudoVocabularies
+    arguments:
+      - '@extension.list.module'
+  # The wide selector tier: what the browser knows (data/wide-selectors.json,
+  # the one server reader). The universe admission is judged against, never
+  # a grant: a selector word outside it is a typo in every mode.
+  daedalus_stylish.wide_selectors:
+    class: Drupal\daedalus_stylish\Vocabulary\WideSelectors
+    arguments:
+      - '@extension.list.module'
+  # The wide condition tier: the media and container features the browser
+  # knows, with their value spaces (data/wide-conditions.json, the one
+  # server reader). The universe a literal condition clause is judged
+  # against, never a grant: strict admits references only, open and
+  # guarded admit a literal the tier knows, a typo is refused everywhere.
+  daedalus_stylish.wide_conditions:
+    class: Drupal\daedalus_stylish\Vocabulary\WideConditions
+    arguments:
+      - '@extension.list.module'
+  # The rosters' value spaces: the site-wide bindings per property and the
+  # deviations per address (the places narrowing below a binding), derived
+  # once for the JSON door's style_guide (the field handlers) and the
+  # design system brief (through the dialect catalog's build event).
+  daedalus_stylish.vocabulary_value_spaces:
+    class: Drupal\daedalus_stylish\Vocabulary\VocabularyValueSpaces
+    arguments:
+      - '@daedalus_stylish.style_guide'
+      - '@daedalus_stylish.vocabulary_roster'
   # The inspector's gesture gates: one read of the current user's variant,
-  # swatch and animation grants for both hosts (the sidebar and the
-  # satellite window).
+  # token, animation, font, skin and law grants for both hosts (the sidebar
+  # and the satellite window).
   daedalus_stylish.inspector_gates:
     class: Drupal\daedalus_stylish\InspectorGates
     arguments:
@@ -81,9 +117,6 @@ services:
       # provenance reads; its tokens are materials and ride the roster's
       # delivery payload instead).
       - '@daedalus_stylish.skin_manager'
-      # The swatch kind vocabulary the palette groups under (a declaration,
-      # like token scales; the swatches themselves ride the roster).
-      - '@plugin.manager.daedalus_swatch_kind'
       # The conformance verdict: the `withheld` payload (the wear bar's
       # stale-row reason for a variant the current law refuses).
       - '@daedalus_stylish.variant_conformance'
@@ -94,6 +127,9 @@ services:
       # The block_content bundle labels: a served block type carries its
       # bundle's human name, what the code view labels a type compound by.
       - '@entity_type.bundle.info'
+      # The active design system: its id and label head the Design
+      # system place (its enforcement mode rides the style guide).
+      - '@daedalus_blueprint.active_design_system'
   daedalus_stylish.style_map_validator:
     class: Drupal\daedalus_stylish\StyleMapValidator
     arguments:
@@ -104,14 +140,12 @@ services:
       # which injects this validator (see the constructor docblock).
       - !service_closure '@daedalus_blueprint.element_locator'
       - '@plugin.manager.daedalus_stylish_condition_type'
-      # The material universes: minted tokens, published swatches and
-      # published variants are the roster's, never walked here.
+      # The material universes: minted tokens and published variants are
+      # the roster's, never walked here.
       - '@daedalus_blueprint.materials_roster_builder'
       # The identity map variant references load entities through
       # (delivery resolves from the innermost render loop).
       - '@daedalus_stylish.variant_repository'
-      # The kind plugins swatch values dispatch to.
-      - '@plugin.manager.daedalus_swatch_kind'
       # The member seam: a design system's member validates in ITS system's
       # universe (the system's default skin, loaded through the skin
       # manager) whether or not it is active.
@@ -124,6 +158,14 @@ services:
       # the address it styles (the one derivation of "what may this
       # address style"), never against a declaration resolved here.
       - '@daedalus_stylish.vocabulary_roster'
+      # The universes a LITERAL condition clause is judged against on an
+      # open or guarded site: the media and container features with their
+      # value spaces, and the pseudo-classes the browser knows.
+      - '@daedalus_stylish.wide_conditions'
+      - '@daedalus_stylish.wide_selectors'
+      # The browser's law on a table pseudo-element's box: a property
+      # outside its allowlist is refused in every mode.
+      - '@daedalus_stylish.pseudo_vocabularies'
   daedalus_stylish.variant_repository:
     # Request-lifetime identity map behind loadVariant(): each distinct
     # variant reference resolves at most once per request and workspace
@@ -135,32 +177,15 @@ services:
       # Optional: the memos key on the active workspace, because a compile
       # runs outside it right after a staged save previews inside it.
       - '@?workspaces.manager'
-  daedalus_stylish.swatch_repository:
-    # The variant repository's twin at value scope: swatch references and
-    # the published set resolve at most once per request and workspace
-    # window, reset by _daedalus_swatch_change() on any swatch save or
-    # delete and by SwatchWorkspaceSubscriber on publish.
-    class: Drupal\daedalus_stylish\SwatchRepository
-    arguments:
-      - '@entity_type.manager'
-      - '@?workspaces.manager'
-  daedalus_stylish.animation_repository:
-    # The swatch repository's twin for the motion material: animation
-    # references and the published set resolve at most once per request
-    # and workspace window, reset by the animation entity hooks on any
-    # save or delete and by the workspace subscriber on publish.
-    class: Drupal\daedalus_stylish\AnimationRepository
-    arguments:
-      - '@entity_type.manager'
-      - '@?workspaces.manager'
   Drupal\daedalus_stylish\Hook\MaterialsGateHooks:
     # The materials roster and its schema fragment are core's; this hook
-    # only advertises daedalus_stylish's minting gate (daedalus_stylish.settings ai_minting,
-    # swatches and animations) on that fragment's guidance, after core
-    # landed it.
+    # only lands the provider's minting posture (daedalus_stylish.settings
+    # ai_minting; mintPosture(), the one sentence the brief's MINT line
+    # also states) on that fragment's guidance for the JSON door, after
+    # core landed it.
     class: Drupal\daedalus_stylish\Hook\MaterialsGateHooks
     arguments:
-      - '@config.factory'
+      - '@daedalus_stylish.materials_provider'
   Drupal\daedalus_stylish\Hook\LayoutDefaultsSchemaHooks:
     # Two-door birth semantics as generated schema data: each
     # available_layouts entry whose layout declares default_variants gains
@@ -207,8 +232,6 @@ services:
       # resolved once per read for both the reference order and the
       # declared tier.
       - '@daedalus_ui.page_builder_declarations'
-      # The ancestor tier folds structural facts by their flag and wrapper.
-      - '@plugin.manager.daedalus_stylish_condition_type'
   daedalus_stylish.style_value_resolver:
     class: Drupal\daedalus_stylish\StyleValueResolver
     arguments:
@@ -236,6 +259,9 @@ services:
       # The map's host: the entity being written, resolved so the validator
       # reads block bundles and section layouts through its document.
       - '@daedalus_blueprint.host_resolver'
+      # The value spaces the fragment prints (bindings, deviations): the one
+      # derivation the dialect catalog carries for the brief.
+      - '@daedalus_stylish.vocabulary_value_spaces'
     tags:
       - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_stylish_style_map' }
   daedalus_stylish.field_handler.skin_tokens:
@@ -254,6 +280,9 @@ services:
       # The rosters the fragment teaches (what each address may style).
       - '@daedalus_stylish.vocabulary_roster'
       - '@daedalus_blueprint.host_resolver'
+      # The value spaces the fragment prints (bindings, deviations): the one
+      # derivation the dialect catalog carries for the brief.
+      - '@daedalus_stylish.vocabulary_value_spaces'
       # Lazy: the importer injects the deserializer, whose handler manager
       # instantiates this handler (the validator's component-locator cycle,
       # again). The distro lock's disk read: does the provider ship this
@@ -280,8 +309,45 @@ services:
       # The rosters the fragment teaches (what each address may style).
       - '@daedalus_stylish.vocabulary_roster'
       - '@daedalus_blueprint.host_resolver'
+      # The value spaces the fragment prints (bindings, deviations): the one
+      # derivation the dialect catalog carries for the brief.
+      - '@daedalus_stylish.vocabulary_value_spaces'
     tags:
       - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_skin_defaults' }
+  daedalus_stylish.field_handler.skin_animations:
+    # The blueprint lane's READ of a skin's animations (the package layer
+    # as records); every whole-field write refuses and names the material
+    # gestures, the defaults handler's posture.
+    class: Drupal\daedalus_stylish\SkinAnimationsFieldHandler
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@daedalus_stylish.style_guide'
+      - '@daedalus_ui.page_builder_declarations'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      - '@daedalus_stylish.style_value_resolver'
+      - '@daedalus_blueprint.materials_roster_builder'
+      - '@daedalus_stylish.vocabulary_roster'
+      - '@daedalus_blueprint.host_resolver'
+      - '@daedalus_stylish.vocabulary_value_spaces'
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_skin_animations' }
+  daedalus_stylish.field_handler.skin_fonts:
+    # The blueprint lane's READ of a skin's fonts (the package layer as
+    # records); every whole-field write refuses and names the material
+    # gestures, the animations handler's posture.
+    class: Drupal\daedalus_stylish\SkinFontsFieldHandler
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@daedalus_stylish.style_guide'
+      - '@daedalus_ui.page_builder_declarations'
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      - '@daedalus_stylish.style_value_resolver'
+      - '@daedalus_blueprint.materials_roster_builder'
+      - '@daedalus_stylish.vocabulary_roster'
+      - '@daedalus_blueprint.host_resolver'
+      - '@daedalus_stylish.vocabulary_value_spaces'
+    tags:
+      - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_skin_fonts' }
   daedalus_stylish.skin_manager:
     class: Drupal\daedalus_stylish\SkinManager
     arguments:
@@ -318,6 +384,9 @@ services:
       # The rosters the fragment teaches (what each address may style).
       - '@daedalus_stylish.vocabulary_roster'
       - '@daedalus_blueprint.host_resolver'
+      # The value spaces the fragment prints (bindings, deviations): the one
+      # derivation the dialect catalog carries for the brief.
+      - '@daedalus_stylish.vocabulary_value_spaces'
       # Lazy: the importer injects the deserializer, whose handler manager
       # instantiates this handler (the validator's component-locator cycle,
       # again). The distro lock's disk read.
@@ -508,113 +577,30 @@ services:
       # defaults seam itself and stores them conditions-canonical.
       - '@daedalus_stylish.style_map_validator'
       - '@plugin.manager.daedalus_stylish_condition_type'
+      # The fonts tier: landed through the font store (a face's bytes
+      # become a permanent managed file) and validated through the font
+      # seam; the gestures converge on the same two.
+      - '@daedalus_stylish.font_validator'
+      - '@daedalus_stylish.font_files'
+      # The defaults validate against the default theme's guide, so the
+      # kind waits while system.theme names a theme not installed yet (the
+      # installer's window); the theme's landing syncs it.
+      - '@theme_handler'
   daedalus_stylish.skin_shipper:
     # The skins lane's other direction: site skins OUT to a module's per-id
-    # file (MODULE.daedalus_stylish.skins.ID.yml), adopted in place with the written
-    # {tokens, defaults} as the source hash so a sync right after reports
-    # UNCHANGED. Skins carry no distro lock, so this is the one way a site's
+    # file (MODULE.daedalus_stylish.skins.ID.yml) with each font face's bytes
+    # under assets/fonts/, adopted in place with the written {tokens,
+    # animations, fonts, defaults} as the source hash so a sync right after
+    # reports UNCHANGED. Skins carry no distro lock, so this is the one way a site's
     # edit of a shipped skin reaches disk.
     class: Drupal\daedalus_stylish\SkinShipper
     arguments:
       - '@module_handler'
       - '@entity_type.manager'
-      # Owns the file names, the grammar check, and what modules ship.
+      # Owns the file names, the grammar check, the assets path, the
+      # payload read of what was written, and what modules ship.
       - '@daedalus_stylish.skin_importer'
-      # Optional: with Workspaces the lookups and adopting saves run outside
-      # any active workspace, like the importer's sync: shipped is LIVE.
-      - '@?workspaces.manager'
-  daedalus_stylish.swatch_importer:
-    class: Drupal\daedalus_stylish\SwatchImporter
-    arguments:
-      - '@module_handler'
-      - '@entity_type.manager'
-      - '@daedalus_blueprint.deserializer'
-      # Same admin-account and workspace-escape rationale as the variant
-      # importer: shipped swatches are code and land live.
-      - '@daedalus_stylish.admin_account_switcher'
-      - '@datetime.time'
-      # Membership: a shipped member joins the design system its module
-      # packages unless its definition says otherwise (design_system: ~).
-      - '@daedalus_blueprint.active_design_system'
-      - '@?workspaces.manager'
-  daedalus_stylish.swatch_shipper:
-    # The swatches lane's other direction: site swatches OUT to a module's
-    # per-id file (MODULE.daedalus_stylish.swatches.ID.yml), adopted in place with
-    # the written {kind, value} as the source hash so a sync right after
-    # reports UNCHANGED.
-    class: Drupal\daedalus_stylish\SwatchShipper
-    arguments:
-      - '@module_handler'
-      - '@entity_type.manager'
-      # Owns the file names, the grammar check, and what modules ship.
-      - '@daedalus_stylish.swatch_importer'
-      # Optional: with Workspaces the lookups and adopting saves run outside
-      # any active workspace, like the importer's sync: shipped is LIVE.
-      - '@?workspaces.manager'
-  daedalus_stylish.animation_importer:
-    class: Drupal\daedalus_stylish\AnimationImporter
-    arguments:
-      - '@module_handler'
-      - '@entity_type.manager'
-      - '@daedalus_blueprint.deserializer'
-      # Same admin-account and workspace-escape rationale as the variant
-      # importer: shipped animations are code and land live.
-      - '@daedalus_stylish.admin_account_switcher'
-      - '@datetime.time'
-      # Membership: a shipped member joins the design system its module
-      # packages unless its definition says otherwise (design_system: ~).
-      - '@daedalus_blueprint.active_design_system'
-      - '@?workspaces.manager'
-  daedalus_stylish.animation_shipper:
-    # The animations lane's other direction: site animations OUT to a
-    # module's per-id file (MODULE.daedalus_stylish.animations.ID.yml), adopted in
-    # place with the written canonical steps as the source hash so a sync
-    # right after reports UNCHANGED.
-    class: Drupal\daedalus_stylish\AnimationShipper
-    arguments:
-      - '@module_handler'
-      - '@entity_type.manager'
-      # Owns the file names, the grammar check, and what modules ship.
-      - '@daedalus_stylish.animation_importer'
-      # Optional: with Workspaces the lookups and adopting saves run outside
-      # any active workspace, like the importer's sync: shipped is LIVE.
-      - '@?workspaces.manager'
-  daedalus_stylish.font_importer:
-    # The type disk lane's site-bound half: MODULE.daedalus_stylish.fonts*.yml with
-    # each face's file under the module's assets/fonts/, landed through
-    # the font store and stamped with the content-addressed payload.
-    class: Drupal\daedalus_stylish\FontImporter
-    arguments:
-      - '@module_handler'
-      - '@entity_type.manager'
-      # Unused by this importer (the family and faces are internal fields
-      # written directly after FontValidator); the base owns the argument.
-      - '@daedalus_blueprint.deserializer'
-      # Same admin-account and workspace-escape rationale as the variant
-      # importer: shipped fonts are code and land live.
-      - '@daedalus_stylish.admin_account_switcher'
-      - '@datetime.time'
-      # Membership: a shipped member joins the design system its module
-      # packages unless its definition says otherwise (design_system: ~).
-      - '@daedalus_blueprint.active_design_system'
-      # The one gate every font write converges on, run on the landed faces.
-      - '@daedalus_stylish.font_validator'
-      # The font store: the bytes land here, permanent, held by usage.
-      - '@daedalus_stylish.font_files'
-      - '@?workspaces.manager'
-  daedalus_stylish.font_shipper:
-    # The fonts lane's other direction: site fonts OUT to a module's per-id
-    # file (MODULE.daedalus_stylish.fonts.ID.yml) with each face's bytes copied
-    # under assets/fonts/, adopted in place with the content-addressed
-    # payload as the source hash so a sync right after reports UNCHANGED.
-    class: Drupal\daedalus_stylish\FontShipper
-    arguments:
-      - '@module_handler'
-      - '@entity_type.manager'
-      # Owns the file names, the grammar check, the assets path and the
-      # payload read of what was written.
-      - '@daedalus_stylish.font_importer'
-      # The faces' managed files: their names become the basenames on disk.
+      # The fonts' managed files: their names become the basenames on disk.
       - '@daedalus_stylish.font_files'
       # Optional: with Workspaces the lookups and adopting saves run outside
       # any active workspace, like the importer's sync: shipped is LIVE.
@@ -624,24 +610,22 @@ services:
     arguments: ['daedalus_stylish']
   daedalus_stylish.shipped_sync:
     # The one activation lane for shipped definitions (disk to site is
-    # "sync"; site to disk is "ship", daedalus_stylish.ship below): the four
-    # importers in dependency order (fonts, animations, swatches, skins,
-    # variants) over a module set, behind hook_rebuild(), hook_modules_installed(), a
+    # "sync"; site to disk is "ship", daedalus_stylish.ship below): the two
+    # importers in dependency order (skins, variants)
+    # over a module set, behind hook_rebuild(), hook_modules_installed(), a
     # design system being activated (every enabled module re-syncs under
-    # the incoming law: the package it defers while inactive and, on a
-    # fresh install, everything the batch left waiting for the installer
-    # to finish), and the daedalus_stylish:sync command.
+    # the incoming law, which lands the package the importers defer while
+    # its system is inactive), the default theme landing (every enabled
+    # module re-syncs, which lands the skins the importer defers while the
+    # named default theme is not installed), and the daedalus_stylish:sync
+    # command.
     class: Drupal\daedalus_stylish\ShippedSync
     arguments:
-      - '@daedalus_stylish.font_importer'
-      - '@daedalus_stylish.animation_importer'
-      - '@daedalus_stylish.swatch_importer'
       - '@daedalus_stylish.skin_importer'
       - '@daedalus_stylish.variant_importer'
-      # The install guard: inside the installer a batch waits only until
-      # the site has its design system (the recipe's activation).
-      - '@daedalus_blueprint.active_design_system'
-      # The rebuild guard: pending entity definition updates skip the sync.
+      # The rebuild guard: pending entity definition updates on the kinds'
+      # own entity types (daedalus_skin, daedalus_variant) skip the sync;
+      # other types' pending updates are not this lane's concern.
       - '@entity.definition_update_manager'
       - '@logger.channel.daedalus_stylish'
   Drupal\daedalus_stylish\ShippedSync: '@daedalus_stylish.shipped_sync'
@@ -649,8 +633,7 @@ services:
     # The sync lane's other direction: a module's per-id files
     # (MODULE.daedalus_stylish.<kind>.ID.yml) rebuilt from the site's entities
     # and site materials adopted into new per-id files, one shipper per
-    # kind in the sync's order (fonts, animations, swatches, skins,
-    # variants). The materials lane of the package ship (tagged; the
+    # kind in the sync's order (skins, variants). The materials lane of the package ship (tagged; the
     # daedalus-blueprint:design-system:ship command runs it after the
     # blueprint lane, at priority 0, so blueprint-owned variants are
     # already in their blueprints' files): the module rebuilt whole plus every
@@ -659,128 +642,11 @@ services:
     class: Drupal\daedalus_stylish\Ship
     arguments:
       - '@module_handler'
-      - '@daedalus_stylish.font_shipper'
-      - '@daedalus_stylish.animation_shipper'
-      - '@daedalus_stylish.swatch_shipper'
       - '@daedalus_stylish.skin_shipper'
       - '@daedalus_stylish.variant_shipper'
     tags:
       - { name: daedalus_blueprint.package_shipper, priority: 0 }
   Drupal\daedalus_stylish\Ship: '@daedalus_stylish.ship'
-  daedalus_stylish.swatch_usage:
-    # The daedalus_swatch_usage table: which source entities reference which
-    # swatches inside their saved default-revision CSS values, mirrored
-    # from the THREE stores (host style maps, variant styles, skin
-    # tokens/defaults) at the entity save chokepoint
-    # (daedalus_stylish_entity_insert/update/delete). Every usage consumer reads it;
-    # nothing parses content on demand.
-    class: Drupal\daedalus_stylish\SwatchUsage
-    arguments:
-      - '@database'
-      - '@entity_type.manager'
-      - '@entity_field.manager'
-      - '@daedalus_blueprint.host_resolver'
-  daedalus_stylish.swatch_manager:
-    class: Drupal\daedalus_stylish\SwatchManager
-    arguments:
-      # The value seam every mint validates through.
-      - '@daedalus_stylish.style_map_validator'
-      - '@entity_type.manager'
-      # Reference resolution (loadSwatch), the request-lifetime identity map.
-      - '@daedalus_stylish.swatch_repository'
-      - '@current_user'
-      - '@datetime.time'
-      # The disk lane: the shipped-state comparisons, the distro lock, and
-      # the revert gesture read "what does the provider ship right now"
-      # through the importer.
-      - '@daedalus_stylish.swatch_importer'
-      # Compound condition keys canonicalize (part order) on write.
-      - '@plugin.manager.daedalus_stylish_condition_type'
-      # Usage counts and the delete lane's work list read the
-      # daedalus_swatch_usage table.
-      - '@daedalus_stylish.swatch_usage'
-      # A mint joins the active design system unless it opts out (global).
-      - '@daedalus_blueprint.active_design_system'
-      # The distro lock: shipped swatches are read-only while it holds; the
-      # developer gate (settings.php) lifts it on an authoring site.
-      - '@daedalus_blueprint.distro_lock'
-  daedalus_stylish.field_handler.swatch_value:
-    class: Drupal\daedalus_stylish\SwatchValueFieldHandler
-    arguments:
-      - '@daedalus_stylish.style_map_validator'
-      - '@daedalus_stylish.style_guide'
-      # Theme resolution: the declaration spine's one answer (siteTheme()).
-      - '@daedalus_ui.page_builder_declarations'
-      - '@plugin.manager.daedalus_stylish_condition_type'
-      # The input tier's write-time resolution (handled values, layers).
-      - '@daedalus_stylish.style_value_resolver'
-      # The guidance names blueprints among the materials only while the
-      # roster has some (StyleMapFieldHandler::guidanceParagraph()).
-      - '@daedalus_blueprint.materials_roster_builder'
-      # The rosters the fragment teaches (what each address may style).
-      - '@daedalus_stylish.vocabulary_roster'
-      - '@daedalus_blueprint.host_resolver'
-      # Lazy: the importer injects the deserializer, whose handler manager
-      # instantiates this handler (the validator's component-locator cycle,
-      # again). The distro lock's disk read.
-      - !service_closure '@daedalus_stylish.swatch_importer'
-      # The ai_minting governance gate reads daedalus_stylish.settings.
-      - '@config.factory'
-      # The distro lock gates the blueprint-lane write and the guidance's
-      # lock sentence; the developer gate (settings.php) lifts it.
-      - '@daedalus_blueprint.distro_lock'
-    tags:
-      - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_swatch_value' }
-  daedalus_stylish.animation_manager:
-    class: Drupal\daedalus_stylish\AnimationManager
-    arguments:
-      # The steps seam every mint validates through.
-      - '@daedalus_stylish.style_map_validator'
-      - '@entity_type.manager'
-      # Reference resolution (loadAnimation), the request-lifetime identity
-      # map.
-      - '@daedalus_stylish.animation_repository'
-      - '@current_user'
-      - '@datetime.time'
-      # The disk lane: the shipped-state comparisons, the distro lock, and
-      # the revert gesture read "what does the provider ship right now"
-      # through the importer.
-      - '@daedalus_stylish.animation_importer'
-      # Usage counts and the delete lane's work list read the
-      # daedalus_animation_usage table.
-      - '@daedalus_stylish.animation_usage'
-      # A mint joins the active design system unless it opts out (global).
-      - '@daedalus_blueprint.active_design_system'
-      # The distro lock: shipped animations are read-only while it holds;
-      # the developer gate (settings.php) lifts it on an authoring site.
-      - '@daedalus_blueprint.distro_lock'
-  daedalus_stylish.field_handler.animation_steps:
-    class: Drupal\daedalus_stylish\AnimationStepsFieldHandler
-    arguments:
-      - '@daedalus_stylish.style_map_validator'
-      - '@daedalus_stylish.style_guide'
-      # Theme resolution: the declaration spine's one answer (siteTheme()).
-      - '@daedalus_ui.page_builder_declarations'
-      - '@plugin.manager.daedalus_stylish_condition_type'
-      # The input tier's write-time resolution (handled values, layers).
-      - '@daedalus_stylish.style_value_resolver'
-      # The guidance names blueprints among the materials only while the
-      # roster has some (StyleMapFieldHandler::guidanceParagraph()).
-      - '@daedalus_blueprint.materials_roster_builder'
-      # The rosters the fragment teaches (what each address may style).
-      - '@daedalus_stylish.vocabulary_roster'
-      - '@daedalus_blueprint.host_resolver'
-      # Lazy: the importer injects the deserializer, whose handler manager
-      # instantiates this handler (the validator's component-locator cycle,
-      # again). The distro lock's disk read.
-      - !service_closure '@daedalus_stylish.animation_importer'
-      # The ai_minting governance gate reads daedalus_stylish.settings.
-      - '@config.factory'
-      # The distro lock gates the blueprint-lane write and the guidance's
-      # lock sentence; the developer gate (settings.php) lifts it.
-      - '@daedalus_blueprint.distro_lock'
-    tags:
-      - { name: daedalus_blueprint.field_handler, field_types: 'daedalus_animation_steps' }
   daedalus_stylish.media_value_resolver:
     class: Drupal\daedalus_stylish\MediaValueResolver
     arguments:
@@ -827,11 +693,10 @@ services:
       - '@daedalus_stylish.variant_usage'
       - '@daedalus_stylish.variant_repository'
       - '@daedalus_blueprint.materials_roster_builder'
-      - '@daedalus_stylish.variant_conformance'
     tags:
       - { name: event_subscriber }
-  daedalus_stylish.defaults_stylesheet:
-    class: Drupal\daedalus_stylish\DefaultsStylesheet
+  daedalus_stylish.skin_stylesheet:
+    class: Drupal\daedalus_stylish\SkinStylesheet
     arguments:
       - '@daedalus_stylish.css_printer'
       # The active skin: site defaults are its data; its tokens are read as
@@ -849,184 +714,58 @@ services:
       - '@library.discovery'
       # Media tokens in site defaults resolve pre-print, per print site.
       - '@daedalus_stylish.media_value_resolver'
+      # The skin's fonts: each face's file loaded by uuid, its URL printed
+      # into the @font-face block the file opens with.
+      - '@daedalus_stylish.font_files'
+      - '@file_url_generator'
       # Optional: without workspaces there is no preview edge and compiles
       # always see the (only) live revision.
       - '@?workspaces.manager'
   daedalus_stylish.skin_workspace_subscriber:
     # Publish fires no per-entity update hooks: the roster reset, the
-    # recompile and the token usage resync replay here.
+    # recompile of both files (a skin publish is a law change) and the
+    # skin material usage resync replay here.
     class: Drupal\daedalus_stylish\EventSubscriber\SkinWorkspaceSubscriber
     arguments:
-      - '@daedalus_stylish.defaults_stylesheet'
+      - '@daedalus_stylish.skin_stylesheet'
+      - '@daedalus_stylish.variant_stylesheet'
       - '@daedalus_blueprint.materials_roster_builder'
-      - '@daedalus_stylish.token_usage'
+      - '@daedalus_stylish.skin_material_usage'
     tags:
       - { name: event_subscriber }
-  daedalus_stylish.swatch_stylesheet:
-    class: Drupal\daedalus_stylish\SwatchStylesheet
-    arguments:
-      - '@daedalus_stylish.css_printer'
-      # Condition canonicalization and width-condition detection for the
-      # demand-driven page-container rule.
-      - '@plugin.manager.daedalus_stylish_condition_type'
-      # The materials roster: the published set, its order, and the cache
-      # metadata the workspace inline preview carries.
-      - '@daedalus_blueprint.materials_roster_builder'
-      - '@state'
-      - '@file_system'
-      - '@stream_wrapper_manager'
-      - '@library.discovery'
-      # Optional: without workspaces there is no preview edge and compiles
-      # always see the (only) live revisions.
-      - '@?workspaces.manager'
-  daedalus_stylish.swatch_workspace_subscriber:
-    # Publish fires no per-entity update hooks, so the save-chokepoint
-    # reactions replay here: identity map and roster resets, stylesheet
-    # recompile, usage-row resync.
-    class: Drupal\daedalus_stylish\EventSubscriber\SwatchWorkspaceSubscriber
-    arguments:
-      - '@daedalus_stylish.swatch_stylesheet'
-      - '@daedalus_stylish.swatch_usage'
-      - '@daedalus_stylish.swatch_repository'
-      - '@daedalus_blueprint.materials_roster_builder'
-    tags:
-      - { name: event_subscriber }
-  daedalus_stylish.animation_stylesheet:
-    class: Drupal\daedalus_stylish\AnimationStylesheet
-    arguments:
-      - '@daedalus_stylish.css_printer'
-      # The published set: the same read the roster's animation records
-      # come from, so delivery and validation cannot disagree.
-      - '@daedalus_stylish.animation_repository'
-      # The animation LIST cache tag the workspace inline preview carries.
-      - '@entity_type.manager'
-      - '@state'
-      - '@file_system'
-      - '@stream_wrapper_manager'
-      - '@library.discovery'
-      # Optional: without workspaces there is no preview edge and compiles
-      # always see the (only) live revisions.
-      - '@?workspaces.manager'
-  daedalus_stylish.animation_usage:
-    # The daedalus_animation_usage table: which source entities wear which
-    # animations inside their saved default-revision CSS values (the
-    # property-scoped keyframes-name slot), mirrored at the entity save
-    # chokepoint across the three stores; the swatch table's twin.
-    class: Drupal\daedalus_stylish\AnimationUsage
-    arguments:
-      - '@database'
-      - '@entity_type.manager'
-      - '@entity_field.manager'
-      - '@daedalus_blueprint.host_resolver'
-  daedalus_stylish.animation_workspace_subscriber:
-    # Publish fires no per-entity update hooks, so the save-chokepoint
-    # reactions replay here: identity map and roster resets, stylesheet
-    # recompile, usage-row resync.
-    class: Drupal\daedalus_stylish\EventSubscriber\AnimationWorkspaceSubscriber
-    arguments:
-      - '@daedalus_stylish.animation_stylesheet'
-      - '@daedalus_stylish.animation_usage'
-      - '@daedalus_stylish.animation_repository'
-      - '@daedalus_blueprint.materials_roster_builder'
-    tags:
-      - { name: event_subscriber }
-  # The font material (kind font): the animation pattern at family scope.
-  daedalus_stylish.font_repository:
-    # The animation repository's twin for the type material: font
-    # references and the published set resolve at most once per request
-    # and workspace window, reset by the font entity hooks on any save or
-    # delete and by the workspace subscriber on publish.
-    class: Drupal\daedalus_stylish\FontRepository
-    arguments:
-      - '@entity_type.manager'
-      - '@?workspaces.manager'
   daedalus_stylish.font_validator:
-    # The family and faces grammar every font write path converges on; a
-    # face's file resolves through the entity repository (by uuid).
+    # The family and faces grammar every font write path converges on (the
+    # skin material gestures, the skins disk lane); a face's file resolves
+    # through the entity repository (by uuid).
     class: Drupal\daedalus_stylish\FontValidator
     arguments:
       - '@entity.repository'
   daedalus_stylish.font_files:
     # The font store: daedalus_ui's file lane narrowed to woff2 and woff,
     # permanent files under public://daedalus_stylish/fonts, and the file
-    # usage rows a font holds its files through.
+    # usage rows a skin holds its fonts' files through (every revision's
+    # files stay held while the skin lives).
     class: Drupal\daedalus_stylish\FontFiles
     arguments:
       - '@daedalus_ui.file_lane'
       - '@file.mime_type.guesser'
       - '@entity.repository'
       - '@file.usage'
-  daedalus_stylish.font_manager:
-    class: Drupal\daedalus_stylish\FontManager
-    arguments:
-      - '@daedalus_stylish.font_validator'
+      # The skin's revisions, walked on delete for every file they named.
       - '@entity_type.manager'
-      - '@daedalus_stylish.font_repository'
-      - '@current_user'
-      - '@datetime.time'
-      # A mint joins the active design system unless it opts out (global).
-      - '@daedalus_blueprint.active_design_system'
-      # The distro lock: shipped fonts are read-only while it holds; the
-      # developer gate (settings.php) lifts it on an authoring site.
-      - '@daedalus_blueprint.distro_lock'
-      # The living disk source the lock reads (a font whose provider
-      # stopped shipping it is ordinary site content again).
-      - '@daedalus_stylish.font_importer'
-      # Which sources name the family: the delete gesture's work list.
-      - '@daedalus_stylish.font_usage'
-  daedalus_stylish.font_usage:
-    # The daedalus_font_usage table: which source entities name which font
-    # families inside their saved default-revision CSS values (the
-    # property-scoped font slot: font-family values, and the skin tokens on
-    # the scale the guide binds to font-family), mirrored at the entity
-    # save chokepoint across the three stores; the animation table's twin.
-    class: Drupal\daedalus_stylish\FontUsage
-    arguments:
-      - '@database'
-      - '@entity_type.manager'
-      - '@entity_field.manager'
-      - '@daedalus_blueprint.host_resolver'
-      # The font-family binding: which token scale is a family source.
-      - '@daedalus_stylish.style_guide'
-  daedalus_stylish.font_stylesheet:
-    class: Drupal\daedalus_stylish\FontStylesheet
-    arguments:
-      - '@daedalus_stylish.css_printer'
-      # The published set: the same read the roster's font records come
-      # from, so delivery and the roster cannot disagree.
-      - '@daedalus_stylish.font_repository'
-      # The faces' files, loaded by uuid; the file URL the at-rule prints.
-      - '@daedalus_stylish.font_files'
-      - '@file_url_generator'
-      # The font LIST cache tag the workspace inline preview carries.
-      - '@entity_type.manager'
-      - '@state'
-      - '@file_system'
-      - '@stream_wrapper_manager'
-      - '@library.discovery'
-      - '@?workspaces.manager'
-  daedalus_stylish.font_workspace_subscriber:
-    # Publish fires no per-entity update hooks, so the save-chokepoint
-    # reactions replay here: identity map and roster resets, stylesheet
-    # recompile, usage-row resync.
-    class: Drupal\daedalus_stylish\EventSubscriber\FontWorkspaceSubscriber
-    arguments:
-      - '@daedalus_stylish.font_stylesheet'
-      - '@daedalus_stylish.font_usage'
-      - '@daedalus_stylish.font_repository'
-      - '@daedalus_blueprint.materials_roster_builder'
-    tags:
-      - { name: event_subscriber }
   daedalus_stylish.defaults_settings_subscriber:
     class: Drupal\daedalus_stylish\EventSubscriber\DefaultsSettingsSubscriber
-    # Breakpoint thresholds, the container_roots gate and the default theme
-    # bake into the defaults file; which skin prints is the design-system
-    # switch's business, except the site's skin CHOICE for the active
-    # system (skin_choice), which lives in this config and swaps the
-    # active skin's tokens: the roster drops and both skins' token ids
-    # ride the materials delta, as on a switch.
+    # Breakpoint thresholds and the container_roots gate bake into both
+    # compiled files, so every save of this config recompiles both; which
+    # skin prints is the design-system switch's business, except the
+    # site's skin CHOICE for the active system (skin_choice), which lives
+    # in this config and swaps the active skin's tokens: the roster drops
+    # and both skins' token ids and every variant ride the materials
+    # delta, as on a switch. The default theme (system.theme) is a law
+    # input and the switch subscriber's.
     arguments:
-      - '@daedalus_stylish.defaults_stylesheet'
+      - '@daedalus_stylish.skin_stylesheet'
+      - '@daedalus_stylish.variant_stylesheet'
       - '@daedalus_blueprint.active_design_system'
       - '@daedalus_stylish.skin_manager'
       - '@daedalus_stylish.materials_provider'
@@ -1037,16 +776,19 @@ services:
       - { name: event_subscriber }
   daedalus_stylish.design_system_switch_subscriber:
     class: Drupal\daedalus_stylish\EventSubscriber\DesignSystemSwitchSubscriber
-    # A switch drops the roster memo and the style guide (the layered
-    # declarations with it, so the incoming package's law is in force
-    # whatever order the subscribers on the event run in), syncs the
-    # incoming system's package under that law, rides both systems' token
-    # and member ids on the response's materials delta, and recompiles
-    # the three roster-fed files (defaults, variants, swatches).
+    # The one sweep a law change through config runs: drop the roster memo
+    # and the style guide (the layered declarations with it, so the new law
+    # is in force whatever order the subscribers on the event run in),
+    # sync every module's shipped definitions under it, ride the touched
+    # systems' token and member ids on the response's materials delta,
+    # and recompile the two roster-fed files (defaults, variants). Three
+    # saves run it: the pointer's and the landing of the system the pointer
+    # already names (a switch; the active_design_system service reads the
+    # pointer for it), and system.theme's default (the skins kind waits
+    # while the named default theme is not installed; no systems touched).
     arguments:
-      - '@daedalus_stylish.defaults_stylesheet'
+      - '@daedalus_stylish.skin_stylesheet'
       - '@daedalus_stylish.variant_stylesheet'
-      - '@daedalus_stylish.swatch_stylesheet'
       - '@daedalus_blueprint.materials_roster_builder'
       - '@daedalus_blueprint.materials_change_set'
       - '@daedalus_stylish.skin_manager'
@@ -1054,6 +796,7 @@ services:
       - '@entity_type.manager'
       - '@daedalus_stylish.style_guide'
       - '@daedalus_stylish.shipped_sync'
+      - '@daedalus_blueprint.active_design_system'
     tags:
       - { name: event_subscriber }
   daedalus_stylish.style_backend.css:
@@ -1117,20 +860,46 @@ services:
     tags:
       - { name: daedalus_layout.host_transform, priority: -25 }
 
+  daedalus_stylish.fact_condition_convergence:
+    class: Drupal\daedalus_stylish\FactConditionConvergence
+    arguments:
+      - '@plugin.manager.daedalus_stylish_condition_type'
+      - '@entity_type.manager'
+      - '@logger.factory'
+  Drupal\daedalus_stylish\FactConditionConvergence: '@daedalus_stylish.fact_condition_convergence'
+
+  # The fact-condition convergence: position is a qualifier, not a
+  # condition, so every retired fact condition ("first-child",
+  # "not-last-child", "odd", …) moves onto its qualified key. Registered
+  # permanently and after the relative selector sweep, so every key is
+  # canonical before it is qualified.
+  daedalus_stylish.fact_condition_sweep:
+    class: Drupal\daedalus_stylish\FactConditionSweep
+    arguments:
+      - '@daedalus_stylish.fact_condition_convergence'
+    tags:
+      - { name: daedalus_layout.host_transform, priority: -30 }
+
   daedalus_stylish.form_alter.bundle_edit:
     class: Drupal\daedalus_stylish\Form\BundleEditFormAlter
     arguments: ['@daedalus_stylish.field_manager', '@entity_type.manager', '@daedalus_ui.form_alter.bundle_edit']
+  # The same box mirrored on daedalus_ui's bundle roster (the tab's
+  # read-only second door) as the Styling column.
+  daedalus_stylish.bundle_roster.styling:
+    class: Drupal\daedalus_stylish\EventSubscriber\StylingColumn
+    arguments: ['@daedalus_stylish.field_manager']
+    tags:
+      - { name: event_subscriber }
   # The design system form's default_skin: daedalus_blueprint keeps the
   # free-text machine name (it knows no skins); this narrows it to a
   # select of the system's member skins.
   daedalus_stylish.form_alter.design_system:
     class: Drupal\daedalus_stylish\Form\DesignSystemFormAlter
     arguments: ['@daedalus_stylish.skin_manager']
-  # Daedalus Stylish's materials provider: the active skin's tokens, the published
-  # swatches, the published variants and the published animations as
-  # roster records (the ONE place these four kinds are read into the
-  # materials spine; spellings derive from the declarations here and
-  # nowhere else).
+  # Daedalus Stylish's materials provider: the active skin's tokens and
+  # animations, the published variants and fonts as roster records (the
+  # ONE place these four kinds are read into the materials spine;
+  # spellings derive from the declarations here and nowhere else).
   daedalus_stylish.materials_provider:
     class: Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider
     arguments:
@@ -1138,17 +907,13 @@ services:
       - '@daedalus_stylish.skin_manager'
       # Theme resolution: the declaration spine's one answer (siteTheme()).
       - '@daedalus_ui.page_builder_declarations'
-      - '@daedalus_stylish.swatch_repository'
       - '@daedalus_stylish.variant_repository'
-      - '@daedalus_stylish.animation_repository'
       # The gesture lane (save_material / update_material / remove_material
-      # with kind swatch, variant or animation): the managers and the
-      # capture walk, as closures because the dependency is circular by
-      # construction (the managers validate through StyleMapValidator,
-      # whose universe is the roster this provider feeds).
-      - !service_closure '@daedalus_stylish.swatch_manager'
+      # with kind variant): the manager and the capture walk, as closures
+      # because the dependency is circular by construction (the managers
+      # validate through StyleMapValidator, whose universe is the roster
+      # this provider feeds).
       - !service_closure '@daedalus_stylish.variant_manager'
-      - !service_closure '@daedalus_stylish.animation_manager'
       - !service_closure '@daedalus_stylish.variant_capture'
       - '@current_user'
       - '@config.factory'
@@ -1161,16 +926,17 @@ services:
       - !service_closure '@daedalus_blueprint.materials_roster_builder'
       # The verdict the variant records are filtered by.
       - '@daedalus_stylish.variant_conformance'
-      # The distro lock: a shipped swatch, variant or animation record is
-      # `updatable` only once the developer gate (settings.php) lifts it.
+      # The distro lock: a shipped variant record is `updatable` only once
+      # the developer gate (settings.php) lifts it.
       - '@daedalus_blueprint.distro_lock'
-      # The token gestures (kind token): a closure like the other managers,
+      # The skin material gestures (kind token, animation, font): a closure
+      # like the other managers,
       # its validator's universe being the roster this provider feeds.
-      - !service_closure '@daedalus_stylish.token_manager'
-      # The font records and the font gestures (kind font): the repository
-      # direct, the manager a closure like the others.
-      - '@daedalus_stylish.font_repository'
-      - !service_closure '@daedalus_stylish.font_manager'
+      - !service_closure '@daedalus_stylish.skin_material_manager'
+      # The AI context budget, the guard an offered mint and an update
+      # turning offered on answer: a closure, since its weight sources
+      # render the roster this provider feeds.
+      - !service_closure '@daedalus_blueprint.materials_budget'
     tags:
       - { name: daedalus_blueprint.materials_provider }
   # The token gestures: mint, update and delete one token of the active
@@ -1178,12 +944,13 @@ services:
   # site, the package layer on the site's own skin or under the developer
   # gate). The materials provider dispatches save_material /
   # update_material / remove_material with kind token here.
-  daedalus_stylish.token_manager:
-    class: Drupal\daedalus_stylish\TokenManager
+  daedalus_stylish.skin_material_manager:
+    class: Drupal\daedalus_stylish\SkinMaterialManager
     arguments:
-      # The token seam every write validates the merged layers through.
+      # The token and animation seams every write validates the merged
+      # layers through (the font seam is its own service below).
       - '@daedalus_stylish.style_map_validator'
-      # The active skin, the one every token gesture addresses, and the
+      # The active skin, the one every skin material gesture addresses, and the
       # layer rule (SkinManager::writesSiteLayer()) every skin write shares.
       - '@daedalus_stylish.skin_manager'
       - '@current_user'
@@ -1192,31 +959,40 @@ services:
       # The scale declarations a token's custom property derives under
       # (StyleGuide::tokenVariable()), the usage lane's reference form.
       - '@daedalus_stylish.style_guide'
-      # The usage table: the count behind the palette row and the
-      # rewrite batches' work lists.
-      - '@daedalus_stylish.token_usage'
+      # The usage table: the count behind a card and the rewrite batches'
+      # work lists, one table for both sections.
+      - '@daedalus_stylish.skin_material_usage'
       # The disk lane: the revert gesture and the shipped state read "what
-      # does the provider ship for this token right now" through the
-      # importer.
+      # does the provider ship for this material right now" through the
+      # importer (a font's faces landed again from the module's assets).
       - '@daedalus_stylish.skin_importer'
-  daedalus_stylish.token_usage:
-    # The daedalus_token_usage table: which source entities reference
-    # which custom properties (a token's var(--{prefix}-{name})) inside
-    # their saved default-revision CSS values, mirrored at the entity save
-    # chokepoint across the three stores; the swatch table's twin for the
-    # material that lives on the skin.
-    class: Drupal\daedalus_stylish\TokenUsage
+      # The font seam every font write validates the merged layers through,
+      # and the font store the shipped-state comparison content-addresses
+      # a worn font's faces with.
+      - '@daedalus_stylish.font_validator'
+      - '@daedalus_stylish.font_files'
+  daedalus_stylish.skin_material_usage:
+    # The daedalus_skin_material_usage table: which source entities reference
+    # which skin materials (a token's var(--{prefix}-{name}), an
+    # animation's motion-{name} keyframes ident, a font's quoted family in
+    # a font-family stack) inside their saved default-revision CSS values,
+    # mirrored at the entity save chokepoint across the three stores; the
+    # variant table's twin for the materials that live on the skin, one
+    # table for all three sections.
+    class: Drupal\daedalus_stylish\SkinMaterialUsage
     arguments:
       - '@database'
       - '@entity_type.manager'
       - '@entity_field.manager'
       - '@daedalus_blueprint.host_resolver'
-  Drupal\daedalus_stylish\TokenManager: '@daedalus_stylish.token_manager'
+      # The font-family binding: which token scale is a family source.
+      - '@daedalus_stylish.style_guide'
+  Drupal\daedalus_stylish\SkinMaterialManager: '@daedalus_stylish.skin_material_manager'
   Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider: '@daedalus_stylish.materials_provider'
   # The offered variants the site's CURRENT law refuses, judged once per
   # law change (cache-backed under the provider's tags) and withheld from
-  # the roster by the provider; the request memo resets with the variant
-  # repository's.
+  # the roster by the provider; the request memo resets with the roster's
+  # (MaterialsRosterBuilder::reset() cascades to the provider's reset()).
   daedalus_stylish.variant_conformance:
     class: Drupal\daedalus_stylish\VariantConformance
     arguments:
@@ -1265,6 +1041,9 @@ services:
       - '@daedalus_ui.page_builder_declarations'
       # The dressed tags are the active skin's base default scopes.
       - '@daedalus_stylish.skin_manager'
+      # The rosters' value spaces (the bindings and the deviations) ride
+      # the same contribution, from the derivation the JSON door prints.
+      - '@daedalus_stylish.vocabulary_value_spaces'
     tags:
       - { name: event_subscriber }
   daedalus_stylish.component_styles_subscriber:

@@ -149,7 +149,7 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
     $this->assertSame(
       ['default' => ['display' => 'flex', 'flex-direction' => 'column']],
       $entity['defaults']['::' . $selector] ?? NULL,
-      'The layout root defaults to a flex column: the arranging box fact ships with the markup, not the skin, and packs the bands instead of stretching them.',
+      'The layout root defaults to a flex column: the arranging box fact ships with the markup, not the skin, and packs the sections instead of stretching them.',
     );
 
     $resolved = $this->container->get('daedalus_ui.element_resolver')->resolve($entity);

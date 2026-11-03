@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Materials;
 
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\daedalus_blueprint\Dialect\DialectCatalog;
 use Drupal\daedalus_blueprint\Dialect\DialectCatalogBuilder;
 use Drupal\daedalus_blueprint\Dialect\DialectPrinter;
@@ -12,18 +13,31 @@ use Drupal\daedalus_blueprint\Host\HostInterface;
 /**
  * Renders the roster as the blueprint schema's `materials` fragment.
  *
- * The AI's one discovery lane for every material kind, projected from the
- * roster (never walked from the entities): the named values (tokens by
- * scale, swatches with their labels and descriptions), the saved variants
- * with their descriptions and where they apply, the blueprints printed in
- * full as page-language fragments (sample content and worn looks, the
- * definition as a document without ids) with the looks each one owns,
- * and the animations with their keyframe steps, under one guidance
- * paragraph that teaches how each kind is read and referenced. The
- * fragment keeps the FULL text (descriptions unclipped); the cached
- * prompt's design system brief (DialectCatalogPrompt) is the twin that
- * clips every description to its first sentence and projects the same
- * roster in the active system's own structure.
+ * The JSON door's one discovery lane for every material kind, projected
+ * from the roster (never walked from the entities): the named values
+ * (tokens by scale, with their descriptions), the
+ * saved variants with their descriptions and where they apply, the
+ * blueprints printed in full as page-language fragments (sample content
+ * and worn looks, the definition as a document without ids) with the
+ * looks each one owns, the animations with their keyframe steps and the
+ * fonts with their faces, under one guidance paragraph that teaches how
+ * each kind is read and referenced, every description whole. The JSON
+ * door (eb_edit, the API, the CLI) edits variant and skin
+ * entities whose style maps reference named values and has no cached
+ * brief to lean on, so fragment() keeps every kind.
+ *
+ * The dialect door reads the same roster twice: the cached prompt's
+ * design system brief (DialectCatalogPrompt) is its always-on layer and
+ * carries every token, variant, animation and font with its
+ * whole description and value, so a small edit is made from the brief
+ * alone, and the schema is its composition manual. dialect() narrows
+ * this fragment to what the brief does not carry: the group index, the
+ * blueprints in full (the fragment and the looks, the one place a
+ * blueprint's rule rides), the animations' steps and the fonts' faces,
+ * with no description on an animation or a font (the brief's) and its
+ * own guidance paragraph, which teaches only those kinds
+ * (DIALECT_KEYS). DialectSchemaProjector applies it; each material fact
+ * has one home on that door.
  *
  * A blueprint prints where the catalog is in hand: the printer spells a
  * worn variant by its record (an axis attribute or a class) and a block
@@ -64,21 +78,34 @@ use Drupal\daedalus_blueprint\Host\HostInterface;
  * readable with page_read), where MaterialsSchemaHooks lands it on a page
  * bundle's schema.
  *
- * A blueprint's entry prints its whole body, so the fragment never lists
- * every offered blueprint: a site designed for a hundred would pay a
- * hundred prints per read. The `blueprints` group holds the SITE
- * FAVORITES (MaterialRecord::$favorite, the default the Add panel lists
- * under Favorites for everyone; an editor's own marks never reach a
- * surface cached for every user) and the `groups` group is the site's
- * group vocabulary (DialectCatalog::groups(), declaration order) with
- * how many offered block blueprints each holds, plus the reserved
- * DialectCatalog::UNGROUPED bucket for the offered ones in no declared
- * group: the model's index. One group is read in full on demand: narrow()
- * replaces the blueprints group with that group's entries AFTER the
- * cached schema is read (the schema cache key never changes), which is
- * what eb_read_schema's `group` parameter does.
+ * The `blueprints` group holds EVERY OFFERED block blueprint in full
+ * (MaterialRecord::$offered, the "share with the AI" flag): a blueprint's
+ * entry prints its whole body, so the fragment grows with every blueprint
+ * shared, and the AI context budget (MaterialsBudget) is the ceiling that
+ * refuses sharing past it. A site favorite (MaterialRecord::$favorite) is
+ * the Add panel's listing and means nothing to this surface. The `groups`
+ * group is the site's group vocabulary (DialectCatalog::groups(),
+ * declaration order) with how many shared block blueprints each holds,
+ * plus the reserved DialectCatalog::UNGROUPED bucket for the shared ones
+ * in no declared group: the vocabulary a saved blueprint is filed under,
+ * and a filter. One group is read alone on demand: narrow() replaces the
+ * blueprints group with that group's entries AFTER the cached schema is
+ * read (the schema cache key never changes), which is what
+ * eb_read_schema's `group` parameter does.
+ *
+ * The fragment is also a weight source of the AI context budget
+ * (MaterialsBudget): weights() attributes the no-host fragment (the
+ * heaviest view, block scope unfiltered by fit) entry by entry (JSON,
+ * the shape the JSON door ships and the brief's measure is calibrated
+ * against): each record's entry with its key is the record's, a kind's
+ * braces, the commas between its entries and (for tokens) the scale
+ * keys and braces are the kind's shared, the guidance and the group
+ * index are the system's (the index rides every declared group at a
+ * zero count, so no material toggle shrinks it). A shared blueprint's
+ * whole fragment, its owned looks included, is what that blueprint
+ * weighs, which is why sharing is the lever the budget watches.
  */
-class MaterialsSchema {
+class MaterialsSchema implements MaterialsWeightSourceInterface {
 
   /**
    * The applies sentence a root-only variant carries on its entry.
@@ -86,10 +113,10 @@ class MaterialsSchema {
   public const APPLIES_ROOT_ONLY = 'top-level sections only, never nested inside another section';
 
   /**
-   * The placement value a band blueprint carries on its entry.
+   * The placement value a section blueprint carries on its entry.
    *
    * A blueprint whose root wears a root-only variant (MaterialsRoster::
-   * isBand()) places at the document's top level only; every other
+   * isSection()) places at the document's top level only; every other
    * blueprint carries no placement key and places anywhere the grammar
    * allows.
    */
@@ -111,12 +138,54 @@ class MaterialsSchema {
    * The one statement of the shape: fragment() assembles its groups by
    * it and narrow() keeps a replaced group in its place.
    */
-  public const KEYS = ['guidance', 'tokens', 'swatches', 'variants', 'groups', 'blueprints', 'animations', 'fonts'];
+  public const KEYS = ['guidance', 'tokens', 'variants', 'groups', 'blueprints', 'animations', 'fonts'];
+
+  /**
+   * The dialect door's keys, in the order they ride: a subset of KEYS.
+   *
+   * What the design system brief does not already carry whole: the
+   * group index, the blueprints in full, the animations' steps and the
+   * fonts' faces. The tokens and variants are the brief's
+   * alone on that door. dialect() assembles by it, dialectKinds() derives
+   * the kinds a surface names from it, and a surface describing the
+   * dialect schema (the structure line, eb_read_schema's wire
+   * description) says what this list says.
+   */
+  public const DIALECT_KEYS = ['guidance', 'groups', 'blueprints', 'animations', 'fonts'];
+
+  /**
+   * The keys whose entries carry no description on the dialect door.
+   *
+   * An animation's and a font's description is the brief's; their
+   * entries here carry what the brief does not (the steps, the faces).
+   */
+  public const DIALECT_UNDESCRIBED = ['animations', 'fonts'];
 
   /**
    * The key of a group entry's count: the offered block blueprints it holds.
    */
   public const GROUP_COUNT = 'blueprints';
+
+  /**
+   * The dialect paragraph's opening: what this shape is and where the rest is.
+   *
+   * The brief is the one always-on layer on the dialect door, so a
+   * request about "the materials" means the brief's set; this key is
+   * the composition manual, and an absence here speaks only for the
+   * kinds it carries (a token is never here, and the brief says whether
+   * the site has any).
+   */
+  public const DIALECT_OPENING = 'The materials the design system brief in your instructions does not already carry: the brief lists every token, variant, animation and font with its whole description and value, and the blueprints as a menu (a request like "keep to the materials" or "ignore the materials" means the brief\'s set); this key carries what composing reads on demand, the blueprints in full, the animations\' steps and the fonts\' faces, and one of those kinds absent here has none on this site.';
+
+  /**
+   * The animation sentence both doors' paragraphs state.
+   */
+  public const ANIMATIONS_SENTENCE = '"animations" are the published keyframes animations, keyed by machine name; "spelling" is the ident an animation-name value (or the name in an animation shorthand) references, never a var(); "steps" are the keyframes as stored, offset => declarations.';
+
+  /**
+   * The font sentence both doors' paragraphs state.
+   */
+  public const FONTS_SENTENCE = '"fonts" are the published self-hosted font families, keyed by machine name; "spelling" is the quoted family a font-family value (or the font shorthand) references, never a var(); "faces" are the files the family ships, one per weight and style.';
 
   public function __construct(
     protected MaterialsRosterBuilder $rosterBuilder,
@@ -128,9 +197,9 @@ class MaterialsSchema {
   /**
    * The fragment: guidance, then one group per kind the site has.
    *
-   * The blueprints group holds the site favorites in full; the groups
-   * group is the index of every offered block blueprint (narrow() lists
-   * one group in full after the cache).
+   * The blueprints group holds every offered block blueprint in full; the
+   * groups group is the index over them (narrow() lists one group alone
+   * after the cache).
    *
    * @param \Drupal\daedalus_blueprint\Host\HostInterface|null $host
    *   The host of the bundle the schema is read for, whose offer narrows
@@ -142,27 +211,26 @@ class MaterialsSchema {
     $roster = $this->rosterBuilder->build()->offered();
     $records = $this->blueprintRecords($roster, $host);
     $groups = $this->groups($records);
-    $favorites = array_filter($records, static fn (MaterialRecord $record): bool => $record->favorite);
     return $this->assemble([
       'guidance' => $this->guidance($roster, $records, $groups),
       'tokens' => $this->tokens($roster),
-      'swatches' => $this->swatches($roster),
       'variants' => $this->variants($roster),
       'groups' => $groups,
-      'blueprints' => $this->blueprints($roster, $favorites),
+      'blueprints' => $this->blueprints($roster, $records),
       'animations' => $this->animations($roster),
       'fonts' => $this->fonts($roster),
     ]);
   }
 
   /**
-   * A fragment with one group's blueprints in place of the site favorites.
+   * A fragment with one group's blueprints alone: the group as a filter.
    *
    * Applied AFTER the cached schema is read, never inside the cache: the
    * group's records are re-read from the roster (memoized per request)
-   * and printed in full where the favorites sat, every other group of
-   * the fragment (the guidance included) carried through as cached. An
-   * empty group leaves the blueprints group absent, as an empty kind is.
+   * and printed in full in place of the whole shared set, every other
+   * group of the fragment (the guidance included) carried through as
+   * cached. An empty group leaves the blueprints group absent, as an
+   * empty kind is.
    *
    * @param array $fragment
    *   The fragment as fragment() built it (the schema's `materials`).
@@ -193,7 +261,66 @@ class MaterialsSchema {
         : in_array($group, $this->declaredGroups($record), TRUE),
     );
     $fragment['blueprints'] = $this->blueprints($roster, $records);
+    // KEYS orders both doors' shapes: DIALECT_KEYS is its subset in the
+    // same order, so a dialect-narrowed fragment keeps its shape here.
     return $this->assemble($fragment);
+  }
+
+  /**
+   * The fragment narrowed to the dialect door: what the brief does not carry.
+   *
+   * Applied by DialectSchemaProjector AFTER the cached schema is read
+   * (fragment() is one cached projection for both doors): the keys
+   * DIALECT_KEYS names carry through as cached, every other kind leaves
+   * (the brief states each token and variant whole), an
+   * animation's and a font's entry drops its description (the brief's)
+   * and keeps its spelling, steps or faces, and the guidance is the
+   * dialect paragraph, which teaches only the kinds this shape carries.
+   * A pure function of the fragment: narrow() composes with it in either
+   * order, since a group listing is a blueprints group like any other.
+   *
+   * @param array $fragment
+   *   The fragment as fragment() built it, or as narrow() replaced its
+   *   blueprints group.
+   *
+   * @return array
+   *   The narrowed fragment, in DIALECT_KEYS order, the empty kinds absent.
+   */
+  public function dialect(array $fragment): array {
+    $narrowed = array_intersect_key($fragment, array_flip(self::DIALECT_KEYS));
+    foreach (self::DIALECT_UNDESCRIBED as $key) {
+      foreach (array_keys($narrowed[$key] ?? []) as $id) {
+        unset($narrowed[$key][$id]['description']);
+      }
+    }
+    $narrowed['guidance'] = $this->dialectGuidance($narrowed);
+    return $this->assemble($narrowed, self::DIALECT_KEYS);
+  }
+
+  /**
+   * The material kinds a dialect fragment carries, as the plural nouns.
+   *
+   * Derived from DIALECT_KEYS, so a surface naming "the materials the
+   * schema carries" (the projector's structure line, eb_read_schema's
+   * wire description) and the shape itself cannot drift apart.
+   *
+   * @param string[]|null $keys
+   *   A narrowed fragment's keys, to name the kinds that fragment
+   *   actually carries (grows-by-data); NULL for every kind the dialect
+   *   door may carry.
+   *
+   * @return string[]
+   *   The plurals, in MaterialKind order.
+   */
+  public static function dialectKinds(?array $keys = NULL): array {
+    $kinds = [];
+    foreach (MaterialKind::cases() as $kind) {
+      $plural = $kind->plural();
+      if (in_array($plural, self::DIALECT_KEYS, TRUE) && ($keys === NULL || in_array($plural, $keys, TRUE))) {
+        $kinds[] = $plural;
+      }
+    }
+    return $kinds;
   }
 
   /**
@@ -211,10 +338,13 @@ class MaterialsSchema {
    *
    * @param array $parts
    *   Group key => its content; '' or [] for a group with nothing.
+   * @param string[] $keys
+   *   The door's key order: KEYS (the JSON door's, which also orders a
+   *   dialect-narrowed fragment) or DIALECT_KEYS.
    */
-  protected function assemble(array $parts): array {
+  protected function assemble(array $parts, array $keys = self::KEYS): array {
     $fragment = [];
-    foreach (self::KEYS as $key) {
+    foreach ($keys as $key) {
       if (isset($parts[$key]) && $parts[$key] !== [] && $parts[$key] !== '') {
         $fragment[$key] = $parts[$key];
       }
@@ -292,6 +422,82 @@ class MaterialsSchema {
   }
 
   /**
+   * {@inheritdoc}
+   *
+   * The no-host fragment weighed as the characters of its JSON, one
+   * render, the same fragment() the schema caches. A key named for a kind
+   * (MaterialKind::plural()) is that kind's, entry by entry: a record
+   * weighs its entry's JSON plus its key, quotes and colon (the tokens'
+   * keys are custom properties, mapped back to the record ids through
+   * the same offered roster); what the kind's JSON has
+   * beyond its entries (its braces, the commas between entries, a scale's
+   * key, colon and braces) is the kind's shared. Every other key (a
+   * string key, the guidance, at its own length) is the system's.
+   */
+  public function weights(): MaterialsWeights {
+    $records = [];
+    $shared = [];
+    $system = 0;
+    $kinds = [];
+    foreach (MaterialKind::cases() as $kind) {
+      $kinds[$kind->plural()] = $kind;
+    }
+    $ids = $this->namedValueIds();
+    foreach ($this->fragment() as $key => $value) {
+      if (!isset($kinds[$key])) {
+        $system += strlen(is_string($value) ? $value : self::json($value));
+        continue;
+      }
+      $kind = $kinds[$key];
+      $entries = $kind === MaterialKind::Token ? array_merge(...array_values($value)) : $value;
+      $weighed = [];
+      foreach ($entries as $entry_key => $entry) {
+        $id = isset($ids[$kind->value]) ? $ids[$kind->value][$entry_key] : (string) $entry_key;
+        $weighed[$id] = strlen(self::json((string) $entry_key)) + 1 + strlen(self::json($entry));
+      }
+      $records[$kind->value] = $weighed;
+      $shared[$kind->value] = strlen(self::json($value)) - array_sum($weighed);
+    }
+    return new MaterialsWeights($records, $shared, $system);
+  }
+
+  /**
+   * The record behind each named value's key: kind value => property => id.
+   *
+   * The fragment keys tokens by the custom property
+   * (customProperty()), the budget's records by the record id; the map
+   * is read off the same offered roster fragment() projects.
+   *
+   * @return array<string, array<string, string>>
+   *   For MaterialKind::Token, custom property => record id.
+   */
+  protected function namedValueIds(): array {
+    $roster = $this->rosterBuilder->build()->offered();
+    $ids = [MaterialKind::Token->value => []];
+    foreach ($roster->tokens() as $record) {
+      $ids[MaterialKind::Token->value][self::customProperty($record)] = $record->id;
+    }
+    return $ids;
+  }
+
+  /**
+   * A fragment value as the JSON the door ships it as (what weights() counts).
+   */
+  protected static function json(mixed $value): string {
+    return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * The roster's and the offer's, the same facts cacheTags() names for
+   * a cached schema, with the roster's contexts.
+   */
+  public function cacheMetadata(): CacheableMetadata {
+    return $this->rosterBuilder->cacheMetadata()->merge($this->offer->cacheMetadata());
+  }
+
+  /**
    * A bundle's starts: the page blueprints its schema read offers.
    *
    * The records PageStart::starts() answers for the bundle's host (page
@@ -332,13 +538,14 @@ class MaterialsSchema {
   }
 
   /**
-   * The guidance paragraph: roster-reading facts only.
+   * The JSON door's guidance paragraph: roster-reading facts only.
    *
    * Facts about reading the roster live here (schema = facts); the
    * preference order and the mint gate ride the style guide's own guidance
    * and the design system brief (MaterialsProse, the one source), and the
    * membership sentence is the brief's. Door-neutral: it names the page
-   * language's spellings and no JSON op.
+   * language's spellings and no JSON op. The kind sentences it shares
+   * with the dialect paragraph (dialectGuidance()) are one text each.
    *
    * @param \Drupal\daedalus_blueprint\Materials\MaterialsRoster $roster
    *   The roster's offered view.
@@ -350,30 +557,79 @@ class MaterialsSchema {
    *   holds an entry.
    */
   protected function guidance(MaterialsRoster $roster, array $blueprints, array $groups): string {
-    $has_blueprints = $blueprints !== [];
     $sentences = [
       'The site\'s materials; a request like "keep to the materials" or "ignore the materials" means this set, and a kind absent here has no materials on this site. Whose members they are (the active design system\'s plus the global ones) is the design system brief\'s sentence.',
-      '"tokens" are the design tokens the active skin mints, grouped by scale, and "swatches" the published palette swatches with their labels; both are named values, keyed by the CSS custom property a style value references as var(--name) (e.g. var(--space-4)), each entry carrying its "value" and, when its author wrote one, a "description" (why it exists and when to reach for it). A value is a plain string or a condition-keyed map of VALUES for that ONE name ("default" always applies; a key like "dark" is the condition under which the SAME name resolves to that value, never part of its name: var(--color-bg-dark) names nothing). Colors fit color-valued properties and stops inside gradients; gradients fit image-valued properties such as background-image, alone or as a comma-separated layer.',
+      '"tokens" are the design tokens the active skin mints, grouped by scale (the palette\'s colors and gradients among them): named values, keyed by the CSS custom property a style value references as var(--name) (e.g. var(--space-4), var(--color-accent)), each entry carrying its "value" and, when its author wrote one, a "description" (why it exists and when to reach for it). A value is a plain string or a condition-keyed map of VALUES for that ONE name ("default" always applies; a key like "dark" is the condition under which the SAME name resolves to that value, never part of its name: var(--color-bg-dark) names nothing). Colors fit color-valued properties and stops inside gradients; gradients fit image-valued properties such as background-image, alone or as a comma-separated layer.',
       '"variants" are the saved reusable looks, keyed by machine name; "spelling" is how the page language wears one (class="name", or an axis attribute on the element\'s tag such as width="full"), an entry without an axis is on the built-in "style" axis, and an "applies" line narrows where a variant may be worn.',
     ];
-    if ($has_blueprints) {
-      $has_bands = array_filter($blueprints, $roster->isBand(...)) !== [];
-      $sentences[] = '"blueprints" are saved compositions (one root container each, with its children), placed as <pb-blueprint name="id"/> elements in a page-language fragment; each entry\'s "fragment" is the blueprint printed in the page language, its sample content and worn looks included, and its "looks" are the looks the blueprint owns, wearable only inside its placements.'
-        . ' ' . self::LOOKS_BY_POSITION
-        . ($has_bands ? ' A blueprint with "placement": "' . self::PLACEMENT_TOP_LEVEL . '" is a page band (its root wears a top-level-only variant): place it at the document\'s top level, never inside another container.' : '')
-        . ' A blueprint with an "entity_id" is saved on this site and is a page of its own: page_read (entity_type blueprint, that entity_id) prints its body with ids and page_edit edits it, changing what every later placement lands; one without is shipped by a module and read-only.'
-        . ' When the user asks to save a composition as a blueprint: build the subtree with ordinary ops, then save_material (kind blueprint) its root element in the same page_edit batch.';
+    if ($blueprints !== []) {
+      $sentences[] = self::blueprintSentence(array_filter($blueprints, $roster->isSection(...)) !== []);
     }
     if ($groups !== []) {
-      $sentences[] = '"groups" is the site\'s group vocabulary (the ids a blueprint\'s groups take) with how many offered blueprints each holds, "' . DialectCatalog::UNGROUPED . '" the ones in no group; "blueprints" holds the site favorites in full, or one group\'s when the read named a group: eb_read_schema with group (an id, or ' . DialectCatalog::UNGROUPED . ') lists that group here instead.';
+      $sentences[] = self::groupsSentence();
     }
     if ($roster->animations() !== []) {
-      $sentences[] = '"animations" are the published keyframes animations, keyed by machine name; "spelling" is the ident an animation-name value (or the name in an animation shorthand) references, never a var(); "steps" are the keyframes as stored, offset => declarations.';
+      $sentences[] = self::ANIMATIONS_SENTENCE;
     }
     if ($roster->fonts() !== []) {
-      $sentences[] = '"fonts" are the published self-hosted font families, keyed by machine name; "spelling" is the quoted family a font-family value (or the font shorthand) references, never a var(); "faces" are the files the family ships, one per weight and style.';
+      $sentences[] = self::FONTS_SENTENCE;
     }
     return implode(' ', $sentences);
+  }
+
+  /**
+   * The dialect door's guidance paragraph: the kinds the narrowed shape carries.
+   *
+   * Opens by saying where the rest is (the brief, the always-on layer
+   * the model edits from), then teaches each kind present in the
+   * narrowed fragment with the same sentence the JSON door's paragraph
+   * uses, grows-by-data over the fragment's own keys: the blueprint
+   * vocabulary rides while the shape lists blueprints or indexes groups,
+   * the section sentence while a listed blueprint is a section, the animation
+   * and font sentences while their groups ride. Never a token or
+   * variant sentence: those kinds are not here to read.
+   *
+   * @param array $narrowed
+   *   The fragment narrowed to DIALECT_KEYS (dialect()).
+   */
+  protected function dialectGuidance(array $narrowed): string {
+    $sentences = [self::DIALECT_OPENING];
+    if (isset($narrowed['blueprints']) || isset($narrowed['groups'])) {
+      $has_sections = array_filter($narrowed['blueprints'] ?? [], static fn (array $entry): bool => ($entry['placement'] ?? NULL) === self::PLACEMENT_TOP_LEVEL) !== [];
+      $sentences[] = self::blueprintSentence($has_sections);
+    }
+    if (isset($narrowed['groups'])) {
+      $sentences[] = self::groupsSentence();
+    }
+    if (isset($narrowed['animations'])) {
+      $sentences[] = self::ANIMATIONS_SENTENCE;
+    }
+    if (isset($narrowed['fonts'])) {
+      $sentences[] = self::FONTS_SENTENCE;
+    }
+    return implode(' ', $sentences);
+  }
+
+  /**
+   * The blueprint sentences both paragraphs state.
+   *
+   * @param bool $has_sections
+   *   Whether a section is among the blueprints the paragraph covers: the
+   *   placement sentence rides only then (grows-by-data).
+   */
+  protected static function blueprintSentence(bool $has_sections): string {
+    return '"blueprints" are saved compositions (one root container each, with its children), placed as <d-blueprint name="id"/> elements in a page-language fragment; each entry\'s "fragment" is the blueprint printed in the page language, its sample content and worn looks included, and its "looks" are the looks the blueprint owns, wearable only inside its placements.'
+      . ' ' . self::LOOKS_BY_POSITION
+      . ($has_sections ? ' A blueprint with "placement": "' . self::PLACEMENT_TOP_LEVEL . '" is a section (its root wears a top-level-only variant): place it at the document\'s top level, never inside another container.' : '')
+      . ' A blueprint with an "entity_id" is saved on this site and is a page of its own: page_read (entity_type blueprint, that entity_id) prints its body with ids and page_edit edits it, changing what every later placement lands; one without is shipped by a module and read-only.'
+      . ' When the user asks to save a composition as a blueprint: build the subtree with ordinary ops, then save_material (kind blueprint) its root element in the same page_edit batch.';
+  }
+
+  /**
+   * The group-index sentence both paragraphs state.
+   */
+  protected static function groupsSentence(): string {
+    return '"groups" is the site\'s group vocabulary (the ids a blueprint\'s groups take) with how many offered blueprints each holds, "' . DialectCatalog::UNGROUPED . '" the ones in no group; "blueprints" holds every blueprint shared with you in full, or one group\'s alone when the read named a group: eb_read_schema with group (an id, or ' . DialectCatalog::UNGROUPED . ') lists that group here instead.';
   }
 
   /**
@@ -382,8 +638,8 @@ class MaterialsSchema {
    * The value as stored (a string or a condition-keyed map); the
    * description (why the token exists and when to reach for it, the
    * skin author's reasoning) rides only when the record carries one, the
-   * omit-when-nothing rule the swatches follow. The whole text is the
-   * schema's to carry: the brief prints the first sentence alone.
+   * omit-when-nothing rule the variants follow. Whole here and whole on
+   * the brief; on the dialect door the tokens are the brief's alone.
    */
   protected function tokens(MaterialsRoster $roster): array {
     $groups = [];
@@ -395,29 +651,6 @@ class MaterialsSchema {
       $groups[(string) $record->group][self::customProperty($record)] = $entry;
     }
     return $groups;
-  }
-
-  /**
-   * The swatches, keyed by custom property: label, kind, value, description.
-   *
-   * The description (when to reach for the swatch, in the system's
-   * voice) rides only when the record carries one, the omit-when-nothing
-   * rule the variants follow.
-   */
-  protected function swatches(MaterialsRoster $roster): array {
-    $swatches = [];
-    foreach ($roster->swatches() as $record) {
-      $entry = [
-        'label' => $record->label,
-        'kind' => $record->group,
-        'value' => $record->value,
-      ];
-      if ($record->description !== '') {
-        $entry['description'] = $record->description;
-      }
-      $swatches[self::customProperty($record)] = $entry;
-    }
-    return $swatches;
   }
 
   /**
@@ -490,13 +723,13 @@ class MaterialsSchema {
    * one recovery a whole-site read can take for one definition. The
    * entity_id rides a saved blueprint only (the page the page tools
    * address); the looks are the variants the blueprint owns, keyed by
-   * machine name; the placement key rides only a band blueprint
+   * machine name; the placement key rides only a section blueprint
    * (top_level). Keys with nothing to say are omitted.
    *
    * @param \Drupal\daedalus_blueprint\Materials\MaterialsRoster $roster
-   *   The roster's offered view (the owned looks and the band verdicts).
+   *   The roster's offered view (the owned looks and the section verdicts).
    * @param \Drupal\daedalus_blueprint\Materials\MaterialRecord[] $records
-   *   The blueprint records to print in full: the site favorites among
+   *   The blueprint records to print in full: every one of
    *   blueprintRecords(), or one group's (narrow()).
    */
   protected function blueprints(MaterialsRoster $roster, array $records): array {
@@ -526,7 +759,7 @@ class MaterialsSchema {
       if (isset($owned[$record->id])) {
         $entry['looks'] = $owned[$record->id];
       }
-      if ($roster->isBand($record)) {
+      if ($roster->isSection($record)) {
         $entry['placement'] = self::PLACEMENT_TOP_LEVEL;
       }
       $blueprints[$record->id] = $entry;
@@ -551,7 +784,7 @@ class MaterialsSchema {
     if ($print->isAuthored()) {
       return ['fragment' => $print->text];
     }
-    return ['unprintable' => sprintf('The page language cannot print this blueprint (%s); place it as <pb-blueprint name="%s"/> and style the placed elements once they print with ids.', $print->notes[0]->detail, $record->id)];
+    return ['unprintable' => sprintf('The page language cannot print this blueprint (%s); place it as <d-blueprint name="%s"/> and style the placed elements once they print with ids.', $print->notes[0]->detail, $record->id)];
   }
 
   /**

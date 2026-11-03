@@ -49,6 +49,7 @@ const SpacingScale = ({
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
 }) => {
   // The grant-aware offer: the served roster's grant (model.granted, the
   // widget's owned names the target grants) can withhold gap or the whole
@@ -94,6 +95,7 @@ const SpacingScale = ({
           disabledTitle={model.withheld?.gap ?? null}
           onPickCondition={onPickCondition}
           onOpenDocument={onOpenDocument}
+          law={law}
           onPreview={onPreview}
           onRelease={onRelease}
           onCommit={onCommit}

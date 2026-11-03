@@ -114,7 +114,7 @@
 /* The mode row: the two panel-global controls of the inspector's four.
    The styling modes (Basic / Advanced / code) sit left in the shared
    segmented track (panel-controls.css): the track is the one shape
-   that means "the styling mode". The Materials place sits right as a
+   that means "the styling mode". The Design system place sits right as a
    plain text button with a glyph: it is a catalog, not a mode, so it
    does not ride a track of its own. Wraps at sidebar width so the
    place drops under the modes rather than clipping. */
@@ -128,7 +128,7 @@
   gap: 0.25rem;
 }
 
-/* The Materials place: a four-square glyph before the word, caption
+/* The Design system place: a four-square glyph before the word, caption
    size like the mode segments, muted at rest and in the text color
    while the catalog is the shown place (aria-pressed says the same).
    Tight inline padding for the same reason as the row's gap. */
@@ -576,7 +576,9 @@
   background: var(--daedalus-focus-background);
 }
 
-.daedalus-stylish-inspector__swatch {
+/* The gradient builder's stop color input: the native chooser's own box
+   beside the stop's text spelling. */
+.daedalus-stylish-inspector__color-input {
   padding: 0;
   cursor: pointer;
   border: 1px solid var(--daedalus-lines);
@@ -625,7 +627,7 @@
 
 /* The palette chip on advanced media rows (the media chip's sibling):
    the {} glyph face of the button toggling the shared grid popover over
-   the row's gradient swatches. */
+   the row's gradient tokens. */
 .daedalus-stylish-inspector__palette-picker {
   display: inline-flex;
   overflow: hidden;
@@ -880,7 +882,7 @@ button.daedalus-stylish-gradient__stop-face {
   width: 100%;
 }
 
-/* The swatch update session (edit-in-place): the builder wearing the
+/* The token update session (edit-in-place): the builder wearing the
    editing session's mode chrome. The frame speaks the session purple;
    the head carries identity and the blast line; the Update/Discard bar
    sits in the mint gesture's place. */
@@ -1045,10 +1047,10 @@ button.daedalus-stylish-gradient__stop-face {
   margin-inline: auto;
 }
 
-/* The swatch well (swatch-well.js): the color row's current value as a
+/* The token well (token-well.js): the color row's current value as a
    face button, the palette enumeration behind it. The border keeps light
    faces visible on either panel theme. */
-.daedalus-stylish-swatch-well {
+.daedalus-stylish-token-well {
   position: relative;
   overflow: hidden;
   flex-shrink: 0;
@@ -1061,17 +1063,17 @@ button.daedalus-stylish-gradient__stop-face {
   background: var(--daedalus-toggle-background);
 }
 
-.daedalus-stylish-swatch-well:hover {
+.daedalus-stylish-token-well:hover {
   border-color: var(--daedalus-text-muted);
 }
 
-.daedalus-stylish-swatch-well--open {
+.daedalus-stylish-token-well--open {
   outline: 2px solid var(--daedalus-selection);
   outline-offset: 1px;
 }
 
 /* The empty face: unset reads as a slashed well, not a paintable blank. */
-.daedalus-stylish-swatch-well--unset::after {
+.daedalus-stylish-token-well--unset::after {
   position: absolute;
   top: -15%;
   left: 50%;
@@ -1084,11 +1086,11 @@ button.daedalus-stylish-gradient__stop-face {
 
 /* The honest custom face: a value the palette cannot represent (the old
    custom pill's message rides the tooltip). */
-.daedalus-stylish-swatch-well--custom {
+.daedalus-stylish-token-well--custom {
   background: repeating-conic-gradient(rgb(127, 127, 127, 0.35) 0 25%, transparent 0 50%) 0 0 / 8px 8px var(--daedalus-toggle-background);
 }
 
-.daedalus-stylish-swatch-well--custom::after {
+.daedalus-stylish-token-well--custom::after {
   position: absolute;
   display: grid;
   place-items: center;
@@ -1104,8 +1106,8 @@ button.daedalus-stylish-gradient__stop-face {
    the lower-right corner in the panel's ground, so it reads as "a value,
    not from the palette" rather than as a question mark. The color
    field's trigger wears the same marker for the literal kind. */
-.daedalus-stylish-swatch-well--literal::after,
-.daedalus-stylish-swatch-well--gradient::after,
+.daedalus-stylish-token-well--literal::after,
+.daedalus-stylish-token-well--gradient::after,
 .daedalus-stylish-color-field__well--literal::after {
   position: absolute;
   right: -0.2rem;
@@ -1122,11 +1124,11 @@ button.daedalus-stylish-gradient__stop-face {
    never custom — the well wears the resolved thumbnail, or the photo
    glyph when the client URL table cannot answer the uuid (a lost file,
    a satellite before its first broadcast). */
-.daedalus-stylish-swatch-well--media {
+.daedalus-stylish-token-well--media {
   color: var(--daedalus-text-muted);
 }
 
-.daedalus-stylish-swatch-well__thumbnail {
+.daedalus-stylish-token-well__thumbnail {
   position: absolute;
   display: block;
   object-fit: cover;
@@ -1135,7 +1137,7 @@ button.daedalus-stylish-gradient__stop-face {
   block-size: 100%;
 }
 
-.daedalus-stylish-swatch-well__glyph {
+.daedalus-stylish-token-well__glyph {
   position: absolute;
   inset: 0;
   margin: auto;
@@ -1150,7 +1152,7 @@ button.daedalus-stylish-gradient__stop-face {
    and its width (a fixed surface has no row to fill, so the width is
    explicit: the panel's usable width). Inside: the shared palette grid,
    then the lane row and the mint row. */
-.daedalus-stylish-swatch-popover {
+.daedalus-stylish-token-popover {
   box-sizing: border-box;
   inline-size: 16rem;
   padding: 0.5rem;
@@ -1158,8 +1160,8 @@ button.daedalus-stylish-gradient__stop-face {
 
 /* The choice well (widgets/lib/choice-row.js): a basic row's current
    value as one face button when its vocabulary outgrows the chips (a
-   closed type scale, a long roster), the roster behind it in the swatch
-   popover. A text face for most spaces, the lit stop's paint (the swatch
+   closed type scale, a long roster), the roster behind it in the token
+   popover. A text face for most spaces, the lit stop's paint (the token
    well's round face) on a color or image space; the chevron says a
    popover follows. Custom and unset faces read as words, the custom one
    italic like the chips' custom pill. */
@@ -1253,7 +1255,7 @@ button.daedalus-stylish-gradient__stop-face {
   background: var(--daedalus-stylish-origin, transparent);
 }
 
-/* The style well: the swatch well's chrome (the unset slash, the custom
+/* The style well: the token well's chrome (the unset slash, the custom
    "?", the literal notch) squared off, with the line glyph centred: a
    line in the style it names, wide enough for double to read as two. */
 .daedalus-stylish-stroke-well {
@@ -1377,7 +1379,7 @@ button.daedalus-stylish-gradient__stop-face {
   min-width: 0;
 }
 
-/* The face trigger: the swatch well's round face, opening the space's
+/* The face trigger: the token well's round face, opening the space's
    stops as faces (the select of stops). */
 .daedalus-stylish-color-field__well {
   position: relative;
@@ -1531,7 +1533,7 @@ button.daedalus-stylish-gradient__stop-face {
   height: 1rem;
 }
 
-/* The save-as-swatch row (mint-row.js): name + Save, the popover's
+/* The save-as-token row (mint-row.js): name + Save, the popover's
    last row. */
 .daedalus-stylish-mint-row {
   display: flex;
@@ -1600,7 +1602,7 @@ button.daedalus-stylish-gradient__stop-face {
 
 /* Both faces fill their round button; the border is the button's. The
    descendant selectors outweigh .daedalus-stylish-face--paired's own position. */
-.daedalus-stylish-swatch-well .daedalus-stylish-swatch-well__face,
+.daedalus-stylish-token-well .daedalus-stylish-token-well__face,
 .daedalus-stylish-palette-grid__stop .daedalus-stylish-palette-grid__face {
   position: absolute;
   inset: 0;
@@ -1633,7 +1635,7 @@ button.daedalus-stylish-inspector__segment:disabled {
 /* A rejected commit: the page reported the failure; mark the widget until
    the next authoritative value or gesture. */
 .daedalus-stylish-inspector__widget--invalid .daedalus-stylish-inspector__segments,
-.daedalus-stylish-inspector__widget--invalid .daedalus-stylish-swatch-well {
+.daedalus-stylish-inspector__widget--invalid .daedalus-stylish-token-well {
   outline: 1px solid var(--daedalus-danger);
   outline-offset: 1px;
 }
@@ -1674,7 +1676,7 @@ button.daedalus-stylish-inspector__segment:disabled {
   color: inherit;
 }
 
-/* A row's code face: its nested-rule prelude (`&:hover`, `> pb-text`,
+/* A row's code face: its nested-rule prelude (`&:hover`, `> d-text`,
    `@container (max-width: 640px) &`; selector-chrome.js Prelude), one
    face for condition rows, part rows and rule rows in both documents.
    A long at-rule wrapper wraps inside the row on a narrow rail. */
@@ -1683,6 +1685,41 @@ button.daedalus-stylish-inspector__segment:disabled {
   font-family: var(--daedalus-font-mono);
   font-size: inherit;
   overflow-wrap: anywhere;
+}
+
+/* The prelude's edit mode (selector-chrome.js SelectorEditor): the
+   one-line CodeMirror editor that replaces the code face on a
+   double-click, in the face's own metrics so the row does not jump,
+   the row's text color (the selector is being written, not read) and
+   the island editor's chrome-free posture. */
+.daedalus-stylish-islands__prelude--editing {
+  display: inline-block;
+  min-width: 8ch;
+  color: var(--daedalus-text, inherit);
+}
+
+.daedalus-stylish-islands__prelude--editing .cm-editor {
+  font-size: inherit;
+}
+
+.daedalus-stylish-islands__prelude--editing .cm-editor .cm-scroller {
+  font-family: var(--daedalus-font-mono);
+  line-height: inherit;
+}
+
+.daedalus-stylish-islands__prelude--editing .cm-editor.cm-focused {
+  outline: none;
+}
+
+.daedalus-stylish-islands__prelude--editing .cm-editor .cm-content {
+  padding: 0;
+  caret-color: currentColor;
+  white-space: break-spaces;
+  overflow-wrap: anywhere;
+}
+
+.daedalus-stylish-islands__prelude--editing .cm-editor .cm-line {
+  padding: 0;
 }
 
 /* The pose gesture: condition rows are code view's Styled-at surface,
@@ -2353,7 +2390,7 @@ button.daedalus-stylish-inspector__segment:disabled {
   font-size: var(--daedalus-font-size-small);
 }
 
-/* The variant picker (variant-picker.js): the swatch popover's posture
+/* The variant picker (variant-picker.js): the token popover's posture
    (the shared floating surface's content, under body, the surface owning
    the chrome), a search field over a grouped listbox. DOM focus stays in
    the field; the active option is its aria-activedescendant. */
@@ -2501,8 +2538,8 @@ button.daedalus-stylish-inspector__segment:disabled {
   gap: 0.125rem;
 }
 
-/* A list row: identity dot · label · axis chip · shipped marker · use
-   count. A button (the card toggle), styled as a row. */
+/* A list row: identity dot · label · axis chip · use count. A button
+   (the card toggle), styled as a row. */
 .daedalus-stylish-library__row {
   display: flex;
   align-items: center;
@@ -2539,8 +2576,7 @@ button.daedalus-stylish-inspector__segment:disabled {
   text-overflow: ellipsis;
 }
 
-.daedalus-stylish-library__axis,
-.daedalus-stylish-library__shipped {
+.daedalus-stylish-library__axis {
   flex: none;
   color: var(--daedalus-text-muted);
   font-size: var(--daedalus-font-size-small);
@@ -3799,6 +3835,23 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   font-size: 0.6875rem;
 }
 
+/* A staged selector move: one pending row under the bar's row (a move
+   has no island to print in), its dismiss mark the draft toggle's. */
+.daedalus-stylish-push-bar__move {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+}
+
+.daedalus-stylish-push-bar__move-text {
+  color: var(--daedalus-text-muted);
+}
+
+.daedalus-stylish-push-bar__move-text code {
+  color: var(--daedalus-text, inherit);
+}
+
 /* ---------------------------------------------------------------------------
  * The layout widget (mode + share): the basic-mode Layout / Column sections.
  * The mode segment and gap ticks reuse the shared __segments vocabulary;
@@ -3986,20 +4039,120 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   text-decoration: underline;
 }
 
-/* --- The Palette face: the catalog's value section. --- */
+/* --- The Design system place: the system's header, the Skin tab. --- */
 
-/* The catalog section segments (Variants | Palette | Animations) sit
-   above whichever section renders; the Materials place is one place,
-   three sections. */
+/* The header under the mode row: the active system's name and its
+   enforcement mode as a chip. */
+.daedalus-stylish-inspector__system {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block-end: 0.375rem;
+}
+
+.daedalus-stylish-inspector__system-name {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.daedalus-stylish-inspector__system-mode {
+  flex: none;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+/* The tab segments (Skin | Variants | Law) sit above whichever tab
+   renders; the place is one place, two tabs of data and the gated law. */
 .daedalus-stylish-inspector__catalog {
   align-self: start;
   margin-block-end: 0.25rem;
 }
 
-/* A palette row's face chip: the value painted from payload data (a color
-   square, a gradient strip) — the identity dot's counterpart at value
+/* The Skin tab: the skin card, the toolbar (one search, "+ New"), then
+   the sections: the tokens per scale, the Animations, the Fonts. */
+.daedalus-stylish-skin {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: 0;
+}
+
+.daedalus-stylish-skin__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-block: 0.25rem;
+}
+
+.daedalus-stylish-skin__search {
+  flex: 1;
+  min-width: 0;
+}
+
+.daedalus-stylish-skin__new {
+  flex: none;
+}
+
+.daedalus-stylish-skin__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+/* A section's label: a scale's label, or Animations / Fonts with a hint
+   saying what the section's names are referenced as. */
+.daedalus-stylish-skin__section-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-block-start: 0.375rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-skin__section-hint {
+  letter-spacing: normal;
+  text-transform: none;
+  font-weight: 400;
+}
+
+/* A row: preview · name · value summary. A button (the card toggle),
+   styled as a row; no origin marker. */
+.daedalus-stylish-skin__row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.25rem;
+  width: 100%;
+  cursor: pointer;
+  text-align: start;
+  color: inherit;
+  border: 0;
+  border-radius: var(--daedalus-border-radius);
+  background: none;
+  font: inherit;
+}
+
+.daedalus-stylish-skin__row:hover {
+  background: var(--daedalus-hover-background, rgb(128, 128, 128, 0.12));
+}
+
+.daedalus-stylish-skin__row--open {
+  outline: 1px solid var(--daedalus-focus);
+  outline-offset: -1px;
+  background: var(--daedalus-focus-background);
+}
+
+/* A row's face chip: the value painted from payload data (a color
+   square, a gradient strip), the identity dot's counterpart at value
    scope. */
-.daedalus-stylish-palette__face {
+.daedalus-stylish-skin__row-face {
   flex: none;
   inline-size: 1.25rem;
   block-size: 0.875rem;
@@ -4007,210 +4160,7 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   border-radius: 3px;
 }
 
-.daedalus-stylish-palette__mint-open {
-  flex: none;
-}
-
-/* The open card's custom property spelling: identity chrome, copyable. */
-.daedalus-stylish-palette-card__variable {
-  overflow: hidden;
-  flex: none;
-  max-width: 45%;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--daedalus-text-muted);
-  font-size: var(--daedalus-font-size-small);
-}
-
-/* The condition-honesty line over the value editor: the pair control
-   authors the default and scheme entries; every other condition entry
-   commits back verbatim. */
-.daedalus-stylish-palette-card__conditions {
-  color: var(--daedalus-text-muted);
-  font-size: var(--daedalus-font-size-small);
-}
-
-/* The per-scheme pair control: the kind's editor mounted per face
-   (default always; the scheme face behind the add gesture), face labels
-   only while the pair is split. */
-.daedalus-stylish-swatch-pair {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  min-width: 0;
-}
-
-.daedalus-stylish-swatch-pair__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.375rem;
-}
-
-.daedalus-stylish-swatch-pair__scheme {
-  color: var(--daedalus-text-muted);
-  font-size: var(--daedalus-font-size-small);
-}
-
-.daedalus-stylish-swatch-pair__add {
-  align-self: flex-start;
-}
-
-.daedalus-stylish-palette-card__editor {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-/* The mint card's identity row: label beside the kind select. */
-.daedalus-stylish-palette-mint__identity {
-  display: flex;
-  gap: 0.375rem;
-}
-
-.daedalus-stylish-palette-mint__identity .daedalus-stylish-library-card__label {
-  flex: 1;
-  min-width: 0;
-}
-
-/* The skin section: the curated half of the palette, the active skin's
-   tokens per scale, each row a button opening its card. */
-.daedalus-stylish-palette__skin {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-block-start: 0.5rem;
-  padding-block-start: 0.5rem;
-  border-block-start: 1px solid var(--daedalus-lines);
-}
-
-.daedalus-stylish-palette__skin-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-}
-
-.daedalus-stylish-palette__skin-title {
-  font-weight: 600;
-}
-
-.daedalus-stylish-palette__skin-honesty {
-  color: var(--daedalus-text-muted);
-  font-size: var(--daedalus-font-size-small);
-}
-
-.daedalus-stylish-palette__scale-label {
-  margin-block-start: 0.25rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--daedalus-text-muted);
-  font-size: var(--daedalus-font-size-small);
-}
-
-.daedalus-stylish-palette__token {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.125rem 0.25rem;
-  width: 100%;
-  cursor: pointer;
-  text-align: start;
-  color: inherit;
-  border: 0;
-  border-radius: var(--daedalus-border-radius);
-  background: none;
-  font: inherit;
-}
-
-.daedalus-stylish-palette__token:hover {
-  background: var(--daedalus-hover-background, rgb(128, 128, 128, 0.12));
-}
-
-.daedalus-stylish-palette__token--open {
-  outline: 1px solid var(--daedalus-focus);
-  outline-offset: -1px;
-  background: var(--daedalus-focus-background);
-}
-
-/* The skin header's mint button sits under the honesty line. */
-.daedalus-stylish-palette__mint-token-open {
-  align-self: flex-start;
-  margin-block-start: 0.25rem;
-}
-
-/* The skin card over the skin section: a row naming the skin worn that
-   opens the lifecycle card (the other member skins with their standing,
-   the revisions, copy as my skin, the site layer's revert). */
-.daedalus-stylish-palette-skin {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-block-start: 0.25rem;
-}
-
-.daedalus-stylish-palette-skin__open {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.125rem 0.25rem;
-  width: 100%;
-  cursor: pointer;
-  text-align: start;
-  color: inherit;
-  border: 0;
-  border-radius: var(--daedalus-border-radius);
-  background: none;
-  font: inherit;
-}
-
-.daedalus-stylish-palette-skin__open:hover {
-  background: var(--daedalus-hover-background, rgb(128, 128, 128, 0.12));
-}
-
-.daedalus-stylish-palette-skin__open--open {
-  outline: 1px solid var(--daedalus-focus);
-  outline-offset: -1px;
-  background: var(--daedalus-focus-background);
-}
-
-.daedalus-stylish-palette-skin__wearing {
-  color: var(--daedalus-text-muted);
-  font-size: var(--daedalus-font-size-small);
-}
-
-.daedalus-stylish-palette-skin__name {
-  overflow: hidden;
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-weight: 600;
-}
-
-.daedalus-stylish-palette-skin-card__reason,
-.daedalus-stylish-palette-skin-card__member-reason {
-  color: var(--daedalus-text-muted);
-  font-size: var(--daedalus-font-size-small);
-}
-
-.daedalus-stylish-palette-skin-card__members {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-}
-
-.daedalus-stylish-palette-skin-card__member {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.125rem 0.25rem;
-}
-
-.daedalus-stylish-palette-skin-card__member--worn {
-  font-weight: 600;
-}
-
-.daedalus-stylish-palette-skin-card__member-name {
+.daedalus-stylish-skin__row-name {
   overflow: hidden;
   flex: 1;
   min-width: 0;
@@ -4218,51 +4168,7 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   text-overflow: ellipsis;
 }
 
-.daedalus-stylish-palette-skin-card__copy {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-/* The copy's source select beside its label input, the mint's identity
-   row for the skin card. */
-.daedalus-stylish-palette-skin-card__copy-identity {
-  display: flex;
-  gap: 0.375rem;
-}
-
-.daedalus-stylish-palette-skin-card__copy-identity .daedalus-stylish-library-card__label {
-  flex: 1;
-  min-width: 0;
-}
-
-/* The token card: why it withholds what it withholds, the description
-   editor, the text value editor. */
-.daedalus-stylish-palette-token-card__reason,
-.daedalus-stylish-palette-token-card__description-text,
-.daedalus-stylish-palette-token-mint__error {
-  color: var(--daedalus-text-muted);
-  font-size: var(--daedalus-font-size-small);
-}
-
-.daedalus-stylish-palette-token-card__description {
-  width: 100%;
-  resize: vertical;
-}
-
-.daedalus-stylish-palette-token__input {
-  width: 100%;
-}
-
-.daedalus-stylish-palette__token-name {
-  overflow: hidden;
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.daedalus-stylish-palette__token-value {
+.daedalus-stylish-skin__row-value {
   overflow: hidden;
   flex: 0 1 auto;
   min-width: 0;
@@ -4273,35 +4179,106 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   font-size: var(--daedalus-font-size-small);
 }
 
-/* The scheme half's hex beside the default: a middot echoes the split
+/* The scheme half's value beside the default: a middot echoes the split
    face's two halves in the same order (default first, dark second). */
-.daedalus-stylish-palette__token-value--dark::before {
+.daedalus-stylish-skin__row-value--dark::before {
   margin-inline-end: 0.375rem;
   content: "\B7";
 }
 
-/* The Materials › Animations face: the palette face's sibling for the
-   motion material. The card's description line under the identity row. */
-.daedalus-stylish-animations-card__description {
+/* --- The material card: the one card for the skin's three kinds. --- */
+
+/* The spelling beside the name: the reference a style is written as,
+   identity chrome, copyable. */
+.daedalus-stylish-material-card__spelling {
+  overflow: hidden;
+  flex: none;
+  max-width: 45%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--daedalus-text-muted);
   font-size: var(--daedalus-font-size-small);
 }
 
-.daedalus-stylish-animations-mint {
+/* The origin sentence, the read-only reason, the description's plain
+   text, the condition-honesty line over the value editor, the mint
+   card's name error. */
+.daedalus-stylish-material-card__origin,
+.daedalus-stylish-material-card__reason,
+.daedalus-stylish-material-card__description-text,
+.daedalus-stylish-material-card__conditions,
+.daedalus-stylish-skin-mint__error {
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-material-card__description {
+  width: 100%;
+  resize: vertical;
+}
+
+.daedalus-stylish-material-card__editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.daedalus-stylish-material-card__input {
+  width: 100%;
+}
+
+/* An animation's closed anatomy: its steps in one line. */
+.daedalus-stylish-material-card__summary {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+/* The stack editor: the text editor with the minted families as chips. */
+.daedalus-stylish-material-card__stack {
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
 }
 
-.daedalus-stylish-animations-mint__description {
-  width: 100%;
+.daedalus-stylish-material-card__families {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
 }
 
-/* The Materials › Fonts face: the animations face's sibling for the type
-   material. The row's name wears the family; the card lists the faces
-   with a specimen each; the mint card builds faces from uploaded files. */
-.daedalus-stylish-fonts__faces,
-.daedalus-stylish-fonts-mint__drafts {
+/* The per-scheme pair control: the kind's editor mounted per face
+   (default always; the scheme face behind the add gesture), face labels
+   only while the pair is split. */
+.daedalus-stylish-scheme-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.daedalus-stylish-scheme-pair__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.375rem;
+}
+
+.daedalus-stylish-scheme-pair__scheme {
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-scheme-pair__add {
+  align-self: flex-start;
+}
+
+/* The faces: a font card's closed anatomy (one row per face, its label
+   and a specimen in the family) and the faces editor's drafts. */
+.daedalus-stylish-faces,
+.daedalus-stylish-faces-editor__drafts {
   display: flex;
   flex-direction: column;
   margin: 0;
@@ -4310,13 +4287,13 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   gap: 0.25rem;
 }
 
-.daedalus-stylish-fonts__face {
+.daedalus-stylish-faces__face {
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
 }
 
-.daedalus-stylish-fonts__face-label {
+.daedalus-stylish-faces__face-label {
   flex: none;
   min-width: 3.5rem;
   color: var(--daedalus-text-muted);
@@ -4324,7 +4301,7 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   font-variant-numeric: tabular-nums;
 }
 
-.daedalus-stylish-fonts__specimen {
+.daedalus-stylish-faces__specimen {
   overflow: hidden;
   flex: 1;
   min-width: 0;
@@ -4334,17 +4311,7 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   line-height: 1.4;
 }
 
-.daedalus-stylish-fonts-card__spelling {
-  flex: none;
-}
-
-.daedalus-stylish-fonts-mint {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.daedalus-stylish-fonts-mint__files {
+.daedalus-stylish-faces-editor__files {
   display: flex;
   flex-direction: column;
   color: var(--daedalus-text-muted);
@@ -4352,22 +4319,22 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   gap: 0.25rem;
 }
 
-.daedalus-stylish-fonts-mint__input {
+.daedalus-stylish-faces-editor__input {
   font: inherit;
 }
 
-.daedalus-stylish-fonts-mint__draft {
+.daedalus-stylish-faces-editor__draft {
   display: flex;
   align-items: center;
   gap: 0.375rem;
 }
 
-.daedalus-stylish-fonts-mint__draft--duplicate {
+.daedalus-stylish-faces-editor__draft--duplicate {
   border-radius: var(--daedalus-border-radius);
   background: var(--daedalus-warning-background);
 }
 
-.daedalus-stylish-fonts-mint__file {
+.daedalus-stylish-faces-editor__file {
   overflow: hidden;
   flex: 1;
   min-width: 0;
@@ -4376,36 +4343,140 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   font-size: var(--daedalus-font-size-small);
 }
 
-.daedalus-stylish-fonts-mint__weight {
+.daedalus-stylish-faces-editor__weight {
   flex: none;
   width: 4.5rem;
 }
 
-.daedalus-stylish-fonts-mint__style {
+.daedalus-stylish-faces-editor__style {
   flex: none;
 }
 
-.daedalus-stylish-fonts-mint__family,
-.daedalus-stylish-fonts-mint__description {
+/* --- The mint cards: "+ New" › Token / Animation / Font. --- */
+.daedalus-stylish-skin-mint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+/* The token mint's identity row: the scale select beside the name. */
+.daedalus-stylish-skin-mint__identity {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.daedalus-stylish-skin-mint__identity .daedalus-stylish-library-card__label {
+  flex: 1;
+  min-width: 0;
+}
+
+.daedalus-stylish-skin-mint__description,
+.daedalus-stylish-skin-mint__family {
   width: 100%;
 }
 
-/* The Palette's stack editor (a token on the font-family scale): the
-   text field over the minted families as chips, each in its own face. */
-.daedalus-stylish-palette-token__stack {
+/* --- The skin card over the Skin tab: the look the site wears. --- */
+
+/* A row naming the skin worn that opens the lifecycle card (the other
+   member skins with their standing, the revisions, copy as my skin, the
+   site layer's revert). */
+.daedalus-stylish-skin-card {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.daedalus-stylish-palette-token__families {
+.daedalus-stylish-skin-card__open {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.25rem;
+  width: 100%;
+  cursor: pointer;
+  text-align: start;
+  color: inherit;
+  border: 0;
+  border-radius: var(--daedalus-border-radius);
+  background: none;
+  font: inherit;
 }
 
-.daedalus-stylish-palette-token__family {
-  cursor: pointer;
+.daedalus-stylish-skin-card__open:hover {
+  background: var(--daedalus-hover-background, rgb(128, 128, 128, 0.12));
+}
+
+.daedalus-stylish-skin-card__open--open {
+  outline: 1px solid var(--daedalus-focus);
+  outline-offset: -1px;
+  background: var(--daedalus-focus-background);
+}
+
+.daedalus-stylish-skin-card__wearing,
+.daedalus-stylish-skin-card__more {
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-skin-card__more {
+  flex: none;
+}
+
+.daedalus-stylish-skin-card__name {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.daedalus-stylish-skin-card__reason,
+.daedalus-stylish-skin-card__member-reason {
+  color: var(--daedalus-text-muted);
+  font-size: var(--daedalus-font-size-small);
+}
+
+.daedalus-stylish-skin-card__members {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.daedalus-stylish-skin-card__member {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.25rem;
+}
+
+.daedalus-stylish-skin-card__member--worn {
+  font-weight: 600;
+}
+
+.daedalus-stylish-skin-card__member-name {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.daedalus-stylish-skin-card__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+/* The copy's source select beside its label input, the mint's identity
+   row for the skin card. */
+.daedalus-stylish-skin-card__copy-identity {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.daedalus-stylish-skin-card__copy-identity .daedalus-stylish-library-card__label {
+  flex: 1;
+  min-width: 0;
 }
 
 /* The keyframes editor: the offset track (the gradient track's metrics,
@@ -4529,7 +4600,7 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   background: var(--daedalus-selection-background);
 }
 
-/* The keyframes session (edit-in-place): the gradient swatch session's
+/* The keyframes session (edit-in-place): the gradient token session's
    posture. The head carries identity and the blast line; the
    Update/Discard bar closes it. */
 .daedalus-stylish-keyframes-session {
@@ -4587,14 +4658,34 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
 
 /* The "Offer to the AI" toggle (ai-offer.js): the material's AI opt-out
    beside its description on every mint and edit surface. Off hides the
-   description input with it: no audience, nothing to write for. */
+   description input with it: no audience, nothing to write for. The
+   control and, for a user who may read the AI context usage, the door
+   to it ("See what the AI holds") sit on one line. */
 .daedalus-stylish-ai-offer {
   display: inline-flex;
   align-items: center;
-  cursor: pointer;
+  flex-wrap: wrap;
   white-space: nowrap;
   font-size: 0.6875rem;
+  gap: 0.375rem 0.75rem;
+}
+
+.daedalus-stylish-ai-offer__control {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
   gap: 0.375rem;
+}
+
+.daedalus-stylish-ai-offer__context {
+  color: var(--daedalus-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 0.125rem;
+}
+
+.daedalus-stylish-ai-offer__context:hover,
+.daedalus-stylish-ai-offer__context:focus-visible {
+  color: var(--daedalus-text);
 }
 
 /* In the session draft it takes its own full-width line, like the
@@ -4609,7 +4700,7 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   align-self: flex-start;
 }
 
-/* The Law tab (law.js): the Materials place's read-only view of the
+/* The Law tab (law.js): the Design system place's read-only view of the
    design system's law, a declaration tree of sections and rows, each
    row's origin in muted small type, the doorway's focus row outlined. */
 .daedalus-stylish-law {

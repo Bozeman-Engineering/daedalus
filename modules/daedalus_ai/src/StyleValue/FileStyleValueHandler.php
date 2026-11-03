@@ -33,9 +33,9 @@ use Drupal\file\FileInterface;
  * minter and resolves to the canonical stored token url('media:<uuid>'),
  * final at once (nothing is deferred: the pixels are the file's).
  *
- * Soft wiring: the service is tagged daedalus_stylish.style_value_handler;
- * without daedalus_stylish the tag is never collected and this class never
- * loads, so daedalus_ai takes no hard dependency on daedalus_stylish.
+ * Soft wiring: DaedalusAiServiceProvider registers the service, tagged
+ * daedalus_stylish.style_value_handler, only when daedalus_stylish is
+ * enabled, so daedalus_ai takes no hard dependency on daedalus_stylish.
  */
 class FileStyleValueHandler implements StyleValueHandlerInterface {
 

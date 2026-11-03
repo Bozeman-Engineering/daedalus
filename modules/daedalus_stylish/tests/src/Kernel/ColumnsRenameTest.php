@@ -59,6 +59,7 @@ class ColumnsRenameTest extends KernelTestBase {
     'layout_builder',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -83,11 +84,8 @@ class ColumnsRenameTest extends KernelTestBase {
     $this->installEntitySchema('entity_test_mulrev');
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and every compile and validation builds it.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
@@ -95,10 +93,7 @@ class ColumnsRenameTest extends KernelTestBase {
     // across all four value tables beside the variant table.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_font_usage',
-      'daedalus_token_usage',
+      'daedalus_skin_material_usage',
     ]);
     // The importer switches to an administrative account (shipped variants
     // are code, not user input); give the switcher one to find.
@@ -231,17 +226,17 @@ class ColumnsRenameTest extends KernelTestBase {
     $shipped->setShippedSource('cs_stylish', $shipped_styles);
     $shipped->save();
 
-    // Host A, two revisions: the band wears the old name directly beside
+    // Host A, two revisions: the section wears the old name directly beside
     // its width, the nested container wears it via the composition.
     $uuid = $this->container->get('uuid');
-    $band = $uuid->generate();
+    $section = $uuid->generate();
     $nested = $uuid->generate();
     $host = EntityTestMulRev::create([
       'name' => 'Host A',
-      OverridesSectionStorage::FIELD_NAME => [$this->containerSection($band), $this->containerSection($nested)],
+      OverridesSectionStorage::FIELD_NAME => [$this->containerSection($section), $this->containerSection($nested)],
     ]);
     $this->stageMap($host, [
-      "container:$band" => ['variants' => [['variant' => 'container_site', 'fragment' => ''], ['variant' => 'row', 'fragment' => '']]],
+      "container:$section" => ['variants' => [['variant' => 'container_site', 'fragment' => ''], ['variant' => 'row', 'fragment' => '']]],
       "container:$nested" => ['variants' => [['variant' => 'row', 'fragment' => '', 'via' => 'card_left'], ['variant' => 'card_left', 'fragment' => 'container(1)']]],
     ]);
     $revision_1 = $host->getRevisionId();
@@ -249,7 +244,7 @@ class ColumnsRenameTest extends KernelTestBase {
     /** @var \Drupal\entity_test\Entity\EntityTestMulRev $revision_2 */
     $revision_2 = $host_storage->createRevision($host);
     $this->stageMap($revision_2, [
-      "container:$band" => ['variants' => [['variant' => 'row', 'fragment' => '']], 'default' => ['padding-top' => '2rem']],
+      "container:$section" => ['variants' => [['variant' => 'row', 'fragment' => '']], 'default' => ['padding-top' => '2rem']],
       "container:$nested" => ['default' => ['gap' => '1rem']],
     ]);
     $revision_2_id = $revision_2->getRevisionId();
@@ -268,11 +263,11 @@ class ColumnsRenameTest extends KernelTestBase {
 
     // Host maps: every revision repointed, place and provenance kept.
     $this->assertSame([
-      "container:$band" => ['variants' => [['variant' => 'container_site', 'fragment' => ''], ['variant' => 'columns', 'fragment' => '']]],
+      "container:$section" => ['variants' => [['variant' => 'container_site', 'fragment' => ''], ['variant' => 'columns', 'fragment' => '']]],
       "container:$nested" => ['variants' => [['variant' => 'columns', 'fragment' => '', 'via' => 'card_left'], ['variant' => 'card_left', 'fragment' => 'container(1)']]],
     ], $this->revisionMap($revision_1), 'The old revision repointed, the via origin riding along.');
     $this->assertSame([
-      "container:$band" => ['variants' => [['variant' => 'columns', 'fragment' => '']], 'default' => ['padding-top' => '2rem']],
+      "container:$section" => ['variants' => [['variant' => 'columns', 'fragment' => '']], 'default' => ['padding-top' => '2rem']],
       "container:$nested" => ['default' => ['gap' => '1rem']],
     ], $this->revisionMap($revision_2_id), 'The default revision repointed.');
     $host_storage->resetCache();

@@ -164,17 +164,18 @@ final class InspectorSidebar extends SidebarPluginBase implements ContainerFacto
         'drupalSettings' => [
           'daedalusStylish' => [
             'guide' => $this->clientStyleGuide->build(),
-            // The variant, swatch, token, animation and skin gesture gates:
-            // which controls the panel's variant area, Materials cards,
-            // gradient builder and skin session render (InspectorGates:
-            // honest chrome, not access control; the satellite window
-            // reads the same).
+            // The variant, skin material, skin and law gates: which
+            // controls the panel's variant area, the Design system
+            // place's cards, the gradient builder, the skin session and
+            // the Law tab render (InspectorGates: honest chrome, not
+            // access control; the satellite window reads the same).
             'variants' => $this->gates->variants(),
-            'swatches' => $this->gates->swatches(),
-            'tokens' => $this->gates->tokens(),
-            'animations' => $this->gates->animations(),
-            'fonts' => $this->gates->fonts(),
+            // One grant family for the skin's tokens, animations and
+            // fonts: the Skin tab's "+ New" and cards, the wells'
+            // save-as-token.
+            'skinMaterials' => $this->gates->skinMaterials(),
             'skin' => $this->gates->skin(),
+            'law' => $this->gates->law(),
             'mediaUrls' => $media_urls,
           ],
         ],
@@ -203,6 +204,14 @@ final class InspectorSidebar extends SidebarPluginBase implements ContainerFacto
     $library_url = $entity !== NULL ? $this->mediaLibraryOpener?->buildUrl($entity) : NULL;
     if ($library_url !== NULL) {
       $build['#attached']['drupalSettings']['daedalusStylish']['mediaLibrary'] = ['url' => $library_url];
+    }
+
+    // The AI context door the "Offer to the AI" toggles carry: the usage
+    // display's URL for a user who may read it (InspectorGates::
+    // aiContext()); absent, the cards render no link.
+    $ai_context = $this->gates->aiContext();
+    if ($ai_context !== NULL) {
+      $build['#attached']['drupalSettings']['daedalusStylish']['aiContext'] = $ai_context;
     }
 
     // The pop-out needs a channel scope, which needs a main entity; without

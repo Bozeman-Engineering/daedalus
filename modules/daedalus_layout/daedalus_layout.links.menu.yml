@@ -8,3 +8,15 @@ daedalus_layout.frame:
   parent: system.themes_page
   weight: 5
   deriver: Drupal\daedalus_layout\Plugin\Derivative\FrameMenuLink
+
+# The frame's second door in the administration menu: the Styling
+# sub-category of the Daedalus config category (Configuration » Daedalus »
+# Styling), one child per frame off the same deriver. The first door is
+# daedalus_layout.frame above, under Appearance (system.themes_page);
+# nothing about the canvas moves. See SETTINGS.md.
+daedalus_layout.frame.daedalus:
+  title: 'Site frame'
+  description: 'Edit the header, footer and page chrome of the theme.'
+  parent: daedalus.admin_config_styling
+  weight: 5
+  deriver: Drupal\daedalus_layout\Plugin\Derivative\FrameMenuLink

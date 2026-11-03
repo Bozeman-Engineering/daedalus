@@ -33,6 +33,7 @@ import {
 } from './style-guide.js';
 import { formatSlotKey, fragmentStyles } from './slot-key.js';
 import { INSTANCE_PART } from './parts.js';
+import { continuationSuffix } from './rule-move.js';
 import {
   SUFFIX,
   TAG,
@@ -53,8 +54,8 @@ const isEntryObject = (value) =>
  * The relative space every element-shaped read speaks ('' the key's own
  * entry, '::.cls' a part beneath it) continues an ELEMENT key by
  * appending (`block:X` + `::.cls`), and a RULE key by DESCENT under the
- * rule's targets (`container:X::> pb-text` + `::.cls` is
- * `container:X::> pb-text .cls`, relative-selector.js under(): a
+ * rule's targets (`container:X::> d-text` + `::.cls` is
+ * `container:X::> d-text .cls`, relative-selector.js under(): a
  * selector never carries a second `::`), the grammar deciding
  * admissibility exactly as delivery rebases a worn variant's suffixes.
  *
@@ -83,10 +84,18 @@ export const continuedKey = (key, relative) => {
  * The element-relative suffix a map key stands at under a key: the
  * inverse of continuedKey().
  *
- * `block:X::.cls` under `block:X` is '::.cls'; `container:X::> pb-text
- * .cls` under `container:X::> pb-text` is '::.cls' (the continuation by
- * descent read back). Null when the map key is not a continuation of
- * the key (the key itself included: '' is the caller's own read).
+ * `block:X::.cls` under `block:X` is '::.cls' (an element's parts sit
+ * at its own key plus the suffix). Under a RULE the one definition of
+ * "continues" is the server's RelativeSelector::continues(), read on
+ * the client by rule-move.js continuationSuffix(): `container:X::> d-text
+ * .cls` under `container:X::> d-text` is '::.cls' (the continuation by
+ * descent) and `container:X::> d-text::before` is '::&::before' (the
+ * rule's own box, the suffix delivery and the CSS print at a rule
+ * speak). This read is the map-key adapter over that twin, no matching
+ * of its own: the two keys split at their `::` (a different root is no
+ * continuation) and the relatives go to continuationSuffix(). Null when
+ * the map key is not a continuation of the key (the key itself
+ * included: '' is the caller's own read).
  *
  * @param {string} key
  *   A style-map key, element or rule.
@@ -100,14 +109,19 @@ export const relativeUnder = (key, mapKey) => {
     return null;
   }
   const pos = key.indexOf(SUFFIX);
-  if (pos === -1) {
-    return mapKey.startsWith(`${key}${SUFFIX}`) ? mapKey.slice(key.length) : null;
-  }
-  if (!mapKey.startsWith(`${key} `)) {
+  const root = pos === -1 ? key : key.slice(0, pos);
+  if (!mapKey.startsWith(`${root}${SUFFIX}`)) {
     return null;
   }
-  const relative = `${SUFFIX}${mapKey.slice(key.length + 1)}`;
-  return continuedKey(key, relative) === mapKey ? relative : null;
+  const relative = mapKey.slice(root.length);
+  if (pos === -1) {
+    return relative;
+  }
+  const suffix = continuationSuffix(
+    key.slice(pos + SUFFIX.length),
+    relative.slice(SUFFIX.length),
+  );
+  return suffix === null ? null : `${SUFFIX}${suffix}`;
 };
 
 /**
@@ -230,7 +244,7 @@ export const isNestedSectionUuid = (tree, uuid) => {
  * itself wears nothing). A RULE key (a tag tier or a chain whose
  * landing is an element scope, captureScope) reads the vocabulary of
  * the declaration its selector LANDS on (style-guide.js landingForKey:
- * `container:X::> pb-text` speaks block_type:text's axes, `::a` the
+ * `container:X::> d-text` speaks block_type:text's axes, `::a` the
  * base tag's), the scope its wear pairs at, so a rule's rows and picker
  * group by the axes its matches can wear; the server orders each
  * reference by its variant's own scope (StyleMapValidator::
@@ -480,7 +494,7 @@ const rootAddress = (parsed, blockTypes, sectionLayouts) => {
  * key captures its LANDING, the element its last compound names, since a
  * rule's wear is delivered at the rule's targets and the variant must be
  * scoped for them (VocabularyRoster::landingScope()): a type compound's
- * root address (`> pb-text` lands on block_type:text), a tag compound's
+ * root address (`> d-text` lands on block_type:text), a tag compound's
  * base tag (`a` on base:a). A rule whose targets are no element scope
  * (a part, the children, a subjectless compound, a generated box behind
  * any of them) captures null: no variant pairs there, and the server
@@ -500,7 +514,7 @@ export const captureScope = (key, blockTypes = {}, sectionLayouts = {}) => {
   }
   const { compounds, pseudo } = parseSelector(parsed.selector);
   // A generated box is no element scope: no variant pairs at a pseudo
-  // rule (`> pb-text::before`, the owner's own `&::before`).
+  // rule (`> d-text::before`, the owner's own `&::before`).
   if (pseudo !== null) {
     return null;
   }
@@ -591,25 +605,36 @@ export const familyKindOf = (scope) =>
  * stamp daedalus_layout's update-blueprint verb reads). A placement is the whole
  * placed subtree, so every element under a stamped root inherits its
  * provenance — the walk carries the nearest ancestor's stamp down, and a
- * nested placement's own stamp shadows its parent's. Degradation mirrors
- * the depth rule's: no tree, or a uuid the tree does not carry, reads as
- * unprovenanced (null), never a guess.
+ * nested placement's own stamp shadows its parent's. A blueprint's own
+ * canvas is its own first placement: the capture strips every stamp from
+ * the document, so an element the walk FINDS with no stamp of its own or
+ * an ancestor's reads as the canvas's self-provenance (the blueprint's
+ * machine name, source.getSelfProvenance(); null on a page canvas), the
+ * client twin of BlueprintVariantOwnershipChecker::placementProvenance()'s
+ * exit: same walk, same precedence (a stamped nested placement still
+ * wins), same degraded posture. Degradation mirrors the depth rule's: no
+ * tree, or a uuid the tree does not carry, reads as unprovenanced (null)
+ * even with a self, never a guess.
  *
  * @param {string} key
  *   A selectable key (root or '::.class' part form).
  * @param {Array} tree
  *   The lean node tree (source.getTree(); the satellite's arrives by
  *   broadcast).
+ * @param {?string} self
+ *   The canvas's self-provenance: the blueprint's machine name when the
+ *   canvas IS a blueprint's own document, null otherwise.
  *
  * @return {?string}
  *   The blueprint machine name, or null.
  */
-export const blueprintProvenance = (key, tree = []) => {
+export const blueprintProvenance = (key, tree = [], self = null) => {
   const parsed = parseKey(typeof key === 'string' ? key.split('::')[0] : key);
   if (!parsed?.uuid) {
     return null;
   }
   let found = null;
+  let hit = false;
   const walk = (nodes, inherited) => {
     for (const node of Array.isArray(nodes) ? nodes : []) {
       const stamp =
@@ -618,6 +643,7 @@ export const blueprintProvenance = (key, tree = []) => {
           : inherited;
       if (node?.uuid === parsed.uuid) {
         found = stamp;
+        hit = true;
         return true;
       }
       if (walk(nodeChildren(node), stamp)) {
@@ -627,7 +653,10 @@ export const blueprintProvenance = (key, tree = []) => {
     return false;
   };
   walk(tree, null);
-  return found;
+  if (found !== null || !hit) {
+    return found;
+  }
+  return typeof self === 'string' && self !== '' ? self : null;
 };
 
 /**
@@ -689,13 +718,27 @@ const tagOffers = (variant, tag) =>
  * variants (offered only when the selection's rendered tag — resolved
  * from the live canvas by the caller — matches); and, for blueprint-owned
  * variants, the ownership rule against the element's placement provenance
- * (the lean node tree resolves it; without a tree owned variants simply do
- * not offer, the degraded posture that never over-offers). The offer is a
- * roster question (ownership needs the blueprints beside the variants), so
- * the roster is the input, not a variant list.
+ * (the lean node tree resolves it, the canvas's self-provenance standing
+ * in for an unstamped element on a blueprint's own canvas; without a tree
+ * owned variants simply do not offer, the degraded posture that never
+ * over-offers). The offer is a roster question (ownership needs the
+ * blueprints beside the variants), so the roster is the input, not a
+ * variant list.
  *
  * @param {object} materials
  *   The materials roster.
+ * @param {string} key
+ *   The selectable key offered at.
+ * @param {object} blockTypes
+ *   Component uuid to block type (source.getBlockTypes()).
+ * @param {object} sectionLayouts
+ *   Section uuid to layout id (source.getSectionLayouts()).
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()).
+ * @param {?string} tag
+ *   The selection's rendered tag (style-stack.js offerTag), or null.
+ * @param {?string} self
+ *   The canvas's self-provenance (source.getSelfProvenance()), or null.
  *
  * @return {object[]}
  *   The applicable variant records, roster order.
@@ -707,8 +750,9 @@ export const applicableVariants = (
   sectionLayouts = {},
   tree = [],
   tag = null,
+  self = null,
 ) => {
-  const provenance = blueprintProvenance(key, tree);
+  const provenance = blueprintProvenance(key, tree, self);
   return materials
     .ofKind('variant')
     .filter(
@@ -732,7 +776,8 @@ export const applicableVariants = (
  * treatment into whatever consumes the capture. A
  * pure-reference entry contributes nothing. The key is the styling
  * target's: an element's parts sit at '::.cls' beneath it, a rule's
- * continuations by descent (relativeUnder) at the same relative.
+ * continuations (relativeUnder: by descent at the same relative, its
+ * own box at '::&::before') the same way.
  */
 export const elementEntries = (map, key) => {
   const entries = {};
@@ -1029,7 +1074,7 @@ const travellingRefs = (entry) =>
  * strips the same way). FRAGMENT (non-'') references never travel: they
  * are owned by the composition that distributed them. saveStyles() folds
  * them where the re-attach replaces them; they stay behind on the
- * element where it does not. A RULE entry's root references ('::> pb-text'
+ * element where it does not. A RULE entry's root references ('::> d-text'
  * wearing a text variant, the element's own or a child's) travel the
  * same way: the wear is part of the look, delivered at the rule's
  * matches, and apply places it at the same rule under the new wearer.
@@ -1038,8 +1083,9 @@ const travellingRefs = (entry) =>
  *
  * The key may be a RULE ('container:X::a', the editing session's anchor
  * when a rule wears the document): its own sources are its entry and
- * its continuations by descent (relativeUnder: 'container:X::a .icon'
- * at '::.icon'), the same relatives delivery prints them at, so the
+ * its continuations (relativeUnder: 'container:X::> d-text .icon' at
+ * '::.icon', 'container:X::> d-text::before' at '::&::before'), the
+ * same relatives delivery prints them at, so the
  * push bar's shadow clearing and update-from-element read a rule
  * anchor exactly as an element. A rule has no subtree slot table (a
  * variant is saved from an element), so 'direct' is empty there.
@@ -1425,7 +1471,7 @@ export const findVariant = (variants, reference) =>
 /**
  * Whether a material record is module-shipped (its origin).
  *
- * A shipped variant, swatch or animation is the provider's design
+ * A shipped variant, token or animation is the provider's design
  * vocabulary, hash-synced from disk. The origin gates the SHIPPED
  * gestures: "Copy as my variant" (the fork) and "Revert to defaults"
  * (whether the entity diverged from its disk copy is a management fact

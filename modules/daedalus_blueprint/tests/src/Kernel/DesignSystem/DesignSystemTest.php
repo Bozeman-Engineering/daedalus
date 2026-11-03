@@ -41,6 +41,7 @@ class DesignSystemTest extends KernelTestBase {
     'system',
     'user',
     'daedalus_blueprint',
+    'filter',
     'daedalus_blueprint_materials_test',
     'daedalus_blueprint_design_system_test',
   ];
@@ -200,14 +201,14 @@ class DesignSystemTest extends KernelTestBase {
   public function testMembershipResolvesLandedOrShipped(): void {
     $assert_window = function (string $state): void {
       $active = $this->active();
-      $this->assertSame('aurora', $active->shippedMembership(self::PACKAGE, ['id' => 'band']), "An absent key is the package's system ($state).");
-      $named = ['id' => 'band', 'design_system' => 'aurora'];
+      $this->assertSame('aurora', $active->shippedMembership(self::PACKAGE, ['id' => 'section']), "An absent key is the package's system ($state).");
+      $named = ['id' => 'section', 'design_system' => 'aurora'];
       $this->assertSame('aurora', $active->shippedMembership(self::PACKAGE, $named), "An explicit key naming the package's system resolves ($state).");
       $this->assertSame('aurora', $active->shippedMembership('system', $named), "Any installed module may name a shipped system ($state).");
-      $this->assertNull($active->shippedMembership(self::PACKAGE, ['id' => 'band', 'design_system' => NULL]), "A null key opts out ($state).");
-      $this->assertNull($active->shippedMembership('system', ['id' => 'band']), "A packageless module's absent key is global ($state).");
+      $this->assertNull($active->shippedMembership(self::PACKAGE, ['id' => 'section', 'design_system' => NULL]), "A null key opts out ($state).");
+      $this->assertNull($active->shippedMembership('system', ['id' => 'section']), "A packageless module's absent key is global ($state).");
       try {
-        $active->shippedMembership(self::PACKAGE, ['id' => 'band', 'design_system' => 'nope']);
+        $active->shippedMembership(self::PACKAGE, ['id' => 'section', 'design_system' => 'nope']);
         $this->fail("A member of an unshipped, unlanded system was accepted ($state).");
       }
       catch (UnknownDesignSystemException $e) {
@@ -239,7 +240,7 @@ class DesignSystemTest extends KernelTestBase {
     // exists; its deletion turns the membership back into a refusal.
     DesignSystem::create(['id' => 'borealis', 'label' => 'Borealis'])->save();
     $this->assertSame(['aurora', 'borealis'], $this->active()->nameableIds());
-    $site_built = ['id' => 'band', 'design_system' => 'borealis'];
+    $site_built = ['id' => 'section', 'design_system' => 'borealis'];
     $this->assertSame('borealis', $this->active()->shippedMembership('system', $site_built));
     DesignSystem::load('borealis')->delete();
     $this->expectException(UnknownDesignSystemException::class);
@@ -301,11 +302,11 @@ class DesignSystemTest extends KernelTestBase {
     DesignSystem::create(['id' => 'borealis', 'label' => 'Borealis'])->save();
     $this->active()->activate('borealis');
     TestMaterialsProvider::$records = [
-      new MaterialRecord(kind: MaterialKind::Swatch, id: 'ink', label: 'Ink', spellings: ['style' => 'var(--swatch-ink)']),
-      new MaterialRecord(kind: MaterialKind::Swatch, id: 'glow', label: 'Glow', spellings: ['style' => 'var(--swatch-glow)'], designSystem: 'aurora'),
+      new MaterialRecord(kind: MaterialKind::Token, id: 'color/ink', label: 'ink', spellings: ['style' => 'var(--color-ink)']),
+      new MaterialRecord(kind: MaterialKind::Token, id: 'color/glow', label: 'glow', spellings: ['style' => 'var(--color-glow)'], designSystem: 'aurora'),
     ];
     $this->assertSame(['The design system <em class="placeholder">aurora</em> it packages still has 1 member; remove the member or make it global first.'], $reasons($validator->validate(self::PACKAGE)));
-    TestMaterialsProvider::$records[] = new MaterialRecord(kind: MaterialKind::Variant, id: 'band', label: 'Band', spellings: ['class' => 'band'], scope: Address::fromString('kind:container'), designSystem: 'aurora');
+    TestMaterialsProvider::$records[] = new MaterialRecord(kind: MaterialKind::Variant, id: 'section', label: 'Section', spellings: ['class' => 'section'], scope: Address::fromString('kind:container'), designSystem: 'aurora');
     $this->assertSame(['The design system <em class="placeholder">aurora</em> it packages still has 2 members; remove them or make them global first.'], $reasons($validator->validate(self::PACKAGE)));
 
     // Members gone: the package may go.

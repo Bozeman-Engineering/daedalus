@@ -7,3 +7,7 @@ configure the site frame:
   title: 'Configure the site frame'
   description: 'Edit and style the document a theme renders around every page: the site builder''s layer of the document stack.'
   restrict access: true
+
+view ai context usage:
+  title: 'View AI context usage'
+  description: 'See what the site shares with the AI as materials and how much of the AI context budget it takes, by material kind.'

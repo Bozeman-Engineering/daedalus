@@ -27,12 +27,14 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   opens the dialog, the save_material op mints the blueprint, and the
  *   mutation response's materials delta lands the new item in the open
  *   Add panel WITHOUT a reload (the seam: the delta reaching the store and
- *   the panel). The placement doors then place it through place_blueprint
- *   with provenance on the placed root (the mirror's `blueprint` key).
+ *   the panel), and the same response stamps the captured container as
+ *   the blueprint's first placement (the mirror's `blueprint` key, read by
+ *   the Update verb). The placement doors then place it through
+ *   place_blueprint with provenance on the placed root (the same key).
  * - The placement doors (the former placement scenario): a blueprint is a
- *   page BAND when its root's captured wearings include a variant the
+ *   SECTION when its root's captured wearings include a variant the
  *   container declaration marks root-only (the Site width variant,
- *   container_site); a band places at top level only. That fact is
+ *   container_site); a section places at top level only. That fact is
  *   derived once, at the materials roster's applicability predicate
  *   (MaterialsRoster::applicable() and its client twin), and the Add
  *   panel declares it as the acceptsTarget of its blueprint drag source.
@@ -107,36 +109,46 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * - BACK TO THE PAGE: the page boots again with the Card delivered from
  *   discovery's content lane (the item is in the Add panel with no
  *   capture this time).
- * - CAPTURE (F3), THE BAND: "Save as blueprint…" on B mints "Band" (a band
+ * - CAPTURE (F3), THE SECTION: "Save as blueprint…" on B mints "Section" (a section
  *   by derivation: its root wears Site width, which the capture carries
  *   into the blueprint's own style store, so the blueprint bundle must
- *   have styling enabled on the recipe's site).
- * - DRAG, REFUSED: dragging the Band item over the nested container's
+ *   have styling enabled on the recipe's site). B is the Section's first
+ *   placement the moment the save response lands: the mirror holds
+ *   `blueprint: section` on B and B's own chip shows the split control
+ *   "Update blueprint 'Section'", with no reload (the seam: the response's
+ *   targets re-rendering B, the mirror's stamp and the verb registry
+ *   agreeing; the kernel tier pins the stamp and the targets,
+ *   BlueprintOwnedVariantTest::testSaveStampsTheSource, and only the
+ *   browser sees the chip read them). Kris's trap was the missing stamp:
+ *   the container just saved offered no Update and refused the looks the
+ *   update adopted.
+ * - DRAG, REFUSED: dragging the Section item over the nested container's
  *   interior offers no caret (the only gap there is inside C, nested).
  * - DRAG, OFFERED: the same drag over A's bottom edge band offers the
- *   root-flow gap after A; the drop places one band there, top level,
- *   between A and B, wearing Site width, stamped `blueprint: band`.
+ *   root-flow gap after A; the drop places one section there, top level,
+ *   between A and B, wearing Site width, stamped `blueprint: section`.
  * - THE CHIP (the blueprint-verbs-and-dialogs landing): with the placed
- *   band selected, its chip shows ONE split control, "Update blueprint
- *   'Band'" as the main half and a caret whose menu lists "Open blueprint
- *   'Band'" and "Save as new blueprint…" flat; picking the last opens the
- *   save dialog (cancelled, no POST); an unstamped container's chip keeps
- *   the plain "Save as blueprint…" button (the seam: the registry's group
+ *   section selected, its chip shows ONE split control, "Update blueprint
+ *   'Section'" as the main half and a caret whose menu lists "Open blueprint
+ *   'Section'" and "Save as new blueprint…" flat; picking the last opens the
+ *   save dialog (cancelled, no POST); the chip of A, a container never
+ *   captured and never placed, keeps the plain "Save as blueprint…"
+ *   button (the seam: the registry's group
  *   key through the chip's model into a control the menu primitive lists
  *   from; the fold and the model's entries are node-tested, the DOM only
  *   here).
  * - DRAG, CONTRAST: the Card item over the nested interior IS offered
- *   (the empty-container affordance), proving the refusal is the band
+ *   (the empty-container affordance), proving the refusal is the section
  *   fact and not a blanket one.
  * - CLICK, REFUSED: with C selected and the Insert verb armed, clicking
- *   the Band item places nothing (the anchor's target, after C inside A,
+ *   the Section item places nothing (the anchor's target, after C inside A,
  *   is nested) and the session stays armed.
  * - CLICK, CONTRAST: clicking the Card item at the same anchor places
  *   the card after C, nested, in exactly one POST (so the refused click
  *   was no POST at all).
- * - CLICK, OFFERED: with B selected and Insert armed, clicking the Band
- *   item places a band after B, top level.
- * - CLICK, THEN ENTER: a block placed inside the new band, its editor
+ * - CLICK, OFFERED: with B selected and Insert armed, clicking the Section
+ *   item places a section after B, top level.
+ * - CLICK, THEN ENTER: a block placed inside the new section, its editor
  *   opened by Enter, closed by Escape (the insert session's key routing).
  * - PAGE CAPTURE: the top bar's Save caret opens the document menu, "Save
  *   page as blueprint…" opens the dialog worded for a page, and the commit
@@ -144,7 +156,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   the open Add panel gains no item (the seam: a top bar menu item to a
  *   root verb to the dialog to save_material to the delta, which lists a
  *   page-scope blueprint as nothing for this canvas).
- * - OPEN BLUEPRINT: the Band's "Open blueprint" verb lands on its canvas
+ * - OPEN BLUEPRINT: the Section's "Open blueprint" verb lands on its canvas
  *   in Edit Mode with the test's own site-wide mode cookie swept first.
  * - FROM THE ADD FORM TO THE CANVAS (the saved-blueprints landing, step
  *   1): with "Offer starting designs" on for Page content, the add form
@@ -492,13 +504,13 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
         verb.run('$key');
       })();
       JS);
-    $label_input = $assert_session->waitForElementVisible('css', '#layout-builder-modal #daedalus-layout-blueprint-label', 20000);
+    $label_input = $assert_session->waitForElementVisible('css', '#drupal-modal #daedalus-layout-blueprint-label', 20000);
     $this->assertNotNull($label_input, 'The Save as blueprint dialog opened with its label input.');
     $session->executeScript(<<<JS
       (() => {
         document.getElementById('daedalus-layout-blueprint-label').value = {$this->jsString($label)};
         document.getElementById('daedalus-layout-blueprint-description').value = {$this->jsString($description)};
-        document.querySelector('#layout-builder-modal [data-blueprint-save]').click();
+        document.querySelector('#drupal-modal [data-blueprint-save]').click();
       })();
       JS);
     $machine_name = strtolower(preg_replace('/[^a-z0-9_]+/i', '_', $label));
@@ -508,7 +520,7 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       "The save_material response's delta landed the \"$label\" record in the store.",
     );
     $this->assertJsCondition(
-      "!document.querySelector('#layout-builder-modal #daedalus-layout-blueprint-label')",
+      "!document.querySelector('#drupal-modal #daedalus-layout-blueprint-label')",
       10000,
       'The dialog closed on success.',
     );
@@ -608,7 +620,7 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
     );
     $this->assertTrue(
       $session->evaluateScript("(() => { const site = Drupal.Daedalus.Materials.get('variant', 'container_site'); return !!site && site.applies && site.applies.depth === 'root'; })()"),
-      'container_site is root-only: the fact a band derives from.',
+      'container_site is root-only: the fact a section derives from.',
     );
     $this->assertTrue(
       (bool) $session->evaluateScript('!!window.drupalSettings.daedalusLayout.canSaveBlueprints'),
@@ -671,7 +683,7 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
     // ——— CAPTURE (F3): C becomes "Card". ———
     //
     // A capture is one blueprint POST (the save_material op); the Card
-    // wears nothing, so the roster derives no band fact for it. The item
+    // wears nothing, so the roster derives no section fact for it. The item
     // paints from the store's record. The creator's mark reaching the
     // server is a wiring fact too: the settings route's POSTs are counted
     // and their bodies kept from before the capture.
@@ -683,11 +695,11 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       $session->evaluateScript(<<<'JS'
         (() => {
           const Materials = Drupal.Daedalus.Materials;
-          return !Materials.getRoster().isBand(Materials.get('blueprint', 'card'))
+          return !Materials.getRoster().isSection(Materials.get('blueprint', 'card'))
             && Materials.get('blueprint', 'card').updatable === true;
         })()
         JS),
-      'The delivered record derives no band fact for the Card (it wears nothing) and marks it a content blueprint.',
+      'The delivered record derives no section fact for the Card (it wears nothing) and marks it a content blueprint.',
     );
 
     // ——— THE CREATOR'S FAVORITE: the Card is this editor's favorite. ———
@@ -865,40 +877,72 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       'The Add panel lists the Card from the boot payload.',
     );
 
-    // ——— CAPTURE (F3), THE BAND: B becomes "Band". ———
+    // ——— CAPTURE (F3), THE SECTION: B becomes "Section". ———
     //
-    // The Band's root wears container_site, so the roster derives it a
-    // band; the capture carries that wearing into the blueprint's own
+    // The Section's root wears container_site, so the roster derives it a
+    // section; the capture carries that wearing into the blueprint's own
     // style store, so the blueprint bundle must have styling enabled on
-    // the recipe's site.
-    $band_id = $this->captureAsBlueprint("container:$b", 'Band', 'A page band wearing Site width.');
-    $this->assertJsCondition('window.__blueprintPosts === 1', 10000, 'The Band capture was exactly one blueprint POST.');
-    $this->assertSame('band', $band_id);
+    // the recipe's site. The chip selectors serve this step and THE CHIP
+    // below: the primary chip, and its blueprint VERB buttons (the caret
+    // half opens the menu and runs no verb, so it is left out).
+    $chip = '.daedalus-ui-frame__chip--primary';
+    $verb_buttons = "Array.from(document.querySelectorAll('$chip .daedalus-ui-frame__verb:not(.daedalus-ui-split-button__caret)')).filter((button) => /blueprint/.test(button.getAttribute('aria-label') ?? ''))";
+    $this->assertNull($this->provenanceOf("container:$b"), 'Before the capture B carries no provenance: it is a plain container, not a placement.');
+    $section_id = $this->captureAsBlueprint("container:$b", 'Section', 'A section wearing Site width.');
+    $this->assertJsCondition('window.__blueprintPosts === 1', 10000, 'The Section capture was exactly one blueprint POST.');
+    $this->assertSame('section', $section_id);
+
+    // The source is the Section's first placement, straight from the save
+    // response: the provider stamped B through the spine and named it a
+    // RESTRUCTURED target, the response's blueprint replaced the mirror
+    // with the stamp on B and its markup swapped B in, and the Update verb
+    // (updatableBlueprint in js/verbs/blueprint.js) reads that key against
+    // the record the same response delivered. No reload: the POST counter
+    // installed after the last navigation still reads one. Kernel pins the
+    // stamp and the targets; only the browser sees the chip read them.
+    $this->assertSame('section', $this->provenanceOf("container:$b"), 'The save response stamped B as the Section\'s first placement: the mirror\'s `blueprint` key names the blueprint it was saved as.');
+    $this->assertTrue(
+      (bool) $session->evaluateScript(
+        "Drupal.Daedalus.Verbs.verbsFor('container:$b').some((verb) => verb.id === 'daedalus_layout.update_material')"
+        . " && Drupal.Daedalus.Verbs.verbsFor('container:$b').some((verb) => verb.id === 'daedalus_layout.open_blueprint')"
+      ),
+      'The captured container offers Update blueprint and Open blueprint: the stamp resolves to the record the save delivered.',
+    );
+    $session->executeScript("Drupal.Daedalus.Selection.select('container:$b');");
+    $this->assertJsCondition(
+      "(() => { const groups = document.querySelectorAll('$chip .daedalus-ui-frame__group');"
+      . " return groups.length === 1"
+      . " && groups[0].querySelector('.daedalus-ui-split-button__main').getAttribute('aria-label') === \"Update blueprint 'Section'\""
+      . " && $verb_buttons.length === 1; })()",
+      20000,
+      'The captured container\'s own chip shows the split control led by "Update blueprint \'Section\'" straight after the save response, with no reload.',
+    );
+    $this->assertSame(1, (int) $session->evaluateScript('window.__blueprintPosts'), 'The chip read the stamp from the save response alone: no further POST and no navigation (the counter survived).');
     $this->assertTrue(
       $session->evaluateScript(<<<'JS'
         (() => {
           const Materials = Drupal.Daedalus.Materials;
-          return Materials.getRoster().isBand(Materials.get('blueprint', 'band'))
-            && !Materials.getRoster().isBand(Materials.get('blueprint', 'card'))
-            && Materials.get('blueprint', 'band').updatable === true;
+          return Materials.getRoster().isSection(Materials.get('blueprint', 'section'))
+            && !Materials.getRoster().isSection(Materials.get('blueprint', 'card'))
+            && Materials.get('blueprint', 'section').updatable === true;
         })()
         JS),
-      'The delivered records derive the band fact: the Band wears the root-only Site width, the Card does not; both are content blueprints.',
+      'The delivered records derive the section fact: the Section wears the root-only Site width, the Card does not; both are content blueprints.',
     );
-    $band_blueprints = $storage->loadByProperties(['machine_name' => 'band']);
-    $band_blueprint = reset($band_blueprints);
-    $this->assertInstanceOf(Blueprint::class, $band_blueprint);
-    $this->assertSame('node', $band_blueprint->getSubjectType(), 'The Band\'s subject is stamped from the source page too.');
-    $this->assertSame('page', $band_blueprint->getSubjectBundle());
-    $this->assertSame('block', $band_blueprint->getScope());
-    $this->assertCount(1, $band_blueprint->get('layout_builder__layout')->getSections(), 'The Band holds the captured container as its one root.');
+    $section_blueprints = $storage->loadByProperties(['machine_name' => 'section']);
+    $section_blueprint = reset($section_blueprints);
+    $this->assertInstanceOf(Blueprint::class, $section_blueprint);
+    $this->assertSame('node', $section_blueprint->getSubjectType(), 'The Section\'s subject is stamped from the source page too.');
+    $this->assertSame('page', $section_blueprint->getSubjectBundle());
+    $this->assertSame('block', $section_blueprint->getScope());
+    $this->assertCount(1, $section_blueprint->get('layout_builder__layout')->getSections(), 'The Section holds the captured container as its one root.');
     $session->executeScript('Drupal.Daedalus.Selection.clear();');
     $this->openAddPanel();
     $this->assertJsCondition(
-      "(() => { const item = document.querySelector('#place_block [data-daedalus-layout-add-panel-in=\"kind:blueprint\"][data-daedalus-layout-add-panel-row=\"blueprint:band\"]');"
+      "(() => { const item = document.querySelector('#place_block [data-daedalus-layout-add-panel-in=\"kind:blueprint\"][data-daedalus-layout-add-panel-row=\"blueprint:section\"]');"
       . " return !!item && item.getAttribute('data-daedalus-layout-add-panel-kind') === 'blueprint' && typeof item.ondragstart === 'function'; })()",
       20000,
-      'The Add panel rendered the Band row as a blueprint (a section drop) and the drag layer armed it.',
+      'The Add panel rendered the Section row as a blueprint (a section drop) and the drag layer armed it.',
     );
     $this->assertJsCondition(
       "typeof document.querySelector('#place_block [data-daedalus-layout-add-panel-in=\"kind:blueprint\"][data-daedalus-layout-add-panel-row=\"blueprint:card\"]').ondragstart === 'function'",
@@ -906,49 +950,49 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       'The Card row is armed too.',
     );
 
-    // ——— DRAG, REFUSED: the Band over the nested container's interior. ———
+    // ——— DRAG, REFUSED: the Section over the nested container's interior. ———
     //
     // The only gap the cursor resolves there is inside C (an empty
-    // container is one 'inside' gap): nested, so the Band's acceptsTarget
+    // container is one 'inside' gap): nested, so the Section's acceptsTarget
     // refuses it and the controller offers nothing. The caret stays
     // hidden: absent, not red.
     $nested_js = "document.querySelector(\"[data-main-entity] [data-selectable='container:$c']\")";
-    $this->startItemDrag('band', $nested_js, 'center');
-    $this->assertJsCondition('!!document.querySelector(".daedalus-ui-caret")', 10000, 'The Band drag armed the drag layer (the caret component mounted).');
-    $this->assertFalse($this->caretShowing(), 'Over the nested container, no caret is offered to the Band: the nested gap is refused by the source, so it is absent.');
-    $this->endItemDrag('band');
+    $this->startItemDrag('section', $nested_js, 'center');
+    $this->assertJsCondition('!!document.querySelector(".daedalus-ui-caret")', 10000, 'The Section drag armed the drag layer (the caret component mounted).');
+    $this->assertFalse($this->caretShowing(), 'Over the nested container, no caret is offered to the Section: the nested gap is refused by the source, so it is absent.');
+    $this->endItemDrag('section');
 
-    // ——— DRAG, OFFERED: the Band over A's bottom edge band. ———
+    // ——— DRAG, OFFERED: the Section over A's bottom edge band. ———
     //
     // The edge-zone rule resolves the sibling gap after A in the root
-    // flow: top level, so the Band's acceptsTarget accepts it and the
+    // flow: top level, so the Section's acceptsTarget accepts it and the
     // caret line appears.
-    $band_a_js = "document.querySelector(\"[data-main-entity] [data-selectable='container:$a']\")";
-    $this->startItemDrag('band', $band_a_js, 'bottom');
+    $section_a_js = "document.querySelector(\"[data-main-entity] [data-selectable='container:$a']\")";
+    $this->startItemDrag('section', $section_a_js, 'bottom');
     $this->assertJsCondition(
       "document.querySelector('.daedalus-ui-caret__line') && !document.querySelector('.daedalus-ui-caret__line').hidden",
       10000,
-      'Over the root-flow gap after A, the caret line offers the Band its place between the bands.',
+      'Over the root-flow gap after A, the caret line offers the Section its place between the sections.',
     );
 
-    // The drop: one POST, one band placed at top level between A and B,
+    // The drop: one POST, one section placed at top level between A and B,
     // wearing exactly what it captured (Site width) and stamped with its
     // provenance.
     $before = $this->containerKeys();
-    $this->dropItemDrag('band', $band_a_js, 'bottom');
-    $this->assertJsCondition('window.__blueprintPosts === 2', 20000, 'The Band drop was exactly one blueprint POST.');
+    $this->dropItemDrag('section', $section_a_js, 'bottom');
+    $this->assertJsCondition('window.__blueprintPosts === 2', 20000, 'The Section drop was exactly one blueprint POST.');
     $this->assertJsCondition(self::CONTAINERS_JS . '.length === 4', 20000, 'The drop rendered a fourth container.');
     $after = $this->containerKeys();
     $placed = array_values(array_diff($after, $before));
     $this->assertCount(1, $placed, 'Exactly one container was placed by the drop.');
-    $band_key = $placed[0];
-    $this->assertSame(["container:$a", "container:$c", $band_key, "container:$b"], $after, 'The band landed between A and B.');
-    $this->assertNull($this->parentContainerKey($band_key), 'The band sits at top level (inside no container).');
-    $this->assertSame('band', $this->provenanceOf($band_key), 'The placed root carries its provenance: the mirror\'s `blueprint` key names the blueprint it was placed from.');
+    $section_key = $placed[0];
+    $this->assertSame(["container:$a", "container:$c", $section_key, "container:$b"], $after, 'The section landed between A and B.');
+    $this->assertNull($this->parentContainerKey($section_key), 'The section sits at top level (inside no container).');
+    $this->assertSame('section', $this->provenanceOf($section_key), 'The placed root carries its provenance: the mirror\'s `blueprint` key names the blueprint it was placed from.');
     $this->assertTrue(
       (bool) $session->evaluateScript(
-        "Drupal.Daedalus.Verbs.verbsFor('$band_key').some((verb) => verb.id === 'daedalus_layout.open_blueprint')"
-        . " && Drupal.Daedalus.Verbs.verbsFor('$band_key').some((verb) => verb.id === 'daedalus_layout.update_material')"
+        "Drupal.Daedalus.Verbs.verbsFor('$section_key').some((verb) => verb.id === 'daedalus_layout.open_blueprint')"
+        . " && Drupal.Daedalus.Verbs.verbsFor('$section_key').some((verb) => verb.id === 'daedalus_layout.update_material')"
       ),
       'A placement\'s menu offers Open blueprint and Update blueprint: the stamp resolves to a content blueprint the editor may update.',
     );
@@ -966,8 +1010,9 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
     // member, Update, named for its target; the caret opens the shared
     // menu over the rest, flat in weight order, where Save as reads "Save
     // as new blueprint…" because the container is a placement. On a
-    // container that is no placement only Save as applies, and the
-    // registry's fold renders a group of one as the plain button it was.
+    // container that is no placement (A: never captured, never placed)
+    // only Save as applies, and the registry's fold renders a group of one
+    // as the plain button it was.
     // The seam: a registry key read by the chip's model into a control the
     // menu primitive then lists from, three layers that only meet in a
     // browser (verb-groups.test.mjs pins the fold, selection-frame.test.mjs
@@ -975,17 +1020,15 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
     // caret half wears the chip's verb skin too (a `__verb` button labelled
     // "More Update blueprint actions"), so the count of blueprint VERB
     // buttons leaves the caret out: it runs no verb, it opens the menu.
-    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
-    $chip = '.daedalus-ui-frame__chip--primary';
-    $verb_buttons = "Array.from(document.querySelectorAll('$chip .daedalus-ui-frame__verb:not(.daedalus-ui-split-button__caret)')).filter((button) => /blueprint/.test(button.getAttribute('aria-label') ?? ''))";
+    $session->executeScript("Drupal.Daedalus.Selection.select('$section_key');");
     $this->assertJsCondition(
       "(() => { const groups = document.querySelectorAll('$chip .daedalus-ui-frame__group');"
       . " return groups.length === 1"
-      . " && groups[0].querySelector('.daedalus-ui-split-button__main').getAttribute('aria-label') === \"Update blueprint 'Band'\""
+      . " && groups[0].querySelector('.daedalus-ui-split-button__main').getAttribute('aria-label') === \"Update blueprint 'Section'\""
       . " && groups[0].querySelector('.daedalus-ui-split-button__caret').getAttribute('aria-haspopup') === 'menu'"
       . " && $verb_buttons.length === 1; })()",
       20000,
-      'The placed band\'s chip shows one split control led by "Update blueprint \'Band\'", and no other blueprint verb button on its face.',
+      'The placed section\'s chip shows one split control led by "Update blueprint \'Section\'", and no other blueprint verb button on its face.',
     );
     $session->executeScript("document.querySelector('$chip .daedalus-ui-split-button__caret').click();");
     $this->assertJsCondition(
@@ -994,7 +1037,7 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       'The caret opened the shared menu.',
     );
     $this->assertSame(
-      ["Open blueprint 'Band'", 'Save as new blueprint…'],
+      ["Open blueprint 'Section'", 'Save as new blueprint…'],
       $session->evaluateScript(
         "Array.from(document.querySelectorAll('.daedalus-ui-popover > .daedalus-ui-menu .daedalus-ui-menu__item .daedalus-ui-menu__label')).map((label) => label.textContent)"
       ),
@@ -1006,12 +1049,12 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
         .click();
       JS);
     $this->assertNotNull(
-      $assert_session->waitForElementVisible('css', '#layout-builder-modal #daedalus-layout-blueprint-label', 20000),
+      $assert_session->waitForElementVisible('css', '#drupal-modal #daedalus-layout-blueprint-label', 20000),
       '"Save as new blueprint…" from the caret menu opened the save dialog.',
     );
-    $session->executeScript("document.querySelector('#layout-builder-modal [data-blueprint-cancel]').click();");
+    $session->executeScript("document.querySelector('#drupal-modal [data-blueprint-cancel]').click();");
     $this->assertJsCondition(
-      "!document.querySelector('#layout-builder-modal #daedalus-layout-blueprint-label')",
+      "!document.querySelector('#drupal-modal #daedalus-layout-blueprint-label')",
       10000,
       'Cancel closed the save dialog without a save.',
     );
@@ -1022,12 +1065,12 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       . " return document.querySelectorAll('$chip .daedalus-ui-frame__group').length === 0"
       . " && buttons.length === 1 && buttons[0].getAttribute('aria-label') === 'Save as blueprint…'; })()",
       20000,
-      'An unstamped container\'s chip keeps the plain "Save as blueprint…" button: a group of one is no split control.',
+      'The chip of A, a container never captured and never placed, keeps the plain "Save as blueprint…" button: a group of one is no split control.',
     );
 
-    // The inspector's wear bar reads the placed band's wearings: open the
+    // The inspector's wear bar reads the placed section's wearings: open the
     // inspector sidebar (the recipe's cookie entry renders it closed) and
-    // select the band.
+    // select the section.
     $assert_session->waitForElement('css', '#daedalus_stylish_inspector');
     $session->executeScript(<<<'JS'
       (() => {
@@ -1037,13 +1080,13 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
         }
       })();
       JS);
-    $session->executeScript("Drupal.Daedalus.Selection.select('$band_key');");
+    $session->executeScript("Drupal.Daedalus.Selection.select('$section_key');");
     $width_row_xpath = "//div[@id='daedalus_stylish_inspector']"
       . "//div[contains(@class,'daedalus-stylish-wear-bar__row')]"
       . "[.//span[contains(@class,'daedalus-stylish-wear-bar__label')][normalize-space(.)='Width']]";
     $width_label = $assert_session->waitForElement('xpath', "{$width_row_xpath}//span[contains(@class,'daedalus-stylish-wear-bar__variant-label')]", 20000);
-    $this->assertNotNull($width_label, 'The wear bar renders a worn Width row for the placed band.');
-    $this->assertSame('Site width', $width_label->getText(), 'The placed band wears Site width, the wearing it captured (a placement is a total statement).');
+    $this->assertNotNull($width_label, 'The wear bar renders a worn Width row for the placed section.');
+    $this->assertSame('Site width', $width_label->getText(), 'The placed section wears Site width, the wearing it captured (a placement is a total statement).');
     $session->executeScript('Drupal.Daedalus.Selection.clear();');
     // Back to the Add panel (a same-slot inspector may have evicted it).
     $this->openAddPanel();
@@ -1053,7 +1096,7 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "document.querySelector('.daedalus-ui-caret__empty') && !document.querySelector('.daedalus-ui-caret__empty').hidden",
       10000,
-      'Over the nested container, the Card (no root-only wearing) is offered the empty-container affordance: the refusal is the band fact, not a blanket one.',
+      'Over the nested container, the Card (no root-only wearing) is offered the empty-container affordance: the refusal is the section fact, not a blanket one.',
     );
     $this->endItemDrag('card');
     // The caret's existence is gated by the drag store (active or
@@ -1065,14 +1108,14 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       'The dragend closed the Card gesture and the caret withdrew.',
     );
 
-    // ——— CLICK, REFUSED: Insert armed on C, the Band item clicked. ———
+    // ——— CLICK, REFUSED: Insert armed on C, the Section item clicked. ———
     //
     // A section item places AFTER a container anchor: after C, inside A,
     // nested. Click-to-place builds that target from the anchor and asks
-    // the Band's source spec, which refuses it; nothing is placed and the
+    // the Section's source spec, which refuses it; nothing is placed and the
     // session stays armed.
     $this->armInsert("container:$c");
-    $this->clickItem('band');
+    $this->clickItem('section');
     $this->assertJsCondition(
       "document.documentElement.classList.contains('daedalus-layout-insert-pending')",
       10000,
@@ -1081,11 +1124,11 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
 
     // ——— CLICK, CONTRAST: the Card at the same anchor places, nested. ———
     //
-    // One POST for both clicks together: the Card's. The Band click was no
+    // One POST for both clicks together: the Card's. The Section click was no
     // POST at all.
     $before = $this->containerKeys();
     $this->clickItem('card');
-    $this->assertJsCondition('window.__blueprintPosts === 3', 20000, 'The Card click was one blueprint POST, and the refused Band click before it was none.');
+    $this->assertJsCondition('window.__blueprintPosts === 3', 20000, 'The Card click was one blueprint POST, and the refused Section click before it was none.');
     $this->assertJsCondition(self::CONTAINERS_JS . '.length === 5', 20000, 'The Card click rendered a fifth container.');
     $after = $this->containerKeys();
     $placed = array_values(array_diff($after, $before));
@@ -1104,25 +1147,25 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       'The placement advanced the armed anchor (the session stays live for the next click).',
     );
 
-    // ——— CLICK, OFFERED: Insert armed on B, the Band item clicked. ———
+    // ——— CLICK, OFFERED: Insert armed on B, the Section item clicked. ———
     //
-    // After B is the root flow: the same spec accepts it and the Band
+    // After B is the root flow: the same spec accepts it and the Section
     // places at top level.
     $this->armInsert("container:$b");
     $before = $this->containerKeys();
-    $this->clickItem('band');
-    $this->assertJsCondition('window.__blueprintPosts === 4', 20000, 'The Band click at a top-level anchor was one blueprint POST.');
-    $this->assertJsCondition(self::CONTAINERS_JS . '.length === 6', 20000, 'The Band click rendered a sixth container.');
+    $this->clickItem('section');
+    $this->assertJsCondition('window.__blueprintPosts === 4', 20000, 'The Section click at a top-level anchor was one blueprint POST.');
+    $this->assertJsCondition(self::CONTAINERS_JS . '.length === 6', 20000, 'The Section click rendered a sixth container.');
     $after = $this->containerKeys();
     $placed = array_values(array_diff($after, $before));
-    $this->assertCount(1, $placed, 'Exactly one container was placed by the Band click.');
-    $this->assertNull($this->parentContainerKey($placed[0]), 'The clicked band sits at top level.');
-    $this->assertSame($placed[0], end($after), 'The clicked band landed after B, the last band on the page.');
-    $band_anchor = $placed[0];
+    $this->assertCount(1, $placed, 'Exactly one container was placed by the Section click.');
+    $this->assertNull($this->parentContainerKey($placed[0]), 'The clicked section sits at top level.');
+    $this->assertSame($placed[0], end($after), 'The clicked section landed after B, the last section on the page.');
+    $section_anchor = $placed[0];
 
     // ——— CLICK, THEN ENTER: the placed block's editor opens by request. ———
     //
-    // The session's anchor advanced to the clicked band; a block item now
+    // The session's anchor advanced to the clicked section; a block item now
     // places inside it. The placement lands a plain selection (no landing
     // opens an editor) and the session stays armed, so its Enter binding
     // (daedalus_layout.insert.place, registered while armed, ahead of the
@@ -1133,18 +1176,18 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
     // keystroke: only a browser sees the path whole.
     $this->assertJsCondition(
       "document.documentElement.classList.contains('daedalus-layout-insert-pending')"
-      . " && Drupal.Daedalus.Selection.getSelected() === '$band_anchor'",
+      . " && Drupal.Daedalus.Selection.getSelected() === '$section_anchor'",
       10000,
-      'The band click advanced the armed anchor to the placed band.',
+      'The section click advanced the armed anchor to the placed section.',
     );
     $text_row = $this->revealAddPanelRow('inline_block:text');
     $session->executeScript("document.querySelector('$text_row').click();");
     $this->assertJsCondition('window.__blueprintPosts === 5', 20000, 'The Text block click was one blueprint POST.');
     $this->assertNotNull(
-      $assert_session->waitForElement('css', "[data-main-entity] [data-selectable='$band_anchor'] [data-selectable^='block:']", 20000),
-      'The Text block rendered inside the band, the anchor.',
+      $assert_session->waitForElement('css', "[data-main-entity] [data-selectable='$section_anchor'] [data-selectable^='block:']", 20000),
+      'The Text block rendered inside the section, the anchor.',
     );
-    $block_key = $session->evaluateScript("document.querySelector(\"[data-main-entity] [data-selectable='$band_anchor'] [data-selectable^='block:']\").getAttribute('data-selectable')");
+    $block_key = $session->evaluateScript("document.querySelector(\"[data-main-entity] [data-selectable='$section_anchor'] [data-selectable^='block:']\").getAttribute('data-selectable')");
     // The placed block's sample text (the recipe's sample policy fills a
     // placed text block): the page capture below carries it into Landing,
     // and the live preview step reads it back out of a card's frame.
@@ -1195,22 +1238,21 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       'The consumed Escape never reached the session: it is still armed and the Add panel is still open.',
     );
 
-    // ——— PAGE CAPTURE: the top bar's Save menu. ———
+    // ——— PAGE CAPTURE: the top bar menu's document group. ———
     //
     // The page root's own capture: "Save page as blueprint…" is a root
-    // verb flagged for the document menu, so the Save caret lists it; the
-    // item opens the save dialog worded for a page (the element is the
-    // host's uuid), and the commit is one save_material POST whose capture
-    // is the whole document, scope page. A page-scope blueprint is not
-    // offered on any canvas, so the response's delta lands no record and
-    // the open Add panel gains no item. Five layers (a top bar menu item,
-    // a verb, a dialog, an op, the delta) that only meet in a browser.
+    // verb flagged `document`, so the Daedalus menu (#daedalus-ui-menu,
+    // the bar's one menu over the shared primitive) lists it in its
+    // document group; the item opens the save dialog worded for a page
+    // (the element is the host's uuid), and the commit is one
+    // save_material POST whose capture is the whole document, scope page.
+    // A page-scope blueprint is not offered on any canvas, so the
+    // response's delta lands no record and the open Add panel gains no
+    // item. Five layers (a top bar menu item, a verb, a dialog, an op, the
+    // delta) that only meet in a browser. The trigger is clicked for real
+    // (WebDriver): the surface dismisses on an outside pointerdown and the
+    // trigger toggles, so a synthetic click is not a user's gesture.
     $session->executeScript('Drupal.Daedalus.Selection.clear();');
-    $this->assertJsCondition(
-      "(() => { const caret = document.querySelector('#edit-mode-top-bar #daedalus-ui-save-menu'); return !!caret && !caret.hidden; })()",
-      10000,
-      'The Save caret shows: the root offers a document verb to the editor.',
-    );
     $this->assertTrue(
       (bool) $session->evaluateScript(
         "(() => { const root = Drupal.Daedalus.Blueprint.getRoot();"
@@ -1218,30 +1260,30 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       ),
       'The page capture verb applies to the root key and asks for the document menu.',
     );
-    $session->executeScript("document.querySelector('#daedalus-ui-save-menu').click();");
-    $menu_item = $assert_session->waitForElement('xpath', "//div[contains(@class,'daedalus-ui-menu')]//button[contains(@class,'daedalus-ui-menu__item')][.//span[contains(@class,'daedalus-ui-menu__label')][normalize-space(.)='Save page as blueprint…']]", 10000);
-    $this->assertNotNull($menu_item, 'The Save caret opened the document menu with "Save page as blueprint…".');
+    $session->getPage()->find('css', '#edit-mode-top-bar #daedalus-ui-menu')->click();
+    $menu_item = $assert_session->waitForElement('xpath', "//div[contains(@class,'daedalus-ui-popover')]/div[contains(@class,'daedalus-ui-menu')]/button[contains(@class,'daedalus-ui-menu__item')][.//span[contains(@class,'daedalus-ui-menu__label')][normalize-space(.)='Save page as blueprint…']]", 10000);
+    $this->assertNotNull($menu_item, 'The Daedalus menu lists "Save page as blueprint…" in its document group.');
     $menu_item->click();
-    $label_input = $assert_session->waitForElementVisible('css', '#layout-builder-modal #daedalus-layout-blueprint-label', 20000);
+    $label_input = $assert_session->waitForElementVisible('css', '#drupal-modal #daedalus-layout-blueprint-label', 20000);
     $this->assertNotNull($label_input, 'The menu item opened the save dialog.');
     $this->assertNotNull(
-      $assert_session->waitForElement('css', '#layout-builder-modal [data-blueprint-scope="page"]', 10000),
+      $assert_session->waitForElement('css', '#drupal-modal [data-blueprint-scope="page"]', 10000),
       'The dialog is worded for a page: it states the page scope.',
     );
     // The count reads the blueprint SET: a blueprint this editor captured
     // is also under Favorites (the creator's mark), one record, two rows.
     $blueprint_set_rows = "document.querySelectorAll('#place_block [data-daedalus-layout-add-panel-in=\"kind:blueprint\"][data-daedalus-layout-add-panel-kind=\"blueprint\"]').length";
     $items_before = (int) $session->evaluateScript($blueprint_set_rows);
-    $this->assertSame(2, $items_before, 'The Add panel\'s blueprint set lists the Card and the Band before the page capture (the recipe\'s chrome is frame-only, never offered here).');
+    $this->assertSame(2, $items_before, 'The Add panel\'s blueprint set lists the Card and the Section before the page capture (the recipe\'s chrome is frame-only, never offered here).');
     $session->executeScript(<<<JS
       (() => {
         document.getElementById('daedalus-layout-blueprint-label').value = 'Landing';
         document.getElementById('daedalus-layout-blueprint-description').value = 'A whole landing page.';
-        document.querySelector('#layout-builder-modal [data-blueprint-save]').click();
+        document.querySelector('#drupal-modal [data-blueprint-save]').click();
       })();
       JS);
     $this->assertJsCondition(
-      "!document.querySelector('#layout-builder-modal #daedalus-layout-blueprint-label')",
+      "!document.querySelector('#drupal-modal #daedalus-layout-blueprint-label')",
       20000,
       'The dialog closed on success.',
     );
@@ -1276,7 +1318,7 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
     // the canvas: the canvas route's own first visit enters Edit Mode
     // (BlueprintCanvasMode through daedalus_ui's one door,
     // ModeState::enterModeOnFirstVisit) and plants the path-scoped cookie
-    // the client boot gate reads. The Band's canvas has not been visited
+    // the client boot gate reads. The Section's canvas has not been visited
     // in this session, and the test's own session-wide edit cookie is
     // swept first so only the server's answer can arm the landing. The
     // seam: a queued path-scoped cookie honoured by the next navigation.
@@ -1284,24 +1326,24 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
     $this->assertNull($session->getCookie('navigationMode'), 'No mode cookie of the test\'s own reaches the next navigation.');
     $session->executeScript(<<<JS
       (() => {
-        const verb = Drupal.Daedalus.Verbs.verbsFor('$band_key')
+        const verb = Drupal.Daedalus.Verbs.verbsFor('$section_key')
           .find((candidate) => candidate.id === 'daedalus_layout.open_blueprint');
         if (!verb) {
-          throw new Error('The Open blueprint verb does not apply to $band_key.');
+          throw new Error('The Open blueprint verb does not apply to $section_key.');
         }
-        verb.run('$band_key');
+        verb.run('$section_key');
       })();
       JS);
-    $band_path = $band_blueprint->toUrl()->toString();
+    $section_path = $section_blueprint->toUrl()->toString();
     $this->assertTrue(
-      $session->wait(20000, "document.readyState === 'complete' && window.location.pathname.endsWith('$band_path')"),
-      'Open blueprint navigated to the Band\'s canvas.',
+      $session->wait(20000, "document.readyState === 'complete' && window.location.pathname.endsWith('$section_path')"),
+      'Open blueprint navigated to the Section\'s canvas.',
     );
     $this->assertJsCondition(
       "window.Drupal && Drupal.Daedalus && Drupal.Daedalus.Blueprint && !!Drupal.Daedalus.Blueprint.getRoot()"
       . " && Drupal.Daedalus.Blueprint.rootContext().entityType === 'blueprint'",
       20000,
-      'The Band\'s canvas booted the mirror over the blueprint entity: the landing is in Edit Mode.',
+      'The Section\'s canvas booted the mirror over the blueprint entity: the landing is in Edit Mode.',
     );
     $assert_session->elementExists('css', '#edit-mode-top-bar #daedalus-ui-save');
     $this->assertSame(
@@ -1309,7 +1351,7 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       $session->evaluateScript("Drupal.Daedalus.getCookieValue('navigationMode')"),
       'The server planted the path-scoped edit cookie the client boot gate read.',
     );
-    $this->assertCount(1, $this->containerKeys(), 'The Band\'s canvas renders its one root container.');
+    $this->assertCount(1, $this->containerKeys(), 'The Section\'s canvas renders its one root container.');
 
     // ——— FROM THE ADD FORM TO THE CANVAS: a start, then Edit Mode. ———
     //

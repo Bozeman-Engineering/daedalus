@@ -50,8 +50,11 @@ beats everything else. Without the force layer, layering would make a theme
 
 ### Wrapper layer name
 
-`site` by default; configurable via `daedalus_stylish_layers.settings.wrapper_layer`
-(validated as a CSS identifier, falls back to `site`). A theme stylesheet
+`site` by default; set on the Cascade layer settings form (see
+[Settings](#settings)), which validates it as a CSS identifier with the same
+`Layers::isValidLayerName()` the pipeline reads stamps back with (a
+hand-edited invalid value in `daedalus_stylish_layers.settings.wrapper_layer`
+falls back to `site`). A theme stylesheet
 declaring its own `@layer` blocks simply nests inside the wrapper
 (`site.foo`) and can never outrank unlayered styles. Collision — escaped
 (never-wrapped) CSS declaring the same top-level name — is theoretical and
@@ -121,6 +124,17 @@ unlayered as well.
 `daedalus_stylish_layers.settings.enabled` (default TRUE — installing the module is
 the switch). Disabling stops emitting the statement and, by withholding the
 stamps, all wrapping/rewriting.
+
+## Settings
+
+Both keys of `daedalus_stylish_layers.settings` are set on one form, **Cascade
+layer** at `/admin/config/daedalus/styling/cascade-layer` (Configuration »
+Daedalus » Styling, the Daedalus config category's Styling sub-category; core's
+`administer site configuration`): the runtime switch (`enabled`) and the
+wrapper layer name (`wrapper_layer`). The form is the module's one door;
+`SETTINGS.md` at the daedalus repo root rosters it. Saving either key
+invalidates the cached asset arrays (`ConfigSubscriber`) and the rendered
+pages (the config's own cache tag), so the next page render wears the change.
 
 ## Scope
 

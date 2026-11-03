@@ -6,12 +6,19 @@ import {
   findPatternElement,
   findInstanceDeclaration,
   tagWord,
+  conditionForPseudoClass,
 } from './style-guide.js';
 import {
+  ANCHOR_KIND,
+  ATTRIBUTE,
   CLASS_PART,
+  CLASS_QUALIFIER,
   HAS,
+  IS,
   NEXT,
   NOT,
+  NTH_POSITIONS,
+  POSITIONS,
   SUBSEQUENT,
   TAG,
   TYPE,
@@ -19,6 +26,7 @@ import {
   TYPE_CONTAINER,
   UNIVERSAL,
   parseSelector,
+  printQualifier,
   typeAddress,
   typeName,
 } from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
@@ -56,30 +64,47 @@ export const PART_SELECTOR = /^\.[A-Za-z0-9_-]+$/;
  * Instance parts are never DECLARED concretely; they resolve through the
  * guide's site instance namespaces (guide.instances, the spine's
  * `instances:` lane) and exist only in content, so their labels come from
- * the `_element.markup.instances` annotation on the blueprint mirror
- * (stamped server-side from the declared tag vocabulary, there is no
- * client tag-vocabulary copy) and their styles never travel in variants
+ * the `_element.markup.instances` annotation on the effective blueprint
+ * (stamped server-side from the declared tag vocabulary). daedalus_ui's
+ * anatomy payload DOES ship a client copy of that vocabulary
+ * (ClientAnatomy: drupalSettings.daedalusUi.anatomy.instances, pattern
+ * selector => {label, tags}, read by markup-verify.js for its prefix
+ * terms); this module does not consult it, because the instance FACTS
+ * (which classes exist, what each rendered as) ride the annotation, and
+ * a label is a fact's. Their styles never travel in variants
  * (captureSources excludes them; the server rejects them in variant
  * styles).
  */
 export const INSTANCE_PART = /^\.s-[a-z0-9]+$/;
 
 /**
- * The words for a generated box, by pseudo name: the one vocabulary the
+ * The words for a pseudo-element's box, by name: the one vocabulary the
  * page-elements tree's rows (tree-parts.js generated()), the label seam
- * (selectorLabel, so the breadcrumb crumb), the address sentences and
- * the target chip's doorway (write-address.js, subject-model.js) all
- * speak, so a box reads "Before" / "After" wherever it is named.
+ * (selectorLabel, so the breadcrumb crumb), the address sentences, the
+ * target chip's doorway (write-address.js, subject-model.js) and the
+ * code view's box completion (selector-chrome.js) all speak, so a box
+ * reads "Before" / "After" / "Marker" wherever it is named. The two
+ * generated boxes and the pseudo-elements with a vocabulary of their own
+ * (data/pseudo-vocabularies.json) carry translated words; any other the
+ * browser knows reads its own name (boxWord()).
  */
 export const BOX_LABELS = {
   before: () => Drupal.t('Before'),
   after: () => Drupal.t('After'),
+  marker: () => Drupal.t('Marker'),
+  placeholder: () => Drupal.t('Placeholder'),
+  selection: () => Drupal.t('Selection'),
+  'first-letter': () => Drupal.t('First letter'),
+  'first-line': () => Drupal.t('First line'),
+  backdrop: () => Drupal.t('Backdrop'),
 };
 
 /**
- * The word for a generated box's pseudo name ('before' → "Before").
+ * The word for a pseudo-element's name ('before' → "Before",
+ * 'file-selector-button' → "File selector button").
  */
-export const boxWord = (pseudo) => BOX_LABELS[pseudo]();
+export const boxWord = (pseudo) =>
+  BOX_LABELS[pseudo]?.() ?? `${pseudo.charAt(0).toUpperCase()}${pseudo.slice(1).replace(/-/g, ' ')}`;
 
 /**
  * Finds an instance row (or nested carrier) in a markup annotation.
@@ -205,9 +230,9 @@ const partLabel = (guide, key, sub, blockTypes, sectionLayouts, markup) => {
 /**
  * The type compounds the guide declares, each with its human label.
  *
- * The two kind spellings first (`pb-container` "Container", `pb-block`
+ * The two kind spellings first (`d-container` "Container", `d-block`
  * "Block": a kind compound matches at any depth, so it words the kind,
- * never an element's minted Section/Container type), then one `pb-{bundle}` per
+ * never an element's minted Section/Container type), then one `d-{bundle}` per
  * served block type labelled by its bundle's name (the block_content
  * type's label, served on guide.blockTypes[bundle].label); a bundle
  * the site has no type entity for (a dormant declaration) labels by
@@ -235,7 +260,7 @@ export const typeLabels = (guide) => {
 
 /**
  * The human label of a type compound, plural: "Text blocks" for
- * `pb-text` (the bundle's label), "Containers" and "Blocks" for the two
+ * `d-text` (the bundle's label), "Containers" and "Blocks" for the two
  * kinds; an undeclared or unlabelled type reads as its spelling.
  */
 const typeLabel = (guide, type) => {
@@ -256,7 +281,7 @@ const lower = (text) =>
 
 /**
  * The bare word of a type for the middle of a sentence: "image" for
- * `pb-image` (the bundle's label), "container" and "block" for the two
+ * `d-image` (the bundle's label), "container" and "block" for the two
  * kinds; an undeclared or unlabelled type reads as its spelling.
  */
 const typeWord = (guide, type) => {
@@ -294,7 +319,7 @@ const typeOwner = (guide, type) => {
  *
  * A group is a compound with the sibling-combinated compounds that
  * follow it folded in: `> p + p` is ONE group (the second paragraph,
- * worded "right after a paragraph"), `> pb-text .link` two ("Text
+ * worded "right after a paragraph"), `> d-text .link` two ("Text
  * blocks", "Link"). Each group carries its subject's words and its
  * relation phrases, so a row header (selectorLabel) and an address
  * sentence (write-address.js addressLabel) read the same relations with
@@ -316,9 +341,19 @@ const typeOwner = (guide, type) => {
  * - `phrases`: the relation phrases in composition order, the `:has`
  *   phrases ("containing a link"; a sibling-led argument "right before
  *   an image" / "before an image"), then the `:not` phrases ("except
- *   images"; an implied subject "without a link"), then the sibling
- *   phrase ("right after a paragraph" for `+`, "after a paragraph" for
- *   `~`, the predecessor worded with its own relations).
+ *   images"; an implied subject "without a link", "that are not last",
+ *   "not while hover"), then the `:is` phrases ("any of an image, a
+ *   text block"; a member is worded as a `:not()` compound is, a
+ *   subject member by its noun phrase, an implied one by its qualifier
+ *   phrases: "any of while focus-within, while hover"), then the other
+ *   qualifiers of the compound (a
+ *   position "that are first" / "that are at :nth-child(2n+1)", a class
+ *   "with the .active class", an attribute "with [aria-current="page"]",
+ *   a pseudo-class "while hover" by the published condition's label,
+ *   else "while :checked"), then the sibling phrase ("right after a
+ *   paragraph" for `+`, "after a paragraph" for `~`, the predecessor
+ *   worded with its own relations). The owner's anchor compound
+ *   (`&:hover > ul`) is "This element".
  * A part after a type (by descent, `>`, or as the sibling of a part
  * under it) labels against that type's own anatomy
  * (guide.blockTypes[bundle].elements); a `:has()` argument's parts
@@ -328,7 +363,7 @@ const typeOwner = (guide, type) => {
  * context never prints itself: it labels as partLabel() does, the
  * annotation row's word, else the covering declaration's (the type's
  * own pattern part under a type, else the site namespace's "Text
- * element"), so a hand-typed or AI-written `> pb-formatted-text .s-2kxs`
+ * element"), so a hand-typed or AI-written `> d-formatted-text .s-2kxs`
  * still reads as words. Null outside the grammar.
  *
  * @param {object} guide
@@ -383,6 +418,10 @@ export const selectorWords = (
     if (compound.kind === UNIVERSAL) {
       return { label: 'Children', noun: 'child', plural: 'children' };
     }
+    if (compound.kind === ANCHOR_KIND) {
+      const word = Drupal.t('this element');
+      return { label: Drupal.t('This element'), noun: word, plural: word };
+    }
     if (compound.kind === TAG) {
       const word = tagWord(guide, compound.name);
       return { label: word, noun: lower(word), plural: `${lower(word)}s` };
@@ -413,6 +452,53 @@ export const selectorWords = (
       ? Drupal.t('without !thing', { '!thing': thing })
       : Drupal.t('containing !thing', { '!thing': thing });
   };
+  // The place a position qualifier names, for "that are …".
+  const positionPlace = (qualifier) => {
+    const places = {
+      'first-child': Drupal.t('first'),
+      'last-child': Drupal.t('last'),
+      'only-child': Drupal.t('an only child'),
+      empty: Drupal.t('empty'),
+      'first-of-type': Drupal.t('the first of their kind'),
+      'last-of-type': Drupal.t('the last of their kind'),
+      'only-of-type': Drupal.t('the only ones of their kind'),
+    };
+    return (
+      places[qualifier.name] ??
+      Drupal.t('at !spelling', { '!spelling': printQualifier(qualifier) })
+    );
+  };
+  // The phrase of a qualifier that is neither `:has()` nor `:not()`: a
+  // position, a class, an attribute or a pseudo-class, after the
+  // subject; negated when it stands inside `:not()`.
+  const qualifierPhrase = (qualifier, negated) => {
+    if (qualifier.name === CLASS_QUALIFIER) {
+      const className = `.${qualifier.argument}`;
+      return negated
+        ? Drupal.t('without the !class class', { '!class': className })
+        : Drupal.t('with the !class class', { '!class': className });
+    }
+    if (qualifier.name === ATTRIBUTE) {
+      const attribute = printQualifier(qualifier);
+      return negated
+        ? Drupal.t('without !attribute', { '!attribute': attribute })
+        : Drupal.t('with !attribute', { '!attribute': attribute });
+    }
+    if (POSITIONS.includes(qualifier.name) || NTH_POSITIONS.includes(qualifier.name)) {
+      const place = positionPlace(qualifier);
+      return negated
+        ? Drupal.t('that are not !place', { '!place': place })
+        : Drupal.t('that are !place', { '!place': place });
+    }
+    const condition = conditionForPseudoClass(guide?.conditions, qualifier.name);
+    const state =
+      condition === null
+        ? printQualifier(qualifier)
+        : lower(guide.conditions[condition]?.label ?? condition);
+    return negated
+      ? Drupal.t('not while !state', { '!state': state })
+      : Drupal.t('while !state', { '!state': state });
+  };
   // The words of a chain in an owner context; groups() re-enters for a
   // `:has()` argument, so a relation inside a relation reads the same.
   const groups = (chain, context) => {
@@ -435,18 +521,27 @@ export const selectorWords = (
     });
     return list;
   };
-  const compoundWords = (compound, context) => {
+  // `negated` is the implied subject's reading: inside `:not()` its
+  // qualifier phrases negate, inside `:is()` they read plain.
+  const compoundWords = (compound, context, negated = false) => {
     const implied = compound.kind === null;
     const owner = compound.kind === TYPE ? typeOwner(guide, compound.name) : context;
     if (implied) {
-      // `:not(:has(x))`: the negation reads on each `:has` phrase.
+      // The implied subject inside `:not()`: `:not(:has(x))` reads the
+      // negation on each `:has` phrase, `:not(:last-child)`,
+      // `:not([x])`, `:not(:hover)` the negated qualifier phrase; inside
+      // `:is()` the same phrases plain (`:is(:hover, :has(a))`: "while
+      // hover", "containing a link").
       return {
         compound,
         implied,
         owner,
         phrases: compound.qualifiers.map((qualifier) => {
+          if (qualifier.name !== HAS) {
+            return qualifierPhrase(qualifier, negated);
+          }
           const thing = groups(qualifier.argument, owner).map(nounPhrase).join(' › ');
-          return hasPhrase(qualifier.argument[0].combinator, thing, true);
+          return hasPhrase(qualifier.argument[0].combinator, thing, negated);
         }),
       };
     }
@@ -459,7 +554,7 @@ export const selectorWords = (
     const not = compound.qualifiers
       .filter((qualifier) => qualifier.name === NOT)
       .map((qualifier) => {
-        const negated = compoundWords(qualifier.argument, context);
+        const negated = compoundWords(qualifier.argument, context, true);
         if (negated.implied) {
           return negated.phrases.join(' ');
         }
@@ -467,12 +562,31 @@ export const selectorWords = (
           '!things': [`${negated.noun}s`, ...negated.phrases].join(' '),
         });
       });
+    // An `:is()` member is a predicate compound as a `:not()` argument
+    // is: a subject member reads as its noun phrase ("an image", "a text
+    // block containing a link"), an implied one as its qualifier phrases
+    // ("while hover"), and the alternatives read "any of …".
+    const is = compound.qualifiers
+      .filter((qualifier) => qualifier.name === IS)
+      .map((qualifier) =>
+        Drupal.t('any of !members', {
+          '!members': qualifier.argument
+            .map((member) => {
+              const words = compoundWords(member, context);
+              return words.implied ? words.phrases.join(' ') : nounPhrase(words);
+            })
+            .join(', '),
+        }),
+      );
+    const others = compound.qualifiers
+      .filter((qualifier) => ![HAS, NOT, IS].includes(qualifier.name))
+      .map((qualifier) => qualifierPhrase(qualifier, false));
     return {
       compound,
       implied,
       owner,
       ...subjectWords(compound, context),
-      phrases: [...has, ...not],
+      phrases: [...has, ...not, ...is, ...others],
     };
   };
   return groups(compounds, null).map(
@@ -490,9 +604,9 @@ export const selectorWords = (
 /**
  * The human label for one relative selector under a key: its groups'
  * (selectorWords) labels with their relation phrases, joined by " › ",
- * so '> pb-text .link' reads "Text blocks › Link", '> p + p' "Paragraph
- * right after a paragraph", '> pb-text:has(a)' "Text blocks containing a
- * link", '> *:not(pb-image)' "Children except images". A terminal
+ * so '> d-text .link' reads "Text blocks › Link", '> p + p' "Paragraph
+ * right after a paragraph", '> d-text:has(a)' "Text blocks containing a
+ * link", '> *:not(d-image)' "Children except images". A terminal
  * pseudo-element is one more step, its box word (BOX_LABELS) after the
  * host: '.quote::after' reads "Quote › After", the owner's own box
  * '&::before' (no host compound) "Before" alone, the word the

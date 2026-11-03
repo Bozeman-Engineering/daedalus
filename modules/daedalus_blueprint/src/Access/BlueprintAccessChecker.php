@@ -6,6 +6,7 @@ namespace Drupal\daedalus_blueprint\Access;
 
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Session\AccountInterface;
@@ -29,8 +30,12 @@ use Drupal\daedalus_blueprint\Host\HostInterface;
  *   neutral counts as denied, matching core's boolean `access()` form.
  * - Definition-level field access (used only to decide what to advertise in a
  *   schema) is fail-open against neutral: a field is advertisable unless access
- *   is definitively forbidden, because definition-level checks frequently
- *   return neutral for lack of an entity context.
+ *   is definitively forbidden, because a check with no saved entity behind it
+ *   frequently returns neutral. It is asked with a stub of the bundle in hand,
+ *   never a bare definition: core's handlers take the items as optional and
+ *   then reason from them anyway (node's revision_log rule reads the type's
+ *   new-revision setting off the entity for anyone without administer nodes),
+ *   so a bare definition crashed the schema read for every editor.
  */
 class BlueprintAccessChecker {
 
@@ -146,27 +151,35 @@ class BlueprintAccessChecker {
    * Checks field access at the definition level, for schema advertising.
    *
    * Unlike the enforcement checks, this is fail-open against neutral: it
-   * returns TRUE unless access is definitively forbidden. Definition-level
-   * field access has no entity instance to reason about, so many handlers
-   * return neutral; hiding those fields from the schema would needlessly
-   * narrow what the AI can attempt.
+   * returns TRUE unless access is definitively forbidden. There is no saved
+   * entity to reason about, so many handlers return neutral; hiding those
+   * fields from the schema would needlessly narrow what the AI can attempt.
+   * The subject is an unsaved stub of the bundle: the handler receives the
+   * stub's own items for the field, so a rule that reads the entity (node's
+   * revision_log rule reads the type's new-revision setting off it) has one
+   * to read, where a NULL items list sent it dereferencing nothing.
    *
    * @param \Drupal\Core\Field\FieldDefinitionInterface $definition
    *   The field definition.
    * @param string $operation
    *   The operation: 'view' or 'edit'.
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $subject
+   *   An unsaved entity of the definition's type and bundle, shown to the
+   *   handler and never saved.
    * @param \Drupal\Core\Session\AccountInterface|null $account
    *   The account to check, or NULL for the current user.
    *
    * @return bool
    *   TRUE unless access is forbidden.
    */
-  public function fieldDefinitionAccess(FieldDefinitionInterface $definition, string $operation, ?AccountInterface $account = NULL): bool {
+  public function fieldDefinitionAccess(FieldDefinitionInterface $definition, string $operation, FieldableEntityInterface $subject, ?AccountInterface $account = NULL): bool {
     $account ??= $this->currentUser;
     $entity_type = $definition->getTargetEntityTypeId();
+    $name = $definition->getName();
+    $items = $subject->hasField($name) ? $subject->get($name) : NULL;
     $result = $this->entityTypeManager
       ->getAccessControlHandler($entity_type)
-      ->fieldAccess($operation, $definition, $account, NULL, TRUE);
+      ->fieldAccess($operation, $definition, $account, $items, TRUE);
     return !$result->isForbidden();
   }
 

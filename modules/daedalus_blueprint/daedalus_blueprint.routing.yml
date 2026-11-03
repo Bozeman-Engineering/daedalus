@@ -10,3 +10,33 @@ entity.design_system.activate_form:
     _entity_access: 'design_system.update'
   options:
     _admin_route: TRUE
+
+# The AI context usage: the one reading (MaterialsBudget::reading()) on
+# two doors, both under MaterialsBudget::PERMISSION. The JSON route is
+# the spine's API (the reading whole, per record included), cacheable on
+# the reading's metadata (the roster's tags, the settings). The design
+# system size is the form (AiContextForm): the bar over a box per
+# material, which the stylish cards' link, the blueprint dialogs' link
+# and the chat kebab open in the daedalus popup through daedalus_ui's
+# one opener (Drupal.ajax with dialogType 'modal', which asks for it as
+# _wrapper_format=drupal_modal) and a page of its own at the path the
+# refusal hint names (MaterialsBudget::DIALOG_PATH: the hint states the
+# path from inside a gesture with no request in hand, so the route
+# declares the same string). A form route takes GET and POST: the AJAX
+# submit posts back to the same path.
+daedalus_blueprint.ai_context_reading:
+  path: '/daedalus-blueprint/ai-context/reading'
+  methods: [GET]
+  defaults:
+    _controller: '\Drupal\daedalus_blueprint\Controller\AiContextController::reading'
+    _title: 'AI context reading'
+  requirements:
+    _permission: 'view ai context usage'
+
+daedalus_blueprint.ai_context:
+  path: '/daedalus-blueprint/ai-context'
+  defaults:
+    _form: '\Drupal\daedalus_blueprint\Form\AiContextForm'
+    _title: 'Design system size'
+  requirements:
+    _permission: 'view ai context usage'

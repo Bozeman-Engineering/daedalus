@@ -47,6 +47,7 @@ class SkinManagerTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -69,20 +70,14 @@ class SkinManagerTest extends KernelTestBase {
     // A switch recompiles the roster-fed files, whose provider reads all
     // four storages.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_blueprint', 'daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-* and var() references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->setUpCurrentUser([], [], TRUE);
     $this->declareContract(['space' => ['gutter']]);

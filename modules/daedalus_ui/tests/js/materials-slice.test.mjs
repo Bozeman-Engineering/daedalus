@@ -33,12 +33,12 @@ const record = (fields) => ({
 
 /**
  * A page-load payload in delivery order: tokens by declared scale (not
- * alphabetical), swatches by label, variants by weight then label.
+ * alphabetical), variants by weight then label.
  */
 const RECORDS = [
   record({ kind: 'token', id: 'spacing/lg', label: 'lg', value: '2rem', group: 'spacing', spellings: { style: 'var(--spacing-lg)' }, origin: 'shipped' }),
   record({ kind: 'token', id: 'color/accent', label: 'accent', value: { default: '#1475ad', dark: '#52b3eb' }, group: 'color', spellings: { style: 'var(--color-accent)' }, origin: 'shipped' }),
-  record({ kind: 'swatch', id: 'lime_green', label: 'Lime green', value: '#4dff8c', group: 'color', spellings: { style: 'var(--swatch-lime_green)' } }),
+  record({ kind: 'token', id: 'color/lime-green', label: 'lime-green', value: '#4dff8c', group: 'color', spellings: { style: 'var(--color-lime-green)' } }),
   record({ kind: 'variant', id: 'container_full', label: 'Full width', group: 'width', spellings: { 'attr:kind:container:width': 'full' }, scope: 'kind:container', applies: { depth: 'root' }, weight: -10, origin: 'shipped' }),
   record({ kind: 'variant', id: 'button', label: 'Button', group: 'style', spellings: { class: 'button' }, scope: 'block_type:text', origin: 'shipped' }),
   record({ kind: 'variant', id: 'card', label: 'Card', group: 'style', spellings: { class: 'card' }, scope: 'kind:block', origin: 'shipped' }),
@@ -51,7 +51,7 @@ const rootState = (state) => ({ materials: state });
 
 test('the initial state is empty and unbooted; every kind reads as an empty list', () => {
   assert.equal(initial.booted, false);
-  assert.deepEqual(initial.records, { token: [], swatch: [], variant: [], blueprint: [], animation: [], font: [] });
+  assert.deepEqual(initial.records, { token: [], variant: [], blueprint: [], animation: [], font: [] });
   assert.deepEqual(selectRecords(rootState(initial)), []);
   assert.equal(selectRoster(rootState(initial)).isEmpty(), true);
 });
@@ -59,13 +59,11 @@ test('the initial state is empty and unbooted; every kind reads as an empty list
 test('a boot replaces the record set wholesale, per kind, in delivery order', () => {
   const state = booted();
   assert.equal(state.booted, true);
-  assert.deepEqual(ids(state, 'token'), ['spacing/lg', 'color/accent']);
-  assert.deepEqual(ids(state, 'swatch'), ['lime_green']);
+  assert.deepEqual(ids(state, 'token'), ['spacing/lg', 'color/accent', 'color/lime-green']);
   assert.deepEqual(ids(state, 'variant'), ['container_full', 'button', 'card']);
   assert.deepEqual(ids(state, 'blueprint'), []);
   const rebooted = reducer(state, materialsBooted({ records: [RECORDS[2]] }));
-  assert.deepEqual(ids(rebooted, 'token'), []);
-  assert.deepEqual(ids(rebooted, 'swatch'), ['lime_green']);
+  assert.deepEqual(ids(rebooted, 'token'), ['color/lime-green']);
   assert.deepEqual(ids(rebooted, 'variant'), []);
 });
 
@@ -95,7 +93,7 @@ test('an upsert of a known id with unchanged (weight, label) keeps its seat', ()
   const state = booted();
   const edited = { ...RECORDS[0], value: '3rem' };
   const next = reducer(state, materialsDelta({ upsert: [edited], remove: [] }));
-  assert.deepEqual(ids(next, 'token'), ['spacing/lg', 'color/accent']);
+  assert.deepEqual(ids(next, 'token'), ['spacing/lg', 'color/accent', 'color/lime-green']);
   assert.equal(next.records.token[0].value, '3rem');
   // Other kinds are untouched, identity included.
   assert.equal(next.records.variant, state.records.variant);
@@ -107,9 +105,12 @@ test('a new record is seated by (weight, label) among its kind', () => {
   const heavy = record({ kind: 'variant', id: 'zed', label: 'Aardvark', group: 'style', spellings: { class: 'zed' }, scope: 'kind:block', weight: 5 });
   const next = reducer(state, materialsDelta({ upsert: [minted, heavy], remove: [] }));
   assert.deepEqual(ids(next, 'variant'), ['container_full', 'banner', 'button', 'card', 'zed']);
-  const swatch = record({ kind: 'swatch', id: 'coral', label: 'Coral', value: '#ff7f50', group: 'color', spellings: { style: 'var(--swatch-coral)' } });
-  const swatched = reducer(next, materialsDelta({ upsert: [swatch], remove: [] }));
-  assert.deepEqual(ids(swatched, 'swatch'), ['coral', 'lime_green']);
+  // A token seats by label among its kind too (the seat rule is the
+  // kind's, not the scale's: 'coral' sorts before 'lg'); the server's
+  // next boot restores declared scale order.
+  const coral = record({ kind: 'token', id: 'color/coral', label: 'coral', value: '#ff7f50', group: 'color', spellings: { style: 'var(--color-coral)' } });
+  const minted_token = reducer(next, materialsDelta({ upsert: [coral], remove: [] }));
+  assert.deepEqual(ids(minted_token, 'token'), ['color/coral', 'spacing/lg', 'color/accent', 'color/lime-green']);
 });
 
 test('a rename re-seats the record by its new label', () => {
@@ -129,24 +130,24 @@ test('the seat comparison is case-insensitive (the label sort of the roster quer
 
 test('a remove drops the record; removing an unknown id is a no-op', () => {
   const state = booted();
-  const next = reducer(state, materialsDelta({ upsert: [], remove: [{ kind: 'swatch', id: 'lime_green' }, { kind: 'blueprint', id: 'never' }] }));
-  assert.deepEqual(ids(next, 'swatch'), []);
+  const next = reducer(state, materialsDelta({ upsert: [], remove: [{ kind: 'token', id: 'color/lime-green' }, { kind: 'blueprint', id: 'never' }] }));
+  assert.deepEqual(ids(next, 'token'), ['spacing/lg', 'color/accent']);
   assert.deepEqual(ids(next, 'blueprint'), []);
   assert.equal(next.records.variant, state.records.variant);
 });
 
 test('upserts land before removes within one delta', () => {
   const state = booted();
-  const minted = record({ kind: 'swatch', id: 'coral', label: 'Coral', value: '#ff7f50', group: 'color', spellings: { style: 'var(--swatch-coral)' } });
-  const next = reducer(state, materialsDelta({ upsert: [minted], remove: [{ kind: 'swatch', id: 'lime_green' }] }));
-  assert.deepEqual(ids(next, 'swatch'), ['coral']);
+  const minted = record({ kind: 'token', id: 'color/coral', label: 'coral', value: '#ff7f50', group: 'color', spellings: { style: 'var(--color-coral)' } });
+  const next = reducer(state, materialsDelta({ upsert: [minted], remove: [{ kind: 'token', id: 'color/lime-green' }] }));
+  assert.deepEqual(ids(next, 'token'), ['color/coral', 'spacing/lg', 'color/accent']);
 });
 
 test('isEmptyDelta: the empty shape every response carries, and nothing at all', () => {
   assert.equal(isEmptyDelta({ upsert: [], remove: [] }), true);
   assert.equal(isEmptyDelta(undefined), true);
   assert.equal(isEmptyDelta({ upsert: [RECORDS[2]], remove: [] }), false);
-  assert.equal(isEmptyDelta({ upsert: [], remove: [{ kind: 'swatch', id: 'x' }] }), false);
+  assert.equal(isEmptyDelta({ upsert: [], remove: [{ kind: 'token', id: 'color/x' }] }), false);
 });
 
 test('assertDelta refuses the wrong shape and an unknown kind, and accepts the contract', () => {
@@ -154,7 +155,7 @@ test('assertDelta refuses the wrong shape and an unknown kind, and accepts the c
   assert.throws(() => assertDelta({ upsert: [RECORDS[2]], remove: {} }), /A materials delta is/);
   assert.throws(() => assertDelta(null), /A materials delta is/);
   assert.throws(() => assertDelta({ upsert: [record({ kind: 'texture', id: 'x' })], remove: [] }), /names a material kind and id/);
-  assert.throws(() => assertDelta({ upsert: [], remove: [{ kind: 'swatch' }] }), /names a material kind and id/);
+  assert.throws(() => assertDelta({ upsert: [], remove: [{ kind: 'token' }] }), /names a material kind and id/);
   assert.doesNotThrow(() => assertDelta({ upsert: [RECORDS[2]], remove: [{ kind: 'blueprint', id: 'hero' }] }));
   assert.doesNotThrow(() => assertDelta({ upsert: [], remove: [] }));
 });
@@ -162,14 +163,14 @@ test('assertDelta refuses the wrong shape and an unknown kind, and accepts the c
 test('selectRoster indexes the records and is rebuilt exactly when they change', () => {
   const state = booted();
   const roster = selectRoster(rootState(state));
-  assert.equal(roster.bySpelling('style', 'var(--swatch-lime_green)').id, 'lime_green');
+  assert.equal(roster.bySpelling('style', 'var(--color-lime-green)').id, 'color/lime-green');
   assert.equal(roster.bySpelling('attr:kind:container:width', 'full').id, 'container_full');
   assert.deepEqual(roster.ofKind('variant').map((entry) => entry.id), ['container_full', 'button', 'card']);
   assert.equal(selectRoster(rootState(state)), roster);
-  const next = reducer(state, materialsDelta({ upsert: [], remove: [{ kind: 'swatch', id: 'lime_green' }] }));
+  const next = reducer(state, materialsDelta({ upsert: [], remove: [{ kind: 'token', id: 'color/lime-green' }] }));
   const rebuilt = selectRoster(rootState(next));
   assert.notEqual(rebuilt, roster);
-  assert.equal(rebuilt.bySpelling('style', 'var(--swatch-lime_green)'), null);
+  assert.equal(rebuilt.bySpelling('style', 'var(--color-lime-green)'), null);
 });
 
 test('createEnvelopeSync boots on a new string only and lets a malformed envelope fail', () => {
@@ -185,7 +186,7 @@ test('createEnvelopeSync boots on a new string only and lets a malformed envelop
   encoded = JSON.stringify({ records: [RECORDS[2]] });
   sync();
   assert.equal(boots.length, 2);
-  assert.equal(boots[1].records[0].id, 'lime_green');
+  assert.equal(boots[1].records[0].id, 'color/lime-green');
   encoded = '{not json';
   assert.throws(sync, SyntaxError);
 });

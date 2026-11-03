@@ -147,20 +147,20 @@ Every road is `NodeTreeBuilder::build(source host)` then
   blueprint by provenance (`blueprint` on the placed root, under the
   section's `daedalus_blueprint_library` third-party key).
 - **Placement** (the Add panel drop, `place_blueprint {blueprint,
-  location, uuid?, mode?}`, the dialect's `<pb-blueprint name="id"/>`):
+  location, uuid?, mode?}`, the dialect's `<d-blueprint name="id"/>`):
   detached (the default mode), a BLOCK
   blueprint's entry `layout` (a file's, or the saved entity's built tree)
   expands into the spine's ordinary operations on the destination host,
   with fresh identity and the provenance stamp; it places at the top
-  level only by the band rule. `mode: linked` (the Add panel row menu's
-  "Place linked", the dialect's `<pb-linked blueprint="id"/>`) lands one
+  level only by the section rule. `mode: linked` (the Add panel row menu's
+  "Place linked", the dialect's `<d-linked blueprint="id"/>`) lands one
   node instead, `{kind: linked, blueprint}`, the saved blueprint shown by
   reference and following its later edits; a shipped file cannot be
   linked (`BLUEPRINT_NOT_LINKABLE`), and the fit is the op door's for a
   linked node. A page blueprint is refused first,
   `BLUEPRINT_WRONG_SCOPE` (a whole page is a new page's start, never a
   placement into one; the hint names `page_create`'s `start`, and the
-  dialect's `<pb-blueprint>` of one answers the same code), then
+  dialect's `<d-blueprint>` of one answers the same code), then
   `BLUEPRINT_EMPTY` (a saved blueprint not yet holding a root, the
   corrective naming its canvas) and `BLUEPRINT_DOES_NOT_FIT`, all before
   anything is placed (see "Fits" in daedalus_blueprint's README).
@@ -228,7 +228,7 @@ lanes into one flat id namespace (a collision is `BLUEPRINT_CONFLICT`):
 
   ```yaml
   label: 'Call to action'
-  description: 'A heading, a sentence and a button in a band.'
+  description: 'A heading, a sentence and a button in a section.'
   icon: assets/call_to_action.svg      # optional, module-relative
   ai: true                             # optional, offered to the AI
   design_system: olivero               # optional membership
@@ -275,8 +275,9 @@ the `tree`, the page-level `styles` and the derived `requires`.
 Every surface reads those records, each asking the spine's offer for its
 own scope: the Add panel, the prompt's BLUEPRINTS block and the schema's
 `materials.blueprints` the block-scope ones (the two AI surfaces print
-the site favorites in full and the rest as a group index, read one group
-at a time with `eb_read_schema`'s `group`), the chooser in front of an
+every shared one in full under a group index, one group alone with
+`eb_read_schema`'s `group`; a favorite is the Add panel's listing and
+means nothing to them), the chooser in front of an
 add form, its previews and the schema's `starts` the page-scope ones
 (`PageStart::starts()`, favorites first, then by label), and
 daedalus_stylish's ownership surfaces all of them.

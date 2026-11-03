@@ -41,6 +41,7 @@ final class IconResolverTest extends KernelTestBase {
     'media',
     'svg_image_field',
     'daedalus_blueprint',
+    'filter',
   ];
 
   /**

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\daedalus_stylish\DefaultsStylesheet;
+use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinDefaultsItem;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinSiteTokensItem;
@@ -63,7 +63,7 @@ class SkinLayerTest extends KernelTestBase {
   protected const PACKAGE_DEFAULTS = [
     'kind:container' => [
       '' => ['default' => ['padding' => '2rem', 'gap' => '1rem'], 'narrow' => ['padding' => '1rem']],
-      '::.band-inner' => ['default' => ['max-width' => '80rem']],
+      '::.section-inner' => ['default' => ['max-width' => '80rem']],
     ],
     'base:h2' => ['' => ['default' => ['font-size' => '2rem']]],
   ];
@@ -76,6 +76,7 @@ class SkinLayerTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -98,15 +99,9 @@ class SkinLayerTest extends KernelTestBase {
     // The materials roster's daedalus_stylish provider reads all four
     // storages on every build, and every compile builds it.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->setUpCurrentUser([], [], TRUE);
@@ -146,7 +141,7 @@ class SkinLayerTest extends KernelTestBase {
         // One fact changed, the value unstated.
         '8' => ['offered' => FALSE],
         // Site-minted, its unstated facts at their defaults.
-        'gutter' => ['value' => '3rem', 'description' => 'The band gutter.'],
+        'gutter' => ['value' => '3rem', 'description' => 'The section gutter.'],
       ],
       // A scale the package leaves empty is minted whole.
       'color' => ['muted' => '#777777'],
@@ -156,7 +151,7 @@ class SkinLayerTest extends KernelTestBase {
       'space' => [
         '4' => ['value' => '1.25rem'],
         '8' => ['offered' => FALSE],
-        'gutter' => ['value' => '3rem', 'description' => 'The band gutter.'],
+        'gutter' => ['value' => '3rem', 'description' => 'The section gutter.'],
       ],
       'color' => ['muted' => ['value' => '#777777']],
     ], DaedalusStylishSkin::load($skin->id())->siteTokens(), 'The site layer stores exactly the facts it states, bare values wrapped.');
@@ -166,13 +161,29 @@ class SkinLayerTest extends KernelTestBase {
       'space' => [
         '4' => ['value' => '1.25rem', 'description' => 'The base step.', 'offered' => TRUE],
         '8' => ['value' => '2rem', 'description' => '', 'offered' => FALSE],
-        'gutter' => ['value' => '3rem', 'description' => 'The band gutter.', 'offered' => TRUE],
+        'gutter' => ['value' => '3rem', 'description' => 'The section gutter.', 'offered' => TRUE],
       ],
       'color' => [
         'accent' => self::PACKAGE_TOKENS['color']['accent'],
         'muted' => ['value' => '#777777', 'description' => '', 'offered' => TRUE],
       ],
     ], $skin->tokens(), 'The merge: site facts over the package record, package order first, site additions after, full records throughout.');
+
+    // A scale the package does not carry at all is the site's alone: the
+    // merge reads the absent package scale as an empty map, never as a
+    // corrupt list (PHP spells both `[]`), so a site mint on a suite scale
+    // no package token uses (olivero's gradient) lands.
+    $veil = 'linear-gradient(135deg, #e94560, #16213e)';
+    $this->assertSame(
+      self::PACKAGE_TOKENS + ['gradient' => ['veil' => ['value' => $veil, 'description' => '', 'offered' => TRUE]]],
+      SkinTokensItem::mergeLayers(self::PACKAGE_TOKENS, ['gradient' => ['veil' => ['value' => $veil]]]),
+      'A site-minted token on a scale the package lacks merges after the package scales, a full record.',
+    );
+    $this->assertSame(
+      self::PACKAGE_TOKENS + ['gradient' => []],
+      SkinTokensItem::mergeLayers(self::PACKAGE_TOKENS, ['gradient' => []]),
+      'An empty site scale is an empty map, not a corrupt layer.',
+    );
 
     // Unsetting a site entry reveals the package's token whole.
     $skin->setSiteTokens(['space' => ['gutter' => '3rem']])->save();
@@ -223,7 +234,7 @@ class SkinLayerTest extends KernelTestBase {
           'narrow' => ['padding' => '1rem'],
           'dark' => ['background' => '#000'],
         ],
-        '::.band-inner' => ['default' => ['max-width' => '80rem']],
+        '::.section-inner' => ['default' => ['max-width' => '80rem']],
         '::> *' => ['default' => ['min-width' => '0']],
       ],
       'base:h2' => ['' => ['default' => ['font-size' => '2rem']]],
@@ -240,13 +251,13 @@ class SkinLayerTest extends KernelTestBase {
    */
   public function testSiteLayerIsOutsideTheShippedPayload(): void {
     $skin = $this->createSkin();
-    $skin->setShippedSource('example_package', ['tokens' => self::PACKAGE_TOKENS, 'defaults' => self::PACKAGE_DEFAULTS])->save();
+    $skin->setShippedSource('example_package', ['tokens' => self::PACKAGE_TOKENS, 'animations' => [], 'fonts' => [], 'defaults' => self::PACKAGE_DEFAULTS])->save();
     $this->assertTrue($skin->isShipped());
     $this->assertFalse($skin->isModified());
 
     $skin->setSiteTokens(['space' => ['4' => '9rem']])->setSiteDefaults(['base:h2' => ['' => ['default' => ['font-size' => '3rem']]]])->save();
     $this->assertFalse($skin->isModified(), 'A site layer over a shipped skin is not a modification of what the package shipped.');
-    $this->assertFalse($skin->hasNewDefaults(['tokens' => self::PACKAGE_TOKENS, 'defaults' => self::PACKAGE_DEFAULTS]));
+    $this->assertFalse($skin->hasNewDefaults(['tokens' => self::PACKAGE_TOKENS, 'animations' => [], 'fonts' => [], 'defaults' => self::PACKAGE_DEFAULTS]));
 
     $skin->setPackageTokens(['space' => ['4' => '9rem']] + self::PACKAGE_TOKENS);
     $this->assertTrue($skin->isModified(), 'The package layer is the payload the hash covers.');
@@ -311,12 +322,12 @@ class SkinLayerTest extends KernelTestBase {
     $skin->save();
     $this->activateSkin($skin);
 
-    $css = file_get_contents($this->container->get('state')->get(DefaultsStylesheet::STATE_KEY));
+    $css = file_get_contents($this->container->get('state')->get(SkinStylesheet::STATE_KEY));
     $this->assertStringContainsString('--space-4: 1.25rem;', $css, 'The site value delivers.');
     $this->assertStringNotContainsString('--space-4: 1rem;', $css, 'The overridden package value does not.');
     $this->assertStringContainsString('--space-8: 2rem;', $css, 'A withheld token still delivers: offered is a row fact, not delivery.');
     $this->assertStringContainsString('--space-gutter: 3rem;', $css, 'A site-minted token delivers.');
-    $selector = DefaultsStylesheet::elementSelector(Address::fromString('kind:container'));
+    $selector = SkinStylesheet::elementSelector(Address::fromString('kind:container'));
     $this->assertStringContainsString($selector . " {\n  padding: 2rem;\n  gap: 1.5rem;\n}", $css, 'The site property over the package default, the sibling showing through.');
     $this->assertStringContainsString("font-size: 2rem;", $css);
 
@@ -331,7 +342,7 @@ class SkinLayerTest extends KernelTestBase {
 
     // Unsetting the site layer reveals the package layer on the page.
     $skin->setSiteTokens([])->setSiteDefaults([])->save();
-    $css = file_get_contents($this->container->get('state')->get(DefaultsStylesheet::STATE_KEY));
+    $css = file_get_contents($this->container->get('state')->get(SkinStylesheet::STATE_KEY));
     $this->assertStringContainsString('--space-4: 1rem;', $css);
     $this->assertStringNotContainsString('--space-gutter', $css);
     $this->assertStringContainsString($selector . " {\n  padding: 2rem;\n  gap: 1rem;\n}", $css);

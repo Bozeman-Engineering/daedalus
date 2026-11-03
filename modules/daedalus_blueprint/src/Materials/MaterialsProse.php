@@ -8,15 +8,18 @@ namespace Drupal\daedalus_blueprint\Materials;
  * The materials doctrine every model-facing surface states from ONE source.
  *
  * The preference order (variant > named value > inline value), the mint
- * gate (the user asks; the AI never mints of its own accord) and the
+ * gate (the user asks; the AI never mints of its own accord), the
+ * standing procedure (what to do when no material fits) and the
  * membership sentence (whose members the roster holds) are one sentence
  * each, stated here and nowhere else, so the design system brief in the
  * cached prompt, the MINT line and the gesture router lines, the schema
- * tool's description and the schema's guidance cannot drift apart (the
- * polaritySentence precedent). A surface that needs the sentence calls
- * these; a surface that restates it in its own words is the drift this
- * class exists to prevent (the mint gate once lived in four voices, the
- * kind list in three).
+ * tool's description and the JSON door's guidance paragraph cannot drift
+ * apart (the polaritySentence precedent). A surface that needs the
+ * sentence calls these; a surface that restates it in its own words is
+ * the drift this class exists to prevent (the mint gate once lived in
+ * four voices, the kind list in three, the standing procedure in the
+ * field handler alone while the brief, the one always-on surface, never
+ * carried it).
  */
 final class MaterialsProse {
 
@@ -29,7 +32,7 @@ final class MaterialsProse {
    * are one rule read together, at the moment of choosing a value.
    */
   public static function preferenceSentence(): string {
-    return 'Prefer a saved variant that expresses the intent, then a named value (a token or swatch by its var() spelling, an animation by the ident animation-name writes), then an inline value for what no material says; ' . self::mintGateSentence();
+    return 'Prefer a saved variant that expresses the intent, then a named value (a token by its var() spelling, an animation by the ident animation-name writes), then an inline value for what no material says; ' . self::mintGateSentence();
   }
 
   /**
@@ -42,6 +45,21 @@ final class MaterialsProse {
    */
   public static function mintGateSentence(): string {
     return 'never mint a material unless the user asks, and a mint is published site-wide at once.';
+  }
+
+  /**
+   * The standing procedure: what to do when no material fits.
+   *
+   * The sentence that follows the preference order wherever it is taught
+   * (the brief's doctrine line, the JSON door's guidance paragraph): the
+   * mint gate says never to mint unasked, this says what to do instead
+   * (compose freely with blocks and styles, keep the novel styling on
+   * the page, propose what deserves to join the system and let the user
+   * decide). Stated once so the always-on brief and the on-demand schema
+   * teach the same procedure.
+   */
+  public static function standingProcedureSentence(): string {
+    return 'Standing procedure: when no material fits, compose freely with blocks and styles; novel styling stays on this page; if something deserves to join the design system, propose it and let the user decide.';
   }
 
   /**

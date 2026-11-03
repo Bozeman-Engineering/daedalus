@@ -295,7 +295,7 @@ class LayoutSerializer {
 
     // Section-rooted blueprint provenance: place_blueprint stamps the
     // source blueprint ID into the SECTION's third-party settings (a top-level
-    // band has no wrapper component whose additional data could carry it, so
+    // section has no wrapper component whose additional data could carry it, so
     // the section value is the one uniform slot at every depth). Surfaced as
     // the same read-only `blueprint` key block nodes get from their
     // additional-data stamp (see BLUEPRINT_PROVENANCE_KEY); a nested

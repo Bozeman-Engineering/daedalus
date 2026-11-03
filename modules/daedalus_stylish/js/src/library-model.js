@@ -331,7 +331,7 @@ export const applyDoorway = (
  * hold. The styling target wins when it wears the variant (no jump: the
  * session anchors where the bar already wears); otherwise an element's
  * root wearing (the full-sheet context with a read subject), then a
- * rule's (`container:X::> pb-text`: the document rendered at the
+ * rule's (`container:X::> d-text`: the document rendered at the
  * rule's own stack, previewing on every match), then a fragment
  * wearing, map order breaking ties (the map's canonical order is the
  * document's, styleMapOf, so the first wearer on the page wins, never

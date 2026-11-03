@@ -40,6 +40,7 @@ class MediaStyleValueTest extends KernelTestBase {
   protected static $modules = [
     'system',
     'daedalus_blueprint',
+    'filter',
     'user',
     'field',
     'file',
@@ -88,6 +89,10 @@ class MediaStyleValueTest extends KernelTestBase {
     $this->installEntitySchema('file');
     $this->installSchema('file', ['file_usage']);
     $this->installEntitySchema('media');
+    // Importing system's config names the default theme, a law change
+    // that recompiles the variants file over these storages.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['field', 'system', 'image', 'file', 'media']);
     $this->manager = $this->container->get('plugin.manager.daedalus_stylish_property_group');
 

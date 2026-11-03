@@ -74,6 +74,8 @@ class SkinImporterTest extends KernelTestBase {
    */
   protected const OLD_PAYLOAD = [
     'tokens' => ['space' => ['gutter' => ['value' => '3rem', 'description' => '', 'offered' => TRUE]]],
+    'animations' => [],
+    'fonts' => [],
     'defaults' => [],
   ];
 
@@ -85,6 +87,7 @@ class SkinImporterTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -107,20 +110,14 @@ class SkinImporterTest extends KernelTestBase {
     // The materials roster's daedalus_stylish provider reads all four storages on
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-* and var() references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     // The vocabulary the shipped skins validate against: token scales for
     // the tokens tier, the base: section for the defaults tier.
@@ -174,7 +171,7 @@ class SkinImporterTest extends KernelTestBase {
     $this->assertTrue($aurora->isShipped());
     $this->assertSame('daedalus_stylish_skins_test', $aurora->getProvider());
     $this->assertFalse($aurora->isModified());
-    $this->assertFalse($aurora->hasNewDefaults(['tokens' => self::AURORA_TOKENS, 'defaults' => self::AURORA_DEFAULTS]));
+    $this->assertFalse($aurora->hasNewDefaults(['tokens' => self::AURORA_TOKENS, 'animations' => [], 'fonts' => [], 'defaults' => self::AURORA_DEFAULTS]));
 
     // A tier-less skin imports too: label only, both data tiers empty.
     $bare = $this->loadSkin('bare');
@@ -260,6 +257,8 @@ class SkinImporterTest extends KernelTestBase {
     $this->assertNotSame($revision_id, $synced->getRevisionId());
     $this->assertSame(DaedalusStylishSkin::hashData([
       'tokens' => self::AURORA_TOKENS,
+      'animations' => [],
+      'fonts' => [],
       'defaults' => self::AURORA_DEFAULTS,
     ]), $synced->getSourceHash());
     $this->assertFalse($synced->isModified());

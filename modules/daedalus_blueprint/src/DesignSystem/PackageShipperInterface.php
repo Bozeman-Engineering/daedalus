@@ -15,7 +15,7 @@ namespace Drupal\daedalus_blueprint\DesignSystem;
  * blueprints (priority 10, so their owned variants land in the blueprints'
  * own variants files before the materials lane reads them), and
  * daedalus_stylish's lane rebuilds the module's per-id files and adopts
- * the system's unshipped fonts, animations, swatches, skins and variants
+ * the system's unshipped fonts, animations, skins and variants
  * (priority 0). A lane records its outcomes on the report and never
  * throws for a refusal it can name: a refused entry is a FAILED line and
  * the run goes on.

@@ -76,7 +76,7 @@ const normalize = {
 /**
  * Parses the vector's boot state from a URL query string.
  *
- * The query parameters are the vector's out-of-band address: a headless
+ * The query parameters are the vector's address outside the page: a headless
  * renderer (or a pasted URL) can load the page already posed at a state,
  * e.g. ?canvasWidth=375&canvasScheme=dark&canvasMotion=reduce.
  *

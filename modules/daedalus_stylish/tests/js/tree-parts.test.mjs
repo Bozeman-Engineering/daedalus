@@ -151,6 +151,7 @@ globalThis.Element = FakeElement;
 globalThis.Drupal = { t: (text) => text };
 
 const { createPartBehavior } = await import('../../js/src/tree-parts.js');
+const { layoutOf } = await import('../../../daedalus_ui/js/edit_mode/blueprint/document-tree.js');
 const { createCanvasSelectorPaint } = await import('../../js/src/canvas-selector-paint.js');
 const { CONTAINER_SCOPE_LIMIT } = await import('../../js/src/printer.js');
 const { resolveTargets } = await import('../../js/src/computed-read.js');
@@ -267,10 +268,11 @@ test('matches is the DOM twin of selectorFor: computed-read\'s resolveTargets pl
     assert.deepEqual(behavior.matches(BLOCK, '&::before'), { elements: [root], pseudo: 'before' });
     assert.deepEqual(behavior.matches(BLOCK, '.quote::after'), { elements: [quote], pseudo: 'after' });
     assert.deepEqual(behavior.matches(BLOCK, '.quote::after').elements, resolveTargets(BLOCK, '.quote::after'));
-    // Outside the grammar: nothing, and no box either (`::marker` is not
-    // an address here).
-    assert.deepEqual(behavior.matches(BLOCK, 'div > .loose'), { elements: [], pseudo: null });
-    assert.deepEqual(behavior.matches(BLOCK, '&::marker'), { elements: [], pseudo: null });
+    // Any pseudo-element the browser spells hosts on its matches; outside
+    // the grammar: nothing, and no box either.
+    assert.deepEqual(behavior.matches(BLOCK, '&::marker'), { elements: [root], pseudo: 'marker' });
+    assert.deepEqual(behavior.matches(BLOCK, 'div > > .loose'), { elements: [], pseudo: null });
+    assert.deepEqual(behavior.matches(BLOCK, '&::before::after'), { elements: [], pseudo: null });
   }
   finally {
     canvas.root = null;
@@ -281,16 +283,17 @@ test('matches is the DOM twin of selectorFor: computed-read\'s resolveTargets pl
 });
 
 // The generated boxes: a behavior over a source carrying a map, a
-// materials roster and a tree (the stack's inputs), the image block
+// materials roster and a document (the stack's inputs), the image block
 // under a container.
-const generatedWith = ({ map = {}, variants = [], tree = [] } = {}) =>
+const generatedWith = ({ map = {}, variants = [], document = [] } = {}) =>
   createPartBehavior({
     source: {
       getBlockTypes: () => ({ [UUID_A]: 'image' }),
       getSectionLayouts: () => ({ [UUID_B]: 'daedalus_stylish_container' }),
       getStyleMap: () => map,
       getMaterials: () => roster(variants),
-      getTree: () => tree,
+      getDocument: () => document,
+      getTree: () => layoutOf(document),
     },
     guide: { kinds: {}, blockTypes: { image: { elements: {} } } },
   }).generated;
@@ -354,7 +357,7 @@ test('a worn look\'s box fragment delivers a box the owner never wrote', () => {
 });
 
 test('an ancestor rule ending in the box delivers it on every element it reaches', () => {
-  const tree = [
+  const document = [
     {
       kind: 'container',
       uuid: UUID_B,
@@ -363,12 +366,12 @@ test('an ancestor rule ending in the box delivers it on every element it reaches
     },
   ];
   const generated = generatedWith({
-    tree,
+    document,
     map: {
-      [`${CONTAINER}::> pb-image::before`]: { default: { content: '""' } },
+      [`${CONTAINER}::> d-image::before`]: { default: { content: '""' } },
       // A rule at the other box without content styles nothing into
       // existence.
-      [`${CONTAINER}::> pb-image::after`]: { default: { width: '2rem' } },
+      [`${CONTAINER}::> d-image::after`]: { default: { width: '2rem' } },
     },
   });
   assert.deepEqual(generated(BLOCK), [BEFORE_ROW]);
@@ -397,7 +400,7 @@ test('any relative selector builds the printers\' targets: children, types, tags
   );
   // A type compound selects by the element address stamp, the one
   // weighted link; a text block's face lights up, never the container's.
-  const typed = behavior.selectorFor(CONTAINER, '> pb-text', 'color: red;');
+  const typed = behavior.selectorFor(CONTAINER, '> d-text', 'color: red;');
   assert.equal(
     typed,
     `@scope ([data-selectable="${CONTAINER}"]) {\n  :where(:scope) > [data-element="block_type:text"] {\n    color: red;\n  }\n}`,
@@ -412,9 +415,9 @@ test('any relative selector builds the printers\' targets: children, types, tags
 });
 
 test('a selector outside the grammar builds nothing', () => {
-  assert.equal(behavior.selectorFor(BLOCK, 'div > .loose', 'color: red;'), null);
-  assert.equal(behavior.selectorFor(BLOCK, '.two.classes', 'color: red;'), null);
-  assert.equal(behavior.selectorFor(BLOCK, 'a:hover', 'color: red;'), null);
+  assert.equal(behavior.selectorFor(BLOCK, 'div > > .loose', 'color: red;'), null);
+  assert.equal(behavior.selectorFor(BLOCK, '.two:has(:has(.classes))', 'color: red;'), null);
+  assert.equal(behavior.selectorFor(BLOCK, 'a:hover()', 'color: red;'), null);
   // The canonical spelling only: the facade canonicalizes before the
   // facet is seated, so a lenient spelling here is a caller bug.
   assert.equal(behavior.selectorFor(BLOCK, '>*', 'color: red;'), null);
@@ -502,9 +505,9 @@ test('hovering the target\'s selector paints no hover box over the target', () =
 });
 
 test('a type target on a container paints every matching child', () => {
-  // The done-when's shape: seating '> pb-text' on a container outlines
+  // The done-when's shape: seating '> d-text' on a container outlines
   // all its text blocks through the one printed target.
-  selectTo(CONTAINER, '> pb-text');
+  selectTo(CONTAINER, '> d-text');
   const tag = appended.at(-1);
   assert.equal(tag.attributes['data-daedalus-stylish-selector-paint'], 'selected');
   assert.ok(tag.textContent.includes(':where(:scope) > [data-element="block_type:text"]'));
@@ -526,7 +529,7 @@ test('a write address paints its every match in the write slot, dotted, beside t
   assert.equal(tag.textContent, `@scope ([data-selectable="${CONTAINER}"]) {\n  a {\n    outline: 2px dotted var(--daedalus-selection, #0071e3) !important;\n    outline-offset: 5px !important;\n  }\n}`);
   assert.ok(!selected.removed);
   // A new address replaces the slot's tag; the dashed box is untouched.
-  addressTo(CONTAINER, '> pb-text .quote');
+  addressTo(CONTAINER, '> d-text .quote');
   assert.ok(tag.removed);
   assert.ok(!selected.removed);
   const next = appended.at(-1);
@@ -552,7 +555,7 @@ test('a write address paints its every match in the write slot, dotted, beside t
 
 test('a hover facet outside the grammar injects no tag', () => {
   const before = appended.length;
-  hoverTo({ key: BLOCK, selector: 'div > .loose' });
+  hoverTo({ key: BLOCK, selector: 'div > > .loose' });
   assert.equal(appended.length, before);
 });
 
@@ -588,3 +591,23 @@ if (failures) {
   process.exit(1);
 }
 console.log(`${tests.length} tree-parts tests passed.`);
+
+test('another pseudo-element of the owner\'s own lists once the map delivers a property there, after the generated boxes, by its word', () => {
+  // A marker exists with its host and has no switch: an entry delivering
+  // any property is the row; an emptied entry is none; a chain's marker
+  // is a rule, not the owner's own box.
+  const MARKER_ROW = { id: '&::marker', pseudo: 'marker', label: 'Marker' };
+  assert.deepEqual(generatedWith({ map: { [`${BLOCK}::&::marker`]: { default: { color: 'red' } } } })(BLOCK), [MARKER_ROW]);
+  assert.deepEqual(generatedWith({ map: { [`${BLOCK}::&::marker`]: { default: {} } } })(BLOCK), []);
+  assert.deepEqual(generatedWith({ map: { [`${BLOCK}::li::marker`]: { default: { color: 'red' } } } })(BLOCK), []);
+  assert.deepEqual(
+    generatedWith({
+      map: {
+        [`${BLOCK}::&::marker`]: { default: { color: 'red' } },
+        [`${BLOCK}::&::after`]: { default: { content: '""' } },
+        [`${BLOCK}::&::first-letter`]: { hover: { color: 'red' } },
+      },
+    })(BLOCK),
+    [AFTER_ROW, MARKER_ROW, { id: '&::first-letter', pseudo: 'first-letter', label: 'First letter' }],
+  );
+});

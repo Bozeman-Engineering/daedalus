@@ -116,7 +116,7 @@
  * - Rect-measured chrome hides under it, in its OWN stylesheet. Anything
  *   positioned from an element's getBoundingClientRect (daedalus_ui's
  *   selection frame, insertion caret and selection indicator, the canvas
- *   vector's handles and ruler; daedalus_stylish's highlight bands and
+ *   vector's handles and ruler; daedalus_stylish's highlight overlays and
  *   paint canvas) measures the 2D box of a projected quad while the canvas
  *   is transformed, so each owner carries an
  *   `html[data-daedalus-ui-canvas-view] … { display: none }` rule. The
@@ -238,17 +238,17 @@
  * applicable member folds to the plain `{verb}` entry it would be alone,
  * so a face never special-cases it. The selection chip is the one face
  * that draws groups (components/selection-frame/selection-frame.js
- * GroupControl): a group entry is a `daedalus-ui-split-button`, the top
- * bar's Save control and stylesheet (css/split-button.css in the `modes`
+ * GroupControl): a group entry is a `daedalus-ui-split-button`, the chip's
+ * own control and stylesheet (css/split-button.css in the `modes`
  * library), whose main half is the primary's verb button and whose caret
  * half ("More @label actions", @label the primary's label) opens the
  * shared menu, aligned to its end, over the rest through verbMenuItems.
  * At clean density the chip partitions by `tab` first and folds what
  * stays on the face, so a group's untabbed members go behind the chevron
- * as flat items. The context menu, the tree's row menu, the document menu
- * and the hotkeys list the members flat in weight order and never read
- * the key. A module adds a verb to a control by naming the group; it
- * never draws the control itself.
+ * as flat items. The context menu, the tree's row menu, the top bar
+ * menu's document group and the hotkeys list the members flat in weight
+ * order and never read the key. A module adds a verb to a control by
+ * naming the group; it never draws the control itself.
  *
  * A drag source whose data names the element it MOVES passes its
  * selectable key as `data.key`; the controller asks arrange of it at
@@ -276,6 +276,27 @@
  * translation, WORKSPACE_REQUIRED the workspace) and carrying "Edit the
  * template" only when the verdict carries a portal with a url. No chip,
  * menu or inspector offers a portal of its own.
+ *
+ * @section menu_grammar The one popup menu and its item grammar
+ *
+ * Every popup menu in the chrome is Drupal.Daedalus.menu (js/menu/menu.js
+ * over the pure state machine js/menu/menu-state.js, riding the one
+ * floating surface Drupal.Daedalus.popover): a module never rolls a
+ * second popover grammar. It opens imperatively at a pointer or under an
+ * anchor with an explicit `align`, and takes items in one grammar, the
+ * full word of which is menu-state.js's docblock: a plain item {label,
+ * icon?, hint?, title?, disabled?+reason?, checked?, danger?, confirm?,
+ * run, preview?}, a submenu row {label, icon?, hint?, disabled?+reason?,
+ * items: [...]} with no run and never checked, {separator: true}, a group
+ * {caption}, and the read-only {label, meter: 0..1, hint?} row. A
+ * submenu's flyout is one level deep, opens beside its row (ArrowRight,
+ * Enter, Space, a click, or the pointer resting on the row), closes
+ * alone on ArrowLeft or Escape, and an item inside it runs like any
+ * other and takes the whole menu down. Adapters that build items (the
+ * verb registry's verbMenuItems, the row-facts doorways below, the Show
+ * kebab's entries, the top bar's menu) are pure functions of their
+ * sources, so the list they hand the menu is node-testable without a
+ * DOM.
  *
  * @section portal_actions The doorways: one registry for the chip and the row
  *
@@ -366,7 +387,7 @@
  * - `__name`: what the row says, the one zone that gives way (ellipsis).
  *   The type is not printed; it is the row's `title`.
  * - `__facts`: right-aligned, never shrunk, after everything else: the
- *   row-facts seam's `__dot` (the shared `daedalus-ui-dot` swatch, hue
+ *   row-facts seam's `__dot` (the shared `daedalus-ui-dot` disc, hue
  *   inline) and `__text` (caption voice), a `__count` (a folded row's
  *   rows, a set's members; tabular numerals) and the Markup view's
  *   `__tag` (end-aligned dim monospace, no angle brackets).
@@ -433,7 +454,7 @@
  *   painted affordance is a truthful preview of the selector's reach.
  *   Null outside the grammar. For a GENERATED BOX selector (the grammar's
  *   terminal `::before` / `::after`: `&::before`, `.quote::after`,
- *   `> pb-text::before`) the printed rule carries the pseudo-element, so
+ *   `> d-text::before`) the printed rule carries the pseudo-element, so
  *   an `outline` in `declarations` paints the generated box itself.
  * - matches(parentKey, selector): {elements, pseudo}, the DOM twin of
  *   selectorFor: the live canvas elements the selector hits under its
@@ -505,7 +526,7 @@
  * The provider's entries, all pure:
  * - facts(address): [{mark: 'dot' | 'text', hue?, text?, title}] for the
  *   row at a projection-index address (an element key for a model row,
- *   the `key::selector` pair for a part row); a dot is a round swatch
+ *   the `key::selector` pair for a part row); a dot is a round disc
  *   in `hue`, a text its `text` in the caption voice. Drawn in the outline
  *   row grammar's facts zone (css/panel-controls.css, the
  *   `daedalus-ui-outline__facts` zone) ahead of the Markup view's tag,
@@ -531,12 +552,15 @@
  *
  * @section bundle_section One tab, one switch, groups named by outcome
  *
- * Every bundle edit form whose bundle config type carries this module's
- * settings gets one "Page builder" vertical tab, owned by
+ * Every bundle form, add and edit, whose bundle config type carries this
+ * module's settings gets one "Page builder" vertical tab, owned by
  * \Drupal\daedalus_ui\Form\BundleEditFormAlter. It leads with the switch
  * for the one boolean, `third_party_settings.daedalus_ui.enabled` ("the
  * page builder is on for this bundle"), which is the gate every reader
- * asks (ShouldNotEditMode, daedalus_stylish's style store); under it sit
+ * asks (ShouldNotEditMode, daedalus_stylish's style store); a new bundle's
+ * switch starts on and the first save writes it as an explicit value (no
+ * runtime default: a bundle created by code or import stays off until its
+ * form says otherwise). Under the switch sit
  * groups named by the OUTCOME a control serves and never by module
  * (BundleEditFormAlter::GROUP_LAYOUT, GROUP_CREATION and GROUP_STYLING on
  * a page bundle; GROUP_ADD_PANEL, GROUP_ON_PAGE and GROUP_STYLING on a
@@ -550,9 +574,14 @@
  *   `\Drupal\daedalus_ui\Form\BundleEditFormAlter`, injectable by class).
  *   TRUE means the group exists under $form['page_builder'][$group]; add
  *   the control there. FALSE means the section does not belong on this
- *   form (an add form, a bundle config type whose schema is not named):
- *   add nothing. Create-if-missing, so form alter order does not matter.
- *   Never park a details element of your own in the tab.
+ *   form (a bundle config type whose schema is not named): add nothing.
+ *   Create-if-missing, so form alter order does not matter. Never park a
+ *   details element of your own in the tab. The add form is served too:
+ *   there the bundle entity is new (no id, no label, no display), so a
+ *   control that reads the bundle's display or its own config asks
+ *   `$bundle_entity->isNew()` first and shows the new bundle's default;
+ *   a handler that creates config depending on the bundle (a field)
+ *   runs after the form's `::save`, as daedalus_stylish's does.
  * - Route the value FLAT: set explicit `#parents` on the input and persist
  *   it in your own submit handler, never through a third_party_settings
  *   `#parents` route (copyFormValuesToEntity() would replace the entity's
@@ -571,6 +600,16 @@
  *   checked ones after "On".
  * - A group's fieldset carries `data-daedalus-ui-group="{group}"`; select
  *   by that in tests and CSS, not by the generated id.
+ * - Mirror your setting on the bundle roster, the tab's read-only second
+ *   door (/admin/config/daedalus/ui/content-types,
+ *   \Drupal\daedalus_ui\Controller\BundleRoster): subscribe to
+ *   \Drupal\daedalus_ui\Event\BundleRosterEvent, dispatched once per
+ *   bundle listed, and answer `$event->setColumn($id, $header, $cell)`
+ *   with one column per setting (the header the same on every row, the
+ *   cell this row's value as text or a render array). A row you say
+ *   nothing for gets an empty cell. The roster never carries a control:
+ *   the tab stays the one write path. Add any cacheable dependency beyond
+ *   the bundle entity to the event.
  */
 
 /**

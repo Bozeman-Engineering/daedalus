@@ -5,9 +5,9 @@
  * present, snake_case) exactly as the page-load envelope carries them, and
  * indexes them with daedalus_ui's createRoster, the same index the
  * store hands the inspector. Tests describe materials tersely (a token
- * by scale/name/value, a swatch by name/kind/value, a variant by id and
- * its facts, a blueprint by id, an animation by name/label/steps, a font
- * by name/label/family/faces) and read them through
+ * by scale/name/value, a variant by id and its facts, a blueprint by id,
+ * an animation by name/label/steps, a font by name/label/family/faces)
+ * and read them through
  * the roster like production code does; nothing here is a production
  * shape of its own.
  */
@@ -29,7 +29,9 @@ const base = {
 /**
  * A token record: id "{scale}/{name}", label the name, group the scale,
  * spelled var(--{prefix}-{name}) (the provider's StyleGuide::tokenVariable
- * derivation, prefix defaulting to the scale id).
+ * derivation, prefix defaulting to the scale id). Shipped unless `extra`
+ * says otherwise (`origin: 'user'` for a site-minted token); a token is
+ * always updatable (its site layer takes the write).
  */
 export const tokenRecord = (scale, name, value, prefix = scale, extra = {}) => ({
   ...base,
@@ -49,24 +51,6 @@ export const tokenRecord = (scale, name, value, prefix = scale, extra = {}) => (
  * developer gate: shipped AND updatable).
  */
 const updatableFor = (origin, updatable = null) => updatable ?? origin !== 'shipped';
-
-/**
- * A swatch record: id the machine name, group the kind, spelled
- * var(--swatch-{name}) (the reserved namespace). `extra.origin` shipped
- * reads locked unless `extra.updatable` says otherwise.
- */
-export const swatchRecord = (name, kind, value, label = name, extra = {}) => ({
-  ...base,
-  kind: 'swatch',
-  id: name,
-  label,
-  value,
-  group: kind,
-  spellings: { style: `var(--swatch-${name})` },
-  origin: 'user',
-  updatable: updatableFor(extra.origin ?? 'user', extra.updatable),
-  ...extra,
-});
 
 /**
  * A variant record: id the machine name, group the axis ('style' unless
@@ -162,15 +146,19 @@ export const roster = (...records) => createRoster(records.flat());
 
 /**
  * A roster from the terse guide-shaped fixture the older tests spoke:
- * {tokenScales: {scale: {prefix}}, tokens: {scale: {name: value}},
- * swatches: [{machine_name, label, kind, value}]}. Tokens roster in
- * declared scale order then stored order (the provider's walk), swatches
- * in list order.
+ * {tokenScales: {scale: {prefix}}, tokens: {scale: {name: value}}}.
+ * Tokens roster in declared scale order then stored order (the
+ * provider's walk). A value may be wrapped as {value, origin, offered}
+ * to stamp a site-minted or withheld token; a bare value is a shipped,
+ * offered one.
  */
-export const materialsFrom = ({ tokenScales = {}, tokens = {}, swatches = [] } = {}) => roster(
+export const materialsFrom = ({ tokenScales = {}, tokens = {} } = {}) => roster(
   Object.entries(tokenScales).flatMap(([scale, declaration]) => Object.entries(tokens?.[scale] ?? {})
-    .map(([name, value]) => tokenRecord(scale, name, value, declaration?.prefix ?? scale))),
-  swatches.map((swatch) => swatchRecord(swatch.machine_name, swatch.kind, swatch.value, swatch.label ?? swatch.machine_name, swatch.origin ? { origin: swatch.origin } : {})),
+    .map(([name, entry]) => {
+      const wrapped = entry !== null && typeof entry === 'object' && !Array.isArray(entry) && 'value' in entry && !('default' in entry);
+      const { value, ...extra } = wrapped ? entry : { value: entry };
+      return tokenRecord(scale, name, value, declaration?.prefix ?? scale, extra);
+    })),
 );
 
 /**

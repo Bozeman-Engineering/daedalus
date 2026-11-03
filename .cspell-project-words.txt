@@ -226,8 +226,6 @@ subgrid
 sublabel
 sublabels
 sublayer
-swatched
-swatchy
 tagstates
 targetable
 tempstored

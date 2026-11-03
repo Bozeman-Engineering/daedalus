@@ -8,6 +8,7 @@ use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\ai\Attribute\FunctionCall;
 use Drupal\ai\OperationType\Chat\Tools\ToolsFunctionInput;
+use Drupal\daedalus_blueprint\Tool\ParameterProse;
 use Drupal\daedalus_blueprint_ai\PageToolBase;
 
 /**
@@ -23,20 +24,22 @@ use Drupal\daedalus_blueprint_ai\PageToolBase;
   id: 'daedalus_blueprint:page_edit',
   function_name: 'page_edit',
   name: 'Page Edit',
-  description: 'Edits a page with one atomic batch of ops on the page language (the op grammar and element reference live in the "Page language" section): insert/replace/move/remove/set carry dialect HTML and attribute patches, style carries real CSS. Every change to an existing page, structural and styling together, is ONE batch; failed ops roll the whole batch back with corrective errors. Returns the updated page print.',
+  description: 'Edits a page with one atomic batch of ops on the page language (the op grammar and element reference live in the "Page language" section): insert/replace/move/remove/set carry dialect HTML and attribute patches, style carries real CSS. Failed ops roll the whole batch back with corrective errors. Returns the updated page print.',
   group: 'modification_tools',
   context_definitions: [
     'entity_type' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Entity Type'),
       required: TRUE,
-      description: new TranslatableMarkup('The entity type ID (e.g. node).'),
+      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+      description: new TranslatableMarkup(ParameterProse::ENTITY_TYPE),
     ),
     'entity_id' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Entity ID'),
       required: TRUE,
-      description: new TranslatableMarkup('The entity ID.'),
+      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+      description: new TranslatableMarkup(ParameterProse::ENTITY_ID),
     ),
     'ops' => new ContextDefinition(
       data_type: 'map',
@@ -76,7 +79,7 @@ class PageEdit extends PageToolBase {
    */
   public function execute() {
     // The tool-input fact rides an event before anything judges the input,
-    // so dev tools capture exactly what arrived, guards included.
+    // so a diagnostic capture sees exactly what arrived, guards included.
     $this->dispatchToolInput();
     if (!$this->requireValidParams()) {
       return;

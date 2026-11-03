@@ -78,14 +78,12 @@ final class InspectorPopout extends ControllerBase {
             'guide' => $this->clientStyleGuide->build(),
             // The same gesture gates the in-page host attaches
             // (InspectorGates): the satellite renders the same variant,
-            // swatch, token, animation and skin controls (fetches ride its
+            // skin material, skin and law controls (fetches ride its
             // own session; spine ops relay to the leader as intents).
             'variants' => $this->gates->variants(),
-            'swatches' => $this->gates->swatches(),
-            'tokens' => $this->gates->tokens(),
-            'animations' => $this->gates->animations(),
-            'fonts' => $this->gates->fonts(),
+            'skinMaterials' => $this->gates->skinMaterials(),
             'skin' => $this->gates->skin(),
+            'law' => $this->gates->law(),
           ],
           'daedalusUi' => [
             'materials' => $this->materialsDelivery->envelope(),
@@ -93,6 +91,13 @@ final class InspectorPopout extends ControllerBase {
         ],
       ],
     ];
+    // The AI context door the "Offer to the AI" toggles carry, the same
+    // as the in-page host hands over: the usage display's URL for a user
+    // who may read it; absent, the cards render no link.
+    $ai_context = $this->gates->aiContext();
+    if ($ai_context !== NULL) {
+      $build['#attached']['drupalSettings']['daedalusStylish']['aiContext'] = $ai_context;
+    }
     (new CacheableMetadata())
       ->addCacheContexts(['user.permissions'])
       ->addCacheTags(ClientStyleGuide::CACHE_TAGS)

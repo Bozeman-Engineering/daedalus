@@ -1,0 +1,8 @@
+bypass ai usage caps:
+  title: 'Bypass AI usage caps'
+  description: 'Run AI turns past the per-user spend windows. A site-scoped window refuses everyone, this permission included.'
+  restrict access: true
+administer ai usage ledger:
+  title: 'Administer the AI usage ledger'
+  description: 'Configure the price table and the usage caps.'
+  restrict access: true

@@ -9,7 +9,7 @@ use Drupal\daedalus_stylish\CssPrinter;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Exception\StyleGuideException;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
-use Drupal\daedalus_stylish\DefaultsStylesheet;
+use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\daedalus_stylish\SkinDefaultsFieldHandler;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_ui\Render\ElementAddress;
@@ -50,6 +50,7 @@ class SkinDefaultsTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -67,27 +68,19 @@ class SkinDefaultsTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    // The client payload serves the published swatches, so every build()
-    // consumer needs the swatch entity schema.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_variant');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-* and var() references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
@@ -164,7 +157,7 @@ class SkinDefaultsTest extends KernelTestBase {
         // padding-inline stop on the root itself.
         '' => ['default' => ['padding-inline' => 'max(var(--space-gutter), calc((100% - 60rem) / 2))']],
         // An undeclared part on a permissive site: grammar-checked only.
-        '::.band-inner' => ['default' => ['max-width' => '80rem']],
+        '::.section-inner' => ['default' => ['max-width' => '80rem']],
       ],
       'layout:layout_onecol' => ['' => ['default' => ['padding' => '3rem']]],
       'block_type:media' => ['' => ['default' => ['margin' => '1rem']]],
@@ -288,7 +281,7 @@ class SkinDefaultsTest extends KernelTestBase {
       'layout:layout_onecol' => ['' => ['default' => ['padding' => '3rem']]],
       'kind:container' => [
         '' => ['default' => ['padding' => '2rem']],
-        '::.band-inner' => ['default' => ['max-width' => '80rem']],
+        '::.section-inner' => ['default' => ['max-width' => '80rem']],
       ],
       'kind:block' => ['' => ['default' => ['padding' => '1rem'], 'narrow' => ['padding' => '0.5rem']]],
       'block_plugin:system_menu_block' => ['' => ['default' => ['margin' => '1rem']]],
@@ -297,7 +290,7 @@ class SkinDefaultsTest extends KernelTestBase {
     $skin->save();
     $this->activateSkin($skin);
 
-    $uri = $this->container->get('state')->get(DefaultsStylesheet::STATE_KEY);
+    $uri = $this->container->get('state')->get(SkinStylesheet::STATE_KEY);
     $this->assertIsString($uri);
     $css = file_get_contents($uri);
 
@@ -308,7 +301,7 @@ class SkinDefaultsTest extends KernelTestBase {
     // at zero specificity: the element tag tier's bare in-scope tag
     // (0-0-1) beats a base default outright, and every authored rule
     // beats every default by specificity alone.
-    $this->assertStringContainsString(':where(.' . DefaultsStylesheet::SCOPE_CLASS . ') :where(h2) {', $css);
+    $this->assertStringContainsString(':where(.' . SkinStylesheet::SCOPE_CLASS . ') :where(h2) {', $css);
     $this->assertStringContainsString('font-size: 2rem;', $css);
     $this->assertStringNotContainsString('@scope', $css);
     $this->assertStringNotContainsString(':scope', $css);
@@ -318,13 +311,13 @@ class SkinDefaultsTest extends KernelTestBase {
     // PREFIXED by the token scope element inside the :where(): the one
     // boundary both tiers honor, so an address outside it (admin theme,
     // dialogs) is inert. A kind selects its whole family.
-    $selector = static fn (string $scope): string => DefaultsStylesheet::elementSelector(Address::fromString($scope));
-    $prefix = '.' . DefaultsStylesheet::SCOPE_CLASS . ' [' . ElementAddress::ATTRIBUTE;
+    $selector = static fn (string $scope): string => SkinStylesheet::elementSelector(Address::fromString($scope));
+    $prefix = '.' . SkinStylesheet::SCOPE_CLASS . ' [' . ElementAddress::ATTRIBUTE;
     $this->assertSame(':where(' . $prefix . '^="layout:"])', $selector('kind:container'));
     $this->assertStringContainsString($selector('kind:container') . " {\n  padding: 2rem;\n}", $css);
     $this->assertStringContainsString($selector('layout:layout_onecol') . " {\n  padding: 3rem;\n}", $css);
     // Part entries print as :where() descendants of the address selector.
-    $this->assertStringContainsString($selector('kind:container') . " :where(.band-inner) {\n  max-width: 80rem;\n}", $css);
+    $this->assertStringContainsString($selector('kind:container') . " :where(.section-inner) {\n  max-width: 80rem;\n}", $css);
     // The block kind is the two placement families; its plugin
     // refinement compiles the same way at its own exact address.
     $this->assertSame(':where(' . $prefix . '^="block_type:"], ' . $prefix . '^="block_plugin:"])', $selector('kind:block'));
@@ -350,7 +343,7 @@ class SkinDefaultsTest extends KernelTestBase {
 
     // Unpublishing retires defaults from delivery.
     $skin->setUnpublished()->save();
-    $this->assertNull($this->container->get('state')->get(DefaultsStylesheet::STATE_KEY));
+    $this->assertNull($this->container->get('state')->get(SkinStylesheet::STATE_KEY));
   }
 
   /**
@@ -364,15 +357,15 @@ class SkinDefaultsTest extends KernelTestBase {
     $skin->setPackageDefaults([
       'kind:container' => [
         '::> *' => ['default' => ['min-width' => '0']],
-        '::.band-inner > *' => ['default' => ['flex' => '1']],
+        '::.section-inner > *' => ['default' => ['flex' => '1']],
       ],
     ]);
     $skin->save();
     $this->activateSkin($skin);
-    $css = file_get_contents($this->container->get('state')->get(DefaultsStylesheet::STATE_KEY));
-    $selector = DefaultsStylesheet::elementSelector(Address::fromString('kind:container'));
+    $css = file_get_contents($this->container->get('state')->get(SkinStylesheet::STATE_KEY));
+    $selector = SkinStylesheet::elementSelector(Address::fromString('kind:container'));
     $this->assertStringContainsString($selector . " > * {\n  min-width: 0;\n}", $css);
-    $this->assertStringContainsString($selector . " :where(.band-inner) > * {\n  flex: 1;\n}", $css);
+    $this->assertStringContainsString($selector . " :where(.section-inner) > * {\n  flex: 1;\n}", $css);
     $this->assertStringNotContainsString('@scope', $css);
   }
 
@@ -439,62 +432,6 @@ class SkinDefaultsTest extends KernelTestBase {
     $this->activateSkin($skin);
     $payload = $this->container->get('daedalus_stylish.client_style_guide')->build(self::THEME);
     $this->assertSame($defaults, $payload['skinDefaults']);
-  }
-
-  /**
-   * The carbon skin's defaults conform to the suite's bindings under law.
-   *
-   * A skin's defaults go through the same validateAt() as any style map,
-   * so on a law site every value on a property the suite binds must be a
-   * token the skin itself mints (the bindings define the minimum skin, no
-   * fallback). Carbon ships global (no design system of its own), so the
-   * test meets it the way a strict site would: the suite's own vocabulary
-   * (not the controlled one setUp injects), a code-built system wearing
-   * the carbon skin in strict enforcement, then the module's sync, which
-   * validates the shipped defaults under that law as it lands them.
-   */
-  public function testCarbonConformsUnderStrict(): void {
-    $this->container->get('state')->delete('daedalus_stylish_control_test.site');
-    $this->container->get('daedalus_stylish.style_guide')->resetCache();
-    // The importers switch to an administrative account.
-    $this->setUpCurrentUser([], [], TRUE);
-    // daedalus_stylish_layouts grants the container root its spacing (the gap the
-    // skin's kind:container default sets), as on every site.
-    $this->enableModules(['daedalus_stylish_carbon', 'daedalus_stylish_layouts']);
-    $this->activateSkin('carbon');
-    $this->enforce('strict');
-    $this->assertSame('strict', $this->container->get('daedalus_stylish.style_guide')->enforcement(), 'the carbon system is in strict enforcement');
-
-    $report = $this->container->get('daedalus_stylish.shipped_sync')->sync(['daedalus_stylish_carbon']);
-    $this->assertFalse($report->hasFailures(), implode("\n", $report->failureLines()));
-
-    $skin = $this->container->get('daedalus_stylish.skin_manager')->loadActiveSkin();
-    $this->assertNotNull($skin, 'the carbon skin landed and is the active skin');
-    $this->assertSame('carbon', $skin->getMachineName());
-    $tokens = $skin->tokens();
-    $defaults = $skin->defaults();
-
-    $errors = $this->container->get('daedalus_stylish.style_map_validator')->validateDefaults($defaults, ['theme' => self::THEME, 'skin_tokens' => $tokens]);
-    $this->assertSame([], array_map(static fn (BlueprintError $error): string => $error->getPath() . ' [' . $error->getCode() . ']: ' . $error->getMessage(), $errors), 'the carbon skin\'s defaults validate empty under strict law');
-
-    // The bound line-height speaks the skin's leading scale: every value
-    // a default carries is a minted leading token, never a literal.
-    $line_heights = [];
-    foreach ($defaults as $scope => $styles) {
-      foreach ($styles as $relative => $entry) {
-        foreach ($entry as $condition => $properties) {
-          if (isset($properties['line-height'])) {
-            $line_heights["$scope$relative.$condition"] = $properties['line-height'];
-          }
-        }
-      }
-    }
-    $this->assertNotEmpty($line_heights, 'the carbon defaults set line-height');
-    foreach ($line_heights as $at => $value) {
-      $this->assertMatchesRegularExpression('/^var\\(--leading-([a-z0-9-]+)\\)$/', $value, "$at line-height is a leading token");
-      $name = substr($value, strlen('var(--leading-'), -1);
-      $this->assertArrayHasKey($name, $tokens['leading'], "$at line-height names a minted leading token");
-    }
   }
 
 }

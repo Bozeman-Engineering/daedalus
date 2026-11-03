@@ -18,11 +18,16 @@ use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintWarning;
+use Drupal\daedalus_blueprint\Materials\ConditionClause;
 use Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\AnimationStepsItem;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinAnimationsItem;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
+use Drupal\daedalus_stylish\Vocabulary\NearMisses;
+use Drupal\daedalus_stylish\Vocabulary\PseudoVocabularies;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRoster;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
+use Drupal\daedalus_stylish\Vocabulary\WideConditions;
+use Drupal\daedalus_stylish\Vocabulary\WideSelectors;
 
 /**
  * Validates styles against the vocabulary roster of the address they style.
@@ -103,8 +108,7 @@ use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
  *
  * Every material universe here is the site's materials roster's
  * (MaterialsRosterBuilder): the minted tokens var() references and scale
- * constraints resolve against, the published swatches the reserved
- * namespace may name, the published variants a reference may wear and the
+ * constraints resolve against, the published variants a reference may wear and the
  * candidates a corrective offers. The validator projects the roster and
  * never walks the skin or the storages itself, so what it accepts is
  * exactly what the dialect catalog, the cached prompt, the schema and the
@@ -119,6 +123,25 @@ use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
  * roster it would otherwise read is built FROM its verdict. A global
  * material validates in the roster, the active system's universe.
  *
+ * Two posture lanes stand beside the site's enforcement mode, each a flag
+ * set for the duration of one door and read through propertiesClosed()
+ * and constraintsAreLaw(), so no check consults the guide's mode
+ * directly:
+ * - The DECLARED lane (validateDeclaredDefaults()): a declaration's own
+ *   defaults are code, so the property world is open, constraints are
+ *   never law, and every token reference is checked against the empty
+ *   minted universe (a declaration is token-free whatever system is
+ *   active).
+ * - The LANDING lane (withLandingLane()): the disk lane's posture for a
+ *   module's shipped variant, the open posture exactly: property world
+ *   open, constraints offers, token references unchecked, a nested
+ *   reference admitting an existing published referent the verdict
+ *   withholds (nestedReferent()). What is law here is structure alone,
+ *   so a definition the site's law refuses lands and the roster's
+ *   verdict (VariantConformance) withholds it, the same verdict that
+ *   offers it again the day the law changes. Site authors never enter
+ *   it: VariantManager::validateStyles() keeps the full law.
+ *
  * Degradation is explicit, never silent bypass:
  * - block:{uuid} keys resolve to their per-block-type address when the
  *   host entity is in context and the placement is an inline block already
@@ -126,11 +149,12 @@ use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
  * - container:{uuid} keys resolve to their per-layout address when the
  *   host entity is in context and the section is in its layout; otherwise
  *   they fall back to the universal container kind.
- * - Condition names must name a condition a condition type plugin provides
- *   (or "default"), or an "a+b" compound of such names holding at most one
- *   condition per axis, parts accepted in any order (write paths
- *   canonicalize to axis-declaration order, see
- *   ConditionTypePluginManager::canonicalizeCondition()); variant
+ * - Condition keys are clauses (ConditionClause), one per axis, joined by
+ *   "+" in any order (write paths canonicalize to axis-declaration order,
+ *   see ConditionTypePluginManager::canonicalizeCondition()): a reference
+ *   to a published condition in every mode, a literal the browser knows
+ *   (a feature query, a supports test, a pseudo-class) on an open or
+ *   guarded site only (validateCondition(), the admission rule); variant
  *   references must name an existing variant whose scope pairs with the
  *   element's own address (see captureScope() and
  *   Address::pairsWith()), and an entry carries at most
@@ -264,10 +288,24 @@ class StyleMapValidator {
   protected array $universeOverrides = [];
 
   /**
+   * Caller-supplied animation universes standing in for the roster's.
+   *
+   * Set for the duration of withMintedUniverse() when the caller hands a
+   * skin's animations beside its tokens: a skin's defaults and animations
+   * deliver only while THAT skin is worn, so a motion-{name} reference in
+   * them resolves against ITS animations (name => record), never the
+   * active skin's; the member seam swaps in the member system's skin the
+   * same way.
+   *
+   * @var array<int, array<string, array>>
+   */
+  protected array $animationOverrides = [];
+
+  /**
    * Caller-supplied rosters standing in for the site's, per flow.
    *
    * Set for the duration of withUniverse(), keyed by FiberFlow::id() like
-   * $universeOverrides: a member's swatch, animation and variant
+   * $universeOverrides: a member's token, animation and variant
    * references resolve against its own system's partition
    * (withMemberUniverse(): global plus that system,
    * MaterialsRosterBuilder::buildFor()), and variant conformance judges
@@ -291,6 +329,24 @@ class StyleMapValidator {
   protected bool $declaredLane = FALSE;
 
   /**
+   * Whether the landing lane is validating.
+   *
+   * Set for the duration of withLandingLane(): the disk lane lands a
+   * module's shipped variant at the OPEN posture, structure only, because
+   * a module's definition is not the site's act and the roster's verdict
+   * (VariantConformance) already judges offering under the law of the day.
+   * The property world stays open, authored constraints are offers, token
+   * references go unchecked, and a nested reference admits an existing
+   * published variant the verdict withholds (nestedReferent()). Everything
+   * structural stays law: grammar, recognition, unknown selector words,
+   * instance parts, dangling or mis-scoped references, cycles. On an open
+   * site this lane and the save gate are the same thing, which is the
+   * invariant stated from the other side: a landed variant is offered iff
+   * the save gate would accept it today.
+   */
+  protected bool $landingLane = FALSE;
+
+  /**
    * Constructs the style map validator.
    *
    * @param \Drupal\daedalus_stylish\PropertyGroupPluginManager $propertyGroups
@@ -312,8 +368,6 @@ class StyleMapValidator {
    *   The materials roster builder.
    * @param \Drupal\daedalus_stylish\VariantRepository $variantRepository
    *   The variant repository.
-   * @param \Drupal\daedalus_stylish\SwatchKindPluginManager $swatchKinds
-   *   The swatch kind plugin manager.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
    *   The entity type manager.
    * @param \Drupal\daedalus_stylish\SkinManager $skinManager
@@ -322,6 +376,12 @@ class StyleMapValidator {
    *   The variant conformance judge.
    * @param \Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder $vocabulary
    *   The vocabulary roster builder.
+   * @param \Drupal\daedalus_stylish\Vocabulary\WideConditions $wideConditions
+   *   The wide condition tier: the media and container features a literal
+   *   condition clause is judged against.
+   * @param \Drupal\daedalus_stylish\Vocabulary\WideSelectors $wideSelectors
+   *   The wide selector tier: the pseudo-classes a pseudo-class literal
+   *   clause is judged against (the roster walk reads it for qualifiers).
    */
   public function __construct(
     protected PropertyGroupPluginManager $propertyGroups,
@@ -331,11 +391,13 @@ class StyleMapValidator {
     protected ConditionTypePluginManager $conditionTypes,
     protected MaterialsRosterBuilder $rosterBuilder,
     protected VariantRepository $variantRepository,
-    protected SwatchKindPluginManager $swatchKinds,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected SkinManager $skinManager,
     protected VariantConformance $variantConformance,
     protected VocabularyRosterBuilder $vocabulary,
+    protected WideConditions $wideConditions,
+    protected WideSelectors $wideSelectors,
+    protected PseudoVocabularies $pseudoVocabularies,
   ) {}
 
   /**
@@ -464,7 +526,7 @@ class StyleMapValidator {
    * stamp, the one fact the picker, the dialect and the move subscriber
    * read) is neither offered nor wearable on a nested container, so a
    * write of a property it owns there is the recorded recipe (a
-   * full-width band with a nested container carrying its own max-width,
+   * full-width section with a nested container carrying its own max-width,
    * container-forms fork 2), not a miss: no warning. The axis is still
    * named on a root container, and an every-depth axis owns its
    * properties wherever the element sits. A key the locator cannot place
@@ -601,7 +663,7 @@ class StyleMapValidator {
       // not a pass-through. An "a+b" compound validates per part, at most
       // one condition per axis.
       if ($condition !== 'default') {
-        $condition_errors = $this->validateCondition($at, $condition);
+        $condition_errors = $this->validateCondition($at, $condition, $closed);
         if ($condition_errors !== []) {
           array_push($errors, ...$condition_errors);
           continue;
@@ -628,55 +690,281 @@ class StyleMapValidator {
   }
 
   /**
-   * Validates a condition entry key: a condition name or an "a+b" compound.
+   * Validates a condition entry key: clauses, one per axis, joined by "+".
    *
-   * The compound grammar is the manager's (compoundParts()): a single
-   * condition is the compound of one, and a multi-part compound must name a
-   * known condition per part with at most one condition per axis — axes are
+   * The clause grammar is ConditionClause's, read over the published
+   * condition table: a single clause is the compound of one, and every
+   * clause must be admitted with at most one clause per axis — axes are
    * the WHEN counterpart of variant axes (one value per lane, composition
-   * across lanes). Part order is NOT checked: any order is accepted and the
-   * write paths canonicalize it, so an AI never has to learn the spelling
-   * rule to write a valid compound. "default" is not a condition and cannot
-   * join a compound — it is the absence of conditions.
+   * across lanes). Clause order is NOT checked: any order is accepted and
+   * the write paths canonicalize it, so an AI never has to learn the
+   * spelling rule to write a valid compound. "default" is not a condition
+   * and cannot join a compound — it is the absence of conditions.
+   *
+   * Admission is by enforcement mode, the one rule every vocabulary is
+   * judged by (resolveRoster() for the WHERE side): a REFERENCE (a
+   * published name such as "hover" or "narrow") is admitted in every
+   * mode; a LITERAL (a feature query the site does not publish, a supports
+   * test, an unpublished pseudo-class) is admitted on an open or
+   * guarded site when the browser knows it and refused on a strict one
+   * naming the published references on its axis (strict is the closed
+   * world: references only, so a threshold change in the breakpoints
+   * settings reaches every map); a literal the browser does not know (a
+   * feature or value outside the wide condition tier, a pseudo-class
+   * outside the wide selector tier, a @supports declaration naming no
+   * recognized property) is a typo, refused in every mode with the nearest
+   * names; a position pseudo-class is selector text, never a condition. An
+   * UNKNOWN word is refused with the valid conditions; a prefixless
+   * feature query ("(min-width: 900px)") is corrected toward the at-rule
+   * spellings, or on a strict site toward the references on its axis.
    *
    * @param string $at
    *   The error path of the condition block.
    * @param string $condition
    *   The condition key to validate.
+   * @param bool $closed
+   *   Whether the grant posture is closed (strict enforcement): literals
+   *   are then refused.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
    *   Errors at that path; empty when the key is valid.
    */
-  protected function validateCondition(string $at, string $condition): array {
-    $parts = ConditionTypePluginManager::compoundParts($condition);
-    if (count($parts) === 1) {
-      if (!$this->conditionTypes->hasCondition($condition)) {
-        $valid = ['default', ...$this->conditionTypes->getConditionNames()];
-        return [
-          new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" is not a known condition.', $condition), ['valid_conditions' => $valid], sprintf('Valid conditions: %s. Conditions on different axes combine with "+", e.g. "narrow+dark".', implode(', ', $valid))),
-        ];
-      }
-      return [];
-    }
+  protected function validateCondition(string $at, string $condition, bool $closed): array {
+    $table = $this->conditionTypes->getConditions();
+    $clauses = ConditionClause::parse($condition, $table);
+    $compound = count($clauses) > 1;
     $errors = [];
     $axes = [];
-    foreach ($parts as $part) {
-      if (!$this->conditionTypes->hasCondition($part)) {
-        $valid = $this->conditionTypes->getConditionNames();
-        $errors[] = new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" (in the "%s" compound) is not a known condition.', $part, $condition), ['valid_conditions' => $valid], sprintf('Every "+" part must be a condition: %s. "default" cannot join a compound — it is the absence of conditions.', implode(', ', $valid)));
+    foreach ($clauses as $clause) {
+      $error = match ($clause['kind']) {
+        ConditionClause::REFERENCE => NULL,
+        ConditionClause::LITERAL => $this->judgeLiteralClause($at, $clause, $table, $closed),
+        default => $this->unknownClauseError($at, $clause['text'], $condition, $compound, $table, $closed),
+      };
+      if ($error !== NULL) {
+        $errors[] = $error;
         continue;
       }
-      $axis = $this->conditionTypes->getAxis($part);
+      $axis = $clause['axis'];
       if (isset($axes[$axis])) {
-        $errors[] = new BlueprintError($at, 'STYLE_CONDITION_AXIS_CONFLICT', sprintf('"%s" and "%s" are both on the "%s" axis.', $axes[$axis], $part, $axis), [
+        $errors[] = new BlueprintError($at, 'STYLE_CONDITION_AXIS_CONFLICT', sprintf('"%s" and "%s" are both on the "%s" axis.', $axes[$axis], $clause['text'], $axis), [
           'axis' => $axis,
           'conflicting_condition' => $axes[$axis],
         ], 'A compound holds at most one condition per axis: conditions sharing an axis are alternatives, not combinables — key each under its own condition instead.');
         continue;
       }
-      $axes[$axis] = $part;
+      $axes[$axis] = $clause['text'];
     }
     return $errors;
+  }
+
+  /**
+   * The error for a word the clause grammar could not read as a condition.
+   *
+   * @param string $at
+   *   The error path.
+   * @param string $text
+   *   The clause text as spelled.
+   * @param string $condition
+   *   The whole condition key.
+   * @param bool $compound
+   *   Whether the word stands in a compound (the message names it).
+   * @param array $table
+   *   The published condition table.
+   * @param bool $closed
+   *   Whether the grant posture is closed (strict enforcement).
+   */
+  protected function unknownClauseError(string $at, string $text, string $condition, bool $compound, array $table, bool $closed): BlueprintError {
+    $names = array_keys($table);
+    $valid = $compound ? $names : ['default', ...$names];
+    $message = $compound
+      ? sprintf('"%s" (in the "%s" compound) is not a known condition.', $text, $condition)
+      : sprintf('"%s" is not a known condition.', $text);
+    // A feature query spelled without its at-rule: say which at-rule it
+    // wanted (open and guarded) or which references stand for it (strict),
+    // read by prefixing it both ways through the grammar itself.
+    if (preg_match('/^\(.*\)$/s', $text)) {
+      $container = ConditionClause::clause('@container ' . $text, $table);
+      $media = ConditionClause::clause('@media ' . $text, $table);
+      $readable = array_filter([$container, $media], static fn (array $clause): bool => $clause['kind'] !== ConditionClause::UNKNOWN);
+      if ($readable !== []) {
+        $axis = reset($readable)['axis'];
+        $references = $this->referencesOnAxis($table, $axis);
+        if ($closed) {
+          $valid = $references !== [] ? $references : $names;
+          $context = ['valid_conditions' => $valid, 'axis' => $axis];
+          return new BlueprintError($at, 'INVALID_STYLE_CONDITION', $message, $context, sprintf('This site enforces its style guide: conditions are its published names, never a feature query of your own. On the "%s" axis they are: %s.', $axis, implode(', ', $valid)));
+        }
+        $context = [
+          'valid_conditions' => $valid,
+          'axis' => $axis,
+          'spellings' => ['@container ' . $text, '@media ' . $text],
+        ];
+        $published = $references !== [] ? sprintf(' The published conditions on that axis are: %s.', implode(', ', $references)) : '';
+        return new BlueprintError($at, 'INVALID_STYLE_CONDITION', $message, $context, sprintf('A feature query names its at-rule: "@container %1$s" measures the page width (what the width bands measure), "@media %1$s" the viewport or a user preference.%2$s', $text, $published));
+      }
+    }
+    $hint = $compound
+      ? sprintf('Every "+" part must be a condition: %s. "default" cannot join a compound — it is the absence of conditions.', implode(', ', $valid))
+      : sprintf('Valid conditions: %s. Conditions on different axes combine with "+", e.g. "narrow+dark".', implode(', ', $valid));
+    return new BlueprintError($at, 'INVALID_STYLE_CONDITION', $message, ['valid_conditions' => $valid], $hint);
+  }
+
+  /**
+   * Judges a literal clause: strict refuses it, else the browser must know it.
+   *
+   * @param string $at
+   *   The error path.
+   * @param array $clause
+   *   The literal clause record (ConditionClause::clause()).
+   * @param array $table
+   *   The published condition table.
+   * @param bool $closed
+   *   Whether the grant posture is closed (strict enforcement).
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintError|null
+   *   The refusal, or NULL when the literal is admitted.
+   */
+  protected function judgeLiteralClause(string $at, array $clause, array $table, bool $closed): ?BlueprintError {
+    $text = $clause['text'];
+    if ($closed) {
+      $references = $this->referencesOnAxis($table, $clause['axis']);
+      $valid = $references !== [] ? $references : array_keys($table);
+      $context = [
+        'valid_conditions' => $valid,
+        'axis' => $clause['axis'],
+        'literal' => $text,
+      ];
+      return new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" is a literal condition; this site admits its published conditions only.', $text), $context, sprintf('This site enforces its style guide: conditions are its published names (%s), never a feature query, supports test or pseudo-class of your own. Conditions on different axes combine with "+".', implode(', ', $valid)));
+    }
+    return match ($clause['form']) {
+      ConditionClause::PSEUDO => $this->judgePseudoClassLiteral($at, $text),
+      ConditionClause::SUPPORTS => $this->judgeSupportsLiteral($at, $text),
+      default => $this->judgeFeatureLiteral($at, $clause['form'], $text),
+    };
+  }
+
+  /**
+   * A pseudo-class literal: a state the browser knows, never selector text.
+   */
+  protected function judgePseudoClassLiteral(string $at, string $text): ?BlueprintError {
+    $name = substr($text, 1);
+    if (in_array($name, RelativeSelector::POSITIONS, TRUE) || in_array($name, RelativeSelector::NTH_POSITIONS, TRUE)) {
+      return new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" is a position, which is selector text, not a condition.', $text), ['position' => $name], sprintf('Position qualifies the key: write the entry at "{key}::&%1$s" for the element\'s own position, or append "%1$s" to the rule\'s last compound ("::> *%1$s").', $text));
+    }
+    if (in_array($name, [RelativeSelector::HAS, RelativeSelector::NOT, RelativeSelector::IS, 'where'], TRUE)) {
+      return new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" is selector grammar, not a condition.', $text), [], 'A condition is a state (":checked"), a feature query ("@media (hover: hover)") or a supports test; ":has()", ":not()" and ":is()" qualify a compound in the key.');
+    }
+    if (!$this->wideSelectors->knowsPseudoClass($name)) {
+      $similar = NearMisses::rank($name, $this->wideSelectors->pseudoClasses());
+      $hint = 'Only pseudo-classes the browser knows may condition a rule; check the spelling.';
+      if ($similar !== []) {
+        $hint = sprintf('Did you mean %s? ', implode(', ', array_map(static fn (string $candidate): string => ":$candidate", $similar))) . $hint;
+      }
+      return new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" is not a pseudo-class the browser knows.', $text), $similar !== [] ? ['similar' => $similar] : [], $hint);
+    }
+    return NULL;
+  }
+
+  /**
+   * A @media or @container literal: every feature test the tier knows.
+   */
+  protected function judgeFeatureLiteral(string $at, string $form, string $text): ?BlueprintError {
+    $other = $form === ConditionClause::MEDIA ? ConditionClause::CONTAINER : ConditionClause::MEDIA;
+    foreach (ConditionClause::features($text) as [$name, $value]) {
+      $feature = $this->wideConditions->feature($form, $name);
+      if ($feature === NULL) {
+        $context = ['feature' => $name];
+        if ($this->wideConditions->feature($other, $name) !== NULL) {
+          $hint = sprintf('"%1$s" is a @%2$s feature: spell the clause "@%2$s (%1$s%3$s)". A @container query tests the page width (what the width bands measure), a @media query the viewport or a user preference.', $name, $other, $value === NULL ? '' : ": $value");
+        }
+        else {
+          $similar = NearMisses::rank($name, $this->wideConditions->featureNames($form));
+          $hint = sprintf('Only @%s features the browser knows may condition a rule; check the spelling.', $form);
+          if ($similar !== []) {
+            $context['similar'] = $similar;
+            $hint = sprintf('Did you mean %s? ', implode(', ', $similar)) . $hint;
+          }
+        }
+        return new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" is not a @%s feature the browser knows.', $name, $form), $context, $hint);
+      }
+      if ($value === NULL) {
+        if ($name !== $this->bareFeatureName($name)) {
+          return new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" takes a value.', $name), ['feature' => $name], sprintf('A min-/max- feature compares against a value: "(%s: 900px)". The bare "(%s)" tests whether the feature applies at all.', $name, $this->bareFeatureName($name)));
+        }
+        continue;
+      }
+      if ($feature['values'] !== NULL) {
+        if (!in_array($value, $feature['values'], TRUE)) {
+          $similar = NearMisses::rank($value, $feature['values']);
+          $context = ['feature' => $name, 'valid_values' => $feature['values']];
+          if ($similar !== []) {
+            $context['similar'] = $similar;
+          }
+          return new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" is not a value of the "%s" feature.', $value, $name), $context, sprintf('The "%s" feature takes: %s.', $name, implode(', ', $feature['values'])));
+        }
+        continue;
+      }
+      if ($feature['type'] === 'range' && !preg_match('/^-?(?:\d+\.?\d*|\.\d+)(?:[a-z%]+)?(?:\s*\/\s*(?:\d+\.?\d*|\.\d+))?$/', $value) && !($value === 'infinite' && str_contains($feature['syntax'], 'infinite'))) {
+        $context = ['feature' => $name, 'syntax' => $feature['syntax']];
+        return new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" is not a value of the "%s" feature.', $value, $name), $context, sprintf('A range feature compares against a number, a dimension ("900px", "60em") or a ratio ("16 / 9"); the "%s" feature\'s value is %s.', $name, $feature['syntax']));
+      }
+    }
+    return NULL;
+  }
+
+  /**
+   * A @supports literal: each declaration test names a recognized property.
+   *
+   * A supports test is a declaration in parentheses, "selector(…)",
+   * "font-tech(…)" or "font-format(…)", under "not", "and" and "or". The
+   * declarations are judged against the property universe every style
+   * write is (recognizeProperty(): a custom property is always one); the
+   * function tests are the browser's to answer.
+   */
+  protected function judgeSupportsLiteral(string $at, string $text): ?BlueprintError {
+    $body = substr($text, strlen('@supports '));
+    $functions = preg_replace('/\b(?:selector|font-tech|font-format)\s*\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)/i', '()', $body);
+    preg_match_all('/\(\s*([a-zA-Z-][a-zA-Z0-9-]*)\s*:/', $functions, $declarations);
+    if ($declarations[1] === [] && $functions === $body) {
+      return new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" tests nothing the browser can answer.', $text), [], 'A supports test is a declaration in parentheses ("@supports (display: grid)") or a selector test ("@supports selector(:has(a))"), combined with "not", "and" and "or".');
+    }
+    foreach ($declarations[1] as $property) {
+      $property = strtolower($property);
+      if (str_starts_with($property, '--') || $this->propertyGroups->getGroupIdForProperty($property) !== NULL) {
+        continue;
+      }
+      $similar = $this->similarProperties($property);
+      $hint = 'A supports test declares a recognized CSS property; check the spelling.';
+      if ($similar !== []) {
+        $hint = sprintf('Did you mean %s? ', implode(', ', $similar)) . $hint;
+      }
+      return new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" (in "%s") is not a recognized style property.', $property, $text), $similar !== [] ? ['similar' => $similar] : [], $hint);
+    }
+    return NULL;
+  }
+
+  /**
+   * The published condition names on an axis, in table order.
+   *
+   * @return string[]
+   *   The names; [] when nothing is published on the axis.
+   */
+  protected function referencesOnAxis(array $table, ?string $axis): array {
+    $names = [];
+    foreach ($table as $name => $definition) {
+      if (($definition['axis'] ?? NULL) === $axis) {
+        $names[] = (string) $name;
+      }
+    }
+    return $names;
+  }
+
+  /**
+   * A feature name without its min-/max- prefix.
+   */
+  protected function bareFeatureName(string $name): string {
+    return preg_replace('/^(?:min|max)-/', '', $name);
   }
 
   /**
@@ -855,11 +1143,12 @@ class StyleMapValidator {
       $errors[] = new BlueprintError($at, 'TOKEN_DEFAULT_REQUIRED', sprintf('The condition-keyed value of %s has no "default" entry.', $at), [], 'A conditioned token must define its default value; without one, var() references would be silently unresolved outside the listed conditions.');
     }
     $canonical_seen = [];
+    $closed = $this->propertiesClosed();
     foreach ($value as $condition => $conditioned) {
       $condition = (string) $condition;
       $condition_at = "$at.$condition";
       if ($condition !== 'default') {
-        $condition_errors = $this->validateCondition($condition_at, $condition);
+        $condition_errors = $this->validateCondition($condition_at, $condition, $closed);
         if ($condition_errors === []) {
           $condition_errors = $this->checkTokenConditionAxes($condition_at, $condition);
         }
@@ -904,14 +1193,6 @@ class StyleMapValidator {
     $errors = [];
     preg_match_all('/var\(\s*(--[A-Za-z0-9_-]+)/', $value, $matches);
     foreach (array_unique($matches[1]) as $variable) {
-      // Skin tokens may reference swatches (the swatch file delivers before
-      // the skin file for exactly this reason); the reserved namespace is
-      // checked against the published universe like everywhere else.
-      $swatch_error = $this->checkSwatchReference($at, $variable);
-      if ($swatch_error !== NULL) {
-        $errors[] = $swatch_error;
-        continue;
-      }
       $reference = $scales === [] ? NULL : StyleGuide::tokenReference($variable, $scales);
       if ($reference === NULL) {
         continue;
@@ -936,112 +1217,41 @@ class StyleMapValidator {
   }
 
   /**
-   * Validates a swatch's value against its kind.
+   * Whether a value fits a declared scale's shape, references unchecked.
    *
-   * The swatch seam of the one validation engine: every path that writes a
-   * swatch value — the palette gestures (the manager lane), the disk
-   * import lane, the daedalus_blueprint field handler when it lands —
-   * converges here, so the grammar cannot fork per surface.
+   * The capture rule's question (SkinMaterialManager::scaleFor()): the token
+   * seam's own grammar for one value under one declaration (the shape,
+   * the condition-keyed form, the token condition axes) with no reference
+   * universe, so the answer is a pure function of the value and the
+   * declaration. A value that fits here still meets the whole seam when
+   * minted (validateTokens()).
    *
-   * The grammar mirrors token values deliberately (one value model for the
-   * whole palette): a value is a string (unconditional) or a
-   * condition-keyed map whose 'default' entry is REQUIRED, condition keys
-   * ride the style map's vocabulary and compound grammar restricted to the
-   * TOKEN_CONDITION_AXES (a swatch delivers on the token scope element,
-   * exactly like a token, so only width/scheme/motion can condition it).
-   * Each scalar dispatches to the KIND plugin, which owns the shape
-   * ("color", "gradient"); on strict sites every var() reference resolves
-   * against the same universes style values check — minted tokens per
-   * declared scale, published swatches in the reserved namespace — while
-   * permissive sites pass unresolved references (inert, never unsafe).
-   *
-   * @param string $kind
-   *   The swatch kind: a SwatchKind plugin id.
    * @param mixed $value
-   *   The swatch's value.
-   * @param array $context
-   *   Optional context: theme (string), as validate(); design_system
-   *   (string|null), the swatch's membership, as validateAt().
-   *
-   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
-   *   Errors at "kind" (unknown kind), "value", or "value.{condition}",
-   *   or at "design_system" when the member's system does not exist.
-   *   The caller re-roots them onto its own path space. Empty when valid.
+   *   A CSS value or a condition-keyed map.
+   * @param array $declaration
+   *   The scale declaration ({shape, keywords?}).
    */
-  public function validateSwatchValue(string $kind, mixed $value, array $context = []): array {
-    $theme = $context['theme'] ?? ($this->themeHandler->getDefault() ?: NULL);
-    if ($design_system = $this->memberOf($context)) {
-      return $this->withMemberUniverse($design_system, $theme, fn (): array => $this->validateSwatchValue($kind, $value, self::memberless($context, $theme)));
-    }
-    if (!$this->swatchKinds->hasDefinition($kind)) {
-      $kinds = $this->swatchKinds->kinds();
-      return [
-        new BlueprintError('kind', 'SWATCH_KIND_UNKNOWN', sprintf('"%s" is not a swatch kind.', $kind), ['valid_kinds' => $kinds], sprintf('The swatch kinds are: %s. The kind owns the value\'s shape and decides where the swatch is offered.', implode(', ', $kinds))),
-      ];
-    }
-    $plugin = $this->swatchKinds->createInstance($kind);
-    assert($plugin instanceof SwatchKindInterface);
-    $closed = $this->propertiesClosed();
-    if (is_scalar($value)) {
-      $errors = $plugin->validateValue('value', (string) $value);
-      array_push($errors, ...$this->checkTokenReferences('value', (string) $value, $theme, $closed));
-      return $errors;
-    }
-    if (!is_array($value) || (array_is_list($value) && $value !== [])) {
-      return [
-        new BlueprintError('value', 'INVALID_SWATCH_VALUE', 'The swatch value is not a CSS value.', [], 'Provide a string ("#1a1a2e") or a condition-keyed map with a "default" entry ({"default": "#1a1a2e", "dark": "#e8e8f0"}).'),
-      ];
-    }
-    $errors = [];
-    if (!array_key_exists('default', $value)) {
-      $errors[] = new BlueprintError('value', 'SWATCH_DEFAULT_REQUIRED', 'The condition-keyed swatch value has no "default" entry.', [], 'A conditioned swatch must define its default value; without one, var() references would be silently unresolved outside the listed conditions.');
-    }
-    $canonical_seen = [];
-    foreach ($value as $condition => $conditioned) {
-      $condition = (string) $condition;
-      $condition_at = "value.$condition";
-      if ($condition !== 'default') {
-        $condition_errors = $this->validateCondition($condition_at, $condition);
-        if ($condition_errors === []) {
-          $condition_errors = $this->checkTokenConditionAxes($condition_at, $condition);
-        }
-        if ($condition_errors !== []) {
-          array_push($errors, ...$condition_errors);
-          continue;
-        }
-        $canonical = $this->conditionTypes->canonicalizeCondition($condition);
-        if (isset($canonical_seen[$canonical])) {
-          $errors[] = new BlueprintError($condition_at, 'DUPLICATE_STYLE_CONDITION', sprintf('"%s" and "%s" are the same compound condition.', $canonical_seen[$canonical], $condition), ['canonical' => $canonical], 'Compound parts identify a condition regardless of order; merge the two entries into one (the canonical spelling orders parts by axis declaration).');
-          continue;
-        }
-        $canonical_seen[$canonical] = $condition;
-      }
-      if (!is_scalar($conditioned)) {
-        $errors[] = new BlueprintError($condition_at, 'INVALID_SWATCH_VALUE', sprintf('The "%s" value is not a CSS value.', $condition), [], 'Each condition maps to a plain string value; conditions do not nest.');
-        continue;
-      }
-      array_push($errors, ...$plugin->validateValue($condition_at, (string) $conditioned));
-      array_push($errors, ...$this->checkTokenReferences($condition_at, (string) $conditioned, $theme, $closed));
-    }
-    return $errors;
+  public function fitsTokenShape(mixed $value, array $declaration): bool {
+    return $this->validateTokenValue('value', $value, $declaration) === [];
   }
 
   /**
    * Checks a valid condition's axes against the token allowlist.
    *
-   * Runs after validateCondition() accepted the key, so every part is a
-   * known condition; this narrows to the axes token definitions can deliver
-   * on (TOKEN_CONDITION_AXES).
+   * Runs after validateCondition() accepted the key, so every clause is
+   * admitted (a reference, or a literal the browser knows); this narrows
+   * to the axes token definitions can deliver on (TOKEN_CONDITION_AXES),
+   * a literal's axis being its feature's.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
-   *   Errors at the given path; empty when every part's axis is allowed.
+   *   Errors at the given path; empty when every clause's axis is allowed.
    */
   protected function checkTokenConditionAxes(string $at, string $condition): array {
     $errors = [];
-    foreach (ConditionTypePluginManager::compoundParts($condition) as $part) {
-      $axis = $this->conditionTypes->getAxis($part);
+    foreach (ConditionClause::parse($condition, $this->conditionTypes->getConditions()) as $clause) {
+      $axis = $clause['axis'];
       if (!in_array($axis, self::TOKEN_CONDITION_AXES, TRUE)) {
-        $errors[] = new BlueprintError($at, 'TOKEN_CONDITION_AXIS_INVALID', sprintf('"%s" is on the "%s" axis, which cannot condition a token value.', $part, $axis), ['valid_axes' => self::TOKEN_CONDITION_AXES], sprintf('Token values may vary on the %s axes only. Interaction states are per-element: put hover treatments in style maps or variants, where the state applies to the styled element.', implode(', ', self::TOKEN_CONDITION_AXES)));
+        $errors[] = new BlueprintError($at, 'TOKEN_CONDITION_AXIS_INVALID', sprintf('"%s" is on the "%s" axis, which cannot condition a token value.', $clause['text'], $axis), ['valid_axes' => self::TOKEN_CONDITION_AXES], sprintf('Token values may vary on the %s axes only. Interaction states are per-element: put hover treatments in style maps or variants, where the state applies to the styled element.', implode(', ', self::TOKEN_CONDITION_AXES)));
       }
     }
     return $errors;
@@ -1053,7 +1263,7 @@ class StyleMapValidator {
    * The steps grammar every animation write path converges on (the
    * Materials gestures, the blueprint lane, the disk lane): an
    * offset-keyed map, offsets `from`, `to` or `N%` (one grammar with the
-   * storage's canonicalization, AnimationStepsItem::canonicalOffset(), so
+   * storage's canonicalization, SkinAnimationsItem::canonicalOffset(), so
    * two spellings of one offset are refused here as a duplicate), at least
    * one step, each step a property map. Each declaration validates through
    * the universal vocabulary with validateAt() semantics minus the
@@ -1063,7 +1273,7 @@ class StyleMapValidator {
    * authored constraint defaults bind exactly as on any granted property
    * (validateValue(), the value half of validateProperty()), and var()
    * references resolve as anywhere (strict sites refuse
-   * unminted tokens and unpublished swatches). Three refusals are the
+   * unminted tokens). Three refusals are the
    * block's own: animation-* longhands other than animation-timing-function
    * (a keyframe cannot re-time or re-name the animation running it; the
    * per-step easing is the one legal one), the animation shorthand and
@@ -1103,7 +1313,7 @@ class StyleMapValidator {
     foreach ($steps as $offset => $declarations) {
       $offset = (string) $offset;
       $at = "steps.$offset";
-      $canonical = AnimationStepsItem::canonicalOffset($offset);
+      $canonical = SkinAnimationsItem::canonicalOffset($offset);
       if ($canonical === NULL) {
         $errors[] = new BlueprintError($at, 'INVALID_ANIMATION_OFFSET', sprintf('"%s" is not a keyframe offset.', $offset), [], 'An offset is a percentage from 0% to 100%, or the keywords "from" (0%) and "to" (100%); one offset per step.');
         continue;
@@ -1134,6 +1344,66 @@ class StyleMapValidator {
         }
         $constraints = is_array($defaults[$property] ?? NULL) ? $defaults[$property] : [];
         array_push($errors, ...$this->validateValue("$at.$property", $group_id, $property, (string) $value, $constraints, $closed, $theme));
+      }
+    }
+    return $errors;
+  }
+
+  /**
+   * Validates a skin's animations: name-keyed records of keyframe steps.
+   *
+   * The animations seam, validateTokens()'s twin for the skin's motion
+   * section, every write path converges on (the skin material gestures,
+   * the disk lane): each name fits the keyframes ident grammar
+   * (SkinAnimationsItem::NAME, the tail of motion-{name}), each entry is a
+   * record {steps, description, offered} with typed facts, and each
+   * record's steps run through the steps seam (validateAnimationSteps()).
+   * The var() universe the steps resolve against is the skin's OWN tokens
+   * when the caller passes them (skin_tokens, as validateDefaults()): a
+   * skin's animations deliver only while it is worn, so a shipped or
+   * staged skin must be self-contained.
+   *
+   * @param array $animations
+   *   The canonical animations: {name: {steps, description, offered}}.
+   * @param array $context
+   *   Optional context: theme (string), as validate(); skin_tokens (array),
+   *   the owning skin's canonical token map, as validateDefaults().
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
+   *   Errors with paths relative to the animations map ("{name}",
+   *   "{name}.description", "{name}.offered", "{name}.steps",
+   *   "{name}.steps.{offset}", "{name}.steps.{offset}.{property}"). The
+   *   caller re-roots them onto its own path space. Empty when valid.
+   */
+  public function validateAnimations(array $animations, array $context = []): array {
+    $theme = $context['theme'] ?? ($this->themeHandler->getDefault() ?: NULL);
+    $skin_tokens = $context['skin_tokens'] ?? NULL;
+    if (is_array($skin_tokens)) {
+      return $this->withMintedUniverse($skin_tokens, $theme, fn (): array => $this->validateAnimations($animations, ['theme' => $theme] + array_diff_key($context, ['skin_tokens' => TRUE])));
+    }
+    $errors = [];
+    foreach ($animations as $name => $record) {
+      $name = (string) $name;
+      if (!preg_match(SkinAnimationsItem::NAME, $name)) {
+        $errors[] = new BlueprintError($name, 'INVALID_ANIMATION_NAME', sprintf('"%s" is not a valid animation name.', $name), [], 'Animation names are lowercase letters, digits, and inner hyphens or underscores ("fade_in", "rise"); the name becomes the tail of the keyframes name motion-{name}.');
+        continue;
+      }
+      if (!SkinAnimationsItem::isRecord($record)) {
+        $errors[] = new BlueprintError($name, 'INVALID_ANIMATION_RECORD', sprintf('%s is not an animation record.', $name), ['keys' => SkinAnimationsItem::RECORD_KEYS], 'An animation is a record {"steps": {...}, "description": "...", "offered": true}; a bare steps map ({"0%": {...}, "100%": {...}}) is accepted as shorthand for {"steps": ...}.');
+        continue;
+      }
+      if ($unknown = array_diff(array_keys($record), SkinAnimationsItem::RECORD_KEYS)) {
+        $errors[] = new BlueprintError($name, 'INVALID_ANIMATION_RECORD', sprintf('Unknown key(s) %s in the record of %s.', implode(', ', array_map(static fn ($key) => "\"$key\"", $unknown)), $name), ['keys' => SkinAnimationsItem::RECORD_KEYS], sprintf('An animation record carries %s and nothing else.', implode(', ', SkinAnimationsItem::RECORD_KEYS)));
+        continue;
+      }
+      if (!is_string($record['description'])) {
+        $errors[] = new BlueprintError("$name.description", 'INVALID_ANIMATION_RECORD', sprintf('The description of %s is not a string.', $name), [], 'A description is prose: when to reach for the motion, or "" for none.');
+      }
+      if (!is_bool($record['offered'])) {
+        $errors[] = new BlueprintError("$name.offered", 'INVALID_ANIMATION_RECORD', sprintf('The offered flag of %s is not a boolean.', $name), [], 'offered is true (the AI\'s roster advertises the animation) or false (minted and legal, offered to the UI alone).');
+      }
+      foreach ($this->validateAnimationSteps($record['steps'], ['theme' => $theme]) as $error) {
+        $errors[] = $error->withPath("$name." . $error->getPath());
       }
     }
     return $errors;
@@ -1347,7 +1617,8 @@ class StyleMapValidator {
     // universe applies.
     $skin_tokens = $context['skin_tokens'] ?? NULL;
     if (is_array($skin_tokens)) {
-      return $this->withMintedUniverse($skin_tokens, $theme, fn (): array => $this->validateDefaults($defaults, ['theme' => $theme] + array_diff_key($context, ['skin_tokens' => TRUE])));
+      $skin_animations = $context['skin_animations'] ?? NULL;
+      return $this->withMintedUniverse($skin_tokens, $theme, fn (): array => $this->validateDefaults($defaults, ['theme' => $theme] + array_diff_key($context, ['skin_tokens' => TRUE, 'skin_animations' => TRUE])), is_array($skin_animations) ? $skin_animations : NULL);
     }
     $errors = [];
     foreach ($defaults as $scope => $styles) {
@@ -1447,23 +1718,55 @@ class StyleMapValidator {
   }
 
   /**
+   * Runs a validation on the landing lane: the open posture, structure only.
+   *
+   * The disk lane's door (VariantStylesFieldHandler for a shipped_sync
+   * write): the callable's validateAt() calls read the lane through
+   * propertiesClosed(), constraintsAreLaw(), checkTokenReferences() and
+   * nestedReferent(), so a module's shipped variant lands when it is
+   * structurally sound and the roster's verdict withholds it while the
+   * site's law refuses its values. Site authors never come through here:
+   * VariantManager::validateStyles() keeps the full law. Save/restore
+   * like validateDeclaredDefaults(), so a nested or failing validation
+   * never leaks the posture into the next caller's.
+   *
+   * @param \Closure $validation
+   *   The validation to run with the lane set.
+   *
+   * @return mixed
+   *   Whatever the callable returns.
+   */
+  public function withLandingLane(\Closure $validation): mixed {
+    $saved = $this->landingLane;
+    $this->landingLane = TRUE;
+    try {
+      return $validation();
+    }
+    finally {
+      $this->landingLane = $saved;
+    }
+  }
+
+  /**
    * Whether the property world is closed for the running validation.
    *
    * The site's enforcement mode (StyleGuide::propertiesClosed()), except
-   * on the declared-defaults lane, whose posture is fixed by code.
+   * on the declared-defaults lane, whose posture is fixed by code, and on
+   * the landing lane, whose posture is open by decision.
    */
   protected function propertiesClosed(): bool {
-    return !$this->declaredLane && $this->styleGuide->propertiesClosed();
+    return !$this->declaredLane && !$this->landingLane && $this->styleGuide->propertiesClosed();
   }
 
   /**
    * Whether authored constraints bind the running validation.
    *
    * The site's enforcement mode (StyleGuide::constraintsAreLaw()), except
-   * on the declared-defaults lane, whose posture is fixed by code.
+   * on the declared-defaults lane, whose posture is fixed by code, and on
+   * the landing lane, where constraints are offers the verdict enforces.
    */
   protected function constraintsAreLaw(): bool {
-    return !$this->declaredLane && $this->styleGuide->constraintsAreLaw();
+    return !$this->declaredLane && !$this->landingLane && $this->styleGuide->constraintsAreLaw();
   }
 
   /**
@@ -1539,7 +1842,7 @@ class StyleMapValidator {
    * containers per layout plugin ("layout:{layout_id}"), every other
    * element by its kind ("kind:{entity|field}"), and a key's relative
    * selector rides the address so the roster walk resolves it
-   * ("layout:{id}::> pb-text"). The rule is ONE resolution rule at every
+   * ("layout:{id}::> d-text"). The rule is ONE resolution rule at every
    * depth: a container's declaration IS its layout's declaration, whether
    * the container is a top-level row or nested inside another container
    * (nesting is position, not kind). The one derivation every reader of
@@ -1576,10 +1879,10 @@ class StyleMapValidator {
    * roster's landingScope(): a type compound's root address, a tag
    * compound's base tag), because a rule's wear is delivered at the
    * rule's targets, so that is what the variant must be scoped for: a
-   * text variant wears at "container:X::> pb-text", never a container
+   * text variant wears at "container:X::> d-text", never a container
    * variant. A rule whose targets are no element scope (a part, the
    * children, a subjectless compound, a generated box: "::&::before",
-   * "::> pb-text::after") captures NULL: no variant pairs there, and
+   * "::> d-text::after") captures NULL: no variant pairs there, and
    * validateVariantReference() says so.
    *
    * @param string $key
@@ -1760,8 +2063,9 @@ class StyleMapValidator {
       }
       // The reference resolved; the axis is the remaining applicability
       // gate (the load rides the storage's static cache after the check
-      // above resolved the same reference).
-      $axis = $this->loadVariant($reference)->getAxis();
+      // above resolved the same reference, through the same lane-aware
+      // resolver, so a referent the landing lane admitted is found again).
+      $axis = $this->nestedReferent($reference)->getAxis();
       if ($reserved_axis !== NULL && $fragment === '' && $axis === $reserved_axis) {
         $errors[] = new BlueprintError($reference_at, 'STYLE_VARIANT_AXIS_CONFLICT', sprintf('The "%s" reference is on the "%s" axis — the axis this variant itself occupies on every element that wears it.', $reference, $axis), ['axis' => $axis], 'Apply places this variant\'s own reference on that axis at its root, so a root-entry reference sharing it could never be worn. Nest the reference under a slot entry, use a variant on another axis, or copy its styles in as plain properties.');
         continue;
@@ -1812,7 +2116,7 @@ class StyleMapValidator {
    *   Errors at that path (missing variant) or "{at}.fragment" (grammar).
    */
   protected function validateFragmentReference(string $at, string $reference, string $fragment): array {
-    $variant = $this->loadVariant($reference);
+    $variant = $this->nestedReferent($reference);
     if ($variant === NULL) {
       return [
         new BlueprintError($at, 'STYLE_VARIANT_NOT_FOUND', sprintf('"%s" is not a saved style variant.', $reference), [], 'A fragment reference names the composition variant it was distributed from; that variant no longer exists (or the reference is misspelled). Apply an existing composition variant instead of writing fragment references by hand.'),
@@ -1891,11 +2195,15 @@ class StyleMapValidator {
    * would be dangling or mis-scoped on every element apply distributes it
    * to. A miss is named the way the map lane names it: a published
    * member of an inactive system, then a published variant the style
-   * guide withholds, then the plain not-found. The importer and the save
-   * door validate a variant's nested references through the JUDGED
-   * roster, so a shipped variant nesting a withheld one meets the first
-   * two here; only the judge's own run (the universe override, where
-   * every offered published variant resolves) never does.
+   * guide withholds, then the plain not-found. The save door validates a
+   * variant's nested references through the JUDGED roster, so a site
+   * author nesting a withheld variant meets the first two here; the
+   * landing lane resolves the referent through the repository instead
+   * (nestedReferent(): exists and published, whatever the verdict says),
+   * so a shipped variant nesting one the law withholds lands and the
+   * verdict withholds the pair; only the judge's own run (the universe
+   * override, where every offered published variant resolves) never
+   * meets them.
    *
    * @param string $at
    *   The error path of the reference ("{relative}.variants.{index}").
@@ -1908,7 +2216,7 @@ class StyleMapValidator {
    *   Errors at that path.
    */
   protected function validateNestedRootReference(string $at, string $reference, ?Address $carrier, string $relative = ''): array {
-    $variant = $this->loadVariant($reference);
+    $variant = $this->nestedReferent($reference);
     if ($variant === NULL) {
       $available = $this->availableVariantsForScope($carrier);
       $applies = $carrier === NULL ? sprintf('this rule ("%s")', $relative) : sprintf('this slot\'s scope ("%s")', $carrier);
@@ -1933,7 +2241,7 @@ class StyleMapValidator {
         new BlueprintError($at, 'STYLE_VARIANT_SCOPE_MISMATCH', sprintf('The "%s" variant is scoped to "%s", but "%s" lands on no element scope.', $reference, $scope, $relative), [
           'variant_scope' => $scope,
           'element_scope' => NULL,
-        ] + self::candidateContext($reference, []), 'A rule entry wears a variant at its landing, the element its last compound names: a type ("::> pb-text" wears text variants) or a declared tag ("::a" wears link variants). A part ("::.class-name"), the children ("::> *") and a compound with no subject land on no element scope, so no variant pairs there: put the properties in this entry directly, or reference the variant from the rule entry that names the element.'),
+        ] + self::candidateContext($reference, []), 'A rule entry wears a variant at its landing, the element its last compound names: a type ("::> d-text" wears text variants) or a declared tag ("::a" wears link variants). A part ("::.class-name"), the children ("::> *") and a compound with no subject land on no element scope, so no variant pairs there: put the properties in this entry directly, or reference the variant from the rule entry that names the element.'),
       ];
     }
     if (!Address::fromString($scope)->pairsWith($carrier)) {
@@ -2021,7 +2329,7 @@ class StyleMapValidator {
    *   closure is a tree.
    */
   protected function findReferenceCycle(string $reference, array $identity, array $path, array &$clean): ?array {
-    $variant = $this->loadVariant($reference);
+    $variant = $this->nestedReferent($reference);
     if ($variant === NULL) {
       return NULL;
     }
@@ -2118,13 +2426,13 @@ class StyleMapValidator {
           new BlueprintError($at, 'STYLE_VARIANT_SCOPE_MISMATCH', sprintf('The "%s" variant is scoped to "%s", but "%s" lands on no element scope.', $reference, $scope, $key), [
             'variant_scope' => $scope,
             'element_scope' => NULL,
-          ] + self::candidateContext($reference, []), 'A rule wears a variant at its landing, the element its last compound names: a type ("::> pb-text" wears text variants) or a declared tag ("::a" wears link variants). A part ("::.class-name", "::> pb-text .link"), the children ("::> *"), a compound with no subject and a generated box ("::&::before", "::> pb-text::after") land on no element scope, so no variant pairs there: style that rule with properties instead, or wear the variant at the rule that names the element.'),
+          ] + self::candidateContext($reference, []), 'A rule wears a variant at its landing, the element its last compound names: a type ("::> d-text" wears text variants) or a declared tag ("::a" wears link variants). A part ("::.class-name", "::> d-text .link"), the children ("::> *"), a compound with no subject and a generated box ("::&::before", "::> d-text::after") land on no element scope, so no variant pairs there: style that rule with properties instead, or wear the variant at the rule that names the element.'),
         ];
       }
       $hint = 'A variant applies only to elements of the scope it was saved from' . ($rule === NULL ? '. ' : ', and a rule wears one for its landing, the element its last compound names. ')
         . ($available !== [] ? sprintf('Variants among the site\'s materials that DO apply %s: %s. ', $rule === NULL ? 'to this element' : 'at this rule', MaterialsRoster::describe($available)) : '')
         . ($rule === NULL
-          ? 'Set custom styles on this element instead, or give it and its siblings one treatment through a selector entry on their container (container:{uuid}::> pb-text styles every text block child at once, and wears their variants); a variant never crosses its scope.'
+          ? 'Set custom styles on this element instead, or give it and its siblings one treatment through a selector entry on their container (container:{uuid}::> d-text styles every text block child at once, and wears their variants); a variant never crosses its scope.'
           : 'Set custom styles at this rule instead, or wear the variant at the rule whose landing is its scope; a variant never crosses its scope.');
       return [
         new BlueprintError($at, 'STYLE_VARIANT_SCOPE_MISMATCH', sprintf('The "%s" variant is scoped to "%s", but "%s" is "%s".', $reference, $scope, $key, $captured), [
@@ -2396,6 +2704,29 @@ class StyleMapValidator {
   }
 
   /**
+   * Resolves a nested reference's referent for the running lane.
+   *
+   * The reference-list resolution (validateNestedRootReference(), the
+   * fragment check validateFragmentReference(), the axis read in
+   * validateVariantList() and the cycle walk findReferenceCycle()): the
+   * roster's offer (loadVariant()) on the save door, where a referent the
+   * verdict withholds is named as such; the repository on the landing
+   * lane (withLandingLane()), where an existing PUBLISHED variant resolves
+   * whatever the verdict says about it, because whether the pair is
+   * offered under the law of the day is the verdict's question, not the
+   * disk lane's. Published only on both lanes: an unpublished variant is
+   * no material, so a reference to it dangles, and the cycle walk follows
+   * exactly the referents the reference check admits.
+   */
+  protected function nestedReferent(string $reference): ?DaedalusStylishVariantInterface {
+    if (!$this->landingLane) {
+      return $this->loadVariant($reference);
+    }
+    $variant = $this->variantRepository->resolve($reference);
+    return $variant !== NULL && $variant->isPublished() ? $variant : NULL;
+  }
+
+  /**
    * Derives a parsed element key's address from its placement.
    *
    * The element lane's half of the one derivation: the root by key kind
@@ -2404,7 +2735,7 @@ class StyleMapValidator {
    * relative selector the key carries, riding the address so the roster
    * walk resolves it. Depth-blind by design: one layout, one address,
    * any placement. A container's grant is its layout's grant whether it
-   * is a page band or nested inside one; placement curates offers and
+   * is a section or nested inside one; placement curates offers and
    * birth (the section-created defaults, the root-only axes), never what
    * validates here.
    */
@@ -2437,10 +2768,20 @@ class StyleMapValidator {
    *   element's tag tier -> minted part), a live descendant tag rule
    *   catching future instances of the tag too. Its vocabulary is the
    *   site declaration's base section, the ONE declaration of a prose
-   *   tag's styleability (the same tags a skin's defaults may set), and
-   *   an undeclared tag is rejected in EVERY enforcement mode: the key is
-   *   only grammar for declared base tags, never an open-ended tag
-   *   selector lane.
+   *   tag's styleability (the same tags a skin's defaults may set).
+   *   Undeclared, it follows the grant posture like every other
+   *   vocabulary: a strict site rejects it naming the declared tags, an
+   *   open or guarded site accepts it grammar-checked only (the roster
+   *   with no grant). A tag the browser does not know ("navv", the wide
+   *   selector tier's verdict) is a typo, rejected in every mode with
+   *   the nearest names (STYLE_SELECTOR_UNKNOWN); so is a pseudo-class
+   *   outside the tier ("a:hovre").
+   * - A qualifier on a compound (a markup class no declared part
+   *   matches, an attribute predicate, a pseudo-class no published
+   *   condition spells) is admitted by mode the same way: the walk admits
+   *   it on an open or guarded site and refuses it on a strict one by its
+   *   kind (STYLE_CLASS_NOT_DECLARED, STYLE_ATTRIBUTE_NOT_DECLARED,
+   *   STYLE_STATE_NOT_DECLARED naming the published states).
    * - A class part resolves by the one part rule (an exact declaration
    *   anywhere in the landing owner's elements tree, then an owner
    *   PATTERN part covering the class namespace its prefix matches, then
@@ -2455,10 +2796,10 @@ class StyleMapValidator {
    *   declares markup shells; "all direct children" is a styling
    *   addressable with no shell of its own); undeclared, the part posture
    *   again.
-   * - A type compound ("> pb-text") lands on that type's own declaration;
+   * - A type compound ("> d-text") lands on that type's own declaration;
    *   a bundle no declaration covers is undeclared, the part posture
    *   again, the corrective naming the declared types.
-   * - A terminal pseudo-element ("&::before", ".quote::after", "> pb-text
+   * - A terminal pseudo-element ("&::before", ".quote::after", "> d-text
    *   ::before") is the generated box of the chain's landing. Existence
    *   is universal, so only its vocabulary is declared: the host's pseudo
    *   section names it, else the roster derives the host's grant plus
@@ -2489,17 +2830,31 @@ class StyleMapValidator {
       return $roster;
     }
     $name = $undeclared['name'];
-    if ($undeclared['kind'] === RelativeSelector::TAG) {
-      $tags = $this->styleGuide->baseTags($theme);
-      $hint = $tags === []
-        ? 'A tag compound is the element-scoped tag tier over the site\'s declared base tags, and this site declares no base section, so no tag tier exists. To style a sub-element, use a declared part ("::.class-name").'
-        : sprintf('A tag compound ("::p", "::> pb-text p") styles every one of the element\'s text elements of that tag (the element-scoped tag tier over the site\'s base vocabulary). Declared base tags: %s. To style ONE text element, use its minted identity class ("::.s-…").', implode(', ', $tags));
-      $errors[] = new BlueprintError($at, 'STYLE_TAG_NOT_DECLARED', sprintf('"%s" is not a declared base tag.', $name), ['declared_tags' => $tags], $hint);
+    if (($undeclared['known'] ?? TRUE) === FALSE) {
+      // A word the browser does not know (the wide selector tier): a typo
+      // in every mode, with the tier's nearest names.
+      $is_tag = $undeclared['kind'] === RelativeSelector::TAG;
+      $is_pseudo_element = $undeclared['kind'] === VocabularyRoster::KIND_PSEUDO;
+      $similar = $undeclared['similar'] ?? [];
+      $spelled = static fn (string $word): string => $is_tag ? $word : ($is_pseudo_element ? '::' : ':') . $word;
+      $hint = match (TRUE) {
+        $is_tag => 'A tag compound names an HTML element the browser knows; check the spelling.',
+        $is_pseudo_element => 'A pseudo-element names a box the browser knows (::before, ::after, ::marker, ::placeholder, ::selection, ::first-letter, ::first-line, …); check the spelling.',
+        default => 'A pseudo-class names a state or position the browser knows (this site publishes as states: ' . implode(', ', $this->publishedStates($roster)) . '); check the spelling.',
+      };
+      if ($similar !== []) {
+        $hint = sprintf('Did you mean %s? ', implode(', ', array_map($spelled, $similar))) . $hint;
+      }
+      $context = ['word' => $name, 'kind' => $is_tag ? 'tag' : ($is_pseudo_element ? 'pseudo-element' : 'pseudo-class')];
+      if ($similar !== []) {
+        $context['similar'] = $similar;
+      }
+      $errors[] = new BlueprintError($at, 'STYLE_SELECTOR_UNKNOWN', sprintf('"%s" is not a %s the browser knows.', $spelled($name), $context['kind']), $context, $hint);
       return NULL;
     }
     if (!$closed) {
-      // Undeclared part, children or type on an open site: stylable,
-      // grammar-checked only.
+      // Undeclared part, children, type or tag on an open or guarded
+      // site: stylable, grammar-checked only.
       return $roster;
     }
     // The owner the corrective names: the entry's own key up to the
@@ -2507,6 +2862,28 @@ class StyleMapValidator {
     // address the root entry is worn at.
     $owner = strpos($at, Address::SUFFIX) > 0 ? substr($at, 0, strpos($at, Address::SUFFIX)) : (string) $address->root();
     switch ($undeclared['kind']) {
+      case RelativeSelector::TAG:
+        $tags = $this->styleGuide->baseTags($theme);
+        $hint = $tags === []
+          ? 'A tag compound is the element-scoped tag tier over the site\'s declared base tags; this site enforces its style guide and declares no base section, so no tag tier exists here. To style a sub-element, use a declared part ("::.class-name").'
+          : sprintf('A tag compound ("::p", "::> d-text p") styles every one of the element\'s text elements of that tag (the element-scoped tag tier over the site\'s base vocabulary); this site enforces its style guide, so only its declared base tags may be named: %s. To style ONE text element, use its minted identity class ("::.s-…").', implode(', ', $tags));
+        $errors[] = new BlueprintError($at, 'STYLE_TAG_NOT_DECLARED', sprintf('"%s" is not a declared base tag.', $name), ['declared_tags' => $tags], $hint);
+        return NULL;
+
+      case VocabularyRoster::KIND_CLASS:
+        $declared = array_keys($roster->landingParts());
+        $errors[] = new BlueprintError($at, 'STYLE_CLASS_NOT_DECLARED', sprintf('The style guide does not declare a "%s" class on "%s".', $name, $owner), ['declared_elements' => $declared], sprintf('A class qualifier ("li.active", "&.open > ul") names a markup class the page\'s JavaScript or a worn variant sets; this site enforces its style guide, so a class must be a declared part. %s', $declared ? sprintf('Declared parts: %s.', implode(', ', $declared)) : 'This element declares no parts.'));
+        return NULL;
+
+      case VocabularyRoster::KIND_ATTRIBUTE:
+        $errors[] = new BlueprintError($at, 'STYLE_ATTRIBUTE_NOT_DECLARED', sprintf('The style guide does not admit the "[%s]" attribute qualifier on "%s".', $name, $owner), ['attribute' => $name], 'An attribute qualifier ("[aria-expanded=\"true\"] > ul", "a[href^=\"http\"]") is a predicate on the markup; this site enforces its style guide, which declares parts, tags and states, never attributes. Style the declared part or the published state instead.');
+        return NULL;
+
+      case VocabularyRoster::KIND_PSEUDO_CLASS:
+        $states = $this->publishedStates($roster);
+        $errors[] = new BlueprintError($at, 'STYLE_STATE_NOT_DECLARED', sprintf('":%s" is not a state this site publishes.', $name), ['published_states' => $states], sprintf('A pseudo-class on a compound (":%s") is a state the browser knows, but this site enforces its style guide and admits only the states it publishes: %s. A position (":first-child", ":nth-child(2n+1)", ":not(:last-child)") is structure and needs no declaration.', $name, $states === [] ? 'none' : implode(', ', array_map(static fn (string $state): string => ':' . $state, $states))));
+        return NULL;
+
       case RelativeSelector::CLASS_PART:
         $declared = array_keys($roster->landingParts());
         $errors[] = new BlueprintError($at, 'STYLE_ELEMENT_NOT_DECLARED', sprintf('The style guide does not declare a "%s" sub-element on "%s".', $name, $owner), ['declared_elements' => $declared], $declared ? sprintf('Declared sub-elements: %s.', implode(', ', $declared)) : 'This element declares no stylable sub-elements.');
@@ -2519,7 +2896,10 @@ class StyleMapValidator {
 
       case VocabularyRoster::KIND_PSEUDO:
         $host = $address->selector->compounds === [] ? $owner : RelativeSelector::printCompounds($address->selector->compounds);
-        $errors[] = new BlueprintError($at, 'STYLE_PSEUDO_NOT_DECLARED', sprintf('The style guide does not declare the ::%s pseudo-element of "%s".', $name, $host), ['pseudo' => $name], sprintf('Every element has a ::before and an ::after box, but this site enforces its style guide, so a generated box may be styled only where its host\'s declaration carries a pseudo section naming what it may style: {pseudo: {%s: {property_groups: {…}}}} on the element, part or type the selector lands on. The box shows once "content" is set ("", none or one media reference url(\'media:<uuid>\'); text belongs in a field).', $name));
+        $hint = in_array($name, RelativeSelector::GENERATED_BOXES, TRUE)
+          ? sprintf('Every element has a ::before and an ::after box, but this site enforces its style guide, so a generated box may be styled only where its host\'s declaration carries a pseudo section naming what it may style: {pseudo: {%s: {property_groups: {…}}}} on the element, part or type the selector lands on. The box shows once "content" is set ("", none or one media reference url(\'media:<uuid>\'); text belongs in a field).', $name)
+          : sprintf('The browser knows the ::%s pseudo-element, but this site enforces its style guide, so it may be styled only where its host\'s declaration carries a pseudo section naming what it may style: {pseudo: {%s: {property_groups: {…}}}} on the element, part or type the selector lands on.', $name, $name);
+        $errors[] = new BlueprintError($at, 'STYLE_PSEUDO_NOT_DECLARED', sprintf('The style guide does not declare the ::%s pseudo-element of "%s".', $name, $host), ['pseudo' => $name], $hint);
         return NULL;
 
       default:
@@ -2690,11 +3070,32 @@ class StyleMapValidator {
       return [$group_id];
     }
     // A pseudo-only group's property (content, the existence switch of a
-    // generated box) means nothing on a real box: refused in every mode,
-    // before the grant, since no roster of a real element grants it.
-    if ($roster->address()->selector?->pseudo === NULL && $this->propertyGroups->isPseudoOnly($group_id)) {
+    // generated box) means nothing on a real box or on a pseudo-element
+    // that is no generated box (::marker exists with its host): refused
+    // in every mode, before the grant, since no roster of either grants
+    // it.
+    $pseudo = $roster->address()->selector?->pseudo;
+    if (!in_array($pseudo, RelativeSelector::GENERATED_BOXES, TRUE) && $this->propertyGroups->isPseudoOnly($group_id)) {
+      $where = $pseudo === NULL ? sprintf('"%s" is not a pseudo-element', $at) : sprintf('::%s is no generated box', $pseudo);
       return [
-        new BlueprintError($path, 'STYLE_PROPERTY_PSEUDO_ONLY', sprintf('"%s" applies to a generated box only, and "%s" is not a pseudo-element.', $property, $at), ['pseudo_elements' => RelativeSelector::PSEUDOS], sprintf('%s styles the ::before or ::after box of an element: address the box with a terminal pseudo-element, "{key}::&::before" for the element\'s own, "{key}::.part::after" for a part\'s, "{key}::> pb-text::before" for a rule\'s. The box shows once content is "" (none removes it, and one media reference url(\'media:<uuid>\') shows an image at its own size); text belongs in a field.', $property)),
+        new BlueprintError($path, 'STYLE_PROPERTY_PSEUDO_ONLY', sprintf('"%s" applies to a generated box only, and %s.', $property, $where), ['pseudo_elements' => RelativeSelector::GENERATED_BOXES], sprintf('%s styles the ::before or ::after box of an element: address the box with a terminal pseudo-element, "{key}::&::before" for the element\'s own, "{key}::.part::after" for a part\'s, "{key}::> d-text::before" for a rule\'s. The box shows once content is "" (none removes it, and one media reference url(\'media:<uuid>\') shows an image at its own size); text belongs in a field.', $property)),
+      ];
+    }
+    // The browser's own law on a table pseudo-element (::marker,
+    // ::placeholder, ::selection, ::first-letter, ::first-line): a
+    // property its specification does not apply there is ignored by every
+    // browser, so it is refused in every mode with the allowlist named,
+    // before the grant (a declared section cannot widen what the browser
+    // styles).
+    if ($pseudo !== NULL && ($allowed = $this->pseudoVocabularies->properties($pseudo)) !== NULL && !in_array($property, $allowed, TRUE)) {
+      return [
+        new BlueprintError(
+          $path,
+          'STYLE_PROPERTY_NOT_ON_PSEUDO',
+          sprintf('"%s" does not apply to ::%s.', $property, $pseudo),
+          ['pseudo' => $pseudo, 'allowed' => $allowed, 'spec' => $this->pseudoVocabularies->spec($pseudo)],
+          sprintf('The browser styles ::%s with these properties only (%s): %s. Style the host element for anything else ("%s" without the pseudo-element).', $pseudo, $this->pseudoVocabularies->spec($pseudo), implode(', ', $allowed), $at),
+        ),
       ];
     }
     $granted = $roster->grantsProperty($property);
@@ -2875,6 +3276,12 @@ class StyleMapValidator {
    *   Errors at the given path; empty on permissive sites.
    */
   protected function checkTokenReferences(string $path, string $value, ?string $theme, bool $closed): array {
+    // The landing lane runs no check: an unminted reference in a shipped
+    // variant is the verdict's to withhold under the law of the day, and
+    // the skin that mints it may land a moment later (withLandingLane()).
+    if ($this->landingLane) {
+      return [];
+    }
     // The declared-defaults lane checks tokens on every site: its universe
     // is empty by construction, so the check is what makes a declaration
     // token-free (validateDeclaredDefaults()).
@@ -2886,14 +3293,6 @@ class StyleMapValidator {
     $minted = $scales === [] ? [] : $this->mintedTokens($theme);
     preg_match_all('/var\(\s*(--[A-Za-z0-9_-]+)/', $value, $matches);
     foreach (array_unique($matches[1]) as $variable) {
-      // The swatch namespace ("--swatch-") is reserved before any scale
-      // speaks, so its check runs regardless of what scales the site
-      // declares.
-      $swatch_error = $this->checkSwatchReference($path, $variable);
-      if ($swatch_error !== NULL) {
-        $errors[] = $swatch_error;
-        continue;
-      }
       $reference = $scales === [] ? NULL : StyleGuide::tokenReference($variable, $scales);
       if ($reference === NULL) {
         continue;
@@ -2914,51 +3313,12 @@ class StyleMapValidator {
   }
 
   /**
-   * Checks one variable against the published-swatch universe.
-   *
-   * The swatch counterpart of the minted-token check, sharing its severity
-   * posture exactly: a var() reference inside the reserved swatch
-   * namespace (StyleGuide::swatchReference()) must name a swatch among the
-   * site's materials on strict sites (the roster is the published set, and
-   * all published swatches are live, so it IS the legal universe), while
-   * permissive sites pass it through (an unresolved var is inert, never
-   * unsafe; the client lints it as a warning, and erroring would make
-   * swatch deletion retroactively corrupt every value referencing it).
-   * Callers gate on strictness; this only answers for one variable.
-   *
-   * @return \Drupal\daedalus_blueprint\Result\BlueprintError|null
-   *   The error, or NULL when the variable is outside the swatch namespace
-   *   or names a published swatch.
-   */
-  protected function checkSwatchReference(string $path, string $variable): ?BlueprintError {
-    $name = StyleGuide::swatchReference($variable);
-    if ($name === NULL) {
-      return NULL;
-    }
-    $swatches = $this->roster()->swatches();
-    if (isset($swatches[$name])) {
-      return NULL;
-    }
-    // Values ride the hint for the same reason the token correctives carry
-    // them: the model patches from this hint alone, and only the values
-    // let it pick the swatch that preserves the rejected value's intent.
-    $materials = [];
-    foreach ($swatches as $record) {
-      $materials[] = $record->spelling(MaterialRecord::SLOT_STYLE) . ' = ' . MaterialsRoster::valueProse($record->value);
-    }
-    $hint = $materials === []
-      ? 'No swatches are published; mint the swatch first, or use a literal value.'
-      : sprintf('Published swatches, among the site\'s materials: %s. Mint the swatch first, or reference one of these.', implode(', ', $materials));
-    return new BlueprintError($path, 'STYLE_SWATCH_NOT_PUBLISHED', sprintf('"%s" is in the swatch namespace, but no published "%s" swatch exists.', $variable, $name), ['published_swatches' => array_keys($swatches)], $hint);
-  }
-
-  /**
    * Checks a value's keyframes names against the published animations.
    *
    * The property-scoped reference check: KeyframesNames::inValue() finds
    * the names (only animation-name and the animation shorthand carry any;
    * the generic style slot never scans for a bare ident), and each must
-   * spell a published animation. The swatch check's severity posture
+   * spell a published animation. The minted-token check's severity posture
    * exactly: strict sites error, permissive sites pass an unresolved name
    * through (inert, never unsafe; the client lints it as a warning, and
    * erroring would make animation deletion retroactively corrupt every
@@ -2995,14 +3355,14 @@ class StyleMapValidator {
    *   The error, or NULL when the name spells a published animation.
    */
   protected function checkAnimationReference(string $path, string $name): ?BlueprintError {
-    $animations = $this->roster()->animations();
+    $animations = $this->animationUniverse();
     $machine_name = StyleGuide::animationReference($name);
     if ($machine_name !== NULL && isset($animations[$machine_name])) {
       return NULL;
     }
     $materials = [];
-    foreach ($animations as $record) {
-      $materials[] = sprintf('%s (%s)', $record->spelling(MaterialRecord::SLOT_ANIMATION), $record->label);
+    foreach ($animations as $machine => $label) {
+      $materials[] = sprintf('%s (%s)', StyleGuide::animationName($machine), $label);
     }
     $hint = $materials === []
       ? 'No animations are published; mint the animation first, or set "none".'
@@ -3011,6 +3371,30 @@ class StyleMapValidator {
       ? sprintf('"%s" is not a site animation; this site enforces its style guide, so keyframes names must name published animations (motion-{name}).', $name)
       : sprintf('"%s" is in the motion namespace, but no published "%s" animation exists.', $name, $machine_name);
     return new BlueprintError($path, 'STYLE_ANIMATION_NOT_PUBLISHED', $message, ['published_animations' => array_keys($animations)], $hint);
+  }
+
+  /**
+   * The animation universe: the names a motion-{name} reference may spell.
+   *
+   * The roster's animation records (the active skin's animations as worn),
+   * or the universe a caller handed in through withMintedUniverse() (a
+   * skin's own animations while its defaults validate; a member system's
+   * skin under the member seam).
+   *
+   * @return array<string, string>
+   *   Animation machine names to their labels.
+   */
+  protected function animationUniverse(): array {
+    $override = $this->animationOverrides[FiberFlow::id()] ?? NULL;
+    if ($override !== NULL) {
+      $names = array_map('strval', array_keys($override));
+      return array_combine($names, $names);
+    }
+    $universe = [];
+    foreach ($this->roster()->animations() as $record) {
+      $universe[$record->id] = $record->label;
+    }
+    return $universe;
   }
 
   /**
@@ -3093,7 +3477,7 @@ class StyleMapValidator {
    *
    * The member seam: the roster becomes the system's partition (its
    * members plus the global ones, MaterialsRosterBuilder::buildFor()) so
-   * swatch, animation and variant references resolve to what the site
+   * token, animation and variant references resolve to what the site
    * offers WITH that system active, and the minted tokens become its
    * default skin's (withMintedUniverse()), so var() references and scale
    * constraints resolve against the vocabulary the member speaks. A
@@ -3124,7 +3508,7 @@ class StyleMapValidator {
     $skin = $this->skinManager->loadSkinFor($design_system);
     return $this->withUniverse(
       $this->rosterBuilder->buildFor($design_system),
-      fn (): array => $this->withMintedUniverse($skin?->tokens() ?? [], $theme, $run),
+      fn (): array => $this->withMintedUniverse($skin?->tokens() ?? [], $theme, $run, $skin?->animations() ?? []),
     );
   }
 
@@ -3237,8 +3621,9 @@ class StyleMapValidator {
    * to detach it, wear a conforming variant, or repair the variant, not
    * to mint one. Asked on both reference paths, a host map's wearing
    * (validateVariantReference()) and a variant's nested reference
-   * (validateNestedRootReference(), the importer's and the save door's
-   * lane, which resolves through the judged roster). Safe while the judge
+   * (validateNestedRootReference() on the save door, which resolves
+   * through the judged roster; the landing lane admits the referent
+   * before this question is reached, nestedReferent()). Safe while the judge
    * runs: its universe (StyleMapValidator::withUniverse()) holds every
    * offered published variant, so roster()->has() answers first and the
    * verdict is never asked for; VariantConformance::withheld()'s
@@ -3353,13 +3738,21 @@ class StyleMapValidator {
    *   the nested calls pass to mintedTokens() or the seed misses.
    * @param callable $run
    *   The validation to run under the swapped universe.
+   * @param array|null $skin_animations
+   *   The owning skin's canonical animations map ({name: record}), which
+   *   becomes the universe every strict motion-{name} check inside $run
+   *   resolves against; NULL leaves the roster's animations in force.
    *
    * @return mixed
    *   Whatever $run returns.
    */
-  protected function withMintedUniverse(array $skin_tokens, ?string $theme, callable $run): mixed {
+  protected function withMintedUniverse(array $skin_tokens, ?string $theme, callable $run, ?array $skin_animations = NULL): mixed {
     $flow = FiberFlow::id();
     $saved = $this->universeOverrides[$flow] ?? NULL;
+    $saved_animations = $this->animationOverrides[$flow] ?? NULL;
+    if ($skin_animations !== NULL) {
+      $this->animationOverrides[$flow] = $skin_animations;
+    }
     $universe = [];
     $values = SkinTokensItem::values($skin_tokens);
     foreach ($this->styleGuide->getTokenScales($theme) as $scale => $declaration) {
@@ -3378,6 +3771,14 @@ class StyleMapValidator {
       else {
         $this->universeOverrides[$flow] = $saved;
       }
+      if ($skin_animations !== NULL) {
+        if ($saved_animations === NULL) {
+          unset($this->animationOverrides[$flow]);
+        }
+        else {
+          $this->animationOverrides[$flow] = $saved_animations;
+        }
+      }
     }
   }
 
@@ -3393,20 +3794,27 @@ class StyleMapValidator {
    *   Up to five candidates.
    */
   protected function similarProperties(string $property): array {
-    $needle = strtolower($property);
-    $scored = [];
-    foreach ($this->propertyGroups->getPropertyNames() as $candidate) {
-      $distance = levenshtein($needle, $candidate);
-      // Needle-contains-candidate only counts for candidates long enough to
-      // mean something: the wide tier's vocabulary includes single-letter
-      // SVG presentation properties (x, y, r, d), and "zzzx" does not mean
-      // the writer was reaching for "x".
-      if ($distance <= 3 || str_contains($candidate, $needle) || (strlen($candidate) >= 4 && str_contains($needle, $candidate))) {
-        $scored[$candidate] = $distance;
+    return NearMisses::rank($property, $this->propertyGroups->getPropertyNames());
+  }
+
+  /**
+   * The states a roster publishes: its pseudo-class conditions' names.
+   *
+   * What a pseudo-class qualifier may name on a strict site, and what
+   * the unknown-pseudo-class corrective lists beside the tier's nearest
+   * names.
+   *
+   * @return string[]
+   *   Condition names whose wrapper is a pseudo-class (hover, focus, …).
+   */
+  protected function publishedStates(VocabularyRoster $roster): array {
+    $states = [];
+    foreach ($roster->conditions() as $name => $definition) {
+      if (str_starts_with((string) ($definition['wrapper'] ?? ''), ':')) {
+        $states[] = (string) $name;
       }
     }
-    asort($scored);
-    return array_slice(array_keys($scored), 0, 5);
+    return $states;
   }
 
 }

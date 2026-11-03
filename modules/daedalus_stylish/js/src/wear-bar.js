@@ -35,7 +35,7 @@ import { highlightClaimsFor } from './highlight-claims.js';
  *
  * One row per WORN reference at the styling TARGET (`target`, the key
  * the bar wears at: the selected element, or the rule the target chip
- * names, `container:X::> pb-text .link`, whose every match wears what is
+ * names, `container:X::> d-text .link`, whose every match wears what is
  * applied here; wornRows: axis-declaration order, claimed axes yield,
  * stale references after), each row dot · axis label · variant label ·
  * chevron, ONE trigger: a worn row's click is the SWAP, opening the
@@ -78,7 +78,7 @@ import { highlightClaimsFor } from './highlight-claims.js';
  * OVERRIDDEN (overriddenWearing: the layer rule's honesty half, on the
  * stale row's idiom): the row carries a modifier class and a sub-line
  * naming the lost declarations ("padding-inline overridden by your
- * padding"; the match is grain-aware, so a band's own padding is seen
+ * padding"; the match is grain-aware, so a section's own padding is seen
  * masking its width inset), and Reset overrides is the row's one ACTION
  * beside it, dropping the element's own values where they shadow the
  * variant so it shows through again. The mark lives here, where the
@@ -194,10 +194,11 @@ export const WearBar = ({
   );
   const { rows, stale } = wornRows(entry, library, vocabulary, claimedAxes);
   // The offer: scope-filtered at the target's landing (ownership and tag
-  // gates included, the tag from the tree: the subject's, or a tag
-  // rule's own), shipped variants included (applying a shipped variant
-  // is fine; only pushing into one is locked), fit-ranked for the
-  // picker's order and hints.
+  // gates included, the tag from the document: the subject's, or a tag
+  // rule's own, the ownership read taking the canvas's self-provenance
+  // for an unstamped element on a blueprint's own canvas), shipped
+  // variants included (applying a shipped variant is fine; only pushing
+  // into one is locked), fit-ranked for the picker's order and hints.
   const ranked = rankVariants(
     applicableVariants(
       materials,
@@ -205,7 +206,8 @@ export const WearBar = ({
       blockTypes,
       sectionLayouts,
       tree,
-      offerTag(source.getTree?.() ?? null, target),
+      offerTag(source.getDocument?.() ?? null, target),
+      source.getSelfProvenance?.() ?? null,
     ),
     target,
     tree,

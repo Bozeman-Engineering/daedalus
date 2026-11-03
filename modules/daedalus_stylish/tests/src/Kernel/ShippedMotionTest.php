@@ -5,37 +5,37 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\daedalus_stylish\AnimationStylesheet;
-use Drupal\daedalus_stylish\StyleGuide;
-use Drupal\daedalus_stylish\DaedalusStylishAnimationInterface;
+use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
+use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
 use Drupal\daedalus_stylish\DaedalusStylishVariantInterface;
+use Drupal\daedalus_stylish\SkinStylesheet;
+use Drupal\daedalus_stylish\StyleGuide;
 use Drupal\daedalus_stylish\VariantStylesheet;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Tests the shipped motion materials and the animation axis on a bare site.
+ * Tests a skin package's shipped motion and the motion axes.
  *
- * Daedalus Stylish ships five animations (daedalus_stylish.daedalus_stylish.animations.yml) and two
- * twin entrance families on the animation axis: three variants on the
- * block kind (daedalus_stylish.daedalus_stylish.variants.yml) and the same three looks on
- * the container kind (daedalus_stylish_layouts.daedalus_stylish.variants.yml), every one
- * playing when its wearer scrolls into view through the Motion group's
- * trigger pair (`timeline-trigger: --in-view view() entry 20% exit 100%` +
- * `animation-trigger: --in-view play-once`, the Animation Triggers
- * draft's spelling). Beside them, one hover-feel look per kind on the
- * hover axis (block_lift / container_lift), each carrying its own
- * `hover` block: a wear never carries a condition, so the material owns
- * its WHEN. A bare site (no skin active, so the materials roster carries
- * no tokens) is the proving ground: everything here must import through
+ * The suite ships no motion of its own: the starter skin
+ * (daedalus_stylish_starter_skin, the olivero skin's twin) carries five
+ * animations in its skins file (`animations:` beside its tokens and
+ * defaults) and a variants file wearing three of them on the animation
+ * axis, one look per animation on the universal block kind and its twin
+ * on the universal container kind, every one playing when its wearer
+ * scrolls into view through the Motion group's trigger pair, plus one
+ * hover-feel look per kind on the hover axis carrying its own `hover`
+ * block. The package is met the way a site meets it: enabled and its
+ * system activated, the sync landing the skin (its motion with it) and
+ * then its variants under the skin's own law. Everything imports through
  * the same spine validation AI- and UI-minted materials get, with literal
- * values only, and each variant must carry its own reduced-motion unset
- * (a skin's bottom-layer `animation: none` could never beat a variant's
- * animation-name). The axes are declared once per kind (the universal
- * block kind reaches every block type; the universal container kind every
- * container), and the twin families share their attribute spellings
- * because an axis value resolves in its scope's own slot.
+ * values only, and each variant carries its own reduced-motion unset (a
+ * skin's bottom-layer `animation: none` could never beat a variant's
+ * animation-name). The axes are declared once per kind in the suite (the
+ * universal block kind reaches every block type; the universal container
+ * kind every container), so a package that mints no motion shows an
+ * empty row and nothing defaults at birth.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -43,32 +43,36 @@ class ShippedMotionTest extends KernelTestBase {
 
   use UserCreationTrait;
 
+  protected const PACKAGE = 'daedalus_stylish_starter_skin';
+
+  protected const SYSTEM = 'starter';
+
   /**
-   * The shipped animations, in the repository's label order.
+   * The skin's animations, in stored order.
    */
-  protected const ANIMATIONS = ['fade_in', 'pulse', 'rise', 'scale_in', 'spin'];
+  protected const ANIMATIONS = ['fade_in', 'rise', 'scale_in', 'pulse', 'spin'];
 
   /**
    * The shipped entrance variants, keyed by machine name: [scope, animation].
    *
    * The two families are twins: one look per animation on each kind, so
-   * a page band and the blocks inside it speak one motion vocabulary.
+   * a section and the blocks inside it speak one motion vocabulary.
    */
   protected const VARIANTS = [
-    'block_fade_in' => ['kind:block', 'fade_in'],
-    'block_rise' => ['kind:block', 'rise'],
-    'block_scale_in' => ['kind:block', 'scale_in'],
-    'container_fade_in' => ['kind:container', 'fade_in'],
-    'container_rise' => ['kind:container', 'rise'],
-    'container_scale_in' => ['kind:container', 'scale_in'],
+    'starter_fade_in' => ['kind:block', 'fade_in'],
+    'starter_rise' => ['kind:block', 'rise'],
+    'starter_scale_in' => ['kind:block', 'scale_in'],
+    'starter_fade_in_section' => ['kind:container', 'fade_in'],
+    'starter_rise_section' => ['kind:container', 'rise'],
+    'starter_scale_in_section' => ['kind:container', 'scale_in'],
   ];
 
   /**
    * The shipped hover-axis variants, keyed by machine name: the scope.
    */
   protected const LIFTS = [
-    'block_lift' => 'kind:block',
-    'container_lift' => 'kind:container',
+    'starter_lift' => 'kind:block',
+    'starter_lift_section' => 'kind:container',
   ];
 
   /**
@@ -86,6 +90,7 @@ class ShippedMotionTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -104,44 +109,38 @@ class ShippedMotionTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('user');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all four storages on
-    // every build, and every compile and validation builds it.
-    $this->installEntitySchema('daedalus_swatch');
     $this->installEntitySchema('daedalus_skin');
-    // A reference-carrying variant save mirrors its references into the
-    // usage tables (the delete-in-use grade reads them): the entrances'
-    // motion-* names, and the container family's var() token references.
+    // A reference-carrying save mirrors its references into the usage
+    // tables (the delete-in-use grade reads them): the entrances' motion-*
+    // names and the skin's var() token references.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_font_usage',
-      'daedalus_token_usage',
+      'daedalus_skin_material_usage',
     ]);
-    $this->installConfig(['daedalus_stylish']);
+    $this->installConfig(['daedalus_stylish', 'daedalus_blueprint']);
     // The importers switch to an administrative account (shipped materials
     // are code, not user input); give the switcher one to find.
     $this->setUpCurrentUser([], [], TRUE);
-    // enableModules() skips install hooks: run daedalus_stylish's own install sweep
-    // (variants, skins, swatches, animations, in the hook's order) exactly
-    // as a site enabling daedalus_stylish would. daedalus_stylish in the batch syncs EVERY
-    // enabled module's file, so the container family arrives with it.
-    daedalus_stylish_modules_installed(['daedalus_stylish'], FALSE);
+    $this->enableModules([self::PACKAGE]);
+    $this->installConfig([self::PACKAGE]);
+    // The activation syncs every enabled module under the starter's law:
+    // the skin (its motion with it), then the variants wearing it.
+    $this->container->get(ActiveDesignSystem::SERVICE_ID)->activate(self::SYSTEM);
+    $report = $this->container->get('daedalus_stylish.shipped_sync')->sync();
+    $this->assertFalse($report->hasFailures(), implode("\n", $report->failureLines()));
   }
 
   /**
-   * Loads an animation by machine name, bypassing access.
+   * The active skin, fresh from storage.
    */
-  protected function loadAnimation(string $machine_name): ?DaedalusStylishAnimationInterface {
-    $storage = \Drupal::entityTypeManager()->getStorage('daedalus_animation');
+  protected function skin(): DaedalusStylishSkinInterface {
+    $storage = \Drupal::entityTypeManager()->getStorage('daedalus_skin');
     $storage->resetCache();
-    $animations = $storage->loadByProperties(['machine_name' => $machine_name]);
-    $animation = reset($animations) ?: NULL;
-    assert($animation === NULL || $animation instanceof DaedalusStylishAnimationInterface);
-    return $animation;
+    $skins = $storage->loadByProperties(['machine_name' => self::SYSTEM]);
+    $skin = reset($skins);
+    assert($skin instanceof DaedalusStylishSkinInterface);
+    return $skin;
   }
 
   /**
@@ -157,37 +156,41 @@ class ShippedMotionTest extends KernelTestBase {
   }
 
   /**
-   * The five shipped animations import, publish, roster and compile.
+   * The five animations ride the skin, roster and compile.
    */
-  public function testShippedAnimationsImport(): void {
-    foreach (self::ANIMATIONS as $name) {
-      $animation = $this->loadAnimation($name);
-      $this->assertInstanceOf(DaedalusStylishAnimationInterface::class, $animation, $name);
-      $this->assertTrue($animation->isPublished(), $name);
-      $this->assertTrue($animation->isShipped(), $name);
-      $this->assertSame('daedalus_stylish', $animation->getProvider(), $name);
-      $this->assertFalse($animation->isModified(), $name);
-      $this->assertNotSame('', $animation->getDescription(), "$name teaches the AI when to reach for it");
-      // Literal steps only: a shipped animation resolves on any skin.
-      $this->assertStringNotContainsString('var(', json_encode($animation->getSteps()), $name);
+  public function testShippedAnimationsRideTheSkin(): void {
+    $skin = $this->skin();
+    $this->assertSame(self::PACKAGE, $skin->getProvider());
+    $animations = $skin->animations();
+    $this->assertSame(self::ANIMATIONS, array_keys($animations), 'The skin carries the five, in the file\'s order.');
+    $this->assertSame([], $skin->siteAnimations(), 'The package layer is the disk\'s; nothing of the site over it.');
+    foreach ($animations as $name => $record) {
+      $this->assertSame(['steps', 'description', 'offered'], array_keys($record), $name);
+      $this->assertNotSame('', $record['description'], "$name teaches the AI when to reach for it");
+      $this->assertTrue($record['offered'], $name);
+      // Literal steps only: a shipped animation resolves on any site.
+      $this->assertStringNotContainsString('var(', json_encode($record['steps']), $name);
     }
     // from/to spellings store canonical, sorted.
-    $this->assertSame(['0%', '100%'], array_keys($this->loadAnimation('fade_in')->getSteps()));
-    $this->assertSame(['0%', '50%', '100%'], array_keys($this->loadAnimation('pulse')->getSteps()));
+    $this->assertSame(['0%', '100%'], array_keys($animations['fade_in']['steps']));
+    $this->assertSame(['0%', '50%', '100%'], array_keys($animations['pulse']['steps']));
 
-    // The published set (what the roster serves, what motion-* validates
-    // against on a strict site, what the keyframes file compiles) is the
-    // whole family, label-ordered, and nothing else.
-    $names = static fn (array $animations): array => array_map(static fn ($animation) => $animation->getMachineName(), $animations);
-    $this->assertSame(self::ANIMATIONS, $names(\Drupal::service('daedalus_stylish.animation_repository')->publishedAnimations()));
+    // The roster serves the skin's animations (what motion-* validates
+    // against on a strict site, what the skin file compiles), in the
+    // skin's order, shipped and updatable.
     $roster = \Drupal::service('daedalus_blueprint.materials_roster_builder')->build();
     $this->assertSame(self::ANIMATIONS, array_keys($roster->animations()));
     foreach (self::ANIMATIONS as $name) {
-      $this->assertSame(['animation' => StyleGuide::animationName($name)], $roster->animations()[$name]->spellings);
+      $record = $roster->animations()[$name];
+      $this->assertSame(['animation' => StyleGuide::animationName($name)], $record->spellings);
+      $this->assertSame('shipped', $record->origin, $name);
+      $this->assertTrue($record->updatable, "$name: a consuming site's edit lands in the skin's site layer");
+      $this->assertSame(self::SYSTEM, $record->designSystem, "$name is its skin's, a member of the starter system");
     }
 
-    // The compiled keyframes file carries every shipped name.
-    $uri = \Drupal::state()->get(AnimationStylesheet::STATE_KEY);
+    // The compiled skin file carries every keyframes block after the
+    // tokens and before the defaults.
+    $uri = \Drupal::state()->get(SkinStylesheet::STATE_KEY);
     $this->assertIsString($uri);
     $css = file_get_contents($uri);
     foreach (self::ANIMATIONS as $name) {
@@ -195,31 +198,32 @@ class ShippedMotionTest extends KernelTestBase {
     }
     $this->assertStringContainsString('transform: translateY(1rem);', $css);
     $this->assertStringContainsString('transform: rotate(360deg);', $css);
+    $this->assertLessThan(strpos($css, '@keyframes motion-fade_in'), strpos($css, '--space-gutter:'), 'The tokens lead the keyframes.');
+    $this->assertGreaterThan(strpos($css, '@keyframes motion-spin'), strpos($css, ':where(h1)') ?: PHP_INT_MAX, 'The keyframes lead the defaults.');
   }
 
   /**
-   * Every shipped variant validates on a bare site with no token in sight.
+   * Every shipped entrance variant validates against the skin and wears its motion.
    *
    * The import IS the validation: each definition rode the blueprint
    * deserializer through the variant styles field handler against the
-   * real kind declarations, on a site whose roster mints no token. The
+   * real kind declarations, naming an animation the skin carries. The
    * variant's face is then pinned: the animation axis, a literal timing
-   * on the longhands, a shipped animation as the name, the in-view
+   * on the longhands, the skin's animation as the name, the in-view
    * trigger pair (so an entrance below the fold waits for its wearer to
    * scroll in, and one above it still plays at load), and the variant's
    * own reduced-motion unset (which already kills the triggered animation,
    * so the trigger needs no unset of its own).
    */
-  public function testShippedVariantsValidateWithoutTokens(): void {
+  public function testShippedVariantsWearTheSkinsMotion(): void {
     $roster = \Drupal::service('daedalus_blueprint.materials_roster_builder')->build();
-    $this->assertSame([], $roster->tokens(), 'A bare site mints no token: nothing here may reference one.');
-
     foreach (self::VARIANTS as $machine_name => [$scope, $animation]) {
       $variant = $this->loadVariant($machine_name);
       $this->assertInstanceOf(DaedalusStylishVariantInterface::class, $variant, $machine_name);
       $this->assertTrue($variant->isPublished(), $machine_name);
       $this->assertTrue($variant->isShipped(), $machine_name);
-      $this->assertSame($scope === 'kind:block' ? 'daedalus_stylish' : 'daedalus_stylish_layouts', $variant->getProvider(), $machine_name);
+      $this->assertSame(self::PACKAGE, $variant->getProvider(), $machine_name);
+      $this->assertSame(self::SYSTEM, $variant->getDesignSystem(), $machine_name);
       $this->assertSame('animation', $variant->getAxis(), $machine_name);
       $this->assertSame($scope, $variant->getScope(), $machine_name);
       $this->assertNotSame('', $variant->getDescription(), $machine_name);
@@ -230,7 +234,7 @@ class ShippedMotionTest extends KernelTestBase {
       $root = $styles[''];
       $this->assertSame(['default', 'reduced-motion'], array_keys($root), $machine_name);
       // The longhands carry the entrance (one fact per advanced row); the
-      // name is a shipped animation's motion-* spelling.
+      // name is the skin's animation's motion-* spelling.
       $this->assertSame(StyleGuide::animationName($animation), $root['default']['animation-name'], $machine_name);
       $this->assertMatchesRegularExpression('/^\d+ms$/', $root['default']['animation-duration'], $machine_name);
       $this->assertSame('both', $root['default']['animation-fill-mode'], $machine_name);
@@ -247,26 +251,27 @@ class ShippedMotionTest extends KernelTestBase {
     // The usage mirror sees every reference: each entrance animation is
     // worn by its block variant and its container twin, so the
     // delete-in-use grade guards it.
-    $usage = \Drupal::service('daedalus_stylish.animation_usage');
+    $usage = \Drupal::service('daedalus_stylish.skin_material_usage');
     foreach (['fade_in', 'rise', 'scale_in'] as $name) {
-      $this->assertSame(2, $usage->countReferences($this->loadAnimation($name)), $name);
+      $this->assertSame(2, $usage->countReferencesTo(StyleGuide::animationName($name)), $name);
     }
     foreach (['pulse', 'spin'] as $name) {
-      $this->assertSame(0, $usage->countReferences($this->loadAnimation($name)), $name);
+      $this->assertSame(0, $usage->countReferencesTo(StyleGuide::animationName($name)), $name);
     }
 
     // The roster serves both families on the one axis, each spelled as
-    // its own tag's animation attribute value (the machine name minus the
-    // kind's prefix) in its SCOPE's slot: the same value on two tags is
-    // two spellings, so `animation="fade_in"` reads as this family on a
-    // block and as its twin on a container.
+    // its own tag's animation attribute value (the label, lowercased and
+    // hyphenated) in its SCOPE's slot: the same value on two tags is two
+    // spellings, so `animation="fade-in"` reads as this family on a block
+    // and as its twin on a container.
     $variants = $roster->variants();
+    $values = ['fade_in' => 'fade-in', 'rise' => 'rise', 'scale_in' => 'scale-in'];
     foreach (self::VARIANTS as $machine_name => [$scope, $animation]) {
       $this->assertSame('animation', $variants[$machine_name]->group, $machine_name);
-      $this->assertSame(["attr:$scope:animation" => $animation], $variants[$machine_name]->spellings, $machine_name);
+      $this->assertSame(["attr:$scope:animation" => $values[$animation]], $variants[$machine_name]->spellings, $machine_name);
     }
-    foreach (['kind:block' => 'block_fade_in', 'kind:container' => 'container_fade_in'] as $scope => $expected) {
-      $spelled = array_filter($variants, static fn ($record): bool => ($record->spellings["attr:$scope:animation"] ?? NULL) === 'fade_in');
+    foreach (['kind:block' => 'starter_fade_in', 'kind:container' => 'starter_fade_in_section'] as $scope => $expected) {
+      $spelled = array_filter($variants, static fn ($record): bool => ($record->spellings["attr:$scope:animation"] ?? NULL) === 'fade-in');
       $this->assertSame([$expected], array_keys($spelled), "One look name, one record in $scope's slot.");
     }
 
@@ -311,7 +316,7 @@ class ShippedMotionTest extends KernelTestBase {
       $this->assertInstanceOf(DaedalusStylishVariantInterface::class, $variant, $machine_name);
       $this->assertTrue($variant->isPublished(), $machine_name);
       $this->assertTrue($variant->isShipped(), $machine_name);
-      $this->assertSame($scope === 'kind:block' ? 'daedalus_stylish' : 'daedalus_stylish_layouts', $variant->getProvider(), $machine_name);
+      $this->assertSame(self::PACKAGE, $variant->getProvider(), $machine_name);
       $this->assertSame('hover', $variant->getAxis(), $machine_name);
       $this->assertSame($scope, $variant->getScope(), $machine_name);
       $this->assertSame('Lift', $variant->label(), $machine_name);
@@ -381,7 +386,7 @@ class ShippedMotionTest extends KernelTestBase {
    * (daedalus_stylish_layouts.page_builder.yml) after width and Layout, offered at
    * every depth (width stays the one root-only axis) and defaulting
    * nothing at birth: the container layout's default_variants still name
-   * the width stop alone, so a page band is born still and an entrance or
+   * the width stop alone, so a section is born still and an entrance or
    * a hover feel is the deliberate gesture.
    */
   public function testAxisEffectiveOnContainer(): void {

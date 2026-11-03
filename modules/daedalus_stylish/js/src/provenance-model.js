@@ -51,7 +51,7 @@ import { tagWord } from './style-guide.js';
  * say so at every pose.
  *
  * An ancestor's rule reaching the element (an `ancestor:{owner}::
- * {selector}` layer: a container's `> pb-text` color landing on this
+ * {selector}` layer: a container's `> d-text` color landing on this
  * text block, the row variant's `> *` fill on this column) renders like
  * the floor: lit in the floor hue, the origin sentence naming the
  * ancestor and its rule, and one doorway that edits AT the rule: it
@@ -66,13 +66,13 @@ import { tagWord } from './style-guide.js';
  * the mark's reference, the origin sentence naming the variant and the
  * rule it arrives through in the switcher's words ("Button at Text
  * blocks in the section"; the layer's `carrier`, never the id's
- * position: a value reaching a part through `pb-text .text-block-link`
- * is worn by `pb-text`), and the doorways: open the variant (the
+ * position: a value reaching a part through `d-text .text-block-link`
+ * is worn by `d-text`), and the doorways: open the variant (the
  * session anchored at the carrier, where the variant is worn), edit at
  * the carrier (the rule as the styling target), drive when the
  * delivering condition is not the pose. A carrier with no selector is
  * the owner's own root wearing a variant whose sub-entry reaches the
- * position (a container look's `::> pb-text` block): no rule to seat,
+ * position (a container look's `::> d-text` block): no rule to seat,
  * the sentence names the owner, and opening the variant selects the
  * owner (the wearer) the way the library card's Edit styles does.
  *
@@ -215,12 +215,14 @@ const skinDoorway = (scope, condition, conditions, guide) => [
 
 // The declared tier's doorway: a declaration is code beside its
 // templates and nothing on the site edits it, so the doorway SHOWS it,
-// the Materials place's Law tab at the declaring scope with the
+// the Design system place's Law tab at the declaring scope with the
 // property's rows revealed (law.js, law-model.js). It rides the one
 // openDocument road the skin doorway rides, as a law document reference
 // (code/layers.js lawDocument: the declared layer id with the property
 // as its fragment; use-row-menu.js dispatches it, the Inspector's
 // openDocument routes it to the tab before any session logic).
+// Produced only under the law gate (originOf's `law` input): without
+// the tab there is no doorway, the sentence alone names the declaration.
 const declaredDoorway = (scope, property, declaration) => ({
   id: 'declared',
   label: Drupal.t('See the declaration…'),
@@ -405,6 +407,12 @@ export const supplierName = (layer) => {
  *   Whether the editable layer says something here beyond its stored
  *   block (a draft being typed, a pending line): a higher layer then
  *   reads as overriding it even while the block itself is empty.
+ * @param {object} [input.law]
+ *   The law gate (drupalSettings.daedalusStylish.law, {canView}): the
+ *   declared tier's doorway opens the Law tab, so it exists only while
+ *   the host offers the tab; without the gate (or a caller that wires
+ *   none) the declaration is still named in the sentence and the row
+ *   has no doorway there. Honest chrome: the tab is the permission's.
  *
  * @return {{layer: string, tier: string, reference: ?string, color: ?string, atPose: boolean, delivers: boolean, title: string, header: string, doorways: Array<object>, alsoAt: Array<object>, alsoOn: ?{label: string, value: string}}}
  *   The origin: `layer` the supplying layer's id (the winner's; the
@@ -422,7 +430,7 @@ export const supplierName = (layer) => {
  *   value}), the winner's delivering condition excluded, `alsoOn` the
  *   address rule's second authored value on another of the binding's
  *   boxes ({label, value}: the Button's link background over a root
- *   band, read from `read.alsoOn`, controls.js resolveCandidates), null
+ *   background, read from `read.alsoOn`, controls.js resolveCandidates), null
  *   when there is none or the read carries no address fact.
  */
 export const originOf = (
@@ -437,6 +445,7 @@ export const originOf = (
     sectionLayouts = {},
     faceOf = (value) => value,
     staged = false,
+    law = {},
   },
 ) => {
   const editable = editableLayer(stack);
@@ -751,13 +760,22 @@ export const originOf = (
                 '!value': value,
                 '!declaration': declaration,
               });
-          return hued(winner, sentence, [
-            declaredDoorway(
-              layerAt(stack, winner.layer)?.scope ?? null,
-              property,
-              declaration,
-            ),
-          ]);
+          // The doorway exists only while the host offers the Law tab
+          // (the law gate): the sentence names the declaration either
+          // way, the road to it is the permission's.
+          return hued(
+            winner,
+            sentence,
+            law.canView === true
+              ? [
+                  declaredDoorway(
+                    layerAt(stack, winner.layer)?.scope ?? null,
+                    property,
+                    declaration,
+                  ),
+                ]
+              : [],
+          );
         }
         default: {
           // An element-tier layer beneath the editable one (no layer

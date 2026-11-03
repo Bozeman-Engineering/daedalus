@@ -21,9 +21,15 @@
  *
  * Modules contribute ruler bands via (window.DaedalusUiCanvasStops
  * ||= []).push({min?, max?, label, name}) — inclusive px edges, missing
- * edges unbounded; no load-order coupling either way. The ruler renders
- * each band as a labeled span with ticks on the band edges, and lights
- * the band the EFFECTIVE width (posed ?? measured) sits in. It shows
+ * edges unbounded; no load-order coupling either way. Beside that
+ * permanent vocabulary, Drupal.Daedalus.CanvasVector.mark(bands) marks
+ * bands IN USE for the moment (the contributor's literal width clauses
+ * on the selected element's rows), replacing the previous marks whole,
+ * so a contributor re-marks on every change and marks nothing to clear.
+ * The ruler renders each band as a labeled span with ticks on the band
+ * edges, and lights every band the EFFECTIVE width (posed ?? measured)
+ * sits in (a marked band nested in a contributed one lights beside it).
+ * It shows
  * only while the canvas is constrained in any way (a width posed at
  * all, or the unposed stage squeezed below base's floor by rails or a
  * narrow window) and rests when the stage sits at its natural full
@@ -40,7 +46,7 @@ import { applyToSheets } from './emulate-media.js';
 import {
   normalizeBands,
   bandEdgeTicks,
-  bandFor,
+  bandsHolding,
   constrained,
 } from './ruler-bands.js';
 
@@ -58,11 +64,19 @@ import {
           const vector = createVector(parseBootState(window.location.search));
 
           // ------------------------------------------------------------------
-          // Width bands: drained from the global queue, live thereafter.
+          // Width bands: the contributed vocabulary drained from the global
+          // queue (live thereafter) plus the bands marked in use through the
+          // facade's mark() lane; the ruler shows their union.
           // ------------------------------------------------------------------
           let bands = [];
+          let marked = [];
+          let shown = [];
+          const refreshBands = () => {
+            shown = normalizeBands([...bands, ...marked]);
+          };
           const acceptBands = (entries) => {
             bands = normalizeBands([...bands, ...entries]);
+            refreshBands();
           };
           window.DaedalusUiCanvasStops ||= [];
           const queue = window.DaedalusUiCanvasStops;
@@ -71,6 +85,11 @@ import {
             acceptBands(entries);
             buildRuler();
             return queue.length;
+          };
+          const markBands = (entries) => {
+            marked = normalizeBands(entries);
+            refreshBands();
+            buildRuler();
           };
 
           // ------------------------------------------------------------------
@@ -212,7 +231,7 @@ import {
             ruler.replaceChildren();
             rulerBands = [];
             rulerTicks = [];
-            bands.forEach((band) => {
+            shown.forEach((band) => {
               ['left', 'right'].forEach((side) => {
                 const span = document.createElement('span');
                 span.className = 'canvas-vector-ruler__band';
@@ -223,7 +242,7 @@ import {
                 rulerBands.push({ el: span, band, side });
               });
             });
-            bandEdgeTicks(bands).forEach((px) => {
+            bandEdgeTicks(shown).forEach((px) => {
               ['left', 'right'].forEach((side) => {
                 const tick = document.createElement('span');
                 tick.className = 'canvas-vector-ruler__mark';
@@ -266,10 +285,12 @@ import {
           };
 
           /**
-           * The ruler's one width-driven refresher. Lights the band the
-           * effective width (posed ?? measured) sits in. Above every band,
-           * or with nothing measured yet, nothing lights: that space is
-           * deliberately bandless, the contributor's unconditioned base.
+           * The ruler's one width-driven refresher. Lights every band the
+           * effective width (posed ?? measured) sits in (ruler-bands.js
+           * bandsHolding: one of the contributed vocabulary, plus any
+           * marked band nested there). Above every band, or with nothing
+           * measured yet, nothing lights: that space is deliberately
+           * bandless, the contributor's unconditioned base.
            * Shows the ruler only while the canvas is constrained
            * (ruler-bands.js constrained(): any pose, or the unposed stage
            * measured inside a band); while a handle drag is live the
@@ -280,13 +301,13 @@ import {
            */
           const updateRuler = () => {
             const posed = vector.get().width;
-            const active = bandFor(bands, posed ?? measured);
+            const holding = bandsHolding(shown, posed ?? measured);
             rulerBands.forEach(({ el, band }) => {
-              el.classList.toggle('is-active', band === active);
+              el.classList.toggle('is-active', holding.includes(band));
             });
             ruler.classList.toggle(
               'is-constrained',
-              constrained(bands, posed, measured),
+              constrained(shown, posed, measured),
             );
             const effective = posed ?? measured;
             readout.textContent = effective === null ? '' : `${effective}px`;
@@ -472,7 +493,8 @@ import {
               facadeListeners.add(listener);
               return () => facadeListeners.delete(listener);
             },
-            bands: () => bands.map((band) => ({ ...band })),
+            bands: () => shown.map((band) => ({ ...band })),
+            mark: markBands,
           };
         },
       );

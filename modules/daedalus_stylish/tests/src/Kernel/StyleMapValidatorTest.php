@@ -14,6 +14,7 @@ use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\Exception\VariantValidationException;
 use Drupal\daedalus_stylish\MediaToken;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 use Drupal\daedalus_stylish\StyleMapValidator;
 use Drupal\file\Entity\File;
 use Drupal\media\Entity\Media;
@@ -70,6 +71,7 @@ class StyleMapValidatorTest extends KernelTestBase {
     'block_content',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -95,26 +97,20 @@ class StyleMapValidatorTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    // All four material storages: the roster reads them on every build,
+    // All three material storages: the roster reads them on every build,
     // and activating a design system (the enforcement door) recompiles
     // the delivery files over the same four.
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-*, var() and family references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installEntitySchema('user');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->validator = $this->container->get('daedalus_stylish.style_map_validator');
@@ -288,6 +284,29 @@ class StyleMapValidatorTest extends KernelTestBase {
   }
 
   /**
+   * Layers a base section declaring p (as layerBase()) and a (color).
+   *
+   * For the admission tests: a declared link tag beside the paragraph,
+   * so a qualifier on `a` is judged on strict rather than the tag.
+   */
+  protected function layerBaseAndLinks(): void {
+    $this->layer('site', [
+      'base' => [
+        'p' => [
+          'property_groups' => [
+            'typography' => [
+              'constraints' => [
+                'font-size' => ['max' => '2rem'],
+              ],
+            ],
+          ],
+        ],
+        'a' => ['property_groups' => ['color' => []]],
+      ],
+    ]);
+  }
+
+  /**
    * Tag-tier keys resolve through the site's base section, on any owner.
    *
    * A "{key}::p" key (sub without the leading dot) is the element-scoped
@@ -328,22 +347,353 @@ class StyleMapValidatorTest extends KernelTestBase {
       "block:$uuid::blockquote" => ['default' => ['background-color' => 'red']],
     ]));
 
-    // An undeclared tag rejects on the default (non-strict) posture too:
-    // the key is only grammar for declared base tags. em is legal but
-    // undeclared; div is outside the vocabulary; the instance lane's
-    // identity tags never widen the tier.
+    // An undeclared tag follows the grant posture like every other
+    // vocabulary: on the default (guarded) posture it is admitted
+    // grant-less, grammar-checked only, whether BASE_TAGS lists it (em)
+    // or not (div); the instance lane's identity tags never widen the
+    // tier (em stays grant-less: no base constraint binds). A tag the
+    // browser does not know is a typo in every mode, the tier's nearest
+    // names suggested.
     $this->layer('instances', ['.s-*' => ['tags' => ['em' => 'Emphasis']]]);
+    $this->assertSame([], $this->validator->validate([
+      "block:$uuid::em" => ['default' => ['font-size' => '3rem']],
+      "block:$uuid::div" => ['default' => ['font-size' => '1rem']],
+    ]));
+    $errors = $this->validator->validate([
+      "block:$uuid::divv" => ['default' => ['font-size' => '1rem']],
+    ]);
+    $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $this->codes($errors)["block:$uuid::divv"]);
+    $this->assertSame('tag', $errors[0]->getContext()['kind']);
+    $this->assertContains('div', $errors[0]->getContext()['similar']);
+    $this->assertStringContainsString('Did you mean', $errors[0]->getHint());
+    // Strict refuses the undeclared tag naming the declared base tags.
+    $this->enforce('strict');
     $errors = $this->validator->validate([
       "block:$uuid::em" => ['default' => ['font-size' => '1rem']],
       "block:$uuid::div" => ['default' => ['font-size' => '1rem']],
+      "block:$uuid::divv" => ['default' => ['font-size' => '1rem']],
     ]);
     $codes = $this->codes($errors);
     $this->assertSame(['STYLE_TAG_NOT_DECLARED'], $codes["block:$uuid::em"]);
     $this->assertSame(['STYLE_TAG_NOT_DECLARED'], $codes["block:$uuid::div"]);
+    $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $codes["block:$uuid::divv"]);
     $this->assertSame($this->container->get('daedalus_stylish.style_guide')->baseTags(self::THEME), $errors[0]->getContext()['declared_tags']);
     $this->assertContains('a', $errors[0]->getContext()['declared_tags']);
     $this->assertNotContains('em', $errors[0]->getContext()['declared_tags']);
-    $this->assertStringContainsString('Declared base tags:', $errors[0]->getHint());
+    $this->assertStringContainsString('declared base tags may be named:', $errors[0]->getHint());
+  }
+
+  /**
+   * Admission by mode is one rule for every vocabulary: the tag joins it.
+   *
+   * A tag the site's base section does not declare (nav, span, button:
+   * none of them BASE_TAGS entries) is refused on a strict site
+   * (STYLE_TAG_NOT_DECLARED) and admitted grant-less on an open or
+   * guarded one, in a chain, inside a `:has()` argument and as a box's
+   * host alike; a word the browser does not know is refused in every
+   * mode with the tier's nearest names (STYLE_SELECTOR_UNKNOWN).
+   */
+  public function testTagAdmissionByMode(): void {
+    $this->layerBaseAndLinks();
+    $this->layer('block_types', [
+      'text' => ['property_groups' => ['spacing' => []]],
+    ]);
+    $uuid = self::UUID;
+    $map = [
+      "block:$uuid::nav" => ['default' => ['display' => 'flex']],
+      "block:$uuid::nav a" => ['default' => ['color' => 'red']],
+      "block:$uuid::> d-text:has(button)" => ['default' => ['padding' => '1rem']],
+      "block:$uuid::span::before" => ['default' => ['content' => '""']],
+      "block:$uuid::p span" => ['default' => ['color' => 'red']],
+    ];
+    foreach (['guarded', 'open'] as $mode) {
+      $this->enforce($mode);
+      $this->assertSame([], $this->validator->validate($map), "$mode admits a tag the browser knows, grant-less.");
+      // Grant-less means grammar-checked: the value grammar still holds.
+      $codes = $this->codes($this->validator->validate([
+        "block:$uuid::nav" => ['default' => ['display' => 'sideways']],
+      ]));
+      $this->assertSame(['INVALID_STYLE_VALUE'], $codes["block:$uuid::nav.default.display"]);
+      $errors = $this->validator->validate([
+        "block:$uuid::navv" => ['default' => ['display' => 'flex']],
+        "block:$uuid::> d-text:has(buton)" => ['default' => ['padding' => '1rem']],
+      ]);
+      $codes = $this->codes($errors);
+      $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $codes["block:$uuid::navv"], "$mode refuses a tag the browser does not know.");
+      $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $codes["block:$uuid::> d-text:has(buton)"]);
+      $this->assertSame(['nav'], array_slice($errors[0]->getContext()['similar'], 0, 1));
+      $this->assertContains('button', $errors[1]->getContext()['similar']);
+    }
+    $this->enforce('strict');
+    $codes = $this->codes($this->validator->validate($map + [
+      "block:$uuid::navv" => ['default' => ['display' => 'flex']],
+    ]));
+    foreach (array_keys($map) as $key) {
+      $this->assertSame(['STYLE_TAG_NOT_DECLARED'], $codes[$key], "strict refuses $key");
+    }
+    $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $codes["block:$uuid::navv"]);
+  }
+
+  /**
+   * Literal condition clauses are admitted by mode, references everywhere.
+   *
+   * The WHEN side of the one admission rule: a published reference
+   * ("hover", "narrow") is admitted in every mode; a literal the browser
+   * knows (a feature query with its at-rule, a supports test, an
+   * unpublished pseudo-class) is admitted on open and guarded and refused
+   * on strict (INVALID_STYLE_CONDITION naming the published references
+   * on its axis, the closed world); a literal the browser does not know
+   * (a feature or value outside the wide condition tier, a pseudo-class
+   * outside the selector tier, a supports declaration naming no
+   * recognized property) is refused in every mode with the nearest
+   * names; a position pseudo-class is selector text; a prefixless query
+   * is corrected toward its at-rule spellings, on strict toward the
+   * references; one clause per axis holds for literals too, and a
+   * literal's axis is its feature's (a token value takes a literal width
+   * band, never a pointer literal).
+   */
+  public function testLiteralConditionAdmissionByMode(): void {
+    $uuid = self::UUID;
+    $entry = static fn (array $conditions): array => ["entity:$uuid" => array_map(static fn (): array => ['padding' => '1rem'], array_flip($conditions))];
+    $conditionCodes = fn (array $conditions): array => array_filter(
+      $this->codes($this->validator->validate($entry($conditions))),
+      static fn (string $path): bool => !str_ends_with($path, '.padding'),
+      ARRAY_FILTER_USE_KEY,
+    );
+    $known = [
+      '@media (hover: hover)',
+      '@media (min-width: 900px)',
+      '@container (min-width: 500px)',
+      '@container (inline-size: 40em)',
+      '@media (prefers-contrast: more)',
+      '@media screen and (orientation: landscape)',
+      '@media (color)',
+      '@supports (display: grid)',
+      '@supports not (display: grid) and selector(:has(a))',
+      '@supports (--x: 1)',
+      ':checked',
+      ':visited',
+      '@container (min-width: 500px)+hover',
+      'narrow+@media (prefers-contrast: more)',
+    ];
+    $typos = [
+      '@media (hovre: hover)' => ['hover'],
+      '@media (hover: sometimes)' => [],
+      '@media (min-width: wide)' => [],
+      '@container (prefers-color-scheme: dark)' => [],
+      '@container (min-width)' => [],
+      '@supports (dispaly: grid)' => ['display'],
+      '@supports foo' => [],
+      ':hovre' => ['hover'],
+      ':first-child' => [],
+      ':not' => [],
+    ];
+    foreach (['guarded', 'open'] as $mode) {
+      $this->enforce($mode);
+      $this->assertSame([], $conditionCodes($known), "$mode admits every literal the browser knows.");
+      // A literal spelling a published wrapper is that reference, so it
+      // collides with the name as a duplicate, never as a second clause.
+      $this->assertSame(['DUPLICATE_STYLE_CONDITION'], $conditionCodes(['narrow', '@container (max-width: 767px)'])["entity:$uuid.@container (max-width: 767px)"]);
+      foreach ($typos as $condition => $similar) {
+        $errors = $this->validator->validate($entry([$condition]));
+        $this->assertCount(1, $errors, "$mode refuses \"$condition\" once");
+        $this->assertSame('INVALID_STYLE_CONDITION', $errors[0]->getCode(), "$mode refuses \"$condition\"");
+        $this->assertSame("entity:$uuid.$condition", $errors[0]->getPath());
+        if ($similar !== []) {
+          $this->assertSame($similar, array_slice($errors[0]->getContext()['similar'], 0, 1), "\"$condition\" suggests the nearest name");
+        }
+      }
+      $errors = $this->validator->validate($entry([':first-child']));
+      $this->assertStringContainsString('selector text', $errors[0]->getMessage());
+      $this->assertStringContainsString('::&:first-child', $errors[0]->getHint());
+      $errors = $this->validator->validate($entry(['@container (prefers-color-scheme: dark)']));
+      $this->assertStringContainsString('"prefers-color-scheme" is a @media feature', $errors[0]->getHint());
+      $errors = $this->validator->validate($entry(['@media (hover: sometimes)']));
+      $this->assertSame(['none', 'hover'], $errors[0]->getContext()['valid_values']);
+      // A prefixless query names no at-rule: corrected toward both.
+      $errors = $this->validator->validate($entry(['(min-width: 900px)']));
+      $this->assertSame(['INVALID_STYLE_CONDITION'], array_map(static fn ($error) => $error->getCode(), $errors));
+      $this->assertSame(['@container (min-width: 900px)', '@media (min-width: 900px)'], $errors[0]->getContext()['spellings']);
+      $this->assertStringContainsString('narrow, medium', $errors[0]->getHint());
+      // One clause per axis holds for literals: a literal's axis is its
+      // feature's, a published sibling's where one tests the feature.
+      $codes = $conditionCodes([
+        '@media (hover: hover)+@media (hover: none)',
+        'narrow+@container (min-width: 500px)',
+        '@media (prefers-color-scheme: light)+dark',
+      ]);
+      $this->assertSame(['STYLE_CONDITION_AXIS_CONFLICT'], $codes["entity:$uuid.@media (hover: hover)+@media (hover: none)"]);
+      $this->assertSame(['STYLE_CONDITION_AXIS_CONFLICT'], $codes["entity:$uuid.narrow+@container (min-width: 500px)"]);
+      $this->assertSame(['STYLE_CONDITION_AXIS_CONFLICT'], $codes["entity:$uuid.@media (prefers-color-scheme: light)+dark"]);
+      // A token value varies on the width, scheme and motion axes: a
+      // literal width band is admitted, a pointer literal is not.
+      $this->assertTrue($this->validator->fitsTokenShape([
+        'default' => '#111',
+        '@container (min-width: 500px)' => '#222',
+        '@media (prefers-color-scheme: light)' => '#333',
+      ], ['shape' => 'color']), "$mode admits a literal on a token axis");
+      $this->assertFalse($this->validator->fitsTokenShape(['default' => '#111', '@media (hover: hover)' => '#222'], ['shape' => 'color']), "$mode refuses a pointer literal on a token value");
+    }
+    $this->enforce('strict');
+    $this->assertSame([], $conditionCodes(['hover', 'narrow', 'narrow+dark']), 'strict admits every reference.');
+    $this->assertSame([], $conditionCodes(['@container (max-width: 767px)', ':hover+dark']), 'strict admits a reference however it is spelled: a literal equal to a published wrapper is that reference.');
+    $codes = $conditionCodes($known);
+    foreach ($known as $condition) {
+      $this->assertSame(['INVALID_STYLE_CONDITION'], $codes["entity:$uuid.$condition"], "strict refuses the literal \"$condition\"");
+    }
+    $errors = $this->validator->validate($entry(['@media (min-width: 900px)']));
+    $this->assertSame(['narrow', 'medium'], $errors[0]->getContext()['valid_conditions'], 'strict names the references on the literal\'s axis');
+    $this->assertStringContainsString('narrow, medium', $errors[0]->getHint());
+    $errors = $this->validator->validate($entry(['(min-width: 900px)']));
+    $this->assertSame(['narrow', 'medium'], $errors[0]->getContext()['valid_conditions'], 'strict names the references for a prefixless query too');
+    $this->assertStringContainsString('narrow, medium', $errors[0]->getHint());
+    $errors = $this->validator->validate($entry(['@media (hover: hover)']));
+    $this->assertContains('narrow', $errors[0]->getContext()['valid_conditions'], 'an axis nothing is published on names every reference');
+    foreach (array_keys($typos) as $condition) {
+      $this->assertSame(['INVALID_STYLE_CONDITION'], $conditionCodes([$condition])["entity:$uuid.$condition"], "strict refuses the typo \"$condition\"");
+    }
+  }
+
+  /**
+   * Class and pseudo-class qualifiers are admitted by mode on every compound.
+   *
+   * A class qualifier is a declared part where one matches (every mode),
+   * else a markup class: refused on strict (STYLE_CLASS_NOT_DECLARED
+   * naming the declared parts), admitted on open and guarded ON THE
+   * COMPOUND'S OWN LANDING (the landing's constraint still binds, since a
+   * qualifier never moves the landing). A pseudo-class qualifier is a
+   * published condition where one is spelled by it (every mode, in a
+   * chain, on the anchor, inside `:not()` and `:has()`), else a state the
+   * browser knows: refused on strict (STYLE_STATE_NOT_DECLARED naming the
+   * published states), admitted on open and guarded; a pseudo-class the
+   * browser does not know is refused everywhere with the nearest names.
+   */
+  public function testQualifierAdmissionByMode(): void {
+    $this->layerBaseAndLinks();
+    $this->layer('block_types', [
+      'text' => [
+        'property_groups' => ['typography' => ['constraints' => ['font-size' => ['max' => '1.5rem']]]],
+        'elements' => ['.link' => ['label' => 'Link', 'property_groups' => ['typography' => []]]],
+      ],
+    ]);
+    $uuid = self::UUID;
+    $published = [
+      "container:$uuid::p:hover a" => ['default' => ['color' => 'red']],
+      "container:$uuid::&:hover > p" => ['default' => ['color' => 'red']],
+      "container:$uuid::> d-text:not(:hover)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text:has(a:focus-visible)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::p:focus-within" => ['default' => ['font-size' => '1rem']],
+    ];
+    $declared_part = [
+      "container:$uuid::> d-text.link" => ['default' => ['font-size' => '1rem']],
+    ];
+    $markup = [
+      "container:$uuid::p.active" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::&.open > p" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text.featured" => ['default' => ['font-size' => '1rem']],
+    ];
+    // A lone class inside `:not()` is a class PART compound by the
+    // grammar (`:not(.active)` negates the part), judged by the part
+    // posture: admitted by mode, strict naming the declared parts.
+    $negated_part = [
+      "container:$uuid::p:not(.active)" => ['default' => ['font-size' => '1rem']],
+    ];
+    $states = [
+      "container:$uuid::a:visited" => ['default' => ['color' => 'red']],
+      "container:$uuid::p:has(a:visited)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::&:focus-within:not(:disabled) > p" => ['default' => ['font-size' => '1rem']],
+    ];
+    $typos = [
+      "container:$uuid::a:hovre" => ['default' => ['color' => 'red']],
+      "container:$uuid::p:not(:hovered) a" => ['default' => ['color' => 'red']],
+    ];
+    foreach (['guarded', 'open'] as $mode) {
+      $this->enforce($mode);
+      $this->assertSame([], $this->validator->validate($published + $declared_part + $markup + $negated_part + $states), "$mode admits every qualifier the browser knows.");
+      // The landing's constraint binds through the qualifier where
+      // constraints are law (guarded; open demotes them to offers):
+      // p.active is still base.p (font-size at most 2rem), d-text.featured
+      // still the text type (1.5rem), the anchor's state still the
+      // owner's chain.
+      $bound = $mode === 'guarded' ? ['STYLE_VALUE_ABOVE_MAX'] : NULL;
+      $codes = $this->codes($this->validator->validate([
+        "container:$uuid::p.active" => ['default' => ['font-size' => '3rem']],
+        "container:$uuid::> d-text.featured" => ['default' => ['font-size' => '1.75rem']],
+        "container:$uuid::p:not(:hover)" => ['default' => ['font-size' => '3rem']],
+        "container:$uuid::&.open > d-text:visited" => ['default' => ['font-size' => '1.75rem']],
+      ]));
+      $this->assertSame($bound, $codes["container:$uuid::p.active.default.font-size"] ?? NULL, "$mode: the qualified compound keeps its landing's grant");
+      $this->assertSame($bound, $codes["container:$uuid::> d-text.featured.default.font-size"] ?? NULL);
+      $this->assertSame($bound, $codes["container:$uuid::p:not(:hover).default.font-size"] ?? NULL);
+      $this->assertSame($bound, $codes["container:$uuid::&.open > d-text:visited.default.font-size"] ?? NULL);
+      $errors = $this->validator->validate($typos);
+      $codes = $this->codes($errors);
+      $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $codes["container:$uuid::a:hovre"], "$mode refuses a pseudo-class the browser does not know.");
+      $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $codes["container:$uuid::p:not(:hovered) a"]);
+      $this->assertSame('pseudo-class', $errors[0]->getContext()['kind']);
+      $this->assertSame(['hover'], array_slice($errors[0]->getContext()['similar'], 0, 1));
+      $this->assertStringContainsString('Did you mean :hover', $errors[0]->getHint());
+      $this->assertContains('hover', $errors[1]->getContext()['similar']);
+    }
+    $this->enforce('strict');
+    $this->assertSame([], $this->validator->validate($published + $declared_part), 'strict admits a published state on any compound and a class that is a declared part.');
+    $errors = $this->validator->validate($markup + $states + $typos);
+    $codes = $this->codes($errors);
+    foreach (array_keys($markup) as $key) {
+      $this->assertSame(['STYLE_CLASS_NOT_DECLARED'], $codes[$key], "strict refuses the markup class in $key");
+    }
+    foreach (array_keys($states) as $key) {
+      $this->assertSame(['STYLE_STATE_NOT_DECLARED'], $codes[$key], "strict refuses the unpublished state in $key");
+    }
+    foreach (array_keys($typos) as $key) {
+      $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $codes[$key], "strict refuses the typo in $key");
+    }
+    $this->assertStringContainsString('".active" class on "container:' . $uuid . '"', $errors[0]->getMessage());
+    $this->assertStringContainsString('must be a declared part', $errors[0]->getHint());
+    $this->assertContains('.link', $errors[2]->getContext()['declared_elements'], 'the text type\'s parts are what d-text.featured is corrected against');
+    $state = $errors[count($markup)];
+    $this->assertSame(['hover', 'focus', 'focus-within', 'focus-visible', 'active'], $state->getContext()['published_states']);
+    $this->assertStringContainsString(':visited', $state->getMessage());
+    $this->assertSame(['STYLE_ELEMENT_NOT_DECLARED'], $this->codes($this->validator->validate($negated_part))["container:$uuid::p:not(.active)"]);
+  }
+
+  /**
+   * Attribute qualifiers are admitted by mode on every compound.
+   *
+   * A predicate on the markup, never a declaration: strict refuses it
+   * (STYLE_ATTRIBUTE_NOT_DECLARED naming the attribute), open and guarded
+   * admit it on the compound's own landing, whichever operator, value or
+   * flag it carries, and wherever it stands (the anchor, a chain, a
+   * `:not()`, a `:has()` argument).
+   */
+  public function testAttributeQualifierAdmission(): void {
+    $this->layerBaseAndLinks();
+    $uuid = self::UUID;
+    $map = [
+      "container:$uuid::p[aria-expanded=\"true\"] > a" => ['default' => ['color' => 'red']],
+      "container:$uuid::a[href^=\"http\"]::after" => ['default' => ['content' => '""']],
+      "container:$uuid::&[data-open] p" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::p:not([hidden])" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-container:has(a[target=\"_blank\" i])" => ['default' => ['padding' => '1rem']],
+    ];
+    foreach (['guarded', 'open'] as $mode) {
+      $this->enforce($mode);
+      $this->assertSame([], $this->validator->validate($map), "$mode admits attribute predicates.");
+      // The landing's constraint binds through the attribute where
+      // constraints are law (guarded; open demotes them to offers).
+      $codes = $this->codes($this->validator->validate([
+        "container:$uuid::p[aria-current=\"page\"]" => ['default' => ['font-size' => '3rem']],
+      ]));
+      $this->assertSame($mode === 'guarded' ? ['STYLE_VALUE_ABOVE_MAX'] : NULL, $codes["container:$uuid::p[aria-current=\"page\"].default.font-size"] ?? NULL, "$mode: the landing's constraint binds through the attribute");
+    }
+    $this->enforce('strict');
+    $errors = $this->validator->validate($map);
+    $codes = $this->codes($errors);
+    foreach (array_keys($map) as $key) {
+      $this->assertSame(['STYLE_ATTRIBUTE_NOT_DECLARED'], $codes[$key], "strict refuses $key");
+    }
+    $this->assertSame('aria-expanded', $errors[0]->getContext()['attribute']);
+    $this->assertStringContainsString('[aria-expanded]', $errors[0]->getMessage());
   }
 
   /**
@@ -422,7 +772,7 @@ class StyleMapValidatorTest extends KernelTestBase {
    * Variant styles accept tag and type selectors; instance parts stay out.
    *
    * A structural relation transfers with the look: a "::p" relative key
-   * validates against the base tag, "::> pb-text" against the type; an
+   * validates against the base tag, "::> d-text" against the type; an
    * instance part is bound to one content's minted identities and is
    * refused wherever it stands in a selector.
    */
@@ -434,18 +784,18 @@ class StyleMapValidatorTest extends KernelTestBase {
     ], Address::fromString('kind:block')));
     $codes = $this->codes($this->validator->validateAt([
       '::.s-a3' => ['default' => ['font-size' => '1rem']],
-      '::> pb-text .s-a3' => ['default' => ['font-size' => '1rem']],
+      '::> d-text .s-a3' => ['default' => ['font-size' => '1rem']],
     ], Address::fromString('kind:container')));
     $this->assertSame(['STYLE_INSTANCE_PART_IN_VARIANT'], $codes['::.s-a3']);
-    $this->assertSame(['STYLE_INSTANCE_PART_IN_VARIANT'], $codes['::> pb-text .s-a3']);
+    $this->assertSame(['STYLE_INSTANCE_PART_IN_VARIANT'], $codes['::> d-text .s-a3']);
   }
 
   /**
    * Sibling and qualified compounds resolve by the roster walk.
    *
    * A sibling compound resolves where its predecessor did (`> p + *` on
-   * the owner's children, `> pb-text .link ~ .link` on the same part); a
-   * qualifier is vocabulary to judge and never moves the landing (`> pb-
+   * the owner's children, `> d-text .link ~ .link` on the same part); a
+   * qualifier is vocabulary to judge and never moves the landing (`> d-
    * text:has(a)` is typed by the text type, not by base.a; a `:has()`
    * argument's parts resolve against the qualified type; a `:not()`
    * compound is judged where the qualified compound stands); the first
@@ -457,7 +807,7 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->layer('kinds', [
       'container' => [
         'property_groups' => ['spacing' => []],
-        'elements' => ['.band' => ['label' => 'Band', 'property_groups' => ['spacing' => []]]],
+        'elements' => ['.section' => ['label' => 'Section', 'property_groups' => ['spacing' => []]]],
         'children' => ['property_groups' => ['spacing' => ['properties' => ['margin-top', 'margin-bottom'], 'constraints' => ['margin-top' => ['max' => '2rem']]]]],
       ],
     ]);
@@ -474,17 +824,17 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->assertSame([], $this->validator->validate([
       "container:$uuid::> p + *" => ['default' => ['margin-top' => '1rem']],
       "container:$uuid::> p ~ p" => ['default' => ['font-size' => '1rem']],
-      "container:$uuid::> pb-container > p + p" => ['default' => ['font-size' => '1rem']],
-      "container:$uuid::> pb-text .link ~ .link" => ['default' => ['font-size' => '1rem']],
-      "container:$uuid::.band + .band" => ['default' => ['padding' => '0']],
-      "container:$uuid::> pb-text:has(a)" => ['default' => ['font-size' => '1rem']],
-      "container:$uuid::> pb-text:has(.link)" => ['default' => ['font-size' => '1rem']],
-      "container:$uuid::> pb-text:has(+ pb-image)" => ['default' => ['font-size' => '1rem']],
-      "container:$uuid::> pb-container:has(> pb-image)" => ['default' => ['padding' => '1rem']],
-      "container:$uuid::> pb-container:has(> *)" => ['default' => ['padding' => '1rem']],
-      "container:$uuid::> *:not(pb-image)" => ['default' => ['margin-bottom' => '1rem']],
-      "container:$uuid::> pb-text:not(:has(a))" => ['default' => ['font-size' => '1rem']],
-      "container:$uuid::> pb-text:has(a):not(.band)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-container > p + p" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text .link ~ .link" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::.section + .section" => ['default' => ['padding' => '0']],
+      "container:$uuid::> d-text:has(a)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text:has(.link)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text:has(+ d-image)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-container:has(> d-image)" => ['default' => ['padding' => '1rem']],
+      "container:$uuid::> d-container:has(> *)" => ['default' => ['padding' => '1rem']],
+      "container:$uuid::> *:not(d-image)" => ['default' => ['margin-bottom' => '1rem']],
+      "container:$uuid::> d-text:not(:has(a))" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text:has(a):not(.section)" => ['default' => ['font-size' => '1rem']],
     ]));
 
     // The landing types the write: the sibling `*` by the children
@@ -494,44 +844,49 @@ class StyleMapValidatorTest extends KernelTestBase {
     // answered), a sibling tag by base.p.
     $codes = $this->codes($this->validator->validate([
       "container:$uuid::> p + *" => ['default' => ['margin-top' => '3rem']],
-      "container:$uuid::> *:not(pb-image)" => ['default' => ['margin-top' => '3rem']],
-      "container:$uuid::> pb-text:has(a)" => ['default' => ['font-size' => '1.75rem']],
-      "container:$uuid::> pb-text:not(:has(a))" => ['default' => ['font-size' => '1.75rem']],
+      "container:$uuid::> *:not(d-image)" => ['default' => ['margin-top' => '3rem']],
+      "container:$uuid::> d-text:has(a)" => ['default' => ['font-size' => '1.75rem']],
+      "container:$uuid::> d-text:not(:has(a))" => ['default' => ['font-size' => '1.75rem']],
       "container:$uuid::> p + p" => ['default' => ['font-size' => '3rem']],
     ]));
     $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::> p + *.default.margin-top"]);
-    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::> *:not(pb-image).default.margin-top"]);
-    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::> pb-text:has(a).default.font-size"]);
-    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::> pb-text:not(:has(a)).default.font-size"]);
+    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::> *:not(d-image).default.margin-top"]);
+    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::> d-text:has(a).default.font-size"]);
+    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::> d-text:not(:has(a)).default.font-size"]);
     $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::> p + p.default.font-size"]);
 
     // An undeclared compound inside an argument ends the walk with the
     // existing correctives: a part against the qualified type's parts, a
     // type, the children section, and a tag in every mode.
     $errors = $this->validator->validate([
-      "container:$uuid::> pb-text:has(.nope)" => ['default' => ['font-size' => '1rem']],
-      "container:$uuid::> *:not(pb-video)" => ['default' => ['margin-top' => '1rem']],
-      "container:$uuid::> pb-text:has(> *)" => ['default' => ['font-size' => '1rem']],
-      "container:$uuid::> pb-text:not(.nope)" => ['default' => ['font-size' => '1rem']],
-      "container:$uuid::> pb-text:has(a) + pb-text:has(em)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text:has(.nope)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> *:not(d-video)" => ['default' => ['margin-top' => '1rem']],
+      "container:$uuid::> d-text:has(> *)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text:not(.nope)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text:has(a) + d-text:has(em)" => ['default' => ['font-size' => '1rem']],
     ]);
     $codes = $this->codes($errors);
-    $this->assertSame(['STYLE_ELEMENT_NOT_DECLARED'], $codes["container:$uuid::> pb-text:has(.nope)"]);
+    $this->assertSame(['STYLE_ELEMENT_NOT_DECLARED'], $codes["container:$uuid::> d-text:has(.nope)"]);
     $this->assertContains('.link', $errors[0]->getContext()['declared_elements']);
-    $this->assertNotContains('.band', $errors[0]->getContext()['declared_elements']);
-    $this->assertSame(['STYLE_TYPE_NOT_DECLARED'], $codes["container:$uuid::> *:not(pb-video)"]);
-    $this->assertSame(['STYLE_CHILDREN_NOT_DECLARED'], $codes["container:$uuid::> pb-text:has(> *)"]);
-    $this->assertSame(['STYLE_ELEMENT_NOT_DECLARED'], $codes["container:$uuid::> pb-text:not(.nope)"]);
-    $this->assertContains('.band', $errors[3]->getContext()['declared_elements']);
+    $this->assertNotContains('.section', $errors[0]->getContext()['declared_elements']);
+    $this->assertSame(['STYLE_TYPE_NOT_DECLARED'], $codes["container:$uuid::> *:not(d-video)"]);
+    $this->assertSame(['STYLE_CHILDREN_NOT_DECLARED'], $codes["container:$uuid::> d-text:has(> *)"]);
+    $this->assertSame(['STYLE_ELEMENT_NOT_DECLARED'], $codes["container:$uuid::> d-text:not(.nope)"]);
+    $this->assertContains('.section', $errors[3]->getContext()['declared_elements']);
     $this->assertNotContains('.link', $errors[3]->getContext()['declared_elements']);
-    $this->assertSame(['STYLE_TAG_NOT_DECLARED'], $codes["container:$uuid::> pb-text:has(a) + pb-text:has(em)"]);
+    $this->assertSame(['STYLE_TAG_NOT_DECLARED'], $codes["container:$uuid::> d-text:has(a) + d-text:has(em)"]);
+    // An open site admits the undeclared part and the undeclared tag
+    // alike (grammar-only); a tag the browser does not know is still a
+    // typo there.
     $this->enforce('open');
     $codes = $this->codes($this->validator->validate([
-      "container:$uuid::> pb-text:has(.nope)" => ['default' => ['font-size' => '1rem']],
-      "container:$uuid::> pb-text:has(em)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text:has(.nope)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text:has(em)" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::> d-text:has(emm)" => ['default' => ['font-size' => '1rem']],
     ]));
-    $this->assertArrayNotHasKey("container:$uuid::> pb-text:has(.nope)", $codes);
-    $this->assertSame(['STYLE_TAG_NOT_DECLARED'], $codes["container:$uuid::> pb-text:has(em)"]);
+    $this->assertArrayNotHasKey("container:$uuid::> d-text:has(.nope)", $codes);
+    $this->assertArrayNotHasKey("container:$uuid::> d-text:has(em)", $codes);
+    $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $codes["container:$uuid::> d-text:has(emm)"]);
   }
 
   /**
@@ -553,9 +908,15 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->layer('kinds', [
       'container' => [
         'property_groups' => ['spacing' => ['constraints' => ['padding-top' => ['max' => '2rem']]]],
-        'elements' => ['.band' => ['label' => 'Band', 'property_groups' => ['spacing' => []]]],
+        'elements' => ['.section' => ['label' => 'Section', 'property_groups' => ['spacing' => []]]],
         'children' => ['property_groups' => ['spacing' => []]],
-        'pseudo' => ['before' => ['property_groups' => ['background' => []]]],
+        'pseudo' => [
+          'before' => ['property_groups' => ['background' => []]],
+          // A declared section for a pseudo-element with a vocabulary of
+          // its own: the section grants, the browser's allowlist still
+          // bounds (the strict block below).
+          'selection' => ['property_groups' => ['typography' => []]],
+        ],
       ],
     ]);
     $this->layer('block_types', [
@@ -570,23 +931,25 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->assertSame([], $this->validator->validate([
       "container:$uuid::&::before" => ['default' => ['content' => '""', 'background-color' => 'gold']],
       "container:$uuid::&::after" => ['default' => ['content' => 'none', 'padding-top' => '1rem']],
-      "container:$uuid::.band::after" => ['default' => ['content' => '""', 'padding' => '1rem']],
+      "container:$uuid::.section::after" => ['default' => ['content' => '""', 'padding' => '1rem']],
       "container:$uuid::> *::before" => ['default' => ['content' => '""', 'margin-top' => '1rem']],
-      "container:$uuid::> pb-text::before" => ['default' => ['content' => '""', 'font-size' => '1rem'], 'hover' => ['font-size' => '1.25rem']],
+      "container:$uuid::> d-text::before" => ['default' => ['content' => '""', 'font-size' => '1rem'], 'hover' => ['font-size' => '1.25rem']],
       "container:$uuid::p::after" => ['default' => ['content' => '""', 'font-size' => '1rem']],
     ]));
     $codes = $this->codes($this->validator->validate([
       "container:$uuid::&::after" => ['default' => ['padding-top' => '3rem']],
-      "container:$uuid::> pb-text::before" => ['default' => ['font-size' => '3rem']],
+      "container:$uuid::> d-text::before" => ['default' => ['font-size' => '3rem']],
       "container:$uuid::p::after" => ['default' => ['font-size' => '3rem']],
       "container:$uuid::.nope::before" => ['default' => ['content' => '""']],
       "container:$uuid::em::before" => ['default' => ['content' => '""']],
+      "container:$uuid::emm::before" => ['default' => ['content' => '""']],
     ]));
     $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::&::after.default.padding-top"], 'The host\'s constraint types the derived box.');
-    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::> pb-text::before.default.font-size"]);
+    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::> d-text::before.default.font-size"]);
     $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes["container:$uuid::p::after.default.font-size"]);
     $this->assertArrayNotHasKey("container:$uuid::.nope::before", $codes, 'An undeclared part is grammar on a guarded site, its box with it.');
-    $this->assertSame(['STYLE_TAG_NOT_DECLARED'], $codes["container:$uuid::em::before"], 'An undeclared tag is refused in every mode, box or not.');
+    $this->assertArrayNotHasKey("container:$uuid::em::before", $codes, 'An undeclared tag the browser knows is grammar on a guarded site (admission by mode), its box with it.');
+    $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $codes["container:$uuid::emm::before"], 'A tag the browser does not know is a typo in every mode, box or not.');
 
     // The content grammar: "", none, or exactly one media reference as
     // the whole value, nothing else, wherever the box is. The token rides
@@ -606,7 +969,7 @@ class StyleMapValidatorTest extends KernelTestBase {
     $media->save();
     $token = MediaToken::build($media->uuid());
     $this->assertSame([], $this->validator->validate(["container:$uuid::&::before" => ['default' => ['content' => $token]]]));
-    $this->assertSame([], $this->validator->validate(["container:$uuid::> pb-text::before" => ['default' => ['content' => " url(media:{$media->uuid()}) "]]]));
+    $this->assertSame([], $this->validator->validate(["container:$uuid::> d-text::before" => ['default' => ['content' => " url(media:{$media->uuid()}) "]]]));
     $this->assertSame([], $this->validator->validate(["container:$uuid::&::before" => ['default' => ['content' => ' NONE ']]]));
     foreach (['"hi"', 'attr(title)', 'counter(item)', 'open-quote', 'url(x.png)', 'url(x.svg)', 'linear-gradient(#000, #fff)', "$token, $token", "\"x\" $token", "none $token", "$token / \"alt\"", 'var(--x)', 'inherit', 'normal', "''"] as $value) {
       $errors = $this->validator->validate(["container:$uuid::&::before" => ['default' => ['content' => $value]]]);
@@ -622,8 +985,48 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->assertSame('MEDIA_NOT_FOUND', $errors[0]->getCode());
     $this->assertSame("container:$uuid::&::before.default.content", $errors[0]->getPath());
 
+    // The box slot takes any pseudo-element the browser knows: a table
+    // pseudo-element (::marker, ::placeholder, ::selection, ::first-letter,
+    // ::first-line) is styled with the properties its specification
+    // allows, in every mode (the browser ignores the rest), the refusal
+    // naming the allowlist; its host's grammar and admission hold as for
+    // a box; content is the generated boxes' alone; one the browser does
+    // not know is a typo everywhere, the nearest names suggested.
+    $this->assertSame([], $this->validator->validate([
+      "container:$uuid::&::marker" => ['default' => ['color' => 'gold', 'font-size' => '1rem'], 'hover' => ['color' => 'red']],
+      "container:$uuid::> d-text::first-letter" => ['default' => ['font-size' => '1rem', 'float' => 'left']],
+      "container:$uuid::p::selection" => ['default' => ['background-color' => 'gold']],
+      "container:$uuid::&::backdrop" => ['default' => ['padding-top' => '1rem']],
+    ]));
+    $errors = $this->validator->validate([
+      "container:$uuid::&::marker" => ['default' => ['padding-top' => '1rem']],
+      "container:$uuid::p::selection" => ['default' => ['font-size' => '1rem']],
+      "container:$uuid::&::marker " => ['default' => ['color' => 'gold']],
+      "container:$uuid::> d-text::marker" => ['default' => ['content' => '""']],
+      "container:$uuid::&::markr" => ['default' => ['color' => 'gold']],
+      "container:$uuid::&::part(x)" => ['default' => ['color' => 'gold']],
+    ]);
+    $codes = $this->codes($errors);
+    $this->assertSame(['STYLE_PROPERTY_NOT_ON_PSEUDO'], $codes["container:$uuid::&::marker.default.padding-top"]);
+    $this->assertSame('"padding-top" does not apply to ::marker.', $errors[0]->getMessage());
+    $this->assertSame('marker', $errors[0]->getContext()['pseudo']);
+    $this->assertContains('color', $errors[0]->getContext()['allowed']);
+    $this->assertNotContains('padding-top', $errors[0]->getContext()['allowed']);
+    $this->assertStringStartsWith('https://drafts.csswg.org/', $errors[0]->getContext()['spec']);
+    $this->assertStringContainsString('The browser styles ::marker with these properties only', $errors[0]->getHint());
+    $this->assertStringContainsString('color, ', $errors[0]->getHint());
+    $this->assertSame(['STYLE_PROPERTY_NOT_ON_PSEUDO'], $codes["container:$uuid::p::selection.default.font-size"]);
+    $this->assertSame(['INVALID_STYLE_KEY'], $codes["container:$uuid::&::marker "]);
+    $this->assertSame(['STYLE_PROPERTY_PSEUDO_ONLY'], $codes["container:$uuid::> d-text::marker.default.content"]);
+    $this->assertSame('"content" applies to a generated box only, and ::marker is no generated box.', $errors[3]->getMessage());
+    $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $codes["container:$uuid::&::markr"]);
+    $this->assertSame('"::markr" is not a pseudo-element the browser knows.', $errors[4]->getMessage());
+    $this->assertSame(['word' => 'markr', 'kind' => 'pseudo-element', 'similar' => ['marker']], array_intersect_key($errors[4]->getContext(), ['word' => 1, 'kind' => 1]) + ['similar' => array_slice($errors[4]->getContext()['similar'], 0, 1)]);
+    $this->assertStringStartsWith('Did you mean ::marker?', $errors[4]->getHint());
+    $this->assertSame(['INVALID_STYLE_KEY'], $codes["container:$uuid::&::part(x)"]);
+
     // content on a real box is refused in every mode, before any grant.
-    foreach (['', '::.band', '::> *', '::> pb-text', '::p'] as $suffix) {
+    foreach (['', '::.section', '::> *', '::> d-text', '::p'] as $suffix) {
       $errors = $this->validator->validate(["container:$uuid$suffix" => ['default' => ['content' => '""', 'padding-top' => '1rem']]]);
       $this->assertCount(1, $errors, $suffix);
       $this->assertSame('STYLE_PROPERTY_PSEUDO_ONLY', $errors[0]->getCode(), $suffix);
@@ -634,16 +1037,16 @@ class StyleMapValidatorTest extends KernelTestBase {
 
     // No element scope: nothing wears at a box, on either lane.
     $this->assertNull($this->validator->captureScope("container:$uuid::&::before"));
-    $this->assertNull($this->validator->captureScope("container:$uuid::> pb-text::before"));
+    $this->assertNull($this->validator->captureScope("container:$uuid::> d-text::before"));
     $this->assertNull($this->validator->captureScope("container:$uuid::p::after"));
     DaedalusStylishVariant::create(['label' => 'text_soft', 'machine_name' => 'text_soft', 'scope' => 'block_type:text'])->setStyles(['' => ['default' => ['padding' => '1rem']]])->save();
-    $errors = $this->validator->validate(["container:$uuid::> pb-text::before" => ['variants' => [['variant' => 'text_soft', 'fragment' => '']]]]);
+    $errors = $this->validator->validate(["container:$uuid::> d-text::before" => ['variants' => [['variant' => 'text_soft', 'fragment' => '']]]]);
     $this->assertCount(1, $errors);
     $this->assertSame('STYLE_VARIANT_SCOPE_MISMATCH', $errors[0]->getCode());
     $this->assertNull($errors[0]->getContext()['element_scope']);
     $this->assertStringContainsString('lands on no element scope', $errors[0]->getMessage());
     $this->assertStringContainsString('a generated box ("::&::before"', $errors[0]->getHint());
-    $errors = $this->validator->validateAt(['::> pb-text::before' => ['variants' => [['variant' => 'text_soft', 'fragment' => '']]]], Address::fromString('kind:container'));
+    $errors = $this->validator->validateAt(['::> d-text::before' => ['variants' => [['variant' => 'text_soft', 'fragment' => '']]]], Address::fromString('kind:container'));
     $this->assertSame('STYLE_VARIANT_SCOPE_MISMATCH', $errors[0]->getCode());
     $this->assertNull($errors[0]->getContext()['element_scope']);
 
@@ -651,14 +1054,14 @@ class StyleMapValidatorTest extends KernelTestBase {
     // the same way.
     $this->assertSame([], $this->validator->validateAt([
       '::&::before' => ['default' => ['content' => '""', 'background-color' => 'gold']],
-      '::> pb-text::after' => ['default' => ['content' => '""', 'font-size' => '1rem']],
+      '::> d-text::after' => ['default' => ['content' => '""', 'font-size' => '1rem']],
       'container(1)::&::after' => ['default' => ['content' => 'none']],
     ], Address::fromString('kind:container')));
     $codes = $this->codes($this->validator->validateAt([
-      '::> pb-text::after' => ['default' => ['content' => '"x"', 'font-size' => '3rem']],
+      '::> d-text::after' => ['default' => ['content' => '"x"', 'font-size' => '3rem']],
     ], Address::fromString('kind:container')));
-    $this->assertSame(['INVALID_STYLE_VALUE'], $codes['::> pb-text::after.default.content']);
-    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes['::> pb-text::after.default.font-size']);
+    $this->assertSame(['INVALID_STYLE_VALUE'], $codes['::> d-text::after.default.content']);
+    $this->assertSame(['STYLE_VALUE_ABOVE_MAX'], $codes['::> d-text::after.default.font-size']);
     $this->assertSame([], $this->validator->validateDefaults([
       'kind:container' => ['::&::before' => ['default' => ['content' => '""', 'background-color' => 'gold']]],
       'base:p' => ['::&::after' => ['default' => ['content' => '""', 'font-size' => '1rem']]],
@@ -679,51 +1082,76 @@ class StyleMapValidatorTest extends KernelTestBase {
     $errors = $this->validator->validate([
       "container:$uuid::&::before" => ['default' => ['padding-top' => '1rem']],
       "container:$uuid::&::after" => ['default' => ['content' => '""']],
-      "container:$uuid::.band::after" => ['default' => ['content' => '""']],
-      "container:$uuid::> pb-text::before" => ['default' => ['content' => '""']],
+      "container:$uuid::.section::after" => ['default' => ['content' => '""']],
+      "container:$uuid::> d-text::before" => ['default' => ['content' => '""']],
       "container:$uuid::.nope::before" => ['default' => ['content' => '""']],
       "container:$uuid" => ['default' => ['content' => '""']],
     ]);
     $codes = $this->codes($errors);
     $this->assertSame(['STYLE_PROPERTY_NOT_DECLARED'], $codes["container:$uuid::&::before.default.padding-top"]);
     $this->assertSame(['STYLE_PSEUDO_NOT_DECLARED'], $codes["container:$uuid::&::after"]);
-    $this->assertSame(['STYLE_PSEUDO_NOT_DECLARED'], $codes["container:$uuid::.band::after"]);
-    $this->assertSame(['STYLE_PSEUDO_NOT_DECLARED'], $codes["container:$uuid::> pb-text::before"]);
+    $this->assertSame(['STYLE_PSEUDO_NOT_DECLARED'], $codes["container:$uuid::.section::after"]);
+    $this->assertSame(['STYLE_PSEUDO_NOT_DECLARED'], $codes["container:$uuid::> d-text::before"]);
     $this->assertSame(['STYLE_ELEMENT_NOT_DECLARED'], $codes["container:$uuid::.nope::before"]);
     $this->assertSame(['STYLE_PROPERTY_PSEUDO_ONLY'], $codes["container:$uuid.default.content"]);
     $this->assertSame('The style guide does not declare the ::after pseudo-element of "container:' . $uuid . '".', $errors[1]->getMessage());
     $this->assertSame('after', $errors[1]->getContext()['pseudo']);
     $this->assertStringContainsString('{pseudo: {after: {property_groups: {…}}}}', $errors[1]->getHint());
-    $this->assertSame('The style guide does not declare the ::after pseudo-element of ".band".', $errors[2]->getMessage());
-    $this->assertSame('The style guide does not declare the ::before pseudo-element of "> pb-text".', $errors[3]->getMessage());
-    $this->assertContains('.band', $errors[4]->getContext()['declared_elements']);
+    $this->assertSame('The style guide does not declare the ::after pseudo-element of ".section".', $errors[2]->getMessage());
+    $this->assertSame('The style guide does not declare the ::before pseudo-element of "> d-text".', $errors[3]->getMessage());
+    $this->assertContains('.section', $errors[4]->getContext()['declared_elements']);
     // The corrective of a declared box teaches its own grant.
     $this->assertSame(['background', 'generated_content'], $errors[0]->getContext()['declared_groups']);
     $this->assertContains('content', $errors[0]->getContext()['declared_properties']);
     $this->assertNotContains('padding-top', $errors[0]->getContext()['declared_properties']);
 
+    // Strict: an undeclared table pseudo-element is refused like a
+    // derived box (the corrective names the section); a declared one is
+    // closed to its section, and the browser's allowlist refuses before
+    // the grant is even asked.
+    $this->assertSame([], $this->validator->validate([
+      "container:$uuid::&::selection" => ['default' => ['color' => 'gold']],
+    ]));
+    $codes = $this->codes($errors = $this->validator->validate([
+      "container:$uuid::&::marker" => ['default' => ['color' => 'gold']],
+      "container:$uuid::&::selection" => ['default' => ['padding-top' => '1rem', 'font-size' => '1rem']],
+    ]));
+    $this->assertSame(['STYLE_PSEUDO_NOT_DECLARED'], $codes["container:$uuid::&::marker"]);
+    $this->assertStringContainsString('The browser knows the ::marker pseudo-element, but this site enforces its style guide', $errors[0]->getHint());
+    $this->assertStringContainsString('{pseudo: {marker: {property_groups: {…}}}}', $errors[0]->getHint());
+    $this->assertSame(['STYLE_PROPERTY_NOT_ON_PSEUDO'], $codes["container:$uuid::&::selection.default.padding-top"], 'The browser\'s law, before the grant.');
+    $this->assertSame(['STYLE_PROPERTY_NOT_ON_PSEUDO'], $codes["container:$uuid::&::selection.default.font-size"], 'Declared typography cannot widen what the browser styles on a highlight.');
+
     // Open: the derivation is granted, the undeclared part is grammar, the
-    // content grammar and the real-box refusal hold.
+    // content grammar and the real-box refusal hold; an undeclared tag's
+    // marker is grammar-only too, its color admitted and its padding
+    // refused by the browser's own law.
     $this->enforce('open');
     $this->assertSame([], $this->validator->validate([
       "container:$uuid::&::after" => ['default' => ['content' => '""', 'padding-top' => '3rem']],
       "container:$uuid::.nope::before" => ['default' => ['content' => '""']],
+      "container:$uuid::li::marker" => ['default' => ['color' => 'gold']],
     ]));
+    $codes = $this->codes($errors = $this->validator->validate([
+      "container:$uuid::li::marker" => ['default' => ['padding' => '1rem']],
+    ]));
+    $this->assertSame(['STYLE_PROPERTY_NOT_ON_PSEUDO'], $codes["container:$uuid::li::marker.default.padding"]);
+    $this->assertStringContainsString('color', $errors[0]->getHint());
     $codes = $this->codes($this->validator->validate([
       "container:$uuid::&::after" => ['default' => ['content' => '"x"']],
-      "container:$uuid::.band" => ['default' => ['content' => '""']],
+      "container:$uuid::.section" => ['default' => ['content' => '""']],
     ]));
     $this->assertSame(['INVALID_STYLE_VALUE'], $codes["container:$uuid::&::after.default.content"]);
-    $this->assertSame(['STYLE_PROPERTY_PSEUDO_ONLY'], $codes["container:$uuid::.band.default.content"]);
+    $this->assertSame(['STYLE_PROPERTY_PSEUDO_ONLY'], $codes["container:$uuid::.section.default.content"]);
   }
 
   /**
-   * A nested container is granted exactly what the page band is.
+   * A nested container is granted exactly what the section is.
    *
    * Placement curates offers and birth, never legality: the validator
    * resolves one declaration per layout for any placement, so with the
    * host entity in context (both placements locatable) an allowlist
-   * refuses the same properties on the band and on the container nested
+   * refuses the same properties on the section and on the container nested
    * inside it, both correctives teach the same roster, and the whole
    * group grants the shorthand and the inline sides to both. Without the
    * host in context the answer is the same again.
@@ -751,7 +1179,7 @@ class StyleMapValidatorTest extends KernelTestBase {
     ]);
     $this->enforce('strict');
 
-    // One root band nesting one container (sections all the way down).
+    // One root section nesting one container (sections all the way down).
     $root_uuid = 'aaaaaaaa-1111-2222-3333-444444444444';
     $nested_uuid = 'bbbbbbbb-1111-2222-3333-444444444444';
     $nested = new Section('layout_onecol', [], [], ['daedalus_layout' => ['uuid' => $nested_uuid]]);
@@ -849,8 +1277,8 @@ class StyleMapValidatorTest extends KernelTestBase {
    * The warning learns depth: width is root-only (neither offered nor
    * wearable nested), so `max-width` written on a container the locator
    * places inside another section's region is the recorded recipe (a
-   * full-width band with a nested container carrying its own max-width),
-   * not a miss, and warns nothing. The same write on the root band still
+   * full-width section with a nested container carrying its own max-width),
+   * not a miss, and warns nothing. The same write on the root section still
    * warns STYLE_PROPERTY_AXIS_OWNED naming width, and a property an
    * every-depth axis owns (`padding-top` under rhythm here) warns at both
    * depths. A key the locator cannot place (no host in context) keeps the
@@ -880,7 +1308,7 @@ class StyleMapValidatorTest extends KernelTestBase {
       ],
     ]);
 
-    // One root band nesting one container (sections all the way down).
+    // One root section nesting one container (sections all the way down).
     $root_uuid = 'aaaaaaaa-1111-2222-3333-444444444444';
     $nested_uuid = 'bbbbbbbb-1111-2222-3333-444444444444';
     $nested = new Section('layout_onecol', [], [], ['daedalus_layout' => ['uuid' => $nested_uuid]]);
@@ -1144,7 +1572,7 @@ class StyleMapValidatorTest extends KernelTestBase {
    *
    * A rule key captures the element its last compound names (a type's
    * root address, a tag's base tag), so a text variant wears at
-   * "::> pb-text" and a container variant is refused there with the
+   * "::> d-text" and a container variant is refused there with the
    * text-scoped candidates; a part, the children and a subjectless
    * compound land on no element scope and wear nothing; a composition is
    * refused at any rule by its keys. keyAddress() keeps answering the
@@ -1171,7 +1599,7 @@ class StyleMapValidatorTest extends KernelTestBase {
     ]);
     foreach ([
       ['text_soft', 'block_type:text'],
-      ['band', 'kind:container'],
+      ['section', 'kind:container'],
       ['link_style', 'base:a'],
     ] as [$name, $scope]) {
       $variant = DaedalusStylishVariant::create(['label' => $name, 'machine_name' => $name, 'scope' => $scope]);
@@ -1189,34 +1617,34 @@ class StyleMapValidatorTest extends KernelTestBase {
     // The capture: an element its own root, a rule its landing, and
     // nothing where the targets are no element scope.
     $this->assertSame('kind:container', (string) $this->validator->captureScope("container:$uuid"));
-    $this->assertSame('block_type:text', (string) $this->validator->captureScope("container:$uuid::> pb-text"));
-    $this->assertSame('kind:container', (string) $this->validator->captureScope("container:$uuid::> pb-text > pb-container"));
+    $this->assertSame('block_type:text', (string) $this->validator->captureScope("container:$uuid::> d-text"));
+    $this->assertSame('kind:container', (string) $this->validator->captureScope("container:$uuid::> d-text > d-container"));
     $this->assertSame('base:a', (string) $this->validator->captureScope("container:$uuid::a"));
     $this->assertSame('base:p', (string) $this->validator->captureScope("container:$uuid::> p + p"));
-    $this->assertNull($this->validator->captureScope("container:$uuid::> pb-text .link"));
+    $this->assertNull($this->validator->captureScope("container:$uuid::> d-text .link"));
     $this->assertNull($this->validator->captureScope("container:$uuid::> *"));
-    $this->assertNull($this->validator->captureScope("container:$uuid::> *:not(pb-image)"));
+    $this->assertNull($this->validator->captureScope("container:$uuid::> *:not(d-image)"));
     $this->assertNull($this->validator->captureScope('bogus'));
-    $this->assertSame('kind:container::> pb-text', (string) $this->validator->keyAddress("container:$uuid::> pb-text"));
+    $this->assertSame('kind:container::> d-text', (string) $this->validator->keyAddress("container:$uuid::> d-text"));
     $this->assertSame('kind:container', (string) $this->validator->keyAddress("container:$uuid"));
 
     // Pairing by the landing: the text variant wears at the text rule,
     // the link treatment at the anchor rule; the container variant is
     // refused at both with the candidates that DO pair at the rule.
-    $this->assertSame([], $this->validator->validate($wearing("container:$uuid::> pb-text", 'text_soft')));
+    $this->assertSame([], $this->validator->validate($wearing("container:$uuid::> d-text", 'text_soft')));
     $this->assertSame([], $this->validator->validate($wearing("container:$uuid::a", 'link_style')));
-    $this->assertSame([], $this->validator->validate($wearing("container:$uuid", 'band')));
-    $errors = $this->validator->validate($wearing("container:$uuid::> pb-text", 'band'));
+    $this->assertSame([], $this->validator->validate($wearing("container:$uuid", 'section')));
+    $errors = $this->validator->validate($wearing("container:$uuid::> d-text", 'section'));
     $this->assertCount(1, $errors);
     $this->assertSame('STYLE_VARIANT_SCOPE_MISMATCH', $errors[0]->getCode());
-    $this->assertSame("container:$uuid::> pb-text.variants.0", $errors[0]->getPath());
+    $this->assertSame("container:$uuid::> d-text.variants.0", $errors[0]->getPath());
     $this->assertSame('block_type:text', $errors[0]->getContext()['element_scope']);
     // The candidates by the landing: the text variant and the tag
     // treatment (a base:{tag} scope pairs with every element address; the
     // tag itself is the offer-time gate), never the container's.
     $this->assertSame(['link_style', 'text_soft'], array_column($errors[0]->getContext()['candidates'], 'id'));
     $this->assertStringContainsString('a rule wears one for its landing', $errors[0]->getHint());
-    $errors = $this->validator->validate($wearing("container:$uuid::a", 'band'));
+    $errors = $this->validator->validate($wearing("container:$uuid::a", 'section'));
     $this->assertSame('STYLE_VARIANT_SCOPE_MISMATCH', $errors[0]->getCode());
     $this->assertSame('base:a', $errors[0]->getContext()['element_scope']);
     $this->assertSame(['link_style'], array_column($errors[0]->getContext()['candidates'], 'id'));
@@ -1225,7 +1653,7 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->assertSame(['STYLE_VARIANT_SCOPE_MISMATCH'], $this->codes($this->validator->validate($wearing("container:$uuid", 'text_soft')))["container:$uuid.variants.0"]);
 
     // No element scope: a part, the children, a subjectless compound.
-    foreach (['> pb-text .link', '> *', '> *:not(pb-image)'] as $selector) {
+    foreach (['> d-text .link', '> *', '> *:not(d-image)'] as $selector) {
       $errors = $this->validator->validate($wearing("container:$uuid::$selector", 'text_soft'));
       $this->assertCount(1, $errors, $selector);
       $this->assertSame('STYLE_VARIANT_SCOPE_MISMATCH', $errors[0]->getCode(), $selector);
@@ -1237,7 +1665,7 @@ class StyleMapValidatorTest extends KernelTestBase {
 
     // A composition is refused at any rule by its keys, before scope: at
     // its own family's rule and at a foreign one alike.
-    foreach (['> pb-container', '> pb-text'] as $selector) {
+    foreach (['> d-container', '> d-text'] as $selector) {
       $errors = $this->validator->validate($wearing("container:$uuid::$selector", 'card'));
       $this->assertCount(1, $errors, $selector);
       $this->assertSame('STYLE_VARIANT_COMPOSITION_AT_RULE', $errors[0]->getCode(), $selector);
@@ -1247,25 +1675,25 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->assertSame([], $this->validator->validate($wearing("container:$uuid", 'card')));
 
     // The not-found corrective lists the candidates by the landing too.
-    $errors = $this->validator->validate($wearing("container:$uuid::> pb-text", 'ghost'));
+    $errors = $this->validator->validate($wearing("container:$uuid::> d-text", 'ghost'));
     $this->assertSame('STYLE_VARIANT_NOT_FOUND', $errors[0]->getCode());
     $this->assertSame(['link_style', 'text_soft'], array_column($errors[0]->getContext()['candidates'], 'id'));
 
     // The variant styles lane pairs a rule entry's nested references by
     // the same landing (a captured rule's wear travels as refs): the
-    // text variant nests at a container variant's "::> pb-text" entry
+    // text variant nests at a container variant's "::> d-text" entry
     // and at a slot's rule, the link treatment at "::a", the container
     // variant is refused at the text rule with the text candidates, and
     // a rule landing on no element scope wears nothing.
     $nested = static fn (string $relative, string $reference): array => [$relative => ['variants' => [['variant' => $reference, 'fragment' => '']]]];
     $at = Address::fromString('kind:container');
-    $this->assertSame([], $this->validator->validateAt($nested('::> pb-text', 'text_soft'), $at));
-    $this->assertSame([], $this->validator->validateAt($nested('container(1)::> pb-text', 'text_soft'), $at));
+    $this->assertSame([], $this->validator->validateAt($nested('::> d-text', 'text_soft'), $at));
+    $this->assertSame([], $this->validator->validateAt($nested('container(1)::> d-text', 'text_soft'), $at));
     $this->assertSame([], $this->validator->validateAt($nested('::a', 'link_style'), $at));
-    $errors = $this->validator->validateAt($nested('::> pb-text', 'band'), $at);
+    $errors = $this->validator->validateAt($nested('::> d-text', 'section'), $at);
     $this->assertCount(1, $errors);
     $this->assertSame('STYLE_VARIANT_SCOPE_MISMATCH', $errors[0]->getCode());
-    $this->assertSame('::> pb-text.variants.0', $errors[0]->getPath());
+    $this->assertSame('::> d-text.variants.0', $errors[0]->getPath());
     $this->assertSame('block_type:text', $errors[0]->getContext()['element_scope']);
     $this->assertSame(['link_style', 'text_soft'], array_column($errors[0]->getContext()['candidates'], 'id'));
     $errors = $this->validator->validateAt($nested('::> *', 'text_soft'), $at);
@@ -1276,6 +1704,67 @@ class StyleMapValidatorTest extends KernelTestBase {
     $errors = $this->validator->validateAt($nested('::> *', 'ghost'), $at);
     $this->assertSame('STYLE_VARIANT_NOT_FOUND', $errors[0]->getCode());
     $this->assertStringContainsString('No variant applies at this rule ("::> *")', $errors[0]->getHint());
+  }
+
+  /**
+   * The gradient shape: layers of gradient functions or var() references.
+   *
+   * A gradient-shaped scale's token validates through the one grammar a
+   * gradient-typed property shares (PropertyGroupBase::validateGradient()):
+   * the hygiene gate, CSS-wide keywords pass, every comma-separated layer a
+   * gradient function (linear, radial, conic, their repeating- forms) or a
+   * var() reference to another named value. A var() stop inside a layer
+   * does not excuse the layer from being a gradient; url(), a color,
+   * calc(), a trailing word, a malformed list and a script scheme refuse
+   * at the token's value path, a condition's at its key beneath it.
+   */
+  public function testGradientShape(): void {
+    $this->layer('site', ['token_scales' => ['gradient' => ['label' => 'Gradient', 'shape' => 'gradient']]]);
+    $validate = fn (mixed $value): array => $this->validator->validateTokens(
+      SkinTokensItem::canonicalizeTokens(['gradient' => ['veil' => $value]]),
+      ['theme' => self::THEME],
+    );
+
+    foreach ([
+      'radial-gradient(circle at 30% 20%, #6b2d5c, #1a1a2e)',
+      'linear-gradient(135deg, #1a1a2e, #e94560)',
+      'conic-gradient(from 90deg at 50% 50%, red, blue)',
+      'repeating-linear-gradient(45deg, #000 0 10px, #fff 10px 20px)',
+      'repeating-radial-gradient(circle, #000 0 10px, #fff 10px 20px)',
+      'repeating-conic-gradient(from 0deg, #000 0 10deg, #fff 10deg 20deg)',
+      'linear-gradient(#000, #fff), radial-gradient(circle, red, blue)',
+      'linear-gradient(var(--color-accent), transparent)',
+      'var(--gradient-plum-veil)',
+      'var(--gradient-plum-veil), linear-gradient(#000, #fff)',
+      'inherit',
+      ['default' => 'linear-gradient(#000, #fff)', 'dark' => 'linear-gradient(#fff, #000)'],
+    ] as $value) {
+      $this->assertSame([], $validate($value), json_encode($value));
+    }
+
+    foreach ([
+      'url(x.png)',
+      'url(x.png), linear-gradient(#000, #fff)',
+      '#1a1a2e',
+      'red',
+      'calc(1px + 2px)',
+      'linear-gradient(#000, #fff',
+      'linear-gradient(#000, #fff),',
+      ', linear-gradient(#000, #fff)',
+      'linear-gradient(#000, #fff), , var(--x)',
+      'linear-gradient(#000, #fff) solid',
+      'linear-gradient(#000, #fff) radial-gradient(red, blue)',
+      'javascript:alert(1)',
+    ] as $value) {
+      $this->assertSame(['gradient.veil.value' => ['INVALID_STYLE_VALUE']], $this->codes($validate($value)), $value);
+    }
+    $this->assertSame(
+      ['gradient.veil.value.dark' => ['INVALID_STYLE_VALUE']],
+      $this->codes($validate(['default' => 'linear-gradient(#000, #fff)', 'dark' => 'red'])),
+    );
+    // Media stays with the style value composing the gradient, never
+    // inside the named gradient.
+    $this->assertSame(['gradient.veil.value' => ['INVALID_STYLE_VALUE']], $this->codes($validate("url('media:" . self::UUID . "')")));
   }
 
 }

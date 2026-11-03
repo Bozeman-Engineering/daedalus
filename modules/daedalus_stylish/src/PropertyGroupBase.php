@@ -94,6 +94,11 @@ abstract class PropertyGroupBase extends PluginBase implements PropertyGroupInte
    */
   protected const CSS_WIDE_KEYWORDS = ['inherit', 'initial', 'unset', 'revert', 'revert-layer'];
 
+  /**
+   * The head of a CSS gradient function (the gradient shape's one layer).
+   */
+  protected const GRADIENT_FUNCTION = '/^(?:repeating-)?(?:linear|radial|conic)-gradient\(/i';
+
   public function __construct(
     array $configuration,
     $plugin_id,
@@ -223,6 +228,12 @@ abstract class PropertyGroupBase extends PluginBase implements PropertyGroupInte
    * rejected: a token is a value, and the media resolution machinery rides
    * property definitions the token lane does not have.
    *
+   * The gradient shape is the one exception to the var() pass-through: a
+   * var() LAYER passes (a gradient may alias or layer another named
+   * value), but a var() stop inside a layer does not excuse the layer from
+   * being a gradient function, so the shape dispatches to
+   * validateGradient() ahead of the pass-through and decides per layer.
+   *
    * @param string $path
    *   The error path (doubles as the "property" name in messages), e.g.
    *   "space.4" for the token "4" on the "space" scale.
@@ -230,7 +241,7 @@ abstract class PropertyGroupBase extends PluginBase implements PropertyGroupInte
    *   The value to validate.
    * @param string $shape
    *   One of StyleGuide::TOKEN_SHAPES: dimension, number, color, keyword,
-   *   or text.
+   *   text, or gradient.
    * @param array $keywords
    *   The closed vocabulary for the keyword shape; ignored otherwise.
    *
@@ -249,7 +260,13 @@ abstract class PropertyGroupBase extends PluginBase implements PropertyGroupInte
         new BlueprintError($path, 'INVALID_STYLE_VALUE', sprintf('Media references are not valid for %s.', $path), [], 'Token values are plain CSS; only media-capable style properties accept url(\'media:<uuid>\') values.'),
       ];
     }
-    if (in_array(strtolower($value), self::CSS_WIDE_KEYWORDS, TRUE) || str_contains($value, 'var(') || str_starts_with($value, 'calc(')) {
+    if (in_array(strtolower($value), self::CSS_WIDE_KEYWORDS, TRUE)) {
+      return [];
+    }
+    if ($shape === 'gradient') {
+      return $this->validateGradient($path, $value);
+    }
+    if (str_contains($value, 'var(') || str_starts_with($value, 'calc(')) {
       return [];
     }
     return $this->validateScalar($path, $value, [
@@ -277,6 +294,7 @@ abstract class PropertyGroupBase extends PluginBase implements PropertyGroupInte
       'ident' => $this->validateIdent($property, $value, $definition),
       'animation_name' => $this->validateAnimationName($property, $value, $definition),
       'color' => $this->validateColor($property, $value),
+      'gradient' => $this->validateGradient($property, $value),
       // 'any' is the wide tier's honest tail: name membership plus value
       // hygiene (the ;{}<> ban already ran; validateText adds the
       // script-scheme scan). The real grammar is client UX via csstree,
@@ -292,10 +310,19 @@ abstract class PropertyGroupBase extends PluginBase implements PropertyGroupInte
    * commas and spaces). Returns NULL for a malformed list: an empty comma
    * segment (leading, trailing, or doubled comma) or unbalanced parentheses.
    *
+   * @param string $value
+   *   The list value.
+   * @param bool $whitespace
+   *   Whether top-level whitespace separates components too (a list
+   *   definition's repetition). FALSE splits at top-level commas only,
+   *   the layer grammar of a comma-separated value whose layers may hold
+   *   spaces ("linear-gradient(red, blue), var(--x)"); each component is
+   *   trimmed.
+   *
    * @return string[]|null
    *   The components, or NULL when the list itself is malformed.
    */
-  protected function splitList(string $value): ?array {
+  protected function splitList(string $value, bool $whitespace = TRUE): ?array {
     $components = [];
     $current = '';
     $depth = 0;
@@ -309,11 +336,15 @@ abstract class PropertyGroupBase extends PluginBase implements PropertyGroupInte
       elseif ($char === ')' && --$depth < 0) {
         return NULL;
       }
-      if ($depth === 0 && ($char === ',' || ctype_space($char))) {
-        if ($current !== '') {
-          $components[] = $current;
+      if ($depth === 0 && ($char === ',' || ($whitespace && ctype_space($char)))) {
+        if (trim($current) !== '') {
+          $components[] = trim($current);
           $current = '';
           $pending_comma = FALSE;
+        }
+        elseif ($current !== '') {
+          // Whitespace alone between two commas is still an empty segment.
+          $current = '';
         }
         if ($char === ',') {
           if ($pending_comma || $components === []) {
@@ -328,8 +359,8 @@ abstract class PropertyGroupBase extends PluginBase implements PropertyGroupInte
     if ($depth !== 0) {
       return NULL;
     }
-    if ($current !== '') {
-      $components[] = $current;
+    if (trim($current) !== '') {
+      $components[] = trim($current);
       $pending_comma = FALSE;
     }
     return $pending_comma ? NULL : $components;
@@ -504,6 +535,69 @@ abstract class PropertyGroupBase extends PluginBase implements PropertyGroupInte
       ];
     }
     return [];
+  }
+
+  /**
+   * Validates a gradient value: a named <image> of gradient layers.
+   *
+   * The one grammar for a gradient token's value and a gradient-typed
+   * property's. Server checks are csstree-informed but match the wide-tier
+   * posture: the text hygiene (the script-scheme scan; the ;{}<> ban and
+   * the media rejection already ran at the caller) first, then the
+   * structure the server can honestly check — every comma-separated layer
+   * must BE a CSS gradient function (linear/radial/conic and their
+   * repeating- forms) with balanced parentheses, or a var() reference to
+   * another named value (whether it resolves is the spine's strict-site
+   * check). What the server does not attempt is the inner stop grammar:
+   * that is the client csstree lexer's job, and an ungrammatical stop list
+   * is inert, never unsafe. url() layers do NOT pass: media belongs in the
+   * style value composing the gradient over it, not inside the named
+   * gradient (a token compiles media-free).
+   */
+  protected function validateGradient(string $property, string $value): array {
+    $errors = $this->validateText($property, $value);
+    if ($errors !== []) {
+      return $errors;
+    }
+    $layers = $this->splitList($value, FALSE);
+    if ($layers === NULL || $layers === []) {
+      return [
+        new BlueprintError($property, 'INVALID_STYLE_VALUE', sprintf('"%s" is not a gradient value.', $value), [], 'A gradient value is one or more comma-separated CSS gradient functions with balanced parentheses, e.g. "linear-gradient(135deg, #1a1a2e, #e94560)".'),
+      ];
+    }
+    foreach ($layers as $layer) {
+      if (preg_match('/^var\(/i', $layer)) {
+        continue;
+      }
+      if (!preg_match(self::GRADIENT_FUNCTION, $layer) || !$this->isOneFunction($layer)) {
+        return [
+          new BlueprintError($property, 'INVALID_STYLE_VALUE', sprintf('"%s" is not a CSS gradient.', $layer), [], 'Each layer of a gradient value must be a gradient function — linear-gradient(), radial-gradient(), conic-gradient(), or a repeating- form — or a var() reference to a named value. Media images compose with a gradient in the style value referencing it, never inside the named gradient itself.'),
+        ];
+      }
+    }
+    return [];
+  }
+
+  /**
+   * Whether a component is exactly one function call: its parentheses
+   * open at the head and close only at its last character.
+   *
+   * "linear-gradient(#000, #fff) radial-gradient(red, blue)" is two
+   * functions with a space between, not a layer; "linear-gradient(#000,
+   * #fff) solid" trails a word. Balance itself is the caller's split's.
+   */
+  protected function isOneFunction(string $component): bool {
+    $depth = 0;
+    $length = strlen($component);
+    for ($i = 0; $i < $length; $i++) {
+      if ($component[$i] === '(') {
+        $depth++;
+      }
+      elseif ($component[$i] === ')' && --$depth === 0) {
+        return $i === $length - 1;
+      }
+    }
+    return FALSE;
   }
 
   /**

@@ -24,7 +24,7 @@ import {
   variantOwnership,
 } from './library-model.js';
 import { useMenu } from './menu.js';
-import { axisLabel, findVariant } from './variant-scope.js';
+import { axisLabel, findVariant, isShipped } from './variant-scope.js';
 import { AiOfferToggle, isOffered } from './ai-offer.js';
 import { RevisionList, revisionDate } from './revision-list.js';
 
@@ -503,6 +503,19 @@ const VariantCard = ({
           </span>
         )}
       </div>
+      {/* Who ships it, in a sentence (no marker on the row): a shipped
+          variant's identity and styles are the package's on a consuming
+          site, and the copy gesture below is the way to one of your own. */}
+      {isShipped(variant) && (
+        <div className="daedalus-stylish-material-card__origin">
+          {management?.provider
+            ? Drupal.t(
+                'Shipped by !provider. Copy it as your variant to change it.',
+                { '!provider': management.provider },
+              )
+            : Drupal.t('Shipped by a module. Copy it as your variant to change it.')}
+        </div>
+      )}
       {/* The AI opt-out beside the description it silences: the toggle
           when the card can update (the details route, one revisioned
           save), a chip when read-only and withheld; the description shows
@@ -749,8 +762,9 @@ const VariantCard = ({
  * nothing fetches a list, and the facts a card needs beyond its record
  * (usage, the shipped state) are its own per-open read. Rows carry the
  * honesty chrome: the identity dot (the same stable hue the wear bar and
- * effective view speak), the axis chip, the shipped marker, and the
- * description's first line as the row's tooltip.
+ * effective view speak), the axis chip, and the description's first
+ * line as the row's tooltip; no origin marker (who ships a variant is
+ * the open card's sentence).
  */
 export const LibraryView = ({
   guide,
@@ -849,16 +863,6 @@ export const LibraryView = ({
                 <span className="daedalus-ui-chip daedalus-stylish-library__axis">
                   {axisLabel(guide, row.axis)}
                 </span>
-                {row.shipped && (
-                  <span
-                    className="daedalus-ui-chip daedalus-stylish-library__shipped"
-                    title={Drupal.t(
-                      'Built-in: provided by a module, read-only. Copy it as your variant to change it.',
-                    )}
-                  >
-                    {Drupal.t('Built-in')}
-                  </span>
-                )}
               </button>
               {card === row.reference && (
                 <VariantCard

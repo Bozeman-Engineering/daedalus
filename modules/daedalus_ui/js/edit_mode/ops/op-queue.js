@@ -227,7 +227,7 @@ export const applyResponse = async (payload) => {
   // records; empty on most). It lands before the markup so a widget
   // re-rendering off the swap already reads the minted material, and it
   // is the WHOLE of a materials-only payload (an AI turn that minted a
-  // swatch and mutated no page: no blueprint, no entity_uuid, no markup),
+  // token and mutated no page: no blueprint, no entity_uuid, no markup),
   // which therefore touches neither the canvas nor the mirror below.
   if (payload.materials) {
     applyMaterialsDelta(payload.materials);

@@ -15,7 +15,7 @@
 import { strict as assert } from 'node:assert';
 import {
   parseKey, declarationForKey, landingForKey, declaredForKey, pseudoGroups, findInstanceDeclaration, findBaseTagDeclaration,
-  baseTags, instanceTags, tagWord, isInstancePartKey, animationReference, swatchReference, scaleRow, styleMapOf,
+  baseTags, instanceTags, tagWord, isInstancePartKey, animationReference, tokenReference, scaleRow, styleMapOf,
 } from '../../js/src/style-guide.js';
 import { selectorLabel } from '../../js/src/parts.js';
 
@@ -41,7 +41,7 @@ const guide = {
     // part-first sibling chain and the anchor.
     container: {
       grants: SPACING,
-      elements: { '.band': { label: 'Band', grants: SPACING } },
+      elements: { '.section': { label: 'Section', grants: SPACING } },
       children: { grants: { spacing: ['margin-top', 'margin-bottom'] } },
       pseudo: { before: { grants: { sizing: ['width'], ...GENERATED }, valueSpaces: {} } },
     },
@@ -143,7 +143,7 @@ test('parseKey reads the relative selector suffix (charset only, PHP mirror)', (
     form: 'container', kind: 'container', uuid: UUID_A, selector: 'ul > *',
   });
   assert.equal(parseKey(`block:${UUID_A}::h2`)?.selector, 'h2');
-  assert.equal(parseKey(`container:${UUID_A}::> pb-text .link`)?.selector, '> pb-text .link');
+  assert.equal(parseKey(`container:${UUID_A}::> d-text .link`)?.selector, '> d-text .link');
   assert.equal(parseKey(`container:${UUID_A}`)?.selector, null);
   // The charset is the grammar's: lowercase tags, no empty suffix, one
   // canonical spelling (the retired '::>' pseudo-part never parses).
@@ -181,35 +181,47 @@ test('a tag-tier key resolves through the base section only', () => {
 test('landingForKey walks sibling and qualified compounds (PHP mirror)', () => {
   // The roster walk (VocabularyRosterBuilder::walk()): a sibling compound
   // resolves where its predecessor did, so `> p + *` lands on the
-  // container's children and `> pb-container > p + p` on base.p; a
-  // qualifier is judged and never moves the landing, so `> pb-text:has(a)`
-  // lands on the text type (not base.a) and `> *:not(pb-image)` on the
+  // container's children and `> d-container > p + p` on base.p; a
+  // qualifier is judged and never moves the landing, so `> d-text:has(a)`
+  // lands on the text type (not base.a) and `> *:not(d-image)` on the
   // children; an undeclared compound anywhere answers null.
   const land = (selector) =>
     landingForKey(guide, parseKey(`container:${UUID_A}::${selector}`), null);
   assert.deepEqual(land('> p + *'), guide.kinds.container.children);
   assert.deepEqual(land('> p ~ p'), guide.base.p);
-  assert.deepEqual(land('> pb-container > p + p'), guide.base.p);
-  assert.deepEqual(land('> pb-text .link ~ .link'), guide.blockTypes.text.elements['.link']);
-  assert.deepEqual(land('.band + .band'), guide.kinds.container.elements['.band']);
-  assert.deepEqual(land('> pb-text:has(a)'), guide.blockTypes.text);
-  assert.deepEqual(land('> pb-text:has(.link)'), guide.blockTypes.text);
-  assert.deepEqual(land('> pb-text:has(+ pb-image)'), guide.blockTypes.text);
-  assert.deepEqual(land('> pb-container:has(> pb-image)'), guide.kinds.container);
-  assert.deepEqual(land('> pb-container:has(> *)'), guide.kinds.container);
-  assert.deepEqual(land('> *:not(pb-image)'), guide.kinds.container.children);
-  assert.deepEqual(land('> pb-text:not(:has(a))'), guide.blockTypes.text);
-  assert.deepEqual(land('> pb-text:has(a):not(.band)'), guide.blockTypes.text);
+  assert.deepEqual(land('> d-container > p + p'), guide.base.p);
+  assert.deepEqual(land('> d-text .link ~ .link'), guide.blockTypes.text.elements['.link']);
+  assert.deepEqual(land('.section + .section'), guide.kinds.container.elements['.section']);
+  assert.deepEqual(land('> d-text:has(a)'), guide.blockTypes.text);
+  assert.deepEqual(land('> d-text:has(.link)'), guide.blockTypes.text);
+  assert.deepEqual(land('> d-text:has(+ d-image)'), guide.blockTypes.text);
+  assert.deepEqual(land('> d-container:has(> d-image)'), guide.kinds.container);
+  assert.deepEqual(land('> d-container:has(> *)'), guide.kinds.container);
+  assert.deepEqual(land('> *:not(d-image)'), guide.kinds.container.children);
+  assert.deepEqual(land('> d-text:not(:has(a))'), guide.blockTypes.text);
+  assert.deepEqual(land('> d-text:has(a):not(.section)'), guide.blockTypes.text);
+  // An `:is()` member is judged as a `:not()` compound is, every member
+  // of it: a type member at the children, a state inside `:is()` on a
+  // non-terminal compound (the reveal `.menu-item:is(:focus-within,
+  // :hover) > ul`), a member's own `:has()`; a class member at the
+  // qualified compound's own position (the text type's part is not the
+  // container's), an undeclared type or part ends the walk.
+  assert.deepEqual(land('> *:is(d-image, d-text)'), guide.kinds.container.children);
+  assert.deepEqual(land('> d-text:is(:focus-within, :hover) a'), guide.base.a);
+  assert.deepEqual(land('> d-text:is(:has(.link), :has(a))'), guide.blockTypes.text);
+  assert.equal(land('> d-text:is(.link, .nope)'), null);
+  assert.equal(land('> *:is(d-image, d-video)'), null);
+  assert.equal(land('> d-text:is(:has(.nope), :has(a))'), null);
   // A `:has()` argument's parts resolve against the qualified type; a
   // `:not()` compound is judged where the qualified compound stands (the
-  // container owns `.band`, the text type does not).
-  assert.equal(land('> pb-text:has(.nope)'), null);
-  assert.equal(land('> pb-text:has(.band)'), null);
-  assert.equal(land('> pb-text:not(.link)'), null);
-  assert.equal(land('> *:not(pb-video)'), null);
-  assert.equal(land('> pb-text:has(> *)'), null);
-  assert.equal(land('> pb-text:has(a) + pb-text:has(em)'), null);
-  assert.deepEqual(declarationForKey(guide, parseKey(`container:${UUID_A}::> pb-text:has(em)`), null), {});
+  // container owns `.section`, the text type does not).
+  assert.equal(land('> d-text:has(.nope)'), null);
+  assert.equal(land('> d-text:has(.section)'), null);
+  assert.equal(land('> d-text:not(.link)'), null);
+  assert.equal(land('> *:not(d-video)'), null);
+  assert.equal(land('> d-text:has(> *)'), null);
+  assert.equal(land('> d-text:has(a) + d-text:has(em)'), null);
+  assert.deepEqual(declarationForKey(guide, parseKey(`container:${UUID_A}::> d-text:has(em)`), null), {});
 });
 
 test('a pseudo-element key lands on its host\'s box: served when declared, derived otherwise (PHP mirror)', () => {
@@ -229,8 +241,8 @@ test('a pseudo-element key lands on its host\'s box: served when declared, deriv
   assert.deepEqual(guide.kinds.block.grants, SPACING);
   // A part's, a type's, a tag's and the children's boxes derive from the
   // chain's landing; an undeclared host ends the walk before the box.
-  assert.deepEqual(land(`container:${UUID_A}::.band::after`), { grants: { ...SPACING, ...GENERATED }, valueSpaces: {} });
-  assert.deepEqual(land(`container:${UUID_A}::> pb-text::before`), { grants: { ...TYPOGRAPHY, ...GENERATED }, valueSpaces: {} });
+  assert.deepEqual(land(`container:${UUID_A}::.section::after`), { grants: { ...SPACING, ...GENERATED }, valueSpaces: {} });
+  assert.deepEqual(land(`container:${UUID_A}::> d-text::before`), { grants: { ...TYPOGRAPHY, ...GENERATED }, valueSpaces: {} });
   assert.deepEqual(land(`block:${UUID_A}::p::after`), { grants: { ...TYPOGRAPHY, ...SPACING, ...GENERATED }, valueSpaces: {} });
   assert.deepEqual(land(`container:${UUID_A}::> *::before`), { grants: { spacing: ['margin-top', 'margin-bottom'], ...GENERATED }, valueSpaces: {} });
   assert.equal(land(`container:${UUID_A}::.nope::before`), null);
@@ -252,12 +264,12 @@ test('declaredForKey is the roster\'s declared(): a derived box lands but is not
   const declared = (key, bundle = null) => declaredForKey(guide, parseKey(key), bundle);
   assert.equal(declared(`container:${UUID_A}`), true);
   assert.equal(declared(`block:${UUID_A}`, 'unknown'), true, 'a degraded refinement is a declared place');
-  assert.equal(declared(`container:${UUID_A}::.band`), true);
+  assert.equal(declared(`container:${UUID_A}::.section`), true);
   assert.equal(declared(`container:${UUID_A}::.nope`), false);
   assert.equal(declared(`block:${UUID_A}::em`), false);
   assert.equal(declared(`container:${UUID_A}::&::before`), true);
   assert.equal(declared(`container:${UUID_A}::&::after`), false);
-  assert.equal(declared(`container:${UUID_A}::.band::after`), false);
+  assert.equal(declared(`container:${UUID_A}::.section::after`), false);
   assert.equal(declared(`container:${UUID_A}::.nope::before`), false);
   assert.equal(declared(`block:${UUID_A}::p::after`), false);
 });
@@ -316,8 +328,8 @@ test('selectorLabel labels a tag selector from the declared vocabulary', () => {
   assert.equal(selectorLabel(guide, `block:${UUID_A}`, 'div', blockTypes), 'div');
   // The children, a type, and a chain read their compounds' labels.
   assert.equal(selectorLabel(guide, `block:${UUID_A}`, '> *', blockTypes), 'Children');
-  assert.equal(selectorLabel(guide, `block:${UUID_A}`, '> pb-container', blockTypes), 'Containers');
-  assert.equal(selectorLabel(guide, `block:${UUID_A}`, '> pb-text p', blockTypes), 'pb-text › Paragraph');
+  assert.equal(selectorLabel(guide, `block:${UUID_A}`, '> d-container', blockTypes), 'Containers');
+  assert.equal(selectorLabel(guide, `block:${UUID_A}`, '> d-text p', blockTypes), 'd-text › Paragraph');
 });
 
 test('selectorLabel degrades to the namespace label without an annotation', () => {
@@ -328,21 +340,21 @@ test('selectorLabel degrades to the namespace label without an annotation', () =
   assert.equal(selectorLabel(guide, `block:${UUID_B}`, '.s-a3', blockTypes), 'Owner namespace');
 });
 
-test('animationReference is the motion namespace twin of swatchReference', () => {
+test('animationReference is the motion namespace twin of tokenReference', () => {
   // The reserved prefixes are namespace questions only (PHP is
-  // authoritative: StyleGuide::animationReference / swatchReference):
+  // authoritative: StyleGuide::animationReference / tokenReference):
   // prefix plus a name tail, nothing else.
   assert.equal(animationReference('motion-fade_in'), 'fade_in');
   assert.equal(animationReference('motion-a-b'), 'a-b', 'the tail is whatever follows the prefix');
   assert.equal(animationReference('motion-'), null, 'the bare prefix names nothing');
   assert.equal(animationReference('motion'), null);
   assert.equal(animationReference('spin'), null, 'a theme keyframes name is outside the namespace');
-  assert.equal(animationReference('--swatch-motion-x'), null, 'a custom property is not a keyframes ident');
+  assert.equal(animationReference('--color-motion-x'), null, 'a custom property is not a keyframes ident');
   assert.equal(animationReference(undefined), null);
-  // The two namespaces never meet: a swatch variable is no animation and
-  // a keyframes ident is no swatch.
-  assert.equal(swatchReference('motion-fade_in'), null);
-  assert.equal(animationReference('--swatch-fade_in'), null);
+  // The two namespaces never meet: a token variable is no animation and
+  // a keyframes ident is no token.
+  assert.equal(tokenReference('motion-fade_in', { color: { prefix: 'color' } }), null);
+  assert.equal(animationReference('--color-fade_in'), null);
 });
 
 // --- scaleRow: the row resolution, the roster's scaleStops() twin ----
@@ -408,7 +420,7 @@ const ENTRY = (property, value) => ({ default: { [property]: value } });
 const documentTree = () => [
   {
     kind: 'container', uuid: UUID_A, layout_id: 'layout_twocol_section',
-    styles: { '::.band': ENTRY('gap', '1rem'), '': ENTRY('padding', '4rem') },
+    styles: { '::.section': ENTRY('gap', '1rem'), '': ENTRY('padding', '4rem') },
     children: [
       { kind: 'region', region: 'first', children: [
         { kind: 'block', uuid: UUID_B, block_type: 'text', styles: { '': ENTRY('color', 'red'), ':field_title': ENTRY('font-weight', '700') } },
@@ -429,7 +441,7 @@ const scrambled = {
   [`block:${UUID_D}`]: ENTRY('color', 'purple'),
   [`field:${UUID_A}:field_body`]: ENTRY('color', 'teal'),
   [`block:${UUID_B}:field_title`]: ENTRY('font-weight', '700'),
-  [`container:${UUID_A}::.band`]: ENTRY('gap', '1rem'),
+  [`container:${UUID_A}::.section`]: ENTRY('gap', '1rem'),
   [`container:${UUID_C}::> *`]: ENTRY('min-width', '0'),
   [`entity:${UUID_A}`]: ENTRY('padding', '2rem'),
   [`block:${UUID_B}`]: ENTRY('color', 'red'),
@@ -438,7 +450,7 @@ const scrambled = {
 const documentOrder = [
   `field:${UUID_A}:field_body`,
   `entity:${UUID_A}`,
-  `container:${UUID_A}::.band`,
+  `container:${UUID_A}::.section`,
   `container:${UUID_A}`,
   `block:${UUID_B}`,
   `block:${UUID_B}:field_title`,
@@ -450,7 +462,7 @@ test('styleMapOf: node-less keys first in stored order, then the tree in documen
   const map = styleMapOf({ layout: documentTree(), styles: scrambled });
   assert.deepEqual(Object.keys(map), documentOrder);
   // Every entry is the one the key names, under its absolute key.
-  assert.deepEqual(map[`container:${UUID_A}::.band`], ENTRY('gap', '1rem'));
+  assert.deepEqual(map[`container:${UUID_A}::.section`], ENTRY('gap', '1rem'));
   assert.deepEqual(map[`block:${UUID_B}:field_title`], ENTRY('font-weight', '700'));
   assert.deepEqual(map[`container:${UUID_C}::> *`], ENTRY('min-width', '0'));
   assert.deepEqual(map[`entity:${UUID_A}`], ENTRY('padding', '2rem'));
@@ -510,3 +522,38 @@ if (failures) {
   process.exit(1);
 }
 console.log(`${tests.length} style-guide resolution tests passed.`);
+
+test('another pseudo-element lands on its spec vocabulary, derives its host without a switch, or lands nowhere when unknown (PHP mirror)', () => {
+  // VocabularyRosterBuilder::specNode(): a table pseudo-element grants
+  // the allowlist grouped by the served curated group that owns each
+  // property (the payload serves spacing alone here, so only its
+  // members of the allowlist grant), never the host's grants and never
+  // the existence switch.
+  const land = (key, bundle = null) => landingForKey(guide, parseKey(key), bundle);
+  assert.deepEqual(land(`block:${UUID_A}::&::first-letter`), { grants: { spacing: ['padding'] }, valueSpaces: {} });
+  assert.deepEqual(land(`block:${UUID_A}::&::marker`), { grants: {}, valueSpaces: {} }, 'no served group owns a marker property');
+  // A served group's own order, the site's constraint default riding.
+  const typed = {
+    ...guide,
+    groups: { ...guide.groups, typography: { label: 'Typography', properties: { 'font-size': {}, color: {}, 'text-align': {} } } },
+    constraintDefaults: { color: { allowed: ['red'] } },
+  };
+  assert.deepEqual(landingForKey(typed, parseKey(`block:${UUID_A}::&::marker`), null), {
+    grants: { typography: ['font-size', 'color'] },
+    valueSpaces: { color: { allowed: ['red'] } },
+  });
+  // A declared section still wins over the table.
+  const declared = {
+    ...guide,
+    kinds: { ...guide.kinds, block: { ...guide.kinds.block, pseudo: { marker: { grants: { spacing: ['gap'] }, valueSpaces: {} } } } },
+  };
+  assert.deepEqual(landingForKey(declared, parseKey(`block:${UUID_A}::&::marker`), null), { grants: { spacing: ['gap'] }, valueSpaces: {} });
+  assert.equal(declaredForKey(declared, parseKey(`block:${UUID_A}::&::marker`), null), true);
+  assert.equal(declaredForKey(guide, parseKey(`block:${UUID_A}::&::marker`), null), false);
+  // A pseudo-element the table does not carry derives its host, with no
+  // existence switch (only the two generated boxes have one).
+  assert.deepEqual(land(`block:${UUID_A}::&::backdrop`), { grants: SPACING, valueSpaces: { padding: { max: '4rem' } } });
+  // One the browser does not know lands nowhere, as an unknown tag does.
+  assert.equal(land(`block:${UUID_A}::&::markr`), null);
+  assert.equal(declaredForKey(guide, parseKey(`block:${UUID_A}::&::markr`), null), false);
+});

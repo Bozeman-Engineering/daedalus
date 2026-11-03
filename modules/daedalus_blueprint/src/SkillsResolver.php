@@ -34,6 +34,13 @@ use Symfony\Component\Yaml\Yaml;
  * carries the resolved membership. A member of an inactive system does not
  * exist for the request, beside the permission gate: neither listed nor
  * invokable, since every consumer reads through here.
+ *
+ * A definition may declare `reframe: true`: invoking the skill reframes the
+ * work, and the context spine's segment policy (daedalus_ai_memory) closes
+ * the working transcript's segment on it once the segment is large enough.
+ * The flag is normalized after the alter hook, so every resolved definition
+ * carries it as a boolean and a consumer never guesses at a missing key; a
+ * value that is not a boolean is a developer error refused at discovery.
  */
 class SkillsResolver implements SkillsResolverInterface {
 
@@ -97,6 +104,10 @@ class SkillsResolver implements SkillsResolverInterface {
 
     $this->moduleHandler->alter('daedalus_blueprint_skills', $skills);
 
+    foreach ($skills as $skill_id => $data) {
+      $skills[$skill_id]['reframe'] = $this->reframe($skill_id, $data);
+    }
+
     // Membership resolves against the landed and shipped systems, so a
     // package's files answer right before its install config lands; the
     // list tag is for a site-built system (no shipped file) a member
@@ -139,6 +150,21 @@ class SkillsResolver implements SkillsResolverInterface {
     catch (\InvalidArgumentException $exception) {
       throw new \UnexpectedValueException(sprintf('The "%s" skill of the "%s" module (%s): %s Name a design system the site has landed or an installed module ships, ship the missing one as install config beside the skill, drop the key (the module\'s own shipped design system applies) or set it to ~ (global).', $skill_id, $module, basename($file), $exception->getMessage()), 0, $exception);
     }
+  }
+
+  /**
+   * A definition's reframe flag, normalized to a boolean, loudly.
+   *
+   * @throws \UnexpectedValueException
+   *   When the key is present and not a boolean: a developer error in the
+   *   shipping module or the altering hook, caught at discovery.
+   */
+  protected function reframe(string $skill_id, array $data): bool {
+    $value = $data['reframe'] ?? FALSE;
+    if (!is_bool($value)) {
+      throw new \UnexpectedValueException(sprintf('The "%s" skill declares reframe as %s; it must be true or false (omit the key for false).', $skill_id, is_scalar($value) ? var_export($value, TRUE) : gettype($value)));
+    }
+    return $value;
   }
 
   /**

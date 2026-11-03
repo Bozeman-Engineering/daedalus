@@ -71,7 +71,17 @@ class LabelAttributionTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('block_content');
+    // Naming the default theme below is a law change: every enabled
+    // module's shipped definitions sync (an administrative account does
+    // the writing) and the variants file recompiles over its storage.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_skin_material_usage',
+    ]);
     $this->installConfig(['daedalus_stylish']);
+    $this->setUpCurrentUser([], [], TRUE);
     // The InlineBlockFieldKeys rewrite rides TwigRenderTemplateEvent, which
     // fires only for templates rendered through twig_events' theme engine:
     // the engine rides every installed twig theme (system_info_alter), but

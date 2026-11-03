@@ -62,11 +62,15 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * library reset, media-recompile bookkeeping, the accepted staleness
  * class) live on CompiledStylesheetBase; a variant-side note on staleness:
  * nothing pushes a recompile into open tabs (a drupal_commands link swap
- * is deliberately deferred). compile() runs on variant
+ * is deliberately deferred). The file is a projection of the conformance
+ * verdict, so compile() runs on every input of it: variant
  * insert/update/delete (after the roster and repository resets, so it
- * reads the post-write set), on workspace publish, and on
- * insert/update/delete of a media entity the compiled variants reference
- * (referencesMedia()).
+ * reads the post-write set), workspace publish, every law change (a
+ * skin write or publish, an enforcement edit, a declaration change, a
+ * daedalus_stylish.settings save, a default-theme change, a switch:
+ * _daedalus_stylish_delivery_compile() and the subscribers, each after
+ * the roster reset that forgets the verdict), and insert/update/delete
+ * of a media entity the compiled variants reference (referencesMedia()).
  */
 class VariantStylesheet extends CompiledStylesheetBase {
 
@@ -303,13 +307,13 @@ class VariantStylesheet extends CompiledStylesheetBase {
    * Inline CSS for a style map's variant references at RULE keys.
    *
    * The third delivery lane, the same in every mode: a reference on a
-   * rule entry ("container:X::> pb-text" wearing a text variant) has no
+   * rule entry ("container:X::> d-text" wearing a text variant) has no
    * one element to stamp a class on and no selectable attribute of its
    * own, so its fragment prints inside the rule OWNER's @scope
    * ([data-selectable="container:X"]) with the variant's suffixes
    * continued under the rule by descent (printFragment() under the
    * rule): the root entry at the rule's targets, a '::.link' entry at
-   * `> pb-text .link`, a '::> *' entry at `> pb-text > *`. Class delivery
+   * `> d-text .link`, a '::> *' entry at `> d-text > *`. Class delivery
    * (the stamp, the compiled file, workspaceInlineCss()) and the edit-mode
    * element lane (editModeInlineCss()) skip rule keys; this lane prints
    * only them. The caller puts it before the map's own CSS so a rule's

@@ -6,13 +6,13 @@ over the Navigation sidebar.
 ## Edit mode
 
 Daedalus UI provides Edit mode. When a user enters Edit mode the Navigation
-sidebar is replaced with the editing chrome: a top bar of panel toggles and
-document actions, and sidebar panels. Save is a split control: the button
-commits, and the caret beside it opens the DOCUMENT menu, the top bar's face
-of the verb registry, listing the root entity's verbs registered with
-`document: true` (daedalus_layout's "Save page as blueprint…"); the caret
-renders hidden until the root offers one, and the bar names no gesture of
-its own. Edit Mode is the foundation of the
+sidebar is replaced with the editing chrome: a top bar (the Daedalus menu,
+panel toggles, the document sentence with Save as the unsaved-changes
+indicator, and Done) and sidebar panels. The menu's document group is the
+top bar's face of the verb registry, listing the root entity's verbs
+registered with `document: true` (daedalus_layout's "Save page as
+blueprint…"); the group exists only while the root offers one, and the bar
+names no gesture of its own. Edit Mode is the foundation of the
 Daedalus. It has one pointer and one keyboard grammar over the one selection;
 editing is a state of the selection, opened by gesture (double-click a leaf,
 Enter, the Edit chip), and other modules such as [Daedalus Layout](https://www.drupal.org/project/daedalus)
@@ -115,8 +115,8 @@ chrome-density ladder: at full density every verb as icon plus text label, at
 minimal the same verbs as icons only, at clean the registry's `tab`-flagged
 verbs as icon buttons plus a chevron opening the context menu with the rest.
 Verbs that share a registry `group` (the `group` spec key, see "The verb
-contract" in `daedalus_ui.api.php`) are one split control on the face, the
-same `daedalus-ui-split-button` the top bar's Save is: the group's lightest
+contract" in `daedalus_ui.api.php`) are one split control on the face
+(`daedalus-ui-split-button`, the chip's own control): the group's lightest
 applicable member is the main half and its caret ("More @label actions")
 opens the shared menu over the rest in weight order, so on a placed
 blueprint daedalus_layout's Update, Open and "Save as new blueprint…" are one
@@ -343,6 +343,19 @@ line states the setup. Another module adds its control into a group
 through `ensureGroup()` and never parks a section of its own; the
 contract is in `daedalus_ui.api.php`.
 
+The tab has a second door: the bundle roster at
+`/admin/config/daedalus/ui/content-types` (`Controller\BundleRoster`,
+listed under the Daedalus config category's UI sub-category beside the
+chrome form, the same `administer Daedalus UI configuration` gate). It is
+read-only, one table per bundle config type the tab serves and one row per
+bundle, stating what the tab would show (on or off, whether new pages open
+in the page builder, how a block is selected) plus the columns other
+modules contribute through `Event\BundleRosterEvent` (one event per row,
+the bundle in, columns keyed by id out; daedalus_layout's starting designs
+and daedalus_stylish's styling), with operations into the bundle form's
+tab and the manage-display page. The bundle form stays the one write path;
+the roster never carries a control.
+
 The settings schema cannot be generated: core names a third-party
 section per bundle config type, so one type, `daedalus_ui.bundle.options`
 (`enabled`, `initial_mode`, `presentation`), is named for the bundle
@@ -442,6 +455,32 @@ their field settings there via
 missing, park elements under `$form['page_builder']`, and route values into
 core's `third_party_settings` tree with `#parents` so core persists them
 without custom submit mapping.
+
+## The file lane
+
+One lane for bytes: every byte a user or the model supplies to the page
+builder (a media file dropped on the canvas, a chat attachment, a file the
+model declares, a font a design system ships) becomes a managed file through
+the `daedalus_ui.file_lane` service (`\Drupal\daedalus_ui\File\FileLane`),
+never through `FileRepository::writeData()`. The lane runs core's upload
+handler with its own validators (an explicit extension allowlist, one size
+ceiling) and the `FileValidationEvent` chain where the SVG sanitizer lives; a
+second saving road anywhere in the page builder would be a bespoke wire past
+the sanitizer. Files are saved temporary until something uses them (a media
+entity, a conversation), so an abandoned upload falls to core's garbage
+collection.
+
+The lane also names the file. A saved filename is a handle the model echoes
+back to open an attachment, that CSS carries in `url('file:...')` and that
+HTML attributes and media labels repeat, so the lane canonicalises every
+incoming filename itself with core's full sanitization posture (transliterated,
+whitespace and anything outside `[0-9A-Za-z_.-]` to `-`, the extension
+lowercased), independent of `file.settings.filename_sanitization`, which is off
+by default and left to the site for its other uploads. A name the model is
+handed therefore round-trips byte for byte; a macOS screenshot's narrow
+no-break space, which a model repeats as a plain space, never reaches the
+disk. Core still renames on collision and its security subscriber still runs
+on the clean name (`shell.php.txt` is saved as `shell.php_.txt`).
 
 ## The icon value grammar
 

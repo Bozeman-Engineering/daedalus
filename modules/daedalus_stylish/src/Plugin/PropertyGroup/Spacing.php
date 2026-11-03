@@ -36,7 +36,7 @@ final class Spacing extends PropertyGroupBase {
       'padding-left' => ['label' => $this->t('Padding left'), 'type' => 'dimension'],
       // The logical inline pair, the one-box container's width spelling:
       // `padding-inline: max(gutter, calc((100% - W) / 2))` constrains a
-      // full-bleed band's content on the band itself (the shipped width
+      // full-bleed section's content on the section itself (the shipped width
       // variants and the skins' container defaults write it).
       'padding-inline' => ['label' => $this->t('Padding inline'), 'type' => 'dimension', 'repeat' => 2],
       'margin' => [

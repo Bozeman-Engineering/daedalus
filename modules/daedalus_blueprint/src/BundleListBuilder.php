@@ -39,7 +39,7 @@ class BundleListBuilder {
    *   - bundles: array keyed by bundle ID with 'label' and 'description'.
    */
   public function getVisibleBundles(): array {
-    $bundle_list = $this->buildBundleList();
+    $bundle_list = $this->getCatalog();
 
     $config = $this->configFactory->get('daedalus_blueprint_ai.settings');
     $hidden_entity_types = $config->get('hidden_entity_types') ?? [];
@@ -88,7 +88,7 @@ class BundleListBuilder {
    *   out of the AI-visible list.
    */
   public function isHidden(string $entity_type, ?string $bundle = NULL): bool {
-    $catalog = $this->buildBundleList();
+    $catalog = $this->getCatalog();
     if (!isset($catalog[$entity_type])) {
       return FALSE;
     }
@@ -126,12 +126,64 @@ class BundleListBuilder {
   }
 
   /**
+   * The page bundles: the visible bundles whose entities are pages.
+   *
+   * The one projection of the bundle fact every page door states from:
+   * the always-on PAGES line of the page language and page_create's
+   * bundle correctives both print it, so a cold conversation standing on
+   * no page never guesses node/page on a site that has no such bundle,
+   * and the markdown catalog marks its page bundles from it. A page
+   * bundle is one PageHosts calls a page (its entities render as a page
+   * document, their own or their template's), asked of the bundle's
+   * unsaved host; the fact a creation door needs rides beside the label:
+   * whether the bundle's pages render the template (they own only the
+   * slots it places, so page_create takes no layout for them). Catalog
+   * order, visibility applied: a hidden bundle is on no page surface.
+   *
+   * @return array<string, array{entity_type: string, bundle: string, label: string, description: string, renders_template: bool}>
+   *   Keyed "entity_type/bundle".
+   */
+  public function getPageBundles(): array {
+    $pages = [];
+    foreach ($this->getVisibleBundles() as $type_id => $type_data) {
+      foreach ($type_data['bundles'] as $bundle_id => $bundle_data) {
+        $host = $this->pageHosts->bundleHost($type_id, (string) $bundle_id);
+        if ($host === NULL || !$this->pageHosts->isPage($host)) {
+          continue;
+        }
+        $pages["$type_id/$bundle_id"] = [
+          'entity_type' => $type_id,
+          'bundle' => (string) $bundle_id,
+          'label' => $bundle_data['label'],
+          'description' => $bundle_data['description'],
+          'renders_template' => $this->hostResolver->foreignOwner($host) !== NULL,
+        ];
+      }
+    }
+    return $pages;
+  }
+
+  /**
+   * A page bundle's name as every page surface spells it: type/bundle "Label".
+   *
+   * One spelling, so the bundle a corrective names is the bundle the PAGES
+   * line lists, character for character.
+   *
+   * @param array{entity_type: string, bundle: string, label: string} $page
+   *   One entry of getPageBundles().
+   */
+  public static function pageBundleName(array $page): string {
+    return sprintf('%s/%s "%s"', $page['entity_type'], $page['bundle'], $page['label']);
+  }
+
+  /**
    * Formats the visible bundle list as markdown.
    *
    * A page bundle is marked after its label, so a reader can sort pages
    * from other entities before choosing a creation door: "[page]" when the
    * bundle's pages own their layout, "[page, renders its template]" when
-   * they render the template's (PageHosts, the one meaning of "page").
+   * they render the template's (getPageBundles(), the one projection of
+   * PageHosts' one meaning of "page").
    *
    * @return string
    *   Formatted markdown string with entity types as headings and bundles
@@ -139,6 +191,7 @@ class BundleListBuilder {
    */
   public function formatAsMarkdown(): string {
     $bundle_list = $this->getVisibleBundles();
+    $pages = $this->getPageBundles();
 
     $lines = [];
     foreach ($bundle_list as $type_id => $type_data) {
@@ -150,9 +203,8 @@ class BundleListBuilder {
 
       foreach ($type_data['bundles'] as $bundle_id => $bundle_data) {
         $line = "- {$bundle_id}: {$bundle_data['label']}";
-        $host = $this->pageHosts->bundleHost($type_id, (string) $bundle_id);
-        if ($host !== NULL && $this->pageHosts->isPage($host)) {
-          $line .= $this->hostResolver->foreignOwner($host) === NULL ? ' [page]' : ' [page, renders its template]';
+        if (isset($pages["$type_id/$bundle_id"])) {
+          $line .= $pages["$type_id/$bundle_id"]['renders_template'] ? ' [page, renders its template]' : ' [page]';
         }
         if (!empty($bundle_data['description'])) {
           $line .= " — {$bundle_data['description']}";
@@ -167,16 +219,24 @@ class BundleListBuilder {
   }
 
   /**
-   * Builds the full unfiltered bundle list.
+   * Gets the full catalog: every bundle the visibility vocabulary covers.
+   *
+   * The catalog is every fieldable entity type with bundles that is not
+   * internal. An internal type (EntityTypeInterface::isInternal(), e.g. a
+   * ledger row or a moderation state) is bookkeeping, not content: it is
+   * never offered to the AI and never listed in the visibility settings, so
+   * nobody has to remember to hide it. The visibility settings
+   * (daedalus_blueprint_ai.settings) and the alter hook then filter this
+   * catalog down to getVisibleBundles().
    *
    * @return array
    *   Same structure as getVisibleBundles(), before filtering.
    */
-  protected function buildBundleList(): array {
+  public function getCatalog(): array {
     $bundle_list = [];
 
     foreach ($this->entityTypeManager->getDefinitions() as $type_id => $definition) {
-      if (!$definition->entityClassImplements(FieldableEntityInterface::class)) {
+      if ($definition->isInternal() || !$definition->entityClassImplements(FieldableEntityInterface::class)) {
         continue;
       }
 

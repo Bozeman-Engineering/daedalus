@@ -72,23 +72,23 @@ class MutationResponseMaterialsTest extends BlueprintKernelTestBase {
     // the touch order.
     $change_set->touch(MaterialKind::Animation, 'fade_in');
     $change_set->touch(MaterialKind::Blueprint, 'hero');
-    $change_set->touch(MaterialKind::Swatch, 'gone', 'lime_green');
+    $change_set->touch(MaterialKind::Token, 'color/gone', 'color/lime-green');
     $change_set->touch(MaterialKind::Token, 'color/accent');
     // Touching twice is one change.
-    $change_set->touch(MaterialKind::Swatch, 'lime_green');
+    $change_set->touch(MaterialKind::Token, 'color/lime-green');
     $this->assertFalse($change_set->isEmpty());
 
     $delta = $change_set->delta();
     $this->assertSame(
-      [['token', 'color/accent'], ['swatch', 'lime_green'], ['blueprint', 'hero'], ['animation', 'fade_in']],
+      [['token', 'color/lime-green'], ['token', 'color/accent'], ['blueprint', 'hero'], ['animation', 'fade_in']],
       array_map(static fn (array $record): array => [$record['kind'], $record['id']], $delta['upsert']),
     );
-    $this->assertSame([['kind' => 'swatch', 'id' => 'gone']], $delta['remove']);
+    $this->assertSame([['kind' => 'token', 'id' => 'color/gone']], $delta['remove']);
 
     // An upsert is the record as the boot payload spells it: every field.
     $roster = $this->container->get('daedalus_blueprint.materials_roster_builder')->build();
-    $this->assertSame($roster->get(MaterialKind::Swatch, 'lime_green')->toArray(), $delta['upsert'][1]);
-    $this->assertSame('var(--swatch-lime_green)', $delta['upsert'][1]['spellings']['style']);
+    $this->assertSame($roster->get(MaterialKind::Token, 'color/lime-green')->toArray(), $delta['upsert'][0]);
+    $this->assertSame('var(--color-lime-green)', $delta['upsert'][0]['spellings']['style']);
 
     // delta() is a read; flush() is the one-response drain.
     $this->assertFalse($change_set->isEmpty());
@@ -112,12 +112,12 @@ class MutationResponseMaterialsTest extends BlueprintKernelTestBase {
     // never merged into the touched set.
     $this->assertSame([
       'upsert' => [],
-      'remove' => [['kind' => 'swatch', 'id' => 'lime_green'], ['kind' => 'swatch', 'id' => 'coral']],
-    ], $change_set->stagedRemoval(MaterialKind::Swatch, 'lime_green', 'coral'));
+      'remove' => [['kind' => 'token', 'id' => 'color/lime-green'], ['kind' => 'token', 'id' => 'color/coral']],
+    ], $change_set->stagedRemoval(MaterialKind::Token, 'color/lime-green', 'color/coral'));
     $this->assertTrue($change_set->isEmpty());
 
     $this->expectException(\InvalidArgumentException::class);
-    $change_set->touch(MaterialKind::Swatch, '');
+    $change_set->touch(MaterialKind::Token, '');
   }
 
   /**
@@ -134,12 +134,12 @@ class MutationResponseMaterialsTest extends BlueprintKernelTestBase {
     $entity = $this->createTestEntity();
     $request = Request::create('/daedalus-blueprint/entity_test/' . $entity->id(), 'POST');
 
-    $change_set->touch(MaterialKind::Swatch, 'lime_green', 'gone');
+    $change_set->touch(MaterialKind::Token, 'color/lime-green', 'color/gone');
     $response = $builder->build($request, $entity, BlueprintResult::success($this->host($entity)), NULL, [], 'full');
     $payload = Json::decode($response->getContent());
     $this->assertSame(200, $response->getStatusCode());
-    $this->assertSame('lime_green', $payload['materials']['upsert'][0]['id']);
-    $this->assertSame([['kind' => 'swatch', 'id' => 'gone']], $payload['materials']['remove']);
+    $this->assertSame('color/lime-green', $payload['materials']['upsert'][0]['id']);
+    $this->assertSame([['kind' => 'token', 'id' => 'color/gone']], $payload['materials']['remove']);
     $this->assertTrue($change_set->isEmpty());
 
     // Flushed once: the next response of the request carries nothing.
@@ -194,16 +194,16 @@ class MutationResponseMaterialsTest extends BlueprintKernelTestBase {
       $records,
     );
 
-    $change_set->touch(MaterialKind::Swatch, 'lime_green');
+    $change_set->touch(MaterialKind::Token, 'color/lime-green');
     $change_set->touch(MaterialKind::Blueprint, 'hero');
-    $this->assertSame([['swatch', 'lime_green'], ['blueprint', 'hero']], $ids($change_set->delta()['upsert']), 'No canvas: unfiltered.');
+    $this->assertSame([['token', 'color/lime-green'], ['blueprint', 'hero']], $ids($change_set->delta()['upsert']), 'No canvas: unfiltered.');
     $this->assertSame([], $change_set->delta()['remove']);
     $delta = $change_set->delta($host);
-    $this->assertSame([['swatch', 'lime_green']], $ids($delta['upsert']));
+    $this->assertSame([['token', 'color/lime-green']], $ids($delta['upsert']));
     $this->assertSame([['kind' => 'blueprint', 'id' => 'hero']], $delta['remove'], 'The canvas does not offer a rootless blueprint.');
 
     $payload = Json::decode($builder->build($request, $entity, BlueprintResult::success($host), NULL, [], 'full', $host)->getContent());
-    $this->assertSame([['swatch', 'lime_green']], $ids($payload['materials']['upsert']));
+    $this->assertSame([['token', 'color/lime-green']], $ids($payload['materials']['upsert']));
     $this->assertSame([['kind' => 'blueprint', 'id' => 'hero']], $payload['materials']['remove']);
     $this->assertTrue($change_set->isEmpty());
 
@@ -233,7 +233,7 @@ class MutationResponseMaterialsTest extends BlueprintKernelTestBase {
     $this->assertSame(
       [
         'color/accent',
-        'lime_green',
+        'color/lime-green',
         'button',
         'container_full',
         'block_full',

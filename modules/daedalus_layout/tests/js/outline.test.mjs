@@ -28,7 +28,7 @@ const SETS = buildSets(
       block('inline_block:text', KIND_BASIC, 'Text', ['marketing'], true),
       block('field_block:node:page:title', 'Content fields', 'Title'),
     ],
-    [record('hero_band', 'Hero band', ['marketing'])],
+    [record('hero_section', 'Hero section', ['marketing'])],
   ),
   [{ id: 'marketing', label: 'Marketing', description: '' }],
   null,

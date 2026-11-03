@@ -73,6 +73,7 @@ class PendingTargetCollectorWiringTest extends KernelTestBase {
     'daedalus_tempstore',
     'daedalus_ui',
     'daedalus_blueprint',
+    'filter',
     'daedalus_blueprint_api',
     'daedalus_ai',
   ];

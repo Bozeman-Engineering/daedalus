@@ -12,10 +12,10 @@ use Symfony\Component\Console\Exception\RuntimeException;
  *
  * Drush 14 has no global --user switch, so commands whose output is enforced
  * against the current user (schema building, deserialize/save) expose their own
- * --user option (default uid 1) and switch the account for the operation,
- * mirroring daedalus_blueprint_ai_dev_tools' prompt-audit command. Drush itself
- * bootstraps as the anonymous user, under which those operations would be
- * denied, so a deliberate, operator-chosen account is required.
+ * --user option (default uid 1) and switch the account for the operation.
+ * Drush itself bootstraps as the anonymous user, under which those
+ * operations would be denied, so a deliberate, operator-chosen account is
+ * required.
  *
  * The host class must provide $this->accountSwitcher
  * (\Drupal\Core\Session\AccountSwitcherInterface) and $this->entityTypeManager

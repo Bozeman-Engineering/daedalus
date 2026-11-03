@@ -54,6 +54,7 @@ class BlueprintAccessTest extends KernelTestBase {
     'layout_discovery',
     'layout_builder',
     'daedalus_blueprint',
+    'filter',
     'daedalus_blueprint_library',
   ];
 

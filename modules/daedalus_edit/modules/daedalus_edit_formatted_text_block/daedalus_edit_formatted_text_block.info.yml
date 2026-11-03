@@ -10,6 +10,9 @@ dependencies:
   - drupal:filter
   - drupal:text
   - daedalus:daedalus_edit
+  # The composed content reads text formats through the blueprint spine's
+  # core 11.3 compatibility service (CORE_11_3_COMPAT.md).
+  - daedalus:daedalus_blueprint
   - field_sample_value:field_sample_value
   - daedalus:daedalus_layout
   - daedalus:daedalus_ui

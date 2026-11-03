@@ -1,10 +1,12 @@
 import store from '../store/store';
 import { findInstance, findPart, markupPlacement } from './markup-presence';
+import { effectiveBlueprint } from './effective-blueprint';
 
 /**
- * THE markup index over the blueprint mirror: selectable key → the
- * `_element.markup` annotation, memoized on the mirror reference (the
- * mirror is replaced wholesale by every mutation response, so reference
+ * THE markup index over the effective blueprint: selectable key → the
+ * `_element.markup` annotation, memoized on the effective tree's
+ * reference (the mirror is replaced wholesale by every mutation response
+ * and the effective tree is re-derived on every draft, so reference
  * equality is change detection).
  *
  * The annotation is the canonical instance model, the element resolver's
@@ -17,6 +19,16 @@ import { findInstance, findPart, markupPlacement } from './markup-presence';
  * daedalus_stylish's layout-context facts, and the canvas DOM is a projection to
  * verify against, never a source. Consumers get the same answer the
  * server render printed, by construction.
+ *
+ * The source is the EFFECTIVE tree (effective-blueprint.js), not the raw
+ * mirror: the mirror is the server's last word, the draft is the open
+ * gesture's resolved markup for the one node being edited (the resolver
+ * twin's answer for the previewed bag, the tree the canvas was morphed
+ * to), and readers read the two as one tree. So a tag picked or a link
+ * typed in a composed edit answers here before the op round-trips, with
+ * the committed rich-text facts (`instances`, `tags`) kept beneath the
+ * structural draft; the next mirror replacement clears the draft and the
+ * index answers the committed annotation again.
  *
  * Key forms served (the selectable-key grammar):
  * - entity:{root uuid}, the root node's markup.
@@ -91,24 +103,26 @@ const indexTree = (nodes) => {
  *   The `_element.markup` annotation.
  */
 export const markupForKey = (key) => {
-  const state = store.getState().blueprint;
-  if (typeof key !== 'string' || !state.blueprint || !state.root) {
+  const state = store.getState();
+  const { root } = state.blueprint;
+  const blueprint = effectiveBlueprint(state);
+  if (typeof key !== 'string' || !blueprint || !root) {
     return null;
   }
-  if (indexSource !== state.blueprint) {
-    indexSource = state.blueprint;
+  if (indexSource !== blueprint) {
+    indexSource = blueprint;
     index = new Map();
-    if (state.root.uuid) {
-      indexNode(state.blueprint._element, `entity:${state.root.uuid}`);
+    if (root.uuid) {
+      indexNode(blueprint._element, `entity:${root.uuid}`);
       for (const [name, facts] of Object.entries(
-        state.blueprint._element?.fields ?? {},
+        blueprint._element?.fields ?? {},
       )) {
         if (facts?.markup) {
-          index.set(`field:${state.root.uuid}:${name}`, facts.markup);
+          index.set(`field:${root.uuid}:${name}`, facts.markup);
         }
       }
     }
-    indexTree(state.blueprint.layout);
+    indexTree(blueprint.layout);
   }
   return index.get(key) ?? null;
 };

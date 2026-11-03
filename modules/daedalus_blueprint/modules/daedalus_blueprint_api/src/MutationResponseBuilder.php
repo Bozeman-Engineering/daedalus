@@ -29,7 +29,7 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  * `attachments` carries asset commands to play before the markup swap and
  * `drupal_commands` carries piggybacked AJAX commands to play after it, and
  * `materials` carries the {upsert, remove} delta of every material (token,
- * swatch, variant, blueprint, animation) this request changed, whichever
+ * variant, blueprint, animation, font) this request changed, whichever
  * lane changed
  * it, so the client store learns a mint the moment it lands
  * (MaterialsChangeSet).
@@ -74,7 +74,7 @@ final class MutationResponseBuilder {
    * A payload carrying only this request's materials delta.
    *
    * The contract shape with no entity behind it: an AI tool that persisted
-   * a NON-PAGE entity (a swatch, a variant) mutated nothing the blueprint
+   * a NON-PAGE entity (a variant, an animation) mutated nothing the blueprint
    * or markup channels describe, yet the client must still learn the mint.
    * The delta rides the same applyResponse pipeline as every other payload;
    * with no blueprint the mirror stays, with no markup nothing swaps.
@@ -163,7 +163,7 @@ final class MutationResponseBuilder {
     }
 
     // Every material the request changed, whichever operation or hook
-    // changed it (a blueprint saved mid-batch, a swatch an AI tool minted
+    // changed it (a blueprint saved mid-batch, a variant an AI tool minted
     // before this build): flushed here so one response carries it once.
     // A failed batch may still have minted (the blueprint gestures' documented
     // side-effect semantics), so the delta rides failures too.

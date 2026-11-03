@@ -26,7 +26,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * grammar (add_section born as the node's layout, update_element,
  * add_element, and daedalus_stylish's style operations) and runs it as a nested
  * batch. A section-rooted blueprint rides add_section's ONE placement
- * grammar, so the same blueprint lands as a top-level band or nested inside
+ * grammar, so the same blueprint lands as a top-level section or nested inside
  * any region. The style operations are captured by a spy handler standing
  * in for daedalus_stylish, which keeps the assertions on exactly what the blueprint
  * handler emits: the operations and their translated selectable keys.
@@ -162,9 +162,9 @@ class BlueprintInstantiateTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests stamping a section-rooted blueprint as a top-level band.
+   * Tests stamping a section-rooted blueprint as a top-level section.
    */
-  public function testInstantiateAsBand(): void {
+  public function testInstantiateAsSection(): void {
     ['entity' => $entity] = $this->createHost();
 
     // The client-minted root UUID (the Add panel's optimistic seam): the
@@ -180,7 +180,7 @@ class BlueprintInstantiateTest extends BlueprintKernelTestBase {
     ]);
     $this->assertBatchSuccess($result);
 
-    // The blueprint appended a band: a SECOND top-level row, no wrapper, no
+    // The blueprint appended a section: a SECOND top-level row, no wrapper, no
     // client-side add_section hack.
     $sections = $this->sections($entity);
     $this->assertCount(2, $sections);
@@ -381,7 +381,7 @@ class BlueprintInstantiateTest extends BlueprintKernelTestBase {
    * A saved blueprint composed from scratch and not yet holding a root
    * (the fit passes vacuously, the instantiator would be handed nothing)
    * is refused BLUEPRINT_EMPTY after the lookup and before anything is
-   * staged; the dialect's <pb-blueprint> rides the same door and answers
+   * staged; the dialect's <d-blueprint> rides the same door and answers
    * the same code.
    */
   public function testEmptyBlueprintRefused(): void {
@@ -414,7 +414,7 @@ class BlueprintInstantiateTest extends BlueprintKernelTestBase {
     $result = $this->operations()->batchOperations($this->host($entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-blueprint name="uncomposed" />',
+        'html' => '<d-blueprint name="uncomposed" />',
         'at' => ['ref' => $root_section, 'position' => 'afterend'],
       ],
     ], $this->dialectOptions(with_roster: TRUE));
@@ -431,7 +431,7 @@ class BlueprintInstantiateTest extends BlueprintKernelTestBase {
    * spine's PageStart) and never a placement into a page: refused
    * BLUEPRINT_WRONG_SCOPE after the lookup and before the empty check and
    * the fit (an empty page blueprint is still the start's to refuse), with
-   * nothing staged; the dialect's <pb-blueprint> rides the same door and
+   * nothing staged; the dialect's <d-blueprint> rides the same door and
    * answers the same code.
    */
   public function testPageBlueprintRefusedAsPlacement(): void {
@@ -487,7 +487,7 @@ class BlueprintInstantiateTest extends BlueprintKernelTestBase {
     $result = $this->operations()->batchOperations($this->host($entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-blueprint name="whole_page" />',
+        'html' => '<d-blueprint name="whole_page" />',
         'at' => ['ref' => $root_section, 'position' => 'afterend'],
       ],
     ], $this->dialectOptions(with_roster: TRUE));

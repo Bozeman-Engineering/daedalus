@@ -59,6 +59,11 @@ host:
   (a config import, or one from before value blocks) is converted on save
   and by the `display_value_blocks` post update.
 
+In Edit Mode the canvas (`EventSubscriber\EditableUiBuilder`) takes the
+place of the route entity's fields but keeps each field key as an empty
+element, so a core preprocess hook that reads a base field by key (the
+term's `name`) finds what it expects and prints nothing for it.
+
 ### The site frame
 The outermost document of the stack is the theme's site frame: a
 `daedalus_frame` config entity per theme (id the theme's machine name)
@@ -110,8 +115,9 @@ container; the dialog takes label, description, the subject's allow-list
 and whether to adopt the variants it wears), "Save page as blueprint…" on
 the page root (the same dialog worded for a page, the same op with the
 host's own uuid as the element, a page-scope blueprint; a root verb flagged
-`document`, so the top bar's Save caret is where it shows, on a page the
-actor may configure and never on a template or a blueprint's own canvas),
+`document`, so the top bar menu's document group is where it shows, on a
+page the actor may configure and never on a template or a blueprint's own
+canvas),
 "Update blueprint 'X'" on a placement, which pushes the placed subtree back
 into the blueprint it came from by provenance, and "Open blueprint 'X'", which
 navigates to the canvas of the blueprint a join shows (a linked placement, a
@@ -287,7 +293,7 @@ they say what kind of thing a block is and stay as the kinds under All.
   Space toggles, Left collapses, Right expands, Enter or Space on a row
   lifts it into the caret walk); the blueprint row's menu ("Edit
   details…", "Delete…", Shift+F10) and its live repaint from the store;
-  a band placing at the top level only.
+  a section placing at the top level only.
 - **The build.** The panel is a bundled Preact surface: `js/src/` (the
   component under `components/`, the pure model under `model/`, which the
   node tests cover) built by `webpack.config.js` into
@@ -325,7 +331,12 @@ editor's door to it, three pieces in one place:
   setting per page-capable bundle config type (node types, media types,
   vocabularies, comment types; a block type has no creation group), and
   daedalus_ui's `hasSettingsSchema($type, 'daedalus_layout')` is the probe,
-  so the control never writes a key with no schema.
+  so the control never writes a key with no schema. The setting is
+  mirrored, read-only, as the "Starting designs" column of daedalus_ui's
+  bundle roster (`/admin/config/daedalus/ui/content-types`,
+  `EventSubscriber\StartingDesignsColumn` on `BundleRosterEvent`): On or
+  Off as stored, "n/a" where the box would be disabled, no column on a
+  block type.
 - **The chooser** (`Form\StartChooser`) is the add form itself, not a
   route: one `hook_form_alter` on a content entity form holding a NEW
   entity (an edit form, a translation's add form and a Layout Builder form
@@ -406,7 +417,7 @@ container); the op door enforces the same verdict on the mutation.
 
 #### UI Colors
 To set your UI colors to match your theme go to Manage > Configuration >
-Content authoring > Daedalus Layout.
+Daedalus > UI > Editor chrome (`/admin/config/daedalus/ui/chrome`).
 
 # Recommended modules
 - [Field Sample Value](https://www.drupal.org/project/field_sample_value)

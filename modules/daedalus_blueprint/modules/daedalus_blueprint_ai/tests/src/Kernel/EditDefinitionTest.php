@@ -63,7 +63,7 @@ class EditDefinitionTest extends BlueprintKernelTestBase {
     // The tool description is the universal contract, not an op catalog:
     // atomicity, sequencing over minted uuids, and the literal text rule.
     $this->assertStringContainsString('atomically', $description);
-    $this->assertStringContainsString('rolled back', $description);
+    $this->assertStringContainsString('rolls back', $description);
     $this->assertStringContainsString('never HTML-escaped', $description);
     $this->assertStringNotContainsString('update_element', $description, 'The description does not enumerate ops; the roll-call lives once in the operations parameter.');
     $this->assertStringNotContainsString('add_section', $description, 'The description does not enumerate ops; the roll-call lives once in the operations parameter.');

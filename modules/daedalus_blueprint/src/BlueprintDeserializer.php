@@ -116,7 +116,7 @@ class BlueprintDeserializer implements BlueprintDeserializerInterface {
 
     // Phase B: Semantic validation + hydration.
     $entity_type = $data['entity_type'];
-    $bundle = $data['bundle'];
+    $bundle = $this->structuralValidator->impliedBundle($entity_type, $data['bundle'] ?? NULL);
     $langcode = $data['langcode'] ?? NULL;
     $fields = $data['fields'] ?? [];
     $is_full_create = !isset($data['_root_entity']);

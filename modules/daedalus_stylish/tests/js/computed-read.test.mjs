@@ -30,7 +30,9 @@ const ENTITY_D = 'dddddddd-1111-2222-3333-444444444444';
 /**
  * Matches one compound of the printed target grammar: `:scope`, `*`,
  * `.class`, [attr="value"], [attr^="prefix"], `:where(...)` and
- * `:is(a, b)` wrappers, and glued compounds such as `:scope.cls`.
+ * `:is(a, b)` wrappers, glued compounds such as `:scope.cls`, and a bare
+ * pseudo-class (`:hover`), which never matches: nothing on the fake
+ * canvas is hovered, focused or active.
  */
 const matchesCompound = (node, compound, scope) => {
   let rest = compound.trim();
@@ -44,6 +46,9 @@ const matchesCompound = (node, compound, scope) => {
       }
       rest = rest.slice(':scope'.length);
       continue;
+    }
+    if (/^:[a-z-]+(?![a-z(-])/.test(rest) && !/^:(where|is)\(/.test(rest)) {
+      return false;
     }
     const nested = rest.match(/^:(where|is)\(/);
     if (nested) {
@@ -220,7 +225,7 @@ const el = ({ selectable = null, element = null, classes = [], children = [] } =
 };
 
 /**
- * The canvas: an entity root holding a section band whose region carries an
+ * The canvas: an entity root holding a section whose region carries an
  * own part match, a nested section (own root stamped, own part match), and a
  * block (own root stamped, own part match) — one .quote at every depth, so
  * the donut is the only thing separating the three.
@@ -231,21 +236,29 @@ const buildCanvas = () => {
   const quoteInBlock = el({ classes: ['quote'] });
   const block = el({ selectable: `block:${BLOCK_C}`, element: 'block_type:text', children: [quoteInBlock] });
   const nested = el({ selectable: `container:${SECTION_NESTED}`, element: 'layout:daedalus_stylish_container', children: [quoteInNested, block] });
-  const band = el({ selectable: `container:${SECTION_A}`, element: 'layout:daedalus_stylish_container', children: [quoteInA, nested] });
-  const canvas = el({ selectable: `entity:${ENTITY_D}`, element: 'kind:entity', children: [band] });
-  return { canvas, band, nested, block, quoteInA, quoteInNested, quoteInBlock };
+  const section = el({ selectable: `container:${SECTION_A}`, element: 'layout:daedalus_stylish_container', children: [quoteInA, nested] });
+  const canvas = el({ selectable: `entity:${ENTITY_D}`, element: 'kind:entity', children: [section] });
+  return { canvas, section, nested, block, quoteInA, quoteInNested, quoteInBlock };
 };
 
-const resolveFrom = (canvas, key, selector = null) => {
+const resolveFrom = (canvas, key, selector = null, conditions = {}) => {
   globalThis.document = {
     querySelector: (selector) => (canvas.matches(selector) ? canvas : canvas.querySelector(selector)),
   };
   try {
-    return resolveTargets(key, selector);
+    return resolveTargets(key, selector, conditions);
   }
   finally {
     delete globalThis.document;
   }
+};
+
+// The guide's condition table: hover and focus are posable states, a
+// width band is not a pseudo-class at all.
+const CONDITIONS = {
+  hover: { label: 'Hover', wrapper: ':hover', axis: 'state' },
+  focus: { label: 'Focus', wrapper: ':focus', axis: 'state' },
+  narrow: { label: 'Narrow', wrapper: '@container (max-width: 767px)', axis: 'width', band: { max: 767 } },
 };
 
 // --- Root resolution --------------------------------------------------------
@@ -263,8 +276,8 @@ const rootFrom = (canvas, key) => {
 };
 
 test('resolveRoot finds the stamped root for a key, null when absent', () => {
-  const { canvas, band, nested, block } = buildCanvas();
-  assert.equal(rootFrom(canvas, `container:${SECTION_A}`), band);
+  const { canvas, section, nested, block } = buildCanvas();
+  assert.equal(rootFrom(canvas, `container:${SECTION_A}`), section);
   assert.equal(rootFrom(canvas, `container:${SECTION_NESTED}`), nested);
   assert.equal(rootFrom(canvas, `block:${BLOCK_C}`), block);
   assert.equal(rootFrom(canvas, `entity:${ENTITY_D}`), canvas);
@@ -312,9 +325,9 @@ test('a nested section key resolves to its own stamped root, no translation', ()
   assert.deepEqual(resolveFrom(canvas, `container:${SECTION_NESTED}`), [nested]);
 });
 
-test('band, block, and entity keys resolve to their stamped roots', () => {
-  const { canvas, band, block } = buildCanvas();
-  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`), [band]);
+test('section, block, and entity keys resolve to their stamped roots', () => {
+  const { canvas, section, block } = buildCanvas();
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`), [section]);
   assert.deepEqual(resolveFrom(canvas, `block:${BLOCK_C}`), [block]);
   assert.deepEqual(resolveFrom(canvas, `entity:${ENTITY_D}`), [canvas]);
 });
@@ -328,7 +341,7 @@ test('a key absent from the canvas resolves to nothing', () => {
 
 // --- Part resolution and the donut boundary ----------------------------------
 
-test('a band-owned part stops at the nested section root (the donut)', () => {
+test('a section-owned part stops at the nested section root (the donut)', () => {
   const { canvas, quoteInA } = buildCanvas();
   assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '.quote'), [quoteInA]);
 });
@@ -345,8 +358,8 @@ test('a block-owned part is not donut-limited', () => {
 
 test('a selector outside the grammar resolves to nothing', () => {
   const { canvas } = buildCanvas();
-  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, 'div .quote'), []);
-  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '.quote>.x'), []);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, 'div > > .quote'), []);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '.quote:has(:has(.x))'), []);
   assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '::>'), []);
 });
 
@@ -358,22 +371,50 @@ test('the children selector hits every direct child, nested roots included', () 
 
 test('a type selector reaches by the element address, past nested roots', () => {
   const { canvas, nested, block } = buildCanvas();
-  // Only the nested container is a direct child container of the band;
+  // Only the nested container is a direct child container of the section;
   // the text block sits one level down, reached by the descendant form.
-  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '> pb-container'), [nested]);
-  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '> pb-text'), []);
-  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, 'pb-text'), [block]);
-  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_NESTED}`, '> pb-text'), [block]);
-  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '> pb-container > pb-text'), [block]);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '> d-container'), [nested]);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '> d-text'), []);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, 'd-text'), [block]);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_NESTED}`, '> d-text'), [block]);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '> d-container > d-text'), [block]);
 });
 
 test('a part reaching by > shifts the donut: nested roots are its children', () => {
-  const { canvas, band, nested, quoteInA } = buildCanvas();
-  // The band wears the hoisted part class on its own root: the dual half.
-  band.classes.push('region');
+  const { canvas, section, nested, quoteInA } = buildCanvas();
+  // The section wears the hoisted part class on its own root: the dual half.
+  section.classes.push('region');
   assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '.region > *'), [quoteInA, nested]);
   // A part continuing by a descendant combinator reaches the whole subtree.
-  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '.region pb-text').length, 1);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '.region d-text').length, 1);
+});
+
+// --- The structural reach of a state-qualified rule -------------------------
+
+test('a state qualifier resolves to the structural reach: the elements the rule hits once the state holds', () => {
+  const { canvas, section, nested, block, quoteInA } = buildCanvas();
+  const a = `container:${SECTION_A}`;
+  // The reveal: `li:hover > ul`'s shape over the fixture. Nothing on the
+  // canvas is hovered, and the rule's targets are still the text block
+  // under the nested container, the elements the bands measure and the
+  // pose stamps.
+  assert.deepEqual(resolveFrom(canvas, a, '> d-container:hover > d-text', CONDITIONS), [block]);
+  assert.deepEqual(resolveFrom(canvas, a, 'd-container:focus d-text', CONDITIONS), [block]);
+  // The owner's own state is the owner; with a chain, the chain.
+  assert.deepEqual(resolveFrom(canvas, a, '&:hover', CONDITIONS), [section]);
+  assert.deepEqual(resolveFrom(canvas, a, '&:hover > d-container', CONDITIONS), [nested]);
+  // A state the table does not publish is no state: it stays in the
+  // print and hits only what really holds (nothing here).
+  assert.deepEqual(resolveFrom(canvas, a, '> d-container:visited > d-text', CONDITIONS), []);
+  // Without a table nothing is a state: the same rule hits nothing on an
+  // unhovered canvas, as the delivered CSS would.
+  assert.deepEqual(resolveFrom(canvas, a, '> d-container:hover > d-text'), []);
+  assert.deepEqual(resolveFrom(canvas, a, '&:hover'), []);
+  // A state whose compound is left with no address reaches nothing.
+  assert.deepEqual(resolveFrom(canvas, a, '*:hover > d-text', CONDITIONS), []);
+  // The donut still binds on the reach: the owner's part under its own
+  // hover is the section's quote alone, never the nested roots'.
+  assert.deepEqual(resolveFrom(canvas, a, '&:hover .quote', CONDITIONS), [quoteInA]);
 });
 
 // --- Generated boxes ---------------------------------------------------------
@@ -382,31 +423,36 @@ test('pseudoOf names the terminal box of a selector, null for an element target'
   assert.equal(pseudoOf(null), null);
   assert.equal(pseudoOf(undefined), null);
   assert.equal(pseudoOf('.quote'), null);
-  assert.equal(pseudoOf('> pb-text'), null);
+  assert.equal(pseudoOf('> d-text'), null);
   assert.equal(pseudoOf('&::before'), 'before');
   assert.equal(pseudoOf('.quote::after'), 'after');
-  assert.equal(pseudoOf('> pb-text:has(a)::before'), 'before');
-  // Outside the grammar there is no box to name (resolveTargets answers
-  // nothing for these; the name is not a second verdict).
-  assert.equal(pseudoOf('&::marker'), null);
+  assert.equal(pseudoOf('> d-text:has(a)::before'), 'before');
+  // Any pseudo-element the browser spells is a box to name; outside the
+  // grammar there is none (resolveTargets answers nothing for these; the
+  // name is not a second verdict).
+  assert.equal(pseudoOf('li::marker'), 'marker');
+  assert.equal(pseudoOf('&::first-line'), 'first-line');
+  assert.equal(pseudoOf('&::before::after'), null);
   assert.equal(pseudoOf('p ::before'), null);
   assert.equal(pseudoOf('::before'), null);
 });
 
 test('a generated box resolves to its hosts: the root for the anchor, every match for a part or type box', () => {
-  const { canvas, band, block, quoteInA, quoteInBlock } = buildCanvas();
+  const { canvas, section, block, quoteInA, quoteInBlock } = buildCanvas();
   // The anchor is the owner's own box: the host is the root itself.
   assert.deepEqual(resolveFrom(canvas, `block:${BLOCK_C}`, '&::before'), [block]);
-  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '&::after'), [band]);
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '&::after'), [section]);
   // A part's box hosts on the part's matches, the donut holding exactly
   // as for the part.
   assert.deepEqual(resolveFrom(canvas, `block:${BLOCK_C}`, '.quote::after'), [quoteInBlock]);
   assert.deepEqual(resolveFrom(canvas, `container:${SECTION_A}`, '.quote::before'), [quoteInA]);
   // A type box hosts on the typed children.
-  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_NESTED}`, '> pb-text::before'), [block]);
-  // No host, no box; a pseudo outside the grammar is no address.
+  assert.deepEqual(resolveFrom(canvas, `container:${SECTION_NESTED}`, '> d-text::before'), [block]);
+  // Any pseudo-element hosts on its matches; no host, no box; a pseudo
+  // outside the grammar is no address.
+  assert.deepEqual(resolveFrom(canvas, `block:${BLOCK_C}`, '&::marker'), [block]);
   assert.deepEqual(resolveFrom(canvas, `block:${'e'.repeat(8)}-1111-2222-3333-444444444444`, '&::before'), []);
-  assert.deepEqual(resolveFrom(canvas, `block:${BLOCK_C}`, '&::marker'), []);
+  assert.deepEqual(resolveFrom(canvas, `block:${BLOCK_C}`, '&::before::after'), []);
 });
 
 test('readComputed reads a box through its host with the pseudo argument', () => {

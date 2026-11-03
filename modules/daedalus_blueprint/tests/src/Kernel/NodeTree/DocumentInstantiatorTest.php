@@ -101,9 +101,6 @@ class DocumentInstantiatorTest extends BlueprintKernelTestBase {
     ]);
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['block_content', 'daedalus_stylish']);
@@ -345,7 +342,7 @@ class DocumentInstantiatorTest extends BlueprintKernelTestBase {
                 'uuid' => self::NESTED_UUID,
                 'layout_id' => 'layout_onecol',
                 'section_index' => 0,
-                'blueprint' => 'nested_band',
+                'blueprint' => 'nested_section',
                 'children' => [
                   [
                     'kind' => 'block',
@@ -417,7 +414,7 @@ class DocumentInstantiatorTest extends BlueprintKernelTestBase {
         'op' => 'add_section',
         'uuid' => self::SECTION_UUID,
         'layout' => 'eb_test_container',
-        'layout_settings' => ['label' => 'Band'],
+        'layout_settings' => ['label' => 'Section'],
         'location' => ['anchor' => $source->uuid(), 'placement' => 'inside'],
       ],
       [
@@ -1058,7 +1055,7 @@ class DocumentInstantiatorTest extends BlueprintKernelTestBase {
           '' => [
             'variants' => [
               'card',
-              ['variant' => 'band'],
+              ['variant' => 'section'],
               ['variant' => 'card', 'fragment' => 'title'],
               ['variant' => 'aurora', 'via' => 'card'],
             ],
@@ -1073,14 +1070,14 @@ class DocumentInstantiatorTest extends BlueprintKernelTestBase {
     $this->assertTrue($expansion->isValid(), print_r(self::errorsByPath($expansion->errors), TRUE));
     $styles = array_slice($expansion->operations, $expansion->structuralCount);
     $this->assertSame(
-      [['apply_variant', 'card'], ['apply_variant', 'band'], ['update_style', NULL], ['apply_variant', 'chip']],
+      [['apply_variant', 'card'], ['apply_variant', 'section'], ['update_style', NULL], ['apply_variant', 'chip']],
       array_map(static fn (array $op): array => [$op['op'], $op['variant'] ?? NULL], $styles),
       'Authored wearings apply by name; derived ones are dropped; the one condition map is the one property write.',
     );
     $this->assertSame('default', $styles[2]['condition']);
     $this->assertSame(['padding' => '2rem'], $styles[2]['properties']);
     $root_key = 'container:' . $expansion->roots[0];
-    $this->assertSame(['variants' => ['card', 'band'], 'default' => ['padding' => '2rem']], $expansion->styles[$root_key], 'The map carries the references, never the variants\' properties.');
+    $this->assertSame(['variants' => ['card', 'section'], 'default' => ['padding' => '2rem']], $expansion->styles[$root_key], 'The map carries the references, never the variants\' properties.');
   }
 
 }

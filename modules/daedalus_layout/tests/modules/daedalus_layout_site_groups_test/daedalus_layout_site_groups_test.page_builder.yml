@@ -8,5 +8,5 @@ site:
     heroes:
       label: Heroes
       description: 'Full-width openers for the top of a page.'
-    bands:
-      label: Bands
+    sections:
+      label: Sections

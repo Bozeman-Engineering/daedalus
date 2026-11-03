@@ -242,13 +242,13 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
       NULL,
       'layout_twocol_section',
       [],
-      'hero_band',
+      'hero_section',
     );
 
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $sections = $entity->get('layout_builder__layout')->getSections();
     $section = end($sections);
-    $this->assertSame('hero_band', $section->getThirdPartySetting(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, 'blueprint'));
+    $this->assertSame('hero_section', $section->getThirdPartySetting(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, 'blueprint'));
 
     // A section that is not a blueprint placement carries no stamp.
     $result = $this->operations->addSection(
@@ -274,14 +274,14 @@ class BlueprintOperationsAddSectionLayoutTest extends BlueprintKernelTestBase {
         'op' => 'add_section',
         'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside'],
         'layout' => 'layout_onecol',
-        'blueprint' => 'hero_band',
+        'blueprint' => 'hero_section',
       ],
     ]);
 
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $sections = $entity->get('layout_builder__layout')->getSections();
     $section = end($sections);
-    $this->assertSame('hero_band', $section->getThirdPartySetting(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, 'blueprint'));
+    $this->assertSame('hero_section', $section->getThirdPartySetting(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, 'blueprint'));
   }
 
   /**

@@ -13,10 +13,10 @@ namespace Drupal\daedalus_blueprint\Materials;
  * "block_plugin:system_menu_block", "layout:layout_onecol", "base:a"),
  * optionally refined by a relative selector into that element's subtree
  * ("::.class-name" a declared part, "::p" its paragraphs, "::> *" its
- * direct children, "::> pb-text .link"; RelativeSelector is the grammar).
+ * direct children, "::> d-text .link"; RelativeSelector is the grammar).
  * A variant's scope is a root address (no selector); the element key
  * grammar (daedalus_stylish's StyleMapValidator::parseKey(),
- * "container:{uuid}::> pb-text") shares the selector grammar through
+ * "container:{uuid}::> d-text") shares the selector grammar through
  * RelativeSelector::splitKey() and resolves to an address by capture.
  *
  * Families:

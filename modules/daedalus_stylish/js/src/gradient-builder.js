@@ -20,8 +20,8 @@ import {
 import { paletteFallback, stopsFor } from './widget-values.js';
 import { usePalettePopover } from './palette-picker.js';
 import { customProperty, paintValue, styleReference } from './materials.js';
-import { editableValue, mergedValue } from './palette-model.js';
-import { fetchSwatchUsage } from './swatches-api.js';
+import { editableValue, mergedValue, tokenNameError } from './skin-model.js';
+import { fetchMaterialUsage } from './skin-api.js';
 import { saveMaterial, updateMaterial } from './material-gestures.js';
 import { pickerHex } from './color-field-model.js';
 import { browserHex } from './native-picker.js';
@@ -30,8 +30,8 @@ import { browserHex } from './native-picker.js';
  * A stop color as face paint: material references paint from roster data
  * (never getComputedStyle — the panel DOM may sit outside the token
  * scope); everything else paints as itself. The one face-paint rule
- * (materials.js paintValue), shared with the color kind's editor
- * (swatch-kinds.js) and the palette card faces.
+ * (materials.js paintValue), shared with the palette's color editor and
+ * the palette card faces.
  */
 export const paintColor = (guide, materials, color) =>
   typeof color === 'string' ? paintValue(guide, materials, color) : color;
@@ -80,8 +80,8 @@ const derive = (value, guide, materials, constraints) => {
 };
 
 /**
- * The gradient builder: the gradient swatch kind's editor, and the value
- * editor behind the media rows' gradient chip.
+ * The gradient builder: the gradient token's editor, and the value editor
+ * behind the media rows' gradient chip.
  *
  * A pure client widget over one string value (so it renders identically in
  * the satellite window): type, repeating flag, angle knob + number (or the
@@ -108,10 +108,12 @@ const derive = (value, guide, materials, constraints) => {
  * text at the narrowest honest scope — the target layer, or the whole
  * value when it will not even split — never a silent normalization.
  *
- * The save-as-swatch gesture (create-swatches permission, `canMint`)
- * mints the edited gradient as a site-wide swatch through the source's
- * batch commit (save_material, kind swatch: the op the AI submits) and
- * commits the var() reference in the layer's place; the op queue lands
+ * The save-as-token gesture (the create-tokens grant, `canMint`) mints
+ * the edited gradient as a token on the active skin through the source's
+ * batch commit (save_material, kind token, no group: the server lands it
+ * on the first declared scale whose shape fits a gradient, the op the AI
+ * submits) and commits the var() reference in the layer's place; the op
+ * queue lands
  * the minted record on the store (the leader relays it to the satellite)
  * before the promise resolves, so the live vocabulary and the canvas
  * custom property already know it.
@@ -125,7 +127,7 @@ const derive = (value, guide, materials, constraints) => {
  *   The bound property's guide constraints — the stop vocabulary inherits
  *   them (stopsFor), exactly like a color row would.
  * @param {boolean} [props.canMint]
- *   Whether the save-as-swatch gesture renders (honest chrome; the op
+ *   Whether the save-as-token gesture renders (honest chrome; the op
  *   enforces).
  * @param {?object} [props.source]
  *   The state source the mint commits through (required with canMint).
@@ -136,10 +138,10 @@ const derive = (value, guide, materials, constraints) => {
  * @param {?Function} [props.onClose]
  *   Closes the builder (the chip's toggle in chip form).
  * @param {?object} [props.session]
- *   The swatch update session's chrome (GradientSwatchSession wires it):
- *   {label, ref, conditions, usages, busy, onUpdate, onDiscard}. Present, the builder wears the session frame: head with
- *   identity + blast line, Update swatch / Discard commit bar in the mint
- *   gesture's place.
+ *   The token update session's chrome (GradientTokenSession wires it):
+ *   {label, ref, conditions, usages, busy, onUpdate, onDiscard}. Present,
+ *   the builder wears the session frame: head with identity + blast line,
+ *   Update token / Discard commit bar in the mint gesture's place.
  */
 export const GradientBuilder = ({
   value,
@@ -183,6 +185,10 @@ export const GradientBuilder = ({
   const knobTurning = useRef(false);
   const [mintLabel, setMintLabel] = useState('');
   const [minting, setMinting] = useState(false);
+  // The token name grammar, checked before the round trip (the scale is
+  // the server's to infer from the gradient, so only the spelling is
+  // judged here; a taken name refuses at the op and the source reports).
+  const mintNameError = tokenNameError(mintLabel.trim(), null, materials);
 
   const wholeOf = (next) =>
     next.kind === 'gradient'
@@ -228,18 +234,19 @@ export const GradientBuilder = ({
     saveMaterial(
       source,
       {
-        kind: 'swatch',
+        kind: 'token',
         label: mintLabel.trim(),
-        group: 'gradient',
         value: serializeGradient(state.gradient),
       },
-      Drupal.t('Added the swatch !label', { '!label': mintLabel.trim() }),
+      Drupal.t('Saved the gradient as the token !name', {
+        '!name': mintLabel.trim(),
+      }),
     )
       .then((minted) => {
         // The minted record is already on the store; its style spelling is
         // what this value references from now on. The value becomes the
-        // reference: the edited layer's slot now holds the swatch's style
-        // spelling (a swatch edit restyles this use) and every other layer
+        // reference: the edited layer's slot now holds the token's style
+        // spelling (a token edit restyles this use) and every other layer
         // still reassembles verbatim.
         emitWhole(
           buildValue(state.layers, state.index, styleReference(minted)),
@@ -362,7 +369,7 @@ export const GradientBuilder = ({
     >
       <div className="daedalus-stylish-gradient__header">
         <span className="daedalus-stylish-gradient__title">
-          {session ? Drupal.t('Editing swatch') : Drupal.t('Gradient')}
+          {session ? Drupal.t('Editing token') : Drupal.t('Gradient')}
         </span>
         {onClose && (
           <button
@@ -377,7 +384,7 @@ export const GradientBuilder = ({
       </div>
       {session && (
         /* The session head (the mockup's who + blast lines): the edited
-           swatch's identity and the site-wide consequence, on screen the
+           token's identity and the site-wide consequence, on screen the
            moment the session mounts. The conditions line is the string
            editors' honesty rule: the builder edits the default entry;
            the other condition entries commit back verbatim. */
@@ -658,7 +665,7 @@ export const GradientBuilder = ({
                   )}
                   <input
                     type="color"
-                    className="daedalus-stylish-inspector__swatch"
+                    className="daedalus-stylish-inspector__color-input"
                     title={
                       hex === null
                         ? Drupal.t(
@@ -753,7 +760,15 @@ export const GradientBuilder = ({
               <input
                 type="text"
                 className="daedalus-stylish-gradient__mint-name daedalus-ui-input"
-                placeholder={Drupal.t('Swatch name…')}
+                placeholder={Drupal.t('Token name…')}
+                aria-label={Drupal.t('Token name')}
+                title={
+                  mintNameError === 'invalid'
+                    ? Drupal.t(
+                        'Lowercase letters, digits and inner hyphens ("hero-fade"); the name becomes the tail of the custom property.',
+                      )
+                    : Drupal.t('The tail of the custom property: --gradient-name')
+                }
                 value={mintLabel}
                 onInput={(event) => setMintLabel(event.target.value)}
               />
@@ -761,12 +776,12 @@ export const GradientBuilder = ({
                 type="button"
                 className="daedalus-stylish-gradient__mint-save daedalus-ui-pill-button"
                 title={Drupal.t(
-                  'Save this gradient as a palette swatch the whole site can reuse; this value becomes a reference to it.',
+                  "Save this gradient as a token on the skin's gradient scale, for the whole site to reuse; this value becomes a reference to it.",
                 )}
-                disabled={minting || mintLabel.trim() === ''}
+                disabled={minting || mintNameError !== null}
                 onClick={mint}
               >
-                {Drupal.t('Save as swatch')}
+                {Drupal.t('Save as token')}
               </button>
             </div>
           )}
@@ -774,7 +789,7 @@ export const GradientBuilder = ({
       )}
       {session && (
         /* The session's exits, in the mint gesture's place, and OUTSIDE
-           the gradient-only body, so a swatch whose value degrades (raw
+           the gradient-only body, so a token whose value degrades (raw
            layer grammar, an unsplittable whole) still commits or discards
            honestly. */
         <div className="daedalus-stylish-gradient__session-bar">
@@ -783,7 +798,7 @@ export const GradientBuilder = ({
             className="daedalus-ui-pill-button"
             disabled={session.busy}
             title={Drupal.t(
-              'Close without saving; the swatch and every use keep their stored value.',
+              'Close without saving; the token and every use keep their stored value.',
             )}
             onClick={session.onDiscard}
           >
@@ -794,11 +809,11 @@ export const GradientBuilder = ({
             className="daedalus-ui-pill-button daedalus-stylish-gradient__session-update"
             disabled={session.busy}
             title={Drupal.t(
-              'Save the value; every place referencing this swatch restyles instantly.',
+              'Save the value; every place referencing this token restyles instantly.',
             )}
             onClick={session.onUpdate}
           >
-            {Drupal.t('Update swatch')}
+            {Drupal.t('Update token')}
           </button>
         </div>
       )}
@@ -807,47 +822,49 @@ export const GradientBuilder = ({
 };
 
 /**
- * The gradient chip's edit-in-place posture: the builder over the SWATCH's
+ * The gradient chip's edit-in-place posture: the builder over the TOKEN's
  * own value (right after minting, the editor's next gesture is "keep
  * tweaking"; a trip to Materials → Palette is a mode error).
  *
  * Mounted by the media rows' PropertyWidget when the row's committed value
- * is exactly one var() naming a gradient-kind swatch
- * (materials.js gradientSwatchOf). The row's value never changes here; the
- * live link IS the point: the builder edits the swatch's default condition
- * entry (editableValue; other condition entries remerge verbatim on
- * commit, the honesty rule) and Update swatch is the update_material op
- * (kind swatch) through the source's batch commit, whose materials delta
- * the op queue lands on the store (the leader relays it to the
- * satellite), so every use on the canvas and every face in both windows
- * restyles without a reload.
+ * is exactly one var() naming a gradient-scale token (materials.js
+ * gradientTokenOf). The row's value never changes here; the live link IS
+ * the point: the builder edits the token's default condition entry
+ * (editableValue; other condition entries remerge verbatim on commit, the
+ * honesty rule) and Update token is the update_material op (kind token)
+ * through the source's batch commit, whose materials delta the op queue
+ * lands on the store (the leader relays it to the satellite), so every
+ * use on the canvas and every face in both windows restyles without a
+ * reload. On a consuming site the write lands in the skin's site layer
+ * over the package's record, the same lane the palette card's editor
+ * takes.
  *
  * Live preview rides the source's previewMaterial seam per input event:
- * the draft, remerged over the swatch's other condition entries, lands on
+ * the draft, remerged over the token's other condition entries, lands on
  * the token scope lane (the canvas answers while the user drags; the
  * store keeps the committed value, so panel faces stay on it until
  * Update). Discard, close, or unmount releases the preview
- * (previewMaterial with null restores the store's value). Pure client
- * over the source seam, so the satellite renders it unchanged: the relay
+ * (previewMaterial null). Pure client over the source's seams, so it
+ * renders in the satellite too, where the satellite source's relay
  * carries the seam.
  *
  * @param {object} props
- * @param {object} props.swatch
- *   The swatch as a picker entry (materials.js gradientSwatchOf's answer:
- *   {name, label, kind, ref, value, record}).
+ * @param {object} props.token
+ *   The token as a picker entry (materials.js gradientTokenOf's answer:
+ *   {scale, scaleLabel, shape, name, ref, value, valueDark, record}).
  * @param {object} props.guide
  *   The style guide payload.
  * @param {object} props.materials
  *   The materials roster.
  * @param {?object} [props.constraints]
- *   The bound property's guide constraints (the stop vocabulary).
+ *   The bound property's constraints (the stop vocabulary inherits them).
  * @param {object} props.source
- *   The state source (commitBatch and the previewMaterial seam).
+ *   The state source (the update op and the preview seam).
  * @param {?Function} [props.onClose]
  *   Closes the builder (the chip's toggle).
  */
-export const GradientSwatchSession = ({
-  swatch,
+export const GradientTokenSession = ({
+  token,
   guide = {},
   materials,
   constraints = null,
@@ -857,7 +874,7 @@ export const GradientSwatchSession = ({
   // The mount-time snapshot: the session's one baseline. The prop follows
   // the store (an Update lands a new record), so deriving the stored value
   // from the prop mid-session would move the baseline under the draft.
-  const [original] = useState(swatch);
+  const [original] = useState(token);
   const { draft: stored, conditions } = editableValue(original.record.value);
   const [draft, setDraft] = useState(stored);
   const [usages, setUsages] = useState(null);
@@ -865,11 +882,11 @@ export const GradientSwatchSession = ({
   // Whether the delivery seam wears a previewed value that must restore.
   const previewed = useRef(false);
 
-  // The blast line's number: the existing swatch usage read, once per
+  // The blast line's number: the existing token usage read, once per
   // session entry (the SessionFrame precedent at value scope).
   useEffect(() => {
     let alive = true;
-    fetchSwatchUsage(original.name).then(
+    fetchMaterialUsage('token', original.record.id).then(
       (body) =>
         alive &&
         setUsages(typeof body.usages === 'number' ? body.usages : null),
@@ -878,7 +895,7 @@ export const GradientSwatchSession = ({
     return () => {
       alive = false;
     };
-  }, [original.name]);
+  }, [original.record.id]);
 
   const restore = () => {
     if (previewed.current) {
@@ -904,11 +921,11 @@ export const GradientSwatchSession = ({
     updateMaterial(
       source,
       {
-        kind: 'swatch',
-        id: original.name,
+        kind: 'token',
+        id: original.record.id,
         value: mergedValue(original.record.value, draft),
       },
-      Drupal.t('Updated the swatch !label', { '!label': original.label }),
+      Drupal.t('Updated the token !id', { '!id': original.record.id }),
     )
       .then(() => {
         // The committed record supersedes the preview: nothing to restore,
@@ -939,7 +956,7 @@ export const GradientSwatchSession = ({
       onCommit={preview}
       onClose={onClose}
       session={{
-        label: original.label,
+        label: original.name,
         ref: original.ref,
         conditions,
         usages,

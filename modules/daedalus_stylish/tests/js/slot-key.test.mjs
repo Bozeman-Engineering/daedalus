@@ -141,7 +141,7 @@ test('the relative selector suffix terminates any key (PHP mirror)', () => {
   assert.equal(parseSlotKey('container(1)/block(text,1)::.card > *', 'container').selector, '.card > *');
   // Tags and types are selectors like any other (legal in variants now).
   assert.equal(parseSlotKey('::p', 'container').selector, 'p');
-  assert.equal(parseSlotKey('::> pb-text .link', 'container').selector, '> pb-text .link');
+  assert.equal(parseSlotKey('::> d-text .link', 'container').selector, '> d-text .link');
   for (const rootKind of [...ROOT_KINDS, null]) {
     assert.equal(parseSlotKey('::> *', rootKind).selector, '> *');
   }
@@ -169,7 +169,7 @@ test('format round-trips every canonical key losslessly', () => {
     '::.daedalus-stylish-layout-container > *',
     'container(1)::> *',
     'container(1)/block(text,1)::.card > *',
-    '::> pb-text .link',
+    '::> d-text .link',
   ];
   for (const key of keys) {
     const parsed = parseSlotKey(key, 'container');

@@ -21,16 +21,10 @@ use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\Markup;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
-use Drupal\daedalus_stylish\AnimationStylesheet;
-use Drupal\daedalus_stylish\DefaultsStylesheet;
+use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\daedalus_stylish\StyleMapValidator;
-use Drupal\daedalus_stylish\DaedalusStylishAnimationInterface;
-use Drupal\daedalus_stylish\DaedalusStylishFontInterface;
-use Drupal\daedalus_stylish\FontStylesheet;
 use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
-use Drupal\daedalus_stylish\DaedalusStylishSwatchInterface;
 use Drupal\daedalus_stylish\DaedalusStylishVariantInterface;
-use Drupal\daedalus_stylish\SwatchStylesheet;
 use Drupal\daedalus_stylish\VariantStylesheet;
 
 /**
@@ -326,68 +320,29 @@ function daedalus_stylish_library_info_build(): array {
       'daedalus_stylish_layers_exempt' => TRUE,
     ];
   }
-  // The "daedalus_stylish/defaults" library delivers the compiled defaults
-  // stylesheet (the declared tier, then the active skin's tokens and
-  // defaults), the exact posture of the variants library above:
-  // hash-busted file resolved at discovery time, unlayered so token
-  // definitions cannot lose to a theme's own custom-property declarations
-  // at higher specificity.
-  $libraries['defaults'] = ['css' => ['theme' => []]];
-  $path = \Drupal::service('daedalus_stylish.defaults_stylesheet')->libraryPath();
+  // The "daedalus_stylish/skin" library delivers the compiled skin
+  // stylesheet (the active skin's @font-face blocks, the declared tier,
+  // then the skin's tokens, its @keyframes and its defaults), the exact
+  // posture of the variants
+  // library above: hash-busted file resolved at discovery time, unlayered
+  // so token definitions cannot lose to a theme's own custom-property
+  // declarations at higher specificity. Every page carrying the skin's
+  // keyframes carries the motion-triggers runtime: any element wearing
+  // an animation may bind it to a trigger.
+  $libraries['skin'] = ['css' => ['theme' => []], 'dependencies' => ['daedalus_stylish/motion_triggers']];
+  $path = \Drupal::service('daedalus_stylish.skin_stylesheet')->libraryPath();
   if ($path !== NULL) {
-    $libraries['defaults']['css']['theme'][$path] = [
+    $libraries['skin']['css']['theme'][$path] = [
       'preprocess' => FALSE,
       'daedalus_stylish_layers_exempt' => TRUE,
-      // The defaults file must sort BEFORE the variants file: defaults and
+      // The skin file must sort BEFORE the variants file: defaults and
       // variant CSS meet at identical :scope specificity on the same
       // elements, and document order must let the explicit variant choice
-      // beat the default.
+      // beat the default; and variants may wear the skin's animations, so
+      // the keyframes definitions lead their wearers in the document
+      // (keyframe steps referencing skin tokens resolve at use, custom
+      // properties being late-bound).
       'weight' => -10,
-    ];
-  }
-  // The "daedalus_stylish/swatches" library delivers the compiled swatch stylesheet
-  // (the palette's custom properties), same posture again.
-  $libraries['swatches'] = ['css' => ['theme' => []]];
-  $path = \Drupal::service('daedalus_stylish.swatch_stylesheet')->libraryPath();
-  if ($path !== NULL) {
-    $libraries['swatches']['css']['theme'][$path] = [
-      'preprocess' => FALSE,
-      'daedalus_stylish_layers_exempt' => TRUE,
-      // Before the defaults file (-10) and the variants file (0): skin
-      // tokens and variant values may reference swatches, so the palette's
-      // definitions lead the delivered document (see SwatchStylesheet).
-      'weight' => -20,
-    ];
-  }
-  // The "daedalus_stylish/animations" library delivers the compiled animations
-  // stylesheet (the named @keyframes at-rules), same posture again.
-  // Every page carrying the keyframes carries the motion-triggers runtime:
-  // any element wearing an animation may bind it to a trigger.
-  $libraries['animations'] = ['css' => ['theme' => []], 'dependencies' => ['daedalus_stylish/motion_triggers']];
-  $path = \Drupal::service('daedalus_stylish.animation_stylesheet')->libraryPath();
-  if ($path !== NULL) {
-    $libraries['animations']['css']['theme'][$path] = [
-      'preprocess' => FALSE,
-      'daedalus_stylish_layers_exempt' => TRUE,
-      // After the swatch file (-20), before the defaults file (-10):
-      // keyframe steps may reference swatches, and defaults and variants
-      // may wear animations, so the definitions sit between the two in the
-      // delivered document (see AnimationStylesheet).
-      'weight' => -15,
-    ];
-  }
-  // The "daedalus_stylish/fonts" library delivers the compiled fonts
-  // stylesheet (the @font-face at-rules), same posture again.
-  $libraries['fonts'] = ['css' => ['theme' => []]];
-  $path = \Drupal::service('daedalus_stylish.font_stylesheet')->libraryPath();
-  if ($path !== NULL) {
-    $libraries['fonts']['css']['theme'][$path] = [
-      'preprocess' => FALSE,
-      'daedalus_stylish_layers_exempt' => TRUE,
-      // Before the swatch file (-20): the skin's font tokens and every
-      // variant may name a family, so the declarations lead the delivered
-      // document (see FontStylesheet).
-      'weight' => -25,
     ];
   }
   return $libraries;
@@ -404,12 +359,10 @@ function daedalus_stylish_library_info_build(): array {
  * bubble onto the page (HtmlRenderer::invokePageAttachmentHooks) and reach
  * the chromeless documents (preview mode) whose page_top daedalus_ui nulls
  * whole (DaedalusUiHooks::preprocessHtml). Attach the
- * "daedalus_stylish/defaults" library (asset-less when nothing is compiled;
+ * "daedalus_stylish/skin" library (asset-less when nothing is compiled;
  * attaching a missing library is an error, an asset-less one is not) and
  * carry the recompile tag so skin saves, design-system switches and
- * declaration changes reach cached pages. The swatch file (the palette's
- * custom properties) and the animations file (the named @keyframes
- * at-rules) ride the same seam with the same anatomy.
+ * declaration changes reach cached pages.
  *
  * Documents the skin does not reach (admin-theme pages, pop-outs; see
  * _daedalus_stylish_skinless_document()) carry no token scope element, so
@@ -417,8 +370,8 @@ function daedalus_stylish_library_info_build(): array {
  * saves the request (correctness comes from the scope element, this is
  * only optimization).
  *
- * Inside a workspace the active skin's (possibly staged) revision, the
- * staged palette and the staged keyframes inline per page at the same
+ * Inside a workspace the active skin's (possibly staged) revision
+ * (fonts, tokens, keyframes and defaults) inlines per page at the same
  * scope-class selectors (the preview edge at page level). The tags print
  * from the scope-element preprocess
  * (daedalus_stylish_preprocess_off_canvas_page_wrapper()), a seam that
@@ -434,16 +387,10 @@ function daedalus_stylish_page_attachments(array &$attachments): void {
   if (_daedalus_stylish_skinless_document()) {
     return;
   }
-  $attachments['#attached']['library'][] = 'daedalus_stylish/defaults';
-  $attachments['#attached']['library'][] = 'daedalus_stylish/swatches';
-  $attachments['#attached']['library'][] = 'daedalus_stylish/animations';
-  $attachments['#attached']['library'][] = 'daedalus_stylish/fonts';
+  $attachments['#attached']['library'][] = 'daedalus_stylish/skin';
   $tags = [
-    DefaultsStylesheet::CACHE_TAG,
+    SkinStylesheet::CACHE_TAG,
     'config:daedalus_stylish.settings',
-    SwatchStylesheet::CACHE_TAG,
-    AnimationStylesheet::CACHE_TAG,
-    FontStylesheet::CACHE_TAG,
   ];
   if (\Drupal::hasService('workspaces.manager')) {
     $attachments['#cache']['contexts'] = Cache::mergeContexts($attachments['#cache']['contexts'] ?? [], ['workspace']);
@@ -459,7 +406,7 @@ function daedalus_stylish_page_attachments(array &$attachments): void {
  *
  * Stamps the TOKEN SCOPE ELEMENT: the wrapper the compiled defaults
  * stylesheet scopes every token definition to
- * (DefaultsStylesheet::SCOPE_CLASS). Tokens
+ * (SkinStylesheet::SCOPE_CLASS). Tokens
  * deliver on an element, not :root, because width-conditioned values
  * compile as @container queries and container queries cannot style the
  * query container itself: the definitions need an element just INSIDE the
@@ -492,9 +439,8 @@ function daedalus_stylish_page_attachments(array &$attachments): void {
  *
  * Inside a workspace the staged previews print here, as the scope
  * element's first children: a <style> per service that has staged CSS
- * (data-daedalus-stylish-defaults-preview, -swatch-preview,
- * -animation-preview; the attributes identify the preview tags for
- * reconciliation and debugging, mirroring the per-entity
+ * (data-daedalus-stylish-skin-preview; the attribute identifies the
+ * preview tag for reconciliation and debugging, mirroring the per-entity
  * data-daedalus-stylish-entity attribute). The scope element is then
  * literally the one place every defaults output lives, and the tags sit
  * in <body>, later in the document than the compiled <link>s in <head>,
@@ -519,21 +465,18 @@ function daedalus_stylish_preprocess_off_canvas_page_wrapper(&$variables): void 
     }
   }
   $variables['children'] = Markup::create(
-    '<div class="' . DefaultsStylesheet::SCOPE_CLASS . '">' . $previews . $variables['children'] . '</div>'
+    '<div class="' . SkinStylesheet::SCOPE_CLASS . '">' . $previews . $variables['children'] . '</div>'
   );
 }
 
 /**
  * The workspace preview services, keyed by id, valued by their tag attribute.
  *
- * Print order: the fonts, the skin, the palette, the keyframes.
+ * The skin alone: its fonts, tokens, keyframes and defaults in one print.
  */
 function _daedalus_stylish_workspace_previews(): array {
   return [
-    'daedalus_stylish.font_stylesheet' => 'data-daedalus-stylish-font-preview',
-    'daedalus_stylish.defaults_stylesheet' => 'data-daedalus-stylish-defaults-preview',
-    'daedalus_stylish.swatch_stylesheet' => 'data-daedalus-stylish-swatch-preview',
-    'daedalus_stylish.animation_stylesheet' => 'data-daedalus-stylish-animation-preview',
+    'daedalus_stylish.skin_stylesheet' => 'data-daedalus-stylish-skin-preview',
   ];
 }
 
@@ -686,9 +629,6 @@ function daedalus_stylish_entity_insert(EntityInterface $entity): void {
   _daedalus_variant_change($entity);
   _daedalus_skin_change($entity);
   _daedalus_design_system_change($entity);
-  _daedalus_swatch_change($entity);
-  _daedalus_animation_change($entity);
-  _daedalus_font_change($entity);
   _daedalus_stylish_media_change($entity);
   _daedalus_stylish_usage_track($entity);
   _daedalus_stylish_value_usage_track($entity);
@@ -702,9 +642,6 @@ function daedalus_stylish_entity_update(EntityInterface $entity): void {
   _daedalus_variant_change($entity);
   _daedalus_skin_change($entity);
   _daedalus_design_system_change($entity);
-  _daedalus_swatch_change($entity);
-  _daedalus_animation_change($entity);
-  _daedalus_font_change($entity);
   _daedalus_stylish_media_change($entity);
   _daedalus_stylish_usage_track($entity);
   _daedalus_stylish_value_usage_track($entity);
@@ -715,19 +652,13 @@ function daedalus_stylish_entity_update(EntityInterface $entity): void {
  */
 function daedalus_stylish_entity_delete(EntityInterface $entity): void {
   _daedalus_variant_change($entity);
-  _daedalus_skin_change($entity);
-  _daedalus_swatch_change($entity);
-  _daedalus_animation_change($entity);
-  _daedalus_font_change($entity, TRUE);
+  _daedalus_skin_change($entity, TRUE);
   _daedalus_stylish_media_change($entity);
   if (_daedalus_stylish_style_host($entity) !== NULL) {
     \Drupal::service('daedalus_stylish.variant_usage')->untrack($entity);
   }
   if (_daedalus_stylish_value_usage_source($entity)) {
-    \Drupal::service('daedalus_stylish.swatch_usage')->untrack($entity);
-    \Drupal::service('daedalus_stylish.animation_usage')->untrack($entity);
-    \Drupal::service('daedalus_stylish.font_usage')->untrack($entity);
-    \Drupal::service('daedalus_stylish.token_usage')->untrack($entity);
+    \Drupal::service('daedalus_stylish.skin_material_usage')->untrack($entity);
   }
   // A deleted bundle takes its opt-out record with it, so a future bundle
   // reusing the machine name defaults ON like any other new bundle. Config
@@ -745,31 +676,37 @@ function daedalus_stylish_entity_delete(EntityInterface $entity): void {
  * Implements hook_modules_installed().
  *
  * Activates the shipped definitions of the just-installed modules (their
- * MODULE.daedalus_stylish.animations.yml / swatches / skins / variants.yml and the
- * per-id files beside them; see ShippedDefinitionsImporter) through the
+ * MODULE.daedalus_stylish.skins.yml / variants.yml and the per-id files
+ * beside them; see ShippedDefinitionsImporter) through the
  * one orchestrator, and, when daedalus_stylish itself is in the batch, every
  * enabled module's. ModuleInstaller does not rebuild all caches, so
  * install is its own entry beside hook_rebuild(). Runs during config sync
  * too: shipped definitions are content belonging to the module's code, so
  * enabling the module through a config import must produce the same
- * styled site as enabling it by hand. During a site install a batch
- * before the recipe's activation waits, silently (the activation lands
- * it), and a batch after it syncs at install (see ShippedSync).
- * The installed modules' declarations (and any declared
- * defaults among them) land the same way (_daedalus_stylish_declarations_changed()),
- * after the sync so a shipped skin landing in the batch compiles once
- * with its declarations.
+ * styled site as enabling it by hand. A site install's batches sync as
+ * they install, before the recipe's activation or after it: a global the
+ * site's law cannot offer yet lands withheld by the roster's verdict, not
+ * refused (see ShippedSync). The guide drops its built declarations
+ * BEFORE the sync (the batch's own declaration files joined the layering,
+ * and a skin's defaults validate against the guide of the moment; the
+ * persistent declarations cache would otherwise serve the pre-install
+ * layering until daedalus_ui's own reset, which runs after this hook),
+ * and delivery recompiles after it (both files: a shipped skin landing
+ * in the batch compiles once with its declarations, and a batch's
+ * declarations are law the variants' verdict follows).
  */
 function daedalus_stylish_modules_installed(array $modules, bool $is_syncing): void {
+  _daedalus_stylish_declarations_reset();
   \Drupal::service('daedalus_stylish.shipped_sync')->onInstall($modules);
-  _daedalus_stylish_declarations_changed();
+  _daedalus_stylish_delivery_compile();
 }
 
 /**
  * Implements hook_modules_uninstalled().
  *
  * An uninstalled module takes its declarations with it: the declared tier
- * of the defaults stylesheet recompiles without them.
+ * of the defaults stylesheet recompiles without them, and the variants
+ * file follows the verdict judged without them.
  */
 function daedalus_stylish_modules_uninstalled(array $modules, bool $is_syncing): void {
   _daedalus_stylish_declarations_changed();
@@ -780,9 +717,21 @@ function daedalus_stylish_modules_uninstalled(array $modules, bool $is_syncing):
  *
  * A theme may restate a module's declared defaults (it owns the markup
  * model); its declaration files join the layering when it is installed.
+ * When the installed theme is the one system.theme already names as the
+ * default, its install is the default theme landing: the skins kind
+ * waited for it (a skin's defaults validate against the default theme's
+ * guide, which has no chain until the theme is installed), so every
+ * module syncs (ShippedSync::onDefaultThemeChanged()), between the reset
+ * and the compile like an install batch. The other half of the landing,
+ * system.theme's default changing to an installed theme, is
+ * DesignSystemSwitchSubscriber's.
  */
 function daedalus_stylish_themes_installed($theme_list): void {
-  _daedalus_stylish_declarations_changed();
+  _daedalus_stylish_declarations_reset();
+  if (in_array(\Drupal::service('theme_handler')->getDefault(), $theme_list, TRUE)) {
+    \Drupal::service('daedalus_stylish.shipped_sync')->onDefaultThemeChanged();
+  }
+  _daedalus_stylish_delivery_compile();
 }
 
 /**
@@ -793,21 +742,50 @@ function daedalus_stylish_themes_uninstalled(array $themes): void {
 }
 
 /**
- * Recompiles the defaults stylesheet after the declaration set changed.
+ * Recompiles delivery after the declaration set changed.
  *
  * The one reaction behind every extension event (module and theme install
  * and uninstall, the cache rebuild): the guide drops its built
  * declarations first (the persistent declarations cache with them, so the
  * compile reads the new layering, not a memo built before the change),
- * then the defaults stylesheet recompiles; content-addressed, so a batch
- * that changed no declaration touches nothing but cache tags. The
- * design-system switch is the same reaction in DesignSystemSwitchSubscriber
- * (a package's declarations layer only while its system is active) and a
- * default-theme change in DefaultsSettingsSubscriber.
+ * then delivery recompiles; content-addressed, so a batch that changed
+ * no declaration touches nothing but cache tags. The install hooks run
+ * the two halves around their sync (a sync runs under the guide of the
+ * moment, and a skin landing in the batch compiles once with its
+ * declarations). The two law changes through config, the design-system
+ * switch and the default-theme change, are the same reaction with the
+ * sync between in DesignSystemSwitchSubscriber.
  */
 function _daedalus_stylish_declarations_changed(): void {
+  _daedalus_stylish_declarations_reset();
+  _daedalus_stylish_delivery_compile();
+}
+
+/**
+ * Drops the guide's built declarations: the layering is about to be read anew.
+ */
+function _daedalus_stylish_declarations_reset(): void {
   \Drupal::service('daedalus_stylish.style_guide')->resetCache();
-  \Drupal::service('daedalus_stylish.defaults_stylesheet')->compile();
+}
+
+/**
+ * Recompiles live delivery: the skin stylesheet, then the variants file.
+ *
+ * The one compile every law change ends in (a skin write, an enforcement
+ * edit, a declaration change, a settings save, a default-theme change, a
+ * switch): both files are projections of the law, the skin file of the
+ * layering and the worn skin, the variants file of the conformance
+ * verdict (which variants the law offers), so a change to either input
+ * recompiles both. The skin file first: the variants file prints token
+ * references verbatim and the skin file supplies their values. Each
+ * compile is content-addressed, so an unchanged result rewrites the same
+ * file and touches nothing but cache tags. Every caller resets the
+ * roster (its reset cascades to the verdict's memo) before calling, so
+ * the variants compile judges under the law as it now stands.
+ */
+function _daedalus_stylish_delivery_compile(): void {
+  \Drupal::service('daedalus_stylish.skin_stylesheet')->compile();
+  \Drupal::service('daedalus_stylish.variant_stylesheet')->compile();
 }
 
 /**
@@ -819,10 +797,11 @@ function _daedalus_stylish_declarations_changed(): void {
  * (the way a module's blueprint file already goes live through discovery).
  * A deliberate departure from core's install-and-update-hooks-only
  * posture; see ShippedSync for the reasoning, the pending-entity-updates
- * guard, and the log. The defaults stylesheet recompiles behind the same
- * guard: a rebuild is where pulled declaration changes (a module's new
- * declared defaults, a theme's restatement) go live, and the compile reads
- * the entity storages the guard protects.
+ * guard (the kinds' own entity types only), and the log. Delivery (both
+ * files) recompiles behind the same guard: a rebuild is where pulled
+ * declaration changes (a module's new declared defaults, a theme's
+ * restatement) go live, and the compiles read the entity storages the
+ * guard protects.
  */
 function daedalus_stylish_rebuild(): void {
   if (\Drupal::service('daedalus_stylish.shipped_sync')->onRebuild()) {
@@ -845,12 +824,12 @@ function _daedalus_variant_change(EntityInterface $entity): void {
     // gesture that saves a variant and re-resolves it in the same request
     // (push, save-as-variant re-attach) reads the fresh entity.
     \Drupal::service('daedalus_stylish.variant_repository')->reset();
-    // The conformance verdict memoizes with the repository: the saved
-    // entity is judged afresh under the current law (its persistent entry
-    // rides the list tag this write invalidates).
-    \Drupal::service('daedalus_stylish.variant_conformance')->reset();
     // The materials roster memoizes the published set per request; the
-    // same write must not leave it holding the pre-write roster.
+    // same write must not leave it holding the pre-write roster. The
+    // roster's reset cascades to its providers, so the conformance
+    // verdict's request memo goes with it and the saved entity is judged
+    // afresh under the current law (its persistent entry rides the list
+    // tag this write invalidates).
     \Drupal::service('daedalus_blueprint.materials_roster_builder')->reset();
     // The write rides the response's materials delta: by id only, the
     // delta resolves upsert vs remove against the fresh roster.
@@ -862,65 +841,111 @@ function _daedalus_variant_change(EntityInterface $entity): void {
 }
 
 /**
- * Recompiles the defaults stylesheet when a skin changes.
+ * Recompiles delivery when a skin changes.
  *
- * The skin counterpart of _daedalus_variant_change(): compilation always
- * reads the live default revision — a save inside a workspace leaves the
- * file unchanged (its staged CSS previews via the page-level inline
- * fallback) but still invalidates the consumers, harmlessly broad, and a
- * save of an INACTIVE skin recompiles to an identical file. Workspace
- * PUBLISH is covered by SkinWorkspaceSubscriber; a design-system switch
- * by DesignSystemSwitchSubscriber and threshold changes by
+ * The skin counterpart of _daedalus_variant_change(), and a law change: a
+ * skin write is where tokens are minted, and a token's minting flips the
+ * verdict on every variant that references it (withheld under strict law
+ * while unminted, offered once minted), so the write ends in both
+ * compiles and the active skin's write carries every variant on the
+ * delta beside its own tokens. Compilation always reads the live default
+ * revision — a save inside a workspace leaves the files unchanged (its
+ * staged CSS previews via the page-level inline fallback) but still
+ * invalidates the consumers, harmlessly broad, and a save of an INACTIVE
+ * skin recompiles to identical files. Workspace PUBLISH is covered by
+ * SkinWorkspaceSubscriber; a design-system switch by
+ * DesignSystemSwitchSubscriber and threshold changes by
  * DefaultsSettingsSubscriber.
+ *
+ * The skin's fonts' files are held through core's file usage, synced to
+ * the faces here on every save (FontFiles::hold(): every file a face of
+ * either layer names, never released by a save, since a revision restore
+ * may bring a face back) and released whole on delete, so a face's file
+ * is never garbage while the skin lives.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $entity
+ *   The saved or deleted entity.
+ * @param bool $deleted
+ *   TRUE from hook_entity_delete().
  */
-function _daedalus_skin_change(EntityInterface $entity): void {
+function _daedalus_skin_change(EntityInterface $entity, bool $deleted = FALSE): void {
   if ($entity instanceof DaedalusStylishSkinInterface) {
+    $files = \Drupal::service('daedalus_stylish.font_files');
+    if ($deleted) {
+      $files->release($entity);
+    }
+    else {
+      $files->hold($entity);
+    }
     // The materials roster carries the active skin's tokens, and the
     // validator's token universe and the compiled file's token walk are
     // the roster's: a skin change mid-request (an AI batch minting a
     // token, then writing a style that references it) must see the fresh
     // universe, and the compile below must read the post-write tokens.
     \Drupal::service('daedalus_blueprint.materials_roster_builder')->reset();
-    // Tokens are materials of the ACTIVE skin only (token ids are not skin
-    // qualified: "{scale}/{name}" names the active skin's token), so only
-    // its write rides the response's materials delta: every token id the
-    // skin carried before and carries now, upsert vs remove resolved
-    // against the fresh roster (an unpublish removes them all).
+    // Tokens, animations and fonts are materials of the ACTIVE skin only
+    // (their ids are not skin qualified: "{scale}/{name}" names the active
+    // skin's token, "{name}" its animation or font), so only its write
+    // rides the response's materials delta: every id the skin carried
+    // before and carries now, upsert vs remove resolved against the fresh
+    // roster (an unpublish removes them all).
     if (\Drupal::service('daedalus_stylish.skin_manager')->activeSkinName() === $entity->getMachineName()) {
       $provider = \Drupal::service('daedalus_stylish.materials_provider');
+      $change_set = \Drupal::service('daedalus_blueprint.materials_change_set');
       $original = $entity->getOriginal();
-      \Drupal::service('daedalus_blueprint.materials_change_set')->touch(
+      $change_set->touch(
         MaterialKind::Token,
         ...$provider->tokenIds($entity),
         ...($original instanceof DaedalusStylishSkinInterface ? $provider->tokenIds($original) : []),
       );
+      $change_set->touch(
+        MaterialKind::Animation,
+        ...array_keys($entity->animations()),
+        ...($original instanceof DaedalusStylishSkinInterface ? array_keys($original->animations()) : []),
+      );
+      $change_set->touch(
+        MaterialKind::Font,
+        ...array_keys($entity->fonts()),
+        ...($original instanceof DaedalusStylishSkinInterface ? array_keys($original->fonts()) : []),
+      );
+      // The verdict's flips: every variant rides, resolved against the
+      // fresh roster (a reference to a token this write minted resolves
+      // to an upsert, one it unminted to a remove).
+      $provider->touchVariants($change_set);
     }
-    \Drupal::service('daedalus_stylish.defaults_stylesheet')->compile();
+    _daedalus_stylish_delivery_compile();
   }
 }
 
 /**
- * Restyles the site when the active design system's own save changes its skin.
+ * Restyles the site when the active design system's own save changes its law.
  *
- * The unit names its default_skin, and SkinManager wears it whenever the
- * site's choice for the unit does not outrank it, so a save of the
- * ACTIVE unit that changes which skin it wears is a skin change for
- * delivery: what a choice does through DefaultsSettingsSubscriber and a
- * switch through DesignSystemSwitchSubscriber, here for the third writer
- * of the worn skin. Every writer of the unit reaches it (the design
- * system form, config sync's entity import, and the copy gesture: a
- * site's own unit takes its first copy as its default_skin, written
- * AFTER the copy's save, where _daedalus_skin_change() saw a skin that
- * was not yet worn, so this hook is what lands the copy's tokens on the
- * delta and recompiles the file). The skin worn before is judged from
- * the original unit through the same rule the read applies
+ * Two of the unit's fields are law for delivery. The unit names its
+ * default_skin, and SkinManager wears it whenever the site's choice for
+ * the unit does not outrank it, so a save of the ACTIVE unit that
+ * changes which skin it wears is a skin change for delivery: what a
+ * choice does through DefaultsSettingsSubscriber and a switch through
+ * DesignSystemSwitchSubscriber, here for the third writer of the worn
+ * skin. Every writer of the unit reaches it (the design system form,
+ * config sync's entity import, and the copy gesture: a site's own unit
+ * takes its first copy as its default_skin, written AFTER the copy's
+ * save, where _daedalus_skin_change() saw a skin that was not yet worn,
+ * so this hook is what lands the copy's tokens on the delta and
+ * recompiles the files). The skin worn before is judged from the
+ * original unit through the same rule the read applies
  * (SkinManager::resolveChoice()), so a standing choice reads as worn on
- * both sides and the save touches nothing. A save that leaves the worn
- * skin as it was (a description edit, the package ship stamping
- * `package`) touches nothing; an inactive unit's save touches nothing.
- * An entity hook rather than the config save event because the config
- * entity storage resets its static cache only after the config save,
- * so at that event SkinManager would still read the unit as it was.
+ * both sides. The unit's enforcement is the other: the conformance
+ * verdict judges under it (strict law withholds a literal or an unminted
+ * token that open law admits), so an enforcement edit flips verdicts
+ * with the worn skin unchanged and is a law change of its own. Either
+ * change resets the roster (the verdict's memo with it), carries every
+ * variant on the delta (and both skins' tokens when the worn skin
+ * changed) and recompiles delivery. A save that changes neither (a
+ * description edit, the package ship stamping `package`) touches
+ * nothing; an inactive unit's save touches nothing. An entity hook
+ * rather than the config save event because the config entity storage
+ * resets its static cache only after the config save, so at that event
+ * SkinManager would still read the unit as it was.
  */
 function _daedalus_design_system_change(EntityInterface $entity): void {
   if (!$entity instanceof DesignSystemInterface) {
@@ -934,106 +959,23 @@ function _daedalus_design_system_change(EntityInterface $entity): void {
   $original = $entity->getOriginal();
   $before = $original instanceof DesignSystemInterface ? $skin_manager->resolveChoice($original, $choice) : NULL;
   $after = $skin_manager->resolveChoice($entity, $choice);
-  if ($before === $after) {
+  $enforcement_changed = $original instanceof DesignSystemInterface && $original->getEnforcement() !== $entity->getEnforcement();
+  if ($before === $after && !$enforcement_changed) {
     return;
   }
   \Drupal::service('daedalus_blueprint.materials_roster_builder')->reset();
   $provider = \Drupal::service('daedalus_stylish.materials_provider');
-  foreach (array_filter([$before, $after]) as $name) {
-    $skin = $skin_manager->loadByMachineName($name);
-    if ($skin !== NULL) {
-      \Drupal::service('daedalus_blueprint.materials_change_set')->touch(MaterialKind::Token, ...$provider->tokenIds($skin));
+  $change_set = \Drupal::service('daedalus_blueprint.materials_change_set');
+  if ($before !== $after) {
+    foreach (array_filter([$before, $after]) as $name) {
+      $skin = $skin_manager->loadByMachineName($name);
+      if ($skin !== NULL) {
+        $change_set->touch(MaterialKind::Token, ...$provider->tokenIds($skin));
+      }
     }
   }
-  \Drupal::service('daedalus_stylish.defaults_stylesheet')->compile();
-}
-
-/**
- * Recompiles the swatch stylesheet when a swatch changes.
- *
- * The swatch counterpart of _daedalus_variant_change(): compilation always
- * reads the live default revisions — a save inside a workspace leaves the
- * file unchanged (its staged CSS previews via the page-level inline
- * fallback) but still invalidates the consumers, harmlessly broad.
- * Workspace PUBLISH is covered by SwatchWorkspaceSubscriber. There is
- * deliberately NO daedalus_stylish.settings chokepoint: the compile builds the
- * materials roster, whose provider queries the daedalus_stylish storages, which do
- * not exist yet when default config imports at module install (the
- * variants posture, see DefaultsSettingsSubscriber's docblock).
- *
- * The repository reset mirrors _daedalus_variant_change()'s: the
- * resolved-reference memo and the published-name universe must not outlive
- * the write, so a gesture that mints a swatch and validates a value
- * referencing it in the same request sees the fresh universe.
- */
-function _daedalus_swatch_change(EntityInterface $entity): void {
-  if ($entity instanceof DaedalusStylishSwatchInterface) {
-    \Drupal::service('daedalus_stylish.swatch_repository')->reset();
-    // The materials roster memoizes the published set per request; the
-    // same write must not leave it holding the pre-write roster.
-    \Drupal::service('daedalus_blueprint.materials_roster_builder')->reset();
-    // The write rides the response's materials delta: by id only, the
-    // delta resolves upsert vs remove against the fresh roster.
-    \Drupal::service('daedalus_blueprint.materials_change_set')->touch(MaterialKind::Swatch, $entity->getMachineName());
-    \Drupal::service('daedalus_stylish.swatch_stylesheet')->compile();
-  }
-}
-
-/**
- * Recompiles the animations stylesheet when an animation changes.
- *
- * The animation counterpart of _daedalus_swatch_change(), same posture in
- * every respect: compilation always reads the live default revisions (a
- * save inside a workspace leaves the file unchanged and previews via the
- * page-level inline fallback), workspace PUBLISH is covered by
- * AnimationWorkspaceSubscriber, no daedalus_stylish.settings chokepoint, and the
- * repository reset comes first so a gesture that mints an animation and
- * wears it in the same request sees the fresh universe.
- */
-function _daedalus_animation_change(EntityInterface $entity): void {
-  if ($entity instanceof DaedalusStylishAnimationInterface) {
-    \Drupal::service('daedalus_stylish.animation_repository')->reset();
-    // The materials roster memoizes the published set per request; the
-    // same write must not leave it holding the pre-write roster.
-    \Drupal::service('daedalus_blueprint.materials_roster_builder')->reset();
-    // The write rides the response's materials delta: by id only, the
-    // delta resolves upsert vs remove against the fresh roster.
-    \Drupal::service('daedalus_blueprint.materials_change_set')->touch(MaterialKind::Animation, $entity->getMachineName());
-    \Drupal::service('daedalus_stylish.animation_stylesheet')->compile();
-  }
-}
-
-/**
- * Recompiles the fonts stylesheet and syncs file usage when a font changes.
- *
- * The font counterpart of _daedalus_animation_change(), same posture:
- * compilation always reads the live default revisions, workspace PUBLISH
- * is covered by FontWorkspaceSubscriber, and the repository reset comes
- * first. The font's files are held through core's file usage, synced to
- * the faces here (FontFiles::hold(), a diff against the pre-save faces)
- * and released on delete, so a face's file is never garbage while the
- * font lives.
- *
- * @param \Drupal\Core\Entity\EntityInterface $entity
- *   The saved or deleted entity.
- * @param bool $deleted
- *   TRUE from hook_entity_delete().
- */
-function _daedalus_font_change(EntityInterface $entity, bool $deleted = FALSE): void {
-  if ($entity instanceof DaedalusStylishFontInterface) {
-    $files = \Drupal::service('daedalus_stylish.font_files');
-    if ($deleted) {
-      $files->release($entity);
-    }
-    else {
-      $original = $entity->getOriginal();
-      $files->hold($entity, $original instanceof DaedalusStylishFontInterface ? $original : NULL);
-    }
-    \Drupal::service('daedalus_stylish.font_repository')->reset();
-    \Drupal::service('daedalus_blueprint.materials_roster_builder')->reset();
-    \Drupal::service('daedalus_blueprint.materials_change_set')->touch(MaterialKind::Font, $entity->getMachineName());
-    \Drupal::service('daedalus_stylish.font_stylesheet')->compile();
-  }
+  $provider->touchVariants($change_set);
+  _daedalus_stylish_delivery_compile();
 }
 
 /**
@@ -1060,8 +1002,8 @@ function _daedalus_stylish_media_change(EntityInterface $entity): void {
   }
   // The defaults stylesheet bakes resolved media URLs too (skin defaults
   // may reference media), with its own recorded reference list.
-  if (\Drupal::service('daedalus_stylish.defaults_stylesheet')->referencesMedia((string) $entity->uuid())) {
-    \Drupal::service('daedalus_stylish.defaults_stylesheet')->compile();
+  if (\Drupal::service('daedalus_stylish.skin_stylesheet')->referencesMedia((string) $entity->uuid())) {
+    \Drupal::service('daedalus_stylish.skin_stylesheet')->compile();
   }
 }
 
@@ -1101,25 +1043,22 @@ function _daedalus_stylish_style_host(EntityInterface $entity): ?HostInterface {
 }
 
 /**
- * Keeps the value-level usage tables in step with a saved source entity.
+ * Keeps the value-level usage table in step with a saved source entity.
  *
- * The variant chokepoint's hard twin, for the three value-level
- * references: swatch references (var(--swatch-*)), token references
- * (var() of every other custom property) and animation references (the
- * motion-{name} keyframes ident in a motion property) live inside CSS
- * VALUES across the same THREE stores, so the one maintenance point
- * listens on three entity families — map hosts (every style map write
- * ends in a host save), variants (styles), and skins (tokens and site
- * defaults) — and each table's track() dispatches by source kind. Default
- * revisions only, matching what a material edit restyles: the live custom
- * property, the live keyframes.
+ * The variant chokepoint's hard twin, for the value-level references:
+ * skin material references (var() of any custom property, the
+ * motion-{name} keyframes ident in a motion property, a font's quoted
+ * family in a font-family stack) live inside CSS VALUES across the same
+ * THREE stores, so the one maintenance point listens on three entity
+ * families — map hosts (every style map write ends in a host save),
+ * variants (styles), and skins (tokens, animations and defaults) — and
+ * the table's track() dispatches by source kind. Default revisions only,
+ * matching what a material edit restyles: the live custom property, the
+ * live keyframes, the live faces.
  */
 function _daedalus_stylish_value_usage_track(EntityInterface $entity): void {
   if (_daedalus_stylish_value_usage_source($entity)) {
-    \Drupal::service('daedalus_stylish.swatch_usage')->track($entity);
-    \Drupal::service('daedalus_stylish.animation_usage')->track($entity);
-    \Drupal::service('daedalus_stylish.font_usage')->track($entity);
-    \Drupal::service('daedalus_stylish.token_usage')->track($entity);
+    \Drupal::service('daedalus_stylish.skin_material_usage')->track($entity);
   }
 }
 
@@ -1183,29 +1122,6 @@ function daedalus_stylish_daedalus_blueprint_ai_bundle_list_alter(array &$bundle
     // The bundle description is the AI's first contact with the skin
     // concept; it routes the AI to the skins skill before it improvises.
     $bundle_list['daedalus_skin']['bundles']['daedalus_skin']['description'] =
-      "The site's look as data: design-token values and site-wide element defaults. One skin is active sitewide. Invoke the skins skill before creating or editing skins.";
-  }
-  // Swatches are ungated (editor vocabulary, entity access is the
-  // permission model); the description is the AI's first contact with the
-  // palette concept and routes it to the material gestures the design
-  // system brief's MINT line teaches, never to an entity write.
-  if (isset($bundle_list['daedalus_swatch']['bundles']['daedalus_swatch'])) {
-    $bundle_list['daedalus_swatch']['bundles']['daedalus_swatch']['description'] =
-      'A palette swatch: a named CSS value (kinds color and gradient) referenced from styles as var(--swatch-{machine_name}). Published swatches are live site-wide; the design system brief lists them under NAMED VALUES. Mint and edit one through the material gestures (save_material, update_material, remove_material with kind swatch, page_edit ops; the brief\'s MINT line carries the keys), never through an entity write.';
-  }
-  // Animations likewise: the motion material, ungated (entity access is
-  // the permission model); the description routes the AI to the material
-  // gestures and the wear (animation-name) before it improvises a
-  // keyframes block.
-  if (isset($bundle_list['daedalus_animation']['bundles']['daedalus_animation'])) {
-    $bundle_list['daedalus_animation']['bundles']['daedalus_animation']['description'] =
-      'An animation: a named @keyframes block (steps: offsets mapping CSS properties to values) worn from styles as animation-name: motion-{machine_name}. Published animations are live site-wide; the design system brief lists them under ANIMATIONS. Mint and edit one through the material gestures (save_material, update_material, remove_material with kind animation, page_edit ops; the brief\'s MINT line carries the keys), never through an entity write; never write @keyframes into a style.';
-  }
-  // Fonts likewise: the type material, ungated; the description routes
-  // the AI to the material gestures and the use (a font-family stack)
-  // before it improvises an @font-face block.
-  if (isset($bundle_list['daedalus_font']['bundles']['daedalus_font'])) {
-    $bundle_list['daedalus_font']['bundles']['daedalus_font']['description'] =
-      'A font: a self-hosted family (faces: weight, style and an uploaded font file per face) named from styles in a font-family stack as "{family}". Published fonts are live site-wide; the design system brief lists them under FONTS. Mint and edit one through the material gestures (save_material, update_material, remove_material with kind font, page_edit ops; the brief\'s MINT line carries the keys), never through an entity write; never write @font-face into a style.';
+      "The site's look as data: design tokens, animations, self-hosted fonts and site-wide element defaults. One skin is active sitewide. Its materials are minted through the material gestures (save_material, update_material, remove_material with kind token, animation or font), never through an entity write; invoke the skins skill before creating or editing skins.";
   }
 }

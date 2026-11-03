@@ -12,8 +12,12 @@ use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\Routing\AdminHtmlRouteProvider;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\daedalus_blueprint\DesignSystem\DesignSystemInterface;
+use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\Entity\DesignSystemMemberTrait;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinAnimationsItem;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinDefaultsItem;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinFontsItem;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 use Drupal\daedalus_stylish\DaedalusStylishSkinAccessControlHandler;
@@ -33,27 +37,37 @@ use Drupal\user\EntityOwnerTrait;
  * what a skin IS, only what it says.
  *
  * A skin has no add or edit form. It is authored on the canvas, in Edit
- * Mode's Materials place, through the same operations the AI submits:
- * tokens as materials (save_material, update_material, remove_material
- * with kind token) and defaults through update_default, and its
+ * Mode's Design system place, through the same operations the AI submits:
+ * tokens, animations and fonts as materials (save_material,
+ * update_material, remove_material with kind token, animation or font)
+ * and defaults through update_default, and its
  * lifecycle (choose, copy, restore, revert) through SkinManager's routes.
  * The admin routes that remain are the skin list (/admin/appearance/skins)
  * and the delete form. Delivery (the compiled skin stylesheet) is a
  * separate concern and reads none of them.
  *
  * A skin is two layers on one entity. The PACKAGE layer (tokens,
- * defaults) is what a module ships: the disk lane's fields, the only
- * ones the importer writes and the shipper reads, the payload the source
- * hash covers. The SITE layer (site_tokens, site_defaults) holds what
- * the site added or changed over it, by name down to the fact (a token's
- * value, description or offered) or the property (a default): a package
+ * animations, fonts, defaults) is what a module ships: the disk lane's
+ * fields, the only ones the importer writes and the shipper reads, the
+ * payload the source hash covers. The SITE layer (site_tokens,
+ * site_animations, site_fonts, site_defaults) holds what the site added
+ * or changed over it, by name down to the fact (a token's value, an
+ * animation's steps, a font's faces, a description or offered) or the
+ * property (a default): a package
  * update lands in its own layer and shows through wherever the site
  * changed nothing, and removing a site entry reveals the package's. Every
- * reader but the disk lane reads the merge (tokens(), defaults()). A skin
+ * reader but the disk lane reads the merge (tokens(), animations(),
+ * fonts(), defaults()). A skin
  * with no provider is the site's own and has one layer, the package one,
  * edited directly. Both layers are revisionable and the identity fields
  * are not, so a revision revert changes what either layer says and never
  * what the skin is.
+ *
+ * A member skin is born wearable: the site's own skin that joins a design
+ * system and brings no defaults starts from the defaults the system's
+ * default skin wears (preSave(); see inheritBirthDefaults()), because a
+ * skin of tokens alone renders a page bare, with no gutter and no heading
+ * scale, every one of those living in defaults.
  */
 #[ContentEntityType(
   id: 'daedalus_skin',
@@ -133,6 +147,16 @@ class DaedalusStylishSkin extends EditorialContentEntityBase implements Daedalus
       ->setDescription(new TranslatableMarkup("The design tokens: {scale: {name: {value, description, offered}}} against the site's declared token scales, each value a string or a condition-keyed map with a 'default' entry; a bare value is shorthand for {value}."))
       ->setRevisionable(TRUE);
 
+    $fields['animations'] = BaseFieldDefinition::create('daedalus_skin_animations')
+      ->setLabel(new TranslatableMarkup('Animations'))
+      ->setDescription(new TranslatableMarkup("The skin's motion: {name: {steps, description, offered}}, each steps map keyframe offsets ('0%', '50%', '100%') to CSS properties; a bare steps map is shorthand for {steps}. Delivered as @keyframes motion-{name} in the compiled skin file."))
+      ->setRevisionable(TRUE);
+
+    $fields['fonts'] = BaseFieldDefinition::create('daedalus_skin_fonts')
+      ->setLabel(new TranslatableMarkup('Fonts'))
+      ->setDescription(new TranslatableMarkup("The skin's type: {name: {family, faces, description, offered}}, each faces list naming an uploaded font file per weight and style ({weight, style, source: {file: uuid}}). Delivered as one @font-face per face at the head of the compiled skin file; a font-family stack names the family quoted."))
+      ->setRevisionable(TRUE);
+
     $fields['defaults'] = BaseFieldDefinition::create('daedalus_skin_defaults')
       ->setLabel(new TranslatableMarkup('Site defaults'))
       ->setDescription(new TranslatableMarkup('The site element defaults: {scope: element-relative styles} with LIVE semantics — they restyle existing placements through the compiled skin stylesheet, and per-entity style maps beat them by cascade.'))
@@ -148,6 +172,18 @@ class DaedalusStylishSkin extends EditorialContentEntityBase implements Daedalus
     $fields['site_tokens'] = BaseFieldDefinition::create('daedalus_skin_site_tokens')
       ->setLabel(new TranslatableMarkup('Site tokens'))
       ->setDescription(new TranslatableMarkup("The site's layer over the shipped tokens: {scale: {name: the facts the site changed or the record it minted}}; an unstated fact shows through from the package layer."))
+      ->setRevisionable(TRUE)
+      ->setInternal(TRUE);
+
+    $fields['site_animations'] = BaseFieldDefinition::create('daedalus_skin_site_animations')
+      ->setLabel(new TranslatableMarkup('Site animations'))
+      ->setDescription(new TranslatableMarkup("The site's layer over the shipped animations: {name: the facts the site changed or the record it minted}; an unstated fact shows through from the package layer."))
+      ->setRevisionable(TRUE)
+      ->setInternal(TRUE);
+
+    $fields['site_fonts'] = BaseFieldDefinition::create('daedalus_skin_site_fonts')
+      ->setLabel(new TranslatableMarkup('Site fonts'))
+      ->setDescription(new TranslatableMarkup("The site's layer over the shipped fonts: {name: the facts the site changed or the record it minted}; an unstated fact shows through from the package layer."))
       ->setRevisionable(TRUE)
       ->setInternal(TRUE);
 
@@ -172,7 +208,7 @@ class DaedalusStylishSkin extends EditorialContentEntityBase implements Daedalus
 
     $fields['source_hash'] = BaseFieldDefinition::create('string')
       ->setLabel(new TranslatableMarkup('Source hash'))
-      ->setDescription(new TranslatableMarkup("Hash of the shipped {tokens, defaults} payload (the package layer, tokens as records) at the last import or sync. Sync compares it against the current disk payload (defaults changed?); the ship lane compares it against the entity's package layer (edited under the developer gate?)."))
+      ->setDescription(new TranslatableMarkup("Hash of the shipped {tokens, animations, fonts, defaults} payload (the package layer, tokens, animations and fonts as records, each font face named by the sha256 of its file) at the last import or sync. Sync compares it against the current disk payload (defaults changed?); the ship lane compares it against the entity's package layer (edited under the developer gate?)."))
       ->setSetting('max_length', 64);
 
     $fields['created'] = BaseFieldDefinition::create('created')
@@ -193,6 +229,49 @@ class DaedalusStylishSkin extends EditorialContentEntityBase implements Daedalus
     $this->checkDesignSystem();
     if ($this->get('machine_name')->isEmpty()) {
       $this->set('machine_name', $this->generateMachineName('skin'));
+    }
+    if ($this->isNew()) {
+      $this->inheritBirthDefaults();
+    }
+  }
+
+  /**
+   * A new member skin starts from its system's default skin's defaults.
+   *
+   * The gutter, the heading scale and every base-tag rule live in a
+   * skin's defaults, so a skin of tokens alone is wearable in name only:
+   * a page built under it renders bare. The site's own skin (no provider)
+   * that joins a design system and brings no defaults of its own is born
+   * with the defaults the system's default skin wears, both layers
+   * merged, the look the site has; every road to a new skin (the AI's
+   * create door, the skin card's copy of a defaults-less skin, a test)
+   * passes here, and re-valuing them afterwards is update_default's job
+   * as on any skin. A shipped skin's defaults are its package's, even
+   * when empty; a global skin has no system to inherit from; a system
+   * whose default skin is this skin, or is not minted on the site, gives
+   * nothing.
+   */
+  protected function inheritBirthDefaults(): void {
+    if ($this->getProvider() !== NULL || $this->packageDefaults() !== []) {
+      return;
+    }
+    $system_id = $this->getDesignSystem();
+    if ($system_id === NULL) {
+      return;
+    }
+    $system = $this->entityTypeManager()->getStorage(DesignSystem::ENTITY_TYPE_ID)->load($system_id);
+    $default = $system instanceof DesignSystemInterface ? (string) $system->getDefaultSkin() : '';
+    if ($default === '' || $default === $this->getMachineName()) {
+      return;
+    }
+    $sources = $this->entityTypeManager()->getStorage('daedalus_skin')->loadByProperties(['machine_name' => $default]);
+    $source = reset($sources);
+    if (!$source instanceof DaedalusStylishSkinInterface) {
+      return;
+    }
+    $defaults = $source->defaults();
+    if ($defaults !== []) {
+      $this->setPackageDefaults($defaults);
     }
   }
 
@@ -236,6 +315,76 @@ class DaedalusStylishSkin extends EditorialContentEntityBase implements Daedalus
    */
   public function tokens(): array {
     return SkinTokensItem::mergeLayers($this->packageTokens(), $this->siteTokens());
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function packageAnimations(): array {
+    return $this->layer('animations');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setPackageAnimations(array $animations): static {
+    return $this->setLayer('animations', $animations);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function siteAnimations(): array {
+    return $this->layer('site_animations');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setSiteAnimations(array $animations): static {
+    return $this->setLayer('site_animations', $animations);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function animations(): array {
+    return SkinAnimationsItem::mergeLayers($this->packageAnimations(), $this->siteAnimations());
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function packageFonts(): array {
+    return $this->layer('fonts');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setPackageFonts(array $fonts): static {
+    return $this->setLayer('fonts', $fonts);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function siteFonts(): array {
+    return $this->layer('site_fonts');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setSiteFonts(array $fonts): static {
+    return $this->setLayer('site_fonts', $fonts);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function fonts(): array {
+    return SkinFontsItem::mergeLayers($this->packageFonts(), $this->siteFonts());
   }
 
   /**
@@ -296,14 +445,27 @@ class DaedalusStylishSkin extends EditorialContentEntityBase implements Daedalus
    * {@inheritdoc}
    *
    * The shipped payload is the PACKAGE layer, everything a skins file
-   * ships — tokens AND defaults — under stable keys, so adding a tier
-   * never silently changes the hash of a tier-less skin ({} hashes the
-   * same under both shapes only if the shape is keyed; hence the explicit
-   * map). The site layer is outside it: a site's additions and changes
-   * are not a modification of what the package shipped.
+   * ships — tokens, animations, fonts AND defaults — under stable keys, so
+   * adding a tier never silently changes the hash of a tier-less skin ({}
+   * hashes the same under both shapes only if the shape is keyed; hence
+   * the explicit map). The site layer is outside it: a site's additions
+   * and changes are not a modification of what the package shipped.
+   *
+   * The fonts tier hashes CONTENT-ADDRESSED (FontFiles::contentAddressed():
+   * each face's source {hash: sha256 of its bytes} in place of {file:
+   * uuid}): the site holds a face's file by uuid and a module by basename
+   * under assets/fonts/, and neither name crosses the disk lane, so the
+   * importer hashes the module's assets into the same shape
+   * (SkinImporter::shippedFonts()) and one stored hash still answers both
+   * questions; swapping a face's bytes on either side reads as a change.
    */
   protected function shippedData(): array {
-    return ['tokens' => $this->packageTokens(), 'defaults' => $this->packageDefaults()];
+    return [
+      'tokens' => $this->packageTokens(),
+      'animations' => $this->packageAnimations(),
+      'fonts' => \Drupal::service('daedalus_stylish.font_files')->contentAddressed($this->packageFonts()),
+      'defaults' => $this->packageDefaults(),
+    ];
   }
 
 }

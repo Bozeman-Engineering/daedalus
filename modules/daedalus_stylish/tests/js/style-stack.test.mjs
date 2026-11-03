@@ -1,9 +1,11 @@
 /**
  * Self-asserting tests for the style stack (js/src/style-stack.js): the
  * builder's layer order, part suffix and fragment resolution, the base
- * layer keyed by the read subject's tag from the tree (an element's
+ * layer keyed by the read subject's tag from the document (an element's
  * root tag, a part's declared tag, none for a rule), the ancestor tier
- * over the blueprint tree,
+ * over the document tree (the host entity above its sections: an entity
+ * rule is the farthest ancestor layer, a field-keyed row carries its
+ * block's rules beneath the sections'),
  * the session overlay, the write address's editable layer, raw styles; layersAt's
  * index winners and lost marks; stackAt's cascade across layers and
  * conditions, own against inherited.
@@ -213,14 +215,23 @@ test('no skin in the payload: no skin layers, no base tags, skin false; the decl
 
 // --- buildStack: the base tag --------------------------------------------------
 
-// The block alone in a tree, rendering as `tag` with the given declared
-// parts (the annotation's markup facts the read subject's tag comes from).
+// The block alone in a document under a keyless root (a host with no
+// uuid: structure nothing addresses), rendering as `tag` with the given
+// declared parts (the annotation's markup facts the read subject's tag
+// comes from).
 const rooted = (tag, parts = {}) => [
-  { kind: 'block', uuid: UUID, block_type: 'testimonial', _element: { markup: { tag, parts } } },
+  {
+    kind: 'entity',
+    uuid: null,
+    _element: null,
+    children: [
+      { kind: 'block', uuid: UUID, block_type: 'testimonial', _element: { markup: { tag, parts } } },
+    ],
+  },
 ];
 
-test('the tree\'s rendered tag adds the skin base layer beneath the skin scoped blocks; an uncarried or unknown tag, or no tree, adds nothing', () => {
-  assert.deepEqual(ids(build({ tree: rooted('h2') })), [
+test('the document\'s rendered tag adds the skin base layer beneath the skin scoped blocks; an uncarried or unknown tag, or no document, adds nothing', () => {
+  assert.deepEqual(ids(build({ document: rooted('h2') })), [
     'declared:kind:block',
     'declared:block_type:testimonial',
     'skin:base:h2',
@@ -228,13 +239,13 @@ test('the tree\'s rendered tag adds the skin base layer beneath the skin scoped 
     'skin:block_type:testimonial',
     'element',
   ]);
-  const base = build({ tree: rooted('h2') }).layers[2];
+  const base = build({ document: rooted('h2') }).layers[2];
   assert.equal(base.tier, TIER_SKIN);
   assert.equal(base.scope, 'base:h2');
   assert.deepEqual(base.styles, { default: { 'font-size': '2rem' } });
-  assert.deepEqual(ids(build({ tree: rooted('div') })), ids(build()));
-  assert.deepEqual(ids(build({ tree: rooted(null) })), ids(build()));
-  assert.deepEqual(ids(build({ tree: [] })), ids(build()));
+  assert.deepEqual(ids(build({ document: rooted('div') })), ids(build()));
+  assert.deepEqual(ids(build({ document: rooted(null) })), ids(build()));
+  assert.deepEqual(ids(build({ document: [] })), ids(build()));
   assert.equal(ids(build()).some((id) => id.startsWith('skin:base:')), false);
   assert.equal(subjectTag(rooted('h2'), KEY), 'h2');
   assert.equal(subjectTag(null, KEY), null);
@@ -242,52 +253,52 @@ test('the tree\'s rendered tag adds the skin base layer beneath the skin scoped 
 });
 
 test('offerTag: the subject\'s tag where there is one, a tag rule\'s own tag, nothing for a type rule or the children', () => {
-  const tree = rooted('h2', { '.testimonial__quote': { tag: 'p' } });
-  assert.equal(offerTag(tree, KEY), 'h2');
-  assert.equal(offerTag(tree, QUOTE), 'p');
-  assert.equal(offerTag(tree, `${KEY}::a`), 'a');
-  assert.equal(offerTag(tree, `${KEY}::> pb-text a`), 'a');
-  assert.equal(offerTag(tree, `${KEY}::> pb-text`), null);
-  assert.equal(offerTag(tree, `${KEY}::> *`), null);
-  // A tag rule answers its tag without a tree; an element without one
+  const document = rooted('h2', { '.testimonial__quote': { tag: 'p' } });
+  assert.equal(offerTag(document, KEY), 'h2');
+  assert.equal(offerTag(document, QUOTE), 'p');
+  assert.equal(offerTag(document, `${KEY}::a`), 'a');
+  assert.equal(offerTag(document, `${KEY}::> d-text a`), 'a');
+  assert.equal(offerTag(document, `${KEY}::> d-text`), null);
+  assert.equal(offerTag(document, `${KEY}::> *`), null);
+  // A tag rule answers its tag without a document; an element without one
   // has no subject tag to answer.
   assert.equal(offerTag(null, `${KEY}::a`), 'a');
   assert.equal(offerTag(null, KEY), null);
 });
 
 test('a part key reads its own declared tag at the root position, never the root\'s; a tagless part, a tag tier and a chain read no base layer', () => {
-  const tree = rooted('h2', { '.testimonial__quote': { tag: 'p' } });
-  const part = build({ key: QUOTE, tree });
+  const document = rooted('h2', { '.testimonial__quote': { tag: 'p' } });
+  const part = build({ key: QUOTE, document });
   assert.deepEqual(ids(part), ['declared:block_type:testimonial', 'skin:base:p', 'element']);
   assert.deepEqual(part.layers[1].styles, { default: { 'line-height': '1.6' } });
-  assert.equal(subjectTag(tree, QUOTE), 'p');
+  assert.equal(subjectTag(document, QUOTE), 'p');
   // The part declares no tag: its subject's tag is unknown.
-  assert.deepEqual(ids(build({ key: QUOTE, tree: rooted('h2', { '.testimonial__quote': {} }) })), ['declared:block_type:testimonial', 'element']);
+  assert.deepEqual(ids(build({ key: QUOTE, document: rooted('h2', { '.testimonial__quote': {} }) })), ['declared:block_type:testimonial', 'element']);
   assert.equal(subjectTag(rooted('h2', { '.testimonial__quote': {} }), QUOTE), null);
   // A rule has no one subject: the tag tier reads no base:p for all the
   // skin carries one, nor does the children chain.
-  assert.equal(ids(build({ key: `${KEY}::p`, tree })).some((id) => id.startsWith('skin:base:')), false);
-  assert.equal(ids(build({ key: `${KEY}::> *`, tree })).some((id) => id.startsWith('skin:base:')), false);
-  assert.equal(subjectTag(tree, `${KEY}::p`), null);
-  assert.equal(subjectTag(tree, `${KEY}::> *`), null);
-  assert.equal(subjectTag(tree, `${KEY}::> pb-text .testimonial__quote`), null);
-  // A floorless read carries no base layer whatever the tree says.
-  assert.deepEqual(ids(build({ tree, floor: false })), ['element']);
+  assert.equal(ids(build({ key: `${KEY}::p`, document })).some((id) => id.startsWith('skin:base:')), false);
+  assert.equal(ids(build({ key: `${KEY}::> *`, document })).some((id) => id.startsWith('skin:base:')), false);
+  assert.equal(subjectTag(document, `${KEY}::p`), null);
+  assert.equal(subjectTag(document, `${KEY}::> *`), null);
+  assert.equal(subjectTag(document, `${KEY}::> d-text .testimonial__quote`), null);
+  // A floorless read carries no base layer whatever the document says.
+  assert.deepEqual(ids(build({ document, floor: false })), ['element']);
 });
 
 test('a generated box has no subject: no base layer for the owner\'s own box nor a tagged part\'s, and no base offer behind a tag', () => {
-  const tree = rooted('h2', { '.testimonial__quote': { tag: 'p' } });
+  const document = rooted('h2', { '.testimonial__quote': { tag: 'p' } });
   // The box renders as no tag: the skin's base:h2 and base:p blocks
   // style the host and the part, never their boxes.
-  assert.deepEqual(ids(build({ key: `${KEY}::&::before`, tree })), ['element']);
-  assert.deepEqual(ids(build({ key: `${QUOTE}::after`, tree })), ['element']);
-  assert.equal(subjectTag(tree, `${KEY}::&::before`), null);
-  assert.equal(subjectTag(tree, `${QUOTE}::after`), null);
-  assert.equal(subjectTag(tree, `${KEY}::p::before`), null);
-  assert.equal(offerTag(tree, `${KEY}::&::after`), null);
-  assert.equal(offerTag(tree, `${QUOTE}::before`), null);
-  assert.equal(offerTag(tree, `${KEY}::a::before`), null);
-  assert.equal(offerTag(tree, `${KEY}::> pb-text a::after`), null);
+  assert.deepEqual(ids(build({ key: `${KEY}::&::before`, document })), ['element']);
+  assert.deepEqual(ids(build({ key: `${QUOTE}::after`, document })), ['element']);
+  assert.equal(subjectTag(document, `${KEY}::&::before`), null);
+  assert.equal(subjectTag(document, `${QUOTE}::after`), null);
+  assert.equal(subjectTag(document, `${KEY}::p::before`), null);
+  assert.equal(offerTag(document, `${KEY}::&::after`), null);
+  assert.equal(offerTag(document, `${QUOTE}::before`), null);
+  assert.equal(offerTag(document, `${KEY}::a::before`), null);
+  assert.equal(offerTag(document, `${KEY}::> d-text a::after`), null);
 });
 
 // --- buildStack: parts, fragments, tags, children ----------------------------
@@ -394,6 +405,7 @@ test('an open session makes the edited reference the editable layer carrying the
     reference: 'sleek',
     pending: {
       kind: 'update',
+      moves: [],
       lines: [
         { id: 'p1', relative: '', condition: 'default', property: 'padding', value: '4rem' },
         { id: 'p2', relative: '', condition: 'default', property: 'color', value: null },
@@ -431,6 +443,7 @@ test('an open session makes the edited reference the editable layer carrying the
 test('an open skin session makes its scope\'s skin layer the editable document, the own layer yielding, the staged document at the slot; a scope this key does not read leaves the own layer editable', () => {
   const pending = {
     kind: 'skin',
+    moves: [],
     scope: 'base:h2',
     lines: [
       { id: 'p1', relative: '', condition: 'default', property: 'font-size', value: '3rem' },
@@ -438,7 +451,7 @@ test('an open skin session makes its scope\'s skin layer the editable document, 
     ],
   };
   const map = { [KEY]: { default: { padding: '3rem' } } };
-  const stack = build({ map, tree: rooted('h2'), session: { reference: 'skin:base:h2', pending } });
+  const stack = build({ map, document: rooted('h2'), session: { reference: 'skin:base:h2', pending } });
   assert.deepEqual(ids(stack), ['declared:kind:block', 'declared:block_type:testimonial', 'skin:base:h2', 'skin:kind:block', 'skin:block_type:testimonial', 'element']);
   assert.deepEqual(stack.layers.map((layer) => layer.editable), [false, false, true, false, false, false]);
   assert.equal(editableLayer(stack), 2);
@@ -450,7 +463,7 @@ test('an open skin session makes its scope\'s skin layer the editable document, 
   // An element scope's document reads at the key's relative: the part
   // key reads its own slot, empty here, and the layer still stands as
   // the editable one (a worn reference's layer does too).
-  const kind = { reference: 'skin:kind:block', pending: { kind: 'skin', scope: 'kind:block', lines: [] } };
+  const kind = { reference: 'skin:kind:block', pending: { kind: 'skin', moves: [], scope: 'kind:block', lines: [] } };
   const part = build({ map, key: QUOTE, session: kind });
   const kindLayer = part.layers.find((layer) => layer.id === 'skin:kind:block');
   assert.deepEqual(kindLayer.styles, {});
@@ -461,12 +474,12 @@ test('an open skin session makes its scope\'s skin layer the editable document, 
 
   // No stored value for a staged property: the staged line joins the
   // stored ones as the document.
-  const minted = build({ map, tree: rooted('p'), session: { reference: 'skin:base:p', pending: { kind: 'skin', scope: 'base:p', lines: [{ id: 'x', relative: '', condition: 'default', property: 'color', value: 'red' }] } } });
+  const minted = build({ map, document: rooted('p'), session: { reference: 'skin:base:p', pending: { kind: 'skin', moves: [], scope: 'base:p', lines: [{ id: 'x', relative: '', condition: 'default', property: 'color', value: 'red' }] } } });
   assert.deepEqual(minted.layers.find((layer) => layer.id === 'skin:base:p').styles, { default: { 'line-height': '1.6', color: 'red' } });
 
-  // A scope this key does not read (the tree says the tag is a div, the
+  // A scope this key does not read (the document says the tag is a div, the
   // scope is a paragraph's): no document layer, the own layer editable.
-  const elsewhere = build({ map, tree: rooted('div'), session: { reference: 'skin:base:p', pending: null } });
+  const elsewhere = build({ map, document: rooted('div'), session: { reference: 'skin:base:p', pending: null } });
   assert.equal(elsewhere.layers.some((layer) => layer.id === 'skin:base:p'), false);
   assert.equal(elsewhere.layers[elsewhere.layers.length - 1].editable, true);
   // A floorless build carries no skin document.
@@ -474,14 +487,14 @@ test('an open skin session makes its scope\'s skin layer the editable document, 
 });
 
 test('skinScopesAt answers the scopes a key\'s stack reads skin blocks for: the subject\'s tag, the family kind, the refinement', () => {
-  assert.deepEqual(skinScopesAt({ key: KEY, blockTypes: BLOCK_TYPES, tree: rooted('h2') }), ['base:h2', 'kind:block', 'block_type:testimonial']);
+  assert.deepEqual(skinScopesAt({ key: KEY, blockTypes: BLOCK_TYPES, document: rooted('h2') }), ['base:h2', 'kind:block', 'block_type:testimonial']);
   assert.deepEqual(skinScopesAt({ key: KEY, blockTypes: BLOCK_TYPES }), ['kind:block', 'block_type:testimonial']);
   // The tag's scope answers whatever the tag (the skin may mint a block
   // for it later; the doorway itself only ever offers a scope the skin
   // delivers), the stack's base layer keying on the skin's block.
-  assert.deepEqual(skinScopesAt({ key: KEY, blockTypes: BLOCK_TYPES, tree: rooted('div') }), ['base:div', 'kind:block', 'block_type:testimonial']);
+  assert.deepEqual(skinScopesAt({ key: KEY, blockTypes: BLOCK_TYPES, document: rooted('div') }), ['base:div', 'kind:block', 'block_type:testimonial']);
   // A part facet reads the part's tag.
-  assert.deepEqual(skinScopesAt({ key: QUOTE, blockTypes: BLOCK_TYPES, tree: rooted('h2', { '.testimonial__quote': { tag: 'p' } }) }), ['base:p', 'kind:block', 'block_type:testimonial']);
+  assert.deepEqual(skinScopesAt({ key: QUOTE, blockTypes: BLOCK_TYPES, document: rooted('h2', { '.testimonial__quote': { tag: 'p' } }) }), ['base:p', 'kind:block', 'block_type:testimonial']);
   assert.deepEqual(skinScopesAt({ key: 'bogus' }), []);
 });
 
@@ -639,7 +652,7 @@ test('stackAt reads own from the editable layer: the session document in a sessi
   const map = { [KEY]: { variants: [{ variant: 'sleek', fragment: '' }], default: { padding: '3rem' } } };
   const session = {
     reference: 'sleek',
-    pending: { kind: 'update', lines: [{ id: 'p1', relative: '', condition: 'default', property: 'padding', value: '4rem' }] },
+    pending: { kind: 'update', moves: [], lines: [{ id: 'p1', relative: '', condition: 'default', property: 'padding', value: '4rem' }] },
   };
   const stack = build({ map, floor: false, session });
   const read = stackAt(stack, 'padding', 'default', CONDITIONS);
@@ -652,12 +665,20 @@ test('stackAt reads own from the editable layer: the session document in a sessi
 
 // --- buildStack: the ancestor tier -------------------------------------------
 
-// A page: section A (labelled) holding section B holding the testimonial
-// block T (a paragraph root whose prose links) and a second block U.
+// A page ("Welcome", the host entity, keyed by the envelope's root uuid
+// and tagless as an entity kind's markup usually is): section A
+// (labelled) holding section B holding the testimonial block T (a
+// paragraph root whose prose links and carries paragraphs) and a second
+// block U, whose open-render `body` field mints one paragraph
+// (`.s-abc`), the row an open render hangs under the FIELD key. The
+// layout is the serializer's shape; the document is the matcher's view
+// of it (documentTree): the entity above the sections.
+const PAGE = 'entity:eeeeeeee-0000-4000-8000-00000000000e';
 const SEC_A = 'container:aaaaaaaa-0000-4000-8000-00000000000a';
 const SEC_B = 'container:bbbbbbbb-0000-4000-8000-00000000000b';
 const U = 'block:44444444-4444-4444-4444-444444444444';
-const TREE = [
+const FIELD_ROW = `${U}:body::.s-abc`;
+const LAYOUT = [
   {
     kind: 'container',
     uuid: SEC_A.slice('container:'.length),
@@ -671,38 +692,50 @@ const TREE = [
         layout_id: 'daedalus_stylish_container',
         _element: { name: 'Container', type: 'Container' },
         children: [
-          { kind: 'block', uuid: UUID, block_type: 'testimonial', _element: { name: 'Testimonial', type: 'Testimonial', markup: { tag: 'p', tags: ['a'] } } },
-          { kind: 'block', uuid: U.slice('block:'.length), block_type: 'testimonial', _element: { name: 'Testimonial', type: 'Testimonial', markup: { tag: 'p' } } },
+          { kind: 'block', uuid: UUID, block_type: 'testimonial', _element: { name: 'Testimonial', type: 'Testimonial', markup: { tag: 'p', tags: ['a', 'p'] } } },
+          {
+            kind: 'block',
+            uuid: U.slice('block:'.length),
+            block_type: 'testimonial',
+            _element: {
+              name: 'Testimonial',
+              type: 'Testimonial',
+              markup: { tag: 'p' },
+              fields: { body: { markup: { tags: ['p'], instances: [{ class: 's-abc', tag: 'p', label: 'Paragraph', children: [] }] } } },
+            },
+          },
         ],
       },
     ],
   },
 ];
-const FACTS = {
-  ...CONDITIONS,
-  'first-child': { label: 'First child', axis: 'structural', wrapper: ':first-child', fact: true },
-  'last-child': { label: 'Last child', axis: 'structural', wrapper: ':last-child', fact: true },
-  'not-last-child': { label: 'Not last child', axis: 'structural', wrapper: ':not(:last-child)', fact: true },
-};
+const DOCUMENT = [
+  {
+    kind: 'entity',
+    uuid: PAGE.slice('entity:'.length),
+    _element: { name: 'Welcome', type: 'Page', icon: '/icons/page.svg', markup: {} },
+    children: LAYOUT,
+  },
+];
 const ROW = variantRecord('row', {
   label: 'Row',
   scope: 'kind:container',
   value: { '': { default: { display: 'flex' } }, '::> *': { default: { display: 'block', color: 'green', 'flex-grow': '1' } } },
 });
 const ancestorArgs = (map, overrides = {}) => ({
-  guide: { ...GUIDE, conditions: FACTS },
+  guide: { ...GUIDE, conditions: CONDITIONS },
   map,
   key: KEY,
   variants: [...VARIANTS, ROW],
   axes: AXES,
   blockTypes: BLOCK_TYPES,
-  tree: TREE,
+  document: DOCUMENT,
   ...overrides,
 });
 
 test('ancestor rules reaching the key sit between the skin tier and the worn references, farthest ancestor first, a group per position', () => {
   const map = {
-    [`${SEC_A}::> pb-container > *`]: { default: { gap: '1rem' } },
+    [`${SEC_A}::> d-container > *`]: { default: { gap: '1rem' } },
     [SEC_B]: { variants: [{ variant: 'row', fragment: '' }] },
     [`${SEC_B}::> *`]: { default: { color: 'red' } },
     [KEY]: { variants: [{ variant: 'sleek', fragment: '' }], default: { padding: '3rem' } },
@@ -714,7 +747,7 @@ test('ancestor rules reaching the key sit between the skin tier and the worn ref
     'skin:base:p',
     'skin:kind:block',
     'skin:block_type:testimonial',
-    `ancestor:${SEC_A}::> pb-container > *`,
+    `ancestor:${SEC_A}::> d-container > *`,
     `ancestor:${SEC_B}::> *|row`,
     `ancestor:${SEC_B}::> *`,
     'variant:sleek',
@@ -722,7 +755,7 @@ test('ancestor rules reaching the key sit between the skin tier and the worn ref
   ]);
   const [outer, worn, inner] = stack.layers.slice(5, 8);
   assert.deepEqual(outer, {
-    id: `ancestor:${SEC_A}::> pb-container > *`,
+    id: `ancestor:${SEC_A}::> d-container > *`,
     tier: TIER_ANCESTOR,
     scope: SEC_A,
     variant: null,
@@ -767,110 +800,176 @@ test('ancestor rules reaching the key sit between the skin tier and the worn ref
   // reference beats the tier (F3: ancestors sit beneath the own
   // wearings, Sleek's color over the section's), the own layer beats
   // everything.
-  assert.equal(stackAt(stack, 'gap', 'default', FACTS).winner.id, `ancestor:${SEC_A}::> pb-container > *`);
-  assert.equal(stackAt(stack, 'flex-grow', 'default', FACTS).winner.id, `ancestor:${SEC_B}::> *|row`);
-  assert.equal(stackAt(stack, 'color', 'default', FACTS).winner.id, 'variant:sleek');
-  assert.deepEqual(stackAt(stack, 'color', 'default', FACTS).beneath.map((read) => read.id), [`ancestor:${SEC_B}::> *`, `ancestor:${SEC_B}::> *|row`]);
-  assert.equal(stackAt(stack, 'padding', 'default', FACTS).winner.id, 'element');
+  assert.equal(stackAt(stack, 'gap', 'default', CONDITIONS).winner.id, `ancestor:${SEC_A}::> d-container > *`);
+  assert.equal(stackAt(stack, 'flex-grow', 'default', CONDITIONS).winner.id, `ancestor:${SEC_B}::> *|row`);
+  assert.equal(stackAt(stack, 'color', 'default', CONDITIONS).winner.id, 'variant:sleek');
+  assert.deepEqual(stackAt(stack, 'color', 'default', CONDITIONS).beneath.map((read) => read.id), [`ancestor:${SEC_B}::> *`, `ancestor:${SEC_B}::> *|row`]);
+  assert.equal(stackAt(stack, 'padding', 'default', CONDITIONS).winner.id, 'element');
 });
 
-test('an ancestor rule folds the structural facts the element satisfies and drops the rest', () => {
+test('a position-qualified ancestor rule reaches the element by its place, whole or not at all', () => {
+  // Position is selector text: the rules the fact-condition convergence
+  // writes (`> *:first-child`, `> *:last-child`) are rules of their own,
+  // each a layer where the matcher says the element's place satisfies
+  // it, absent where it does not; nothing folds.
   const map = {
-    [`${SEC_B}::> *`]: {
-      default: { color: 'red', margin: '0' },
-      'first-child': { color: 'blue', outline: '1px solid' },
-      'last-child': { color: 'black' },
-      'hover+first-child': { color: 'white' },
-      hover: { margin: '1px' },
-    },
+    [`${SEC_B}::> *`]: { default: { color: 'red', margin: '0' }, hover: { margin: '1px' } },
+    [`${SEC_B}::> *:first-child`]: { default: { color: 'blue', outline: '1px solid' }, hover: { color: 'white' } },
+    [`${SEC_B}::> *:last-child`]: { default: { color: 'black' } },
   };
+  const ancestors = (stack) => stack.layers.filter((layer) => layer.tier === TIER_ANCESTOR).map((layer) => [layer.id, layer.styles]);
   const first = buildStack(ancestorArgs(map));
-  assert.deepEqual(first.layers.find((layer) => layer.tier === TIER_ANCESTOR).styles, {
-    default: { color: 'blue', margin: '0', outline: '1px solid' },
-    hover: { color: 'white', margin: '1px' },
-  });
+  assert.deepEqual(ancestors(first), [
+    [`ancestor:${SEC_B}::> *`, { default: { color: 'red', margin: '0' }, hover: { margin: '1px' } }],
+    [`ancestor:${SEC_B}::> *:first-child`, { default: { color: 'blue', outline: '1px solid' }, hover: { color: 'white' } }],
+  ]);
+  assert.equal(stackAt(first, 'color', 'default', CONDITIONS).winner.id, `ancestor:${SEC_B}::> *:first-child`);
   const last = buildStack(ancestorArgs(map, { key: U, blockTypes: { [U.slice('block:'.length)]: 'testimonial' } }));
-  assert.deepEqual(last.layers.find((layer) => layer.tier === TIER_ANCESTOR).styles, {
-    default: { color: 'black', margin: '0' },
-    hover: { margin: '1px' },
-  });
+  assert.deepEqual(ancestors(last), [
+    [`ancestor:${SEC_B}::> *`, { default: { color: 'red', margin: '0' }, hover: { margin: '1px' } }],
+    [`ancestor:${SEC_B}::> *:last-child`, { default: { color: 'black' } }],
+  ]);
+  assert.equal(stackAt(last, 'color', 'default', CONDITIONS).winner.id, `ancestor:${SEC_B}::> *:last-child`);
 });
 
-test('a sibling rule reaches the second sibling alone; a :has() rule the linked one; a negated fact folds on every child but the last', () => {
+test('a sibling rule reaches the second sibling alone; a :has() rule the linked one; a negated position reaches every child but the last', () => {
   const map = {
-    [`${SEC_B}::> *`]: { default: { margin: '0' }, 'not-last-child': { 'margin-bottom': '24px' } },
+    [`${SEC_B}::> *`]: { default: { margin: '0' } },
+    [`${SEC_B}::> *:not(:last-child)`]: { default: { 'margin-bottom': '24px' } },
     [`${SEC_B}::> p + p`]: { default: { 'margin-top': '40px' } },
-    [`${SEC_B}::> pb-testimonial:has(a)`]: { default: { color: 'teal' } },
+    [`${SEC_B}::> d-testimonial:has(a)`]: { default: { color: 'teal' } },
   };
   const ancestors = (stack) => ids(stack).filter((id) => id.startsWith('ancestor:'));
   const layer = (stack, id) => stack.layers.find((candidate) => candidate.id === id);
   const first = buildStack(ancestorArgs(map));
   const last = buildStack(ancestorArgs(map, { key: U, blockTypes: { [U.slice('block:'.length)]: 'testimonial' } }));
   // The first block: not after a p-root, its prose links, not the last.
-  assert.deepEqual(ancestors(first), [`ancestor:${SEC_B}::> *`, `ancestor:${SEC_B}::> pb-testimonial:has(a)`]);
-  assert.deepEqual(layer(first, `ancestor:${SEC_B}::> *`).styles, { default: { margin: '0', 'margin-bottom': '24px' } });
+  assert.deepEqual(ancestors(first), [`ancestor:${SEC_B}::> *`, `ancestor:${SEC_B}::> *:not(:last-child)`, `ancestor:${SEC_B}::> d-testimonial:has(a)`]);
+  assert.deepEqual(layer(first, `ancestor:${SEC_B}::> *:not(:last-child)`).styles, { default: { 'margin-bottom': '24px' } });
   // The second: right after a p-root, no link, the last child.
   assert.deepEqual(ancestors(last), [`ancestor:${SEC_B}::> *`, `ancestor:${SEC_B}::> p + p`]);
   assert.deepEqual(layer(last, `ancestor:${SEC_B}::> *`).styles, { default: { margin: '0' } });
   assert.deepEqual(layer(last, `ancestor:${SEC_B}::> p + p`).styles, { default: { 'margin-top': '40px' } });
-  assert.equal(stackAt(last, 'margin-top', 'default', FACTS).winner.id, `ancestor:${SEC_B}::> p + p`);
-  assert.equal(stackAt(first, 'margin-top', 'default', FACTS).winner, null);
+  assert.equal(stackAt(last, 'margin-top', 'default', CONDITIONS).winner.id, `ancestor:${SEC_B}::> p + p`);
+  assert.equal(stackAt(first, 'margin-top', 'default', CONDITIONS).winner, null);
 });
 
-test('a tag tier and a part key take the ancestor rules reaching inside; a chain key, a floorless read and no tree take none', () => {
+test('a tag tier and a part key take the ancestor rules reaching inside; a chain key, a floorless read and no document take none', () => {
   const map = {
     [`${SEC_A}::a`]: { default: { 'text-decoration': 'none' } },
     [`${SEC_A}::> a`]: { default: { 'text-decoration': 'underline' } },
-    [`${SEC_A}::pb-testimonial a`]: { default: { color: 'teal' } },
-    [`${SEC_B}::> pb-testimonial .testimonial__quote`]: { default: { color: 'crimson' } },
+    [`${SEC_A}::d-testimonial a`]: { default: { color: 'teal' } },
+    [`${SEC_B}::> d-testimonial .testimonial__quote`]: { default: { color: 'crimson' } },
     [`${SEC_B}::.testimonial__quote`]: { default: { color: 'navy' } },
     [`${SEC_B}::> *`]: { default: { color: 'red' } },
   };
   assert.deepEqual(ids(buildStack(ancestorArgs(map, { key: `${KEY}::a` }))), [
     `ancestor:${SEC_A}::a`,
-    `ancestor:${SEC_A}::pb-testimonial a`,
+    `ancestor:${SEC_A}::d-testimonial a`,
     'element',
   ]);
   assert.deepEqual(ids(buildStack(ancestorArgs(map, { key: QUOTE }))), [
     'declared:block_type:testimonial',
-    `ancestor:${SEC_B}::> pb-testimonial .testimonial__quote`,
+    `ancestor:${SEC_B}::> d-testimonial .testimonial__quote`,
     'element',
   ]);
   assert.deepEqual(ids(buildStack(ancestorArgs(map, { key: `${KEY}::> *` }))), ['element']);
   assert.deepEqual(ids(buildStack(ancestorArgs(map, { floor: false }))), ['element']);
-  assert.deepEqual(ids(buildStack(ancestorArgs(map, { tree: null }))).filter((id) => id.startsWith('ancestor:')), []);
-  // A key the tree does not carry has no ancestors.
+  assert.deepEqual(ids(buildStack(ancestorArgs(map, { document: null }))).filter((id) => id.startsWith('ancestor:')), []);
+  // A key the document does not carry has no ancestors.
   assert.deepEqual(ids(buildStack(ancestorArgs(map, { key: CHILD, blockTypes: {} }))).filter((id) => id.startsWith('ancestor:')), []);
+});
+
+test('the entity is the farthest ancestor: a rule on the page reaches the block\'s root and its tag tier as the first layer, named by the page; a keyless root names nothing', () => {
+  const map = {
+    [`${PAGE}::p`]: { default: { border: '2px solid red' } },
+    [`${PAGE}::> d-container > *`]: { default: { gap: '2rem' } },
+    [`${SEC_A}::p`]: { default: { margin: '0' } },
+    [`${SEC_B}::> *`]: { default: { color: 'red' } },
+  };
+  const ancestors = (stack) => ids(stack).filter((id) => id.startsWith('ancestor:'));
+  // The block's root is a paragraph: the page's `p` rule reaches it
+  // before every section's, farthest first.
+  const root = buildStack(ancestorArgs(map));
+  assert.deepEqual(ancestors(root), [`ancestor:${PAGE}::p`, `ancestor:${SEC_A}::p`, `ancestor:${SEC_B}::> *`]);
+  const page = root.layers.find((layer) => layer.id === `ancestor:${PAGE}::p`);
+  assert.deepEqual([page.scope, page.label, page.owner, page.styles], [PAGE, 'Welcome', 'Welcome', { default: { border: '2px solid red' } }]);
+  assert.equal(stackAt(root, 'border', 'default', CONDITIONS).winner.id, `ancestor:${PAGE}::p`);
+  // The block's `::p` tier (the paragraphs inside it): the same rule,
+  // the symptom's surface (a border on every paragraph the canvas
+  // paints, now an inherited layer the panel reads).
+  assert.deepEqual(ancestors(buildStack(ancestorArgs(map, { key: `${KEY}::p` }))), [`ancestor:${PAGE}::p`, `ancestor:${SEC_A}::p`]);
+  // The page's `> d-container > *` rule lands on the nested section (a
+  // child of a top-level container), never on the block two levels
+  // down: the entity's children are the sections, exactly as the canvas
+  // root wrapper's are.
+  assert.deepEqual(ancestors(buildStack(ancestorArgs(map, { key: SEC_B }))), [`ancestor:${PAGE}::> d-container > *`]);
+  assert.equal(ancestors(root).includes(`ancestor:${PAGE}::> d-container > *`), false);
+  // The page itself has no ancestors; its own key still stacks.
+  assert.deepEqual(ancestors(buildStack(ancestorArgs(map, { key: PAGE }))), []);
+  assert.equal(subjectTag(DOCUMENT, PAGE), null);
+  // A keyless root (a host with no uuid): the sections keep their
+  // ancestry, and the page's rules, addressed to nothing, lay no layer.
+  const keyless = [{ ...DOCUMENT[0], uuid: null }];
+  assert.deepEqual(ancestors(buildStack(ancestorArgs(map, { document: keyless }))), [`ancestor:${SEC_A}::p`, `ancestor:${SEC_B}::> *`]);
+});
+
+test('a field-keyed row (an open render\'s paragraph) carries its block\'s own tag rule beneath the page\'s and the sections\'', () => {
+  const map = {
+    [`${PAGE}::p`]: { default: { border: '2px solid red' } },
+    [`${SEC_A}::p`]: { default: { margin: '0' } },
+    [`${SEC_B}::p`]: { default: { 'line-height': '1.5' } },
+    [`${U}::p`]: { default: { color: 'navy' } },
+    [`${U}::a`]: { default: { color: 'teal' } },
+  };
+  const stack = buildStack(ancestorArgs(map, { key: FIELD_ROW, blockTypes: { [U.slice('block:'.length)]: 'testimonial' } }));
+  // The field is inside its block: the block's `p` rule is the nearest
+  // ancestor layer, the sections' and the page's farther; the block's
+  // `a` rule reaches no paragraph.
+  assert.deepEqual(ids(stack).filter((id) => id.startsWith('ancestor:')), [
+    `ancestor:${PAGE}::p`,
+    `ancestor:${SEC_A}::p`,
+    `ancestor:${SEC_B}::p`,
+    `ancestor:${U}::p`,
+  ]);
+  const block = stack.layers.find((layer) => layer.id === `ancestor:${U}::p`);
+  assert.deepEqual([block.scope, block.label, block.owner], [U, 'Testimonial', 'Testimonial']);
+  assert.equal(stackAt(stack, 'color', 'default', CONDITIONS).winner.id, `ancestor:${U}::p`);
+  assert.equal(stackAt(stack, 'border', 'default', CONDITIONS).winner.id, `ancestor:${PAGE}::p`);
+  assert.equal(ids(stack).at(-1), 'element');
+  // The row's subject is the minted paragraph: its tag keys the base
+  // layer the way a declared part's does.
+  assert.equal(subjectTag(DOCUMENT, FIELD_ROW), 'p');
 });
 
 test('selectorSuffixes lists a key\'s worn fragment suffixes first, then the map\'s, deduplicated; none under a selector key', () => {
   const map = {
     [SEC_B]: { variants: [{ variant: 'row', fragment: '' }] },
-    [`${SEC_B}::> pb-testimonial`]: { default: { color: 'red' } },
+    [`${SEC_B}::> d-testimonial`]: { default: { color: 'red' } },
     [`${SEC_B}::> *`]: { default: { color: 'red' } },
   };
-  assert.deepEqual(selectorSuffixes(map, SEC_B, [...VARIANTS, ROW], ['style']), ['::> *', '::> pb-testimonial']);
+  assert.deepEqual(selectorSuffixes(map, SEC_B, [...VARIANTS, ROW], ['style']), ['::> *', '::> d-testimonial']);
   assert.deepEqual(selectorSuffixes(map, `${SEC_B}::> *`, [...VARIANTS, ROW], ['style']), []);
 });
 
 // --- wear at a rule ----------------------------------------------------------
 
 // A container look with a text-block sub-entry: the root's wear delivers
-// at the `> pb-testimonial` rule position too.
-const BAND = variantRecord('band', {
-  label: 'Band',
+// at the `> d-testimonial` rule position too.
+const SECTION = variantRecord('section', {
+  label: 'Section',
   scope: 'kind:container',
   value: {
     '': { default: { gap: '3rem' } },
-    '::> pb-testimonial': { default: { color: 'green', margin: '1rem' } },
+    '::> d-testimonial': { default: { color: 'green', margin: '1rem' } },
   },
 });
-const RULE = `${SEC_B}::> pb-testimonial`;
-const ruleArgs = (map, overrides = {}) => ancestorArgs(map, { variants: [...VARIANTS, ROW, BAND], ...overrides });
+const RULE = `${SEC_B}::> d-testimonial`;
+const ruleArgs = (map, overrides = {}) => ancestorArgs(map, { variants: [...VARIANTS, ROW, SECTION], ...overrides });
 
 // A testimonial look with its own generated box: a fragment at the
 // pseudo key, delivered wherever the look is worn (the root's
-// `::&::before`, a rule's `::> pb-testimonial::before` by continuation).
+// `::&::before`, a rule's `::> d-testimonial::before` by continuation).
 const GLOW = variantRecord('glow', {
   label: 'Glow',
   scope: 'block_type:testimonial',
@@ -894,13 +993,13 @@ test('a rule key\'s stack carries its worn layer beneath its own entry, and the 
   assert.equal(own.layers[0].axis, 'emphasis');
   assert.deepEqual(own.layers[1].styles, { default: { padding: '5rem' } });
   assert.equal(own.layers[1].editable, true);
-  assert.equal(stackAt(own, 'padding', 'default', FACTS).winner.id, 'element');
-  assert.equal(stackAt(own, 'font-weight', 'default', FACTS).winner.id, 'variant:loud');
+  assert.equal(stackAt(own, 'padding', 'default', CONDITIONS).winner.id, 'element');
+  assert.equal(stackAt(own, 'font-weight', 'default', CONDITIONS).winner.id, 'variant:loud');
   // The owner wearing a variant with an entry at the rule's selector:
   // rule wear prints before the element lanes, so the owner's wear sits
   // over the rule's own wear and under the rule's entry.
-  const wornOwner = buildStack(ruleArgs({ ...map, [SEC_B]: { variants: [{ variant: 'band', fragment: '' }] } }, { key: RULE }));
-  assert.deepEqual(ids(wornOwner), ['variant:loud', 'variant:band', 'element']);
+  const wornOwner = buildStack(ruleArgs({ ...map, [SEC_B]: { variants: [{ variant: 'section', fragment: '' }] } }, { key: RULE }));
+  assert.deepEqual(ids(wornOwner), ['variant:loud', 'variant:section', 'element']);
   assert.deepEqual(wornOwner.layers[1].styles, { default: { color: 'green', margin: '1rem' } });
   // A stale reference at the rule is a layer that resolves nothing.
   const stale = buildStack(ruleArgs({ [RULE]: { variants: [{ variant: 'ghost', fragment: '' }] } }, { key: RULE }));
@@ -916,6 +1015,7 @@ test('a session anchored at a rule makes the rule\'s worn layer the editable one
     reference: 'loud',
     pending: {
       kind: 'update',
+      moves: [],
       lines: [{ id: 'p1', relative: '', condition: 'default', property: 'padding', value: '4rem' }],
     },
   };
@@ -929,7 +1029,7 @@ test('a session anchored at a rule makes the rule\'s worn layer the editable one
   assert.deepEqual(stack.layers[0].styles, { default: { padding: '4rem', 'font-weight': 'bold' }, dark: { color: '#eee' } });
   // Own beats worn by order: the rule's entry still wins padding over
   // the document, the honesty read the rows strike through with.
-  assert.equal(stackAt(stack, 'padding', 'default', FACTS).winner.id, 'element');
+  assert.equal(stackAt(stack, 'padding', 'default', CONDITIONS).winner.id, 'element');
   // A session on a reference no carrier of the rule wears leaves the
   // rule's own layer editable.
   const elsewhere = buildStack(ruleArgs(map, { key: RULE, session: { reference: 'sleek', pending: null } }));
@@ -962,16 +1062,16 @@ test('a member\'s ancestor tier holds the rule as a group: its worn variants wit
     axis: 'emphasis',
     resolved: true,
     editable: false,
-    carrier: { key: SEC_B, selector: '> pb-testimonial' },
+    carrier: { key: SEC_B, selector: '> d-testimonial' },
     styles: { default: { padding: '2rem', 'font-weight': 'bold' }, dark: { color: '#eee' } },
   });
   assert.deepEqual(own.styles, { default: { padding: '5rem' } });
   assert.equal(own.variant, null);
   assert.equal(own.carrier, null);
-  assert.equal(stackAt(stack, 'font-weight', 'default', FACTS).winner.id, `ancestor:${RULE}|loud`);
-  assert.equal(stackAt(stack, 'padding', 'default', FACTS).winner.id, `ancestor:${RULE}`);
-  assert.deepEqual(stackAt(stack, 'padding', 'default', FACTS).beneath.map((read) => read.id), [`ancestor:${RULE}|loud`, 'skin:kind:block', 'declared:block_type:testimonial']);
-  assert.equal(stackAt(stack, 'color', 'default', FACTS).winner.id, 'element');
+  assert.equal(stackAt(stack, 'font-weight', 'default', CONDITIONS).winner.id, `ancestor:${RULE}|loud`);
+  assert.equal(stackAt(stack, 'padding', 'default', CONDITIONS).winner.id, `ancestor:${RULE}`);
+  assert.deepEqual(stackAt(stack, 'padding', 'default', CONDITIONS).beneath.map((read) => read.id), [`ancestor:${RULE}|loud`, 'skin:kind:block', 'declared:block_type:testimonial']);
+  assert.equal(stackAt(stack, 'color', 'default', CONDITIONS).winner.id, 'element');
   // The honesty read every "this element wears" surface makes (the
   // Advanced roster's `worn`, the candidate resolver, the AI door):
   // the member's stack carries NO variant-tier layer; the rule's wear
@@ -1000,9 +1100,9 @@ test('a group exists only when one of its layers delivers; a worn layer joins it
     value: { '::.testimonial__quote': { default: { 'font-style': 'italic' } } },
   });
   const wearing = { [RULE]: { variants: [{ variant: 'quote_only', fragment: '' }] } };
-  const nothing = buildStack(ruleArgs(wearing, { variants: [...VARIANTS, ROW, BAND, partOnly] }));
+  const nothing = buildStack(ruleArgs(wearing, { variants: [...VARIANTS, ROW, SECTION, partOnly] }));
   assert.equal(ids(nothing).some((id) => id.startsWith('ancestor:')), false);
-  const part = buildStack(ruleArgs(wearing, { key: QUOTE, variants: [...VARIANTS, ROW, BAND, partOnly] }));
+  const part = buildStack(ruleArgs(wearing, { key: QUOTE, variants: [...VARIANTS, ROW, SECTION, partOnly] }));
   assert.deepEqual(part.layers.filter((layer) => layer.tier === TIER_ANCESTOR).map((layer) => [layer.id, layer.styles]), [
     [`ancestor:${RULE} .testimonial__quote|quote_only`, { default: { 'font-style': 'italic' } }],
     [`ancestor:${RULE} .testimonial__quote`, {}],
@@ -1031,32 +1131,47 @@ test('a group exists only when one of its layers delivers; a worn layer joins it
   assert.deepEqual(own.layers.map((layer) => [layer.id, layer.resolved]), [['variant:ghost', false], ['element', true]]);
 });
 
-test('each layer of a group folds the structural facts on its own', () => {
+test('a worn look\'s position-qualified fragments continue under the rule to the members their place satisfies', () => {
+  // The keys the fact-condition convergence writes into a variant
+  // (`::&:first-child`, `::&:last-child`) are fragments of the look;
+  // worn at a rule they rebase onto the rule's landing
+  // (`> d-testimonial:first-child`) and reach the member whose place
+  // satisfies them, as a group the rule carries; the rule's own
+  // qualified entry is a rule of its own.
   const map = {
-    [RULE]: {
-      variants: [{ variant: 'facts', fragment: '' }],
-      default: { margin: '0' },
-      'last-child': { margin: '8px' },
-    },
+    [RULE]: { variants: [{ variant: 'places', fragment: '' }], default: { margin: '0' } },
+    [`${RULE}:last-child`]: { default: { margin: '8px' } },
   };
-  const facts = variantRecord('facts', {
-    label: 'Facts',
+  const places = variantRecord('places', {
+    label: 'Places',
     scope: 'block_type:testimonial',
-    value: { '': { default: { color: 'red' }, 'first-child': { color: 'blue', outline: '1px solid' }, 'last-child': { color: 'black' } } },
+    value: {
+      '': { default: { color: 'red' } },
+      '::&:first-child': { default: { color: 'blue', outline: '1px solid' } },
+      '::&:last-child': { default: { color: 'black' } },
+    },
   });
-  const args = (overrides) => ruleArgs(map, { variants: [...VARIANTS, ROW, BAND, facts], ...overrides });
-  // The first block: the worn layer folds its first-child block, the own
-  // layer drops its last-child block.
+  const args = (overrides) => ruleArgs(map, { variants: [...VARIANTS, ROW, SECTION, places], ...overrides });
+  const ancestors = (stack) => stack.layers.filter((layer) => layer.tier === TIER_ANCESTOR).map((layer) => [layer.id, layer.styles]);
+  // The first block: the look's root entry and its first-child fragment
+  // (each carried by the rule), the rule's own margin; never the
+  // last-child fragment nor the rule's last-child entry.
   const first = buildStack(args({}));
-  assert.deepEqual(first.layers.filter((layer) => layer.tier === TIER_ANCESTOR).map((layer) => layer.styles), [
-    { default: { color: 'blue', outline: '1px solid' } },
-    { default: { margin: '0' } },
+  assert.deepEqual(ancestors(first), [
+    [`ancestor:${RULE}:first-child|places`, { default: { color: 'blue', outline: '1px solid' } }],
+    [`ancestor:${RULE}:first-child`, {}],
+    [`ancestor:${RULE}|places`, { default: { color: 'red' } }],
+    [`ancestor:${RULE}`, { default: { margin: '0' } }],
   ]);
-  // The last block: the other way round.
+  assert.equal(stackAt(first, 'color', 'default', CONDITIONS).winner.id, `ancestor:${RULE}|places`);
+  // The last block: the other way round, and the rule's own last-child
+  // entry beside it.
   const last = buildStack(args({ key: U, blockTypes: { [U.slice('block:'.length)]: 'testimonial' } }));
-  assert.deepEqual(last.layers.filter((layer) => layer.tier === TIER_ANCESTOR).map((layer) => layer.styles), [
-    { default: { color: 'black' } },
-    { default: { margin: '8px' } },
+  assert.deepEqual(ancestors(last), [
+    [`ancestor:${RULE}:last-child|places`, { default: { color: 'black' } }],
+    [`ancestor:${RULE}:last-child`, { default: { margin: '8px' } }],
+    [`ancestor:${RULE}|places`, { default: { color: 'red' } }],
+    [`ancestor:${RULE}`, { default: { margin: '0' } }],
   ]);
 });
 
@@ -1067,9 +1182,9 @@ test('a rule\'s worn "::sel" entry continues under the rule by descent: the part
   };
   // The suffix listing: the continued selector first (rule wear prints
   // first), then the map's own rules.
-  assert.deepEqual(selectorSuffixes(map, SEC_B, [...VARIANTS, ROW, BAND], ['style']), ['::> pb-testimonial .testimonial__quote', '::> pb-testimonial', '::> *']);
+  assert.deepEqual(selectorSuffixes(map, SEC_B, [...VARIANTS, ROW, SECTION], ['style']), ['::> d-testimonial .testimonial__quote', '::> d-testimonial', '::> *']);
   // The quote part: the container's continued position reaches it as a
-  // group whose worn layer is carried by the RULE (`> pb-testimonial`,
+  // group whose worn layer is carried by the RULE (`> d-testimonial`,
   // where the wear bar shows Sleek), not by the continued position, and
   // whose own layer rides empty (the map carries no entry there:
   // existence is the group's, styles are the map's).
@@ -1081,7 +1196,7 @@ test('a rule\'s worn "::sel" entry continues under the rule by descent: the part
     'element',
   ]);
   assert.deepEqual(part.layers[1].styles, { default: { 'font-size': '1.5rem' } });
-  assert.deepEqual(part.layers[1].carrier, { key: SEC_B, selector: '> pb-testimonial' });
+  assert.deepEqual(part.layers[1].carrier, { key: SEC_B, selector: '> d-testimonial' });
   assert.equal(part.layers[1].variant, 'sleek');
   assert.deepEqual(part.layers[2].styles, {});
   // The continued key's own stack: sleek's part entry is the layer,
@@ -1090,7 +1205,7 @@ test('a rule\'s worn "::sel" entry continues under the rule by descent: the part
   const continued = buildStack(ruleArgs({ ...map, [`${RULE} .testimonial__quote`]: { default: { color: 'plum' } } }, { key: `${RULE} .testimonial__quote` }));
   assert.deepEqual(ids(continued), ['variant:sleek', 'element']);
   assert.deepEqual(continued.layers[0].styles, { default: { 'font-size': '1.5rem' } });
-  assert.deepEqual(continued.layers[0].carrier, { key: SEC_B, selector: '> pb-testimonial' });
+  assert.deepEqual(continued.layers[0].carrier, { key: SEC_B, selector: '> d-testimonial' });
   assert.deepEqual(continued.layers[1].styles, { default: { color: 'plum' } });
   // The block itself takes the rule's root entry (sleek's padding), not
   // its part entry, with the rule's empty own layer riding.
@@ -1104,9 +1219,10 @@ test('a rule\'s worn "::sel" entry continues under the rule by descent: the part
 
 // --- generated boxes ----------------------------------------------------------
 
-test('a generated box takes the ancestor rules ending in the same box (facts folded), a worn look\'s fragment at the box and its own lines; pseudo-free rules and the other box never', () => {
+test('a generated box takes the ancestor rules ending in the same box (a position-qualified one where the place holds), a worn look\'s fragment at the box and its own lines; pseudo-free rules and the other box never', () => {
   const map = {
-    [`${SEC_A}::pb-testimonial::before`]: { default: { 'background-color': 'teal' }, 'first-child': { width: '2rem' } },
+    [`${SEC_A}::d-testimonial::before`]: { default: { 'background-color': 'teal' } },
+    [`${SEC_A}::d-testimonial:first-child::before`]: { default: { width: '2rem' } },
     [`${SEC_B}::> *`]: { default: { color: 'red' } },
     [`${SEC_B}::> *::after`]: { default: { content: '""' } },
     [`${RULE} .testimonial__quote::after`]: { default: { content: '""', color: 'plum' } },
@@ -1114,42 +1230,44 @@ test('a generated box takes the ancestor rules ending in the same box (facts fol
     [KEY]: { variants: [{ variant: 'glow', fragment: '' }], default: { color: 'navy' } },
     [`${KEY}::&::before`]: { default: { content: '""', width: '1rem' } },
   };
-  const args = (overrides = {}) => ruleArgs(map, { variants: [...VARIANTS, ROW, BAND, GLOW], ...overrides });
+  const args = (overrides = {}) => ruleArgs(map, { variants: [...VARIANTS, ROW, SECTION, GLOW], ...overrides });
   const ancestors = (stack) => ids(stack).filter((id) => id.startsWith('ancestor:'));
   // The block's own `&::before`: no floor (a box has no tier block and
-  // no tag), the outer section's descent rule for the box with its
-  // first-child block folded (the block is the first child), Glow's box
+  // no tag), the outer section's descent rule for the box and its
+  // position-qualified twin (the block is the first child), Glow's box
   // fragment worn at the inner section's rule continued under it as
-  // `> pb-testimonial::before` (the anchor binds to the rule's landing;
+  // `> d-testimonial::before` (the anchor binds to the rule's landing;
   // the rule carries it, the own layer rides empty), then the block's
   // own wearing read at the box and its own lines. The pseudo-free
-  // rules (`> *`, `> pb-testimonial`) and the `::after` box deliver
+  // rules (`> *`, `> d-testimonial`) and the `::after` box deliver
   // nothing here.
   const before = buildStack(args({ key: `${KEY}::&::before` }));
   assert.deepEqual(ids(before), [
-    `ancestor:${SEC_A}::pb-testimonial::before`,
+    `ancestor:${SEC_A}::d-testimonial::before`,
+    `ancestor:${SEC_A}::d-testimonial:first-child::before`,
     `ancestor:${RULE}::before|glow`,
     `ancestor:${RULE}::before`,
     'variant:glow',
     'element',
   ]);
   assert.deepEqual({ rootKey: before.rootKey, relative: before.relative, scope: before.scope }, { rootKey: KEY, relative: '::&::before', scope: 'block_type:testimonial' });
-  assert.deepEqual(before.layers[0].styles, { default: { 'background-color': 'teal', width: '2rem' } });
-  assert.deepEqual(before.layers[1].styles, { default: { content: '""', 'background-color': 'gold' }, hover: { 'background-color': 'goldenrod' } });
-  assert.deepEqual(before.layers[1].carrier, { key: SEC_B, selector: '> pb-testimonial' });
-  assert.equal(before.layers[1].variant, 'glow');
-  assert.deepEqual(before.layers[2].styles, {});
-  assert.deepEqual(before.layers[3].styles, before.layers[1].styles);
-  assert.deepEqual(before.layers[3].carrier, { key: KEY, selector: null });
-  assert.deepEqual(before.layers[4].styles, { default: { content: '""', width: '1rem' } });
-  assert.equal(before.layers[4].editable, true);
-  assert.equal(stackAt(before, 'background-color', 'default', FACTS).winner.id, 'variant:glow');
-  assert.deepEqual(stackAt(before, 'background-color', 'default', FACTS).beneath.map((read) => read.id), [`ancestor:${RULE}::before|glow`, `ancestor:${SEC_A}::pb-testimonial::before`]);
-  assert.equal(stackAt(before, 'width', 'default', FACTS).winner.id, 'element');
-  assert.equal(stackAt(before, 'background-color', 'hover', FACTS).winner.value, 'goldenrod');
+  assert.deepEqual(before.layers[0].styles, { default: { 'background-color': 'teal' } });
+  assert.deepEqual(before.layers[1].styles, { default: { width: '2rem' } });
+  assert.deepEqual(before.layers[2].styles, { default: { content: '""', 'background-color': 'gold' }, hover: { 'background-color': 'goldenrod' } });
+  assert.deepEqual(before.layers[2].carrier, { key: SEC_B, selector: '> d-testimonial' });
+  assert.equal(before.layers[2].variant, 'glow');
+  assert.deepEqual(before.layers[3].styles, {});
+  assert.deepEqual(before.layers[4].styles, before.layers[2].styles);
+  assert.deepEqual(before.layers[4].carrier, { key: KEY, selector: null });
+  assert.deepEqual(before.layers[5].styles, { default: { content: '""', width: '1rem' } });
+  assert.equal(before.layers[5].editable, true);
+  assert.equal(stackAt(before, 'background-color', 'default', CONDITIONS).winner.id, 'variant:glow');
+  assert.deepEqual(stackAt(before, 'background-color', 'default', CONDITIONS).beneath.map((read) => read.id), [`ancestor:${RULE}::before|glow`, `ancestor:${SEC_A}::d-testimonial::before`]);
+  assert.equal(stackAt(before, 'width', 'default', CONDITIONS).winner.id, 'element');
+  assert.equal(stackAt(before, 'background-color', 'hover', CONDITIONS).winner.value, 'goldenrod');
   // The host's own lines are the host's: the box takes no color from
   // the block's key nor from Glow's root entry.
-  assert.equal(stackAt(before, 'color', 'default', FACTS).winner, null);
+  assert.equal(stackAt(before, 'color', 'default', CONDITIONS).winner, null);
   // The other box: the inner section's `> *::after` rule alone; the
   // wearing is a layer of the box too, empty (a reference is a fact of
   // its carrier).
@@ -1160,10 +1278,11 @@ test('a generated box takes the ancestor rules ending in the same box (facts fol
   // The host itself takes none of the box rules: its own tier is the
   // pseudo-free rules, Glow's root entry under the rule and its own.
   assert.deepEqual(ancestors(buildStack(args())), [`ancestor:${SEC_B}::> *`, `ancestor:${RULE}|glow`, `ancestor:${RULE}`]);
-  // The last child's box: the descent rule's first-child block drops,
-  // the continued fragment reaches it too, nothing worn or owned at it.
+  // The last child's box: the descent rule's position-qualified twin
+  // never reaches it, the continued fragment does, nothing worn or
+  // owned at it.
   const last = buildStack(args({ key: `${U}::&::before`, blockTypes: { [U.slice('block:'.length)]: 'testimonial' } }));
-  assert.deepEqual(ids(last), [`ancestor:${SEC_A}::pb-testimonial::before`, `ancestor:${RULE}::before|glow`, `ancestor:${RULE}::before`, 'element']);
+  assert.deepEqual(ids(last), [`ancestor:${SEC_A}::d-testimonial::before`, `ancestor:${RULE}::before|glow`, `ancestor:${RULE}::before`, 'element']);
   assert.deepEqual(last.layers[0].styles, { default: { 'background-color': 'teal' } });
   // A part's box: the rule ending in the part's box reaches it as the
   // part's rules do; the part itself takes none of it.
@@ -1171,9 +1290,9 @@ test('a generated box takes the ancestor rules ending in the same box (facts fol
   assert.deepEqual(ids(partBox), [`ancestor:${RULE} .testimonial__quote::after`, 'variant:glow', 'element']);
   assert.deepEqual(partBox.layers[0].styles, { default: { content: '""', color: 'plum' } });
   assert.deepEqual(ancestors(buildStack(args({ key: QUOTE }))), []);
-  // A floorless read and no tree carry no box rules either.
+  // A floorless read and no document carry no box rules either.
   assert.deepEqual(ids(buildStack(args({ key: `${KEY}::&::before`, floor: false }))), ['variant:glow', 'element']);
-  assert.deepEqual(ancestors(buildStack(args({ key: `${KEY}::&::before`, tree: null }))), []);
+  assert.deepEqual(ancestors(buildStack(args({ key: `${KEY}::&::before`, document: null }))), []);
 });
 
 test('selectorSuffixes lists a generated box as a sibling suffix of the root: a rule\'s worn box continued under the rule first, then a worn fragment\'s box, then the map\'s; none under a box', () => {
@@ -1184,9 +1303,9 @@ test('selectorSuffixes lists a generated box as a sibling suffix of the root: a 
     [`${SEC_B}::&::before`]: { default: { content: '""' } },
   };
   assert.deepEqual(selectorSuffixes(map, SEC_B, [...VARIANTS, ROW, GLOW], ['style']), [
-    '::> pb-testimonial::before',
+    '::> d-testimonial::before',
     '::> *',
-    '::> pb-testimonial',
+    '::> d-testimonial',
     '::> *::after',
     '::&::before',
   ]);
@@ -1223,33 +1342,33 @@ test('a write address marks its existing ancestor layer editable and the own lay
   // The rows' read: the winner is what it always is; `own` is now the
   // address's block at the pose (the Unset verb's test), and the
   // element's own delivery no longer counts as own.
-  const color = stackAt(stack, 'color', 'default', FACTS);
+  const color = stackAt(stack, 'color', 'default', CONDITIONS);
   assert.equal(color.winner.id, 'variant:sleek');
   assert.deepEqual(color.own, { layer: 5, id, tier: TIER_ANCESTOR, variant: null, condition: 'default', value: 'red' });
-  assert.equal(stackAt(stack, 'color', 'hover', FACTS).own.value, 'pink');
-  const padding = stackAt(stack, 'padding', 'default', FACTS);
+  assert.equal(stackAt(stack, 'color', 'hover', CONDITIONS).own.value, 'pink');
+  const padding = stackAt(stack, 'padding', 'default', CONDITIONS);
   assert.equal(padding.winner.id, 'element');
   assert.equal(padding.own, null);
   // Without the address the same map reads as before: own is the element's.
   const plain = buildStack(ancestorArgs(map));
   assert.equal(plain.layers[5].editable, false);
-  assert.equal(stackAt(plain, 'padding', 'default', FACTS).own.id, 'element');
+  assert.equal(stackAt(plain, 'padding', 'default', CONDITIONS).own.id, 'element');
 });
 
 test('an address with no entry yet is a virtual empty editable ancestor layer at its delivery position', () => {
   const map = {
-    [`${SEC_A}::> pb-container > *`]: { default: { gap: '1rem' } },
+    [`${SEC_A}::> d-container > *`]: { default: { gap: '1rem' } },
     [`${SEC_B}::> *`]: { default: { color: 'red' } },
   };
-  const outer = buildStack(ancestorArgs(map, { editable: { key: SEC_A, selector: 'pb-testimonial' } }));
+  const outer = buildStack(ancestorArgs(map, { editable: { key: SEC_A, selector: 'd-testimonial' } }));
   assert.deepEqual(ids(outer).slice(5), [
-    `ancestor:${SEC_A}::> pb-container > *`,
-    `ancestor:${SEC_A}::pb-testimonial`,
+    `ancestor:${SEC_A}::> d-container > *`,
+    `ancestor:${SEC_A}::d-testimonial`,
     `ancestor:${SEC_B}::> *`,
     'element',
   ]);
   assert.deepEqual(outer.layers[6], {
-    id: `ancestor:${SEC_A}::pb-testimonial`,
+    id: `ancestor:${SEC_A}::d-testimonial`,
     tier: TIER_ANCESTOR,
     scope: SEC_A,
     variant: null,
@@ -1266,17 +1385,17 @@ test('an address with no entry yet is a virtual empty editable ancestor layer at
     styles: {},
   });
   assert.equal(editableLayer(outer), 6);
-  assert.equal(stackAt(outer, 'color', 'default', FACTS).own, null, 'nothing written there yet');
-  const inner = buildStack(ancestorArgs(map, { editable: { key: SEC_B, selector: '> pb-testimonial' } }));
+  assert.equal(stackAt(outer, 'color', 'default', CONDITIONS).own, null, 'nothing written there yet');
+  const inner = buildStack(ancestorArgs(map, { editable: { key: SEC_B, selector: '> d-testimonial' } }));
   assert.deepEqual(ids(inner).slice(5), [
-    `ancestor:${SEC_A}::> pb-container > *`,
+    `ancestor:${SEC_A}::> d-container > *`,
     `ancestor:${SEC_B}::> *`,
-    `ancestor:${SEC_B}::> pb-testimonial`,
+    `ancestor:${SEC_B}::> d-testimonial`,
     'element',
   ]);
   assert.equal(inner.layers[7].editable, true);
   assert.equal(inner.layers[8].editable, false);
-  // An owner the tree does not place among the ancestors sits nearest
+  // An owner the document does not place among the ancestors sits nearest
   // the own entry, and a tag tier takes the address too.
   const stray = buildStack(ancestorArgs(map, { editable: { key: 'container:elsewhere', selector: 'p' } }));
   assert.deepEqual(ids(stray).slice(7), ['ancestor:container:elsewhere::p', 'element']);
@@ -1285,7 +1404,7 @@ test('an address with no entry yet is a virtual empty editable ancestor layer at
   assert.deepEqual(tier.layers.map((layer) => [layer.id, layer.editable]), [[`ancestor:${SEC_A}::a`, true], ['element', false]]);
 });
 
-test('an address naming the key itself keeps the own layer; a floorless or treeless build carries no editable layer under an address', () => {
+test('an address naming the key itself keeps the own layer; a floorless or documentless build carries no editable layer under an address', () => {
   const own = buildStack(ancestorArgs({}, { key: QUOTE, editable: { key: KEY, selector: '.testimonial__quote' } }));
   assert.equal(own.layers[own.layers.length - 1].editable, true);
   assert.equal(own.layers.some((layer) => layer.tier === TIER_ANCESTOR), false);
@@ -1293,8 +1412,8 @@ test('an address naming the key itself keeps the own layer; a floorless or treel
   const floorless = buildStack(ancestorArgs({}, { floor: false, editable: address }));
   assert.deepEqual(ids(floorless), ['element']);
   assert.equal(editableLayer(floorless), -1);
-  const treeless = buildStack(ancestorArgs({}, { tree: null, editable: address }));
-  assert.equal(editableLayer(treeless), -1);
+  const documentless = buildStack(ancestorArgs({}, { document: null, editable: address }));
+  assert.equal(editableLayer(documentless), -1);
   // A malformed address is no address.
   assert.equal(editableLayer(buildStack(ancestorArgs({}, { editable: { key: SEC_B } }))), 5);
   assert.equal(editableLayer(buildStack(ancestorArgs({}, { editable: { key: SEC_B, selector: '' } }))), 5);

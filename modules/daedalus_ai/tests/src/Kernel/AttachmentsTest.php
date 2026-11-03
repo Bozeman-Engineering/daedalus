@@ -6,9 +6,11 @@ namespace Drupal\Tests\daedalus_ai\Kernel;
 
 use Drupal\daedalus_ai\Attachments;
 use Drupal\daedalus_blueprint\Dialect\DialectAliasMap;
+use Drupal\daedalus_ui\File\FileLane;
 use Drupal\file\Entity\File;
 use Drupal\file\FileInterface;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\user\UserInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -24,19 +26,22 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * daedalus_ai or daedalus_blueprint: the module's info.yml drags the whole
  * AI stack and the alias map needs nothing but tempstore.shared. The routes
  * over the store are Functional (AttachRouteTest), since a request upload
- * cannot move inside a Kernel test.
+ * cannot move inside a Kernel test. The round-trip case saves through the
+ * real file lane, hand-built over core's upload handler (daedalus_ui is not
+ * enabled either) with an image media type so the lane accepts a png.
  */
 #[CoversClass(Attachments::class)]
 #[Group('daedalus_ai')]
 #[RunTestsInSeparateProcesses]
 final class AttachmentsTest extends KernelTestBase {
 
+  use MediaTypeCreationTrait;
   use UserCreationTrait;
 
   /**
    * {@inheritdoc}
    */
-  protected static $modules = ['system', 'user', 'file'];
+  protected static $modules = ['system', 'user', 'field', 'file', 'image', 'media'];
 
   /**
    * The store under test.
@@ -61,7 +66,11 @@ final class AttachmentsTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('file');
     $this->installSchema('file', ['file_usage']);
-    $this->installConfig(['system', 'user']);
+    $this->installEntitySchema('media');
+    $this->installConfig(['field', 'system', 'user', 'image', 'file', 'media']);
+    // The lane's accepted extensions are the media types' source extensions
+    // plus the textual kinds; a png needs the image type.
+    $this->createMediaType('image', ['id' => 'image']);
     $this->owner = $this->setUpCurrentUser(['name' => 'owner']);
     $this->aliasMap = new DialectAliasMap($this->container->get('tempstore.shared'));
     $this->attachments = $this->buildStore($this->aliasMap);
@@ -129,6 +138,40 @@ final class AttachmentsTest extends KernelTestBase {
     $this->assertSame(2, $this->attachments->release('thread-a', $this->owner));
     $this->assertNull($this->attachments->resolve('thread-a', 'logo.svg'));
     $this->assertNull((new DialectAliasMap($this->container->get('tempstore.shared')))->resolveFile('thread-a', 'logo.svg'));
+  }
+
+  /**
+   * A screenshot's exotic name round-trips as the lane's clean filename.
+   *
+   * A macOS screenshot name carries a NARROW NO-BREAK SPACE (U+202F) before
+   * "PM"; the model echoes such a handle with a plain space, so a handle
+   * that kept the byte never resolved on the live site. The lane saves the
+   * file under its canonical name, attach() answers exactly that name, and
+   * the store stays byte-exact: the clean name resolves, the original
+   * spelling and the model's plain-space spelling do not (one name, one
+   * spelling; a lenient lookup would be a second grammar).
+   */
+  public function testScreenshotRoundTripsOnTheCleanName(): void {
+    $lane = new FileLane(
+      $this->container->get('file.upload_handler'),
+      $this->container->get('file_system'),
+      $this->container->get('entity_type.manager'),
+      $this->container->get('transliteration'),
+      $this->container->get('language_manager'),
+    );
+    $original = "Screenshot 2026-10-27 at 4.17.44\u{202F}PM.png";
+    $clean = 'Screenshot-2026-10-27-at-4.17.44-PM.png';
+    $png = file_get_contents($this->root . '/core/misc/druplicon.png');
+    $file = $lane->fromBytes($original, 'image/png', $png, Attachments::DIRECTORY);
+    $this->assertSame($clean, $file->getFilename());
+    $this->assertSame((int) $this->owner->id(), (int) $file->getOwnerId(), 'The lane saves for the current user.');
+
+    $this->assertSame($clean, $this->attachments->attach($file, 'thread-a'));
+    $this->assertSame($file->id(), $this->attachments->resolve('thread-a', $clean)?->id());
+    $this->assertSame($file->uuid(), (new DialectAliasMap($this->container->get('tempstore.shared')))->resolveFile('thread-a', $clean), 'The clean name is the settled alias.');
+    $this->assertNull($this->attachments->resolve('thread-a', $original), 'The original spelling is not a name the thread holds.');
+    $this->assertNull($this->attachments->resolve('thread-a', str_replace("\u{202F}", ' ', $original)), 'Nor is the plain-space spelling the model echoed.');
+    $this->assertSame($png, $this->attachments->bytes($file));
   }
 
   /**

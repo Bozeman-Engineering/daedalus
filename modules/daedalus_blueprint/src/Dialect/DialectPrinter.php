@@ -6,6 +6,7 @@ namespace Drupal\daedalus_blueprint\Dialect;
 
 use Drupal\daedalus_blueprint\Capability\VerdictStamper;
 use Drupal\daedalus_blueprint\FieldHandler\LinkFieldHandler;
+use Drupal\daedalus_blueprint\Materials\ConditionClause;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
@@ -38,7 +39,7 @@ use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
  *
  * Provenance prints: a placement root carries blueprint="id", the
  * blueprint it was placed from, right after its identity, so the model can
- * see what a band IS and keep that fact when it rewrites the element (the
+ * see what a section IS and keep that fact when it rewrites the element (the
  * parser takes the attribute back as an identity fact, never as a request
  * to re-instantiate). Only a stamp naming a rostered (published) blueprint
  * prints: a dead stamp is residue the model could not write back.
@@ -47,10 +48,10 @@ use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
  * editor's tree, chips and panels call it by, the element-naming spine's
  * one renamable slot) prints name="..." after its provenance, and the
  * parser takes it back onto the same slot (DialectWalk::NAME_ATTR), so
- * the model reads "Welcome", refers to the band by it and renames it
+ * the model reads "Welcome", refers to the section by it and renames it
  * through set {name}. A block's label stays residue: its name is derived
  * from its content and is not renamable. A slot section (a top-level
- * container carrying `slot`) prints as <pb-slot name="id"> instead: name
+ * container carrying `slot`) prints as <d-slot name="id"> instead: name
  * is the slot it fills, a birth fact, and the parser takes it back as
  * the node's `slot`; such a section's label has no spelling (0.7).
  *
@@ -110,12 +111,12 @@ use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
  * refuses every one of these annotations written back. What remains of
  * DialectPrintException is the unknown node kind, a programming error.
  * A '::' local prints as
- * its relative selector after #id (`#id > pb-text .link`), the one
+ * its relative selector after #id (`#id > d-text .link`), the one
  * grammar the parser reads back; states on the addressed element append
  * to the selector's last compound and its generated box after them
  * (`#id:hover::after` for the anchor's `::&::after` local, `#id >
- * pb-text::before` for a chain's); the rule's own variant references
- * print as wear declarations in its plain block (`#id > pb-text { tone:
+ * d-text::before` for a chain's); the rule's own variant references
+ * print as wear declarations in its plain block (`#id > d-text { tone:
  * loud; class: button; color: red; }`), the attribute's twin
  * (ruleWear()).
  */
@@ -309,14 +310,14 @@ class DialectPrinter {
    */
   protected function tagOf(array $node, DialectCatalog $catalog): string {
     if (($node['kind'] ?? '') === 'container') {
-      return is_string($node['slot'] ?? NULL) && $node['slot'] !== '' ? DialectWalk::SLOT_TAG : 'pb-container';
+      return is_string($node['slot'] ?? NULL) && $node['slot'] !== '' ? DialectWalk::SLOT_TAG : DialectWalk::CONTAINER_TAG;
     }
     if (($node['kind'] ?? '') === LinkedBlueprintBlock::KIND) {
       return DialectWalk::LINKED_TAG;
     }
     $block_type = (string) ($node['block_type'] ?? '');
     if (NodeTreeBuilder::pluginBase($node) !== NULL || $block_type === '' || $catalog->blockType($block_type) === NULL) {
-      return 'pb-block';
+      return DialectWalk::BLOCK_TAG;
     }
     return DialectCatalog::tagForBlockType($block_type);
   }
@@ -348,7 +349,7 @@ class DialectPrinter {
     switch ($kind) {
       case 'container':
         $regions = $this->regionsOf($node);
-        // A slot section prints as <pb-slot name="id">: name is the slot it
+        // A slot section prints as <d-slot name="id">: name is the slot it
         // fills (the serializer's `slot` on a top-level container), the
         // one word it is called by, so its label has no spelling there.
         $tag = $this->tagOf($node, $catalog);
@@ -384,7 +385,7 @@ class DialectPrinter {
 
       case 'blueprint':
         $attrs = $this->identityAttr($node, $aliases) + $this->regionAttr($region) + ['name' => (string) ($node['name'] ?? '')];
-        $lines[] = sprintf('%s<pb-blueprint%s />', $indent, $this->attrString($attrs));
+        $lines[] = sprintf('%s<%s%s />', $indent, DialectWalk::BLUEPRINT_TAG, $this->attrString($attrs));
         return;
 
       case LinkedBlueprintBlock::KIND:
@@ -488,9 +489,9 @@ class DialectPrinter {
         + $this->regionAttr($region)
         + $this->provenanceAttr($node, $catalog)
         + $identity
-        + $this->variantAttrs($node, $catalog, $catalog->axesFor(FALSE, NULL, $plugin), 'pb-block', $rules, $notes)
+        + $this->variantAttrs($node, $catalog, $catalog->axesFor(FALSE, NULL, $plugin), DialectWalk::BLOCK_TAG, $rules, $notes)
         + $this->styleAttr($node, $catalog);
-      $lines[] = sprintf('%s<pb-block%s />', $indent, $this->attrString($attrs));
+      $lines[] = sprintf('%s<%s%s />', $indent, DialectWalk::BLOCK_TAG, $this->attrString($attrs));
       return;
     }
 
@@ -543,7 +544,7 @@ class DialectPrinter {
   }
 
   /**
-   * Prints an undeclared block type in the generic pb-block form.
+   * Prints an undeclared block type in the generic d-block form.
    */
   protected function printGenericBlock(array $node, string $block_type, DialectCatalog $catalog, string $indent, array &$lines, array &$rules, array &$notes, array $aliases = [], ?string $region = NULL): void {
     $fields = [];
@@ -553,10 +554,10 @@ class DialectPrinter {
         continue;
       }
       if (!is_scalar($value)) {
-        // The generic <pb-field> form spells scalars only; a structured
+        // The generic <d-field> form spells scalars only; a structured
         // value is named, not printed.
         $unprinted[] = (string) $name;
-        $this->note(DialectPrintNoteKind::UnprintedField, $node, $catalog, sprintf('holds field %s as a structured value, which the generic <pb-field> form does not spell', $name), $notes);
+        $this->note(DialectPrintNoteKind::UnprintedField, $node, $catalog, sprintf('holds field %s as a structured value, which the generic <d-field> form does not spell', $name), $notes);
         continue;
       }
       $fields[$name] = (string) $value;
@@ -567,17 +568,17 @@ class DialectPrinter {
       + ($unprinted === [] ? [] : ['data-unprinted' => implode(' ', $unprinted)])
       + $this->provenanceAttr($node, $catalog)
       + ['type' => $block_type]
-      + $this->variantAttrs($node, $catalog, $catalog->axesFor(FALSE, $block_type, NULL), 'pb-block', $rules, $notes)
+      + $this->variantAttrs($node, $catalog, $catalog->axesFor(FALSE, $block_type, NULL), DialectWalk::BLOCK_TAG, $rules, $notes)
       + $this->styleAttr($node, $catalog);
     if ($fields === []) {
-      $lines[] = sprintf('%s<pb-block%s />', $indent, $this->attrString($attrs));
+      $lines[] = sprintf('%s<%s%s />', $indent, DialectWalk::BLOCK_TAG, $this->attrString($attrs));
       return;
     }
-    $lines[] = sprintf('%s<pb-block%s>', $indent, $this->attrString($attrs));
+    $lines[] = sprintf('%s<%s%s>', $indent, DialectWalk::BLOCK_TAG, $this->attrString($attrs));
     foreach ($fields as $name => $value) {
-      $lines[] = sprintf('%s  <pb-field name="%s">%s</pb-field>', $indent, self::escapeAttr($name), $value);
+      $lines[] = sprintf('%s  <%s name="%s">%s</%s>', $indent, DialectWalk::FIELD_TAG, self::escapeAttr($name), $value, DialectWalk::FIELD_TAG);
     }
-    $lines[] = $indent . '</pb-block>';
+    $lines[] = $indent . '</' . DialectWalk::BLOCK_TAG . '>';
   }
 
   /**
@@ -1026,18 +1027,21 @@ class DialectPrinter {
     $wrappers = [];
     $states = '';
     if ($condition !== 'default') {
-      foreach (DialectCatalog::compoundParts($condition) as $part) {
-        $wrapper = $catalog->conditions()[$part] ?? NULL;
-        if ($wrapper === NULL) {
+      // The condition grammar reads the key: a reference prints its
+      // published wrapper, a literal its own text, each at-rule clause
+      // nesting around the rule and each pseudo-class clause glued to the
+      // addressed element; a clause the grammar cannot read is a gap.
+      foreach (ConditionClause::parse($condition, $catalog->conditions()) as $clause) {
+        if ($clause['kind'] === ConditionClause::UNKNOWN) {
           $gap = [];
-          $this->styleGap($node, $catalog, sprintf('carries the condition "%s"%s, which is not in the catalog vocabulary', $part, $local === '' ? '' : ' on its rule ' . substr($local, 2)), $gap, $notes);
+          $this->styleGap($node, $catalog, sprintf('carries the condition "%s"%s, which is not in the catalog vocabulary', $clause['text'], $local === '' ? '' : ' on its rule ' . substr($local, 2)), $gap, $notes);
           return $gap[0];
         }
-        if (str_starts_with($wrapper, ':')) {
-          $states .= $wrapper;
+        if ($clause['form'] === ConditionClause::PSEUDO) {
+          $states .= $clause['css'];
         }
         else {
-          $wrappers[] = $wrapper;
+          $wrappers[] = $clause['css'];
         }
       }
     }
@@ -1045,15 +1049,23 @@ class DialectPrinter {
     // A '::' local is a relative selector in its canonical spelling
     // (the one grammar the parser reads back): #id, a space, the chain,
     // the addressed element's states, and its generated box last of all
-    // (`#id:hover::after` for the anchor's `::&::after`, `#id > pb-text
-    // ::before` for a chain's box), the order CSS itself demands.
+    // (`#id:hover::after` for the anchor's `::&::after`, `#id > d-text
+    // ::before` for a chain's box), the order CSS itself demands. The
+    // qualified anchor IS #id: its qualifiers glue onto the id and the
+    // chain behind it follows (`#id:first-child > *` for
+    // `::&:first-child > *`), never a literal `&` after the id.
     $selector = '#' . $identity;
     $pseudo = '';
     if ($local !== '') {
       // Judged once per local by collectRules(); a local reaching here
       // parses.
       $relative = RelativeSelector::parse(substr($local, strlen(RelativeSelector::SUFFIX)));
-      $selector .= $relative->compounds === [] ? '' : ' ' . RelativeSelector::printCompounds($relative->compounds);
+      $compounds = $relative->compounds;
+      if ($compounds !== [] && $compounds[0]['kind'] === RelativeSelector::ANCHOR_KIND) {
+        $selector .= substr(RelativeSelector::printCompound($compounds[0]), strlen(RelativeSelector::ANCHOR));
+        $compounds = array_slice($compounds, 1);
+      }
+      $selector .= $compounds === [] ? '' : ' ' . RelativeSelector::printCompounds($compounds);
       $pseudo = $relative->pseudo === NULL ? '' : RelativeSelector::SUFFIX . $relative->pseudo;
     }
     $selector .= $states . $pseudo;

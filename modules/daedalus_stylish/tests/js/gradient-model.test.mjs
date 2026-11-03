@@ -27,7 +27,7 @@ test('splitLayers: top-level commas only, function commas intact', () => {
     splitLayers("linear-gradient(180deg, rgb(0, 0, 0), transparent), url('media:abc')"),
     ['linear-gradient(180deg, rgb(0, 0, 0), transparent)', "url('media:abc')"],
   );
-  assert.deepEqual(splitLayers('var(--swatch-hero_fade)'), ['var(--swatch-hero_fade)']);
+  assert.deepEqual(splitLayers('var(--gradient-hero-fade)'), ['var(--gradient-hero-fade)']);
   // The empty value is zero layers, not a malformed list.
   assert.deepEqual(splitLayers(''), []);
   assert.deepEqual(splitLayers('   '), []);
@@ -47,12 +47,12 @@ test('splitLayers: malformed lists answer null', () => {
 test('gradient layer detection: gradients yes, references and media no', () => {
   assert.equal(isGradientLayer('linear-gradient(red, blue)'), true);
   assert.equal(isGradientLayer('REPEATING-RADIAL-GRADIENT(circle, red, blue)'), true);
-  // A var() layer is opaque even when it references a gradient swatch:
+  // A var() layer is opaque even when it references a gradient token:
   // the builder must never unfold a reference.
-  assert.equal(isGradientLayer('var(--swatch-hero_fade)'), false);
+  assert.equal(isGradientLayer('var(--gradient-hero-fade)'), false);
   assert.equal(isGradientLayer("url('media:abc')"), false);
   assert.equal(gradientTargetIndex(['url(x)', 'conic-gradient(red, blue)']), 1);
-  assert.equal(gradientTargetIndex(['url(x)', 'var(--swatch-a)']), -1);
+  assert.equal(gradientTargetIndex(['url(x)', 'var(--gradient-a)']), -1);
 });
 
 test('parseGradient: linear with angle prelude and positioned stops', () => {
@@ -111,16 +111,16 @@ test('parseGradient: grammar beyond the model degrades to null', () => {
   assert.equal(parseGradient('linear-gradient(red, rgb(0,0)'), null);
   // Not a gradient at all.
   assert.equal(parseGradient("url('media:abc')"), null);
-  assert.equal(parseGradient('var(--swatch-hero_fade)'), null);
+  assert.equal(parseGradient('var(--gradient-hero-fade)'), null);
   // A prelude-only body carries no stops.
   assert.equal(parseGradient('linear-gradient(180deg)'), null);
 });
 
 test('buildValue: one layer edited, every other layer verbatim', () => {
-  const layers = splitLayers("linear-gradient(red, blue), url('media:ABC-def'), var(--swatch-x, none)");
+  const layers = splitLayers("linear-gradient(red, blue), url('media:ABC-def'), var(--gradient-x, none)");
   assert.equal(
     buildValue(layers, 0, 'linear-gradient(0deg, red, blue)'),
-    "linear-gradient(0deg, red, blue), url('media:ABC-def'), var(--swatch-x, none)",
+    "linear-gradient(0deg, red, blue), url('media:ABC-def'), var(--gradient-x, none)",
   );
   // Index -1 prepends: the scrim layer paints above the media beneath it.
   assert.equal(

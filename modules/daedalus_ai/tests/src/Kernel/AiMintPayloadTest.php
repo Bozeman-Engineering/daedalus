@@ -9,7 +9,8 @@ use Drupal\daedalus_ai\MutatedTurn;
 use Drupal\daedalus_blueprint_ai\Event\AiToolActionEvent;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
+use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
+use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -23,9 +24,10 @@ use Symfony\Component\HttpFoundation\Request;
  * event goes through the real dispatcher into the real
  * AiToolActionSubscriber, and the real MutatedTurn builds what
  * DeepChatResponseListener injects as `blueprint_responses`. Pinned:
- * - a NEW swatch (no page, no link template) queues no open-link and
- *   collects no page mutation, yet the turn answers a materials-only
- *   payload carrying the swatch's record (the entity hook recorded it);
+ * - a token minted on the worn skin (a non-page entity with no link
+ *   template) queues no open-link and collects no page mutation, yet the
+ *   turn answers a materials-only payload carrying the token's record
+ *   (the skin's entity hook recorded it);
  * - a page mutation's payload carries the `history` timeline the turn's
  *   writes extended AND the delta of a mint made in the same turn, with
  *   no trailing materials-only payload (the delta rides once);
@@ -37,6 +39,7 @@ use Symfony\Component\HttpFoundation\Request;
 #[RunTestsInSeparateProcesses]
 class AiMintPayloadTest extends KernelTestBase {
 
+  use DesignSystemActivationTrait;
   use UserCreationTrait;
 
   /**
@@ -77,21 +80,36 @@ class AiMintPayloadTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('entity_test');
-    // A swatch save compiles the palette stylesheet, which builds the
-    // roster; the daedalus_stylish provider reads all four storages.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // A skin save compiles the skin stylesheet, which builds the roster;
+    // the daedalus_stylish provider reads all three storages.
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
+    // The activation below syncs every enabled package's shipped
+    // definitions; styled saves mirror their var() and motion-* references
+    // into the skin material usage table.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
-    $this->installConfig(['filter', 'text', 'daedalus_stylish']);
+    $this->installConfig(['filter', 'text', 'daedalus_blueprint', 'daedalus_stylish']);
     $this->setUpCurrentUser([], [], TRUE);
+    // The skin the mints land on: the site's own, worn through a design
+    // system of its own. Its activation is the fixture's, not a turn's,
+    // so the delta it recorded is drained before any turn is built.
+    $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora']);
+    $skin->save();
+    $this->activateSkin($skin);
+    $this->container->get('daedalus_blueprint.materials_change_set')->flush();
+  }
+
+  /**
+   * Mints a token on the worn skin, the way an AI tool's write lands it.
+   */
+  protected function mint(string $name, string $value): DaedalusStylishSkin {
+    $tokens = $this->container->get('daedalus_stylish.skin_material_manager');
+    $skin = $tokens->mint($tokens->activeSkin(), 'color', $name, $value);
+    assert($skin instanceof DaedalusStylishSkin);
+    return $skin;
   }
 
   /**
@@ -108,7 +126,7 @@ class AiMintPayloadTest extends KernelTestBase {
    * Fires the persisted event the tools dispatch, through the real bus.
    */
   protected function persisted(object $entity, bool $is_new, array $targets = []): void {
-    // A page result carries its host; a config result (the swatch) its
+    // A page result carries its host; a non-page result (the skin) its
     // entity, as the tool base dispatches them.
     $resolver = $this->container->get('daedalus_blueprint.host_resolver');
     $subject = $resolver->hosts($entity) ? ['host' => $resolver->fromEntity($entity)] : ['entity' => $entity];
@@ -120,16 +138,14 @@ class AiMintPayloadTest extends KernelTestBase {
   }
 
   /**
-   * A minted swatch with no page behind it answers a materials-only payload.
+   * A minted token with no page behind it answers a materials-only payload.
    */
   public function testNonPageMintAnswersMaterialsOnlyPayload(): void {
     $turn = $this->container->get('daedalus_ai.mutated_turn');
     $this->assertSame([], $turn->buildPayloads($this->chatRequest()), 'A turn that changed nothing answers nothing.');
 
-    $swatch = DaedalusStylishSwatch::create(['label' => 'Brand red', 'kind' => 'color']);
-    $swatch->setSwatchValue('#b91c1c');
-    $swatch->save();
-    $this->persisted($swatch, TRUE);
+    $skin = $this->mint('brand-red', '#b91c1c');
+    $this->persisted($skin, FALSE);
 
     // No page to open: the subscriber queued nothing (the old path threw
     // on the missing link template and dropped the turn's effects).
@@ -144,11 +160,11 @@ class AiMintPayloadTest extends KernelTestBase {
     $this->assertArrayNotHasKey('entity_uuid', $payload);
     $upsert = $payload['materials']['upsert'];
     $this->assertCount(1, $upsert);
-    $this->assertSame('swatch', $upsert[0]['kind']);
-    $this->assertSame('brand_red', $upsert[0]['id']);
-    $this->assertSame('Brand red', $upsert[0]['label']);
+    $this->assertSame('token', $upsert[0]['kind']);
+    $this->assertSame('color/brand-red', $upsert[0]['id']);
+    $this->assertSame('brand-red', $upsert[0]['label']);
     $this->assertSame('#b91c1c', $upsert[0]['value']);
-    $this->assertSame('var(--swatch-brand_red)', $upsert[0]['spellings']['style']);
+    $this->assertSame('var(--color-brand-red)', $upsert[0]['spellings']['style']);
     $this->assertSame([], $payload['materials']['remove']);
 
     // Drained: the next leg of the turn carries nothing.
@@ -163,10 +179,8 @@ class AiMintPayloadTest extends KernelTestBase {
     $page = EntityTest::create(['name' => 'Landing']);
     $page->save();
 
-    $swatch = DaedalusStylishSwatch::create(['label' => 'Sea', 'kind' => 'color']);
-    $swatch->setSwatchValue('#0ea5e9');
-    $swatch->save();
-    $this->persisted($swatch, TRUE);
+    $skin = $this->mint('sea', '#0ea5e9');
+    $this->persisted($skin, FALSE);
     $this->persisted($page, FALSE, [['uuid' => $page->uuid(), 'field_name' => 'name']]);
     $this->assertTrue($turn->hasMutations());
 
@@ -182,7 +196,7 @@ class AiMintPayloadTest extends KernelTestBase {
     $this->assertSame(['pointer', 'can_undo', 'can_redo', 'entries'], array_keys($payload['history']));
     $this->assertFalse($payload['history']['can_undo']);
 
-    $this->assertSame(['sea'], array_column($payload['materials']['upsert'], 'id'));
+    $this->assertSame(['color/sea'], array_column($payload['materials']['upsert'], 'id'));
     $this->assertSame([], $payload['materials']['remove']);
   }
 

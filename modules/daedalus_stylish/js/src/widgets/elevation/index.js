@@ -33,6 +33,7 @@ const Elevation = ({
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
 }) => (
   <div className={widgetClasses('elevation', false)}>
     <ChoiceRow
@@ -52,6 +53,7 @@ const Elevation = ({
       disabledTitle={model.withheld?.['box-shadow'] ?? null}
       onPickCondition={onPickCondition}
       onOpenDocument={onOpenDocument}
+      law={law}
       onPreview={onPreview}
       onRelease={onRelease}
       onCommit={onCommit}

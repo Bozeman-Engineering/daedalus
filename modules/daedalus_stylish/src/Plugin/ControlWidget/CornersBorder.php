@@ -18,7 +18,7 @@ use Drupal\daedalus_stylish\ControlWidgetBase;
  * any part set on an unset stroke completes it (style solid, width the
  * first width stop, color left unset so it paints with currentColor),
  * and unset clears the whole stroke, never a part. The widget owns the
- * stroke colors for that reason: with a swatch well in the row, color
+ * stroke colors for that reason: with a color well in the row, color
  * is the point, and currentColor survives as the unset state.
  *
  * Border is per side: the widget owns the three shorthand families AND

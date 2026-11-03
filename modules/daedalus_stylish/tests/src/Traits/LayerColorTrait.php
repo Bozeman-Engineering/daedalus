@@ -8,7 +8,7 @@ namespace Drupal\Tests\daedalus_stylish\Traits;
  * Spells layers.js layerColor() in PHP for browser assertions.
  *
  * The identity system's one hue rule for a worn variant's layer (djb2
- * over the layer id to a hue, shifted off the element blue's band),
+ * over the layer id to a hue, shifted off the element blue's hue range),
  * spelled here so a row's `--daedalus-stylish-origin`, a mark's hue or
  * a wear bar dot is asserted against the FUNCTION every identity
  * surface shares (the style stack's marks, the wear bar, the code

@@ -226,7 +226,7 @@ test('propertyGranted binds at every placement depth', () => {
   assert.equal(propertyGranted.length, 2, 'no depth argument exists');
   assert.equal(propertyGranted(declaration, 'padding'), false);
   assert.equal(propertyGranted(declaration, 'padding-left'), false);
-  // The whole group (the shipped container): a page band's padding row
+  // The whole group (the shipped container): a section's padding row
   // offers four sides, exactly like a nested card's.
   const whole = { grants: { spacing: SPACING } };
   const offered = SPACING.filter((property) => propertyGranted(whole, property));

@@ -21,7 +21,6 @@ namespace Drupal\daedalus_blueprint\Materials;
 enum ValueKind: string {
 
   case Token = 'token';
-  case Swatch = 'swatch';
   case Variant = 'variant';
   case Blueprint = 'blueprint';
   case Animation = 'animation';

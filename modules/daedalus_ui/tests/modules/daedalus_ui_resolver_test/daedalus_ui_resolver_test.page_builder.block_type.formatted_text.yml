@@ -1,0 +1,7 @@
+# The formatted text shape: one fixed div root holding the rich body
+# (daedalus_edit_formatted_text_block's declaration, mirrored so the cards'
+# kernel lock does not depend on daedalus_edit). Its interior elements are
+# content wearing instance classes, which no declaration can enumerate, so
+# the whole markup model of the type is this one tag.
+composed: true
+tag: div

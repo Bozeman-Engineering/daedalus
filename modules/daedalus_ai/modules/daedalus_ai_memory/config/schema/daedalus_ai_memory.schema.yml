@@ -8,9 +8,31 @@ daedalus_ai_memory.settings:
       sequence:
         type: string
         label: 'Agent ID'
-    max_history_messages:
+    cache_ttl:
+      type: string
+      label: 'Prompt cache TTL asked of a capable provider'
+    segment_budget_tokens:
       type: integer
-      label: 'Maximum chat history messages to persist'
-    keep_recent_turns:
+      label: 'Segment budget (tokens)'
+    segment_budget_minimum_tokens:
       type: integer
-      label: 'Number of recent turns to always keep'
+      label: 'Segment budget minimum (tokens)'
+    segment_budget_overrides:
+      type: sequence
+      label: 'Segment budget overrides per model'
+      sequence:
+        type: mapping
+        label: 'Override'
+        mapping:
+          model:
+            type: string
+            label: 'Model ID'
+          tokens:
+            type: integer
+            label: 'Budget (tokens)'
+    segment_headroom_tokens:
+      type: integer
+      label: 'Headroom below the model maximum input (tokens)'
+    reframe_minimum_tokens:
+      type: integer
+      label: 'Reframe minimum (tokens)'

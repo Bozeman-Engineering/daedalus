@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_ui\File;
 
+use Drupal\Component\Transliteration\TransliterationInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\File\FileExists;
 use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\Language\LanguageInterface;
+use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\file\FileInterface;
 use Drupal\file\Upload\FileUploadHandlerInterface;
-use Drupal\file\Upload\FormUploadedFile;
 use Drupal\file\Upload\InputStreamUploadedFile;
 use Drupal\file\Upload\UploadedFileInterface;
 use Drupal\media\MediaTypeInterface;
@@ -19,15 +21,32 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  * The one lane through which any supplied bytes become a managed file.
  *
  * Every byte a user or the model hands the page builder (a dropped media
- * file, a chat attachment, a `<pb-file>` declaration, render_page's shot)
+ * file, a chat attachment, a `<d-file>` declaration, a shot a tool kept)
  * enters through core's file.upload_handler with this lane's validators and
  * the FileValidationEvent chain, where the upload-time SVG sanitizer lives.
  * Two entry points, one save step: a request's UploadedFile is wrapped as
- * core's FormUploadedFile (the secure move_uploaded_file() move), bytes are
+ * the lane's CanonicalFormUploadedFile (core's FormUploadedFile, the secure
+ * move_uploaded_file() move, answering the canonical name), bytes are
  * spooled to a temporary file and wrapped as InputStreamUploadedFile, and
  * from there validators, the sanitizer, renaming on collision and the entity
  * save run identically. Nothing supplied from outside is ever written with
  * FileRepository::writeData(), which bypasses the validator.
+ *
+ * The lane names the file. A saved filename is a handle: the model echoes it
+ * back to open an attachment, CSS carries it in url('file:...'), HTML
+ * attributes and media labels repeat it, so it must be a name every one of
+ * them can repeat byte for byte. macOS screenshots carry a NARROW NO-BREAK
+ * SPACE before "PM" that a model normalises to a plain space, and the handle
+ * stops resolving. Core's own sanitization (the file module's subscriber on
+ * FileUploadSanitizeNameEvent) applies `file.settings.filename_sanitization`,
+ * every switch off by default, so a guarantee resting on it would rest on
+ * config every fresh site lacks; the lane canonicalises the name itself,
+ * before the handler, through canonicalName(): core's full posture minus the
+ * lowercase switch (the stem keeps its case, the extension is lowercased).
+ * Core's handler then dispatches the event as always, so the system module's
+ * security subscriber still runs on the clean name (`shell.php.txt` is saved
+ * as `shell.php_.txt`) and the site's own `file.settings` choice is left
+ * alone for its other uploads.
  *
  * The accepted set is explicit: the union of every media type's source-field
  * extensions plus the textual kinds the AI reads and the self-hosted font
@@ -60,14 +79,29 @@ final class FileLane {
    */
   public const SIZE_LIMIT = 25 * 1024 * 1024;
 
+  /**
+   * The separator the canonical name uses wherever a character gives way.
+   */
+  private const SEPARATOR = '-';
+
+  /**
+   * The stem a name is saved under when nothing of its own survives.
+   */
+  private const EMPTY_STEM = 'file';
+
   public function __construct(
     private readonly FileUploadHandlerInterface $uploadHandler,
     private readonly FileSystemInterface $fileSystem,
     private readonly EntityTypeManagerInterface $entityTypeManager,
+    private readonly TransliterationInterface $transliteration,
+    private readonly LanguageManagerInterface $languageManager,
   ) {}
 
   /**
    * Saves a request's uploaded file.
+   *
+   * The file is saved under canonicalName() of the client's name, renamed on
+   * collision by core's handler as always.
    *
    * @param \Symfony\Component\HttpFoundation\File\UploadedFile $upload
    *   The file from the request's files bag.
@@ -86,7 +120,8 @@ final class FileLane {
    *   When a validator or the FileValidationEvent chain refuses the file.
    */
   public function fromRequest(UploadedFile $upload, string $directory, bool $permanent = FALSE, ?array $extensions = NULL): FileInterface {
-    return $this->save(new FormUploadedFile($upload), $directory, $permanent, $extensions);
+    $wrapped = new CanonicalFormUploadedFile($upload, $this->canonicalName($upload->getClientOriginalName()));
+    return $this->save($wrapped, $directory, $permanent, $extensions);
   }
 
   /**
@@ -94,7 +129,8 @@ final class FileLane {
    *
    * The bytes are spooled to a temporary file so core's handler moves them
    * exactly as it moves a stream upload (JSON:API, REST), and the validators
-   * and sanitizer see a real file at the entity's URI.
+   * and sanitizer see a real file at the entity's URI. The file is saved
+   * under canonicalName() of the given name, renamed on collision.
    *
    * @param string $name
    *   The filename; its extension is what the validators judge and what the
@@ -124,8 +160,9 @@ final class FileLane {
     if ($spool === FALSE || file_put_contents($spool, $content) === FALSE) {
       throw new \RuntimeException('The file lane could not spool the supplied bytes to a temporary file.');
     }
+    $canonical = $this->canonicalName($name);
     try {
-      $file = $this->save(new InputStreamUploadedFile($name, $name, $spool, strlen($content)), $directory, $permanent, $extensions);
+      $file = $this->save(new InputStreamUploadedFile($canonical, $canonical, $spool, strlen($content)), $directory, $permanent, $extensions);
     }
     catch (FileLaneException $e) {
       // The handler leaves a refused spool where it was; a refusal must not
@@ -138,6 +175,50 @@ final class FileLane {
       throw new FileLaneException([sprintf('The declared type %s does not match the type of %s (%s).', $mime, $name, $file->getMimeType())]);
     }
     return $file;
+  }
+
+  /**
+   * The canonical form of a filename: what the lane saves a file under.
+   *
+   * Core's full sanitization posture (FileEventSubscriber::sanitizeFilename
+   * with every switch on) minus the lowercase switch, independent of
+   * `file.settings`: the extension is split off; the stem is transliterated
+   * in the content language (an unknown character becomes `-`), whitespace
+   * (the Unicode class, so U+202F and U+00A0 included) becomes `-`, anything
+   * outside `[0-9A-Za-z_.-]` becomes `-`, runs of separators collapse to one,
+   * trailing `-` and `.` are trimmed, and a stem left with nothing becomes
+   * `file`. The stem keeps its case ("PM", initials); the extension is
+   * lowercased to match the lane's lowercase allowlist and the media types'
+   * extension settings. Core's security subscriber still runs after this on
+   * the handler's event, so a dangerous inner extension is munged as today.
+   *
+   * @param string $name
+   *   A filename as a client or the model supplied it.
+   *
+   * @return string
+   *   The name the file is saved under, before any collision rename.
+   */
+  public function canonicalName(string $name): string {
+    $dot = strrpos($name, '.');
+    $stem = $dot === FALSE ? $name : substr($name, 0, $dot);
+    $extension = $dot === FALSE ? '' : substr($name, $dot + 1);
+
+    $langcode = $this->languageManager->getCurrentLanguage(LanguageInterface::TYPE_CONTENT)->getId();
+    $stem = $this->transliteration->transliterate($stem, $langcode, self::SEPARATOR);
+    $stem = preg_replace('/\s/u', self::SEPARATOR, trim($stem));
+    $stem = preg_replace('/[^0-9A-Za-z_.-]/u', self::SEPARATOR, $stem);
+    // Core's three dedupe passes: runs of one separator, a separator followed
+    // by separators, runs of the replacement character.
+    $stem = preg_replace('/(_)_+|(\.)\.+|(-)-+/u', self::SEPARATOR, $stem);
+    $stem = preg_replace('/(_|\.|\-)[(_|\.|\-)]+/u', self::SEPARATOR, $stem);
+    $stem = preg_replace('/' . preg_quote(self::SEPARATOR, '/') . '+/u', self::SEPARATOR, $stem);
+    $stem = rtrim($stem, self::SEPARATOR . '.');
+    if ($stem === '') {
+      $stem = self::EMPTY_STEM;
+    }
+
+    $extension = strtolower($extension);
+    return $extension === '' ? $stem : $stem . '.' . $extension;
   }
 
   /**

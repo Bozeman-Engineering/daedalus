@@ -70,18 +70,12 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
     $this->installEntitySchema('block_content');
     $this->installConfig(['block_content']);
     // The catalog reads the materials roster, whose daedalus_stylish
-    // provider reads all four storages.
+    // provider reads all three storages.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -99,8 +93,8 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
 
     // A published container style variant, the class a rule may wear.
     $variant = DaedalusStylishVariant::create([
-      'label' => 'Band',
-      'machine_name' => 'band',
+      'label' => 'Section',
+      'machine_name' => 'section',
       'scope' => 'kind:container',
       'axis' => 'style',
       'status' => TRUE,
@@ -121,16 +115,41 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
    */
   public function testNestingStatesAndWrappers(): void {
     $key = "container:{$this->section}";
-    $parsed = $this->door->parse($this->host($this->entity), $key, "color: red;\n&:hover { color: blue; }\n@container (max-width: 767px) {\n  &:hover { color: green; }\n}\n> pb-container { gap: 1rem; }\n> * { margin: 0; }");
+    $parsed = $this->door->parse($this->host($this->entity), $key, "color: red;\n&:hover { color: blue; }\n@container (max-width: 767px) {\n  &:hover { color: green; }\n}\n> d-container { gap: 1rem; }\n> * { margin: 0; }");
     $this->assertSame([], $parsed['errors']);
     $this->assertSame([], $parsed['wear']);
     $this->assertSame([
       ['key' => $key, 'condition' => 'default', 'properties' => ['color' => 'red']],
       ['key' => $key, 'condition' => 'hover', 'properties' => ['color' => 'blue']],
       ['key' => $key, 'condition' => 'hover+narrow', 'properties' => ['color' => 'green']],
-      ['key' => "$key::> pb-container", 'condition' => 'default', 'properties' => ['gap' => '1rem']],
+      ['key' => "$key::> d-container", 'condition' => 'default', 'properties' => ['gap' => '1rem']],
       ['key' => "$key::> *", 'condition' => 'default', 'properties' => ['margin' => '0']],
     ], $parsed['entries']);
+
+    // The WHEN opened: an at-rule prelude equal to a published wrapper
+    // (case and spacing folded) is its reference; any other query the
+    // condition grammar reads is a LITERAL clause in its canonical text,
+    // composed with the states and wrappers around it; an unpublished
+    // posable pseudo-class on the anchor peels as a pseudo-class literal.
+    // The door parses only: whether this site admits a literal is the
+    // validator's verdict at the write.
+    $parsed = $this->door->parse($this->host($this->entity), $key, "@CONTAINER (max-width:767px) { color: red; }\n@media (hover: hover) { &:hover { color: blue; } }\n@container (min-width: 500px) { > * { margin: 0; } }\n@supports (display: grid) { gap: 1rem; }\n&:checked { color: green; }");
+    $this->assertSame([], $parsed['errors']);
+    $this->assertSame([
+      ['key' => $key, 'condition' => 'narrow', 'properties' => ['color' => 'red']],
+      ['key' => $key, 'condition' => 'hover+@media (hover: hover)', 'properties' => ['color' => 'blue']],
+      ['key' => "$key::> *", 'condition' => '@container (min-width: 500px)', 'properties' => ['margin' => '0']],
+      ['key' => $key, 'condition' => '@supports (display: grid)', 'properties' => ['gap' => '1rem']],
+      ['key' => $key, 'condition' => ':checked', 'properties' => ['color' => 'green']],
+    ], $parsed['entries']);
+
+    // What the grammar cannot read is refused on its line with the
+    // digester's corrective naming the published wrappers.
+    $parsed = $this->door->parse($this->host($this->entity), $key, "color: red;\n@media screen { color: blue; }");
+    $this->assertSame(['UNKNOWN_WRAPPER'], array_column($parsed['errors'], 'code'));
+    $this->assertSame(2, $parsed['errors'][0]['context']['line']);
+    $this->assertStringContainsString('@container (max-width: 767px)  (narrow)', $parsed['errors'][0]['hint']);
+    $this->assertSame([['key' => $key, 'condition' => 'default', 'properties' => ['color' => 'red']]], $parsed['entries']);
 
     $storage = $this->entityTypeManager->getStorage('entity_test');
     $storage->resetCache([$this->entity->id()]);
@@ -141,15 +160,15 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
    * A rule key: the text is the rule's block, its wear peeled off.
    *
    * Under `#id { selector { … } }` the plain declarations are the rule's
-   * default entry, `&:hover` its state, and `class: band` the variant the
+   * default entry, `&:hover` its state, and `class: section` the variant the
    * rule wears (the parser's variants tuple), answered apart from the
    * entries because the client emits it as apply_variant.
    */
   public function testRuleKeyAndItsWear(): void {
-    $key = "container:{$this->section}::> pb-container";
-    $parsed = $this->door->parse($this->host($this->entity), $key, "class: band;\ngap: 2rem;\n&:hover { gap: 3rem; }");
+    $key = "container:{$this->section}::> d-container";
+    $parsed = $this->door->parse($this->host($this->entity), $key, "class: section;\ngap: 2rem;\n&:hover { gap: 3rem; }");
     $this->assertSame([], $parsed['errors']);
-    $this->assertSame([['key' => $key, 'variant' => 'band']], $parsed['wear']);
+    $this->assertSame([['key' => $key, 'variant' => 'section']], $parsed['wear']);
     $this->assertSame([
       ['key' => $key, 'condition' => 'default', 'properties' => ['gap' => '2rem']],
       ['key' => $key, 'condition' => 'hover', 'properties' => ['gap' => '3rem']],
@@ -161,16 +180,16 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
    */
   public function testRuleWearUnderAnElementKey(): void {
     $key = "container:{$this->section}";
-    $parsed = $this->door->parse($this->host($this->entity), $key, "> pb-container { class: band; gap: 1rem; }");
+    $parsed = $this->door->parse($this->host($this->entity), $key, "> d-container { class: section; gap: 1rem; }");
     $this->assertSame([], $parsed['errors']);
-    $this->assertSame([['key' => "$key::> pb-container", 'variant' => 'band']], $parsed['wear']);
+    $this->assertSame([['key' => "$key::> d-container", 'variant' => 'section']], $parsed['wear']);
     $this->assertSame([
-      ['key' => "$key::> pb-container", 'condition' => 'default', 'properties' => ['gap' => '1rem']],
+      ['key' => "$key::> d-container", 'condition' => 'default', 'properties' => ['gap' => '1rem']],
     ], $parsed['entries']);
 
     // The element wears on its own tag, never in its block: the parser's
     // rule, answered as a corrective and the rest of the text still read.
-    $parsed = $this->door->parse($this->host($this->entity), $key, "class: band;\ncolor: red;");
+    $parsed = $this->door->parse($this->host($this->entity), $key, "class: section;\ncolor: red;");
     $this->assertSame(['WEAR_ON_ELEMENT'], array_column($parsed['errors'], 'code'));
     $this->assertSame([], $parsed['wear']);
     $this->assertSame([['key' => $key, 'condition' => 'default', 'properties' => ['color' => 'red']]], $parsed['entries']);
@@ -198,18 +217,47 @@ class CssFragmentDoorTest extends BlueprintKernelTestBase {
 
   /**
    * A corrective carries the line of the sent text, and the rest still reads.
+   *
+   * The digester's refusal (a pseudo-element of another name) arrives as
+   * the parser's BAD_SELECTOR with the digester's hint; an unpublished
+   * pseudo-class (`&:sparkle`) is no refusal here any more: it stays a
+   * qualifier of the element's own key, and whether the site admits the
+   * word is the validator's verdict on the write (STYLE_SELECTOR_UNKNOWN).
    */
-  public function testUnknownStateCorrectiveCarriesItsLine(): void {
+  public function testCorrectiveCarriesItsLine(): void {
     $key = "container:{$this->section}";
-    $parsed = $this->door->parse($this->host($this->entity), $key, "color: red;\n\n&:sparkle { color: blue; }");
+    // Any pseudo-element the browser spells parses (`&::sparkle` is an
+    // entry at the box key; the validator refuses the WRITE as
+    // STYLE_SELECTOR_UNKNOWN, the door runs no validator); a functional
+    // one is the digester's refusal, carrying its line.
+    $parsed = $this->door->parse($this->host($this->entity), $key, "color: red;\n\n&::sparkle { color: blue; }");
+    $this->assertSame([], $parsed['errors']);
+    $this->assertSame([
+      ['key' => $key, 'condition' => 'default', 'properties' => ['color' => 'red']],
+      ['key' => $key . '::&::sparkle', 'condition' => 'default', 'properties' => ['color' => 'blue']],
+    ], $parsed['entries']);
+    $parsed = $this->door->parse($this->host($this->entity), $key, "color: red;\n\n&::part(label) { color: blue; }");
     $this->assertCount(1, $parsed['errors']);
     $error = $parsed['errors'][0];
     $this->assertSame('css', $error['path']);
-    $this->assertSame('UNKNOWN_STATE', $error['code']);
+    $this->assertSame('BAD_SELECTOR', $error['code']);
     $this->assertSame(3, $error['context']['line']);
     $this->assertStringEndsWith('(line 3)', $error['message']);
-    $this->assertStringStartsWith('Legal states:', $error['hint']);
+    $this->assertStringStartsWith('Style a pseudo-element by its bare name', $error['hint']);
     $this->assertSame([['key' => $key, 'condition' => 'default', 'properties' => ['color' => 'red']]], $parsed['entries']);
+
+    // The door parses only: an unpublished pseudo-class on the anchor
+    // peels as a pseudo-class literal clause (`:sparkle`, a word the
+    // validator refuses at the write with the nearest states), one on a
+    // compound before the last stays its qualifier, a list folds into
+    // one `:is()` rule (the digester's fold, one entry).
+    $parsed = $this->door->parse($this->host($this->entity), $key, "&:sparkle { color: blue; }\nli:hover > ul { display: block; }\nh1, h2 { margin: 0; }");
+    $this->assertSame([], $parsed['errors']);
+    $this->assertSame([
+      ['key' => $key, 'condition' => ':sparkle', 'properties' => ['color' => 'blue']],
+      ['key' => "$key::li:hover > ul", 'condition' => 'default', 'properties' => ['display' => 'block']],
+      ['key' => "$key::*:is(h1, h2)", 'condition' => 'default', 'properties' => ['margin' => '0']],
+    ], $parsed['entries']);
   }
 
   /**

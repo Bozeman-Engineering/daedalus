@@ -84,16 +84,10 @@ class PageStartTest extends BlueprintKernelTestBase {
     $this->installEntitySchema('daedalus_variant');
     // The style ops validate through the materials roster, whose stylish
     // provider reads every material storage on each build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
 
@@ -233,7 +227,7 @@ class PageStartTest extends BlueprintKernelTestBase {
       'type' => 'section',
       'label' => 'Landing',
       'machine_name' => 'landing',
-      'description' => 'A landing page: an intro, the body, a closing band.',
+      'description' => 'A landing page: an intro, the body, a closing section.',
       'scope' => BlueprintInterface::SCOPE_PAGE,
       'subject_type' => 'node',
       'subject_bundle' => 'page',
@@ -629,8 +623,8 @@ class PageStartTest extends BlueprintKernelTestBase {
       'subject_bundle' => 'page',
     ], []);
     $this->createBlueprint([
-      'label' => 'Band',
-      'machine_name' => 'band',
+      'label' => 'Section',
+      'machine_name' => 'section',
       'description' => 'A block blueprint any host can hold.',
     ]);
 
@@ -648,7 +642,7 @@ class PageStartTest extends BlueprintKernelTestBase {
    * to an editor; the verb answers the one order every offering surface
    * shows (the chooser's cards, the schema's starts): the site's
    * favorites (the record's own default) ahead of the rest, and each run
-   * by label, natural ("Band 2" before "Band 10") and case-insensitive
+   * by label, natural ("Section 2" before "Section 10") and case-insensitive
    * ("alpha" before "Zed"). The fixture's machine names are chosen so the
    * roster's order (by entity id, the order written here) is neither.
    */
@@ -659,19 +653,19 @@ class PageStartTest extends BlueprintKernelTestBase {
       'subject_bundle' => 'page',
     ];
     $this->createBlueprint(['label' => 'Zed', 'machine_name' => 'zed', 'favorite' => TRUE] + $page);
-    $this->createBlueprint(['label' => 'Band 10', 'machine_name' => 'band_ten'] + $page);
+    $this->createBlueprint(['label' => 'Section 10', 'machine_name' => 'section_ten'] + $page);
     $this->createBlueprint(['label' => 'alpha', 'machine_name' => 'alpha', 'favorite' => TRUE] + $page);
-    $this->createBlueprint(['label' => 'Band 2', 'machine_name' => 'band_two'] + $page);
+    $this->createBlueprint(['label' => 'Section 2', 'machine_name' => 'section_two'] + $page);
     $this->createBlueprint(['label' => 'Aside', 'machine_name' => 'aside'] + $page);
 
     $starts = $this->start()->starts($this->bundleHost('node', 'page'));
-    $this->assertSame(['alpha', 'zed', 'aside', 'band_two', 'band_ten'], array_keys($starts), 'Favorites first, then the rest, each by label, natural and case-insensitive.');
+    $this->assertSame(['alpha', 'zed', 'aside', 'section_two', 'section_ten'], array_keys($starts), 'Favorites first, then the rest, each by label, natural and case-insensitive.');
     $this->assertTrue($starts['alpha']->favorite);
     $this->assertFalse($starts['aside']->favorite);
 
     // The order is the verb's, not a surface's: the schema's projection
     // keeps it as handed.
-    $this->assertSame(['alpha', 'zed', 'aside', 'band_two', 'band_ten'], array_keys($this->container->get('daedalus_blueprint.materials_schema')->starts($starts)));
+    $this->assertSame(['alpha', 'zed', 'aside', 'section_two', 'section_ten'], array_keys($this->container->get('daedalus_blueprint.materials_schema')->starts($starts)));
   }
 
   /**
@@ -688,8 +682,8 @@ class PageStartTest extends BlueprintKernelTestBase {
       'subject_bundle' => 'page',
     ], []);
     $this->createBlueprint([
-      'label' => 'Band',
-      'machine_name' => 'band',
+      'label' => 'Section',
+      'machine_name' => 'section',
       'description' => 'A block blueprint any host can hold.',
     ]);
 
@@ -721,9 +715,9 @@ class PageStartTest extends BlueprintKernelTestBase {
     $this->assertSame(['blank', 'template', 'landing'], $result->getErrors()[0]->getContext()['available']);
 
     // A block blueprint is never a start: the corrective names its door.
-    $result = $this->start()->apply($host, 'band');
+    $result = $this->start()->apply($host, 'section');
     $this->assertRefused($result, 'BLUEPRINT_WRONG_SCOPE', $host);
-    $this->assertSame(['blueprint' => 'band', 'scope' => 'block'], $result->getErrors()[0]->getContext());
+    $this->assertSame(['blueprint' => 'section', 'scope' => 'block'], $result->getErrors()[0]->getContext());
     $this->assertStringContainsString('place_blueprint', $result->getErrors()[0]->getHint());
 
     // An empty page blueprint starts nothing; the corrective names its

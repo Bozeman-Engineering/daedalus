@@ -8,7 +8,8 @@ namespace Drupal\daedalus_blueprint\Materials;
  * The kinds of material a site's roster can carry.
  *
  * A material is a named, reusable thing a style or markup value can
- * reference: a skin token, a palette swatch, a saved variant, a blueprint,
+ * reference: a skin token (a palette color or gradient among them), a
+ * saved variant, a blueprint,
  * a named keyframes animation, a self-hosted font family. Anything else
  * a value can be (a literal, a
  * media reference, a generation request) is an inline value, not a
@@ -22,7 +23,6 @@ namespace Drupal\daedalus_blueprint\Materials;
 enum MaterialKind: string {
 
   case Token = 'token';
-  case Swatch = 'swatch';
   case Variant = 'variant';
   case Blueprint = 'blueprint';
   case Animation = 'animation';
@@ -36,12 +36,11 @@ enum MaterialKind: string {
   }
 
   /**
-   * The plural noun prose uses for this kind ("the site's swatches").
+   * The plural noun prose uses for this kind ("the site's variants").
    */
   public function plural(): string {
     return match ($this) {
       self::Token => 'tokens',
-      self::Swatch => 'swatches',
       self::Variant => 'variants',
       self::Blueprint => 'blueprints',
       self::Animation => 'animations',

@@ -11,7 +11,7 @@ use Drupal\daedalus_blueprint\Host\HostInterface;
  *
  * The mid-session half of the delivery contract (MaterialsDelivery is the
  * page-load half): a material write anywhere in the request (an op batch
- * saving a blueprint, a gesture route minting a swatch, an AI tool creating
+ * saving a blueprint, a gesture minting a token, an AI tool creating
  * a variant, an importer, an admin form) is recorded here by the owning
  * module's entity hooks, and every response builder appends the delta so
  * the client store learns the change the moment it lands, whichever lane
@@ -119,7 +119,7 @@ final class MaterialsChangeSet {
   /**
    * The delta for a removal a response has staged but not yet performed.
    *
-   * The batched delete lanes (a referenced swatch or variant: the route
+   * The batched delete lanes (a referenced token or variant: the route
    * stages a rewrite-then-delete core Batch the client drives, and the
    * entity goes in the batch's last request, long after this response is
    * built) cannot resolve the removal at flush: the record is still in

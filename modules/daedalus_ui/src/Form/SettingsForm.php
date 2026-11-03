@@ -7,7 +7,12 @@ use Drupal\Core\Form\FormStateInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Configure Daedalus settings for this site.
+ * The editor chrome colors (daedalus_ui.settings colors).
+ *
+ * The form is one module's page under the Daedalus config category's UI
+ * sub-category, so its three colors sit at the top level with no details
+ * wrapper. The form id is a contract: bz_render alters it by id to add its
+ * own details beneath the colors.
  */
 class SettingsForm extends ConfigFormBase {
 
@@ -41,15 +46,10 @@ class SettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state): array {
     $colors = $this->config('daedalus_ui.settings')->get('colors');
 
-    $form['daedalus_ui'] = [
-      '#type' => 'details',
-      '#title' => $this->t('Daedalus UI'),
-      '#open' => TRUE,
-    ];
-    $form['daedalus_ui']['colors'] = [
+    $form['colors'] = [
       '#tree' => TRUE,
     ];
-    $form['daedalus_ui']['colors']['main'] = [
+    $form['colors']['main'] = [
       '#type' => 'color',
       '#title' => $this->t('Main color'),
       '#default_value' => $colors['main'] ?? '#4b9ae4',
@@ -58,7 +58,7 @@ class SettingsForm extends ConfigFormBase {
         'css-rule' => '--daedalus-ui-main-color',
       ],
     ];
-    $form['daedalus_ui']['colors']['secondary'] = [
+    $form['colors']['secondary'] = [
       '#type' => 'color',
       '#title' => $this->t('Secondary color'),
       '#default_value' => $colors['secondary'] ?? '#4b9ae4',
@@ -67,7 +67,7 @@ class SettingsForm extends ConfigFormBase {
         'css-rule' => '--daedalus-ui-secondary-color',
       ],
     ];
-    $form['daedalus_ui']['colors']['highlight'] = [
+    $form['colors']['highlight'] = [
       '#type' => 'color',
       '#title' => $this->t('Highlight color'),
       '#default_value' => $colors['highlight'] ?? '#4b9ae4',

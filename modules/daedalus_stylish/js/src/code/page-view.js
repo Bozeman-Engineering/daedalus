@@ -212,6 +212,7 @@ export const PageCodeView = ({
   posed = 'default',
   onPose = null,
   onOpenDocument = null,
+  law = {},
   head = null,
 }) => {
   // The row context menu (the shared primitive): the wearing rows'
@@ -236,21 +237,22 @@ export const PageCodeView = ({
   }
   const library = variants ?? [];
   const map = styleMap ?? {};
-  const nodeTree = source.getTree?.() ?? [];
-  // The lens's name: the selected element's word off the tree, the same
-  // spine the subject line reads (subject-model.js elementWord over the
-  // matcher's facts), so the head and the subject never disagree on
+  // The document (source.getDocument(): the host entity above its
+  // sections), read once for the two things here that walk it.
+  const document = source.getDocument?.() ?? [];
+  // The lens's name: the selected element's word off the document, the
+  // same spine the subject line reads (subject-model.js elementWord over
+  // the matcher's facts), so the head and the subject never disagree on
   // what the element is called.
   const matcher = useMemo(
-    () => (Array.isArray(nodeTree) ? createMatcher(nodeTree) : null),
-    [nodeTree],
+    () => (Array.isArray(document) ? createMatcher(document) : null),
+    [document],
   );
 
-  const pageTree = pageNodes(
-    nodeTree,
-    source.getRootUuid(),
-    source.getRootElement?.() ?? null,
-  );
+  // The page tree walks the document: the page row IS the document's
+  // root node, worded by its own annotation, on the leader and the
+  // satellite alike.
+  const pageTree = pageNodes(document);
   const nodes = scopeNodes(pageTree, scope, selected);
   const tree = visibleTree(nodes, map);
   // The rendered tree in the collapse model's shape, projected per
@@ -608,6 +610,7 @@ export const PageCodeView = ({
               targetSelector={isSelected ? targetSelector : null}
               address={isSelected ? address : null}
               onOpenDocument={onOpenDocument}
+              law={law}
             />
           </div>
         )}

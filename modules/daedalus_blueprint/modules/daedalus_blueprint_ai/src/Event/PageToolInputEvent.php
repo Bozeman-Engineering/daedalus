@@ -11,8 +11,8 @@ use Symfony\Contracts\EventDispatcher\Event;
  *
  * The spine emits a fact, nothing more: what page_create / page_edit /
  * page_read was handed, exactly as it arrived, before any guard or parse
- * touches it. Diagnostic consumers (daedalus_blueprint_ai_dev_tools' capture
- * subscriber) subscribe to it; the production path carries no dev
+ * touches it. Diagnostic consumers (a capture subscriber in a diagnostics
+ * module) subscribe to it; the production path carries no diagnostic
  * dependency and no behavior rides on this event.
  *
  * Lifecycle: the tool dispatches the event at the very top of execute()

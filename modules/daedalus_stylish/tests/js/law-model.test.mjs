@@ -85,7 +85,7 @@ const TEXT = {
   },
   axes: {
     style: { label: null, root_only: false, description: null, owns: [] },
-    width: { label: 'Width', root_only: true, description: 'How wide the band runs.', owns: ['max-width'] },
+    width: { label: 'Width', root_only: true, description: 'How wide the section runs.', owns: ['max-width'] },
   },
   birth: { style: { variant: 'text_default', depth: null }, width: { variant: 'wide', depth: 'root' } },
   defaults: { '': { default: { display: 'block' } }, '::.text-body': { narrow: { 'max-width': '40rem' } } },
@@ -237,7 +237,7 @@ test('nodeSections: a root\'s grants, constraints, axes, birth and defaults, eve
   ]);
   assert.deepEqual(axes.rows.map((row) => [row.id, row.label, row.value, row.origin.words]), [
     ['style', 'style', '', 'built in'],
-    ['width', 'Width', 'top-level sections only · owns max-width · How wide the band runs.', 'guide.page_builder.block_type.text.yml'],
+    ['width', 'Width', 'top-level sections only · owns max-width · How wide the section runs.', 'guide.page_builder.block_type.text.yml'],
   ]);
   assert.deepEqual(birth.rows.map((row) => [row.id, row.label, row.value, row.origin.words]), [
     ['style', 'style', 'text_default', 'guide.page_builder.block_type.text.yml'],
@@ -296,7 +296,7 @@ test('scaleRows: each scale with its facts, contract and origins, and everything
   assert.deepEqual(rows[1].bindings, [{ property: 'gap', site: true, scope: null, path: '' }], 'a node inheriting the site binding is not a binding of its own');
   assert.deepEqual(bindingWords(rows[0].bindings[0]), 'font-size (site-wide)');
   assert.deepEqual(bindingWords(rows[0].bindings[1]), 'font-size on text block type');
-  assert.deepEqual(bindingWords({ property: 'max-width', site: false, scope: 'layout:layout_onecol', path: '.band-inner' }), 'max-width on layout_onecol layout .band-inner');
+  assert.deepEqual(bindingWords({ property: 'max-width', site: false, scope: 'layout:layout_onecol', path: '.section-inner' }), 'max-width on layout_onecol layout .section-inner');
   assert.deepEqual(scaleRows(null), []);
 });
 

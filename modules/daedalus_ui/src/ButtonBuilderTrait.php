@@ -8,7 +8,13 @@ use Drupal\Core\Template\Attribute;
 use Drupal\Core\Url;
 
 /**
- * Provides a helper method for building top bar buttons with icon support.
+ * Builds the top bar's shared button anatomies with icon support.
+ *
+ * Two anatomies: the panel toggle (buildTopBarButton(): a container or a
+ * link every sidebar plugin's buildToggleButton() returns) and the menu
+ * trigger (buildMenuTrigger(): a real button with a caret that opens the
+ * shared menu primitive). Both wear the chrome tooltip attribute so the
+ * label rides the tooltip spine wherever the density ladder hides it.
  */
 trait ButtonBuilderTrait {
 
@@ -79,58 +85,48 @@ trait ButtonBuilderTrait {
   }
 
   /**
-   * Builds a split control: a top bar button with a menu caret beside it.
+   * Builds a menu trigger: a top bar button whose press opens a menu.
    *
-   * The main half is an ordinary top bar button (buildTopBarButton(): same
-   * id, label, tooltip and icon contract, so a behavior bound to the id
-   * keeps working). The caret is a real button that opens the shared menu
-   * primitive (Drupal.Daedalus.menu) over whatever items its behavior
-   * supplies: the markup carries no menu of its own, and the caret renders
-   * hidden until that behavior finds something to list, so a bar never
-   * shows a caret that opens nothing.
+   * A real button (focusable, aria-haspopup="menu", aria-expanded the
+   * behavior flips) wearing the toggle anatomy (icon, label span, the
+   * tooltip attribute) plus a caret glyph after the label, the same
+   * "more of this" caret the selection chip draws. The markup carries no
+   * menu of its own: the behavior bound to the id opens the shared menu
+   * primitive (Drupal.Daedalus.menu) over whatever it lists at open time.
    *
    * @param string $id
-   *   The main button's id.
+   *   The button's id, the hook its menu behavior binds to.
    * @param \Drupal\Core\StringTranslation\TranslatableMarkup|string $label
-   *   The main button's label.
+   *   The label beside the icon (inline at full density, the tooltip below).
    * @param \Drupal\Core\StringTranslation\TranslatableMarkup|string $title
-   *   The main button's description, its aria-label.
+   *   The button's description, its aria-label.
    * @param string $pack_id
    *   The icon pack id.
    * @param string $icon_id
    *   The icon id.
-   * @param string $caret_id
-   *   The caret button's id, the hook its menu behavior binds to.
-   * @param \Drupal\Core\StringTranslation\TranslatableMarkup|string $caret_title
-   *   The caret's label: its aria-label, and its tooltip (the caret is
-   *   icon-only at every chrome density).
+   * @param array $attributes
+   *   Extra attributes (a conceal declaration, data hooks).
    *
    * @return array
-   *   A render array for the split control.
+   *   A render array for the trigger.
    */
-  protected function buildSplitButton(string $id, $label, $title, string $pack_id, string $icon_id, string $caret_id, $caret_title): array {
-    $main = $this->buildTopBarButton($id, $label, $title, $pack_id, $icon_id)['wrapper'];
-    $main['#attributes']['class'][] = 'daedalus-ui-split-button__main';
+  protected function buildMenuTrigger(string $id, $label, $title, string $pack_id, string $icon_id, array $attributes = []): array {
     return [
-      '#type' => 'container',
-      '#attributes' => [
-        'class' => ['daedalus-ui-split-button'],
-      ],
-      'main' => $main,
-      'caret' => [
-        '#type' => 'inline_template',
-        '#template' => "<button{{ attributes }}>{{ icon('daedalus_ui', 'caret-down', { class: 'toolbar-button__icon', size: 14 }) }}</button>",
-        '#context' => [
-          'attributes' => new Attribute([
-            'type' => 'button',
-            'id' => $caret_id,
-            'class' => ['toolbar-button', 'daedalus-ui-split-button__caret'],
-            'aria-label' => $caret_title,
-            'aria-haspopup' => 'menu',
-            'data-daedalus-ui-tooltip' => $caret_title,
-            'hidden' => TRUE,
-          ]),
-        ],
+      '#type' => 'inline_template',
+      '#template' => "<button{{ attributes }}>{{ icon(pack_id, icon_id, { class: 'toolbar-button__icon', size: 20 }) }}<span class='toolbar-button__label'>{{ label }}</span>{{ icon('daedalus_ui', 'caret-down', { class: 'toolbar-button__caret', size: 14 }) }}</button>",
+      '#context' => [
+        'attributes' => new Attribute($attributes + [
+          'type' => 'button',
+          'id' => $id,
+          'class' => ['toolbar-button', 'daedalus-ui-menu-trigger'],
+          'aria-label' => $title,
+          'aria-haspopup' => 'menu',
+          'aria-expanded' => 'false',
+          'data-daedalus-ui-tooltip' => $label,
+        ]),
+        'label' => $label,
+        'pack_id' => $pack_id,
+        'icon_id' => $icon_id,
       ],
     ];
   }

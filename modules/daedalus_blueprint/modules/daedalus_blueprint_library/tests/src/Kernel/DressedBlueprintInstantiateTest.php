@@ -48,17 +48,11 @@ class DressedBlueprintInstantiateTest extends BlueprintKernelTestBase {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
     // Variant references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->createBlockContentType('testimonial');
@@ -102,9 +96,9 @@ class DressedBlueprintInstantiateTest extends BlueprintKernelTestBase {
     // The blueprint's own document is a dressed statement too: its root
     // wears card_look alone, its block nothing.
     $this->createBlueprintFromTree([
-      'label' => 'Dressed band',
-      'machine_name' => 'dressed_band',
-      'description' => 'A onecol band wearing card_look over a sampled testimonial.',
+      'label' => 'Dressed section',
+      'machine_name' => 'dressed_section',
+      'description' => 'A onecol section wearing card_look over a sampled testimonial.',
     ], [
       [
         'kind' => 'container',
@@ -127,7 +121,7 @@ class DressedBlueprintInstantiateTest extends BlueprintKernelTestBase {
     $result = $this->operations()->batchOperations($this->host($entity), [
       [
         'op' => 'place_blueprint',
-        'blueprint' => 'dressed_band',
+        'blueprint' => 'dressed_section',
         'uuid' => $root,
         'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside'],
       ],

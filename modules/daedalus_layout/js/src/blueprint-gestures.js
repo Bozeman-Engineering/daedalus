@@ -25,8 +25,8 @@
  * server-rendered markup, same field ids and styling;
  * BlueprintSaveDialog::details()), prefills the label and description
  * client-side from the record, and reads the icon, the subject select,
- * the allow-list, the group checkboxes and the favorite box the server
- * prefilled from the blueprint.
+ * the allow-list, the group checkboxes, the favorite box and the "Offer
+ * to the AI" box the server prefilled from the blueprint.
  *
  * The listeners this file installs are delegated on the document and
  * inert unless a details gesture is pending: install them once, at the
@@ -158,18 +158,17 @@ const openDetailsDialog = (id) => {
     label: record?.label ?? '',
     description: record?.description ?? '',
   };
-  ModePluginBase.dialog({
+  Drupal.Daedalus.openModal(
     // The blueprint reference rides the query so the server can render
     // what the client cannot prefill from the record: the icon picker
     // showing the stored icon (scoped to this blueprint as the media
     // library opener's access subject), the read-only scope, the subject
     // select, the allow-list, the groups and the favorite.
-    url: ModePluginBase.url('/daedalus-layout/blueprint-details-dialog', {
+    ModePluginBase.url('/daedalus-layout/blueprint-details-dialog', {
       blueprint: id,
     }),
-    width: 480,
-    message: Drupal.t('Loading...'),
-  });
+    { width: 480 },
+  );
 };
 
 /**
@@ -187,7 +186,9 @@ const inputsValid = () =>
     .every((input) => !input || input.reportValidity());
 
 const closeDialog = () => {
-  const dialog = document.getElementById('layout-builder-modal');
+  // The daedalus popup is core's modal: the opener lands every dialog on
+  // #drupal-modal.
+  const dialog = document.getElementById('drupal-modal');
   if (dialog) {
     jQuery(dialog).dialog('close');
   }
@@ -211,7 +212,7 @@ const commitDetails = (button) => {
     .getElementById('daedalus-layout-blueprint-description')
     .value.trim();
   const payload = { label, description };
-  // Icon, subject, hosts, groups and the favorite ride the
+  // Icon, subject, hosts, groups, the favorite and the offer ride the
   // presence-semantics contract: a section the server rendered sends
   // its value (the icon's `media:<uuid>` writes, null clears; the
   // subject select's value; the checked hosts, [] for any; the checked
@@ -243,6 +244,15 @@ const commitDetails = (button) => {
   const favorite = dialog?.querySelector('[data-blueprint-favorite]');
   if (favorite) {
     payload.favorite = favorite.checked;
+  }
+  // The AI opt-out, the same presence semantics: the box's state when
+  // the server rendered it (a resolved blueprint), else the stored flag
+  // stands. Re-stating a flag already on is not a share, so the budget
+  // guard lets a details save through; turning it on past the budget is
+  // refused with the usage display named in the hint.
+  const offered = dialog?.querySelector('[data-blueprint-offered]');
+  if (offered) {
+    payload.offered = offered.checked;
   }
   button.disabled = true;
   post(

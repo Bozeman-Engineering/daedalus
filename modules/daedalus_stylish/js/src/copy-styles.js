@@ -6,7 +6,7 @@
  * them. Copy reads the styling target's own document out of the style
  * map, the same document the code view and a variant capture read: the
  * target's entry and every entry beneath it at an element-relative key
- * ('' the target itself, '::.cls' a part, '::> pb-text' a rule under an
+ * ('' the target itself, '::.cls' a part, '::> d-text' a rule under an
  * element, a rule's continuations by descent), each as its condition
  * blocks plus the root references it wears. Paste rebases those relatives
  * under the new target (continuedKey, the one key continuation) and

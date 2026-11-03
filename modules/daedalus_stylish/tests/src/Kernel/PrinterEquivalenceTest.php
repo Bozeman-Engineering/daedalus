@@ -41,6 +41,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -133,14 +134,14 @@ class PrinterEquivalenceTest extends KernelTestBase {
       // type, :is() for the block family), conditions composing on the
       // last compound, the part-first donut shifting per child level.
       [
-        "container:$uuid_a::> pb-text" => ['default' => ['color' => 'red'], 'hover' => ['color' => 'blue']],
-        "container:$uuid_a::> pb-text .text-block-link" => ['narrow' => ['padding' => '0']],
-        "container:$uuid_a::pb-block" => ['default' => ['margin' => '0']],
-        "container:$uuid_a::> pb-container > *" => ['default' => ['gap' => '1rem']],
-        "container:$uuid_a::.band > pb-text" => ['default' => ['color' => 'teal']],
-        "container:$uuid_a::.band p" => ['default' => ['color' => 'navy']],
+        "container:$uuid_a::> d-text" => ['default' => ['color' => 'red'], 'hover' => ['color' => 'blue']],
+        "container:$uuid_a::> d-text .text-block-link" => ['narrow' => ['padding' => '0']],
+        "container:$uuid_a::d-block" => ['default' => ['margin' => '0']],
+        "container:$uuid_a::> d-container > *" => ['default' => ['gap' => '1rem']],
+        "container:$uuid_a::.section > d-text" => ['default' => ['color' => 'teal']],
+        "container:$uuid_a::.section p" => ['default' => ['color' => 'navy']],
         "container:$uuid_a::> .quote" => ['default' => ['color' => 'olive']],
-        "block:$uuid_a::> pb-formatted-text p" => ['hover' => ['color' => 'purple']],
+        "block:$uuid_a::> d-formatted-text p" => ['hover' => ['color' => 'purple']],
       ],
       // Emit hygiene: unsafe declarations drop identically.
       [
@@ -224,22 +225,17 @@ class PrinterEquivalenceTest extends KernelTestBase {
         "block:$uuid_b::p" => ['default' => ['animation-trigger' => '--in-view play-once']],
         "entity:$uuid_b" => ['default' => ['animation-trigger' => 'x; } </style>']],
       ],
-      // Structural facts print bare (no force-state dual) on both sides:
-      // alone, beside a posable state, under an at-rule, on a selector
-      // entry and on the root.
+      // Position qualifiers (the keys the fact-condition convergence
+      // writes) print at their compound on both sides, no force-state
+      // dual: on the children, beside a state, under an at-rule, on the
+      // owner's anchor and on a part.
       [
-        "container:$uuid_a::> *" => [
-          'first-child' => ['margin-top' => '0'],
-          'odd' => ['background-color' => '#f5f5f5'],
-          'hover+last-child' => ['color' => 'blue'],
-        ],
-        "block:$uuid_b" => [
-          'empty' => ['display' => 'none'],
-          'even+narrow' => ['padding' => '1rem'],
-        ],
-        "block:$uuid_b::.quote" => [
-          'only-child' => ['font-style' => 'italic'],
-        ],
+        "container:$uuid_a::> *:first-child" => ['default' => ['margin-top' => '0']],
+        "container:$uuid_a::> *:nth-child(odd)" => ['default' => ['background-color' => '#f5f5f5']],
+        "container:$uuid_a::> *:last-child" => ['hover' => ['color' => 'blue']],
+        "block:$uuid_b::&:empty" => ['default' => ['display' => 'none']],
+        "block:$uuid_b::&:nth-child(even)" => ['narrow' => ['padding' => '1rem']],
+        "block:$uuid_b::.quote:only-child" => ['default' => ['font-style' => 'italic']],
       ],
       // Relations: sibling combinators print like `>`, a qualifier prints
       // on its compound with every argument compound inside :where() and
@@ -249,16 +245,17 @@ class PrinterEquivalenceTest extends KernelTestBase {
       [
         "container:$uuid_a::> p + p" => ['default' => ['margin-top' => '0'], 'hover' => ['color' => 'blue']],
         "container:$uuid_a::> p ~ *" => ['narrow' => ['margin-top' => '1rem']],
-        "container:$uuid_a::> pb-text:has(a)" => ['default' => ['color' => 'red']],
-        "container:$uuid_a::> pb-container:has(> pb-image) > *" => ['default' => ['gap' => '1rem']],
-        "container:$uuid_a::> pb-text:has(+ pb-image)" => ['default' => ['margin-bottom' => '0']],
-        "container:$uuid_a::> *:not(pb-image):not(pb-video)" => ['default' => ['padding' => '1rem'], 'last-child' => ['padding' => '0']],
-        "container:$uuid_a::> pb-text:not(:has(a))" => ['default' => ['color' => 'teal']],
-        "container:$uuid_a::> pb-text:has(a):not(.featured)" => ['dark' => ['color' => 'olive']],
-        "container:$uuid_a::.band + .band" => ['default' => ['margin-top' => '0']],
-        "container:$uuid_a::.band:has(a) > *" => ['default' => ['color' => 'navy']],
+        "container:$uuid_a::> d-text:has(a)" => ['default' => ['color' => 'red']],
+        "container:$uuid_a::> d-container:has(> d-image) > *" => ['default' => ['gap' => '1rem']],
+        "container:$uuid_a::> d-text:has(+ d-image)" => ['default' => ['margin-bottom' => '0']],
+        "container:$uuid_a::> *:not(d-image):not(d-video)" => ['default' => ['padding' => '1rem']],
+        "container:$uuid_a::> *:last-child:not(d-image):not(d-video)" => ['default' => ['padding' => '0']],
+        "container:$uuid_a::> d-text:not(:has(a))" => ['default' => ['color' => 'teal']],
+        "container:$uuid_a::> d-text:has(a):not(.featured)" => ['dark' => ['color' => 'olive']],
+        "container:$uuid_a::.section + .section" => ['default' => ['margin-top' => '0']],
+        "container:$uuid_a::.section:has(a) > *" => ['default' => ['color' => 'navy']],
         "block:$uuid_a::p:has(a)" => ['default' => ['color' => 'purple']],
-        "block:$uuid_a::> pb-formatted-text p + p" => ['hover' => ['color' => 'purple']],
+        "block:$uuid_a::> d-formatted-text p + p" => ['hover' => ['color' => 'purple']],
       ],
       // Generated boxes: the terminal pseudo-element prints last on every
       // target, after the host's chain, after a state's suffix and after
@@ -274,23 +271,99 @@ class PrinterEquivalenceTest extends KernelTestBase {
         "block:$uuid_a::&::before" => [
           'default' => ['content' => '""', 'color' => 'red', 'animation-trigger' => '--in-view play-once'],
           'hover' => ['color' => 'blue'],
-          'first-child' => ['display' => 'none'],
           'narrow+dark' => ['display' => 'none'],
         ],
+        "block:$uuid_a::&:first-child::before" => ['default' => ['display' => 'none']],
         "block:$uuid_a::&::after" => ['default' => ['content' => '""', 'font-weight' => '700']],
         "container:$uuid_a::.quote::after" => ['default' => ['content' => '""'], 'hover' => ['color' => 'purple']],
-        "container:$uuid_a::.band > *::before" => ['default' => ['content' => '""']],
-        "container:$uuid_a::.band + .band::before" => ['default' => ['content' => '""']],
-        "container:$uuid_a::> pb-text::before" => ['default' => ['content' => '""'], 'hover+medium' => ['color' => 'blue']],
-        "container:$uuid_a::> pb-text:has(a)::after" => ['default' => ['content' => '""']],
+        "container:$uuid_a::.section > *::before" => ['default' => ['content' => '""']],
+        "container:$uuid_a::.section + .section::before" => ['default' => ['content' => '""']],
+        "container:$uuid_a::> d-text::before" => ['default' => ['content' => '""'], 'hover+medium' => ['color' => 'blue']],
+        "container:$uuid_a::> d-text:has(a)::after" => ['default' => ['content' => '""']],
         "container:$uuid_a::> p + p::before" => ['default' => ['content' => '""']],
-        "container:$uuid_a::> *::after" => ['odd' => ['content' => '""']],
-        "container:$uuid_a::pb-block::before" => ['default' => ['content' => '""']],
+        "container:$uuid_a::> *:nth-child(odd)::after" => ['default' => ['content' => '""']],
+        "container:$uuid_a::d-block::before" => ['default' => ['content' => '""']],
         "block:$uuid_a::p::before" => ['default' => ['content' => '""'], 'hover' => ['animation-trigger' => '--in-view replay reset']],
-        "block:$uuid_b::&::marker" => ['default' => ['color' => 'red']],
+        "block:$uuid_b::&::part(x)" => ['default' => ['color' => 'red']],
         "block:$uuid_b::&" => ['default' => ['color' => 'red']],
         "block:$uuid_b::& ::before" => ['default' => ['color' => 'red']],
         "block:$uuid_b::.quote::before::after" => ['default' => ['color' => 'red']],
+      ],
+      // Position qualifiers and the qualified anchor: a position prints
+      // inside its own :where() at its compound (inside a negation too,
+      // with its canonical An+B argument); the anchor's qualifiers print
+      // on the scope root, bare or in :where() by the discipline, the
+      // chain behind it following; a part behind the anchor keeps its
+      // dual and donut (standard, child-shifted); conditions and the box
+      // compose after them, byte-identical on both sides.
+      [
+        "container:$uuid_a::> *:not(:last-child)" => ['default' => ['margin-bottom' => '1rem']],
+        "container:$uuid_a::> *:first-child" => ['default' => ['margin-top' => '0'], 'hover' => ['color' => 'blue']],
+        "block:$uuid_a::li:nth-child(2n+1)" => ['default' => ['background-color' => '#f5f5f5']],
+        "container:$uuid_a::> d-text:first-of-type" => ['narrow' => ['padding' => '0']],
+        "block:$uuid_a::&:first-child" => ['default' => ['margin-top' => '0'], 'hover' => ['color' => 'blue']],
+        "container:$uuid_a::&:not(:last-child) > *" => ['default' => ['margin-bottom' => '1rem']],
+        "container:$uuid_a::&:first-child > d-text" => ['dark' => ['color' => 'olive']],
+        "block:$uuid_a::&:first-child::before" => ['default' => ['content' => '""'], 'hover' => ['color' => 'purple']],
+        "container:$uuid_a::&:first-child .quote" => ['default' => ['color' => 'red']],
+        "container:$uuid_a::&:first-child .quote > *" => ['default' => ['gap' => '1rem']],
+        "container:$uuid_a::&:only-child > *:nth-last-child(-n+3)" => ['default' => ['color' => 'teal']],
+        "container:$uuid_a::.section:not(:first-child) > *" => ['narrow+hover' => ['color' => 'navy']],
+      ],
+      // Class, attribute and pseudo-class qualifiers: each prints at its
+      // compound inside its own :where() (no weight), a published state
+      // as the force-state dual (the same helper the condition suffix
+      // prints), an unpublished pseudo-class bare, the anchor's on the
+      // scope root, a part's extra class on its hoisted dual; inside a
+      // negation and a :has() argument too; an :is() inside its own
+      // :where() with its members bare inside it (the dual per posable
+      // member for Lily's rule, a type by its stamp, a tag bare, inside
+      // a :has() argument); conditions and the box compose after them,
+      // byte-identical on both sides.
+      [
+        "container:$uuid_a::.menu-item:is(:focus-within, :hover) > ul" => ['default' => ['display' => 'block'], 'hover' => ['display' => 'grid']],
+        "container:$uuid_a::*:is(h1, h2)" => ['default' => ['margin-top' => '0']],
+        "container:$uuid_a::> *:is(d-image, d-text)" => ['default' => ['gap' => '1rem']],
+        "container:$uuid_a::> d-text:has(*:is(a, button))" => ['default' => ['color' => 'teal']],
+        "container:$uuid_a::li:hover > ul" => ['default' => ['display' => 'block']],
+        "container:$uuid_a::> d-text:hover a" => ['default' => ['color' => 'blue'], 'hover' => ['text-decoration-line' => 'underline']],
+        "container:$uuid_a::li.active > ul" => ['default' => ['display' => 'block']],
+        "container:$uuid_a::&.open > ul" => ['default' => ['display' => 'block'], 'narrow' => ['display' => 'none']],
+        "block:$uuid_a::&:hover > ul" => ['default' => ['opacity' => '1']],
+        "block:$uuid_a::&.open" => ['default' => ['outline' => '1px solid teal'], 'hover' => ['outline-color' => 'navy']],
+        "container:$uuid_a::*[aria-expanded=\"true\"] > ul" => ['default' => ['display' => 'block']],
+        "block:$uuid_a::a:visited" => ['default' => ['color' => 'purple']],
+        "container:$uuid_a::> *:not(:hover)" => ['default' => ['opacity' => '0.5']],
+        "container:$uuid_a::> d-text:has(a:hover)" => ['default' => ['background-color' => '#eeeeee']],
+        "container:$uuid_a::.featured.quote" => ['default' => ['color' => 'red']],
+        "container:$uuid_a::li.active:hover[aria-current=\"page\"] > a::before" => ['default' => ['content' => '""'], 'hover' => ['color' => 'blue']],
+      ],
+      // Literal condition clauses (the WHEN opened): a feature query nests
+      // as its own at-rule by its prefix, a supports test the same, a
+      // pseudo-class literal is a suffix with the dual when posable and
+      // bare otherwise, a literal beside a reference composes in clause
+      // order, a literal spelling a published wrapper is that reference,
+      // and an unknown clause (a prefixless query, a two-axis literal, a
+      // typo) gates its block out; byte-identical on both sides.
+      [
+        "block:$uuid_a" => [
+          'default' => ['color' => 'red'],
+          '@media (hover: hover)' => ['color' => 'blue'],
+          '@container (min-width: 500px)+hover' => ['padding' => '1rem'],
+          '@supports (display: grid)' => ['display' => 'grid'],
+          ':checked' => ['outline' => '1px solid teal'],
+          ':visited' => ['color' => 'purple'],
+          'narrow+@media (prefers-contrast: more)' => ['outline-width' => '2px'],
+          '@container (max-width: 767px)' => ['margin' => '0'],
+          '(min-width: 900px)' => ['color' => 'red'],
+          '@media (hover: hover) and (pointer: fine)' => ['color' => 'red'],
+          'narow' => ['color' => 'red'],
+        ],
+        "container:$uuid_a::> d-text::before" => [
+          'default' => ['content' => '""'],
+          '@media (prefers-contrast: more)+hover' => ['color' => 'blue'],
+        ],
+        "container:$uuid_a::li:hover > ul" => ['@container (min-width: 500px)' => ['display' => 'block']],
       ],
     ];
 
@@ -313,7 +386,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
       'block(text,2)::> *' => ['hover' => ['gap' => '1rem']],
       '::>x' => ['default' => ['color' => 'red']],
       '::>' => ['default' => ['color' => 'red']],
-      '::> pb-text .link' => ['default' => ['color' => 'red']],
+      '::> d-text .link' => ['default' => ['color' => 'red']],
       'container(1)::p' => ['default' => ['color' => 'red']],
       'block(text,2)' => ['default' => ['margin' => '0'], 'hover' => ['color' => 'teal']],
       'block(text,1)::.quote' => ['hover' => ['color' => 'purple']],
@@ -426,7 +499,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
     // suffix continued by descent, the class suffix refused under a tag
     // rule, and the donut judged on the rebased selector, must not
     // diverge between the entity's inline tag and the client's preview.
-    foreach (['> pb-text', 'a', '> pb-container', '.band > pb-container', '> p + p'] as $under) {
+    foreach (['> d-text', 'a', '> d-container', '.section > d-container', '> p + p'] as $under) {
       $variant_cases[] = [
         'scopeRoot' => '[data-selectable="container:aaaaaaaa-1111-2222-3333-444444444444"]',
         'scope' => 'layout:layout_twocol_section',
@@ -445,7 +518,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
         '::p:has(a)' => ['default' => ['color' => 'navy']],
       ],
       'fragment' => '',
-      'under' => '> pb-text:has(a)',
+      'under' => '> d-text:has(a)',
     ];
     // A fragment carrying generated boxes: the anchor and a part's box at
     // the element (a class root), the anchor continued onto the rule's
@@ -457,7 +530,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
       '' => ['default' => ['padding' => '1rem']],
       '::&::before' => ['default' => ['content' => '""', 'animation-trigger' => '--in-view play-once'], 'hover' => ['color' => 'purple']],
       '::.link::after' => ['default' => ['content' => '""'], 'narrow' => ['display' => 'none']],
-      '::&::marker' => ['default' => ['color' => 'red']],
+      '::&::part(x)' => ['default' => ['color' => 'red']],
     ];
     $variant_cases[] = [
       'scopeRoot' => '.daedalus-stylish-variant--sleek',
@@ -465,7 +538,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
       'styles' => $box_styles,
       'fragment' => '',
     ];
-    foreach (['> pb-text', '> pb-text::before', 'a'] as $under) {
+    foreach (['> d-text', '> d-text::before', 'a'] as $under) {
       $variant_cases[] = [
         'scopeRoot' => '[data-selectable="container:aaaaaaaa-1111-2222-3333-444444444444"]',
         'scope' => 'block_type:text',
@@ -508,7 +581,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
       [
         'name' => 'motion-pulse',
         'steps' => [
-          '50%' => ['opacity' => 'var(--swatch-dim, 0.5)', 'animation-timing-function' => 'ease-in-out'],
+          '50%' => ['opacity' => 'var(--color-dim, 0.5)', 'animation-timing-function' => 'ease-in-out'],
         ],
       ],
       // A name failing the custom-ident gate prints nothing.
@@ -543,7 +616,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
       "entity:$uuid_a" => ['default' => ['padding' => '2rem']],
       "field:$uuid_a:field_body" => ['hover' => ['color' => 'teal']],
       "container:$uuid_a" => ['default' => ['padding' => '4rem']],
-      "container:$uuid_a::.band" => ['narrow' => ['gap' => '1rem']],
+      "container:$uuid_a::.section" => ['narrow' => ['gap' => '1rem']],
       "block:$uuid_b" => ['default' => ['color' => 'red']],
       "block:$uuid_b:field_title" => ['default' => ['font-weight' => '700']],
       "container:$uuid_c::> *" => ['default' => ['min-width' => '0']],
@@ -557,7 +630,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
         'layout_id' => 'layout_twocol_section',
         // The node's own keys in the node's stored order: the part before
         // the root entry here, kept verbatim.
-        'styles' => ['::.band' => $entries["container:$uuid_a::.band"], '' => $entries["container:$uuid_a"]],
+        'styles' => ['::.section' => $entries["container:$uuid_a::.section"], '' => $entries["container:$uuid_a"]],
         'children' => [
           [
             'kind' => 'region',
@@ -607,7 +680,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
       "container:$uuid_e" => $entries["container:$uuid_e"],
       "field:$uuid_a:field_body" => $entries["field:$uuid_a:field_body"],
       "block:$uuid_b:field_title" => $entries["block:$uuid_b:field_title"],
-      "container:$uuid_a::.band" => $entries["container:$uuid_a::.band"],
+      "container:$uuid_a::.section" => $entries["container:$uuid_a::.section"],
       "container:$uuid_c::> *" => $entries["container:$uuid_c::> *"],
       "entity:$uuid_a" => $entries["entity:$uuid_a"],
       "block:$uuid_b" => $entries["block:$uuid_b"],
@@ -636,7 +709,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
         'label' => (string) $definition['label'],
         'wrapper' => $definition['wrapper'],
         'axis' => $definition['axis'],
-      ] + array_intersect_key($definition, ['fact' => TRUE]);
+      ];
     }
 
     $printer = $this->container->get('daedalus_stylish.css_printer');
@@ -688,7 +761,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
     $document_order = [
       "field:$uuid_a:field_body",
       "entity:$uuid_a",
-      "container:$uuid_a::.band",
+      "container:$uuid_a::.section",
       "container:$uuid_a",
       "block:$uuid_b",
       "block:$uuid_b:field_title",
@@ -704,7 +777,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
         "block:$uuid_d",
         "field:$uuid_a:field_body",
         "block:$uuid_b:field_title",
-        "container:$uuid_a::.band",
+        "container:$uuid_a::.section",
         "container:$uuid_c::> *",
         "entity:$uuid_a",
         "block:$uuid_b",
@@ -730,14 +803,56 @@ class PrinterEquivalenceTest extends KernelTestBase {
     }
     // Guard against a silently-empty battery.
     $this->assertStringContainsString('@scope (', $php_output[0]);
-    // Structural facts are in the battery (silently-empty guard): bare
-    // pseudo-classes, the posable state keeping its dual beside one.
-    $facts = $php_output[13];
-    $this->assertStringContainsString(':scope > *:first-child {', $facts);
-    $this->assertStringContainsString(':scope > *:nth-child(odd) {', $facts);
-    $this->assertStringContainsString(':scope > *:is(:hover, [data-force-state~="hover"]):last-child {', $facts);
-    $this->assertStringContainsString(':scope.quote:only-child, .quote:only-child {', $facts);
-    $this->assertStringNotContainsString('data-force-state~="first-child"', $facts);
+    // Position qualifiers are in the battery (silently-empty guard): each
+    // prints at its compound inside :where() (no weight, no force-state
+    // dual), the state keeping its dual as the entry's suffix.
+    $positions = $php_output[13];
+    $this->assertStringContainsString(':scope > *:where(:first-child) {', $positions);
+    $this->assertStringContainsString(':scope > *:where(:nth-child(odd)) {', $positions);
+    $this->assertStringContainsString(':scope > *:where(:last-child):is(:hover, [data-force-state~="hover"]) {', $positions);
+    $this->assertStringContainsString(':scope:where(:empty) {', $positions);
+    $this->assertStringContainsString('.quote:where(:only-child) {', $positions);
+    $this->assertStringNotContainsString('data-force-state~="first-child"', $positions);
+    $this->assertStringNotContainsString('data-force-state~="empty"', $positions);
+    // Class, attribute and pseudo-class qualifiers are in the battery
+    // (silently-empty guard): each at its compound inside :where(), a
+    // published state as the dual, an unpublished pseudo-class bare.
+    $qualifiers = $php_output[count($cases) - 2];
+    $this->assertStringContainsString(':where(li):where(:is(:hover, [data-force-state~="hover"])) > ul {', $qualifiers);
+    $this->assertStringContainsString(':where(li):where(.active) > ul {', $qualifiers);
+    $this->assertStringContainsString(':where(:scope):where(.open) > ul {', $qualifiers);
+    $this->assertStringContainsString(':scope:where(.open):is(:hover, [data-force-state~="hover"]) {', $qualifiers);
+    $this->assertStringContainsString('*:where([aria-expanded="true"]) > ul {', $qualifiers);
+    $this->assertStringContainsString("\n  a:where(:visited) {", $qualifiers);
+    $this->assertStringNotContainsString('data-force-state~="visited"', $qualifiers);
+    $this->assertStringContainsString(':scope > *:not(:where(:is(:hover, [data-force-state~="hover"]))) {', $qualifiers);
+    $this->assertStringContainsString(':scope.featured:where(.quote), .featured:where(.quote) {', $qualifiers);
+    $this->assertStringContainsString(':where(li):where(.active):where(:is(:hover, [data-force-state~="hover"])):where([aria-current="page"]) > a:is(:hover, [data-force-state~="hover"])::before {', $qualifiers);
+    $either = ':is(:is(:focus-within, [data-force-state~="focus-within"]), :is(:hover, [data-force-state~="hover"]))';
+    $this->assertStringContainsString(":where(:scope):where(.menu-item):where($either) > ul, :where(.menu-item):where($either) > ul {", $qualifiers);
+    $this->assertStringContainsString(":where(:scope):where(.menu-item):where($either) > ul:is(:hover, [data-force-state~=\"hover\"]), :where(.menu-item):where($either) > ul:is(:hover, [data-force-state~=\"hover\"]) {", $qualifiers);
+    $this->assertStringContainsString("\n  *:where(:is(h1, h2)) {", $qualifiers);
+    $this->assertStringContainsString(':scope > *:where(:is([data-element="block_type:image"], [data-element="block_type:text"])) {', $qualifiers);
+    $this->assertStringContainsString(':where(:scope) > [data-element="block_type:text"]:has(*:where(:is(a, button))) {', $qualifiers);
+    // Literal clauses are in the battery (silently-empty guard): each
+    // at-rule literal nests by its own prefix, a pseudo-class literal is
+    // the dual when posable and bare when not, a literal beside a
+    // reference composes, a literal spelling a wrapper is the reference,
+    // an unknown clause prints nothing.
+    $literals = $php_output[count($cases) - 1];
+    $this->assertStringContainsString("  @media (hover: hover) {\n    :scope {\n      color: blue;", $literals);
+    $this->assertStringContainsString("  @container (min-width: 500px) {\n    :scope:is(:hover, [data-force-state~=\"hover\"]) {\n      padding: 1rem;", $literals);
+    $this->assertStringContainsString("  @supports (display: grid) {\n    :scope {\n      display: grid;", $literals);
+    $this->assertStringContainsString("\n  :scope:is(:checked, [data-force-state~=\"checked\"]) {\n    outline: 1px solid teal;", $literals);
+    $this->assertStringContainsString("\n  :scope:visited {\n    color: purple;", $literals);
+    $this->assertStringNotContainsString('data-force-state~="visited"', $literals);
+    $this->assertStringContainsString("  @container (max-width: 767px) {\n    @media (prefers-contrast: more) {\n      :scope {\n        outline-width: 2px;", $literals);
+    $this->assertStringContainsString("  @container (max-width: 767px) {\n    :scope {\n      margin: 0;", $literals);
+    $this->assertStringNotContainsString('(min-width: 900px)', $literals);
+    $this->assertStringNotContainsString('pointer: fine', $literals);
+    $this->assertStringNotContainsString('narow', $literals);
+    $this->assertStringContainsString("  @media (prefers-contrast: more) {\n    :where(:scope) > [data-element=\"block_type:text\"]:is(:hover, [data-force-state~=\"hover\"])::before {", $literals);
+    $this->assertStringContainsString("  @container (min-width: 500px) {\n    :where(li):where(:is(:hover, [data-force-state~=\"hover\"])) > ul {", $literals);
     // Part selectors are dual-target on both sides: the descendant class
     // reaches the root-depth part element, the ":scope" half reaches a
     // collapsed container root carrying the hoisted part class.
@@ -760,8 +875,8 @@ class PrinterEquivalenceTest extends KernelTestBase {
     $this->assertStringContainsString(':where(:scope) > :where([data-element="block_type:text"]) .text-block-link {', $php_output[7]);
     $this->assertStringContainsString(':is([data-element^="block_type:"], [data-element^="block_plugin:"]) {', $php_output[7]);
     $this->assertStringContainsString(':where(:scope) > [data-element^="layout:"] > * {', $php_output[7]);
-    $this->assertStringContainsString(") to (:scope [data-selectable^=\"container:\"] > *, :scope [data-selectable^=\"block:\"] > *) {\n  :where(:scope):where(.band) > [data-element=\"block_type:text\"], :where(.band) > [data-element=\"block_type:text\"] {", $php_output[7]);
-    $this->assertStringContainsString("\"]) {\n  :where(:scope):where(.band) p, :where(.band) p {", $php_output[7]);
+    $this->assertStringContainsString(") to (:scope [data-selectable^=\"container:\"] > *, :scope [data-selectable^=\"block:\"] > *) {\n  :where(:scope):where(.section) > [data-element=\"block_type:text\"], :where(.section) > [data-element=\"block_type:text\"] {", $php_output[7]);
+    $this->assertStringContainsString("\"]) {\n  :where(:scope):where(.section) p, :where(.section) p {", $php_output[7]);
     $this->assertStringContainsString(':scope.quote, :where(:scope) > .quote {', $php_output[7]);
     $this->assertStringContainsString(':where(:scope) > :where([data-element="block_type:formatted_text"]) p:is(:hover, [data-force-state~="hover"]) {', $php_output[7]);
     $this->assertStringContainsString(':where(:scope) > :where([data-element="block_type:text"]) .link {', $php_variant_output[0]);
@@ -790,11 +905,11 @@ class PrinterEquivalenceTest extends KernelTestBase {
     $this->assertStringContainsString(':where(:scope) > [data-element="block_type:text"]:has(:where(a)) {', $php_output[14]);
     $this->assertStringContainsString(':where(:scope) > [data-element^="layout:"]:has(> :where([data-element="block_type:image"])) > * {', $php_output[14]);
     $this->assertStringContainsString(':where(:scope) > [data-element="block_type:text"]:has(+ :where([data-element="block_type:image"])) {', $php_output[14]);
-    $this->assertStringContainsString(':scope > *:not(:where([data-element="block_type:image"])):not(:where([data-element="block_type:video"])):last-child {', $php_output[14]);
+    $this->assertStringContainsString(':scope > *:where(:last-child):not(:where([data-element="block_type:image"])):not(:where([data-element="block_type:video"])) {', $php_output[14]);
     $this->assertStringContainsString(':where(:scope) > [data-element="block_type:text"]:not(:has(:where(a))) {', $php_output[14]);
-    $this->assertStringContainsString("\n  :where(.band) + .band {", $php_output[14]);
-    $this->assertStringNotContainsString(':scope:where(.band) + .band', $php_output[14]);
-    $this->assertStringContainsString(':scope:where(.band):has(:where(a)) > *, .band:has(:where(a)) > * {', $php_output[14]);
+    $this->assertStringContainsString("\n  :where(.section) + .section {", $php_output[14]);
+    $this->assertStringNotContainsString(':scope:where(.section) + .section', $php_output[14]);
+    $this->assertStringContainsString(':scope:where(.section):has(:where(a)) > *, .section:has(:where(a)) > * {', $php_output[14]);
     $this->assertStringContainsString("\n  p:has(:where(a)) {", $php_output[14]);
     $this->assertStringContainsString(':scope > * {', $php_variant_output[0]);
     $this->assertStringContainsString(') to (', $php_variant_output[0]);
@@ -820,36 +935,37 @@ class PrinterEquivalenceTest extends KernelTestBase {
     $this->assertSame(2, substr_count($php_variant_output[9], '@supports not (animation-trigger: none) {'));
     $this->assertStringContainsString("--daedalus-stylish-animation-trigger: none;", $php_variant_output[9]);
     // Generated boxes are in the battery (silently-empty guard): the
-    // anchor as the root's own box with its state, its fact and its hold
+    // anchor as the root's own box with its state, its position and its hold
     // each before the pseudo and no companion beside it, the part dual
     // carrying the box on both halves with its donut and skipped after a
     // sibling step, a rule's box after the rule's chain under an at-rule,
-    // the children's box under a fact, the tag's box with its hold, and
+    // the children's box behind a position, the tag's box with its hold, and
     // nothing at all for the spellings outside the grammar.
     $boxes = $php_output[15];
     $this->assertStringContainsString("\n  :scope::before {\n    content: \"\";\n    color: red;", $boxes);
     $this->assertStringContainsString(':scope:is(:hover, [data-force-state~="hover"])::before {', $boxes);
-    $this->assertStringContainsString(':scope:first-child::before {', $boxes);
+    $this->assertStringContainsString(':scope:where(:first-child)::before {', $boxes);
+    $this->assertStringContainsString(':scope > *:where(:nth-child(odd))::after {', $boxes);
     $this->assertStringContainsString(':scope:not([data-daedalus-stylish-triggered])::before {', $boxes);
     $this->assertStringContainsString("\n  :scope::after {\n    content: \"\";\n    font-weight: 700;", $boxes);
     $this->assertStringNotContainsString('data-claims-content', $boxes);
     $this->assertStringContainsString('to (:scope [data-selectable^="container:"], :scope [data-selectable^="block:"]) {' . "\n" . '  :scope.quote::after, .quote::after {', $boxes);
     $this->assertStringContainsString(':scope.quote:is(:hover, [data-force-state~="hover"])::after, .quote:is(:hover, [data-force-state~="hover"])::after {', $boxes);
-    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {' . "\n" . '  :scope:where(.band) > *::before, .band > *::before {', $boxes);
-    $this->assertStringContainsString("\n  :where(.band) + .band::before {", $boxes);
-    $this->assertStringNotContainsString(':scope:where(.band) + .band::before', $boxes);
+    $this->assertStringContainsString('to (:scope [data-selectable^="container:"] > *, :scope [data-selectable^="block:"] > *) {' . "\n" . '  :scope:where(.section) > *::before, .section > *::before {', $boxes);
+    $this->assertStringContainsString("\n  :where(.section) + .section::before {", $boxes);
+    $this->assertStringNotContainsString(':scope:where(.section) + .section::before', $boxes);
     $this->assertStringContainsString("@container (min-width: 768px) and (max-width: 1023px) {\n    :where(:scope) > [data-element=\"block_type:text\"]:is(:hover, [data-force-state~=\"hover\"])::before {", $boxes);
     $this->assertStringContainsString(':where(:scope) > [data-element="block_type:text"]:has(:where(a))::after {', $boxes);
     $this->assertStringContainsString(':where(:scope) > :where(p) + p::before {', $boxes);
-    $this->assertStringContainsString(':scope > *:nth-child(odd)::after {', $boxes);
     $this->assertStringContainsString(':is([data-element^="block_type:"], [data-element^="block_plugin:"])::before {', $boxes);
     $this->assertStringContainsString("\n  p::before {", $boxes);
     $this->assertStringContainsString('p:is(:hover, [data-force-state~="hover"]):not([data-daedalus-stylish-triggered])::before {', $boxes);
     $this->assertStringNotContainsString($uuid_b, $boxes);
     // The variant lane rides the same seam: the anchor at the class root,
-    // continued onto the rule's landing with the part's box under it,
-    // the tag rule refusing the part's box, and a box rule taking only
-    // the fragment's own entry; the `::marker` fragment prints nowhere.
+    // continued onto the rule's landing with the part's box under it (a
+    // tag rule continues it too: a class qualifies any compound), and a
+    // box rule taking only the fragment's own entry; the `::part(x)`
+    // fragment (outside the grammar) prints nowhere.
     $box_at_element = $php_variant_output[16];
     $this->assertStringContainsString("@scope (.daedalus-stylish-variant--sleek) {\n  :scope::before {\n    content: \"\";", $box_at_element);
     $this->assertStringContainsString(':scope:not([data-daedalus-stylish-triggered])::before {', $box_at_element);
@@ -865,7 +981,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
     $this->assertStringContainsString(":where(:scope) > [data-element=\"block_type:text\"]::before {\n    padding: 1rem;", $box_under_box);
     $box_under_tag = $php_variant_output[19];
     $this->assertStringContainsString("\n  a::before {", $box_under_tag);
-    $this->assertStringNotContainsString('.link', $box_under_tag);
+    $this->assertStringContainsString(':where(a) .link::after {', $box_under_tag);
     // Keyframes cases are in the battery (silently-empty guard for the
     // named at-rule lane): the at-rule prelude, offsets as step selectors
     // outside any @scope, every admitted spelling kept, the gates dropping

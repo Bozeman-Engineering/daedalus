@@ -100,19 +100,24 @@ export const createPopoutLeader = ({ scope, url, source }) => {
     styleMap: source.getStyleMap(),
     rootUuid: source.getRootUuid(),
     // The root's verdict, so the satellite's gate answers for the root
-    // and the host's fields (its tree holds the layout elements alone).
+    // and the host's fields (its gate walks the layout, which holds no
+    // root node).
     rootCan: source.getRootCan?.() ?? null,
-    // The root's three minted words, so the satellite's page row reads
-    // the page's icon and name as the leader's does (its tree holds the
-    // layout elements alone).
-    rootElement: source.getRootElement?.() ?? null,
     blockTypes: source.getBlockTypes(),
     sectionLayouts: source.getSectionLayouts(),
-    // The lean node tree, the one structure the satellite walks: its
-    // stacks carry the same ancestor layers, its fact rows light the same
-    // way, and satellite-initiated variant capture walks the subtree the
-    // leader page stages.
-    tree: source.getTree?.() ?? [],
+    // The document tree (the host entity above the blueprint's layout),
+    // the one structure the satellite walks: its stacks carry the same
+    // ancestor layers (the page's rules first), its page row reads the
+    // page's icon and name off the root node as the leader's does, its
+    // fact rows light the same way, and satellite-initiated variant
+    // capture walks the layout read back out of it (layoutOf), the
+    // subtree the leader page stages.
+    document: source.getDocument?.() ?? [],
+    // The canvas's self-provenance beside the document: on a blueprint's own
+    // canvas the satellite's offer and consent reads substitute it for an
+    // unstamped element exactly as the leader's do (one rule, two
+    // windows); null on a page canvas.
+    selfProvenance: source.getSelfProvenance?.() ?? null,
     // The selection's layout surroundings (parent computed display et al),
     // digested here because computed style needs the canvas document the
     // satellite lacks. Rides every broadcast, so it refreshes exactly when
@@ -256,7 +261,7 @@ export const createPopoutLeader = ({ scope, url, source }) => {
         source.pickMedia(payload);
       } else if (payload.intent === 'material-preview') {
         // A satellite's live material-value preview (a token card's or
-        // the gradient swatch session's drag): the canvas lives here, so
+        // the gradient token session's drag): the canvas lives here, so
         // the draft lands on this page's token scope lane; null releases
         // it back to the store's value. Committed changes never come this
         // way: they ride the materials wire as deltas (materials-store.js).

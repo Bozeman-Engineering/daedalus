@@ -27,9 +27,9 @@ const test = (name, run) => tests.push([name, run]);
 
 // The store's variant records, roster order (weight, then label).
 const LIBRARY = [
-  variantRecord('cta', { label: 'CTA', scope: 'layout:daedalus_stylish_container', description: 'The call to action band.' }),
+  variantRecord('cta', { label: 'CTA', scope: 'layout:daedalus_stylish_container', description: 'The call to action section.' }),
   variantRecord('row', { label: 'Columns', scope: 'kind:container', group: 'container_layout', origin: 'shipped', weight: 10 }),
-  variantRecord('hero_band', { label: 'Hero band', scope: 'kind:container', group: 'width', weight: 20 }),
+  variantRecord('hero_section', { label: 'Hero section', scope: 'kind:container', group: 'width', weight: 20 }),
 ];
 // The shipped row under the developer gate: the provider stamps it
 // updatable (the lock is open), its origin is still shipped.
@@ -49,14 +49,14 @@ test('libraryFilters: distinct sorted axes and scopes; group-less reads style', 
 
 test('libraryRows: the flagged roster in roster order, counts never a list fact', () => {
   const rows = libraryRows(LIBRARY);
-  assert.deepEqual(rows.map((row) => row.reference), ['cta', 'row', 'hero_band']);
+  assert.deepEqual(rows.map((row) => row.reference), ['cta', 'row', 'hero_section']);
   // Shipped marks the record's origin, never a disk state and not the
   // lock: a shipped-and-updatable record (the gate) still reads shipped.
   assert.deepEqual(rows.map((row) => row.shipped), [false, true, false]);
   assert.equal(libraryRows([OPEN_ROW])[0].shipped, true);
   assert.deepEqual(rows.map((row) => row.axis), ['style', 'container_layout', 'width']);
   assert.deepEqual(rows.map((row) => row.weight), [0, 10, 20]);
-  assert.deepEqual(rows.map((row) => row.description), ['The call to action band.', '', '']);
+  assert.deepEqual(rows.map((row) => row.description), ['The call to action section.', '', '']);
   assert.deepEqual(Object.keys(rows[0]).sort(), ['axis', 'description', 'label', 'offered', 'reference', 'scope', 'shipped', 'weight']);
 });
 
@@ -74,18 +74,18 @@ test('libraryRows: offered is the record\'s AI opt-out; absent reads as offered,
 });
 
 test('libraryRows: search matches label, id or description, case-insensitive', () => {
-  assert.deepEqual(libraryRows(LIBRARY, { search: 'hero' }).map((row) => row.reference), ['hero_band']);
+  assert.deepEqual(libraryRows(LIBRARY, { search: 'hero' }).map((row) => row.reference), ['hero_section']);
   assert.deepEqual(libraryRows(LIBRARY, { search: 'CTA' }).map((row) => row.reference), ['cta']);
-  assert.deepEqual(libraryRows(LIBRARY, { search: 'hero_band' }).map((row) => row.reference), ['hero_band']);
-  assert.deepEqual(libraryRows(LIBRARY, { search: 'action band' }).map((row) => row.reference), ['cta']);
+  assert.deepEqual(libraryRows(LIBRARY, { search: 'hero_section' }).map((row) => row.reference), ['hero_section']);
+  assert.deepEqual(libraryRows(LIBRARY, { search: 'action section' }).map((row) => row.reference), ['cta']);
   assert.deepEqual(libraryRows(LIBRARY, { search: '  ' }).length, 3);
   assert.deepEqual(libraryRows(LIBRARY, { search: 'nothing' }), []);
 });
 
 test('libraryRows: axis and scope filters are exact; null is all', () => {
   assert.deepEqual(libraryRows(LIBRARY, { axis: 'container_layout' }).map((row) => row.reference), ['row']);
-  assert.deepEqual(libraryRows(LIBRARY, { scope: 'kind:container' }).map((row) => row.reference), ['row', 'hero_band']);
-  assert.deepEqual(libraryRows(LIBRARY, { axis: 'width', scope: 'kind:container' }).map((row) => row.reference), ['hero_band']);
+  assert.deepEqual(libraryRows(LIBRARY, { scope: 'kind:container' }).map((row) => row.reference), ['row', 'hero_section']);
+  assert.deepEqual(libraryRows(LIBRARY, { axis: 'width', scope: 'kind:container' }).map((row) => row.reference), ['hero_section']);
   assert.deepEqual(libraryRows(LIBRARY, { axis: null, scope: null }).length, 3);
 });
 
@@ -181,7 +181,7 @@ test('cardGestures: delete carries the two permission grades', () => {
 const MATERIALS = roster(
   blueprintRecord('call_to_action', { label: 'Call to action' }),
   blueprintRecord('hero', { label: 'Hero' }),
-  blueprintRecord('promo', { label: 'Promo band', updatable: false }),
+  blueprintRecord('promo', { label: 'Promo section', updatable: false }),
 );
 const OWN = { ...ALL, canOwn: true };
 
@@ -253,7 +253,7 @@ test('cardGestures: the ownership gestures ride the blueprint grant', () => {
 const MAP = {
   'container:root': { variants: [{ variant: 'cta', fragment: '' }] },
   'container:root::.inner': { default: { gap: '1rem' } },
-  'block:child': { variants: [{ variant: 'hero_band', fragment: 'block(text,1)' }] },
+  'block:child': { variants: [{ variant: 'hero_section', fragment: 'block(text,1)' }] },
   'block:other': { default: { color: 'red' } },
 };
 
@@ -274,7 +274,7 @@ test('pageWearer: the selection wins when it wears the variant', () => {
 test('pageWearer: a fragment wearing answers when nothing wears the root', () => {
   assert.deepEqual(pageWearer(MAP, LIBRARY[2], null), {
     key: 'block:child',
-    reference: 'hero_band',
+    reference: 'hero_section',
     fragment: 'block(text,1)',
   });
   // A reference is the record id: a retired uuid spelling never wears.
@@ -298,7 +298,7 @@ test('applyDoorway: no selection shuts the doorway first', () => {
 test('applyDoorway: a wearing selection reads worn, fragments included', () => {
   // container:root wears cta.
   assert.equal(applyDoorway(LIBRARY[0], MAP, 'container:root', LIBRARY, null, MATERIALS), 'worn');
-  // block:child wears hero_band as a fragment — still worn (the wearing
+  // block:child wears hero_section as a fragment — still worn (the wearing
   // row is the gesture surface then).
   assert.equal(applyDoorway(LIBRARY[2], MAP, 'block:child', LIBRARY, null, MATERIALS), 'worn');
 });
@@ -314,11 +314,11 @@ test('applyDoorway: offer membership answers fit', () => {
 });
 
 test('applyDoorway: the target may be a rule; its own wearing reads worn', () => {
-  const RULE = 'container:root::> pb-text';
+  const RULE = 'container:root::> d-text';
   const map = { ...MAP, [RULE]: { variants: [{ variant: 'cta', fragment: '' }] } };
   assert.equal(applyDoorway(LIBRARY[0], map, RULE, LIBRARY, null, MATERIALS), 'worn');
   // The rule does not wear what its root wears.
-  assert.equal(applyDoorway(LIBRARY[0], map, 'container:root::> pb-image', [LIBRARY[0]], null, MATERIALS), 'ready');
+  assert.equal(applyDoorway(LIBRARY[0], map, 'container:root::> d-image', [LIBRARY[0]], null, MATERIALS), 'ready');
   assert.equal(applyDoorway(LIBRARY[1], map, RULE, [], null, MATERIALS), 'unfit');
 });
 

@@ -21,10 +21,11 @@ use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
 /**
  * The bundle form's "Page builder" section.
  *
- * One vertical tab on every bundle edit form whose bundle config type
- * carries the settings (::hasSettingsSchema()). Daedalus UI owns the
+ * One vertical tab on every bundle form, add and edit, whose bundle config
+ * type carries the settings (::hasSettingsSchema()). Daedalus UI owns the
  * section: its leading switch ("the page builder is on for this bundle",
- * the one boolean ShouldNotEditMode and daedalus_stylish's gate read) and
+ * the one boolean ShouldNotEditMode and daedalus_stylish's gate read; on
+ * for a new bundle, stored as the form's explicit value at its first save) and
  * the groups under it, named by outcome and never by module. On a page
  * bundle the groups are the layout (a fact with a link, not a control),
  * when a page is created (the initial mode as one checkbox; daedalus_layout
@@ -105,17 +106,32 @@ class BundleEditFormAlter {
     // copyFormValuesToEntity() (a third_party_settings #parents route
     // would replace the entity's TPS wholesale, clobbering keys no form
     // element carries).
+    //
+    // A new bundle starts on: on a page builder site a new type exists to
+    // be built in the page builder. The default is the FORM's, written as
+    // an explicit value by ::submit() on the first save; nothing at runtime
+    // assumes it, so a bundle created by code or config import keeps
+    // explicit control and an existing bundle never changes. A new bundle
+    // has no label yet, so its switch names the type instead.
+    if ($bundle_entity->isNew()) {
+      $title = $block_type
+        ? $this->t('Use blocks of this type in the page builder')
+        : $this->t('Build content of this type in the page builder');
+    }
+    else {
+      $title = $block_type
+        ? $this->t('Use @bundle blocks in the page builder', ['@bundle' => $bundle_entity->label()])
+        : $this->t('Build @bundle content in the page builder', ['@bundle' => $bundle_entity->label()]);
+    }
     $form['page_builder'][self::SWITCH] = [
       '#weight' => -10,
       '#type' => 'checkbox',
       '#parents' => [self::SWITCH],
-      '#title' => $block_type
-        ? $this->t('Use @bundle blocks in the page builder', ['@bundle' => $bundle_entity->label()])
-        : $this->t('Build @bundle content in the page builder', ['@bundle' => $bundle_entity->label()]),
+      '#title' => $title,
       '#description' => $block_type
         ? $this->t('Editors place and edit these blocks in place, on the page.')
         : $this->t('Editors edit this content in place, on the page. Turn it off and it is edited through the form alone.'),
-      '#default_value' => (bool) $bundle_entity->getThirdPartySetting('daedalus_ui', 'enabled', FALSE),
+      '#default_value' => $bundle_entity->isNew() ? TRUE : (bool) $bundle_entity->getThirdPartySetting('daedalus_ui', 'enabled', FALSE),
     ];
     if ($block_type) {
       $this->ensureGroup($form, $form_state, self::GROUP_ON_PAGE);
@@ -126,12 +142,7 @@ class BundleEditFormAlter {
         '#type' => 'radios',
         '#parents' => [ElementModel::SETTING],
         '#title' => $this->t('How the block is selected'),
-        '#options' => [
-          'auto' => $this->t('Decide automatically'),
-          Presentation::UNIT => $this->t('As one element'),
-          Presentation::MERGED => $this->t('As one element, merged'),
-          Presentation::OPEN => $this->t('Show its structure'),
-        ],
+        '#options' => $this->presentationOptions(),
         '#default_value' => $bundle_entity->getThirdPartySetting('daedalus_ui', ElementModel::SETTING, 'auto'),
         'auto' => [
           '#description' => $this->t("One element when the block's content is one thing; its structure otherwise."),
@@ -294,7 +305,9 @@ class BundleEditFormAlter {
    * display resolution rule): pages own their layout (overrides on), share
    * the template's (Layout Builder on, overrides off), or have none to
    * build (Layout Builder off). The links are field_ui's manage-display
-   * routes and are left out on a site without them.
+   * routes and are left out on a site without them. A new bundle has no
+   * display to read and no id to link to: its fact says where the layout
+   * is turned on once the type exists.
    *
    * @param \Drupal\Core\Config\Entity\ConfigEntityBundleBase $bundle_entity
    *   The bundle config entity.
@@ -305,12 +318,16 @@ class BundleEditFormAlter {
    *   A render array.
    */
   protected function layoutFact(ConfigEntityBundleBase $bundle_entity, string $bundle_of): array {
+    if ($bundle_entity->isNew()) {
+      return [
+        '#type' => 'container',
+        '#attributes' => ['class' => ['daedalus-ui-bundle-fact']],
+        'fact' => ['#markup' => $this->t('Pages of this type have no layout to build yet: once the type is saved, turn on Layout Builder on their display.')],
+      ];
+    }
     $display = $this->pageHosts->bundleHost($bundle_of, (string) $bundle_entity->id())?->display();
     $layout_builder = $display instanceof LayoutEntityDisplayInterface && $display->isLayoutBuilderEnabled();
-    $display_route = "entity.entity_view_display.$bundle_of.default";
-    $display_url = $this->routeProvider->getRoutesByNames([$display_route]) !== []
-      ? Url::fromRoute($display_route, [$bundle_entity->getEntityTypeId() => $bundle_entity->id()])
-      : NULL;
+    $display_url = $this->manageDisplayUrl($bundle_entity);
     $template_link = $layout_builder && $this->ui->hasEditingUrl($display)
       ? Link::fromTextAndUrl($this->t('Edit the template'), $this->ui->getEditingUrl($display))->toString()
       : NULL;
@@ -343,10 +360,53 @@ class BundleEditFormAlter {
   }
 
   /**
+   * The manage-display URL of a bundle, when the site has one.
+   *
+   * The default-display route of field_ui for the content entity type the
+   * bundle belongs to, or NULL on a site without field_ui. The one place
+   * the route name is spelled: the tab's layout fact and the bundle roster
+   * (Controller\BundleRoster) both link through here.
+   *
+   * @param \Drupal\Core\Config\Entity\ConfigEntityBundleBase $bundle_entity
+   *   A saved bundle config entity.
+   *
+   * @return \Drupal\Core\Url|null
+   *   The URL, or NULL when the route does not exist.
+   */
+  public function manageDisplayUrl(ConfigEntityBundleBase $bundle_entity): ?Url {
+    $display_route = 'entity.entity_view_display.' . $bundle_entity->getEntityType()->getBundleOf() . '.default';
+    return $this->routeProvider->getRoutesByNames([$display_route]) !== []
+      ? Url::fromRoute($display_route, [$bundle_entity->getEntityTypeId() => $bundle_entity->id()])
+      : NULL;
+  }
+
+  /**
+   * The labels of a block type's presentation setting, keyed by value.
+   *
+   * The site-builder tier of the element model's presentation decision
+   * (ElementModel::SETTING): 'auto' and the three Presentation modes. The
+   * tab's radios and the bundle roster's cell read the same labels.
+   *
+   * @return \Drupal\Core\StringTranslation\TranslatableMarkup[]
+   *   The labels, keyed by stored value.
+   */
+  public function presentationOptions(): array {
+    return [
+      'auto' => $this->t('Decide automatically'),
+      Presentation::UNIT => $this->t('As one element'),
+      Presentation::MERGED => $this->t('As one element, merged'),
+      Presentation::OPEN => $this->t('Show its structure'),
+    ];
+  }
+
+  /**
    * Whether the form edits a bundle the page builder can be on for.
    *
-   * An existing bundle (the add form has nothing to enable yet) whose
-   * bundle config type carries the settings (::hasSettingsSchema()).
+   * A bundle form (add or edit) whose bundle config type carries the
+   * settings (::hasSettingsSchema()). The add form counts: on a page
+   * builder site a new bundle exists to be built in the page builder, so
+   * the switch is set at birth (on by default) rather than left off and
+   * silent until someone finds the edit form.
    *
    * @param \Drupal\Core\Form\FormStateInterface $form_state
    *   The form state.
@@ -359,11 +419,7 @@ class BundleEditFormAlter {
     if (!$form_object instanceof BundleEntityFormBase) {
       return FALSE;
     }
-    $bundle_entity = $form_object->getEntity();
-    if (empty($bundle_entity->id())) {
-      return FALSE;
-    }
-    return $this->hasSettingsSchema($bundle_entity->getEntityType());
+    return $this->hasSettingsSchema($form_object->getEntity()->getEntityType());
   }
 
   /**

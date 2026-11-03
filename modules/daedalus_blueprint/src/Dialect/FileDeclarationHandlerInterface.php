@@ -8,7 +8,7 @@ namespace Drupal\daedalus_blueprint\Dialect;
  * Saves bytes a batch declares and holds them for its conversation.
  *
  * The page language's authoring form for model-written bytes: a
- * <pb-file name type>...</pb-file> declaration at a document's top level
+ * <d-file name type>...</d-file> declaration at a document's top level
  * and the `file` op ({name, type, content}) in a page_edit batch. Both
  * reach this seam from DomOperationHandler, which owns the grammar and the
  * error shape but not the file store: the implementer (daedalus_ai's

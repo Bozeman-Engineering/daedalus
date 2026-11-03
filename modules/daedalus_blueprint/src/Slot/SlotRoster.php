@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Slot;
 
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\LayoutBuilder\FrameHost;
@@ -27,8 +28,10 @@ use Drupal\daedalus_blueprint\Plugin\Block\SlotBlock;
  * id, the label its admin label), the offer (PlacementRestrictions: a slot
  * destination is offered the slots of its own tier) and the verdict
  * (OwnershipPolicy::doorOf(): a slot block placed under the wrong tier is
- * no door) all read the roster here, so three config reads are one road.
- * A roster save rebuilds the block definitions (SlotRosterSubscriber).
+ * no door) all read the roster here, so three config reads are one road,
+ * and the render that asks the tier (InnerRender::routeSlot(), for the
+ * frame's slot block) declares the roster it read (cacheability()). A
+ * roster save rebuilds the block definitions (SlotRosterSubscriber).
  */
 final class SlotRoster {
 
@@ -52,6 +55,19 @@ final class SlotRoster {
    */
   public function entries(): array {
     return $this->configFactory->get(SlotBlock::CONFIG_NAME)->get(SlotBlock::ROSTER_KEY) ?? [];
+  }
+
+  /**
+   * The cacheability of the roster: its config object's.
+   *
+   * A render that asks the roster declares it, so a roster save (a slot's
+   * tier moved between frame and template) reaches every render whose
+   * answer the tier shaped. The frame's slot block is that render: its
+   * route slot (InnerRender::routeSlot()) is the frame-tier door whose
+   * default is the route's blueprint, and the tier is the roster's word.
+   */
+  public function cacheability(): CacheableMetadata {
+    return CacheableMetadata::createFromObject($this->configFactory->get(SlotBlock::CONFIG_NAME));
   }
 
   /**

@@ -45,7 +45,7 @@ export const browserHex = (spelling) => {
  * every color surface (the color field's face grid, the basic wells'
  * popovers), reached through the shared palette popover's color lane
  * (palette-picker.js usePalettePopover `lanes`), never through a visible
- * swatch of its own: the well or face already wears the value, so a
+ * color box of its own: the well or face already wears the value, so a
  * second painted control beside it was a second door to the same thing.
  * The input stays in the consumer's field (outside the popover, which
  * closes before the lane runs) so it is still mounted when the chooser
@@ -58,7 +58,7 @@ export const browserHex = (spelling) => {
  *
  * The picker's events are the consumer's own literal path: the input
  * event previews (the wheel drags live), the change event settles (the
- * chooser closed on a value), exactly what the visible swatch used to
+ * chooser closed on a value), exactly what the visible color input used to
  * wire, so the FJS story drives the hidden input with the same two
  * events the native wheel fires.
  *
@@ -141,7 +141,7 @@ export const PickerGlyph = ({ className = null }) => (
  * the picker wears the face's paint brought to #rrggbb (pickerHex over
  * the pure parse, then the browser's own parse; never black over a legal
  * value), an UNSET value seeds the chooser's default (the lane must open
- * on an empty row: with the visible swatch gone it is the only picker
+ * on an empty row: with the visible color input gone it is the only picker
  * door), and a set spelling beyond both parsers disables the lane with
  * the reason on its title.
  *

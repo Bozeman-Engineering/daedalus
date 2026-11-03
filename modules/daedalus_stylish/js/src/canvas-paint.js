@@ -28,7 +28,10 @@ import { paintCoverage } from './code/layers.js';
  * views and variant area set it directly, a satellite's intents ride the
  * BroadcastChannel and land in the leader source.
  */
-export const createCanvasPaint = ({ app, source }) => {
+export const createCanvasPaint = ({ app, source, guide = {} }) => {
+  // The posable states, for the structural reach a state-qualified rule
+  // covers (computed-read.js resolveTargets).
+  const conditions = guide?.conditions ?? {};
   const root = document.getElementById('daedalus-root');
   if (!root) {
     return null;
@@ -87,7 +90,7 @@ export const createCanvasPaint = ({ app, source }) => {
       if (pseudoOf(target.selector) !== null) {
         return;
       }
-      resolveTargets(target.key, target.selector).forEach((element) => {
+      resolveTargets(target.key, target.selector, conditions).forEach((element) => {
         let ids = covered.get(element);
         if (!ids) {
           ids = [];

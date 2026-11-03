@@ -18,7 +18,7 @@ namespace Drupal\daedalus_blueprint\Materials;
  * commit, or the lock fails.
  *
  * The grammar owns no vocabulary of its own: material spellings come from
- * the roster (the provider is the one place that knows "--swatch-" or
+ * the roster (the provider is the one place that knows a scale's prefix or
  * that a width-axis variant spells as an attribute), so resolution is an
  * exact-match index lookup per slot plus the four inline syntaxes the
  * spine defines here: a literal (anything else), url('media:<uuid>'),
@@ -26,7 +26,7 @@ namespace Drupal\daedalus_blueprint\Materials;
  * conversation holds, by the name the model knows it under).
  *
  * Slots (MaterialRecord::SLOT_*): "style" holds a CSS declaration value
- * (tokens and swatches by var(), media, generate and file by url(),
+ * (tokens by var(), media, generate and file by url(),
  * literals);
  * "class" holds one class token (style-axis variants);
  * "attr:{scope}:{name}" holds an axis attribute's value on one variant
@@ -103,7 +103,7 @@ final class ValueGrammar {
    *
    * A style value yields each var() reference (with or without a
    * fallback) and each media, generate or file url() inside it, so a
-   * compound like "1px solid var(--swatch-x)" or "linear-gradient(…),
+   * compound like "1px solid var(--color-x)" or "linear-gradient(…),
    * url('media:…')" is checked reference by reference; a plain url()
    * (a path or an external URL) is no reference and is not listed. A class list yields
    * one reference per whitespace-separated token. An attribute value, a
@@ -170,7 +170,7 @@ final class ValueGrammar {
    *
    * The provider-contributed spelling, refused loudly when the material
    * has none there: a writer choosing a slot a material cannot occupy
-   * (a swatch as a class, a block-axis variant on a page tag) is a
+   * (a token as a class, a block-axis variant on a page tag) is a
    * programming error, never a silent empty string.
    */
   public function spell(MaterialRecord $record, string $slot): string {

@@ -24,7 +24,7 @@ namespace Drupal\daedalus_stylish;
  * `\'` inside single quotes), so a family the validator admitted with a
  * quote in it round-trips through the compiled spelling.
  *
- * Server-only: the client never scans or rewrites families (the Fonts tab
+ * Server-only: the client never scans or rewrites families (the Skin tab
  * reads usage from the server, and deletion rewrites references in a
  * batch).
  */

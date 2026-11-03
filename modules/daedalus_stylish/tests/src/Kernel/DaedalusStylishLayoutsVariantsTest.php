@@ -27,14 +27,14 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   the '::> *' children pseudo-part; ratios are per-child flex-grow
  *   overrides). The axis owns flex-direction.
  * - width: the constrained content width as a padding-inline stop
- *   (`max(gutter, calc((100% - W) / 2))`) on the root itself — the band
+ *   (`max(gutter, calc((100% - W) / 2))`) on the root itself — the section
  *   stays full-bleed, the content column centers, and a gutter comes free
  *   below the max. The default is the token-referencing Site width
- *   (--layout-max-width and --space-gutter), so page bands, header and
+ *   (--layout-max-width and --space-gutter), so sections, header and
  *   footer share one number; the px stops are explicit overrides.
- * - animation: the entrance family (container_fade_in and friends), the
- *   block family's twin; ShippedMotionTest pins its face beside the block
- *   half, this file pins that the axis reaches the container.
+ * - animation: the skin packages ship the entrance family (the starter
+ *   skin's starter_fade_in_section and friends; ShippedMotionTest pins
+ *   its face); this file pins that the motion group reaches the container.
  * All families are scoped to the container KIND: with one layout, these
  * are container-wide facts. The count-keyed proportions family (split_*)
  * retired with the mode + share migration.
@@ -58,6 +58,7 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -80,19 +81,14 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and every compile and validation builds it.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    // The container entrance variants reference motion-* names, which a
-    // variant save mirrors into the animation usage table.
+    // Variant saves mirror their var() and motion-* references into the
+    // skin material usage table.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     // The importer switches to an administrative account (shipped variants
@@ -143,7 +139,7 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
     $this->assertSame('kind:container', $row->getScope());
     // The container ROOT backs every axis's properties: layout for the
     // arrangement variant (flex-direction, gap), sizing and spacing for the
-    // width variants, motion for the entrances, effects and shadow for
+    // width variants, motion for the skin packages' entrances, effects and shadow for
     // the hover axis's Lift — the one box carries every group the widgets
     // and the shipped materials write.
     $groups = $declaration['property_groups'] ?? [];

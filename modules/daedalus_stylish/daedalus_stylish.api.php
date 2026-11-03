@@ -40,7 +40,11 @@ declare(strict_types=1);
  * defaults, each with its origin, read under the active system's
  * enforcement mode) that the inspector's Law tab renders read-only. A
  * row whose value a declaration supplies opens the Law tab at that
- * declaration, so an author learns which file to edit.
+ * declaration, so an author learns which file to edit. Both the tab and
+ * the doorway are offered only under the "view style law" permission
+ * (InspectorGates::law(), granted to no role by default): the law
+ * projection still rides the guide payload for the stack's declared
+ * tier, the gate closes the view.
  */
 
 /**
@@ -97,54 +101,91 @@ declare(strict_types=1);
  */
 
 /**
- * A skin is two layers on one entity, and its tokens are materials.
+ * A skin is two layers on one entity, and its three sections are materials.
  *
- * The daedalus_skin entity holds the PACKAGE layer (`tokens`, `defaults`:
- * what a module ships, the fields sync writes and the ship reads, the
- * payload the source hash covers) and the SITE layer (`site_tokens`,
+ * The daedalus_skin entity holds the PACKAGE layer (`tokens`,
+ * `animations`, `fonts`, `defaults`: what a module ships, the fields sync
+ * writes and the ship reads, the payload the source hash covers) and the
+ * SITE layer (`site_tokens`, `site_animations`, `site_fonts`,
  * `site_defaults`: what the site added or changed over it, by name down
- * to one fact of a token or one property of a default). Every reader but
- * the disk lane reads the merge (tokens(), defaults();
- * SkinTokensItem::mergeLayers(), SkinDefaultsItem::mergeLayers()), so a
- * package update lands in its own layer and shows through wherever the
- * site changed nothing, and removing a site entry reveals the package's.
- * A skin with no provider (the site's own, a "Copy as my skin") has one
+ * to one fact of a record or one property of a default). Every reader
+ * but the disk lane reads the merge (tokens(), animations(), fonts(),
+ * defaults(); SkinTokensItem::mergeLayers() and its twins
+ * SkinAnimationsItem, SkinFontsItem, SkinDefaultsItem), so a package
+ * update lands in its own layer and shows through wherever the site
+ * changed nothing, and removing a site entry reveals the package's. A
+ * skin with no provider (the site's own, a "Copy as my skin") has one
  * layer, the package one, edited directly. The site layer is off the
  * blueprint field spine (internal fields): the generic entity ops read
- * and write the package layer alone, and the site layer is written only
- * by the operations below, whose layer rule is
- * SkinManager::writesSiteLayer() (a provider AND the distro lock holding
- * means the site layer; otherwise the package layer).
+ * and write the package layer alone (`animations` and `fonts` have
+ * read-only blueprint handlers, the defaults handler's posture), and the
+ * site layer is written only by the operations below, whose layer rule
+ * is SkinManager::writesSiteLayer() (a provider AND the distro lock
+ * holding means the site layer; otherwise the package layer).
  *
- * A stored token is a record {value, description, offered}
- * (SkinTokensItem::RECORD_KEYS; `value` a string or a condition map,
- * `description` the reasoning the AI and the Palette read, `offered`
- * whether rows and the AI lead with it, TRUE by default). Every door
- * that takes authored text (the importer, the blueprint field handler)
- * canonicalizes a bare value into its record before validation
- * (StyleMapValidator::validateTokens() admits records only), so a
- * hand-authored skin file may spell `md: 1rem`; stores and
- * machine-written files hold records.
+ * Three sections, one record posture. A stored token is
+ * {value, description, offered} (SkinTokensItem::RECORD_KEYS; `value` a
+ * string or a condition map), keyed by name under its scale; an
+ * animation is {steps, description, offered} keyed by name
+ * (SkinAnimationsItem::NAME, the keyframes-ident grammar: lowercase,
+ * digits, inner hyphens or underscores; `steps` the canonical offsets to
+ * property maps); a font is {family, faces, description, offered} keyed
+ * by name (SkinFontsItem::NAME, the same grammar), each face
+ * {weight, style, source: {file: UUID}}, one font per family on a skin.
+ * `description` is the reasoning the AI and the Skin tab read, `offered`
+ * whether rows and the AI lead with it, TRUE by default; no material
+ * carries a label (the name IS the custom-property tail, the motion
+ * ident's tail, or the font's roster id). Every door that takes authored
+ * text (the importer, the blueprint field handler) canonicalizes a bare
+ * token value or a bare steps map into its record before validation
+ * (StyleMapValidator::validateTokens() and validateAnimations(),
+ * FontValidator::validateFonts() admit records only), so a hand-authored
+ * skin file may spell `md: 1rem`; stores and machine-written files hold
+ * records. A font has no shorthand: a family alone delivers nothing.
  *
- * Tokens are MaterialKind::Token on the materials spine, served by
- * DaedalusStylishMaterialsProvider and TokenManager:
- * - save_material {kind: token, group: SCALE, label: NAME, value,
- *   description?, offered?} mints (the label IS the name, never slugged;
- *   `global` is refused because a token's membership is its skin's);
- * - update_material {kind: token, id: 'SCALE/NAME', value?,
- *   description?, offered?} changes one or more facts;
- * - remove_material {kind: token, id} removes a site-minted token, drops
- *   a site override to reveal the shipped value, and refuses a shipped
- *   token the site never touched (STYLE_TOKEN_SHIPPED_LOCKED) or a token
- *   something references (STYLE_TOKEN_IN_USE; the Palette's delete
- *   stages TokenDeleteBatch, which rewrites every reference to the
- *   literal first, under "delete tokens in use").
+ * The three are MaterialKind::Token, ::Animation and ::Font on the
+ * materials spine, served by DaedalusStylishMaterialsProvider and
+ * SkinMaterialManager (one manager over the sections, one write lane):
+ * - save_material {kind: token, group?: SCALE, label: NAME, value |
+ *   element + property, description?, offered?} mints (the label IS the
+ *   name, never slugged; `global` is refused because a material's
+ *   membership is its skin's). `value` may be a captured literal: with
+ *   `element` and `property` the provider reads the literal the element
+ *   wears in its default layer (literalWorn()); with `group` omitted the
+ *   token lands on the first declared scale whose shape fits the value
+ *   (SkinMaterialManager::scaleFor() over
+ *   StyleMapValidator::fitsTokenShape(); STYLE_TOKEN_SCALE_UNFIT when
+ *   none does). Inference follows the DECLARED scale order and the text
+ *   shape admits any hygienic string, so callers omit `group` only for
+ *   colors and gradients, the canvas capture's two cases;
+ *   save_material {kind: animation, label, steps, description?,
+ *   offered?} and {kind: font, label, family, faces, description?,
+ *   offered?} (family required) mint the other two sections;
+ * - update_material {kind, id, …} changes one or more facts (a token's
+ *   id is 'SCALE/NAME', an animation's and a font's their name; a font's
+ *   faces edit here too);
+ * - remove_material {kind, id} removes a site-minted material, drops a
+ *   site override to reveal the shipped record, and refuses a shipped
+ *   material the site never touched (STYLE_TOKEN_SHIPPED_LOCKED) or one
+ *   something references (STYLE_TOKEN_IN_USE; the Skin tab's delete
+ *   stages SkinMaterialDeleteBatch, which rewrites every reference first
+ *   under "delete skin materials in use": a token to its literal, a worn
+ *   animation to `none`, a family out of every stack).
  * Validation runs on the MERGE of both layers with errors re-rooted onto
- * the gesture keys. TokenUsage (`daedalus_token_usage`) records every
- * `var(--x)` reference outside the swatch namespace across host maps,
- * variant styles and skin data, verbatim; which scale a variable belongs
- * to is resolved at lookup through the guide's prefixes. Rename, revert
- * (to the shipped record) and usage ride /daedalus_stylish/tokens/….
+ * the gesture keys (keyframe steps are validated against the skin's own
+ * tokens). SkinMaterialUsage records every reference across host maps,
+ * variant styles and skin data (defaults and keyframe steps) in ONE
+ * table, `daedalus_skin_material_usage`, by the reference form verbatim:
+ * `--{prefix}-{name}` for a token (which scale a variable belongs to is
+ * resolved at lookup through the guide's prefixes), `motion-{name}` for
+ * an animation, the QUOTED family (StyleGuide::fontFamily()) for a font,
+ * counted in font-family stacks and in the tokens of the scale the guide
+ * binds `font-family` to. Rename (an animation's respells its wearers; a
+ * font's is immediate, stacks name the family), revert (to the shipped
+ * record) and usage ride /daedalus_stylish/skin/{section}/… on
+ * SkinMaterialApiController (tokens carry their scale in the path). A
+ * material has no revisions of its own: the skin's revisions are the
+ * lifecycle, so a bad push is one revert away.
  *
  * Site element defaults are written by ONE style operation, update_default
  * {scope, key?, condition?, properties}, the site-scope twin of
@@ -155,13 +196,32 @@ declare(strict_types=1);
  * exactly as for element styles). The `defaults` field has no blueprint
  * write on any skin (SkinDefaultsFieldHandler refuses every payload with
  * SKIN_DEFAULTS_OP_ONLY); the importer lands shipped defaults itself.
- * Permissions follow the per-material pattern: create tokens, update
- * tokens, delete tokens, delete tokens in use, edit skin defaults, and
- * administer skins over them all.
+ * One permission family gates the three sections: create skin materials,
+ * update skin materials, delete skin materials, delete skin materials in
+ * use, beside edit skin defaults, and administer skins over them all;
+ * InspectorGates::skinMaterials() serves the grants to the client as
+ * drupalSettings.daedalusStylish.skinMaterials.
+ *
+ * A rule's SELECTOR is changed by one operation beside update_style on the
+ * same handler: move_style {key, to} (key a rule key, to the relative
+ * selector it becomes; requirement styleKey, so the actor must be able to
+ * style the owner). The plan is RuleMove::plan() over the owner's keys:
+ * the rule's entry and every entry continuing it
+ * (RelativeSelector::continues()) move whole to the new selector
+ * continued by the same suffix (RelativeSelector::under()), conditions,
+ * properties and the "variants" list alike. The moved entries are judged
+ * at their landings through StyleMapValidator before anything is written
+ * (grants and variant scope at the new rule), a present landing refuses
+ * with STYLE_MOVE_TARGET_EXISTS (never a merge), a continuation the
+ * grammar cannot rebase refuses with STYLE_MOVE_CONTINUATION_REFUSED, a
+ * key without "::" with STYLE_MOVE_NOT_A_RULE, and a "to" outside the
+ * grammar with INVALID_STYLE_KEY. "to" is a selector, never a key: a rule
+ * stays with its owner. JSON-only (page-only): the page language spells
+ * a move as the rule restated under its new selector, the old removed.
  *
  * The canvas follows a skin session's Push and the skin card's gestures
  * at once: each ends with source.refreshDefaults() (push-bar.js,
- * palette.js), a read of GET /daedalus_stylish/defaults
+ * skin.js), a read of GET /daedalus_stylish/defaults
  * (SkinApiController::defaults(): the merged defaults map and the
  * compiled CSS) that the leader source stamps into the page's defaults
  * delivery tag. An update_default the AI submits during a turn has no
@@ -197,49 +257,75 @@ declare(strict_types=1);
  */
 
 /**
- * A font is an at-rule material on the animation pattern.
+ * Animations and fonts are the skin's at-rule sections.
  *
- * `@font-face` is a named at-rule block referenced by ident from one
- * property, exactly what keyframes are, so fonts take the animation
- * material's shape: a daedalus_font entity (MaterialKind::Font) with a
- * `family` and `faces` [{weight, style, source: {file: UUID}}], both
- * internal fields written only through the material ops (save_material
- * {kind: font, label, family?, faces, description?}, update_material,
- * remove_material) so FontValidator sees every write. A face's source is
- * a TYPED map: `file` names a managed file the site holds (uploaded
- * through daedalus_ui's file lane, `woff2` and `woff` only, by
- * POST /daedalus_stylish/fonts/files), and a hosted source is a later kind
- * beside `file`, an addition rather than a reshape. FontStylesheet
- * (CompiledStylesheetBase, weight -25, before the swatch file) prints one
- * `@font-face` per face with `font-display: swap`;
- * CssPrinter::printFontFace() is the emit gate and nothing on the client
- * prints a url() (the inspector fetches
- * GET /daedalus_stylish/fonts/stylesheet when the roster's fonts change).
- * The spelling is the quoted family in the `font` slot
- * (StyleGuide::fontFamily()); a reference is that family in a
- * `font-family` stack or in a token on the scale the guide binds
- * `font-family` to (FontFamilies, FontUsage, `daedalus_font_usage`), and
- * deleting a font in use drops the family from every stack first
- * (FontDeleteBatch; a stack that named nothing else becomes `initial`).
- * On disk a face's file is a basename under the module's assets/fonts/
- * and the shipped payload is content-addressed (a sha256 of the bytes),
- * so one hash bridges the site's uuids and the disk's basenames.
+ * A token is a VALUE kind: it prints one declaration and is referenced
+ * by var(). `@keyframes` and `@font-face` are AT-RULE kinds: each prints
+ * a block and is referenced by an identifier inside one property
+ * (`animation-name: motion-{name}`, the quoted family in `font-family`).
+ * CSS forces that split (a keyframes block cannot be a custom property),
+ * and it is the one real axis among the kinds; so the two live on the
+ * skin beside the tokens, as data of the look that swaps with it, with no
+ * entity, stylesheet, usage table or permission family of their own.
+ * The `transition` token (a timing string) is a value; the animation
+ * material (keyframes) is the thing a value names.
+ *
+ * SkinStylesheet (`daedalus_stylish.skin_stylesheet`, library
+ * `daedalus_stylish/skin`, cache tag `daedalus_stylish_skin`) is the one
+ * print of the worn skin, in this order: its `@font-face` blocks (one per
+ * face, `font-display: swap`; CssPrinter::printFontFace() is the emit
+ * gate and nothing on the client prints a url(): the inspector fetches
+ * GET /daedalus_stylish/skin/fonts/stylesheet after a font write), the
+ * declared tier, the tokens, `@keyframes motion-{name}` per animation,
+ * the defaults; the file sorts before the variants file so a variant may
+ * wear the skin's motion and an explicit variant choice beats a default
+ * at equal specificity. A face's source is a TYPED map: `file` names a
+ * managed file the site holds (uploaded through daedalus_ui's file lane,
+ * `woff2` and `woff` only, by POST /daedalus_stylish/skin/fonts/files),
+ * and a hosted source is a later kind beside `file`. FontFiles holds a
+ * skin's files through core's file usage (type `daedalus_skin`, id the
+ * skin): every file a face of either layer names is held on save and
+ * never released by a save (a revision restore may bring a face back);
+ * the whole set is released when the skin is deleted. On disk a face's
+ * file is a basename under the module's assets/fonts/ and the shipped
+ * payload is content-addressed (a sha256 of the bytes), so one hash
+ * bridges the site's uuids and the disk's basenames.
  */
 
 /**
  * The disk lane and the package ship.
  *
  * A module ships materials as MODULE.daedalus_stylish.KIND.yml (the
- * hand-authored single file per kind: fonts, skins, variants, swatches,
- * animations) and MODULE.daedalus_stylish.KIND.ID.yml (the per-id form a
- * machine writes), discovered and merged by ShippedDefinitionsImporter and
- * landed by ShippedSync in dependency order (fonts, animations, swatches,
- * skins, variants) on cache rebuild, module install, design system
- * activation and `drush daedalus_stylish:sync [MODULE]`. Each importer
+ * hand-authored single file per kind: skins, variants) and
+ * MODULE.daedalus_stylish.KIND.ID.yml (the per-id form a machine writes),
+ * discovered and merged by ShippedDefinitionsImporter and landed by
+ * ShippedSync in dependency order (skins, then variants, which may wear
+ * a skin's animations) on cache rebuild, module install, design system
+ * activation and `drush daedalus_stylish:sync [MODULE]`. A skin entry
+ * carries `tokens:`, `animations:`, `fonts:` (each face's `source:
+ * {file: NAME}` a basename under the module's assets/fonts/, landed
+ * through the font store, a file the skin already holds reused by
+ * content hash) and `defaults:`; the importer lands animations before
+ * defaults so a skin's defaults may wear its own motion. Each importer
  * stamps provider and source hash (ShippedSourceInterface) and runs the
  * hash loop (created / updated / unchanged / kept / failed); a skin is
  * never kept because the sync writes its package layer alone. A module
  * packaging a design system syncs only while its system is active.
+ *
+ * A shipped variant validates on the validator's LANDING lane
+ * (StyleMapValidator::withLandingLane()), the open posture: property world
+ * open, authored constraints offers, token references unchecked, a nested
+ * reference admitting an existing published variant the verdict withholds.
+ * Structure alone is law there (grammar, recognition, unknown selector
+ * words, instance parts, dangling or mis-scoped references, cycles), so a
+ * module's definition fails the sync only on structure; whether the site
+ * OFFERS it is the roster's verdict (VariantConformance::withheld()) under
+ * the law of the day, the same verdict that offers it again when the law
+ * changes. A site author's save (VariantManager::validateStyles()) keeps
+ * the full law, and a skin stays loud (SkinImporter validates its
+ * defaults against its own tokens): a skin's defaults are the look, not
+ * an offer. The declared lane (validateDeclaredDefaults()) is the other
+ * posture lane, fixed by code for a declaration's own defaults.
  *
  * The other direction has one command for a whole design system, in
  * daedalus_blueprint: `drush daedalus-blueprint:design-system:ship SYSTEM
@@ -255,10 +341,10 @@ declare(strict_types=1);
  * which VariantImporter::OWNER_KEY carries back onto the variant's
  * `blueprint` / `blueprint_file` fields without knowing its meaning): it
  * rebuilds every per-id file of the module from the site's
- * entities through each kind's ShippedDefinitionsShipper (FontShipper,
- * AnimationShipper, SwatchShipper, SkinShipper, VariantShipper) and
- * adopts every member of the system nothing ships yet, a font's files
- * copied under assets/fonts/. An entry of the hand-authored single file
+ * entities through each kind's ShippedDefinitionsShipper (SkinShipper,
+ * VariantShipper) and adopts every member of the system nothing ships
+ * yet, a skin's font files copied under assets/fonts/ before its file
+ * is written (the shipper's change check widens to the bytes). An entry of the hand-authored single file
  * the site edited is reported `modified` and never written. A module
  * wanting a lane of its own for another kind registers a shipper with
  * the same tag; daedalus_stylish exposes no hook for it.
@@ -269,7 +355,7 @@ declare(strict_types=1);
  *
  * A declaration's grant vocabulary (property_groups and their
  * `properties` allowlists) is a function of the declaration alone: a
- * container nested inside a page band validates exactly what the band
+ * container nested inside a section validates exactly what the section
  * validates, because nesting is position, not kind. The resolved answer
  * for one address is the vocabulary roster
  * (\Drupal\daedalus_stylish\Vocabulary\VocabularyRoster, keyed on the address
@@ -314,7 +400,10 @@ declare(strict_types=1);
  * active design system (DesignSystemInterface::getEnforcement(); a site
  * with none active is guarded), read through StyleGuide::enforcement().
  * daedalus_stylish.settings carries site mechanics only (ai_minting,
- * container_roots, media_image_style, opt_outs, breakpoints).
+ * container_roots, media_image_style, opt_outs, breakpoints); the four the
+ * site builder sets by hand are the styling settings form's
+ * (\Drupal\daedalus_stylish\Form\SettingsForm, Configuration » Daedalus
+ * » Styling), opt_outs the bundle form's Page builder tab's.
  */
 
 /**
@@ -326,7 +415,7 @@ declare(strict_types=1);
  * guide build):
  * - description: the axis's meaning written for a designer, human or
  *   model: the sequence rules, the cardinalities and the "when" no single
- *   value can say ("Alternate tint and plain bands; Accent once, for the
+ *   value can say ("Alternate tint and plain sections; Accent once, for the
  *   call to action"). A fact about one axis lives on its declaration,
  *   never in prose elsewhere: the description partitions with the design
  *   system whose declaration carries it, rides the vocabulary roster
@@ -353,12 +442,12 @@ declare(strict_types=1);
  *   variant_axes:
  *     - width:
  *         depth: root
- *         description: 'How wide a page band lets its content run ...'
+ *         description: 'How wide a section lets its content run ...'
  *         owns: [padding-left, padding-right, max-width]
  *     - rhythm:
  *         depth: root
  *         label: 'Rhythm'
- *         description: 'The band\'s vertical breathing room ...'
+ *         description: 'The section\'s vertical breathing room ...'
  *         owns: [padding-top, padding-bottom]
  * @endcode
  */
@@ -397,13 +486,14 @@ declare(strict_types=1);
  * - BIRTH defaults: `default_variants`, the variants a new element wears
  *   at placement (law, traveling with the design system).
  *
- * Delivery: the defaults stylesheet prints the declared tier first (in
- * delivery rank order: kind scopes, then block plugins, block types,
- * layouts; stored order within; each at :scope inside @scope at its
- * stamped scope class, so a refinement's default wins over its kind's by
- * document order) with no skin gate, then, only with an active published
- * skin, that skin's tokens and defaults, so a skin value for the same
- * target wins at equal specificity. The stamping demand follows the
+ * Delivery: the skin stylesheet prints the declared tier (in delivery
+ * rank order: kind scopes, then block plugins, block types, layouts;
+ * stored order within; each at :scope inside @scope at its stamped scope
+ * class, so a refinement's default wins over its kind's by document
+ * order) with no skin gate, after the worn skin's `@font-face` blocks and
+ * before, only with an active published skin, that skin's tokens,
+ * keyframes and defaults, so a skin value for the same target wins at
+ * equal specificity. The stamping demand follows the
  * tier's scopes: a kind that declares defaults has its scope class
  * stamped wherever the family classes already land. The client
  * guide serves the tier as `declaredDefaults` beside `skinDefaults`; the
@@ -455,22 +545,40 @@ declare(strict_types=1);
  *
  * The relative selector (\Drupal\daedalus_blueprint\Materials\RelativeSelector,
  * JS twin daedalus_ui/js/edit_mode/materials/relative-selector.js) admits
- * one terminal pseudo-element, `::before` or `::after`, after the last
- * compound and nowhere else (never inside `:has()` or `:not()`, never
- * followed by a compound, one per selector). The owner's own box is the
- * CSS nesting anchor `&::before`, the one place `&` is admitted (the
- * whole selector; `& > p` is not one); a part's box `.quote::after`; a
- * descendant rule's `> pb-text::before`. The pseudo lives on the selector
+ * one terminal pseudo-element after the last compound and nowhere else
+ * (never inside `:has()` or `:not()`, never followed by a compound, one
+ * per selector, a bare name): the two generated boxes `::before` and
+ * `::after` (RelativeSelector::GENERATED_BOXES, the ones `content`
+ * switches on) and any other the browser knows (`::marker`,
+ * `::placeholder`, `::selection`, `::first-letter`, `::first-line`,
+ * `::backdrop`; the wide selector tier says which exist, the roster
+ * admits one by mode declared-or-derived like a box, and the five with a
+ * vocabulary of their own are granted and bounded by
+ * data/pseudo-vocabularies.json, Vocabulary\PseudoVocabularies, in every
+ * mode: STYLE_PROPERTY_NOT_ON_PSEUDO). The owner's own box is the
+ * CSS nesting anchor `&::before` (the anchor stands first, bare only
+ * with its own box or carrying qualifiers as the owner's own:
+ * `&.open > ul`, `&:not(:last-child) > *`, `&:hover > ul`; `& > p` is
+ * `> p`); a part's box `.quote::after`; a descendant rule's
+ * `> d-text::before`. The rest of the grammar is CSS's: a compound
+ * carries classes, attributes and pseudo-classes with their arguments on
+ * any compound, and whether an undeclared tag, class, attribute or state
+ * is admitted is the roster's verdict by enforcement mode
+ * (VocabularyRoster::KIND_CLASS, KIND_ATTRIBUTE, KIND_PSEUDO_CLASS;
+ * data/wide-selectors.json is what the browser knows), never the
+ * grammar's; a published state on the last compound is the entry's
+ * condition, on an earlier compound a qualifier the pose stamps
+ * (force-state.js stampTargets). The pseudo lives on the selector
  * record (RelativeSelector::$pseudo), not on a compound: a box is a WHERE
  * with no node, the doctrine of `> *`, so it is neither a condition
  * (`:is(::before)` is invalid CSS) nor a markup part (a decorative
  * element would cost a DOM node on every element and cannot reach a
  * template-rendered block). Style map keys read `{key}::&::before`,
- * `{key}::.quote::after`, `{key}::> pb-text::before`; the first `::` of a
+ * `{key}::.quote::after`, `{key}::> d-text::before`; the first `::` of a
  * key still splits root from selector because the anchor or a compound
  * always precedes the box's own `::`. A rule ending in a box admits no
  * continuation (RelativeSelector::under()); a worn fragment's `&::before`
- * under `> pb-text` continues as `> pb-text::before`. Printed, the box
+ * under `> d-text` continues as `> d-text::before`. Printed, the box
  * comes after the condition suffixes and the animation hold
  * (`:scope:is(:hover, [data-force-state~="hover"])::before`), because a
  * pseudo-element is the last thing a CSS selector may carry; `:where()`
@@ -555,7 +663,7 @@ declare(strict_types=1);
  * stands in as `none` and commits the token; the client's media control
  * (the library chip, the thumbnail, the text field) rides
  * `definition.media`, while the offers follow the type (the two keywords,
- * never the gradient swatches a free image slot takes). None of the base
+ * never the gradient tokens a free image slot takes). None of the base
  * class's pass-throughs (no CSS-wide keyword, `var()` or `calc()`, since a
  * token of text shape could smuggle a string); no strings, `attr()`,
  * counters or `quotes`, because text is content and belongs in a field,
@@ -597,7 +705,11 @@ declare(strict_types=1);
  * is no validator corrective for a contentless box (the validator cannot
  * read the stack, and a variant or ancestor rule may legitimately supply
  * the content) and no client-side seed (an optimistic mirror is replaced
- * by the server's result). Variants and skins are AUTHORED, not born: a
+ * by the server's result). The same handler's `move_style` moves a box
+ * entry WHOLE when its rule's selector changes ("::> d-text::before"
+ * follows "> d-text" to "> d-text:has(a)::before" with its content line),
+ * so a move never seeds and never strands a box. Variants and skins are
+ * AUTHORED, not born: a
  * variant fragment or a skin default at a box key (`'::&::before'` in the
  * same relative-key grammar as parts) carries its own `content`, and a
  * look worn on a rule continues its box under it; apply_variant mints no
@@ -754,10 +866,29 @@ function hook_daedalus_stylish_control_widget_info_alter(array &$definitions): v
 /**
  * Alters condition type plugin definitions.
  *
+ * A condition type publishes REFERENCES: named conditions (label,
+ * wrapper, axis) whose CSS the site owns, so a style keyed by the name
+ * follows a threshold change. A condition key is a compound of clauses,
+ * one per axis, joined with "+", read by the one clause grammar
+ * (\Drupal\daedalus_blueprint\Materials\ConditionClause and its client
+ * twin condition-clause.js): a clause is a published name or, where the
+ * enforcement mode admits one (open and guarded; strict refuses it with
+ * the references on its axis), a LITERAL the browser knows as its own
+ * canonical CSS ("@container (min-width: 500px)", "@media (hover:
+ * hover)", "@supports (display: grid)", ":checked"), judged against
+ * data/wide-conditions.json by StyleMapValidator::validateCondition().
+ * A plugin declares no band or preference: the grammar derives both
+ * from the wrapper's CSS (ConditionClause::band(), ::preference()), for
+ * a reference and a literal alike, and ::posable() / ::stamp() say
+ * whether the canvas can pose a clause and the word the force-state
+ * stamp carries, so a literal in use poses, prints its dual and shows as
+ * a chip exactly as a published condition does.
+ *
  * @param array $definitions
  *   Condition type definitions keyed by plugin ID.
  *
  * @see \Drupal\daedalus_stylish\Attribute\ConditionType
+ * @see \Drupal\daedalus_stylish\ConditionTypeInterface
  */
 function hook_daedalus_stylish_condition_type_info_alter(array &$definitions): void {
   // Let a custom condition type's names win over the shipped ones.

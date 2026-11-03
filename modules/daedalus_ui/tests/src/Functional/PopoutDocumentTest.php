@@ -282,7 +282,7 @@ class PopoutDocumentTest extends BrowserTestBase {
   private function assertSkin(bool $present): void {
     $assert_session = $this->assertSession();
     $selectors = [
-      'link[rel="stylesheet"][href*="/daedalus_stylish/defaults-"]',
+      'link[rel="stylesheet"][href*="/daedalus_stylish/skin-"]',
       '.daedalus-stylish-token-scope',
     ];
     foreach ($selectors as $selector) {

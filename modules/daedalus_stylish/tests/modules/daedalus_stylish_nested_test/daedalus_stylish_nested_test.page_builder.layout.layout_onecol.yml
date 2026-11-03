@@ -3,7 +3,7 @@
 property_groups:
   spacing: {}
 elements:
-  '.band-content':
+  '.section-content':
     label: 'Container'
     contains: regions
     property_groups:

@@ -47,7 +47,7 @@ class SkinShipperTest extends KernelTestBase {
    * never the bare shorthand a hand-authored file may use.
    */
   protected const DUSK_TOKENS = [
-    'space' => ['gutter' => ['value' => '2rem', 'description' => 'The band gutter.', 'offered' => TRUE]],
+    'space' => ['gutter' => ['value' => '2rem', 'description' => 'The section gutter.', 'offered' => TRUE]],
     'color' => [
       'accent' => ['value' => ['default' => '#111111', 'dark' => '#eeeeee'], 'description' => '', 'offered' => FALSE],
     ],
@@ -68,6 +68,7 @@ class SkinShipperTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -115,17 +116,11 @@ class SkinShipperTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     // Every value-usage table: a skin's save mirrors its var() and family
     // references at the chokepoint, and a missing table is a hard error.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_font_usage',
-      'daedalus_token_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     // The vocabulary a skin syncing back through the importer validates
@@ -224,6 +219,8 @@ class SkinShipperTest extends KernelTestBase {
       'label' => 'Dusk',
       'design_system' => NULL,
       'tokens' => self::DUSK_TOKENS,
+      'animations' => [],
+      'fonts' => [],
       'defaults' => self::DUSK_DEFAULTS,
     ], $definition);
     $this->assertSame(self::TARGET . '.daedalus_stylish.skins.dusk.yml', basename($this->shipper()->filePath(self::TARGET, 'dusk')));
@@ -247,8 +244,8 @@ class SkinShipperTest extends KernelTestBase {
     $this->assertSame(self::TARGET, $adopted->getProvider());
     $this->assertTrue($adopted->isShipped());
     $this->assertFalse($adopted->isModified());
-    $this->assertFalse($adopted->hasNewDefaults(['tokens' => self::DUSK_TOKENS, 'defaults' => self::DUSK_DEFAULTS]));
-    $this->assertSame(DaedalusStylishSkin::hashData(['tokens' => self::DUSK_TOKENS, 'defaults' => self::DUSK_DEFAULTS]), $adopted->getSourceHash());
+    $this->assertFalse($adopted->hasNewDefaults(['tokens' => self::DUSK_TOKENS, 'animations' => [], 'fonts' => [], 'defaults' => self::DUSK_DEFAULTS]));
+    $this->assertSame(DaedalusStylishSkin::hashData(['tokens' => self::DUSK_TOKENS, 'animations' => [], 'fonts' => [], 'defaults' => self::DUSK_DEFAULTS]), $adopted->getSourceHash());
     $this->assertTrue($adopted->isPublished());
     $this->assertSame(self::DUSK_TOKENS, $adopted->packageTokens());
     $this->assertSame(self::DUSK_DEFAULTS, $adopted->packageDefaults());
@@ -409,7 +406,7 @@ class SkinShipperTest extends KernelTestBase {
   public function testBareSkinRoundTrips(): void {
     $bare = $this->createSkin('bare', [], []);
     $definition = $this->shipper()->definition($bare);
-    $this->assertSame(['label' => 'Bare', 'design_system' => NULL, 'tokens' => [], 'defaults' => []], $definition);
+    $this->assertSame(['label' => 'Bare', 'design_system' => NULL, 'tokens' => [], 'animations' => [], 'fonts' => [], 'defaults' => []], $definition);
     $this->assertSame(['bare' => SkinShipper::CREATED], $this->shipper()->ship(self::TARGET, 'dusk', ['bare' => $definition]));
     $this->assertFalse($this->loadSkin('bare')->isModified());
     $this->assertSame([self::TARGET => ['bare' => SkinImporter::UNCHANGED]], $this->importer()->sync([self::TARGET])->outcomes());
@@ -433,7 +430,7 @@ class SkinShipperTest extends KernelTestBase {
     ];
     $this->assertSame('aurora', $definitions['aurora_dusk']['design_system']);
     $this->assertNull($definitions['plain_dusk']['design_system']);
-    $this->assertSame(['label', 'design_system', 'tokens', 'defaults'], array_keys($definitions['plain_dusk']));
+    $this->assertSame(['label', 'design_system', 'tokens', 'animations', 'fonts', 'defaults'], array_keys($definitions['plain_dusk']));
 
     $this->assertSame(['aurora_dusk' => SkinShipper::CREATED, 'plain_dusk' => SkinShipper::CREATED], $this->shipper()->ship(self::TARGET, 'dusk', $definitions));
     $written = Yaml::decode(file_get_contents($this->duskFile()));

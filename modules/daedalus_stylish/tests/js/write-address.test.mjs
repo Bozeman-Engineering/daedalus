@@ -52,6 +52,8 @@ const HEADING = `block:${HEADING_UUID}`;
 const IMAGE = `block:${IMAGE_UUID}`;
 const PARA = `block:${PARA_UUID}`;
 const FORMATTED = `block:${FORMATTED_UUID}`;
+const HOME_UUID = '99999999-0000-4000-8000-000000000009';
+const HOME = `entity:${HOME_UUID}`;
 const LINK = '.text-block-link';
 // The formatted text block's annotation: the matcher fixture's block `f`
 // (selector-matcher-fixture.mjs) carried here under a real uuid, since
@@ -68,56 +70,66 @@ const FORMATTED_MARKUP = {
   ],
 };
 
-const TREE = [
-  {
-    kind: 'container',
-    uuid: PAGE_UUID,
-    layout_id: 'daedalus_stylish_container',
-    label: 'Page',
-    _element: { name: 'Page', type: 'Section', markup: { tag: 'section', parts: {} } },
-    children: [
-      {
-        kind: 'container',
-        uuid: HERO_UUID,
-        layout_id: 'daedalus_stylish_container',
-        label: 'Welcome',
-        _element: { name: 'Welcome', type: 'Container', markup: { tag: 'section', parts: {} } },
-        children: [
-          {
-            kind: 'block',
-            uuid: LINKED_UUID,
-            block_type: 'text',
-            _element: { name: 'Text', type: 'Text', markup: { tag: 'p', tags: ['em'], parts: { [LINK]: { tag: 'a' } } } },
-          },
-          {
-            kind: 'block',
-            uuid: PARA_UUID,
-            block_type: 'text',
-            _element: { name: 'Text', type: 'Text', markup: { tag: 'p', parts: {} } },
-          },
-          {
-            kind: 'block',
-            uuid: HEADING_UUID,
-            block_type: 'text',
-            _element: { name: 'Text', type: 'Text', markup: { tag: 'h2', parts: {} } },
-          },
-          {
-            kind: 'block',
-            uuid: IMAGE_UUID,
-            block_type: 'image',
-            _element: { name: 'Image', type: 'Image', markup: { tag: 'figure', parts: {} } },
-          },
-          {
-            kind: 'block',
-            uuid: FORMATTED_UUID,
-            block_type: 'formatted_text',
-            _element: { name: 'Formatted text', type: 'Formatted text', markup: FORMATTED_MARKUP },
-          },
-        ],
-      },
-    ],
-  },
-];
+// The document (source.getDocument()): the host entity ("Home", a Page,
+// tagless markup as the entity kind's usually is) above the layout's one
+// top-level section. The entity is the farthest ancestor of everything
+// on the page, so its rules are addresses too; on a strict site it mints
+// nothing of its own (the roster declares no entity kind here).
+const DOCUMENT = [{
+  kind: 'entity',
+  uuid: HOME_UUID,
+  _element: { name: 'Home', type: 'Page', markup: {} },
+  children: [
+    {
+      kind: 'container',
+      uuid: PAGE_UUID,
+      layout_id: 'daedalus_stylish_container',
+      label: 'Page',
+      _element: { name: 'Page', type: 'Section', markup: { tag: 'section', parts: {} } },
+      children: [
+        {
+          kind: 'container',
+          uuid: HERO_UUID,
+          layout_id: 'daedalus_stylish_container',
+          label: 'Welcome',
+          _element: { name: 'Welcome', type: 'Container', markup: { tag: 'section', parts: {} } },
+          children: [
+            {
+              kind: 'block',
+              uuid: LINKED_UUID,
+              block_type: 'text',
+              _element: { name: 'Text', type: 'Text', markup: { tag: 'p', tags: ['em'], parts: { [LINK]: { tag: 'a' } } } },
+            },
+            {
+              kind: 'block',
+              uuid: PARA_UUID,
+              block_type: 'text',
+              _element: { name: 'Text', type: 'Text', markup: { tag: 'p', parts: {} } },
+            },
+            {
+              kind: 'block',
+              uuid: HEADING_UUID,
+              block_type: 'text',
+              _element: { name: 'Text', type: 'Text', markup: { tag: 'h2', parts: {} } },
+            },
+            {
+              kind: 'block',
+              uuid: IMAGE_UUID,
+              block_type: 'image',
+              _element: { name: 'Image', type: 'Image', markup: { tag: 'figure', parts: {} } },
+            },
+            {
+              kind: 'block',
+              uuid: FORMATTED_UUID,
+              block_type: 'formatted_text',
+              _element: { name: 'Formatted text', type: 'Formatted text', markup: FORMATTED_MARKUP },
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}];
 
 const guideOf = (enforcement) => ({
   enforcement,
@@ -178,8 +190,8 @@ const LAYOUTS = {
   [HERO_UUID]: 'daedalus_stylish_container',
 };
 
-const set = (guide, key, selector, map = {}, tree = TREE, markup = null) =>
-  addressSet({ guide, map, key, selector, tree, blockTypes: TYPES, sectionLayouts: LAYOUTS, markup });
+const set = (guide, key, selector, map = {}, document = DOCUMENT, markup = null) =>
+  addressSet({ guide, map, key, selector, document, blockTypes: TYPES, sectionLayouts: LAYOUTS, markup });
 const keys = (addresses) => addresses.map(addressKey);
 
 test('addressKey, sameAddress and isAddress speak the one key grammar', () => {
@@ -187,9 +199,9 @@ test('addressKey, sameAddress and isAddress speak the one key grammar', () => {
   assert.equal(addressKey({ key: HERO, selector: null }), HERO);
   assert.equal(sameAddress({ key: HERO, selector: 'a' }, { key: HERO, selector: 'a' }), true);
   assert.equal(sameAddress({ key: HERO, selector: 'a' }, { key: HERO, selector: '> a' }), false);
-  assert.equal(isAddress({ key: HERO, selector: '> pb-text' }), true);
+  assert.equal(isAddress({ key: HERO, selector: '> d-text' }), true);
   assert.equal(isAddress({ key: HERO, selector: '' }), false, 'an address always carries a selector');
-  assert.equal(isAddress({ key: HERO, selector: '>pb-text' }), false, 'canonical spelling only');
+  assert.equal(isAddress({ key: HERO, selector: '>d-text' }), false, 'canonical spelling only');
   assert.equal(isAddress(null), false);
 });
 
@@ -199,76 +211,90 @@ test('a root facet on a strict site: the own key, then the mintable rules the ro
   // Welcome's rules (the direct parent: its children, the text blocks
   // directly in it, the text blocks anywhere in it), then Page's (its
   // children never reach the block through Welcome; its text blocks by
-  // descent do). The heading's root tag h2 is no base tag, so no tag
-  // rule is offered anywhere.
+  // descent do), then the host's (the document's entity root, the
+  // farthest ancestor: its text blocks by descent; its children are the
+  // sections, and the roster declares no entity kind, so no `> *`). The
+  // heading's root tag h2 is no base tag, so no tag rule is offered
+  // anywhere.
   assert.deepEqual(keys(addresses), [
     HEADING,
     `${HERO}::> *`,
-    `${HERO}::> pb-text`,
-    `${HERO}::pb-text`,
-    `${PAGE}::pb-text`,
+    `${HERO}::> d-text`,
+    `${HERO}::d-text`,
+    `${PAGE}::d-text`,
+    `${HOME}::d-text`,
   ]);
-  assert.deepEqual(addresses.map((address) => address.existing), [true, false, false, false, false]);
+  assert.deepEqual(addresses.map((address) => address.existing), [true, false, false, false, false, false]);
   assert.deepEqual(addresses.map((address) => address.label), [
     'This element',
     'All children of Welcome',
     'Text blocks directly in Welcome',
     'Text blocks in Welcome',
     'Text blocks in Page',
+    'Text blocks in Home',
   ]);
 });
 
-test('a root facet whose tag the base declares offers the tag rule on every ancestor; an open site keeps grammar-only landings but never an undeclared tag', () => {
+test('a root facet whose tag the base declares offers the tag rule on every ancestor; an open site keeps grammar-only landings, an undeclared tag included', () => {
   const strict = set(STRICT, LINKED, null);
   assert.deepEqual(keys(strict), [
     LINKED,
     `${HERO}::> *`,
-    `${HERO}::> pb-text`,
-    `${HERO}::pb-text`,
+    `${HERO}::> d-text`,
+    `${HERO}::d-text`,
     `${HERO}::p`,
-    `${PAGE}::pb-text`,
+    `${PAGE}::d-text`,
     `${PAGE}::p`,
+    `${HOME}::d-text`,
+    `${HOME}::p`,
   ]);
   assert.equal(strict.find((address) => address.selector === 'p').label, 'Every paragraph in Welcome');
   // Undeclare the type on a strict site: its rules go, the rest stays.
   const undeclared = { ...STRICT, blockTypes: { image: STRICT.blockTypes.image } };
-  assert.deepEqual(keys(set(undeclared, LINKED, null)), [LINKED, `${HERO}::> *`, `${HERO}::p`, `${PAGE}::p`]);
-  // An open site keeps the type rules (grammar-only there) but still
-  // drops an undeclared tag (refused in every mode).
+  assert.deepEqual(keys(set(undeclared, LINKED, null)), [LINKED, `${HERO}::> *`, `${HERO}::p`, `${PAGE}::p`, `${HOME}::p`]);
+  // An open site keeps the type rules (grammar-only there) and the
+  // undeclared tag's rules too: admission is by enforcement mode for
+  // every vocabulary, and the validator admits a tag the browser knows
+  // grant-less on an open or guarded site (refusing it on strict alone).
   const openUndeclared = { ...OPEN, blockTypes: { image: OPEN.blockTypes.image } };
   assert.deepEqual(keys(set(openUndeclared, LINKED, null)), [
     LINKED,
     `${HERO}::> *`,
-    `${HERO}::> pb-text`,
-    `${HERO}::pb-text`,
+    `${HERO}::> d-text`,
+    `${HERO}::d-text`,
     `${HERO}::p`,
-    `${PAGE}::pb-text`,
+    `${PAGE}::d-text`,
     `${PAGE}::p`,
+    `${HOME}::d-text`,
+    `${HOME}::p`,
   ]);
-  assert.deepEqual(keys(set(OPEN, HEADING, null)).filter((key) => key.endsWith('::h2')), [], 'h2 is no base tag: never offered');
+  assert.deepEqual(keys(set(OPEN, HEADING, null)).filter((key) => key.endsWith('::h2')), [`${HERO}::h2`, `${PAGE}::h2`, `${HOME}::h2`], 'h2 is no declared base tag: offered grammar-only on an open site');
+  assert.deepEqual(keys(set(STRICT, HEADING, null)).filter((key) => key.endsWith('::h2')), [], 'h2 is no declared base tag: never offered on a strict site');
 });
 
 test('existing ancestor rules come before the mintable ones, nearest ancestor first, deduplicated against the mint list', () => {
   const map = {
-    [`${PAGE}::pb-text`]: { default: { color: 'red' } },
+    [`${PAGE}::d-text`]: { default: { color: 'red' } },
     [`${HERO}::> *`]: { default: { gap: '1rem' } },
-    [`${HERO}::> pb-container > *`]: { default: { margin: '0' } },
+    [`${HERO}::> d-container > *`]: { default: { margin: '0' } },
   };
   const addresses = set(STRICT, LINKED, null, map);
   assert.deepEqual(keys(addresses), [
     LINKED,
     `${HERO}::> *`,
-    `${PAGE}::pb-text`,
-    `${HERO}::> pb-text`,
-    `${HERO}::pb-text`,
+    `${PAGE}::d-text`,
+    `${HERO}::> d-text`,
+    `${HERO}::d-text`,
     `${HERO}::p`,
     `${PAGE}::p`,
+    `${HOME}::d-text`,
+    `${HOME}::p`,
   ]);
-  assert.deepEqual(addresses.map((address) => address.existing), [true, true, true, false, false, false, false]);
-  // A rule that does not reach the element (Welcome's `> pb-container >
+  assert.deepEqual(addresses.map((address) => address.existing), [true, true, true, false, false, false, false, false, false]);
+  // A rule that does not reach the element (Welcome's `> d-container >
   // *` targets a nested container's children) is neither existing nor
   // mintable here.
-  assert.equal(addresses.some((address) => address.selector === '> pb-container > *'), false);
+  assert.equal(addresses.some((address) => address.selector === '> d-container > *'), false);
 });
 
 test('a rule position is one existing address whether it wears, carries lines, or both: the group\'s own layer names it once', () => {
@@ -281,15 +307,15 @@ test('a rule position is one existing address whether it wears, carries lines, o
     // Wears only: no entry lines, the worn layer delivers.
     [`${HERO}::> *`]: { variants: [{ variant: 'row', fragment: '' }] },
     // Wears and carries lines: a group of two layers, one rule.
-    [`${PAGE}::pb-text`]: { variants: [{ variant: 'row', fragment: '' }], default: { color: 'red' } },
+    [`${PAGE}::d-text`]: { variants: [{ variant: 'row', fragment: '' }], default: { color: 'red' } },
   };
   const addresses = addressSet({
-    guide: STRICT, map, key: LINKED, selector: null, tree: TREE, variants: [row], blockTypes: TYPES, sectionLayouts: LAYOUTS,
+    guide: STRICT, map, key: LINKED, selector: null, document: DOCUMENT, variants: [row], blockTypes: TYPES, sectionLayouts: LAYOUTS,
   });
-  assert.deepEqual(keys(addresses).slice(0, 3), [LINKED, `${HERO}::> *`, `${PAGE}::pb-text`]);
+  assert.deepEqual(keys(addresses).slice(0, 3), [LINKED, `${HERO}::> *`, `${PAGE}::d-text`]);
   assert.deepEqual(addresses.slice(0, 3).map((address) => address.existing), [true, true, true]);
   assert.equal(keys(addresses).filter((key) => key === `${HERO}::> *`).length, 1);
-  assert.equal(keys(addresses).filter((key) => key === `${PAGE}::pb-text`).length, 1);
+  assert.equal(keys(addresses).filter((key) => key === `${PAGE}::d-text`).length, 1);
 });
 
 test('a part facet: this link, the ancestors\' tag rule for the part\'s tag, and the type-then-part chains', () => {
@@ -298,9 +324,11 @@ test('a part facet: this link, the ancestors\' tag rule for the part\'s tag, and
     `${LINKED}::${LINK}`,
     `${PAGE}::a`,
     `${HERO}::a`,
-    `${HERO}::> pb-text ${LINK}`,
-    `${HERO}::pb-text ${LINK}`,
-    `${PAGE}::pb-text ${LINK}`,
+    `${HERO}::> d-text ${LINK}`,
+    `${HERO}::d-text ${LINK}`,
+    `${PAGE}::d-text ${LINK}`,
+    `${HOME}::a`,
+    `${HOME}::d-text ${LINK}`,
   ]);
   assert.deepEqual(addresses.map((address) => address.label), [
     'This link',
@@ -309,6 +337,8 @@ test('a part facet: this link, the ancestors\' tag rule for the part\'s tag, and
     'Text block links directly in Welcome',
     'Text block links in Welcome',
     'Text block links in Page',
+    'Every link in Home',
+    'Text block links in Home',
   ]);
   assert.deepEqual(addresses[0], { key: LINKED, selector: LINK, label: 'This link', existing: true });
   // A part the annotation does not render (the heading block carries
@@ -318,9 +348,10 @@ test('a part facet: this link, the ancestors\' tag rule for the part\'s tag, and
   // the part is the type's anatomy, a legal address either way).
   assert.deepEqual(keys(set(STRICT, HEADING, LINK)), [
     `${HEADING}::${LINK}`,
-    `${HERO}::> pb-text ${LINK}`,
-    `${HERO}::pb-text ${LINK}`,
-    `${PAGE}::pb-text ${LINK}`,
+    `${HERO}::> d-text ${LINK}`,
+    `${HERO}::d-text ${LINK}`,
+    `${PAGE}::d-text ${LINK}`,
+    `${HOME}::d-text ${LINK}`,
   ]);
 });
 
@@ -330,17 +361,19 @@ test('an instance part facet: this paragraph, every paragraph here, then the anc
   // its tag. The own entry (worded by the annotation row), then the
   // block's own `p` tier (the nearest owner styling every paragraph in
   // it), then per ancestor the tag rule and the type-then-TAG chains,
-  // the class substituted; Page's `> pb-formatted-text p` never reaches
+  // the class substituted; Page's `> d-formatted-text p` never reaches
   // the block (it sits in Welcome), so it is dropped like any chain.
-  const addresses = set(STRICT, FORMATTED, '.s-p1', {}, TREE, FORMATTED_MARKUP);
+  const addresses = set(STRICT, FORMATTED, '.s-p1', {}, DOCUMENT, FORMATTED_MARKUP);
   assert.deepEqual(keys(addresses), [
     `${FORMATTED}::.s-p1`,
     `${FORMATTED}::p`,
     `${HERO}::p`,
-    `${HERO}::> pb-formatted-text p`,
-    `${HERO}::pb-formatted-text p`,
+    `${HERO}::> d-formatted-text p`,
+    `${HERO}::d-formatted-text p`,
     `${PAGE}::p`,
-    `${PAGE}::pb-formatted-text p`,
+    `${PAGE}::d-formatted-text p`,
+    `${HOME}::p`,
+    `${HOME}::d-formatted-text p`,
   ]);
   assert.deepEqual(addresses.map((address) => address.label), [
     'This paragraph',
@@ -350,24 +383,29 @@ test('an instance part facet: this paragraph, every paragraph here, then the anc
     'Formatted text block paragraphs in Welcome',
     'Every paragraph in Page',
     'Formatted text block paragraphs in Page',
+    'Every paragraph in Home',
+    'Formatted text block paragraphs in Home',
   ]);
-  assert.deepEqual(addresses.map((address) => address.existing), [true, false, false, false, false, false, false]);
+  assert.deepEqual(addresses.map((address) => address.existing), [true, false, false, false, false, false, false, false, false]);
   assert.equal(addresses.slice(1).some((address) => address.selector.includes('.s-')), false, 'the identity class is the own entry alone');
   // The own tier reads existing when the map holds it; an existing
   // ancestor rule follows it, before the mintable shapes.
   const held = set(STRICT, FORMATTED, '.s-p1', {
     [`${FORMATTED}::p`]: { default: { color: 'red' } },
     [`${PAGE}::p`]: { default: { color: 'teal' } },
-  }, TREE, FORMATTED_MARKUP);
+  }, DOCUMENT, FORMATTED_MARKUP);
   assert.deepEqual(keys(held).slice(0, 3), [`${FORMATTED}::.s-p1`, `${FORMATTED}::p`, `${PAGE}::p`]);
-  assert.deepEqual(held.map((address) => address.existing), [true, true, true, false, false, false, false]);
+  assert.deepEqual(held.map((address) => address.existing), [true, true, true, false, false, false, false, false, false]);
   // A minted tag the base does not declare (h2, the nested li) has no
-  // class-of-things address at all: the own entry alone, the tag gate.
-  assert.deepEqual(keys(set(STRICT, FORMATTED, '.s-h1', {}, TREE, FORMATTED_MARKUP)), [`${FORMATTED}::.s-h1`]);
-  assert.deepEqual(keys(set(OPEN, FORMATTED, '.s-li', {}, TREE, FORMATTED_MARKUP)), [`${FORMATTED}::.s-li`]);
+  // class-of-things address on a strict site: the own entry alone, the
+  // declared gate. An open site admits the tag grammar-only (admission
+  // by mode), so the class-of-things tiers are offered there.
+  assert.deepEqual(keys(set(STRICT, FORMATTED, '.s-h1', {}, DOCUMENT, FORMATTED_MARKUP)), [`${FORMATTED}::.s-h1`]);
+  assert.deepEqual(keys(set(STRICT, FORMATTED, '.s-li', {}, DOCUMENT, FORMATTED_MARKUP)), [`${FORMATTED}::.s-li`]);
+  assert.deepEqual(keys(set(OPEN, FORMATTED, '.s-li', {}, DOCUMENT, FORMATTED_MARKUP)).slice(0, 3), [`${FORMATTED}::.s-li`, `${FORMATTED}::li`, `${HERO}::li`]);
   // A box on an instance host: the host's shapes with the box appended,
   // the own tier's box first.
-  const box = set(OPEN, FORMATTED, '.s-p1::after', {}, TREE, FORMATTED_MARKUP);
+  const box = set(OPEN, FORMATTED, '.s-p1::after', {}, DOCUMENT, FORMATTED_MARKUP);
   assert.deepEqual(keys(box).slice(0, 3), [`${FORMATTED}::.s-p1::after`, `${FORMATTED}::p::after`, `${HERO}::p::after`]);
   assert.deepEqual(box.slice(0, 3).map((address) => address.label), [
     'This paragraph › After',
@@ -380,10 +418,12 @@ test('an instance part facet: this paragraph, every paragraph here, then the anc
   assert.deepEqual(keys(declared), [
     `${LINKED}::${LINK}`,
     `${HERO}::a`,
-    `${HERO}::> pb-text ${LINK}`,
-    `${HERO}::pb-text ${LINK}`,
+    `${HERO}::> d-text ${LINK}`,
+    `${HERO}::d-text ${LINK}`,
     `${PAGE}::a`,
-    `${PAGE}::pb-text ${LINK}`,
+    `${PAGE}::d-text ${LINK}`,
+    `${HOME}::a`,
+    `${HOME}::d-text ${LINK}`,
   ]);
   assert.equal(declared.some((address) => address.key === LINKED && address.selector === 'a'), false);
 });
@@ -399,18 +439,20 @@ test('a tag facet: every such tag here, then the ancestors\' tag rule and the ty
   assert.deepEqual(keys(addresses), [
     `${LINKED}::a`,
     `${HERO}::a`,
-    `${HERO}::> pb-text a`,
-    `${HERO}::pb-text a`,
+    `${HERO}::> d-text a`,
+    `${HERO}::d-text a`,
     `${PAGE}::a`,
-    `${PAGE}::pb-text a`,
+    `${PAGE}::d-text a`,
+    `${HOME}::a`,
+    `${HOME}::d-text a`,
   ]);
   assert.equal(addresses[0].label, 'Every link here');
   assert.equal(addresses[2].label, 'Text block links directly in Welcome');
   assert.equal(addresses[3].label, 'Text block links in Welcome');
 });
 
-test('a chain facet, an unparseable key or facet has no address set; without a tree the set is the own key alone', () => {
-  assert.deepEqual(set(STRICT, HERO, '> pb-text'), []);
+test('a chain facet, an unparseable key or facet has no address set; without a document the set is the own key alone', () => {
+  assert.deepEqual(set(STRICT, HERO, '> d-text'), []);
   assert.deepEqual(set(STRICT, HERO, '> *'), []);
   assert.deepEqual(set(STRICT, LINKED, '> a'), []);
   assert.deepEqual(set(STRICT, 'nonsense', null), []);
@@ -418,7 +460,7 @@ test('a chain facet, an unparseable key or facet has no address set; without a t
   assert.deepEqual(set(STRICT, LINKED, null, {}, null), [
     { key: LINKED, selector: null, label: 'This element', existing: true },
   ]);
-  // A key the tree does not carry: the own key alone.
+  // A key the document does not carry: the own key alone.
   assert.deepEqual(keys(set(STRICT, 'block:99999999-0000-4000-8000-000000000009', null)), [
     'block:99999999-0000-4000-8000-000000000009',
   ]);
@@ -432,24 +474,24 @@ test('an existing relation rule lists as an address where the matcher says it re
   assert.deepEqual(second[1], { key: HERO, selector: '> p + p', label: 'Paragraphs right after a paragraph in Welcome', existing: true });
   assert.equal(set(STRICT, LINKED, null, siblings).some((address) => address.selector === '> p + p'), false);
   assert.equal(set(STRICT, HEADING, null, siblings).some((address) => address.selector === '> p + p'), false);
-  // `> *:not(pb-image)` reaches every child but the image block.
-  const negated = { [`${HERO}::> *:not(pb-image)`]: { default: { color: 'red' } } };
+  // `> *:not(d-image)` reaches every child but the image block.
+  const negated = { [`${HERO}::> *:not(d-image)`]: { default: { color: 'red' } } };
   assert.deepEqual(set(STRICT, HEADING, null, negated)[1], {
     key: HERO,
-    selector: '> *:not(pb-image)',
+    selector: '> *:not(d-image)',
     label: 'Children except images in Welcome',
     existing: true,
   });
-  assert.equal(set(STRICT, IMAGE, null, negated).some((address) => address.selector === '> *:not(pb-image)'), false);
-  // `> pb-text:has(a)` reaches the linked block only.
-  const linked = { [`${HERO}::> pb-text:has(a)`]: { default: { color: 'red' } } };
+  assert.equal(set(STRICT, IMAGE, null, negated).some((address) => address.selector === '> *:not(d-image)'), false);
+  // `> d-text:has(a)` reaches the linked block only.
+  const linked = { [`${HERO}::> d-text:has(a)`]: { default: { color: 'red' } } };
   assert.equal(set(STRICT, LINKED, null, linked)[1].label, 'Text blocks containing a link in Welcome');
-  assert.equal(set(STRICT, PARA, null, linked).some((address) => address.selector === '> pb-text:has(a)'), false);
+  assert.equal(set(STRICT, PARA, null, linked).some((address) => address.selector === '> d-text:has(a)'), false);
   // The mintable set never offers a relation: the rest of the set is
   // the fixed shapes, as without the rule.
   assert.deepEqual(keys(second).slice(2), keys(set(STRICT, PARA, null)).slice(1));
   // A qualified or sibling-reached facet is a rule of its own: no set.
-  assert.deepEqual(set(STRICT, HERO, '> pb-text:has(a)'), []);
+  assert.deepEqual(set(STRICT, HERO, '> d-text:has(a)'), []);
   assert.deepEqual(set(STRICT, HERO, '> p + p'), []);
 });
 
@@ -463,11 +505,13 @@ test('a box facet: the box word, the ancestors\' rules ending in the same box th
   assert.deepEqual(keys(before), [
     `${LINKED}::&::before`,
     `${HERO}::> *::before`,
-    `${HERO}::> pb-text::before`,
-    `${HERO}::pb-text::before`,
+    `${HERO}::> d-text::before`,
+    `${HERO}::d-text::before`,
     `${HERO}::p::before`,
-    `${PAGE}::pb-text::before`,
+    `${PAGE}::d-text::before`,
     `${PAGE}::p::before`,
+    `${HOME}::d-text::before`,
+    `${HOME}::p::before`,
   ]);
   assert.deepEqual(before[0], { key: LINKED, selector: '&::before', label: 'Before', existing: true });
   assert.deepEqual(before.map((address) => address.label), [
@@ -478,22 +522,25 @@ test('a box facet: the box word, the ancestors\' rules ending in the same box th
     'Every paragraph in Welcome › Before',
     'Text blocks in Page › Before',
     'Every paragraph in Page › Before',
+    'Text blocks in Home › Before',
+    'Every paragraph in Home › Before',
   ]);
   assert.equal(set(OPEN, LINKED, '&::after')[0].label, 'After');
-  assert.deepEqual(keys(set(OPEN, HEADING, '&::before')).filter((key) => key.endsWith('::h2::before')), [], 'h2 is no base tag: its box is never offered');
+  assert.deepEqual(keys(set(OPEN, HEADING, '&::before')).filter((key) => key.endsWith('::h2::before')), [`${HERO}::h2::before`, `${PAGE}::h2::before`, `${HOME}::h2::before`], 'h2 is no declared base tag: its box is offered grammar-only on an open site');
+  assert.deepEqual(keys(set(STRICT, HEADING, '&::before')).filter((key) => key.endsWith('::h2::before')), [], 'h2 is no declared base tag: its box is never offered on a strict site');
   // An existing rule ending in the SAME box lists first as existing; a
   // rule ending in the other box, or in no box, never reaches this one.
   const map = {
-    [`${PAGE}::pb-text::before`]: { default: { content: '""', color: 'red' } },
-    [`${HERO}::> pb-text::after`]: { default: { content: '""' } },
-    [`${HERO}::> pb-text`]: { default: { color: 'blue' } },
+    [`${PAGE}::d-text::before`]: { default: { content: '""', color: 'red' } },
+    [`${HERO}::> d-text::after`]: { default: { content: '""' } },
+    [`${HERO}::> d-text`]: { default: { color: 'blue' } },
   };
   const existing = set(OPEN, LINKED, '&::before', map);
-  assert.deepEqual(keys(existing).slice(0, 3), [`${LINKED}::&::before`, `${PAGE}::pb-text::before`, `${HERO}::> *::before`]);
-  assert.deepEqual(existing.map((address) => address.existing), [true, true, false, false, false, false, false]);
-  assert.equal(existing.some((address) => address.selector === '> pb-text::after'), false);
-  assert.equal(existing.some((address) => address.selector === '> pb-text'), false);
-  assert.equal(set(OPEN, LINKED, '&::after', map).find((address) => address.selector === '> pb-text::after')?.existing, true);
+  assert.deepEqual(keys(existing).slice(0, 3), [`${LINKED}::&::before`, `${PAGE}::d-text::before`, `${HERO}::> *::before`]);
+  assert.deepEqual(existing.map((address) => address.existing), [true, true, false, false, false, false, false, false, false]);
+  assert.equal(existing.some((address) => address.selector === '> d-text::after'), false);
+  assert.equal(existing.some((address) => address.selector === '> d-text'), false);
+  assert.equal(set(OPEN, LINKED, '&::after', map).find((address) => address.selector === '> d-text::after')?.existing, true);
   // A part's box: the part's face then the box, the tag rule and the
   // type-then-part chains each ending in the box.
   const partBox = set(OPEN, LINKED, `${LINK}::after`, { [`${PAGE}::a::after`]: { default: { content: '""' } } });
@@ -501,9 +548,11 @@ test('a box facet: the box word, the ancestors\' rules ending in the same box th
     `${LINKED}::${LINK}::after`,
     `${PAGE}::a::after`,
     `${HERO}::a::after`,
-    `${HERO}::> pb-text ${LINK}::after`,
-    `${HERO}::pb-text ${LINK}::after`,
-    `${PAGE}::pb-text ${LINK}::after`,
+    `${HERO}::> d-text ${LINK}::after`,
+    `${HERO}::d-text ${LINK}::after`,
+    `${PAGE}::d-text ${LINK}::after`,
+    `${HOME}::a::after`,
+    `${HOME}::d-text ${LINK}::after`,
   ]);
   assert.deepEqual(partBox.map((address) => address.label), [
     'This link › After',
@@ -512,6 +561,8 @@ test('a box facet: the box word, the ancestors\' rules ending in the same box th
     'Text block links directly in Welcome › After',
     'Text block links in Welcome › After',
     'Text block links in Page › After',
+    'Every link in Home › After',
+    'Text block links in Home › After',
   ]);
   // A tag tier's box reads the tier's face then the box.
   assert.equal(set(OPEN, LINKED, 'a::before')[0].label, 'Every link here › Before');
@@ -522,25 +573,28 @@ test('a box facet: the box word, the ancestors\' rules ending in the same box th
   // unless the host declares the box; the children's box is always
   // derived. An existing rule still lists: it is there.
   assert.deepEqual(keys(set(STRICT, LINKED, '&::before')), [`${LINKED}::&::before`]);
-  assert.deepEqual(keys(set(STRICT, LINKED, '&::before', map)), [`${LINKED}::&::before`, `${PAGE}::pb-text::before`]);
+  assert.deepEqual(keys(set(STRICT, LINKED, '&::before', map)), [`${LINKED}::&::before`, `${PAGE}::d-text::before`]);
   assert.deepEqual(keys(set(BOXED, LINKED, '&::before')), [
     `${LINKED}::&::before`,
-    `${HERO}::> pb-text::before`,
-    `${HERO}::pb-text::before`,
+    `${HERO}::> d-text::before`,
+    `${HERO}::d-text::before`,
     `${HERO}::p::before`,
-    `${PAGE}::pb-text::before`,
+    `${PAGE}::d-text::before`,
     `${PAGE}::p::before`,
+    `${HOME}::d-text::before`,
+    `${HOME}::p::before`,
   ]);
   assert.deepEqual(keys(set(BOXED, LINKED, '&::after')), [`${LINKED}::&::after`], 'the text type declares no after box');
   assert.deepEqual(keys(set(BOXED, LINKED, `${LINK}::after`)), [
     `${LINKED}::${LINK}::after`,
-    `${HERO}::> pb-text ${LINK}::after`,
-    `${HERO}::pb-text ${LINK}::after`,
-    `${PAGE}::pb-text ${LINK}::after`,
+    `${HERO}::> d-text ${LINK}::after`,
+    `${HERO}::d-text ${LINK}::after`,
+    `${PAGE}::d-text ${LINK}::after`,
+    `${HOME}::d-text ${LINK}::after`,
   ], 'the link part declares its after box; the base a tag declares none');
-  // A chain's box is a rule of its own: no set. Without a tree, the own
+  // A chain's box is a rule of its own: no set. Without a document, the own
   // box alone.
-  assert.deepEqual(set(OPEN, HERO, '> pb-text::before'), []);
+  assert.deepEqual(set(OPEN, HERO, '> d-text::before'), []);
   assert.deepEqual(set(OPEN, LINKED, '&::before', {}, null), [
     { key: LINKED, selector: '&::before', label: 'Before', existing: true },
   ]);
@@ -560,7 +614,7 @@ test('boxAddresses lists the doorways of a root or part facet', () => {
     { key: LINKED, selector: `${LINK}::after`, pseudo: 'after' },
   ]);
   assert.deepEqual(doors(OPEN, LINKED, 'a'), []);
-  assert.deepEqual(doors(OPEN, HERO, '> pb-text'), []);
+  assert.deepEqual(doors(OPEN, HERO, '> d-text'), []);
   assert.deepEqual(doors(OPEN, LINKED, '&::before'), []);
   assert.deepEqual(doors(OPEN, LINKED, `${LINK}::after`), []);
   assert.deepEqual(doors(OPEN, LINKED, ':::'), []);
@@ -573,46 +627,127 @@ test('boxAddresses lists the doorways of a root or part facet', () => {
   assert.deepEqual(doors(BOXED, IMAGE, null), [], 'the image type declares no box');
 });
 
+test('the page\'s own rule is an address on a paragraph: the entity root is the farthest ancestor, its existing rule listed after the nearer owners\'', () => {
+  // The symptom this landing resolves: a `p` rule written on the host
+  // entity reaches every paragraph on the page (in the DOM the canvas
+  // root wrapper stands above the sections), so on a minted paragraph it
+  // is an existing address like a section's, worded by the host's label.
+  const map = { [`${HOME}::p`]: { default: { border: '2px solid red' } } };
+  const addresses = set(STRICT, FORMATTED, '.s-p1', map, DOCUMENT, FORMATTED_MARKUP);
+  assert.deepEqual(keys(addresses).slice(0, 3), [`${FORMATTED}::.s-p1`, `${FORMATTED}::p`, `${HOME}::p`]);
+  assert.deepEqual(addresses.slice(0, 3).map((address) => [address.label, address.existing]), [
+    ['This paragraph', true],
+    ['Every paragraph here', false],
+    ['Every paragraph in Home', true],
+  ]);
+  // Existing rules read nearest owner first: the block's own tier, then
+  // Welcome's, then Page's, then the host's.
+  const everywhere = set(STRICT, FORMATTED, '.s-p1', {
+    ...map,
+    [`${FORMATTED}::p`]: { default: { color: 'red' } },
+    [`${HERO}::p`]: { default: { color: 'teal' } },
+  }, DOCUMENT, FORMATTED_MARKUP);
+  assert.deepEqual(keys(everywhere).slice(0, 4), [`${FORMATTED}::.s-p1`, `${FORMATTED}::p`, `${HERO}::p`, `${HOME}::p`]);
+  // The host mints like any ancestor (the reach is the matcher's, the
+  // declaredness the landing's: a tag rule lands on the base tag, a
+  // type-then-tag chain on the type): the existing `p` rule once, then
+  // its mintable chain. Without the rule its `p` tier is still offered,
+  // mintable.
+  assert.deepEqual(keys(addresses).filter((key) => key.startsWith(HOME)), [`${HOME}::p`, `${HOME}::d-formatted-text p`]);
+  const unwritten = set(STRICT, FORMATTED, '.s-p1', {}, DOCUMENT, FORMATTED_MARKUP).find((address) => addressKey(address) === `${HOME}::p`);
+  assert.deepEqual(unwritten, { key: HOME, selector: 'p', label: 'Every paragraph in Home', existing: false });
+});
+
+test('an open render\'s prose row (a field key) lists its block\'s rule and the page\'s as addresses: the block is the row\'s nearest owner', () => {
+  // A block rendered open hangs its prose rows under the FIELD key
+  // (`block:{uuid}:body::.s-xxx`), which the matcher carries as a
+  // record inside the block (never a node): the row's ancestors are the
+  // block and the block's ancestors, so the block's own `p` rule and the
+  // host's are existing addresses, the block's nearest.
+  const ARTICLE_UUID = '22222222-0000-4000-8000-000000000002';
+  const ARTICLE = `block:${ARTICLE_UUID}`;
+  const BODY = `${ARTICLE}:body`;
+  const bodyMarkup = { tags: ['p'], instances: [{ class: 's-b1', tag: 'p', label: 'Paragraph', children: [] }] };
+  const document = [{
+    kind: 'entity',
+    uuid: HOME_UUID,
+    _element: { name: 'Home', type: 'Page', markup: {} },
+    children: [{
+      kind: 'container',
+      uuid: HERO_UUID,
+      layout_id: 'daedalus_stylish_container',
+      _element: { name: 'Welcome', type: 'Container', markup: { tag: 'section', parts: {} } },
+      children: [{
+        kind: 'block',
+        uuid: ARTICLE_UUID,
+        block_type: 'formatted_text',
+        _element: { name: 'Article', type: 'Formatted text', markup: { tag: 'article' }, fields: { body: { markup: bodyMarkup } } },
+      }],
+    }],
+  }];
+  const map = {
+    [`${ARTICLE}::p`]: { default: { color: 'red' } },
+    [`${HOME}::p`]: { default: { border: '2px solid red' } },
+  };
+  const addresses = addressSet({
+    guide: STRICT, map, key: BODY, selector: '.s-b1', document, blockTypes: { [ARTICLE_UUID]: 'formatted_text' }, sectionLayouts: LAYOUTS, markup: bodyMarkup,
+  });
+  // The own entry, the row's own tag tier (every paragraph in this field,
+  // mintable), then the existing rules nearest owner first: the block's,
+  // then the host's.
+  assert.deepEqual(keys(addresses).slice(0, 4), [`${BODY}::.s-b1`, `${BODY}::p`, `${ARTICLE}::p`, `${HOME}::p`]);
+  assert.deepEqual(addresses.slice(0, 4).map((address) => [address.label, address.existing]), [
+    ['This paragraph', true],
+    ['Every paragraph here', false],
+    ['Every paragraph in Article', true],
+    ['Every paragraph in Home', true],
+  ]);
+  // The section between them reaches the row too: its tag rule mints.
+  assert.equal(addresses.some((address) => addressKey(address) === `${HERO}::p` && !address.existing), true);
+});
+
 test('ownerName reads the node\'s minted name, else the generic word; addressLabel reads the selector shapes', () => {
-  const matcher = createMatcher(TREE);
+  const matcher = createMatcher(DOCUMENT);
   assert.equal(ownerName(matcher, HERO), 'Welcome');
+  // The entity root: the host's label.
+  assert.equal(ownerName(matcher, HOME), 'Home');
   assert.equal(ownerName(matcher, 'container:none'), 'the parent element');
   assert.equal(ownerName(null, 'block:none'), 'the parent element');
   const label = (selector) => addressLabel(STRICT, { key: HERO, selector }, 'Welcome', TYPES, LAYOUTS);
   assert.equal(label('> *'), 'All children of Welcome');
   assert.equal(label('a'), 'Every link in Welcome');
   assert.equal(label('span'), 'Every span in Welcome');
-  assert.equal(label('pb-container'), 'Containers in Welcome');
-  assert.equal(label('> pb-block'), 'Blocks directly in Welcome');
-  assert.equal(label('pb-container > *'), 'Containers › Children in Welcome');
-  assert.equal(label(`pb-text ${LINK}`), 'Text block links in Welcome');
-  assert.equal(label('pb-text a'), 'Text block links in Welcome');
+  assert.equal(label('d-container'), 'Containers in Welcome');
+  assert.equal(label('> d-block'), 'Blocks directly in Welcome');
+  assert.equal(label('d-container > *'), 'Containers › Children in Welcome');
+  assert.equal(label(`d-text ${LINK}`), 'Text block links in Welcome');
+  assert.equal(label('d-text a'), 'Text block links in Welcome');
   // The child-combinated type reads "directly in", so the two shapes the
   // set offers side by side never share a label.
-  assert.equal(label(`> pb-text ${LINK}`), 'Text block links directly in Welcome');
-  assert.equal(label('> pb-text a'), 'Text block links directly in Welcome');
-  assert.equal(label('pb-container a'), 'Container links in Welcome');
+  assert.equal(label(`> d-text ${LINK}`), 'Text block links directly in Welcome');
+  assert.equal(label('> d-text a'), 'Text block links directly in Welcome');
+  assert.equal(label('d-container a'), 'Container links in Welcome');
   // Relations: one group reads its plural subject and phrases; a part
   // or tag after a type carries its own relation; anything else falls
   // back to the chevron label.
   assert.equal(label('> p + p'), 'Paragraphs right after a paragraph in Welcome');
   assert.equal(label('> p ~ p'), 'Paragraphs after a paragraph in Welcome');
   assert.equal(label('> p + *'), 'Children right after a paragraph in Welcome');
-  assert.equal(label('> pb-text:has(a)'), 'Text blocks containing a link in Welcome');
-  assert.equal(label('> pb-text:has(+ pb-image)'), 'Text blocks right before an image in Welcome');
-  assert.equal(label('> pb-text:not(:has(a))'), 'Text blocks without a link in Welcome');
-  assert.equal(label('> *:not(pb-image)'), 'Children except images in Welcome');
-  assert.equal(label('> pb-text:has(a) + pb-text'), 'Text blocks right after a text containing a link in Welcome');
-  assert.equal(label(`> pb-text ${LINK} ~ ${LINK}`), 'Text block links after a link directly in Welcome');
-  assert.equal(label('pb-text a:has(img)'), 'Text block links containing an img in Welcome');
-  assert.equal(label(`> pb-text:has(a) ${LINK}`), 'Text blocks containing a link › Link in Welcome');
+  assert.equal(label('> d-text:has(a)'), 'Text blocks containing a link in Welcome');
+  assert.equal(label('> d-text:has(+ d-image)'), 'Text blocks right before an image in Welcome');
+  assert.equal(label('> d-text:not(:has(a))'), 'Text blocks without a link in Welcome');
+  assert.equal(label('> *:not(d-image)'), 'Children except images in Welcome');
+  assert.equal(label('> d-text:has(a) + d-text'), 'Text blocks right after a text containing a link in Welcome');
+  assert.equal(label(`> d-text ${LINK} ~ ${LINK}`), 'Text block links after a link directly in Welcome');
+  assert.equal(label('d-text a:has(img)'), 'Text block links containing an img in Welcome');
+  assert.equal(label(`> d-text:has(a) ${LINK}`), 'Text blocks containing a link › Link in Welcome');
   // A rule ending in a generated box: the host's sentence, then the box
   // word as one more step (the label seam's chevron).
   assert.equal(label('> *::before'), 'All children of Welcome › Before');
-  assert.equal(label('> pb-text::after'), 'Text blocks directly in Welcome › After');
+  assert.equal(label('> d-text::after'), 'Text blocks directly in Welcome › After');
   assert.equal(label('a::before'), 'Every link in Welcome › Before');
-  assert.equal(label(`> pb-text ${LINK}::after`), 'Text block links directly in Welcome › After');
-  assert.equal(label('> pb-text:has(a)::before'), 'Text blocks containing a link in Welcome › Before');
+  assert.equal(label(`> d-text ${LINK}::after`), 'Text block links directly in Welcome › After');
+  assert.equal(label('> d-text:has(a)::before'), 'Text blocks containing a link in Welcome › Before');
 });
 
 test('withheldAt judges the given properties at the address\'s landing declaration, the reason naming the owner', () => {
@@ -624,7 +759,7 @@ test('withheldAt judges the given properties at the address\'s landing declarati
     properties: ['color', 'font-weight', 'font-size'],
     blockTypes: TYPES,
     sectionLayouts: LAYOUTS,
-    tree: TREE,
+    document: DOCUMENT,
   });
   assert.deepEqual(Object.keys(withheld), ['color', 'font-size']);
   assert.equal(
@@ -635,14 +770,14 @@ test('withheldAt judges the given properties at the address\'s landing declarati
   assert.deepEqual(
     withheldAt({
       guide: STRICT,
-      address: { key: HERO, selector: `> pb-text ${LINK}` },
+      address: { key: HERO, selector: `> d-text ${LINK}` },
       properties: ['color', 'font-size'],
       blockTypes: TYPES,
       sectionLayouts: LAYOUTS,
     }),
     {
       'font-size':
-        'font-size is not allowed at "> pb-text .text-block-link" on the parent element: the style guide does not grant it there. Choose this element alone to set it here.',
+        'font-size is not allowed at "> d-text .text-block-link" on the parent element: the style guide does not grant it there. Choose this element alone to set it here.',
     },
   );
   // An undeclared landing grants nothing: everything is withheld.

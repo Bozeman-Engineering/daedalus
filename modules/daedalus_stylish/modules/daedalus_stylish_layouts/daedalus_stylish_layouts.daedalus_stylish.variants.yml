@@ -10,17 +10,16 @@
 #   constraint is a padding-inline stop on the root itself:
 #   `max(gutter, calc((100% - W) / 2))` keeps the background full-bleed,
 #   centers the content column, and grants a gutter for free below the max.
-# - animation: the entrance a container wears when it scrolls into view;
-#   the block family's twin (daedalus_stylish.daedalus_stylish.variants.yml), same three
-#   looks, same literal timings and the same in-view trigger pair, each
-#   carrying its own reduced-motion unset (see the family's comment
-#   below).
-# - hover: the hover feel a container wears (container_lift, the block
-#   family's twin): the variant's own styles carry the WHEN, a `hover`
-#   block beside the rest state's `default` transition.
+# - animation and hover: declared on the kind, but this file ships NO
+#   variant on either. The suite ships no motion of its own; a skin
+#   package mints the container entrances and hover feel beside its
+#   block family (starter_*_section and olivero_*_section in
+#   daedalus_stylish_starter_skin.daedalus_stylish.variants.yml and
+#   daedalus_stylish_olivero_skin.daedalus_stylish.variants.yml), and a
+#   package that mints none shows an empty row.
 #
-# All four axes style the container ROOT (''), scoped to the container
-# KIND: with one layout, container layout, width and entrance are
+# Both families here style the container ROOT (''), scoped to the
+# container KIND: with one layout, container layout and width are
 # container-wide facts, not per-layout ones. The stacking condition is
 # "narrow" (the width-band condition, measured at the ONE page-level query
 # root), so a row stacks when the PAGE is narrow, exactly like a
@@ -37,7 +36,7 @@
 # apply_variant. The
 # default is stamped at the op door only (document-authored sections, the
 # dialect's and a blueprint's, wear exactly what the document states; see
-# the layout YAML's comment), so op-added page bands place constrained
+# the layout YAML's comment), so op-added sections place constrained
 # and keep following shipped updates while unmodified. The retired
 # layout-exact families (onecol_* .. fourcol_*) mapped onto these generics
 # in ContainerMigration::VARIANT_MAP, and the retired count-keyed
@@ -119,11 +118,11 @@ row:
         flex-wrap: 'wrap'
         gap: 'var(--space-gutter)'
 
-# Widths: the constrained content width of any page band. Site width is
+# Widths: the constrained content width of any section. Site width is
 # the default: it references the skin's tokens (--layout-max-width for the
-# stop, --space-gutter for the inset floor), so every band, the header and
+# stop, --space-gutter for the inset floor), so every section, the header and
 # the footer share ONE number by construction and a restyled skin moves
-# them together. The px family stays as explicit per-band overrides. The
+# them together. The px family stays as explicit per-section overrides. The
 # family's weights order the roster widest-first (rosters sort
 # weight-then-label, lighter first): Full width down to Small, the size
 # scale rather than the alphabetical accident of the labels.
@@ -132,7 +131,7 @@ container_site:
   scope: 'kind:container'
   axis: 'width'
   weight: 15
-  description: 'Constrain the container to the site''s shared content width (the skin''s layout max-width token), centered, with the site gutter below it. The default: page bands, header and footer share one number.'
+  description: 'Constrain the container to the site''s shared content width (the skin''s layout max-width token), centered, with the site gutter below it. The default: sections, header and footer share one number.'
   styles:
     '':
       default:
@@ -192,113 +191,8 @@ container_full:
   scope: 'kind:container'
   axis: 'width'
   weight: 10
-  description: 'Let the content run to the edges of the page, inset by the site gutter alone. A band''s background already spans the screen at every width, so this is never the way to get a full-bleed color or image behind a band; reach for it when the content itself should reach the edges, such as edge-to-edge photography or a gallery grid.'
+  description: 'Let the content run to the edges of the page, inset by the site gutter alone. A section''s background already spans the screen at every width, so this is never the way to get a full-bleed color or image behind a section; reach for it when the content itself should reach the edges, such as edge-to-edge photography or a gallery grid.'
   styles:
     '':
       default:
         padding-inline: 'var(--space-gutter)'
-
-# Entrances: the animation axis's shipped family, the block family's twin
-# (daedalus_stylish.daedalus_stylish.variants.yml) so a page band and the blocks inside it
-# speak one motion vocabulary. Every variant references a shipped
-# animation (daedalus_stylish.daedalus_stylish.animations.yml) with LITERAL timings, never a
-# token, so it resolves on any skin, and carries its own reduced-motion
-# unset: skin defaults are the bottom layer and the topmost setter wins
-# per property, so a skin's `animation: none` under the media query could
-# never beat a variant's animation-name. The setter unsets itself; every
-# wearer is honest on any skin, and the pattern is what minters copy. The
-# longhands (not the shorthand) carry the default so the advanced Motion
-# section reads each fact on its own row. The attribute spelling resolves
-# in the container scope's own slot, so `animation="fade_in"` names this
-# family on <pb-container> and the block family on a block tag.
-#
-# Every entrance plays when the band scrolls into view, not at render:
-# `timeline-trigger: --in-view view() entry 20% exit 100%` names a
-# view-timeline trigger whose activation range runs from the point where
-# 20% of the container has entered the scrollport until it has fully
-# left, and `animation-trigger: --in-view play-once` binds the entrance
-# to it (the Motion group's curated pair, the Animation Triggers draft's
-# spelling). The end point is part of the WHEN: a lone start natively
-# activates only while the container crosses its entry band, so a band
-# already in view when the trigger is created would never play; with
-# `exit 100%` a band above the fold plays at load and one below it waits.
-# A wearer overrides either property to change how far in (keep the
-# `exit 100%` end) or to replay every time, keeping the `--in-view` name
-# so the pair stays bound; the reduced-motion unset already kills the
-# animation, so the trigger needs no work there. Where the browser lacks
-# `animation-trigger`, the printer's `@supports not` hold and the
-# daedalus_stylish/motion_triggers runtime play the same role.
-container_fade_in:
-  label: 'Fade in'
-  scope: 'kind:container'
-  axis: 'animation'
-  description: 'Fade the container in over 600ms when it scrolls into view. The quietest entrance for a page band; off under a reduced-motion preference.'
-  styles:
-    '':
-      default:
-        animation-name: 'motion-fade_in'
-        animation-duration: '600ms'
-        animation-timing-function: 'ease-out'
-        animation-fill-mode: 'both'
-        timeline-trigger: '--in-view view() entry 20% exit 100%'
-        animation-trigger: '--in-view play-once'
-      reduced-motion:
-        animation: 'none'
-container_rise:
-  label: 'Rise'
-  scope: 'kind:container'
-  axis: 'animation'
-  description: 'Fade the container in while it drifts up 1rem into place over 600ms when it scrolls into view. Reach for it on a page band that should arrive with a little lift; off under a reduced-motion preference.'
-  styles:
-    '':
-      default:
-        animation-name: 'motion-rise'
-        animation-duration: '600ms'
-        animation-timing-function: 'ease-out'
-        animation-fill-mode: 'both'
-        timeline-trigger: '--in-view view() entry 20% exit 100%'
-        animation-trigger: '--in-view play-once'
-      reduced-motion:
-        animation: 'none'
-container_scale_in:
-  label: 'Scale in'
-  scope: 'kind:container'
-  axis: 'animation'
-  description: 'Fade the container in while it grows from 96% to full size over 500ms when it scrolls into view. Reach for it on a hero or a color-blocked band that should pop into place; off under a reduced-motion preference.'
-  styles:
-    '':
-      default:
-        animation-name: 'motion-scale_in'
-        animation-duration: '500ms'
-        animation-timing-function: 'ease-out'
-        animation-fill-mode: 'both'
-        timeline-trigger: '--in-view view() entry 20% exit 100%'
-        animation-trigger: '--in-view play-once'
-      reduced-motion:
-        animation: 'none'
-
-# The hover axis (declared after animation on the universal container
-# kind): hover FEEL as material on its own axis, the block family's twin
-# (block_lift in daedalus_stylish.daedalus_stylish.variants.yml). A wear is unconditioned
-# by construction, so the variant carries its own WHEN inside its styles:
-# the rest state's transition under `default`, the moved state under
-# `hover`; the wear bar's Hover row, posed Hover, shows that block. The
-# one-per-axis rule keeps an entrance and a hover feel apart, so a band
-# wears both at once. Literal values only, and the variant's own
-# reduced-motion unset for what it set (the transition and the
-# transform); a shadow swap is not motion, so the shadow stays.
-container_lift:
-  label: 'Lift'
-  scope: 'kind:container'
-  axis: 'hover'
-  description: 'Raise the container 4px with a soft shadow while the pointer hovers it, easing over 150ms. Reach for it on a card-like band or a linked panel that should feel pressable; still under a reduced-motion preference.'
-  styles:
-    '':
-      default:
-        transition: 'transform 150ms ease-out, box-shadow 150ms ease-out'
-      hover:
-        transform: 'translateY(-4px)'
-        box-shadow: '0 8px 24px rgb(0 0 0 / 0.12)'
-      reduced-motion:
-        transition: 'none'
-        transform: 'none'

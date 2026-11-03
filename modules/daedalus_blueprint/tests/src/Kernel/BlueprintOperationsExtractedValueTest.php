@@ -96,7 +96,11 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
 
     $this->operations = $this->container->get('daedalus_blueprint.operations');
 
-    $this->spyHandler = new class($this->container->get('entity_type.manager')) extends TextFieldHandler {
+    $this->spyHandler = new class(
+      $this->container->get('entity_type.manager'),
+      $this->container->get('daedalus_blueprint.compat.filter_formats'),
+      $this->container->get('current_user'),
+    ) extends TextFieldHandler {
 
       /**
        * The field names deserialize() was asked for, in call order.
@@ -543,11 +547,11 @@ class BlueprintOperationsExtractedValueTest extends BlueprintKernelTestBase {
   /**
    * The batch's minted-identity walk ignores an ExtractedValue.
    *
-   * Both mintedUuids() and referencesTaintedUuid() walk every op
+   * Both mintedIdentity() and referencesTaintedIdentity() walk every op
    * recursively; an ExtractedValue is an object leaf, so a failed op
    * before it neither throws on it nor suppresses its findings by mistake.
    */
-  public function testMintedUuidWalkIgnoresExtractedValue(): void {
+  public function testMintedIdentityWalkIgnoresExtractedValue(): void {
     $entity = $this->createTestEntity([
       'field_description' => ['value' => '<p>Saved</p>', 'format' => 'plain_text'],
     ]);

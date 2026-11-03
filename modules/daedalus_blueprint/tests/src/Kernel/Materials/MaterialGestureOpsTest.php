@@ -76,15 +76,15 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
     }
     $guidance = $registry->getGuidance();
     $this->assertStringContainsString('never mint a material unless the user asks, and a mint is published site-wide at once', $guidance['save_material'], 'The router line states the mint gate from MaterialsProse.');
-    $this->assertStringContainsString('"kind" (swatch|blueprint)', $guidance['save_material'], 'The kinds are the ones the providers teach a gesture for.');
+    $this->assertStringContainsString('"kind" (token|blueprint)', $guidance['save_material'], 'The kinds are the ones the providers teach a gesture for.');
     $this->assertStringContainsString('"kind"', $guidance['update_material']);
     $this->assertStringContainsString('"kind"', $guidance['remove_material']);
 
     // The builder names the provider that teaches a kind's gesture, and
     // none for a kind nobody teaches.
     $builder = $this->container->get('daedalus_blueprint.materials_roster_builder');
-    $this->assertInstanceOf(TestMaterialsProvider::class, $builder->gestureProvider(MaterialKind::Swatch));
-    $this->assertNull($builder->gestureProvider(MaterialKind::Token));
+    $this->assertInstanceOf(TestMaterialsProvider::class, $builder->gestureProvider(MaterialKind::Token));
+    $this->assertNull($builder->gestureProvider(MaterialKind::Variant));
   }
 
   /**
@@ -95,19 +95,19 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
 
     $result = $this->batch($entity, [
       'op' => 'save_material',
-      'kind' => 'swatch',
-      'label' => 'Brand red',
+      'kind' => 'token',
+      'label' => 'brand-red',
       'value' => '#e94560',
     ]);
     $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
     $this->assertCount(1, TestMaterialsProvider::$gestures);
     $gesture = TestMaterialsProvider::$gestures[0];
     $this->assertSame('capture', $gesture['verb']);
-    $this->assertSame('swatch', $gesture['kind']);
+    $this->assertSame('token', $gesture['kind']);
     $this->assertNull($gesture['id']);
     // The provider sees the gesture's keys only: op and kind are the
     // envelope's, and the origin is a request option, a person by default.
-    $this->assertSame(['label' => 'Brand red', 'value' => '#e94560'], $gesture['operation']);
+    $this->assertSame(['label' => 'brand-red', 'value' => '#e94560'], $gesture['operation']);
     $this->assertSame($entity->uuid(), $gesture['entity']);
     $this->assertSame(MaterialRecord::ORIGIN_USER, $gesture['options'][MaterialGestureOperationHandler::ORIGIN_OPTION]);
 
@@ -125,7 +125,7 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
     $this->assertSame(MaterialRecord::ORIGIN_AI, TestMaterialsProvider::$gestures[1]['options'][MaterialGestureOperationHandler::ORIGIN_OPTION]);
 
     // A provider's refusal is the batch's semantic failure, errors verbatim.
-    $codes = $this->errorCodes($this->batch($entity, ['op' => 'save_material', 'kind' => 'swatch', 'label' => '']));
+    $codes = $this->errorCodes($this->batch($entity, ['op' => 'save_material', 'kind' => 'token', 'label' => '']));
     $this->assertSame(['MISSING_PARAMETER'], $codes['label']);
   }
 
@@ -143,22 +143,22 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
     $codes = $this->errorCodes($this->batch($entity, ['op' => 'save_material', 'kind' => 'sticker', 'label' => 'X']));
     $this->assertSame(['MISSING_PARAMETER'], $codes['kind']);
 
-    // The test provider teaches swatch and blueprint gestures only: a
+    // The test provider teaches token and blueprint gestures only: a
     // variant (a rostered kind) has no gesture here, and the refusal names
     // the kinds that do.
     $result = $this->batch($entity, ['op' => 'save_material', 'kind' => 'variant', 'label' => 'X']);
     $this->assertSame(['kind' => ['NO_GESTURE']], $this->errorCodes($result));
-    $this->assertSame(['swatch', 'blueprint'], $result->getErrors()[0]->getContext()['kinds']);
+    $this->assertSame(['token', 'blueprint'], $result->getErrors()[0]->getContext()['kinds']);
     $this->assertSame([], TestMaterialsProvider::$gestures, 'Nothing reached the provider.');
 
     foreach (['update_material', 'remove_material'] as $op) {
-      $codes = $this->errorCodes($this->batch($entity, ['op' => $op, 'kind' => 'swatch']));
+      $codes = $this->errorCodes($this->batch($entity, ['op' => $op, 'kind' => 'token']));
       $this->assertSame(['MISSING_PARAMETER'], $codes['id'], "$op needs an id.");
     }
 
     // A malformed origin option is the caller's bug, never a stamp.
     $this->expectException(\InvalidArgumentException::class);
-    $this->batch($entity, ['op' => 'save_material', 'kind' => 'swatch', 'label' => 'X'], [MaterialGestureOperationHandler::ORIGIN_OPTION => 'robot']);
+    $this->batch($entity, ['op' => 'save_material', 'kind' => 'token', 'label' => 'X'], [MaterialGestureOperationHandler::ORIGIN_OPTION => 'robot']);
   }
 
   /**
@@ -169,15 +169,15 @@ class MaterialGestureOpsTest extends BlueprintKernelTestBase {
 
     $result = $this->batch($entity, [
       'op' => 'update_material',
-      'kind' => 'swatch',
-      'id' => 'lime_green',
-      'label' => 'Lime',
+      'kind' => 'token',
+      'id' => 'color/lime-green',
+      'label' => 'lime',
       'value' => '#4dff8d',
     ]);
     $this->assertTrue($result->isSuccess());
     $gesture = TestMaterialsProvider::$gestures[0];
-    $this->assertSame(['update', 'swatch', 'lime_green'], [$gesture['verb'], $gesture['kind'], $gesture['id']]);
-    $this->assertSame(['label' => 'Lime', 'value' => '#4dff8d'], $gesture['operation']);
+    $this->assertSame(['update', 'token', 'color/lime-green'], [$gesture['verb'], $gesture['kind'], $gesture['id']]);
+    $this->assertSame(['label' => 'lime', 'value' => '#4dff8d'], $gesture['operation']);
 
     $result = $this->batch($entity, ['op' => 'remove_material', 'kind' => 'blueprint', 'id' => 'hero']);
     $this->assertTrue($result->isSuccess());

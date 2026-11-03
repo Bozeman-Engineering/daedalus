@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
-use Drupal\daedalus_stylish\Entity\DaedalusStylishSwatch;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -13,15 +12,15 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Pins the cached prompt's roster order across fresh repository instances.
  *
- * The published variants and swatches are printed into the AI's cached
+ * The published variants are printed into the AI's cached
  * system prompt (DialectCatalogPrompt's design system brief), which precedes
  * the messages, so any byte that moves between two requests throws the
  * whole prompt cache away. Each sidebar poll is its own PHP request, and
  * a roster sorted without a total key leaves same-label ties to the
  * database, whose pick drifts between requests: a sidebar transcript
  * alternated two byte orders of the shipped block_/container_ motion pairs
- * and read 0 cached tokens on every other call. VariantRepository and
- * SwatchRepository now break label ties on the unique machine name; this
+ * and read 0 cached tokens on every other call. VariantRepository now
+ * breaks label ties on the unique machine name; this
  * renders the prompt twice from fresh repository instances (a container
  * rebuild, the kernel-test twin of a new request) over same-label
  * fixtures inserted against machine-name order, and asserts the two
@@ -44,6 +43,7 @@ class PromptRosterOrderTest extends KernelTestBase {
     'key',
     'ai',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -63,10 +63,7 @@ class PromptRosterOrderTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    // The materials provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // The materials provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
   }
@@ -84,11 +81,12 @@ class PromptRosterOrderTest extends KernelTestBase {
   }
 
   /**
-   * Same-label variants and swatches print in one order, request after request.
+   * Same-label variants print in one order, request after request.
    */
   public function testRosterOrderIsTotal(): void {
-    // The shipped motion pairs' shape: a block_ and a container_ variant
-    // on one label at weight 0. Inserted container-first, then reversed
+    // The skin packages' motion pairs' shape: a block and a container
+    // variant on one label at weight 0, minted here as the fixture's own.
+    // Inserted container-first, then reversed
     // between the pairs, so neither insertion order nor its reverse can
     // pass for the tiebreak.
     $pairs = [
@@ -105,15 +103,6 @@ class PromptRosterOrderTest extends KernelTestBase {
       ]);
       $variant->setStyles(['' => ['default' => ['opacity' => '1']]]);
       $variant->save();
-    }
-    foreach (['accent_warm', 'accent_cool'] as $machine_name) {
-      $swatch = DaedalusStylishSwatch::create([
-        'label' => 'Accent',
-        'machine_name' => $machine_name,
-        'kind' => 'color',
-      ]);
-      $swatch->setSwatchValue($machine_name === 'accent_warm' ? '#e94560' : '#1a1a2e');
-      $swatch->save();
     }
 
     $first = $this->renderFresh();
@@ -134,10 +123,6 @@ class PromptRosterOrderTest extends KernelTestBase {
       '- container_rise "Rise"',
       '- block_fade_in "Fade in"',
       '- block_rise "Rise"',
-    ], $materials);
-    $this->assertAscending([
-      '--swatch-accent_cool "Accent"',
-      '--swatch-accent_warm "Accent"',
     ], $materials);
 
     // Two requests, one byte order: the cached prefix survives the poll.

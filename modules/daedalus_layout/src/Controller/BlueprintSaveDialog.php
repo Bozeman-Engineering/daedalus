@@ -9,8 +9,10 @@ use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleExtensionList;
+use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\Core\Url;
 use Drupal\daedalus_blueprint_library\Exception\BlueprintGestureException;
 use Drupal\daedalus_blueprint_library\BlueprintInterface;
 use Drupal\daedalus_layout\IconPickerOpener;
@@ -18,6 +20,7 @@ use Drupal\media\MediaInterface;
 use Drupal\media_library\MediaLibraryUiBuilder;
 use Drupal\daedalus_blueprint\Dialect\DialectCatalogBuilder;
 use Drupal\daedalus_blueprint\IconResolver;
+use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
 
@@ -37,9 +40,9 @@ use Symfony\Component\HttpFoundation\Request;
  *   top bar's Save menu): the query's element is then the host's own
  *   uuid, and build() words the dialog for a page-scope capture.
  * - Update blueprint (js/verbs/blueprint.js) is the push gesture's confirm
- *   step; no fields of its own (details editing is the Add panel's
- *   dialog), its commit button wears data-blueprint-update and submits
- *   the update_material op.
+ *   step; no face fields of its own (details editing is the Add panel's
+ *   dialog), only the sharing control below; its commit button wears
+ *   data-blueprint-update and submits the update_material op.
  * - Edit details… (js/src/blueprint-gestures.js) shares the save
  *   dialog's label and description fields (prefilled client-side from the
  *   record) and adds what the blueprint is material for: the scope shown
@@ -72,6 +75,21 @@ use Symfony\Component\HttpFoundation\Request;
  * details dialog, the palette face's home. The gestures speak only the
  * media spelling, and the picker can only produce `media:<uuid>` or empty,
  * so the two contracts meet by construction.
+ *
+ * Every dialog offers the one sharing control every material has, "Offer
+ * to the AI" (the record's `offered`, the AI opt-out the stylish cards
+ * carry too): checked on the save dialogs (a mint offers by default),
+ * prefilled from the stored flag on the update and details dialogs
+ * (rendered only for a resolved blueprint, the details route's presence
+ * semantics), sent as `offered` on the op or the details body. Beside
+ * it, for a user holding "view ai context usage"
+ * (MaterialsBudget::PERMISSION), the door to the AI context usage
+ * display: a link wearing data-daedalus-modal that the daedalus popup's
+ * one opener (Drupal.Daedalus.openModal, daedalus_ui/modal, attached
+ * with the link) opens in core's modal over this dialog. A save shares
+ * by default, so
+ * past the budget the op refuses it (AI_CONTEXT_FULL) with that display
+ * named in the hint; the link is where the editor sees why.
  *
  * The save and update dialogs additionally offer ADOPTION where
  * daedalus_stylish and the library module are installed: the adoptable
@@ -110,6 +128,16 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
    * The details dialog's favorite checkbox attribute (the client reads it).
    */
   public const FAVORITE_ATTRIBUTE = 'data-blueprint-favorite';
+
+  /**
+   * The dialogs' "Offer to the AI" checkbox attribute (the clients read it).
+   */
+  public const OFFERED_ATTRIBUTE = 'data-blueprint-offered';
+
+  /**
+   * The AI context usage display's route, the link's target.
+   */
+  public const AI_CONTEXT_ROUTE = 'daedalus_blueprint.ai_context';
 
   /**
    * The daedalus_stylish variant manager, or NULL without daedalus_stylish.
@@ -151,6 +179,7 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
     protected IconResolver $iconResolver,
     protected ModuleExtensionList $moduleExtensionList,
     protected DialectCatalogBuilder $catalogBuilder,
+    protected AccountProxyInterface $currentUser,
   ) {
     $this->variantManager = $variant_manager;
     $this->blueprintManager = $blueprint_manager;
@@ -172,6 +201,7 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
       $container->get('daedalus_blueprint.icon_resolver'),
       $container->get('extension.list.module'),
       $container->get('daedalus_blueprint.dialect_catalog_builder'),
+      $container->get('current_user'),
     );
   }
 
@@ -201,7 +231,7 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
       'intro' => $this->intro($scope === BlueprintInterface::SCOPE_PAGE
         ? $this->t("Save this whole page as a reusable page blueprint, one of the site's materials. A page blueprint starts new pages of this kind; it is not offered in the Add panel, and it has a canvas of its own to edit.")
         : $this->t("Save this container as a reusable blueprint, one of the site's materials. It appears in the Add panel for every editor; placing it stamps a fresh copy, and the blueprint has a canvas of its own to edit.")),
-    ] + $this->fields($this->iconField($host, NULL, 'blueprint-save-icon', $scope), $scope) + $this->scopeField($scope) + $this->adoption($request) + [
+    ] + $this->fields($this->iconField($host, NULL, 'blueprint-save-icon', $scope), $scope) + $this->offeredField(TRUE) + $this->scopeField($scope) + $this->adoption($request) + [
       'actions' => $this->actions('data-blueprint-save', 'data-blueprint-cancel', $this->t('Save blueprint')),
     ];
   }
@@ -219,11 +249,14 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
    *
    * Update additionally shows the blueprint's CURRENT owned roster (the
    * looks it already offers) as inert read-only display (the save dialog
-   * has no roster: a blueprint being born owns nothing).
+   * has no roster: a blueprint being born owns nothing), and the one
+   * sharing control, "Offer to the AI", prefilled from the stored flag
+   * (only for a resolved blueprint; the client sends `offered` on the
+   * update_material op only when the box rendered).
    *
    * @return array
-   *   A render array of the update confirm copy, owned roster, adoption,
-   *   and actions.
+   *   A render array of the update confirm copy, owned roster, the
+   *   offer, adoption, and actions.
    */
   public function update(Request $request): array {
     $blueprint = $this->updateTarget($request);
@@ -231,7 +264,7 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
       '#type' => 'container',
       '#attributes' => ['class' => ['daedalus-layout-blueprint-save']],
       'intro' => $this->intro($this->updateIntro($blueprint)),
-    ] + $this->ownedRoster($blueprint) + $this->adoption($request) + [
+    ] + $this->ownedRoster($blueprint) + ($blueprint === NULL ? [] : $this->offeredField($blueprint->isOffered())) + $this->adoption($request) + [
       'actions' => $this->actions('data-blueprint-update', 'data-blueprint-cancel', $this->t('Update blueprint')),
     ];
   }
@@ -299,9 +332,72 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
       '#type' => 'container',
       '#attributes' => ['class' => ['daedalus-layout-blueprint-save', 'daedalus-layout-blueprint-details']],
       'intro' => $this->intro($this->t('Rename this blueprint, rewrite its description or change what it is material for. The Add panel and the AI read these; existing placements keep what they have.')),
-    ] + $this->fields($this->iconField($blueprint, $blueprint?->getIcon(), 'blueprint-details-icon')) + $this->materialFor($blueprint) + $this->favoriteField($blueprint) + [
+    ] + $this->fields($this->iconField($blueprint, $blueprint?->getIcon(), 'blueprint-details-icon')) + $this->materialFor($blueprint) + $this->favoriteField($blueprint) + ($blueprint === NULL ? [] : $this->offeredField($blueprint->isOffered())) + [
       'actions' => $this->actions('data-blueprint-details-save', 'data-blueprint-details-cancel', $this->t('Save details')),
     ];
+  }
+
+  /**
+   * The "Offer to the AI" control: the one sharing control, as one checkbox.
+   *
+   * The same control the stylish cards carry on every material (the
+   * record's `offered`, the AI opt-out): off, the blueprint leaves the
+   * brief and the schema and stays for the Add panel alone. Checked on
+   * the save dialogs (a mint offers by default); the update and details
+   * dialogs pass the stored flag, and render it only for a resolved
+   * blueprint (their presence semantics: the clients send `offered` only
+   * when the box rendered, so an unresolved reference leaves the stored
+   * flag standing). Beside it, for a user who may read the AI context
+   * usage, the door to the usage display: a link wearing
+   * data-daedalus-modal that the daedalus popup's one opener
+   * (daedalus_ui/modal, attached here) opens in core's modal; its href
+   * rides by route name. Without the permission the
+   * link is absent, honest chrome; the display's route enforces.
+   *
+   * @param bool $checked
+   *   The box's state: TRUE for a mint, the stored flag for an update.
+   *
+   * @return array
+   *   A render array keyed offered_field.
+   */
+  protected function offeredField(bool $checked): array {
+    $field = [
+      '#type' => 'container',
+      '#attributes' => ['class' => ['form-item']],
+      'input' => [
+        '#type' => 'inline_template',
+        // A label wrapping a checkbox: the dialog skin's inline choice
+        // row (the favorite's pattern).
+        '#template' => '<label><input type="checkbox" ' . self::OFFERED_ATTRIBUTE . '{% if checked %} checked{% endif %}/> {{ label }}</label>',
+        '#context' => ['label' => $this->t('Offer to the AI'), 'checked' => $checked],
+      ],
+      'help' => [
+        '#type' => 'html_tag',
+        '#tag' => 'p',
+        '#attributes' => ['class' => ['description']],
+        '#value' => $this->t('Off, the AI is not told about this blueprint: it leaves the brief and the schema but stays in the Add panel.'),
+      ],
+    ];
+    if ($this->currentUser->hasPermission(MaterialsBudget::PERMISSION)) {
+      $field['context'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'a',
+        '#value' => $this->t('See what the AI holds'),
+        '#attributes' => [
+          'href' => Url::fromRoute(self::AI_CONTEXT_ROUTE)->toString(),
+          'class' => ['daedalus-layout-blueprint-save__ai-context'],
+          'data-daedalus-modal' => '',
+          // The display's class on the popup, for its styling and the
+          // tests; the width is the opener's default.
+          'data-daedalus-modal-class' => 'daedalus-ai-context-dialog',
+          'title' => $this->t('What the site shares with the AI, by kind, against the budget.'),
+        ],
+        '#attached' => [
+          'library' => ['daedalus_ui/modal'],
+        ],
+      ];
+    }
+    return ['offered_field' => $field];
   }
 
   /**

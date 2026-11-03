@@ -41,12 +41,9 @@ class BlueprintSchemaEmptyCatalogTest extends BlueprintKernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    // The roster's daedalus_stylish provider queries the variant, swatch, and skin
+    // The roster's daedalus_stylish provider queries the variant and skin
     // storages on every build.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
 
@@ -91,7 +88,7 @@ class BlueprintSchemaEmptyCatalogTest extends BlueprintKernelTestBase {
     $materials = $schema['materials'];
     $this->assertSame('block', $materials['blueprints']['my_block']['scope']);
     $this->assertSame([DialectCatalog::UNGROUPED => ['blueprints' => 1]], $materials['groups'], 'The first blueprint grows the index too.');
-    $this->assertStringContainsString('<pb-blueprint name="id"/>', $materials['guidance']);
+    $this->assertStringContainsString('<d-blueprint name="id"/>', $materials['guidance']);
     $this->assertStringContainsString('save_material', $materials['guidance']);
     $style_guide = $schema['styles']['style_guide'];
     $this->assertStringContainsString('and the blueprints', $style_guide['guidance']);

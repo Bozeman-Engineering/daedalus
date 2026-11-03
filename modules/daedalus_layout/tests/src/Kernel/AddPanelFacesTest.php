@@ -52,7 +52,7 @@ class AddPanelFacesTest extends NestedStorageKernelTestBase {
     'media',
     'options',
     'daedalus_blueprint_library',
-    // Declares the site groups heroes and bands.
+    // Declares the site groups heroes and sections.
     'daedalus_layout_site_groups_test',
   ];
 
@@ -225,7 +225,7 @@ class AddPanelFacesTest extends NestedStorageKernelTestBase {
       ->set('description', 'One paragraph of text.')
       ->setThirdPartySetting('daedalus_layout', 'icon', '/modules/custom/theme/basic.svg')
       ->setThirdPartySetting('daedalus_layout', 'favorite', TRUE)
-      ->setThirdPartySetting('daedalus_layout', 'groups', ['bands', 'openers', 'heroes'])
+      ->setThirdPartySetting('daedalus_layout', 'groups', ['sections', 'openers', 'heroes'])
       ->save();
 
     $face = $this->facesById($this->faces->answer($this->hostOf($this->createTestEntity())))['inline_block:basic'];
@@ -235,7 +235,7 @@ class AddPanelFacesTest extends NestedStorageKernelTestBase {
       'label' => 'Basic Block',
       'description' => 'One paragraph of text.',
       'icon' => '/modules/custom/theme/basic.svg',
-      'groups' => ['bands', 'heroes'],
+      'groups' => ['sections', 'heroes'],
       'favorite' => TRUE,
       // The base's user holds no bundle admin permission.
       'editable' => FALSE,
@@ -310,7 +310,7 @@ class AddPanelFacesTest extends NestedStorageKernelTestBase {
   public function testGroups(): void {
     $expected = [
       ['id' => 'heroes', 'label' => 'Heroes', 'description' => 'Full-width openers for the top of a page.'],
-      ['id' => 'bands', 'label' => 'Bands', 'description' => ''],
+      ['id' => 'sections', 'label' => 'Sections', 'description' => ''],
     ];
     $this->assertSame($expected, $this->faces->groups());
     $this->assertSame($expected, $this->faces->answer($this->hostOf($this->createTestEntity()))->groups);

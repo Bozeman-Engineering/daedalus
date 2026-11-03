@@ -32,7 +32,7 @@ const FACES = faceList(
   ],
   [
     record('signoff', 'Signoff', ['newsletter']),
-    record('hero_band', 'Hero band', ['marketing']),
+    record('hero_section', 'Hero section', ['marketing']),
     record('design_notes', 'Design notes', ['undeclared']),
   ],
 );
@@ -73,7 +73,7 @@ test('a search answers one flat list in label order, each face once, naming its 
 test('a search matches a group\'s label too, once per face', () => {
   // "market" is in no label; it finds the Marketing group's faces.
   const hits = search(FACES, GROUPS, 'market');
-  assert.deepEqual(ids(hits), ['blueprint:hero_band', 'inline_block:text']);
+  assert.deepEqual(ids(hits), ['blueprint:hero_section', 'inline_block:text']);
   // A face whose label AND group both match is listed once.
   const newsletter = search(FACES, GROUPS, 'newsletter');
   assert.deepEqual(ids(newsletter), ['inline_block:signup', 'blueprint:signoff']);

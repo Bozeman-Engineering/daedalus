@@ -8,6 +8,7 @@ use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Cache\Context\CacheContextsManager;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
+use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
@@ -127,7 +128,8 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
     $entity_type_definition = $this->entityTypeManager->getDefinition($entity_type);
     $field_definitions = $this->entityFieldManager->getFieldDefinitions($entity_type, $bundle);
     $processable_fields = $this->fieldHandlerManager->filterFieldDefinitions($entity_type_definition, $field_definitions, $bundle);
-    $processable_fields = $this->filterAccessibleFields($processable_fields);
+    $subject = $this->stubSubject($entity_type_definition, $bundle);
+    $processable_fields = $this->filterAccessibleFields($processable_fields, $subject);
 
     $fields = [];
     foreach ($processable_fields as $field_name => $definition) {
@@ -148,7 +150,7 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
     if ($layout_builder_schema !== NULL) {
       $schema['layout'] = $layout_builder_schema;
     }
-    foreach ($this->filterAccessibleFields($field_definitions) as $definition) {
+    foreach ($this->filterAccessibleFields($field_definitions, $subject) as $definition) {
       if ($definition->getType() === ContentHost::STYLE_MAP_FIELD_TYPE) {
         $schema['styles'] = $this->buildFieldSchema($definition);
         break;
@@ -293,20 +295,45 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
    * field the current user cannot edit (which would only earn a rejected
    * write). The schema is write-guidance; read-side view filtering happens
    * during serialization, not here. Fail-open semantics: a field is kept unless
-   * access is forbidden, because definition-level field access (no entity
-   * instance) is frequently neutral.
+   * access is forbidden, because definition-level field access (no saved
+   * entity) is frequently neutral. The stub subject gives the handler items
+   * to reason from (BlueprintAccessChecker::fieldDefinitionAccess()).
    *
    * @param \Drupal\Core\Field\FieldDefinitionInterface[] $definitions
    *   The processable field definitions, keyed by field name.
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $subject
+   *   The unsaved stub of the bundle the definitions belong to.
    *
    * @return \Drupal\Core\Field\FieldDefinitionInterface[]
    *   The subset the current user may edit.
    */
-  protected function filterAccessibleFields(array $definitions): array {
+  protected function filterAccessibleFields(array $definitions, FieldableEntityInterface $subject): array {
     return array_filter(
       $definitions,
-      fn(FieldDefinitionInterface $definition) => $this->accessChecker->fieldDefinitionAccess($definition, 'edit'),
+      fn(FieldDefinitionInterface $definition) => $this->accessChecker->fieldDefinitionAccess($definition, 'edit', $subject),
     );
+  }
+
+  /**
+   * An unsaved entity of the bundle, for the access checks of a schema read.
+   *
+   * Created through the storage and never saved: the one instance every
+   * field access check of one schema read is asked against.
+   *
+   * @param \Drupal\Core\Entity\EntityTypeInterface $entity_type
+   *   The entity type definition.
+   * @param string $bundle
+   *   The bundle.
+   *
+   * @return \Drupal\Core\Entity\FieldableEntityInterface
+   *   The stub.
+   */
+  protected function stubSubject(EntityTypeInterface $entity_type, string $bundle): FieldableEntityInterface {
+    $values = [];
+    if ($bundle_key = $entity_type->getKey('bundle')) {
+      $values[$bundle_key] = $bundle;
+    }
+    return $this->entityTypeManager->getStorage($entity_type->id())->create($values);
   }
 
   /**
@@ -416,7 +443,7 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
       $bundle_label = (string) $all_bundles[$bundle_name]['label'];
       $field_definitions = $this->entityFieldManager->getFieldDefinitions($target_type, $bundle_name);
       $processable_fields = $this->fieldHandlerManager->filterFieldDefinitions($entity_type_definition, $field_definitions, $bundle_name);
-      $processable_fields = $this->filterAccessibleFields($processable_fields);
+      $processable_fields = $this->filterAccessibleFields($processable_fields, $this->stubSubject($entity_type_definition, $bundle_name));
 
       $fields = [];
       foreach ($processable_fields as $field_name => $field_definition) {
@@ -532,7 +559,7 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
 
     // Node-shape FACTS only (schema = facts, skills = mechanics): the
     // container doctrine (default to the container layout, arrangement is
-    // styling, grouping is nesting) lives in the create_entity skill for
+    // styling, grouping is nesting) lives in the design skill for
     // the blueprint door and in the eb_edit op grammar for the op door.
     // The one grammar is the lean node tree: kind-declared nodes, one
     // children axis, styles on the node. A read answers the same tree, so
@@ -771,7 +798,7 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
     foreach ($bundles as $bundle_name => $bundle_info) {
       $field_definitions = $this->entityFieldManager->getFieldDefinitions('block_content', $bundle_name);
       $processable_fields = $this->fieldHandlerManager->filterFieldDefinitions($entity_type_definition, $field_definitions, $bundle_name);
-      $processable_fields = $this->filterAccessibleFields($processable_fields);
+      $processable_fields = $this->filterAccessibleFields($processable_fields, $this->stubSubject($entity_type_definition, $bundle_name));
 
       $fields = [];
       foreach ($processable_fields as $field_name => $field_definition) {

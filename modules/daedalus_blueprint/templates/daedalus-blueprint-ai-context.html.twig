@@ -1,0 +1,65 @@
+{#
+/**
+ * @file
+ * Default theme implementation for the AI context usage bar.
+ *
+ * A disk-usage gauge of the AI context budget: one stacked bar of the
+ * whole budget, the used part segmented by material kind plus the
+ * system, the rest free, and a legend stating each segment's characters
+ * and estimated tokens. Tokens are an estimate (characters at the
+ * site's ratio, never a provider count) and the text says so. The
+ * figures print as the *_text variables (grouped by the preprocess):
+ * the trans tag drops a placeholder carrying a filter.
+ *
+ * Available variables:
+ * - segments: The used segments in roster order, each with key (a
+ *   material kind or `system`), label, characters and characters_text,
+ *   tokens and tokens_text, percent (its share of the budget) and width
+ *   (the share it draws, in percent).
+ * - free: The free remainder: tokens, tokens_text and width.
+ * - estimated_tokens, estimated_tokens_text: The site's estimated tokens.
+ * - budget_tokens, budget_tokens_text: The budget, in estimated tokens.
+ * - percent: The share of the budget used, rounded.
+ * - over: Whether the site is full.
+ * - over_by, over_by_text: Estimated tokens past the budget (0 when not
+ *   over).
+ * - design_system: The active design system's label, or null.
+ * - attributes: HTML attributes for the containing element.
+ *
+ * @ingroup themeable
+ */
+#}
+<div{{ attributes }}>
+  <p class="daedalus-ai-context__summary">
+    {% if design_system %}
+      {% trans %}Under the {{ design_system }} design system, the site shares an estimated <strong>{{ estimated_tokens_text }}</strong> of {{ budget_tokens_text }} tokens with the AI ({{ percent }}% of the budget).{% endtrans %}
+    {% else %}
+      {% trans %}The site shares an estimated <strong>{{ estimated_tokens_text }}</strong> of {{ budget_tokens_text }} tokens with the AI ({{ percent }}% of the budget).{% endtrans %}
+    {% endif %}
+    {% if over %}
+      <span class="daedalus-ai-context__over">{% trans %}Over budget by {{ over_by_text }} tokens: sharing more is refused until some materials stop being offered or the budget is raised.{% endtrans %}</span>
+    {% endif %}
+  </p>
+  <div class="daedalus-ai-context__bar" role="img" aria-label="{{ 'AI context budget: @percent% used'|t({'@percent': percent}) }}">
+    {% for segment in segments %}
+      <span class="daedalus-ai-context__segment" data-kind="{{ segment.key }}" style="width: {{ segment.width }}%" title="{{ segment.label }}: {{ segment.percent }}%"></span>
+    {% endfor %}
+    {% if free.width > 0 %}
+      <span class="daedalus-ai-context__segment daedalus-ai-context__segment--free" data-kind="free" style="width: {{ free.width }}%" title="{{ 'Free'|t }}: {{ free.tokens_text }}"></span>
+    {% endif %}
+  </div>
+  <ul class="daedalus-ai-context__legend">
+    {% for segment in segments %}
+      <li class="daedalus-ai-context__entry" data-kind="{{ segment.key }}">
+        <span class="daedalus-ai-context__dot"></span>
+        <span class="daedalus-ai-context__label">{{ segment.label }}</span>
+        <span class="daedalus-ai-context__figures">{% trans %}{{ segment.characters_text }} characters, about {{ segment.tokens_text }} tokens ({{ segment.percent }}%){% endtrans %}</span>
+      </li>
+    {% endfor %}
+    <li class="daedalus-ai-context__entry daedalus-ai-context__entry--free" data-kind="free">
+      <span class="daedalus-ai-context__dot"></span>
+      <span class="daedalus-ai-context__label">{{ 'Free'|t }}</span>
+      <span class="daedalus-ai-context__figures">{% trans %}about {{ free.tokens_text }} tokens{% endtrans %}</span>
+    </li>
+  </ul>
+</div>

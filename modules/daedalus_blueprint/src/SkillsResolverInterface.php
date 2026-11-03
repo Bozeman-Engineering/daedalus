@@ -26,6 +26,12 @@ interface SkillsResolverInterface {
    *     shipping module's packaged system), or NULL for a global skill.
    *     A member of an inactive design system does not exist for the
    *     request either: neither listed nor invokable.
+   *   - reframe: bool. Whether invoking the skill is a reframing of the
+   *     work (the doctrine the model re-reads before a big build): the
+   *     context spine closes the working transcript's segment on such an
+   *     invocation once the segment is large enough, so the doctrine lands
+   *     near the request instead of under the conversation's bulk. Always
+   *     present on a resolved definition; FALSE when the file omits it.
    */
   public function getSkills(): array;
 

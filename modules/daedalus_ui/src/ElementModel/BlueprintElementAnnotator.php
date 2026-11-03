@@ -34,7 +34,7 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  * the drupalSettings boot payload (BlueprintMirror::attach(), whose
  * build's cacheability carries what the icon providers read), the
  * mutation response and the derived read modes (BlueprintElementAnnotations
- * subscriber) and the HTML projection (HtmlProjector): never persisted,
+ * subscriber): never persisted,
  * never visible to headless/AI consumers of base daedalus_blueprint, whose
  * blueprint data stays annotation-free.
  *

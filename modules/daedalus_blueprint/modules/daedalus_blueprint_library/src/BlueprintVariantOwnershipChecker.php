@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint_library;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\daedalus_blueprint\Host\BlueprintHost;
 use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
@@ -27,8 +28,10 @@ use Drupal\daedalus_stylish\VariantApplicabilityCheckerInterface;
  * the read-only `blueprint` node key the client's offer filter walks). Same
  * walk, same precedence, same degraded posture as the client
  * (js/src/variant-scope.js blueprintProvenance): the nearest self-or-ancestor
- * stamp wins, nested stamps shadow, and a target the layout does not carry
- * reads as unprovenanced — owned variants then refuse, never over-permit.
+ * stamp wins, nested stamps shadow, an unstamped element on a blueprint's
+ * own canvas is the blueprint's (its document is its first placement), and
+ * a target the layout does not carry reads as unprovenanced — owned
+ * variants then refuse, never over-permit.
  *
  * Only NEW applies land here (the seam's contract): existing wearers keep
  * validating and rendering wherever they are, and orphaned variants (owner
@@ -96,10 +99,18 @@ class BlueprintVariantOwnershipChecker implements VariantApplicabilityCheckerInt
    * precedence per node follows what the serializer emits
    * (LayoutSerializer::serializeElement()): a wrapper component's
    * additional-data stamp beats its embedded section's third-party-settings
-   * stamp beats the inherited ancestor stamp. NULL means unprovenanced —
-   * a key with no placeable uuid (entity/field keys), an element the
-   * layout does not carry, or no layout at all — and the caller refuses
-   * owned variants on it (degraded never over-permits).
+   * stamp beats the inherited ancestor stamp beats the canvas's own
+   * provenance. That last one is the blueprint host's: a blueprint's own
+   * document is its first placement (its owned variants are the switchable
+   * looks it offers, and its own canvas is the first thing they must apply
+   * to), but the capture strips every stamp from the document (a blueprint
+   * is a definition, never a placement of itself), so an element found
+   * there with no stamp of its own or an ancestor's answers the host's
+   * machine name. A stamped nested placement on that canvas still shadows
+   * it, as everywhere. NULL means unprovenanced — a key with no placeable
+   * uuid (entity/field keys), an element the layout does not carry, or no
+   * layout at all — and the caller refuses owned variants on it (degraded
+   * never over-permits).
    */
   protected function placementProvenance(HostInterface $host, string $key): ?string {
     $uuid = $this->targetUuid($key);
@@ -112,7 +123,7 @@ class BlueprintVariantOwnershipChecker implements VariantApplicabilityCheckerInt
       }
       [$found, $stamp] = $this->walkSection($section, $this->sectionStamp($section), $uuid);
       if ($found) {
-        return $stamp;
+        return $stamp ?? ($host instanceof BlueprintHost ? $host->machineName() : NULL);
       }
     }
     return NULL;

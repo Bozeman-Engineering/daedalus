@@ -85,16 +85,16 @@ test('a variant run opens the variant\'s document, anchored at the island\'s own
 });
 
 test('a rule-carried variant run anchors its document at the carrier rule, the position it prints on never wearing it', () => {
-  // Primary worn at the band's `pb-text` rule prints on the continued
-  // position `pb-text .text-block-link`; the session must mount over the
+  // Primary worn at the section's `d-text` rule prints on the continued
+  // position `d-text .text-block-link`; the session must mount over the
   // rule's wearing, so the anchor is the rule's key (seatAnchor's rule
   // road: select the root, target the rule).
   const layer = variantLayerId('guide_button_primary');
   const carried = runMenuItems(layer, [
     { id: ELEMENT_LAYER, carrier: null },
-    { id: layer, carrier: { key: 'container:band', selector: 'pb-text' } },
+    { id: layer, carrier: { key: 'container:section', selector: 'd-text' } },
   ]);
-  assert.deepEqual(carried, [{ type: 'edit-variant', reference: 'guide_button_primary', anchor: 'container:band::pb-text' }]);
+  assert.deepEqual(carried, [{ type: 'edit-variant', reference: 'guide_button_primary', anchor: 'container:section::d-text' }]);
 });
 
 test('a skin run opens the skin session at its scope; a declared run says it is code', () => {
@@ -107,14 +107,14 @@ test('an ancestor rule\'s own run offers nothing: the rule prints as a rule isla
   // The ancestor tier never prints on an island (element-model.js
   // ownIslandLines drops it), so a doorway to the rule here would be a
   // second seat for a run no island renders.
-  assert.deepEqual(runMenuItems(ancestorLayerId(OWNER, '> pb-text')), []);
+  assert.deepEqual(runMenuItems(ancestorLayerId(OWNER, '> d-text')), []);
 });
 
 test('a worn ancestor run opens the variant at its carrier, and only that', () => {
-  const worn = ancestorWearLayerId(OWNER, 'pb-text .text-block-link', 'card_left');
-  const carried = runMenuItems(worn, [{ id: worn, carrier: { key: OWNER, selector: 'pb-text' } }]);
+  const worn = ancestorWearLayerId(OWNER, 'd-text .text-block-link', 'card_left');
+  const carried = runMenuItems(worn, [{ id: worn, carrier: { key: OWNER, selector: 'd-text' } }]);
   assert.deepEqual(carried, [
-    { type: 'edit-variant', reference: 'card_left', anchor: `${OWNER}::pb-text` },
+    { type: 'edit-variant', reference: 'card_left', anchor: `${OWNER}::d-text` },
   ]);
   const root = runMenuItems(worn, [{ id: worn, carrier: { key: OWNER, selector: null } }]);
   assert.deepEqual(root, [{ type: 'edit-variant', reference: 'card_left', anchor: OWNER }]);

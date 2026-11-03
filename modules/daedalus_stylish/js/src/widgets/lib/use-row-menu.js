@@ -24,7 +24,7 @@ import { lawDocument, skinDocument } from '../../code/layers.js';
  * editing session on the skin's document at the supplying scope (the
  * same openDocument, handed the skin document's reference, code/layers.js
  * skinDocument, at the delivering condition and the host's own anchor),
- * `declared` opens the Materials place's Law tab at the supplying
+ * `declared` opens the Design system place's Law tab at the supplying
  * declaration with the property's rows revealed (the same openDocument,
  * handed a law document reference, code/layers.js lawDocument: the
  * Inspector routes it to the tab, never a session),

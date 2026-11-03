@@ -19,4 +19,30 @@ services:
       # The design system the brief introduces: its label, identity,
       # law and skin are the entity's.
       - '@daedalus_blueprint.active_design_system'
+      # The PAGES line projects from the builder's page bundles.
+      - '@daedalus_blueprint.bundle_list_builder'
+    tags:
+      # The section's lines weighed by kind (each line a material kind's
+      # or the system's): the AI context budget's second source, beside
+      # the schema fragment.
+      - { name: daedalus_blueprint.materials_weight_source }
   Drupal\daedalus_blueprint_ai\DialectCatalogPrompt: '@daedalus_blueprint_ai.dialect_catalog_prompt'
+
+  # The Workflow section (the loop every task runs, skills first among its
+  # rules) on the cached system prompt and the skills catalog as the
+  # skills block of a segment's first turn.
+  # (Core's YAML loader honors autoconfigure only under _defaults, so the
+  # subscriber tag is explicit here.)
+  daedalus_blueprint_ai.workflow_subscriber:
+    class: Drupal\daedalus_blueprint_ai\EventSubscriber\WorkflowSubscriber
+    autowire: true
+    tags:
+      - { name: event_subscriber }
+
+  # The runtime contract: the generated page-language catalog on the
+  # cached system prompt, and the conversation id into the tool layer.
+  daedalus_blueprint_ai.page_language_subscriber:
+    class: Drupal\daedalus_blueprint_ai\EventSubscriber\PageLanguageSubscriber
+    autowire: true
+    tags:
+      - { name: event_subscriber }

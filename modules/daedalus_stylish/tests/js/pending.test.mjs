@@ -12,9 +12,11 @@
 import { strict as assert } from 'node:assert';
 import {
   dismissLine,
+  movedStyles,
   payloadRows,
   payloadSummary,
   pendingLineId,
+  pendingMoveId,
   pendingRefId,
   prunedPayload,
   restoreLine,
@@ -23,6 +25,7 @@ import {
   sessionStyles,
   stageIslandLines,
   stageLine,
+  stageMove,
   stageValue,
   skinPushOperations,
   skinSession,
@@ -374,7 +377,7 @@ test('merging never mutates the variant styles or the session', () => {
 
 test('a fresh skin session names its scope and its skin document reference, and stages lines exactly as an update session does', () => {
   const session = skinSession('base:h2', 'block:abc');
-  assert.deepEqual(session, { kind: 'skin', reference: 'skin:base:h2', scope: 'base:h2', anchor: 'block:abc', lines: [] });
+  assert.deepEqual(session, { kind: 'skin', reference: 'skin:base:h2', scope: 'base:h2', anchor: 'block:abc', lines: [], moves: [] });
   assert.equal(stagesLines(session), true);
   assert.equal(stagesLines(updateSession('cta', 'block:abc')), true);
   assert.equal(stagesLines(saveSession('block:abc')), false);
@@ -406,3 +409,229 @@ test('skinPushOperations spells the staged lines as one update_default per (key,
   assert.deepEqual(skinPushOperations(skinSession('kind:container', 'container:c')), []);
   assert.deepEqual(skinPushOperations(updateSession('cta', 'block:abc')), []);
 });
+
+// --- staged moves: a rule's selector edit as its own pending fact ------------
+
+// A variant document with a rule, its family (a continuation by descent
+// and the rule's own box), a nested reference on the rule, and bystanders.
+const ruledStyles = {
+  '': { default: { display: 'grid' } },
+  '::> d-text': {
+    variants: [{ variant: 'nested', fragment: '' }],
+    default: { color: 'teal', 'font-weight': '700' },
+    dark: { color: 'white' },
+  },
+  '::> d-text .link': { default: { 'text-decoration': 'underline' } },
+  '::> d-text::before': { default: { content: '"*"' } },
+  '::> d-text:not(:has(a))': { default: { opacity: '0.5' } },
+  'block(text,1)': { default: { margin: '0' } },
+  'block(text,1)::p': { default: { 'line-height': '1.4' } },
+};
+
+test('a fresh line-staging session holds no moves; stageMove stages one row with a canonical landing', () => {
+  assert.deepEqual(updateSession('cta', 'block:abc').moves, []);
+  assert.deepEqual(skinSession('base:h2', 'block:abc').moves, []);
+  let session = updateSession('cta', 'block:abc');
+  // A lenient spelling of `to` lands canonical, as the op's does.
+  session = stageMove(session, '::> d-text', '>d-text:has( a )');
+  assert.deepEqual(session.moves, [
+    { id: pendingMoveId('::> d-text', '> d-text:has(a)'), from: '::> d-text', to: '> d-text:has(a)' },
+  ]);
+  assert.equal(session.moves[0].id, 'move|::> d-text|> d-text:has(a)');
+  assert.equal(sessionCount(session), 1, 'a move is one pending row');
+  // Re-staging the same rule replaces its row (one rule, one row).
+  session = stageMove(session, '::> d-text', '> d-text:has(img)');
+  assert.deepEqual(session.moves.map((move) => [move.from, move.to]), [['::> d-text', '> d-text:has(img)']]);
+  // A save session passes through untouched.
+  const save = saveSession('block:abc');
+  assert.equal(stageMove(save, '::> d-text', '> d-text:has(a)'), save);
+  // Caller bugs throw: a slot's own entry is no rule, and `to` must parse.
+  assert.throws(() => stageMove(updateSession('cta', 'block:abc'), '', '> d-text'), TypeError);
+  assert.throws(() => stageMove(updateSession('cta', 'block:abc'), 'block(text,1)', 'p'), TypeError);
+  assert.throws(() => stageMove(updateSession('cta', 'block:abc'), '::> d-text', 'd-text >'), TypeError);
+});
+
+test('staging a move renames the staged lines it carries at once (the rule and its staged continuations), other slots untouched', () => {
+  let session = updateSession('cta', 'block:abc');
+  session = stageLine(session, { relative: '::> d-text', condition: 'default', property: 'color', value: 'red' });
+  session = stageLine(session, { relative: '::> d-text .link', condition: 'default', property: 'color', value: 'blue' });
+  session = stageLine(session, { relative: '::> d-text:not(:has(a))', condition: 'default', property: 'opacity', value: '1' });
+  session = stageLine(session, { relative: 'block(text,1)::p', condition: 'default', property: 'margin', value: '0' });
+  session = stageMove(session, '::> d-text', '> d-text:has(a)');
+  assert.deepEqual(session.lines.map((line) => [line.relative, line.id]), [
+    ['::> d-text:has(a)', pendingLineId('::> d-text:has(a)', 'default', 'color')],
+    ['::> d-text:has(a) .link', pendingLineId('::> d-text:has(a) .link', 'default', 'color')],
+    ['::> d-text:not(:has(a))', pendingLineId('::> d-text:not(:has(a))', 'default', 'opacity')],
+    ['block(text,1)::p', pendingLineId('block(text,1)::p', 'default', 'margin')],
+  ]);
+  assert.equal(sessionCount(session), 5);
+  // A line staged after the move lands beside them, at the new key.
+  session = stageLine(session, { relative: '::> d-text:has(a)', condition: 'dark', property: 'color', value: 'pink' });
+  assert.equal(session.lines.filter((line) => line.relative === '::> d-text:has(a)').length, 2);
+});
+
+test('a chain of moves on one rule collapses to one row from the original key; a move back cancels it', () => {
+  let session = updateSession('cta', 'block:abc');
+  session = stageLine(session, { relative: '::> d-text', condition: 'default', property: 'color', value: 'red' });
+  session = stageMove(session, '::> d-text', '> d-text:has(a)');
+  session = stageMove(session, '::> d-text:has(a)', '> d-text:not(:has(img))');
+  assert.deepEqual(session.moves.map((move) => [move.from, move.to]), [['::> d-text', '> d-text:not(:has(img))']]);
+  assert.deepEqual(session.lines.map((line) => line.relative), ['::> d-text:not(:has(img))']);
+  assert.equal(sessionCount(session), 2);
+  // Back onto the original selector: no move remains, the line returns.
+  session = stageMove(session, '::> d-text:not(:has(img))', '> d-text');
+  assert.deepEqual(session.moves, []);
+  assert.deepEqual(session.lines.map((line) => [line.relative, line.id]), [
+    ['::> d-text', pendingLineId('::> d-text', 'default', 'color')],
+  ]);
+});
+
+test('dismissing a move drops its row and returns the lines it carried to the keys they left', () => {
+  let session = updateSession('cta', 'block:abc');
+  session = stageLine(session, { relative: '::> d-text', condition: 'default', property: 'color', value: 'red' });
+  session = stageMove(session, '::> d-text', '> d-text:has(a)');
+  // A line staged under the moved rule after the move rides back too.
+  session = stageLine(session, { relative: '::> d-text:has(a) .link', condition: 'default', property: 'color', value: 'blue' });
+  const [move] = session.moves;
+  session = dismissLine(session, move.id);
+  assert.deepEqual(session.moves, []);
+  assert.deepEqual(session.lines.map((line) => line.relative), ['::> d-text', '::> d-text .link']);
+  assert.equal(sessionCount(session), 2);
+  // An unknown id dismisses nothing.
+  assert.deepEqual(dismissLine(session, pendingMoveId('::p', 'strong')), session);
+});
+
+test('movedStyles reads the stored document through the moves: the family moves whole, keeps its position, and the read is idempotent', () => {
+  let session = updateSession('cta', 'block:abc');
+  session = stageMove(session, '::> d-text', '> d-text:has(a)');
+  const moved = movedStyles(session, ruledStyles);
+  assert.deepEqual(Object.keys(moved), [
+    '',
+    '::> d-text:has(a)',
+    '::> d-text:has(a) .link',
+    '::> d-text:has(a)::before',
+    '::> d-text:not(:has(a))',
+    'block(text,1)',
+    'block(text,1)::p',
+  ], 'the moved keys sit where the old ones did; the sibling rule and the other slot stay');
+  // The rule's entry moves WHOLE: every condition and the nested reference.
+  assert.deepEqual(moved['::> d-text:has(a)'], ruledStyles['::> d-text']);
+  assert.deepEqual(moved['::> d-text:has(a) .link'], ruledStyles['::> d-text .link']);
+  assert.deepEqual(moved['::> d-text:has(a)::before'], ruledStyles['::> d-text::before']);
+  assert.deepEqual(movedStyles(session, moved), moved, 'a document the move already left reads the same');
+  assert.deepEqual(movedStyles(null, ruledStyles), ruledStyles);
+  assert.deepEqual(movedStyles(saveSession('block:abc'), ruledStyles), ruledStyles);
+  assert.deepEqual(ruledStyles['::> d-text'].default, { color: 'teal', 'font-weight': '700' }, 'the stored document is never mutated');
+  // A move in a composition child's slot moves that slot's rule alone.
+  const child = stageMove(updateSession('cta', 'block:abc'), 'block(text,1)::p', 'strong');
+  assert.deepEqual(Object.keys(movedStyles(child, ruledStyles)).filter((key) => key.startsWith('block')), ['block(text,1)', 'block(text,1)::strong']);
+});
+
+test('the variant push payload of one move and one line at the moved key carries the new keys only', () => {
+  let session = updateSession('cta', 'block:abc');
+  session = stageLine(session, { relative: '::> d-text', condition: 'default', property: 'color', value: 'red' });
+  session = stageMove(session, '::> d-text', '> d-text:has(a)');
+  const payload = sessionStyles(session, { documentStyles: ruledStyles });
+  const oldKeys = ['::> d-text', '::> d-text .link', '::> d-text::before'];
+  assert.deepEqual(Object.keys(payload).filter((key) => oldKeys.includes(key)), [], 'no old key survives');
+  assert.deepEqual(payload['::> d-text:has(a)'], {
+    variants: [{ variant: 'nested', fragment: '' }],
+    default: { color: 'red', 'font-weight': '700' },
+    dark: { color: 'white' },
+  }, 'the line merged over the moved entry, the reference rode along');
+  assert.deepEqual(payload['::> d-text:has(a) .link'], { default: { 'text-decoration': 'underline' } });
+  assert.deepEqual(payload['::> d-text:has(a)::before'], { default: { content: '"*"' } });
+  assert.deepEqual(payload['::> d-text:not(:has(a))'], { default: { opacity: '0.5' } });
+  assert.deepEqual(payload['block(text,1)::p'], { default: { 'line-height': '1.4' } });
+  // A line a stale caller stages at the OLD key after the move follows too.
+  const stale = stageLine(session, { relative: '::> d-text', condition: 'dark', property: 'color', value: 'pink' });
+  assert.deepEqual(sessionStyles(stale, { documentStyles: ruledStyles })['::> d-text:has(a)'].dark, { color: 'pink' });
+  assert.equal(sessionStyles(stale, { documentStyles: ruledStyles })['::> d-text'], undefined);
+});
+
+test('a move of a lines-only draft row carries just its lines; a move onto a stored key is a collision and fails loudly', () => {
+  let session = updateSession('cta', 'block:abc');
+  session = stageLine(session, { relative: '::> d-image', condition: 'default', property: 'width', value: '100%' });
+  session = stageMove(session, '::> d-image', '> d-image:has(img)');
+  const payload = sessionStyles(session, { documentStyles: ruledStyles });
+  assert.deepEqual(payload['::> d-image:has(img)'], { default: { width: '100%' } });
+  assert.equal(payload['::> d-image'], undefined);
+  assert.deepEqual(payload['::> d-text'], ruledStyles['::> d-text'], 'nothing else moved');
+  // The sibling rule already holds the landing: the collision throws
+  // instead of picking a winner (the chrome's gate refuses it first).
+  const colliding = stageMove(updateSession('cta', 'block:abc'), '::> d-text', '> d-text:not(:has(a))');
+  assert.throws(() => sessionStyles(colliding, { documentStyles: ruledStyles }), /target_exists at "> d-text:not\(:has\(a\)\)"/);
+  assert.throws(() => movedStyles(colliding, ruledStyles), /refused/);
+});
+
+test('stageValue diffs against the moved baseline: settling the moved entry\'s own value at the new key stages nothing', () => {
+  let session = updateSession('cta', 'block:abc');
+  session = stageMove(session, '::> d-text', '> d-text:has(a)');
+  const same = stageValue(session, ruledStyles, '::> d-text:has(a)', 'default', 'color', 'teal');
+  assert.equal(same.lines.length, 0);
+  const changed = stageValue(session, ruledStyles, '::> d-text:has(a)', 'default', 'color', 'navy');
+  assert.deepEqual(changed.lines.map((line) => [line.relative, line.value]), [['::> d-text:has(a)', 'navy']]);
+  // Clearing a moved value stages an unset at the new key.
+  const cleared = stageValue(session, ruledStyles, '::> d-text:has(a)', 'dark', 'color', '');
+  assert.deepEqual(cleared.lines.map((line) => [line.relative, line.condition, line.value]), [['::> d-text:has(a)', 'dark', null]]);
+});
+
+test('payloadRows renders a move as one pending row: the selector it leaves, the one it lands at, its id', () => {
+  let session = updateSession('cta', 'block:abc');
+  session = stageMove(session, '::> d-text', '> d-text:has(a)');
+  session = stageMove(session, 'block(text,1)::p', 'strong');
+  const rows = payloadRows({}, 'container', session.moves);
+  assert.deepEqual(rows, [
+    { relative: '::> d-text', kind: 'root', detail: null, part: '> d-text', refs: [], lines: [], move: { id: pendingMoveId('::> d-text', '> d-text:has(a)'), to: '> d-text:has(a)' } },
+    { relative: 'block(text,1)::p', kind: 'block', detail: 'text', part: 'p', refs: [], lines: [], move: { id: pendingMoveId('block(text,1)::p', 'strong'), to: 'strong' } },
+  ]);
+  // Entry groups carry no move and render before the move rows.
+  const mixed = payloadRows({ '': { default: { gap: '0' } } }, 'container', session.moves);
+  assert.equal(mixed[0].move, null);
+  assert.equal(mixed.length, 3);
+  assert.equal(payloadRows(payload, 'container').every((group) => group.move === null), true);
+});
+
+test('a skin push spells a move as update_default nulls at the old keys and sets at the new, the lines grouped after', () => {
+  const defaults = {
+    '': { default: { 'font-size': '2rem' } },
+    '::> d-text': { default: { color: 'teal', 'font-weight': '700' }, dark: { color: 'white' } },
+    '::> d-text .link': { default: { 'text-decoration': 'underline' } },
+    '::strong': { default: { color: 'red' } },
+  };
+  let session = skinSession('kind:container', 'container:c');
+  // A line staged before the move follows it; one staged after sits at
+  // the landing already; an unset at the landing beats the moved value.
+  session = stageLine(session, { relative: '::> d-text', condition: 'default', property: 'color', value: 'navy' });
+  session = stageMove(session, '::> d-text', '> d-text:has(a)');
+  session = stageLine(session, { relative: '::> d-text:has(a)', condition: 'dark', property: 'color', value: null });
+  session = stageLine(session, { relative: '::strong', condition: 'default', property: 'color', value: 'blue' });
+  assert.deepEqual(skinPushOperations(session, defaults), [
+    { op: 'update_default', scope: 'kind:container', key: '::> d-text', condition: 'default', properties: { color: null, 'font-weight': null } },
+    { op: 'update_default', scope: 'kind:container', key: '::> d-text', condition: 'dark', properties: { color: null } },
+    { op: 'update_default', scope: 'kind:container', key: '::> d-text:has(a)', condition: 'default', properties: { color: 'navy', 'font-weight': '700' } },
+    { op: 'update_default', scope: 'kind:container', key: '::> d-text:has(a)', condition: 'dark', properties: { color: null } },
+    { op: 'update_default', scope: 'kind:container', key: '::> d-text .link', condition: 'default', properties: { 'text-decoration': null } },
+    { op: 'update_default', scope: 'kind:container', key: '::> d-text:has(a) .link', condition: 'default', properties: { 'text-decoration': 'underline' } },
+    { op: 'update_default', scope: 'kind:container', key: '::strong', condition: 'default', properties: { color: 'blue' } },
+  ]);
+  // The ops and the merge tell one story.
+  assert.deepEqual(sessionStyles(session, { documentStyles: defaults }), {
+    '': { default: { 'font-size': '2rem' } },
+    '::> d-text:has(a)': { default: { color: 'navy', 'font-weight': '700' } },
+    '::> d-text:has(a) .link': { default: { 'text-decoration': 'underline' } },
+    '::strong': { default: { color: 'blue' } },
+  });
+  // A move with nothing stored at the rule spells no nulls: the lines alone.
+  const draft = stageMove(
+    stageLine(skinSession('kind:container', 'container:c'), { relative: '::> d-image', condition: 'default', property: 'width', value: '100%' }),
+    '::> d-image',
+    '> d-image:has(img)',
+  );
+  assert.deepEqual(skinPushOperations(draft, defaults), [
+    { op: 'update_default', scope: 'kind:container', key: '::> d-image:has(img)', condition: 'default', properties: { width: '100%' } },
+  ]);
+  assert.deepEqual(skinPushOperations(stageMove(updateSession('cta', 'block:abc'), '::> d-text', '> d-text:has(a)'), defaults), []);
+});
+
+process.stdout.write('pending suite passed\n');

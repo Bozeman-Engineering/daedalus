@@ -56,6 +56,7 @@ class TokenConsumptionTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -73,27 +74,19 @@ class TokenConsumptionTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    // The client payload serves the published swatches, so every build()
-    // consumer needs the swatch entity schema.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_variant');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-* and var() references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [

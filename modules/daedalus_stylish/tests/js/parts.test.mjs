@@ -28,8 +28,8 @@ const guide = {
       grants: { spacing: ['padding'] },
       elements: {
         '.section__inner': { grants: { spacing: ['padding'] } },
-        // Not a single-class selector: unreachable as a style-map key, so
-        // never a row.
+        // Not a single-class selector: the key grammar admits it, but a
+        // declared part is PART_SELECTOR's shape, so never a row.
         'div > .loose': { label: 'Loose' },
       },
     },
@@ -103,6 +103,10 @@ const related = {
     image: { label: 'Image' },
   },
   tagLabels: { a: 'Link', p: 'Paragraph' },
+  conditions: {
+    hover: { label: 'Hover', wrapper: ':hover', axis: 'state' },
+    narrow: { label: 'Narrow', wrapper: '@container (max-width: 767px)', axis: 'width' },
+  },
 };
 const sectionLayouts = { [UUID_B]: 'layout_twocol_section' };
 
@@ -142,7 +146,7 @@ test('a tag compound labels by the guide\'s one tag word', () => {
   assert.equal(selectorLabel(worded, `block:${UUID_A}`, 'div', blockTypes), 'div');
   // A tag after a type reads the same word (the fixture's testimonial
   // type carries no label, so the type spells itself).
-  assert.equal(selectorLabel(worded, `container:${UUID_B}`, 'pb-testimonial a', blockTypes), 'pb-testimonial › Link');
+  assert.equal(selectorLabel(worded, `container:${UUID_B}`, 'd-testimonial a', blockTypes), 'd-testimonial › Link');
   assert.equal(selectorLabel(guide, `block:${UUID_A}`, 'a', blockTypes), 'a');
 });
 
@@ -359,25 +363,54 @@ test('selectorLabel words the relations: sibling combinators fold into their pre
   assert.equal(label('> p + p'), 'Paragraph right after a paragraph');
   assert.equal(label('> p ~ p'), 'Paragraph after a paragraph');
   assert.equal(label('> p + *'), 'Children right after a paragraph');
-  assert.equal(label('> pb-text:has(a) + pb-text'), 'Text blocks right after a text containing a link');
+  assert.equal(label('> d-text:has(a) + d-text'), 'Text blocks right after a text containing a link');
   // Qualifiers: :has phrases then :not phrases, a sibling-led :has
   // argument reading "before", an implied :not subject "without".
-  assert.equal(label('> pb-text:has(a)'), 'Text blocks containing a link');
-  assert.equal(label('> pb-text:has(.text-block-link)'), 'Text blocks containing a link');
-  assert.equal(label('> pb-text:has(+ pb-image)'), 'Text blocks right before an image');
-  assert.equal(label('> pb-text:has(~ pb-image)'), 'Text blocks before an image');
-  assert.equal(label('> *:not(pb-image)'), 'Children except images');
-  assert.equal(label('> *:not(pb-image):not(pb-video)'), 'Children except images except pb-videos');
-  assert.equal(label('> pb-text:not(:has(a))'), 'Text blocks without a link');
-  assert.equal(label('> pb-text:has(a):has(img)'), 'Text blocks containing a link containing an img');
-  assert.equal(label('> pb-text:not(:has(+ pb-image))'), 'Text blocks not right before an image');
+  assert.equal(label('> d-text:has(a)'), 'Text blocks containing a link');
+  assert.equal(label('> d-text:has(.text-block-link)'), 'Text blocks containing a link');
+  assert.equal(label('> d-text:has(+ d-image)'), 'Text blocks right before an image');
+  assert.equal(label('> d-text:has(~ d-image)'), 'Text blocks before an image');
+  assert.equal(label('> *:not(d-image)'), 'Children except images');
+  assert.equal(label('> *:not(d-image):not(d-video)'), 'Children except images except d-videos');
+  assert.equal(label('> d-text:not(:has(a))'), 'Text blocks without a link');
+  assert.equal(label('> d-text:has(a):has(img)'), 'Text blocks containing a link containing an img');
+  assert.equal(label('> d-text:not(:has(+ d-image))'), 'Text blocks not right before an image');
+  // An `:is()` qualifier reads "any of" its members' words: a subject
+  // member by its noun phrase, an implied one by its qualifier phrases
+  // (plain, never negated), a state inside `:is()` on a non-terminal
+  // compound by the published condition's label, else its spelling.
+  assert.equal(label('> *:is(d-image, d-text)'), 'Children any of an image, a text');
+  assert.equal(label('> d-text:is(:focus-within, :hover) a'), 'Text blocks any of while :focus-within, while hover › Link');
+  assert.equal(label('> d-text:is(:has(a), :has(img))'), 'Text blocks any of containing a link, containing an img');
+  assert.equal(label('> *:is(.featured, d-image)'), 'Children any of a .featured, an image');
+  // The other qualifier kinds the grammar admits on any compound phrase
+  // after the :has and :not phrases, and negated inside :not() on the
+  // implied subject (the `> *:not(:last-child)` row the code view mints
+  // once threw here): a position "that are …", a class "with the …
+  // class", an attribute "with […]", a pseudo-class "while …" by the
+  // published condition's label, else by its spelling.
+  assert.equal(label('> *:not(:last-child)'), 'Children that are not last');
+  assert.equal(label('> d-text:first-child'), 'Text blocks that are first');
+  assert.equal(label('> d-text:nth-child(2n+1)'), 'Text blocks that are at :nth-child(2n+1)');
+  assert.equal(label('> *:not(:only-of-type)'), 'Children that are not the only ones of their kind');
+  assert.equal(label('> d-text:hover a'), 'Text blocks while hover › Link');
+  assert.equal(label('> *:not(:hover)'), 'Children not while hover');
+  assert.equal(label('> d-text:checked'), 'Text blocks while :checked');
+  assert.equal(label('li.active > ul'), 'li with the .active class › ul');
+  assert.equal(label('> d-text:not(.featured)'), 'Text blocks except .featureds');
+  assert.equal(label('[aria-expanded="true"] > ul'), 'Children with [aria-expanded="true"] › ul');
+  assert.equal(label('> d-text:not([data-x])'), 'Text blocks without [data-x]');
+  assert.equal(label('> d-text:has(a):first-child'), 'Text blocks containing a link that are first');
+  // The owner's anchor compound carrying qualifiers is "This element".
+  assert.equal(label('&:hover > ul'), 'This element while hover › ul');
+  assert.equal(label('&:not(:last-child) > *'), 'This element that are not last › Children');
   // Descent steps still join with the chevron; the relation rides its
   // group.
-  assert.equal(label('> pb-text .text-block-link ~ .text-block-link'), 'Text blocks › Link after a link');
-  assert.equal(label('> pb-container:has(> pb-image) > *'), 'Containers containing an image › Children');
-  assert.equal(label('> pb-text:has(a) .text-block-link'), 'Text blocks containing a link › Link');
+  assert.equal(label('> d-text .text-block-link ~ .text-block-link'), 'Text blocks › Link after a link');
+  assert.equal(label('> d-container:has(> d-image) > *'), 'Containers containing an image › Children');
+  assert.equal(label('> d-text:has(a) .text-block-link'), 'Text blocks containing a link › Link');
   // The unrelated shapes read as before.
-  assert.equal(label('> pb-text .text-block-link'), 'Text blocks › Link');
+  assert.equal(label('> d-text .text-block-link'), 'Text blocks › Link');
   assert.equal(label('> *'), 'Children');
   assert.equal(label('p'), 'Paragraph');
   // A terminal pseudo-element is one more step, its box word after the
@@ -385,14 +418,19 @@ test('selectorLabel words the relations: sibling combinators fold into their pre
   // word the page-elements tree gives the box's row.
   assert.equal(label('&::before'), 'Before');
   assert.equal(label('&::after'), 'After');
-  assert.equal(label('> pb-text::before'), 'Text blocks › Before');
-  assert.equal(label('> pb-text .text-block-link::after'), 'Text blocks › Link › After');
+  assert.equal(label('> d-text::before'), 'Text blocks › Before');
+  assert.equal(label('> d-text .text-block-link::after'), 'Text blocks › Link › After');
   assert.equal(label('> p + p::after'), 'Paragraph right after a paragraph › After');
   assert.equal(label('p::before'), 'Paragraph › Before');
   assert.equal(selectorLabel(guide, `block:${UUID_A}`, '.testimonial__quote::after', blockTypes), 'Quote text › After');
   assert.equal(selectorLabel(guide, `block:${UUID_A}`, '&::before', blockTypes), 'Before');
+  // Every pseudo-element reads its box word: the table's translated,
+  // any other its own name.
+  assert.equal(label('&::marker'), 'Marker');
+  assert.equal(label('p::first-letter'), 'Paragraph › First letter');
+  assert.equal(label('&::file-selector-button'), 'File selector button');
   // Outside the grammar the spelling stays the last resort.
-  assert.equal(label('&::marker'), '&::marker');
+  assert.equal(label('&::before::after'), '&::before::after');
   assert.equal(label('& ::before'), '& ::before');
 });
 
@@ -409,13 +447,13 @@ test('an instance class after a type never prints itself: the annotation row, el
   const label = (guide, selector, markup = null) =>
     selectorLabel(guide, key, selector, blockTypes, sectionLayouts, markup);
   // No annotation in reach: the site namespace's word.
-  assert.equal(label(minted, '> pb-formatted-text .s-p1'), 'Formatted text blocks › Text element');
-  assert.equal(label(minted, 'pb-formatted-text .s-p1'), 'Formatted text blocks › Text element');
-  assert.equal(label(minted, '> pb-formatted-text:has(.s-p1)'), 'Formatted text blocks containing a text element');
-  assert.equal(label(minted, '> pb-formatted-text .s-p1 + .s-p1'), 'Formatted text blocks › Text element right after a text element');
+  assert.equal(label(minted, '> d-formatted-text .s-p1'), 'Formatted text blocks › Text element');
+  assert.equal(label(minted, 'd-formatted-text .s-p1'), 'Formatted text blocks › Text element');
+  assert.equal(label(minted, '> d-formatted-text:has(.s-p1)'), 'Formatted text blocks containing a text element');
+  assert.equal(label(minted, '> d-formatted-text .s-p1 + .s-p1'), 'Formatted text blocks › Text element right after a text element');
   // The annotation row's word when markup is given.
   const markup = { tag: 'div', instances: [{ class: 's-p1', tag: 'p', label: 'Paragraph', children: [] }] };
-  assert.equal(label(minted, '> pb-formatted-text .s-p1', markup), 'Formatted text blocks › Paragraph');
+  assert.equal(label(minted, '> d-formatted-text .s-p1', markup), 'Formatted text blocks › Paragraph');
   // The type's own pattern part covers before the site namespace.
   const patterned = {
     ...minted,
@@ -424,19 +462,19 @@ test('an instance class after a type never prints itself: the annotation row, el
       formatted_text: { label: 'Formatted text', elements: { '.s-*': { label: 'Rich text element' } } },
     },
   };
-  assert.equal(label(patterned, '> pb-formatted-text .s-p1'), 'Formatted text blocks › Rich text element');
+  assert.equal(label(patterned, '> d-formatted-text .s-p1'), 'Formatted text blocks › Rich text element');
   // A declared part under the type still labels as authored.
-  assert.equal(label(minted, '> pb-text .text-block-link'), 'Text blocks › Link');
+  assert.equal(label(minted, '> d-text .text-block-link'), 'Text blocks › Link');
   // The address sentence (write-address.js addressLabel) rides the same
   // words: the class of things reads as words, never the identity class.
   const sentence = (selector) => addressLabel(minted, { key, selector }, 'Welcome', blockTypes, sectionLayouts);
-  assert.equal(sentence('pb-formatted-text .s-p1'), 'Formatted text block text elements in Welcome');
-  assert.equal(sentence('> pb-formatted-text .s-p1'), 'Formatted text block text elements directly in Welcome');
-  assert.ok(!sentence('> pb-formatted-text .s-p1').includes('.s-'));
+  assert.equal(sentence('d-formatted-text .s-p1'), 'Formatted text block text elements in Welcome');
+  assert.equal(sentence('> d-formatted-text .s-p1'), 'Formatted text block text elements directly in Welcome');
+  assert.ok(!sentence('> d-formatted-text .s-p1').includes('.s-'));
   // No namespace declared anywhere: the spelling stays the last resort,
   // the same degrade a bare instance part has.
   const { instances, ...unminted } = minted;
-  assert.equal(label(unminted, '> pb-formatted-text .s-p1'), 'Formatted text blocks › .s-p1');
+  assert.equal(label(unminted, '> d-formatted-text .s-p1'), 'Formatted text blocks › .s-p1');
 });
 
 test('partsForKey flattens the nested tree; row shape unchanged', () => {

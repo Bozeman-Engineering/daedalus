@@ -69,6 +69,7 @@ class SlotRosterTest extends BlueprintKernelTestBase {
     $this->assertNull($roster->tier('aside'), 'An id the roster does not name has no tier.');
     $this->assertSame([FrameHost::MAIN_SLOT, 'header'], $roster->ids(SlotRoster::TIER_FRAME));
     $this->assertSame(['content', 'hero'], $roster->ids(SlotRoster::TIER_TEMPLATE));
+    $this->assertSame(['config:' . SlotBlock::CONFIG_NAME], $roster->cacheability()->getCacheTags(), 'A render that asks the roster declares its config.');
 
     // A roster save is read at once.
     $this->writeRoster(['hero' => ['label' => 'Hero', 'tier' => SlotRoster::TIER_FRAME]]);
@@ -107,6 +108,7 @@ class SlotRosterTest extends BlueprintKernelTestBase {
    * The schema: a tier is required and is frame or template.
    */
   public function testRosterValidation(): void {
+    $this->installConfig(['daedalus_blueprint']);
     $this->assertSame([], $this->violations(self::ROSTER), 'A roster of labelled, tiered entries is valid.');
     $this->assertSame(
       ['slots.hero' => "'tier' is a required key."],
@@ -121,16 +123,20 @@ class SlotRosterTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * The constraint violations of the settings config holding a roster.
+   * The constraint violations of the installed settings config holding a roster.
+   *
+   * The roster is overlaid on the installed object's raw data (the shape
+   * SlotRosterGuardTest::validate() uses), so every other key the settings
+   * object requires (its langcode, the AI context budget) rides along as
+   * shipped and only the roster is under test.
    *
    * @return array<string, string>
    *   Property path to message.
    */
   protected function violations(array $slots): array {
     $violations = [];
-    // The roster's labels are translatable, so the config object names its
-    // language, as the shipped config does.
-    $data = ['langcode' => 'en', 'active_design_system' => NULL, SlotBlock::ROSTER_KEY => $slots];
+    $data = $this->config(SlotBlock::CONFIG_NAME)->getRawData();
+    $data[SlotBlock::ROSTER_KEY] = $slots;
     foreach ($this->container->get('config.typed')->createFromNameAndData(SlotBlock::CONFIG_NAME, $data)->validate() as $violation) {
       $violations[$violation->getPropertyPath()] = (string) $violation->getMessage();
     }

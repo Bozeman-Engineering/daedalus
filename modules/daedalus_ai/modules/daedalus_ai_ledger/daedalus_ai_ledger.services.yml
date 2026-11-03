@@ -1,0 +1,44 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  # The price table: USD per million tokens per model in four buckets, the
+  # one counting knob of the caps (a bucket at zero stops counting it).
+  daedalus_ai_ledger.cost_resolver:
+    class: Drupal\daedalus_ai_ledger\CostResolver
+  Drupal\daedalus_ai_ledger\CostResolver: '@daedalus_ai_ledger.cost_resolver'
+
+  # The rows: one ai_usage entity per LLM leg, written from the provider
+  # events and read back per user (the caps) and per conversation (the
+  # segment window's last prompt size).
+  daedalus_ai_ledger.usage_ledger:
+    class: Drupal\daedalus_ai_ledger\UsageLedger
+    arguments:
+      $providerManager: '@ai.provider'
+  Drupal\daedalus_ai_ledger\UsageLedger: '@daedalus_ai_ledger.usage_ledger'
+
+  # Allow or refuse a turn before any model call: the configured windows
+  # (site-scoped first, then the user's; rolling or anchored to a date)
+  # summed from the rows against their caps.
+  daedalus_ai_ledger.usage_gate:
+    class: Drupal\daedalus_ai_ledger\UsageGate
+  Drupal\daedalus_ai_ledger\UsageGate: '@daedalus_ai_ledger.usage_gate'
+
+  logger.channel.daedalus_ai_ledger:
+    parent: logger.channel_base
+    arguments: ['daedalus_ai_ledger']
+
+  # How long the rows are kept: the configured retention, never under the
+  # longest configured window, purged on cron through the entity storage.
+  daedalus_ai_ledger.usage_retention:
+    class: Drupal\daedalus_ai_ledger\UsageRetention
+    arguments:
+      $logger: '@logger.channel.daedalus_ai_ledger'
+  Drupal\daedalus_ai_ledger\UsageRetention: '@daedalus_ai_ledger.usage_retention'
+
+  # Feeds the ledger from drupal/ai's response events: every provider call
+  # on the site (the agent's legs, the image prompt rewriter, generation)
+  # lands as a row.
+  daedalus_ai_ledger.usage_ledger_subscriber:
+    class: Drupal\daedalus_ai_ledger\EventSubscriber\UsageLedgerSubscriber

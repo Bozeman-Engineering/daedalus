@@ -17,7 +17,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Drives the one-box container's behavior on a real page.
  *
  * The capability under test is the one-box container model: a container is
- * ONE element at every depth. A page band is a real <section> whose root
+ * ONE element at every depth. A section is a real <section> whose root
  * carries the width inset (padding-inline), the arrangement (flex on
  * itself), and the empty-drop affordance; nested, the same declaration
  * resolves to a plain grouping <div> with no width vocabulary. Kernel tests
@@ -33,21 +33,21 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   `content: attr(data-container-empty-hint)` resolving into a rendered
  *   ::before, the dashed outline, and the min-height floor are browser
  *   facts (the kernel sees only the stamped attribute).
- * - A stacked band lays out its children with the skin's gap (seam: the
+ * - A stacked section lays out its children with the skin's gap (seam: the
  *   composed kind's declared `display: flex; flex-direction: column`
  *   compiled into the defaults file, stamped on the section root, and
  *   actually laying out the canvas): the container kind declares its
  *   root display and direction as token-free code
  *   (daedalus_stylish_layouts.page_builder.yml), the skin carries only the
  *   look (`gap: var(--space-gutter)` on kind:container, the shape every
- *   shipped skin uses), so a newborn band holding two blocks computes
+ *   shipped skin uses), so a newborn section holding two blocks computes
  *   `display: flex`, `flex-direction: column` and a `row-gap` equal to
  *   the minted gutter, and the blocks sit that far apart. Before the
  *   declared tier the gap was dead on this very skin (a gap with no
  *   arranging display paints nothing): the Kernel tier pins the compiled
  *   block; only a browser proves it arranges.
- * - Columns lands as computed style: a page band is BORN stacked (no
- *   arrangement reference at the add_section door), so the palette band
+ * - Columns lands as computed style: a section is BORN stacked (no
+ *   arrangement reference at the add_section door), so the palette section
  *   computes the declared column before any gesture. A real click on the
  *   Layout widget's Columns segment commits apply_variant on the SELECTED
  *   root key in ONE blueprint POST and the computed `flex-direction`
@@ -67,7 +67,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   ships no children rule, so no equal fill); the section offers the
  *   Horizontal row as justify-content with FOUR stops, Spread the fourth,
  *   and a real click on Spread writes `justify-content: space-between`
- *   on the band's own block in one POST, computed on the root and laid
+ *   on the section's own block in one POST, computed on the root and laid
  *   out (the blocks pushed to the content box's two edges). Clicking
  *   Columns replaces Row in one POST: the wrap goes with the variant,
  *   the equal fill returns, and the Horizontal row is GONE while Vertical
@@ -85,7 +85,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   in a browser.
  * - A masked wearing is legible where it is chosen: the root grant is the
  *   whole spacing group, so the padding row writes the `padding`
- *   shorthand on the band, and the band's own padding beats the worn
+ *   shorthand on the section, and the section's own padding beats the worn
  *   width inset (own overrides beat worn variants). Padding is bound
  *   site-wide by the suite (daedalus_stylish.page_builder.yml binds it to the
  *   space scale), so the row's offer is the scenario skin's space steps
@@ -99,7 +99,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   binding, the grain-aware shadow read, and the row action's
  *   update_style unset landing as computed style.
  * - Nested is a plain <div> with no Width offer: an add_section inside
- *   the band renders the residual div form as the band's DIRECT child,
+ *   the section renders the residual div form as the section's DIRECT child,
  *   and selecting it re-renders the wear bar with no worn row (it wears
  *   nothing) and a variant picker WITHOUT a Width group (the root-only
  *   axis filtered by the client's nested-depth read).
@@ -117,7 +117,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   variant's lit value are back. The pose → vector → widget read/write seam only
  *   exists in a browser.
  * - A stacked child's Bottom is a browser-resolved auto margin: a tall
- *   band (a typed `min-height: 60vh` on the band, the op door standing in
+ *   section (a typed `min-height: 60vh` on the section, the op door standing in
  *   for the advanced row's update_style) holding two text blocks, the
  *   last one selected and drilled into its basic Position widget, whose
  *   Vertical row under a flex-column parent is the auto-margin pair
@@ -127,20 +127,20 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   write trims the side it does not own), the computed `margin-top`
  *   resolves to a non-zero used length, and the block's margin box
  *   (rect.bottom plus its own margin-bottom, the theme's paragraph
- *   rhythm) meets the band's content-box bottom within 1px while its
+ *   rhythm) meets the section's content-box bottom within 1px while its
  *   sibling stays at the top; the row's Bottom chip reads lit from the
  *   pair. Seam: the widget's pair write through the op door to a
  *   browser-resolved auto margin, which no node test can see (the node
  *   tier pins the write's shape; only the flex algorithm hands the free
  *   space to the margin).
  * - The Layout section's alignment rows light the container stack's
- *   winner at the pose and write at the compound: on the tall band (born
+ *   winner at the pose and write at the compound: on the tall section (born
  *   stacked, so the section offers both screen axes) the Horizontal row
  *   is align-items on the flex column, unlit while nothing delivers it;
- *   a real click on Center commits ONE update_style on the band's key
+ *   a real click on Center commits ONE update_style on the section's key
  *   carrying `align-items: center` with no condition (the compound is
  *   Base), the canvas centres the children, and Center lights. Posed
- *   Narrow through the Width chip the band still computes centred (the
+ *   Narrow through the Width chip the section still computes centred (the
  *   default block reaches narrow through the condition cascade) and
  *   Center STAYS lit: the row reads the stack's winner at the pose
  *   (layout-widget.js alignmentState over stackAt, the Gap row's read),
@@ -154,14 +154,14 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * - The empty hint outranks a page's own generated box (seam: the
  *   specificity fight between the affordance stylesheet, a head
  *   stylesheet, and the entity's inline map CSS later in the document,
- *   which wins every tie): an empty band minted after the tall one
+ *   which wins every tie): an empty section minted after the tall one
  *   paints the hint; a user `&::before` on it, minted through the op
  *   spine and born with the seed `content: ""`, prints as
- *   `:scope::before` inside the band's @scope at 0-1-1, and the hint's
+ *   `:scope::before` inside the section's @scope at 0-1-1, and the hint's
  *   rule (`#daedalus-ui-stage [data-container-empty-hint]::before`,
  *   1-1-1, opening with `all: initial`) still paints its text, a
  *   transparent background and the full width over the page's content,
- *   red and 10px: the chrome asserts its own box while the band is
+ *   red and 10px: the chrome asserts its own box while the section is
  *   empty. Only a real cascade orders the two stylesheets; the kernel
  *   tier prints each alone. Representative of the chrome class
  *   (explode's chip reset rides the same law).
@@ -225,8 +225,8 @@ class ContainerBehaviorTest extends WebDriverTestBase {
   }
 
   /**
-   * The palette band, arrangement, width delivery, the nested div, and a
-   * child pinned to a tall band's bottom.
+   * The palette section, arrangement, width delivery, the nested div, and a
+   * child pinned to a tall section's bottom.
    */
   public function testOneBoxContainerScenario(): void {
     $this->loginAsEditor();
@@ -247,7 +247,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     // way every shipped skin does (gap as the gutter, on kind:container's
     // root) and nothing of its mechanic: the arranging `display: flex;
     // flex-direction: column` is the composed kind's declared default in
-    // code, which is what the stacked-band leg below proves lays the gap
+    // code, which is what the stacked-section leg below proves lays the gap
     // out. Created BEFORE the
     // page loads so the compiled skin and defaults files are linked into
     // the document under test.
@@ -282,7 +282,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     );
 
     // A real Layout Builder page, empty: the palette drop below is what
-    // gives it its first band.
+    // gives it its first section.
     $node = Node::create([
       'type' => 'page',
       'title' => 'Container behavior page',
@@ -333,7 +333,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       };
       JS);
 
-    // ——— (a) A page band via the palette. ———
+    // ——— (a) A section via the palette. ———
     //
     // Open the Add panel (its toggle's own API; the cookie entry path can
     // render the sidebar either way) so the gesture starts where a user's
@@ -404,8 +404,8 @@ class ContainerBehaviorTest extends WebDriverTestBase {
         );
       })();
       JS);
-    $band = $assert_session->waitForElement('css', "[data-main-entity] [data-selectable^='container:']", 20000);
-    $this->assertNotNull($band, 'The palette drop placed a container band on the page.');
+    $section = $assert_session->waitForElement('css', "[data-main-entity] [data-selectable^='container:']", 20000);
+    $this->assertNotNull($section, 'The palette drop placed a section on the page.');
     $this->assertSame(
       $posts + 1,
       (int) $session->evaluateScript('window.__blueprintPosts'),
@@ -417,7 +417,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $section_uuid = substr($section_key, strlen('container:'));
     $root = "[data-main-entity] [data-selectable='container:$section_uuid']";
 
-    // The one-box band: a real <section> root, nothing inside it, wearing
+    // The one-box section: a real <section> root, nothing inside it, wearing
     // the resolver-stamped empty pair — and the affordance PAINTING.
     // `content: attr()` resolving into a rendered ::before, the dashed
     // outline, and the min-height floor are the browser half the kernel
@@ -439,7 +439,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
             && root.getBoundingClientRect().height >= parseFloat(style.fontSize) * 4 - 1;
         })()
         JS),
-      'The band is one <section> with no inner div, and the empty affordance paints: attr()-fed ::before hint, dashed outline, min-height floor.',
+      'The section is one <section> with no inner div, and the empty affordance paints: attr()-fed ::before hint, dashed outline, min-height floor.',
     );
 
     // ——— (b) Two blocks, then Columns. ———
@@ -489,7 +489,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $placement_error = $session->evaluateScript('window.__placementError ?? null');
     $this->assertNull($placement_error, 'Block placement failed: ' . ($placement_error ?? ''));
 
-    // The populated band re-rendered from the same declaration: the empty
+    // The populated section re-rendered from the same declaration: the empty
     // pair is gone, and both block roots are the section root's DIRECT
     // children — no part element, no sandwich, at load like at birth.
     $this->assertTrue(
@@ -504,10 +504,10 @@ class ContainerBehaviorTest extends WebDriverTestBase {
             && second.parentElement === root;
         })()
         JS),
-      'Populated, the band dropped the empty pair and holds both blocks as direct children of the one section root.',
+      'Populated, the section dropped the empty pair and holds both blocks as direct children of the one section root.',
     );
 
-    // Select the band programmatically (the facade is the sanctioned
+    // Select the section programmatically (the facade is the sanctioned
     // programmatic face of a canvas click) and open the inspector, whose
     // Layout section is the arrangement widget's home in Basic mode.
     $assert_session->waitForElement('css', '#daedalus_stylish_inspector');
@@ -526,8 +526,8 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       'The Layout section rendered for the selected container.',
     );
 
-    // A page band is BORN stacked: no arrangement reference is stamped at
-    // the add_section door, so the palette band computes the declared
+    // A section is BORN stacked: no arrangement reference is stamped at
+    // the add_section door, so the palette section computes the declared
     // column before any gesture, and the widget's Stack segment is the
     // selected one. Stacked is a FLEX COLUMN: the composed container kind
     // declares its root `display: flex; flex-direction: column`
@@ -546,21 +546,21 @@ class ContainerBehaviorTest extends WebDriverTestBase {
         return JSON.stringify({ display: style.display, direction: style.flexDirection, rowGap: style.rowGap, between: second.top - first.bottom });
       })()
       JS), TRUE);
-    $this->assertIsArray($stacked, 'The newborn band\'s computed arrangement was read.');
+    $this->assertIsArray($stacked, 'The newborn section\'s computed arrangement was read.');
     $this->assertSame(
       'flex',
       $stacked['display'],
-      'The palette band was born stacked as a flex box: the container kind\'s declared display compiled into the defaults file and stamped on the section root, no row variant and no gesture.',
+      'The palette section was born stacked as a flex box: the container kind\'s declared display compiled into the defaults file and stamped on the section root, no row variant and no gesture.',
     );
     $this->assertSame(
       'column',
       $stacked['direction'],
-      'The palette band was born a flex COLUMN: the container kind\'s declared flex-direction, the stack, before any gesture (the row variant is what flips it).',
+      'The palette section was born a flex COLUMN: the container kind\'s declared flex-direction, the stack, before any gesture (the row variant is what flips it).',
     );
     $this->assertSame(
       '32px',
       $stacked['rowGap'],
-      'The stacked band computes the skin\'s gutter as its row-gap: the declared flex column gives the skin\'s gap a box to act on.',
+      'The stacked section computes the skin\'s gutter as its row-gap: the declared flex column gives the skin\'s gap a box to act on.',
     );
     $this->assertEqualsWithDelta(
       32.0,
@@ -571,7 +571,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $layout_mode = "//div[@id='daedalus_stylish_inspector']//span[@aria-label='Layout mode']";
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', "{$layout_mode}//button[normalize-space(.)='Stack'][@aria-pressed='true']"),
-      'The Layout widget reads the newborn band as Stack.',
+      'The Layout widget reads the newborn section as Stack.',
     );
 
     // The widget round trip, direction one: clicking Columns commits
@@ -665,7 +665,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     );
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', "{$layout_mode}//button[normalize-space(.)='Row'][@aria-pressed='true']"),
-      'The Layout widget reads the band as Row: the mode is the worn shipped name.',
+      'The Layout widget reads the section as Row: the mode is the worn shipped name.',
     );
     // The blocks' geometry under Row: side by side one gutter apart, at
     // natural width. Read against the root's content box so "natural"
@@ -687,7 +687,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
         });
       })()
       JS), TRUE);
-    $this->assertIsArray($row_geometry, 'The Row band\'s geometry was read.');
+    $this->assertIsArray($row_geometry, 'The Row section\'s geometry was read.');
     $this->assertTrue($row_geometry['sameRow'], 'Under Row the two blocks share a line (flex-direction row laid out). Read: ' . json_encode($row_geometry));
     $this->assertSame('32px', $row_geometry['columnGap'], 'Row computes the skin\'s gutter as its column-gap (the variant\'s gap declaration). Read: ' . json_encode($row_geometry));
     $this->assertEqualsWithDelta(32.0, (float) $row_geometry['between'], 1.0, 'The two blocks sit one gutter apart on the line. Read: ' . json_encode($row_geometry));
@@ -703,7 +703,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     // Nothing delivers justify-content before the pick, so every chip
     // reads unlit and no custom pill shows. The row's face is read as one
     // string (label:pressed per chip) so a failure names what was lit;
-    // step (g) reads the same rows on the tall band.
+    // step (g) reads the same rows on the tall section.
     $horizontal_row = "//div[@id='daedalus_stylish_inspector']"
       . "//section[contains(concat(' ', normalize-space(@class), ' '), ' daedalus-stylish-inspector__layout ')]"
       . "//div[contains(@class,'daedalus-stylish-inspector__widget-row')]"
@@ -725,7 +725,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $session->wait(20000, $horizontal_reads('Left:false,Center:false,Right:false,Spread:false'));
     $this->assertTrue(
       (bool) $session->evaluateScript($horizontal_reads('Left:false,Center:false,Right:false,Spread:false')),
-      'Under Row the Layout section offers the Horizontal row with four stops, Spread the fourth, all unlit and no custom pill: nothing delivers justify-content on the band. Read: '
+      'Under Row the Layout section offers the Horizontal row with four stops, Spread the fourth, all unlit and no custom pill: nothing delivers justify-content on the section. Read: '
       . $session->evaluateScript("JSON.stringify($horizontal_state)"),
     );
     $this->assertTrue(
@@ -734,17 +734,17 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       . $session->evaluateScript("JSON.stringify($vertical_state)"),
     );
 
-    // A real click on Spread: one update_style on the band's own default
+    // A real click on Spread: one update_style on the section's own default
     // block (one POST), `justify-content: space-between` alone, computed
     // on the root and laid out: the first block hugs the content box's
     // left edge and the second its right edge.
-    $band_entry = $this->styleMapJs() . "['container:$section_uuid']";
+    $section_entry = $this->styleMapJs() . "['container:$section_uuid']";
     $posts = (int) $session->evaluateScript('window.__blueprintPosts');
     $this->clickByXpath("{$horizontal_row}//button[contains(@class,'daedalus-stylish-inspector__segment')][@aria-label='Spread']");
     $this->assertJsCondition(
       "getComputedStyle(document.querySelector(\"$root\")).justifyContent === 'space-between'",
       20000,
-      'Spread landed as computed justify-content space-between on the band.',
+      'Spread landed as computed justify-content space-between on the section.',
     );
     $session->wait(20000, 'window.__blueprintPosts >= ' . ($posts + 1));
     $this->assertSame(
@@ -754,15 +754,15 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       . $session->evaluateScript('JSON.stringify(window.__fetchLog)'),
     );
     $this->assertJsCondition(
-      "(() => { const entry = $band_entry?.default ?? {};"
+      "(() => { const entry = $section_entry?.default ?? {};"
       . " return entry['justify-content'] === 'space-between' && entry['flex-direction'] === undefined && entry.display === undefined; })()",
       20000,
-      'The Spread pick wrote justify-content: space-between alone on the band\'s own default block: the arrangement stays the worn variant\'s, no custom claim.',
+      'The Spread pick wrote justify-content: space-between alone on the section\'s own default block: the arrangement stays the worn variant\'s, no custom claim.',
     );
     $session->wait(20000, $horizontal_reads('Left:false,Center:false,Right:false,Spread:true'));
     $this->assertTrue(
       (bool) $session->evaluateScript($horizontal_reads('Left:false,Center:false,Right:false,Spread:true')),
-      'The Horizontal row lights Spread from the band\'s own block. Read: '
+      'The Horizontal row lights Spread from the section\'s own block. Read: '
       . $session->evaluateScript("JSON.stringify($horizontal_state)"),
     );
     $this->assertTrue(
@@ -783,7 +783,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
 
     // Back to Columns: a real click replaces Row by Columns on the axis
     // in one POST; the wrap goes with the Row variant, the children rule
-    // returns (equal fill again, the band's own inert justify-content
+    // returns (equal fill again, the section's own inert justify-content
     // notwithstanding), and the section re-scopes its rows: Horizontal is
     // gone (columns fill the main axis) and Vertical remains.
     $posts = (int) $session->evaluateScript('window.__blueprintPosts');
@@ -803,7 +803,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     );
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', "{$layout_mode}//button[normalize-space(.)='Columns'][@aria-pressed='true']"),
-      'The Layout widget reads the band as Columns again.',
+      'The Layout widget reads the section as Columns again.',
     );
     $this->assertJsCondition(
       "(() => { const horizontal = $horizontal_state; const vertical = $vertical_state;"
@@ -822,14 +822,14 @@ class ContainerBehaviorTest extends WebDriverTestBase {
             && Math.abs(first.width - second.width) < 2;
         })()
         JS),
-      'Back under Columns the two blocks are equal columns again: the children rule returned with the variant, and the band\'s own justify-content is inert against the equal fill.',
+      'Back under Columns the two blocks are equal columns again: the children rule returned with the variant, and the section\'s own justify-content is inert against the equal fill.',
     );
 
     // ——— (c) Width Small through the wear bar. ———
     //
-    // The band was born wearing the width default (container_site): its
+    // The section was born wearing the width default (container_site): its
     // padding-inline must have RESOLVED through the skin's minted tokens —
-    // max(32px, (100% - 1024px) / 2) against the band's own containing
+    // max(32px, (100% - 1024px) / 2) against the section's own containing
     // width. Percentage padding resolves against the containing block, and
     // an auto-width block's border-box equals it, so offsetWidth is the
     // formula's own input.
@@ -837,11 +837,11 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       . "//div[contains(@class,'daedalus-stylish-wear-bar__row')]"
       . "[.//span[contains(@class,'daedalus-stylish-wear-bar__label')][normalize-space(.)='Width']]";
     $width_label = $assert_session->waitForElement('xpath', "{$width_row_xpath}//span[contains(@class,'daedalus-stylish-wear-bar__variant-label')]");
-    $this->assertNotNull($width_label, 'The wear bar renders a worn Width row for the root-depth band.');
+    $this->assertNotNull($width_label, 'The wear bar renders a worn Width row for the root-depth section.');
     $this->assertSame(
       'Site width',
       $width_label->getText(),
-      'The band wears the birth default width variant (Site width, container_site).',
+      'The section wears the birth default width variant (Site width, container_site).',
     );
     $this->assertTrue(
       $session->evaluateScript(<<<JS
@@ -855,10 +855,10 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       'The birth default width resolved through the minted tokens: computed padding-inline equals max(gutter, (100% - 1024px) / 2).',
     );
 
-    // ——— (c') The band's own padding masks the worn inset, legibly. ———
+    // ——— (c') The section's own padding masks the worn inset, legibly. ———
     //
     // The root grant is the whole spacing group, so the padding row writes
-    // the `padding` shorthand on the band; the element's own layer beats
+    // the `padding` shorthand on the section; the element's own layer beats
     // the worn variant, so the shorthand hides Site width's
     // padding-inline. The wear row must SAY so (the overridden state: the
     // modifier class, the lost declaration named in the sub-line) and its
@@ -882,7 +882,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       '!!document.querySelector(' . json_encode($padding_input) . ')'
       . ' && !!document.querySelector(' . json_encode($padding_chevron) . ')',
       20000,
-      'The band\'s Spacing control renders its Padding row as the detented field with the stop picker\'s chevron (the whole spacing group is granted at root; the suite\'s space binding is an offer under open law).',
+      'The section\'s Spacing control renders its Padding row as the detented field with the stop picker\'s chevron (the whole spacing group is granted at root; the suite\'s space binding is an offer under open law).',
     );
     $this->clickBySelector($padding_chevron);
     $this->assertJsCondition(
@@ -899,10 +899,10 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.includes('48px')).click();"
     );
     $this->assertJsCondition(
-      "(() => { const entry = $band_entry?.default ?? {};"
+      "(() => { const entry = $section_entry?.default ?? {};"
       . " return entry.padding === 'var(--space-lg)' && entry['padding-inline'] === undefined; })()",
       20000,
-      'The padding row wrote the uniform `padding` shorthand on the band as the lg step\'s reference, var(--space-lg) (pick, magnetic capture, the op path), beside its worn width reference.',
+      'The padding row wrote the uniform `padding` shorthand on the section as the lg step\'s reference, var(--space-lg) (pick, magnetic capture, the op path), beside its worn width reference.',
     );
     $this->assertJsCondition(<<<JS
       (() => {
@@ -911,7 +911,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       })()
       JS,
       20000,
-      'The own padding beats the worn inset on every side: the band computes the lg token\'s 48px all round (the reference resolved through the compiled skin file; the layer rule, own over worn).',
+      'The own padding beats the worn inset on every side: the section computes the lg token\'s 48px all round (the reference resolved through the compiled skin file; the layer rule, own over worn).',
     );
     $this->assertJsCondition(
       "(() => { const row = document.evaluate(" . json_encode($width_row_xpath) . ", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;"
@@ -929,9 +929,9 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $posts = (int) $session->evaluateScript('window.__blueprintPosts');
     $this->clickByXpath("{$width_row_xpath}//button[contains(@class,'daedalus-stylish-wear-bar__reset')][normalize-space(.)='Reset overrides']");
     $this->assertJsCondition(
-      "(() => { const entry = $band_entry?.default ?? {}; return entry.padding === undefined; })()",
+      "(() => { const entry = $section_entry?.default ?? {}; return entry.padding === undefined; })()",
       20000,
-      'Reset overrides dropped the band\'s own padding from the map.',
+      'Reset overrides dropped the section\'s own padding from the map.',
     );
     $session->wait(20000, 'window.__blueprintPosts >= ' . ($posts + 1));
     $this->assertSame(
@@ -1012,16 +1012,25 @@ class ContainerBehaviorTest extends WebDriverTestBase {
             && nested.parentElement === document.querySelector("$root");
         })()
         JS),
-      'Nested, the same declaration resolves to a plain <div> — the band\'s direct child, one element at every depth.',
+      'Nested, the same declaration resolves to a plain <div> — the section\'s direct child, one element at every depth.',
     );
 
     // Selecting the nested container re-renders the wear bar without the
     // root-only width axis: the client's nested-depth read filters the
     // vocabulary. Rows are worn references only, and the nested container
     // wears nothing, so the bar is the add row alone; the OFFER lives in
-    // the variant picker, whose groups are the depth-blind axes
-    // (Animation and Hover among them) and never Width.
-    // The wait flips only when the re-render lands — the band's own bar
+    // the variant picker, whose groups are the depth-blind axes with an
+    // offered variant and never Width. The picker drops a group with no
+    // option, and the scenario skin is package-less (the suite ships no
+    // motion; the starter and olivero packages mint theirs), so the
+    // depth-blind axis this fixture can prove is Layout, whose Columns
+    // and Row the layouts module ships at every depth. ONE offered axis
+    // is the picker's flat posture (variant-picker.js: headers are noise
+    // with nothing to tell apart, so the one group renders without its
+    // label and without role="group"), so the leg reads the offer's
+    // OPTIONS, never a group label: one group, no header, exactly the
+    // Layout axis's two variants and none of the Width stops.
+    // The wait flips only when the re-render lands — the section's own bar
     // (with its worn Width row) is on screen when the select commits.
     $session->executeScript("Drupal.Daedalus.Selection.select('container:$nested_uuid');");
     $this->assertJsCondition(
@@ -1033,13 +1042,17 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $this->clickByXpath("//div[@id='daedalus_stylish_inspector']//button[contains(@class,'daedalus-stylish-wear-bar__add')]");
     $this->assertJsCondition(<<<JS
       (() => {
-        const groups = [...document.querySelectorAll('.daedalus-ui-popover .daedalus-stylish-variant-picker__group[role="group"]')]
-          .map((group) => group.getAttribute('aria-label'));
-        return groups.length > 0 && groups.includes('Animation') && groups.includes('Hover') && !groups.includes('Width');
+        const groups = [...document.querySelectorAll('.daedalus-ui-popover .daedalus-stylish-variant-picker__group')];
+        const labels = groups.flatMap((group) => [...group.querySelectorAll('[role="option"] .daedalus-stylish-variant-picker__label')]
+          .map((label) => label.textContent.trim()));
+        return groups.length === 1
+          && groups[0].getAttribute('role') !== 'group'
+          && !groups[0].querySelector('.daedalus-stylish-variant-picker__group-label')
+          && labels.length === 2 && labels.includes('Columns') && labels.includes('Row');
       })()
       JS,
       20000,
-      'The nested container offers no Width: the root-only axis is out of its picker vocabulary, the depth-blind axes remain.',
+      'The nested container offers Layout alone, flat, and no Width: the root-only axis is out of its picker vocabulary, the depth-blind axis remains as the one headerless group of Columns and Row.',
     );
     $this->pressKeyOnFocused('Escape');
     $this->assertJsCondition(
@@ -1050,7 +1063,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
 
     // ——— (e) The Layout section renders posed and writes at the pose. ———
     //
-    // Back on the band (worn Columns): the Width chip poses the canvas at
+    // Back on the section (worn Columns): the Width chip poses the canvas at
     // Narrow (the band's midpoint, the same px drive-there uses). The
     // segment is a WEAR surface and keeps reading Columns; the worn
     // variant's own narrow block stacks the children, and the section
@@ -1059,7 +1072,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $session->executeScript("Drupal.Daedalus.Selection.select('container:$section_uuid');");
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', "{$layout_mode}//button[normalize-space(.)='Columns'][@aria-pressed='true']"),
-      'Re-selected, the band\'s Layout widget reads Columns.',
+      'Re-selected, the section\'s Layout widget reads Columns.',
     );
     $this->assertJsCondition(
       "!!document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__layout-strip')"
@@ -1086,7 +1099,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "getComputedStyle(document.querySelector(\"$root\")).flexDirection === 'column'",
       20000,
-      'At Narrow the worn Columns variant\'s own narrow block stacks the band (flex-direction column on the canvas).',
+      'At Narrow the worn Columns variant\'s own narrow block stacks the section (flex-direction column on the canvas).',
     );
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', "{$layout_mode}//button[normalize-space(.)='Columns'][@aria-pressed='true']"),
@@ -1149,7 +1162,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       "(() => { const style = getComputedStyle(document.querySelector(\"$root\"));"
       . " return style.display === 'flex' && style.flexDirection === 'column' && style.rowGap === '24px'; })()",
       20000,
-      'At Narrow the canvas band is a flex column (the variant\'s narrow block over the declared display) with the 24px gap laid out as its row-gap.',
+      'At Narrow the canvas section is a flex column (the variant\'s narrow block over the declared display) with the 24px gap laid out as its row-gap.',
     );
 
     // Un-posing (the chip's Base entry) returns the canvas to its natural
@@ -1178,7 +1191,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       "(() => { const style = getComputedStyle(document.querySelector(\"$root\"));"
       . " return style.display === 'flex' && style.flexDirection === 'row' && style.columnGap === '32px'; })()",
       20000,
-      'Un-posed, the band is the variant\'s flex row with its gutter gap (the skin\'s 32px): the narrow write changed the canvas at narrow only.',
+      'Un-posed, the section is the variant\'s flex row with its gutter gap (the skin\'s 32px): the narrow write changed the canvas at narrow only.',
     );
     $unposed_gap_row = '(() => { return ' . $gap_row_reads('32px from Columns. Also set at Narrow')
       . " && !!document.querySelector('#daedalus_stylish_inspector .daedalus-stylish-inspector__layout-strip')"
@@ -1192,14 +1205,14 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     // ——— (f) A stacked child's Bottom is a browser-resolved auto margin. ———
     //
     // The reason the stack is a flex column: per-child vertical placement
-    // has a working spelling. A second band (the first one's last child
+    // has a working spelling. A second section (the first one's last child
     // is the nested container, and an auto margin pins only the LAST
     // child to the edge) holding two text blocks, born stacked like the
-    // palette band, given `min-height: 60vh` through the op door (the
-    // same update_style the advanced Sizing row sends, so the band is
+    // palette section, given `min-height: 60vh` through the op door (the
+    // same update_style the advanced Sizing row sends, so the section is
     // taller than its content and there is free space for the margin to
     // take). Both placements ride one mutation batch; the min-height its
-    // own, once the band renders.
+    // own, once the section renders.
     $tall_uuid = $uuid_service->generate();
     $top_uuid = $uuid_service->generate();
     $pinned_uuid = $uuid_service->generate();
@@ -1242,10 +1255,10 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       . " || (!!document.querySelector(\"[data-selectable='block:$top_uuid']\")"
       . " && !!document.querySelector(\"[data-selectable='block:$pinned_uuid']\"))",
       20000,
-      'The tall band and its two block placements resolved.',
+      'The tall section and its two block placements resolved.',
     );
     $tall_error = $session->evaluateScript('window.__tallError ?? null');
-    $this->assertNull($tall_error, 'The tall band placement failed: ' . ($tall_error ?? ''));
+    $this->assertNull($tall_error, 'The tall section placement failed: ' . ($tall_error ?? ''));
     $tall_root = "[data-main-entity] [data-selectable='container:$tall_uuid']";
     $pinned = "[data-selectable='block:$pinned_uuid']";
     $top = "[data-selectable='block:$top_uuid']";
@@ -1260,7 +1273,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
             && style.display === 'flex' && style.flexDirection === 'column';
         })()
         JS),
-      'The second band is born a stacked section too (the declared flex column) with both blocks as its direct children, so the pinned block\'s parent box is a flex column.',
+      'The second section is born stacked too (the declared flex column) with both blocks as its direct children, so the pinned block\'s parent box is a flex column.',
     );
     $session->executeScript(<<<JS
       (() => {
@@ -1280,7 +1293,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       . " return Math.abs(parseFloat(getComputedStyle(root).minHeight) - window.innerHeight * 0.6) <= 1"
       . " && root.getBoundingClientRect().height >= window.innerHeight * 0.6 - 1; })()",
       20000,
-      'The typed min-height landed on the band through the op door and the band grew to 60vh (the free space the auto margin below will take).',
+      'The typed min-height landed on the section through the op door and the section grew to 60vh (the free space the auto margin below will take).',
     );
     $tall_error = $session->evaluateScript('window.__tallError ?? null');
     $this->assertNull($tall_error, 'The min-height update_style failed: ' . ($tall_error ?? ''));
@@ -1288,11 +1301,11 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     // The geometry the pick must change, read BEFORE it: the pinned
     // block's margin box (its rect plus its own margin-bottom, the
     // theme's paragraph rhythm: what the auto margin controls is the
-    // margin box, so that is what is measured against the band's
+    // margin box, so that is what is measured against the section's
     // content-box bottom, the padding and border taken off the rect)
-    // sits well above the band's content edge, and its margin-top is
+    // sits well above the section's content edge, and its margin-top is
     // zero. Without this read the 1px assertion after the pick could
-    // pass on a band with no free space at all.
+    // pass on a section with no free space at all.
     $geometry = <<<JS
       (() => {
         const root = document.querySelector("$tall_root");
@@ -1314,12 +1327,12 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       })()
       JS;
     $before = json_decode((string) $session->evaluateScript("JSON.stringify($geometry)"), TRUE);
-    $this->assertIsArray($before, 'The tall band\'s geometry was read before the pick.');
+    $this->assertIsArray($before, 'The tall section\'s geometry was read before the pick.');
     $margin_before = (float) $before['pinned']['marginTop'];
     $this->assertGreaterThan(
       100.0,
       (float) $before['contentBottom'] - (float) $before['pinned']['marginBoxBottom'],
-      'Before the pick the pinned block\'s margin box sits well above the tall band\'s content-box bottom: the band has free space for an auto margin to take.',
+      'Before the pick the pinned block\'s margin box sits well above the tall section\'s content-box bottom: the section has free space for an auto margin to take.',
     );
 
     // Select the last block and drill into its Position widget: under a
@@ -1402,11 +1415,11 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     );
 
     // The browser half no node test can see: the flex algorithm hands
-    // the band's free space to the auto margin, so the computed
+    // the section's free space to the auto margin, so the computed
     // margin-top resolves to a used length in px (never the `auto`
     // keyword: parseFloat of `auto` is NaN and fails the comparison),
     // far above whatever the theme gave the tag before the pick; the
-    // pinned block's margin box meets the band's content-box bottom
+    // pinned block's margin box meets the section's content-box bottom
     // within 1px, and its sibling stays at the content-box top (the auto
     // margin moved one child, not the stack).
     $geometry_condition = "(() => { const g = $geometry;"
@@ -1416,7 +1429,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $session->wait(20000, $geometry_condition);
     $this->assertTrue(
       (bool) $session->evaluateScript($geometry_condition),
-      'The auto margin resolved in layout: the pinned block\'s computed margin-top is a used length taking the band\'s free space, its margin box bottom meets the band\'s content-box bottom within 1px, and its sibling stays at the top (the pair write through the op door to a browser-resolved auto margin). Geometry: '
+      'The auto margin resolved in layout: the pinned block\'s computed margin-top is a used length taking the section\'s free space, its margin box bottom meets the section\'s content-box bottom within 1px, and its sibling stays at the top (the pair write through the op door to a browser-resolved auto margin). Geometry: '
       . $session->evaluateScript("JSON.stringify($geometry)"),
     );
     $this->assertJsCondition(
@@ -1428,7 +1441,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
 
     // ——— (g) The alignment rows light the stack's winner at the pose. ———
     //
-    // Back on the tall band (born stacked, nothing worn, so the Layout
+    // Back on the tall section (born stacked, nothing worn, so the Layout
     // section offers both screen axes): the Horizontal row is align-items
     // on the flex column. Nothing delivers it before the pick (no own
     // block, no variant, and neither the scenario skin nor the container
@@ -1442,7 +1455,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $tall_entry = $this->styleMapJs() . "['container:$tall_uuid']";
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', "{$layout_mode}//button[normalize-space(.)='Stack'][@aria-pressed='true']", 20000),
-      'Re-selected, the tall band\'s Layout widget reads Stack (born stacked, nothing worn), so the section offers the Horizontal row.',
+      'Re-selected, the tall section\'s Layout widget reads Stack (born stacked, nothing worn), so the section offers the Horizontal row.',
     );
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', "{$center_chip}[not(@disabled)]", 20000),
@@ -1451,13 +1464,13 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $session->wait(20000, $horizontal_reads('Left:false,Center:false,Right:false'));
     $this->assertTrue(
       (bool) $session->evaluateScript($horizontal_reads('Left:false,Center:false,Right:false')),
-      'Before the pick the Horizontal row is unlit with no custom pill: no layer of the band\'s stack delivers align-items. Read: '
+      'Before the pick the Horizontal row is unlit with no custom pill: no layer of the section\'s stack delivers align-items. Read: '
       . $session->evaluateScript("JSON.stringify($horizontal_state)"),
     );
 
-    // A real click on Center, unposed: one update_style on the band's
+    // A real click on Center, unposed: one update_style on the section's
     // key carrying `align-items: center` and no condition (the compound
-    // is Base), one POST, landing in the band's default block; the flex
+    // is Base), one POST, landing in the section's default block; the flex
     // column centres its children and the row lights Center.
     $session->executeScript("$op_log.length = 0;");
     $posts = (int) $session->evaluateScript('window.__blueprintPosts');
@@ -1470,19 +1483,19 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $session->wait(20000, $center_op);
     $this->assertTrue(
       (bool) $session->evaluateScript($center_op),
-      'The Center click dispatched exactly one update_style on the band\'s key carrying `align-items: center` with no condition (alignOps at Base). Op log: '
+      'The Center click dispatched exactly one update_style on the section\'s key carrying `align-items: center` with no condition (alignOps at Base). Op log: '
       . $session->evaluateScript("JSON.stringify($op_log)"),
     );
     $this->assertJsCondition(
       "(() => { const entry = $tall_entry ?? {};"
       . " return entry.default?.['align-items'] === 'center' && entry.narrow === undefined; })()",
       20000,
-      'The map carries the band\'s own `align-items: center` at default and no narrow block.',
+      'The map carries the section\'s own `align-items: center` at default and no narrow block.',
     );
     $this->assertJsCondition(
       "getComputedStyle(document.querySelector(\"$tall_root\")).alignItems === 'center'",
       20000,
-      'The canvas centres the tall band\'s children (align-items on the declared flex column).',
+      'The canvas centres the tall section\'s children (align-items on the declared flex column).',
     );
     $session->wait(20000, 'window.__blueprintPosts >= ' . ($posts + 1));
     $this->assertSame(
@@ -1494,11 +1507,11 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $session->wait(20000, $horizontal_reads('Left:false,Center:true,Right:false'));
     $this->assertTrue(
       (bool) $session->evaluateScript($horizontal_reads('Left:false,Center:true,Right:false')),
-      'Unposed, the Horizontal row lights Center from the band\'s own default block. Read: '
+      'Unposed, the Horizontal row lights Center from the section\'s own default block. Read: '
       . $session->evaluateScript("JSON.stringify($horizontal_state)"),
     );
 
-    // Posed Narrow (the Width chip, as in (e)): the band still computes
+    // Posed Narrow (the Width chip, as in (e)): the section still computes
     // centred, because its default block reaches narrow through the
     // condition cascade, and the row's Center STAYS lit. This is the
     // seam: the row reads the stack's winner at the pose (alignmentState
@@ -1509,7 +1522,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__label')",
       20000,
-      'The tall band\'s Width chip opened its menu.',
+      'The tall section\'s Width chip opened its menu.',
     );
     $session->executeScript(
       "Array.from(document.querySelectorAll('.daedalus-ui-menu__item'))"
@@ -1524,7 +1537,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "getComputedStyle(document.querySelector(\"$tall_root\")).alignItems === 'center'",
       20000,
-      'Posed Narrow, the band still computes centred: the default block\'s align-items reaches narrow through the cascade.',
+      'Posed Narrow, the section still computes centred: the default block\'s align-items reaches narrow through the cascade.',
     );
     $session->wait(20000, $horizontal_reads('Left:false,Center:true,Right:false'));
     $this->assertTrue(
@@ -1547,7 +1560,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $session->wait(20000, $right_op);
     $this->assertTrue(
       (bool) $session->evaluateScript($right_op),
-      'The Right click at Narrow dispatched exactly one update_style on the band\'s key under `narrow` carrying `align-items: flex-end` (the pick lands at the compound). Op log: '
+      'The Right click at Narrow dispatched exactly one update_style on the section\'s key under `narrow` carrying `align-items: flex-end` (the pick lands at the compound). Op log: '
       . $session->evaluateScript("JSON.stringify($op_log)"),
     );
     $this->assertJsCondition(
@@ -1560,7 +1573,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "getComputedStyle(document.querySelector(\"$tall_root\")).alignItems === 'flex-end'",
       20000,
-      'At Narrow the canvas ends the tall band\'s children (the narrow block over default).',
+      'At Narrow the canvas ends the tall section\'s children (the narrow block over default).',
     );
     $session->wait(20000, $horizontal_reads('Left:false,Center:false,Right:true'));
     $this->assertTrue(
@@ -1575,7 +1588,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "!!document.querySelector('.daedalus-ui-menu .daedalus-ui-menu__label')",
       20000,
-      'The tall band\'s Width chip re-opened its menu.',
+      'The tall section\'s Width chip re-opened its menu.',
     );
     $session->executeScript(
       "Array.from(document.querySelectorAll('.daedalus-ui-menu__item'))"
@@ -1589,7 +1602,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "getComputedStyle(document.querySelector(\"$tall_root\")).alignItems === 'center'",
       20000,
-      'Un-posed, the band computes centred again: the narrow write changed the canvas at narrow only.',
+      'Un-posed, the section computes centred again: the narrow write changed the canvas at narrow only.',
     );
     $session->wait(20000, $horizontal_reads('Left:false,Center:true,Right:false'));
     $this->assertTrue(
@@ -1603,13 +1616,13 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     // Seam: the specificity fight between the affordance stylesheet
     // (edit-affordances.css, a head stylesheet earlier in the document)
     // and the entity's inline map CSS (later in the document, which
-    // wins every tie): a user's `&::before` on an empty band prints as
-    // `:scope::before` inside the band's @scope (0-1-1), and the hint's
+    // wins every tie): a user's `&::before` on an empty section prints as
+    // `:scope::before` inside the section's @scope (0-1-1), and the hint's
     // rule carries the edit stage's id (`#daedalus-ui-stage
     // [data-container-empty-hint]::before`, 1-1-1) and opens with
     // `all: initial`, so the hint's text, a transparent background and
     // the full width stand over the page's content, colour and width
-    // for exactly as long as the band is empty. Only a real cascade
+    // for exactly as long as the section is empty. Only a real cascade
     // orders the two stylesheets; the kernel tier prints each alone.
     // The box is minted through the op spine (the advanced row's
     // update_style) and lands with the op spine's seed, `content: ""`,
@@ -1633,19 +1646,19 @@ class ContainerBehaviorTest extends WebDriverTestBase {
             },
           ],
         })).catch((error) => {
-          window.__emptyBandError = error.message;
+          window.__emptySectionError = error.message;
         });
       })();
       JS);
     $this->assertNotNull(
       $assert_session->waitForElement('css', $empty_root, 20000),
-      'The empty band rendered after the tall band: ' . ($session->evaluateScript('window.__emptyBandError ?? null') ?? ''),
+      'The empty section rendered after the tall section: ' . ($session->evaluateScript('window.__emptySectionError ?? null') ?? ''),
     );
     $this->assertJsCondition(
       "(() => { const facts = $hint_js; return !!facts && facts.staged && facts.hint === 'Empty container'"
       . " && facts.content === 'Empty container' && facts.outline === 'dashed'; })()",
       20000,
-      'Before any box of its own the empty band paints the hint inside the edit stage: the attr()-fed ::before text and the dashed edge.',
+      'Before any box of its own the empty section paints the hint inside the edit stage: the attr()-fed ::before text and the dashed edge.',
     );
     $session->executeScript(<<<JS
       (() => {
@@ -1663,11 +1676,11 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "window.__emptyBoxError !== undefined || ($empty_entry)?.default?.['background-color'] === '#ff0000'",
       20000,
-      'The box write at the empty band resolved.',
+      'The box write at the empty section resolved.',
     );
     $this->assertNull(
       $session->evaluateScript('window.__emptyBoxError ?? null'),
-      'Writing the empty band\'s `&::before` failed: ' . ($session->evaluateScript('window.__emptyBoxError ?? null') ?? ''),
+      'Writing the empty section\'s `&::before` failed: ' . ($session->evaluateScript('window.__emptyBoxError ?? null') ?? ''),
     );
     $this->assertSame(
       ['default' => ['content' => '""', 'background-color' => '#ff0000', 'width' => '10px']],
@@ -1679,7 +1692,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       . " && facts.content === 'Empty container' && facts.background === 'rgba(0, 0, 0, 0)'"
       . " && parseFloat(facts.width) > 100 && facts.outline === 'dashed'; })()",
       20000,
-      'With the page\'s own `&::before` delivered (content, red, 10px wide at 0-1-1 inside the band\'s @scope, printed later in the document) the hint still paints: its text, a transparent background and the full width under `all: initial` at 1-1-1, the dashed edge: the chrome asserts its own box while the band is empty. Read: '
+      'With the page\'s own `&::before` delivered (content, red, 10px wide at 0-1-1 inside the section\'s @scope, printed later in the document) the hint still paints: its text, a transparent background and the full width under `all: initial` at 1-1-1, the dashed edge: the chrome asserts its own box while the section is empty. Read: '
       . $session->evaluateScript("JSON.stringify($hint_js)"),
     );
 
@@ -1693,7 +1706,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     $node_storage->resetCache([$nid]);
     $this->assertTrue(
       $node_storage->load($nid)->get('layout_builder__layout')->isEmpty(),
-      'The band, blocks, arrangement, and width are staged in tempstore, not committed to the node.',
+      'The section, blocks, arrangement, and width are staged in tempstore, not committed to the node.',
     );
   }
 

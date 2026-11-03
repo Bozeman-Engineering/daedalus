@@ -16,7 +16,7 @@ use Drupal\daedalus_blueprint_ai\DaedalusBlueprintToolBase;
   id: 'daedalus_blueprint:create_entity',
   function_name: 'eb_create_entity',
   name: 'Create Entity',
-  description: 'Creates a NON-PAGE entity (skins, media, config) from a blueprint; pages are page_create\'s job and materials save_material\'s, never this tool\'s. Workflow: (1) Call eb_skill(create_entity) to discover available entity types and bundles. (2) Call eb_read_schema for the chosen type+bundle to get structure and design guidance. (3) Present your plan to the user and wait for approval. (4) Call this tool with the blueprint. Follow the guidance from the schema. Write text values literally, never HTML-escaped (write &, not &amp;) — HTML entities belong only inside rich-text HTML values.',
+  description: 'Creates a NON-PAGE entity (skins, media, config) from a blueprint in the JSON shape eb_read_schema prints for its type and bundle. Write text values literally, never HTML-escaped (write &, not &amp;) — HTML entities belong only inside rich-text HTML values.',
   group: 'modification_tools',
   context_definitions: [
     'blueprint' => new ContextDefinition(
@@ -86,8 +86,7 @@ class CreateEntity extends DaedalusBlueprintToolBase {
       catch (\Exception $e) {
       }
 
-      // The whole page is the affected target of a create.
-      $this->output = $this->withMarkupEcho($this->formatArray($result_array), $result, whole_entity: TRUE);
+      $this->output = $this->formatArray($result_array);
     }
     catch (\Exception $e) {
       $this->output = 'Error: ' . $e->getMessage();

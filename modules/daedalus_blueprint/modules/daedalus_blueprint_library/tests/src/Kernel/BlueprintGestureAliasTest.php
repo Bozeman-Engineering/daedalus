@@ -57,7 +57,7 @@ class BlueprintGestureAliasTest extends BlueprintKernelTestBase {
     $result = $this->operations()->batchOperations($this->host($entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-container id="hero"></pb-container>',
+        'html' => '<d-container id="hero"></d-container>',
         'at' => ['ref' => $root, 'position' => 'afterend'],
       ],
       [
@@ -65,7 +65,7 @@ class BlueprintGestureAliasTest extends BlueprintKernelTestBase {
         'kind' => 'blueprint',
         'element' => 'hero',
         'label' => 'Hero',
-        'description' => 'The hero band',
+        'description' => 'The hero section',
         'offered' => FALSE,
       ],
     ], $this->dialectOptions());
@@ -104,7 +104,7 @@ class BlueprintGestureAliasTest extends BlueprintKernelTestBase {
    * Blueprint="" on a written element lands the provenance stamp at birth.
    *
    * The print carries a placement root's blueprint as an attribute; a
-   * rewrite that keeps it (a replace, an insert of the printed band) must
+   * rewrite that keeps it (a replace, an insert of the printed section) must
    * land the same stamp place_blueprint writes (a section's third-party
    * settings), so the update verb and the owned-variant wear rule keep
    * targeting the copy. The parser judges the claim against the
@@ -118,12 +118,12 @@ class BlueprintGestureAliasTest extends BlueprintKernelTestBase {
     $result = $this->operations()->batchOperations($this->host($entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-container id="hero"></pb-container>',
+        'html' => '<d-container id="hero"></d-container>',
         'at' => ['ref' => $root, 'position' => 'afterend'],
       ],
       [
         'op' => 'insert',
-        'html' => '<pb-block type="basic" id="quote"/>',
+        'html' => '<d-block type="basic" id="quote"/>',
         'at' => ['ref' => $root, 'position' => 'beforeend'],
       ],
       [
@@ -131,7 +131,7 @@ class BlueprintGestureAliasTest extends BlueprintKernelTestBase {
         'kind' => 'blueprint',
         'element' => 'hero',
         'label' => 'Hero',
-        'description' => 'The hero band',
+        'description' => 'The hero section',
       ],
     ], $this->dialectOptions());
     $this->assertBatchSuccess($result);
@@ -149,12 +149,12 @@ class BlueprintGestureAliasTest extends BlueprintKernelTestBase {
     $this->assertSame('BLUEPRINT_ROOT_NOT_CONTAINER', $refused->getErrors()[0]->getCode());
     $this->assertSame($root, $refused->getErrors()[0]->getContext()['container'], 'The corrective names the block\'s container.');
 
-    // A written band claiming its provenance: the stamp lands on the fresh
+    // A written section claiming its provenance: the stamp lands on the fresh
     // root, exactly where place_blueprint writes it.
     $result = $this->operations()->batchOperations($this->host($entity), [
       [
         'op' => 'insert',
-        'html' => sprintf('<pb-container id="copy" blueprint="%s"></pb-container>', $hero),
+        'html' => sprintf('<d-container id="copy" blueprint="%s"></d-container>', $hero),
         'at' => ['ref' => $root, 'position' => 'afterend'],
       ],
     ], $this->dialectOptions(with_roster: TRUE));
@@ -190,7 +190,7 @@ class BlueprintGestureAliasTest extends BlueprintKernelTestBase {
     $mismatch = $this->operations()->batchOperations($this->host($entity), [
       [
         'op' => 'insert',
-        'html' => sprintf('<pb-block type="basic" id="wrong" blueprint="%s"/>', $hero),
+        'html' => sprintf('<d-block type="basic" id="wrong" blueprint="%s"/>', $hero),
         'at' => ['ref' => $root, 'position' => 'beforeend'],
       ],
     ], $this->dialectOptions(with_roster: TRUE));

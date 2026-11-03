@@ -21,10 +21,10 @@
  *   [{mark: 'dot' | 'text', hue?, text?, title}], in the order the
  *   provider wants them drawn. `address` is the row's projection-index
  *   address (projection-index.js): an element key for a model row, the
- *   `key::selector` pair for a part row. A 'dot' is a round swatch in
+ *   `key::selector` pair for a part row. A 'dot' is a round spot in
  *   `hue` (a CSS color); a 'text' is its `text` in the grammar's caption
  *   voice (`hue` optional, its color). `title` is the fact's words, the
- *   swatch's tooltip. Empty (or absent) for a row the provider has
+ *   spot's tooltip. Empty (or absent) for a row the provider has
  *   nothing to say about. Facts draw in the facts zone AHEAD of the
  *   Markup view's tag, in registration order across providers. Optional.
  * - doorways(address): pure; the row menu items this provider offers for

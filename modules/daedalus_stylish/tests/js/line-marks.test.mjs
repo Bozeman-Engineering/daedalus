@@ -28,7 +28,7 @@ globalThis.Drupal = {
 
 const library = [
   { id: 'card_left', label: 'Card left' },
-  { id: 'hero_band', label: 'Hero band' },
+  { id: 'hero_section', label: 'Hero section' },
 ];
 
 const DELIVERED = 'daedalus-stylish-island__line--delivered';
@@ -82,10 +82,10 @@ test('a winner outside the library falls back to the raw reference', () => {
 });
 
 test('a lost line strikes through on a document island too', () => {
-  const lost = { ...ownLine, lost: true, winner: { layer: variantLayerId('hero_band'), variant: 'hero_band' } };
+  const lost = { ...ownLine, lost: true, winner: { layer: variantLayerId('hero_section'), variant: 'hero_section' } };
   const [mark] = lineMarks([lost], { library, sheet: true });
   assert.deepEqual(mark.classes, [LOST]);
-  assert.equal(mark.winner.label, 'Hero band');
+  assert.equal(mark.winner.label, 'Hero section');
 });
 
 // --- delivered: a variant's line ---------------------------------------------
@@ -108,11 +108,11 @@ test('the supplier title and the run label fall back to the reference when the l
 });
 
 test('a lost variant line keeps both marks: lost first, delivered beside it', () => {
-  const lost = { ...variantLine, lost: true, winner: { layer: variantLayerId('hero_band'), variant: 'hero_band' } };
+  const lost = { ...variantLine, lost: true, winner: { layer: variantLayerId('hero_section'), variant: 'hero_section' } };
   const [mark] = lineMarks([lost], { library, sheet: false });
   assert.deepEqual(mark.classes, [LOST, DELIVERED]);
   assert.equal(mark.attributes.title, 'Supplied by the variant "Card left".');
-  assert.equal(mark.winner.label, 'Hero band');
+  assert.equal(mark.winner.label, 'Hero section');
 });
 
 // --- runs: the label on the first line of each layer run ---------------------
@@ -233,15 +233,15 @@ test('a floor line beaten by a variant names it; a declared line beaten by the s
 // so the marks here are the winner-chip and title vocabulary alone.
 
 const OWNER = 'container:cccccccc-1111-2222-3333-444444444444';
-const ruleLine = { property: 'color', value: 'navy', layer: ancestorLayerId(OWNER, '> pb-text'), variant: null, lost: false, winner: null };
-const wornLine = { property: 'color', value: 'red', layer: ancestorWearLayerId(OWNER, 'pb-text .text-block-link', 'card_left'), variant: 'card_left', lost: false, winner: null };
+const ruleLine = { property: 'color', value: 'navy', layer: ancestorLayerId(OWNER, '> d-text'), variant: null, lost: false, winner: null };
+const wornLine = { property: 'color', value: 'red', layer: ancestorWearLayerId(OWNER, 'd-text .text-block-link', 'card_left'), variant: 'card_left', lost: false, winner: null };
 
 test('an ancestor rule\'s own line is delivered in the floor hue and names the rule and its owner in its title', () => {
   const [mark] = lineMarks([ruleLine], { library, sheet: false });
   assert.deepEqual(mark.classes, [DELIVERED]);
   assert.deepEqual(mark.attributes, {
     style: `--daedalus-stylish-line-hue: ${SKIN_COLOR}`,
-    title: `Inherited from the rule "> pb-text" on ${OWNER}.`,
+    title: `Inherited from the rule "> d-text" on ${OWNER}.`,
   });
   // The run heads in the floor hue; the tier has no word of its own.
   assert.equal(mark.run.layer, ruleLine.layer);
@@ -253,29 +253,29 @@ test('a variant an ancestor\'s rule wears is a VARIANT line: the variant\'s hue,
   assert.deepEqual(mark.classes, [DELIVERED]);
   assert.deepEqual(mark.attributes, {
     style: `--daedalus-stylish-line-hue: ${layerColor(variantLayerId('card_left'))}`,
-    title: `Supplied by the variant "Card left" through the rule "pb-text .text-block-link" on ${OWNER}.`,
+    title: `Supplied by the variant "Card left" through the rule "d-text .text-block-link" on ${OWNER}.`,
   });
   assert.notEqual(mark.attributes.style, `--daedalus-stylish-line-hue: ${SKIN_COLOR}`);
   assert.deepEqual(mark.run, { label: 'Card left', layer: wornLine.layer, color: layerColor(variantLayerId('card_left')), first: true });
   // The library lacking the variant falls back to the reference.
-  const unknown = { ...wornLine, layer: ancestorWearLayerId(OWNER, '> pb-text', 'ghost'), variant: 'ghost' };
-  assert.equal(lineMarks([unknown], { library })[0].attributes.title, `Supplied by the variant "ghost" through the rule "> pb-text" on ${OWNER}.`);
+  const unknown = { ...wornLine, layer: ancestorWearLayerId(OWNER, '> d-text', 'ghost'), variant: 'ghost' };
+  assert.equal(lineMarks([unknown], { library })[0].attributes.title, `Supplied by the variant "ghost" through the rule "> d-text" on ${OWNER}.`);
 });
 
 test('a line lost to an ancestor\'s worn variant names the variant through the rule in the variant\'s hue; lost to the rule\'s own line names the rule in the floor hue', () => {
-  const toWorn = { ...skinLine, lost: true, winner: { layer: ancestorWearLayerId(OWNER, '> pb-text', 'card_left'), variant: 'card_left' } };
+  const toWorn = { ...skinLine, lost: true, winner: { layer: ancestorWearLayerId(OWNER, '> d-text', 'card_left'), variant: 'card_left' } };
   assert.deepEqual(lineMarks([toWorn], { library })[0].winner, {
     label: '"Card left" through an ancestor\'s rule',
     color: layerColor(variantLayerId('card_left')),
   });
-  const toOwn = { ...skinLine, lost: true, winner: { layer: ancestorLayerId(OWNER, '> pb-text'), variant: null } };
-  assert.deepEqual(lineMarks([toOwn], { library })[0].winner, { label: 'an ancestor\'s "> pb-text" rule', color: SKIN_COLOR });
+  const toOwn = { ...skinLine, lost: true, winner: { layer: ancestorLayerId(OWNER, '> d-text'), variant: null } };
+  assert.deepEqual(lineMarks([toOwn], { library })[0].winner, { label: 'an ancestor\'s "> d-text" rule', color: SKIN_COLOR });
   // Own beats worn inside the group: the worn line lost to the rule's
   // own keeps its delivered mark beside the strike.
-  const wornLost = { ...wornLine, lost: true, winner: { layer: ancestorLayerId(OWNER, 'pb-text .text-block-link'), variant: null } };
+  const wornLost = { ...wornLine, lost: true, winner: { layer: ancestorLayerId(OWNER, 'd-text .text-block-link'), variant: null } };
   const [mark] = lineMarks([wornLost], { library });
   assert.deepEqual(mark.classes, [LOST, DELIVERED]);
-  assert.deepEqual(mark.winner, { label: 'an ancestor\'s "pb-text .text-block-link" rule', color: SKIN_COLOR });
+  assert.deepEqual(mark.winner, { label: 'an ancestor\'s "d-text .text-block-link" rule', color: SKIN_COLOR });
 });
 
 test('a document island never marks a floor line delivered', () => {

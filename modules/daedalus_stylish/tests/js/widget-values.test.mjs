@@ -49,7 +49,8 @@ const tests = [];
 const test = (name, run) => tests.push([name, run]);
 
 // The guide payload's palette half, as ClientStyleGuide serves it: token
-// scale prefixes resolved, swatches label-sorted with resolved variables.
+// scale prefixes resolved; the roster below carries the tokens, shipped
+// and site-minted alike.
 const paletteGuide = {
   conditions: {
     narrow: { label: 'Narrow', wrapper: '@container page (max-width: 500px)', axis: 'width' },
@@ -58,16 +59,19 @@ const paletteGuide = {
   tokenScales: {
     color: { label: 'Color', shape: 'color', prefix: 'color' },
     space: { label: 'Space', shape: 'dimension', prefix: 'space' },
+    gradient: { label: 'Gradient', shape: 'gradient', prefix: 'gradient' },
   },
   tokens: {
-    color: { accent: { default: '#1a1a2e', dark: '#e8e8f0' }, surface: '#ffffff' },
+    color: {
+      accent: { default: '#1a1a2e', dark: '#e8e8f0' },
+      surface: '#ffffff',
+      'brand-red': { value: '#b91c1c', origin: 'user' },
+      // Withheld from the rows and the AI: never a fallback stop.
+      hidden: { value: '#000000', offered: false },
+    },
     space: { 4: '1rem' },
+    gradient: { 'hero-fade': { value: 'linear-gradient(#000, #fff)', origin: 'user' } },
   },
-  swatchKinds: { color: { label: 'Colors' }, gradient: { label: 'Gradients' } },
-  swatches: [
-    { machine_name: 'brand_red', label: 'Brand red', kind: 'color', value: '#b91c1c', variable: '--swatch-brand_red' },
-    { machine_name: 'hero_fade', label: 'Hero fade', kind: 'gradient', value: 'linear-gradient(#000, #fff)', variable: '--swatch-hero_fade' },
-  ],
 };
 
 // The same palette as the materials store carries it: the roster every
@@ -251,10 +255,11 @@ test('typography: a guide type scale becomes the size row (stopsFor)', () => {
 });
 
 test('palette: an unconstrained color row is the whole color palette', () => {
-  // Skin tokens first (color-shaped scales only — no dimensions), then
-  // color-kind swatches; gradients never offer on a lone color slot.
+  // The offered tokens of the color-shaped scales, roster order (no
+  // dimensions, no gradients on a lone color slot; a withheld token
+  // leaves the unbound rows as it leaves the bound ones).
   assert.deepEqual(colorPalette.map((stop) => stop.value), [
-    'var(--color-accent)', 'var(--color-surface)', 'var(--swatch-brand_red)',
+    'var(--color-accent)', 'var(--color-surface)', 'var(--color-brand-red)',
   ]);
   // Faces paint from payload data — a condition-keyed value shows its
   // default entry — never from var() resolution.
@@ -262,16 +267,16 @@ test('palette: an unconstrained color row is the whole color palette', () => {
   // Scheme-paired entries thread their dark half onto the stop (the split
   // face's other panel); single-valued stops carry null and stay whole.
   assert.deepEqual(colorPalette.map((stop) => stop.paintDark), ['#e8e8f0', null, null]);
-  // Token stops label as their token name, swatch stops as their label.
-  assert.deepEqual(colorPalette.map((stop) => stop.label), ['accent', 'surface', 'Brand red']);
+  // Stops label as their token name.
+  assert.deepEqual(colorPalette.map((stop) => stop.label), ['accent', 'surface', 'brand-red']);
   // The committed reference lights its stop.
-  assert.equal(segmentState('var(--swatch-brand_red)', colorPalette).selected, 'var(--swatch-brand_red)');
+  assert.equal(segmentState('var(--color-brand-red)', colorPalette).selected, 'var(--color-brand-red)');
   assert.equal(segmentState('VAR(--color-accent)', colorPalette).selected, 'var(--color-accent)');
 });
 
 test('palette: a literal equal to a palette value stays custom (honesty)', () => {
-  // '#b91c1c' shows what the swatch shows TODAY, but it is a different
-  // statement: it will not track a swatch edit or a skin swap.
+  // '#b91c1c' shows what the token shows TODAY, but it is a different
+  // statement: it will not track a token edit or a skin swap.
   assert.deepEqual(segmentState('#b91c1c', colorPalette), { selected: null, custom: true });
   assert.deepEqual(segmentState('#1a1a2e', colorPalette), { selected: null, custom: true });
 });
@@ -283,14 +288,14 @@ test('palette: no palette and no constraint is the honest empty vocabulary', () 
 
 test('palette: a scale constraint closes the row to its tokens, allowed literals beside', () => {
   const stops = stopsFor(paletteGuide, paletteMaterials, { scale: 'color', allowed: ['#111'] }, paletteFallback(paletteGuide, paletteMaterials));
-  // The scale's minted tokens as var() references, then the allowed
-  // literals — the exact closed space both validators enforce; user
-  // swatches never extend a scale-locked option set.
+  // The scale's offered tokens as var() references, then the allowed
+  // literals — the exact closed space both validators enforce; a token
+  // of another scale never extends a scale-locked option set.
   assert.deepEqual(stops.map((stop) => stop.value), [
-    'var(--color-accent)', 'var(--color-surface)', '#111',
+    'var(--color-accent)', 'var(--color-surface)', 'var(--color-brand-red)', '#111',
   ]);
   assert.equal(segmentState('#111', stops).selected, '#111');
-  assert.deepEqual(segmentState('var(--swatch-brand_red)', stops), { selected: null, custom: true });
+  assert.deepEqual(segmentState('var(--gradient-hero-fade)', stops), { selected: null, custom: true });
 });
 
 test('palette: a bare allowed list IS the row, verbatim spellings', () => {
@@ -308,23 +313,22 @@ test('palette: a bare allowed list IS the row, verbatim spellings', () => {
 });
 
 test('palette: an allowed var() entry paints from roster data', () => {
-  const stops = stopsFor(paletteGuide, paletteMaterials, { allowed: ['var(--swatch-brand_red)', 'var(--color-accent)', 'var(--color-unminted)'] }, paletteFallback(paletteGuide, paletteMaterials));
+  const stops = stopsFor(paletteGuide, paletteMaterials, { allowed: ['var(--color-brand-red)', 'var(--color-accent)', 'var(--color-unminted)'] }, paletteFallback(paletteGuide, paletteMaterials));
   assert.deepEqual(stops.map((stop) => stop.paint), ['#b91c1c', '#1a1a2e', 'var(--color-unminted)']);
   // The referenced token's scheme pair rides along; single-valued and
   // unknown references carry none (a plain literal never has a pair).
   assert.deepEqual(stops.map((stop) => stop.paintDark), [null, '#e8e8f0', null]);
-  assert.deepEqual(stops.map((stop) => stop.label), ['Brand red', 'accent', 'var(--color-unminted)']);
-  assert.equal(segmentState('var(--swatch-brand_red)', stops).selected, 'var(--swatch-brand_red)');
+  assert.deepEqual(stops.map((stop) => stop.label), ['brand-red', 'accent', 'var(--color-unminted)']);
+  assert.equal(segmentState('var(--color-brand-red)', stops).selected, 'var(--color-brand-red)');
 });
 
 test('palette: stops carry their palette-side group label', () => {
-  // The swatch-well popover sections by group: scale labels for tokens,
-  // kind labels for swatches; an allowed literal has none (a curated
-  // list is its own one section).
-  assert.deepEqual(colorPalette.map((stop) => stop.group), ['Color', 'Color', 'Colors']);
+  // The token-well popover sections by group: the scale's label; an
+  // allowed literal has none (a curated list is its own one section).
+  assert.deepEqual(colorPalette.map((stop) => stop.group), ['Color', 'Color', 'Color']);
   const scaled = stopsFor(paletteGuide, paletteMaterials, { scale: 'color', allowed: ['#111'] }, paletteFallback(paletteGuide, paletteMaterials));
-  assert.deepEqual(scaled.map((stop) => stop.group), ['Color', 'Color', undefined]);
-  const curated = stopsFor(paletteGuide, paletteMaterials, { allowed: ['#16213e', 'var(--swatch-brand_red)'] }, paletteFallback(paletteGuide, paletteMaterials));
+  assert.deepEqual(scaled.map((stop) => stop.group), ['Color', 'Color', 'Color', undefined]);
+  const curated = stopsFor(paletteGuide, paletteMaterials, { allowed: ['#16213e', 'var(--color-brand-red)'] }, paletteFallback(paletteGuide, paletteMaterials));
   assert.deepEqual(curated.map((stop) => stop.group), [undefined, undefined]);
 });
 
@@ -663,7 +667,7 @@ test('gapGate: gap needs a container actually laying out sibling boxes', () => {
 
 test('boundChildCount: the BOUND element\'s own child boxes, null when unknown', () => {
   // The page selected: the entity root's one child box is the layout
-  // root; the layout root itself lays out two bands. A root binding reads
+  // root; the layout root itself lays out two sections. A root binding reads
   // the selection's count, an element binding the part's.
   const self = { isContainer: true, childCount: 1, partChildCount: { '.daedalus-layout-layout': 2, '.field__items': 1 } };
   assert.equal(boundChildCount(self, null), 1);
@@ -678,7 +682,7 @@ test('boundChildCount: the BOUND element\'s own child boxes, null when unknown',
   assert.equal(boundChildCount(null, null), null);
 });
 
-test('boundGapGate: the page\'s Gap opens on two bands and closes on one', () => {
+test('boundGapGate: the page\'s Gap opens on two sections and closes on one', () => {
   const self = { isContainer: true, childCount: 1, partChildCount: { '.daedalus-layout-layout': 2, '.field__items': 1 } };
   assert.equal(boundGapGate(self, '.daedalus-layout-layout'), true);
   assert.equal(boundGapGate(self, '.field__items'), false);
@@ -723,28 +727,31 @@ test('fallbackFor: the property table wins; the shape rule answers the rest', ()
   assert.equal(fallbackFor(null, EMPTY_MATERIALS, 'gap', { type: 'dimension' }), GAP_STOPS);
   assert.equal(fallbackFor(null, EMPTY_MATERIALS, 'padding-left', null), SPACING_STEPS, 'the table needs no definition');
   // Color-shaped definitions read the materials store (the whole color
-  // palette), image-shaped ones its gradient swatches: a swatch minted
-  // mid-session appears in every such space at once.
+  // palette), image-shaped ones its offered gradient tokens: a token
+  // minted mid-session appears in every such space at once.
   assert.deepEqual(fallbackFor(paletteGuide, paletteMaterials, 'color', { type: 'color' }), paletteFallback(paletteGuide, paletteMaterials));
-  assert.deepEqual(fallbackFor(paletteGuide, paletteMaterials, 'outline-color', { type: 'color' }).map((stop) => stop.value), ['var(--color-accent)', 'var(--color-surface)', 'var(--swatch-brand_red)']);
+  assert.deepEqual(fallbackFor(paletteGuide, paletteMaterials, 'outline-color', { type: 'color' }).map((stop) => stop.value), ['var(--color-accent)', 'var(--color-surface)', 'var(--color-brand-red)']);
   assert.deepEqual(fallbackFor(paletteGuide, paletteMaterials, 'background-image', { type: 'text', media: true }), gradientFallback(paletteGuide, paletteMaterials));
   // The offer follows the type; the media flag adds the picker. A
   // keyword-typed media definition (content: `""`, `none` or one media
-  // token) offers its keywords, never the gradient swatches the server
+  // token) offers its keywords, never the gradient tokens the server
   // refuses there, though the same store holds a gradient.
   assert.deepEqual(fallbackFor(paletteGuide, paletteMaterials, 'content', { type: 'keyword', keywords: ['""', 'none'], media: true }), [
     { id: '""', value: '""', matches: ['""'], label: '""' },
     { id: 'none', value: 'none', matches: ['none'], label: 'none' },
   ]);
   assert.deepEqual(gradientFallback(paletteGuide, paletteMaterials), [{
-    id: 'var(--swatch-hero_fade)',
-    value: 'var(--swatch-hero_fade)',
-    matches: ['var(--swatch-hero_fade)'],
-    label: 'Hero fade',
+    id: 'var(--gradient-hero-fade)',
+    value: 'var(--gradient-hero-fade)',
+    matches: ['var(--gradient-hero-fade)'],
+    label: 'hero-fade',
     paint: 'linear-gradient(#000, #fff)',
     paintDark: null,
-    group: 'Gradients',
+    group: 'Gradient',
   }]);
+  // A withheld gradient token leaves the image rows too.
+  const withheld = materialsFrom({ ...paletteGuide, tokens: { gradient: { quiet: { value: 'linear-gradient(#111, #222)', offered: false } } } });
+  assert.deepEqual(gradientFallback(paletteGuide, withheld), []);
   // A keyword definition offers its keywords, each committing itself.
   assert.deepEqual(fallbackFor(null, EMPTY_MATERIALS, 'display', { type: 'keyword', keywords: ['block', 'Flex'] }), [
     { id: 'block', value: 'block', matches: ['block'], label: 'block' },
@@ -760,7 +767,7 @@ test('fallbackFor: the property table wins; the shape rule answers the rest', ()
 test('imageSlot: the gradient half of a media row follows the type', () => {
   // The advanced row's media control comes from the flag (the library
   // chip on every media definition); its gradient half (the `{}` grid,
-  // the gradient opener) and the code view's swatch completions come
+  // the gradient opener) and the code view's token completions come
   // from the type: a free <image> slot takes a gradient, a keyword-typed
   // one (content) takes its keywords or one token and nothing else.
   assert.equal(imageSlot({ type: 'text', media: true }), true);
@@ -783,7 +790,7 @@ test('propertyStops: stopsFor over the property\'s one fallback', () => {
   const display = propertyStops(null, EMPTY_MATERIALS, 'display', { type: 'keyword', keywords: ['block', 'flex'] }, { allowed: ['flex', 'grid'] });
   assert.deepEqual(display.map((stop) => [stop.id, stop.label]), [['flex', 'flex'], ['grid', 'grid']]);
   const scaled = propertyStops(paletteGuide, paletteMaterials, 'color', { type: 'color' }, { scale: 'color' });
-  assert.deepEqual(scaled.map((stop) => stop.value), ['var(--color-accent)', 'var(--color-surface)']);
+  assert.deepEqual(scaled.map((stop) => stop.value), ['var(--color-accent)', 'var(--color-surface)', 'var(--color-brand-red)']);
   assert.deepEqual(propertyStops(paletteGuide, paletteMaterials, 'color', { type: 'color' }, null), paletteFallback(paletteGuide, paletteMaterials));
 });
 
@@ -905,9 +912,9 @@ test('stopsFor: non-numeric scales label by token name alone', () => {
   // value label would duplicate what the face already shows, so the
   // name carries the information the paint cannot.
   const stops = stopsFor(paletteGuide, paletteMaterials, { scale: 'color' }, []);
-  assert.deepEqual(stops.map((stop) => stop.label), ['accent', 'surface']);
-  assert.deepEqual(stops.map((stop) => stop.paint), ['#1a1a2e', '#ffffff']);
-  assert.deepEqual(stops.map((stop) => stop.paintDark), ['#e8e8f0', null]);
+  assert.deepEqual(stops.map((stop) => stop.label), ['accent', 'surface', 'brand-red']);
+  assert.deepEqual(stops.map((stop) => stop.paint), ['#1a1a2e', '#ffffff', '#b91c1c']);
+  assert.deepEqual(stops.map((stop) => stop.paintDark), ['#e8e8f0', null, null]);
   // A number scale is numeric: values, like a dimension scale.
   const weightGuide = {
     tokenScales: { weight: { label: 'Weight', shape: 'number', prefix: 'weight' } },

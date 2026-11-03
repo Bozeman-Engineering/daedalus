@@ -1,0 +1,22 @@
+# One child per sub-category. The route is core's Administration index, a
+# leaf under the door's own gate (access administration pages), so the
+# child is reachable by exactly the actor who may open the door. Never a
+# category page: core's child-menu access check would walk from it back
+# into these links and recurse without end.
+daedalus_config_category_test.ai:
+  title: 'AI fixture'
+  description: 'A setting listed under the AI sub-category.'
+  parent: daedalus.admin_config_ai
+  route_name: system.admin_index
+
+daedalus_config_category_test.ui:
+  title: 'UI fixture'
+  description: 'A setting listed under the UI sub-category.'
+  parent: daedalus.admin_config_ui
+  route_name: system.admin_index
+
+daedalus_config_category_test.styling:
+  title: 'Styling fixture'
+  description: 'A setting listed under the Styling sub-category.'
+  parent: daedalus.admin_config_styling
+  route_name: system.admin_index

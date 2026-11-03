@@ -6,11 +6,9 @@ import {
 } from '../style-guide.js';
 import { notify } from '../notify.js';
 import { failureText, getText, post } from '../gesture-transport.js';
-import { fetchDefaults } from '../skins-api.js';
-import { fetchFontStylesheet } from '../fonts-api.js';
-import { fontsSignature } from '../fonts-model.js';
+import { fetchDefaults, fetchFontStylesheet } from '../skin-api.js';
+import { animationPreviewCss, fontsSignature } from '../skin-model.js';
 import { customProperty } from '../materials.js';
-import { animationPreviewCss } from '../animations-model.js';
 import { PLACES } from '../surface-state.js';
 import { addressKey } from '../write-address.js';
 import {
@@ -42,6 +40,7 @@ import {
   variantCarriers,
   carrierDelta,
 } from '../log.js';
+import { documentTree } from '../../../../daedalus_ui/js/edit_mode/blueprint/document-tree.js';
 
 /**
  * The in-page state source: the inspector fed by the edit-mode app.
@@ -97,6 +96,33 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     deriveTables();
     return layouts;
   };
+  // The document tree is cached the same way, per (mirror instance, root
+  // uuid) pair: getDocument() answers ONE reference until a reducer
+  // replaces the blueprint or the envelope's root changes, exactly as
+  // getTree() answers the mirror's own `layout` reference. The panel's
+  // `useMemo(() => createMatcher(document), [document])` memos (the
+  // subject line, the page view, the element islands, the variant
+  // document view) rest on that identity: a fresh root object per call
+  // would re-index the whole page on every render. documentTree stays the
+  // one producer; this keeps its answer. (Not named `document`: the
+  // factory reads the DOM document below.)
+  let documentFor = null;
+  let documentRoot = null;
+  let cachedDocument = null;
+  const documentOf = () => {
+    const blueprint = app.Blueprint.getBlueprint();
+    const uuid = app.Blueprint.getRoot()?.uuid ?? null;
+    if (
+      cachedDocument === null ||
+      blueprint !== documentFor ||
+      uuid !== documentRoot
+    ) {
+      documentFor = blueprint;
+      documentRoot = uuid;
+      cachedDocument = documentTree(blueprint, uuid);
+    }
+    return cachedDocument;
+  };
   const preview = createPreview({
     guide,
     getBaseMap: () => styleMapOf(app.Blueprint.getBlueprint()),
@@ -109,18 +135,18 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     // value lands on exactly the element the compiled @scope rule opens at.
     resolveRoot,
     // The token scope element (DefaultsStylesheet::SCOPE_CLASS), the one
-    // element the compiled skin and swatch files deliver custom
-    // properties on: the scope lane writes its slots there.
+    // element the compiled skin file delivers custom properties on: the
+    // scope lane writes its slots there.
     resolveScope: () => document.querySelector(`.${TOKEN_SCOPE_CLASS}`),
   });
   // Every mutation response replaces the mirror; staged-but-unsettled
   // preview must re-project over the new authoritative base.
   app.onBlueprintChange(() => preview.baseChanged());
 
-  // The materials delivery extension: the compiled skin and swatch
-  // stylesheets this page loaded predate any token or swatch minted or
-  // edited this session, so a committed var(--color-accent) or
-  // var(--swatch-{name}) would resolve to its old value (or nothing) until
+  // The materials delivery extension: the compiled skin stylesheet this
+  // page loaded predates any token minted or edited this session, so a
+  // committed var(--color-accent) or var(--gradient-{name}) would resolve
+  // to its old value (or nothing) until
   // a full reload. Every store change delivers the roster through the
   // preview's token scope lane (preview.js createMaterialDelivery: the
   // values that differ from what the files print, each condition under
@@ -138,9 +164,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
   // loaded predates any font minted, edited or deleted this session, and
   // a face's url() is the managed file's, the server's to derive. So when
   // the roster's fonts change (a mint, a faces edit, a delete, this
-  // window's or the paired one's: fonts-model.js fontsSignature, never an
+  // window's or the paired one's: skin-model.js fontsSignature, never an
   // unrelated store change) the leader re-reads the whole current print
-  // (fonts-api.js fetchFontStylesheet) and stamps it on the page
+  // (skin-api.js fetchFontStylesheet) and stamps it on the page
   // (preview.js deliverFonts), so a minted family loads before any
   // reload. The boot roster is the compiled file's content and delivers
   // nothing; a later answer never overwrites a newer one; a refused read
@@ -166,7 +192,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     );
   };
 
-  // The animation delivery extension, the swatch extension's twin at
+  // The animation delivery extension, the token extension's twin at
   // at-rule scope: the compiled keyframes file this page loaded predates
   // any animation minted or edited this session, so the roster's
   // animations print whole into one <style> tag appended to the body
@@ -264,7 +290,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
   // The active skin's defaults as delivered SINCE boot: null until a
   // skin session's push refreshed them (the guide payload's skinDefaults
   // is the boot truth the panel reads meanwhile), then the route's
-  // answer verbatim (skins-api.js fetchDefaults), the same shape. Panel
+  // answer verbatim (skin-api.js fetchDefaults), the same shape. Panel
   // state on neither window: the leader holds it and the satellite
   // reads it off the broadcast, so both panels' stacks read one skin.
   let skinDefaults = null;
@@ -710,8 +736,8 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     },
 
     /**
-     * The materials roster: the store's current index (tokens, swatches,
-     * variants, blueprints in the delivery shape), read through the app's
+     * The materials roster: the store's current index (tokens, variants,
+     * blueprints, animations, fonts in the delivery shape), read through the app's
      * Materials facade. Its identity changes exactly when the records do.
      */
     getMaterials: () => app.Materials.getRoster(),
@@ -726,13 +752,13 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     /**
      * Lands a gesture route's response on the page.
      *
-     * The swatch and variant routes ride their own session (never the op
+     * The token and variant routes ride their own session (never the op
      * queue), and every write among them answers with the `materials`
      * delta beside its payload (and `history` where a lane records one).
      * Handing the whole response to the op queue's response path applies
      * exactly that: the store learns the minted, edited or removed
      * records (and relays the delta to the paired window over the
-     * materials wire), the swatch custom properties re-stamp through the
+     * materials wire), the token custom properties re-stamp through the
      * subscription above, and a payload without blueprint or markup
      * touches nothing else. A satellite applies its own copy and relays
      * the delta itself (satellite-source.js).
@@ -742,7 +768,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     /**
      * Previews a material's value on the canvas without committing it.
      *
-     * The palette token card's and the gradient swatch session's live
+     * The palette token card's and the gradient token session's live
      * drag: the draft lands on the token scope lane (the same delivery a
      * committed change rides), so every use on the canvas answers per
      * input event while the store keeps the committed value. A null value
@@ -752,7 +778,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * previews nothing.
      *
      * @param {?object} record
-     *   The token or swatch record (delivery shape), or null.
+     *   The token record (delivery shape), or null.
      * @param {?(string|object)} value
      *   The draft value in the record's shape (a string or a
      *   condition-keyed map), or null to release.
@@ -1051,29 +1077,11 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
 
     /**
      * The root's verdict (`_element.can` on the blueprint's root), or
-     * null before the mirror boots: broadcast to the satellite, which
-     * holds the lean tree but no root node, so it can answer the gate for
-     * the root and the host's own fields.
+     * null before the mirror boots: broadcast to the satellite, whose
+     * capability gate walks the layout (no root node), so it can answer
+     * the gate for the root and the host's own fields.
      */
     getRootCan: () => app.Blueprint.getBlueprint()?._element?.can ?? null,
-
-    /**
-     * The root's three minted words (`_element.type`, `name` and `icon`
-     * on the blueprint's root: the annotator's spine, what the page row
-     * reads like every element row reads its node's), or null before the
-     * mirror boots. Broadcast to the satellite with the lean tree, which
-     * holds the layout elements alone and no root node.
-     */
-    getRootElement: () => {
-      const element = app.Blueprint.getBlueprint()?._element ?? null;
-      return element
-        ? {
-            type: element.type ?? null,
-            name: element.name ?? null,
-            icon: element.icon ?? null,
-          }
-        : null;
-    },
 
     /**
      * Component uuid → inline block type (null for plugin blocks), from the
@@ -1091,14 +1099,59 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     /**
      * The blueprint's lean node tree (`layout`, kind-discriminated
      * container, region and block nodes carrying the `_element`
-     * annotations): the ONE structure every stylish reader walks — the
-     * selector matcher (ancestor layers in the stack, structural facts,
-     * a rule's actual targets), composition capture (a section's
-     * children into slot keys, at any nesting depth), the depth and
-     * provenance reads, the code view's page tree. Broadcast to the
-     * satellite with the rest of the session state.
+     * annotations): the serializer's canonical shape, the sections at
+     * the top, for every walker that wants them there — composition
+     * capture (a section's children into slot keys, at any nesting
+     * depth), the depth and provenance reads, the axis vocabulary's
+     * nested-section read. A reader asking about CONTAINMENT (the
+     * selector matcher, the style stack's ancestor tier, the code view's
+     * page tree) takes getDocument() instead. Not broadcast on its own:
+     * the satellite reads its layout back out of the document.
      */
     getTree: () => app.Blueprint.getBlueprint()?.layout ?? [],
+
+    /**
+     * The document tree (daedalus_ui blueprint/document-tree.js
+     * documentTree()): the layout with the host entity above it, ONE
+     * `entity` node keyed by the root's uuid and carrying the blueprint
+     * root's `_element` (the page's three minted words, the entity
+     * kind's markup), the sections its children, exactly as the canvas
+     * root wrapper stands above them in the DOM. The matcher's view of
+     * the page: the selector matcher, the style stack's ancestor tier
+     * and the code view's page tree read it, and it is the one
+     * structure broadcast to the satellite. The uuid is the envelope's
+     * (getRoot(), the mirror's root), never the blueprint's: the
+     * serializer emits no root identity. `[]` before the mirror boots; a
+     * keyless root on a host with no uuid. One reference per blueprint
+     * state: the same array until the mirror is replaced or the root
+     * changes (the panel's `[document]` memos rest on it).
+     */
+    getDocument: () => documentOf(),
+
+    /**
+     * The canvas's self-provenance: the blueprint's machine name when
+     * the canvas IS a blueprint's own document, null on every other host.
+     *
+     * A blueprint's own canvas is its own first placement (the capture
+     * strips every stamp from the document, so nothing on it is stamped),
+     * and its owned looks must apply there first of all. The read the
+     * mirror already holds says which host this is (`entity_type`
+     * 'blueprint', the serializer's identity key) and names it
+     * (`fields.machine_name`, the scalar the single-property handler
+     * serializes); the provenance read (variant-scope.js
+     * blueprintProvenance) takes this as the fallback for an element the
+     * tree carries unstamped, the client twin of the server checker's
+     * exit. Broadcast to the satellite beside the tree.
+     */
+    getSelfProvenance: () => {
+      const read = app.Blueprint.getBlueprint();
+      const name = read?.fields?.machine_name;
+      return read?.entity_type === 'blueprint' &&
+        typeof name === 'string' &&
+        name !== ''
+        ? name
+        : null;
+    },
 
     /**
      * The selection facts: {self, parent} with self = the element's own
@@ -1174,7 +1227,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * @param {string} key
      *   The style target's selectable key.
      * @param {?string} selector
-     *   A canonical relative selector ('.quote', '> pb-text',
+     *   A canonical relative selector ('.quote', '> d-text',
      *   '&::before'), or null for the element.
      * @param {string[]} properties
      *   The computed properties to read.
@@ -1187,7 +1240,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      *   for a generated box.
      */
     readCanvas: (key, selector, properties) => {
-      const matches = resolveTargets(key, selector);
+      const matches = resolveTargets(key, selector, guide.conditions ?? {});
       if (!matches.length) {
         return null;
       }
@@ -1247,7 +1300,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      *   honest no-op, the same rule as a missing element on readCanvas).
      */
     replayMotion: (key, selector = null) => {
-      const matches = resolveTargets(key, selector);
+      const matches = resolveTargets(key, selector, guide.conditions ?? {});
       if (!matches.length) {
         return false;
       }
@@ -1365,7 +1418,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * Refreshes the skin's delivery after a push of its defaults.
      *
      * The skin session's landing (push-bar.js commitSession): the
-     * server's current answer for the active skin (skins-api.js
+     * server's current answer for the active skin (skin-api.js
      * fetchDefaults) lands twice here, the defaults map on this source
      * (announced to both windows' panels, whose stacks then read the
      * pushed document as the skin's) and the CSS on the canvas through

@@ -11,7 +11,7 @@ use Drupal\daedalus_blueprint\Materials\MaterialsChangeSet;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_stylish\Controller\SkinApiController;
 use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
-use Drupal\daedalus_stylish\DefaultsStylesheet;
+use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Exception\SkinValidationException;
 use Drupal\daedalus_stylish\SkinManager;
@@ -61,6 +61,7 @@ class SkinLifecycleTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -81,15 +82,9 @@ class SkinLifecycleTest extends KernelTestBase {
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_blueprint', 'daedalus_stylish']);
     $this->setUpCurrentUser([], [], TRUE);
@@ -143,7 +138,7 @@ class SkinLifecycleTest extends KernelTestBase {
     ]);
     $skin->setPackageTokens(['space' => ['gutter' => '1rem', 'tight' => '0.5rem']]);
     $skin->setPackageDefaults(['base:h2' => ['' => ['default' => ['font-size' => '2rem']]]]);
-    $skin->setShippedSource(self::PROVIDER, ['tokens' => $skin->packageTokens(), 'defaults' => $skin->packageDefaults()]);
+    $skin->setShippedSource(self::PROVIDER, ['tokens' => $skin->packageTokens(), 'animations' => [], 'fonts' => [], 'defaults' => $skin->packageDefaults()]);
     $skin->setSiteTokens(['space' => ['gutter' => ['value' => '2rem'], 'wide' => ['value' => '4rem']]]);
     $skin->setSiteDefaults(['base:h2' => ['' => ['default' => ['color' => 'red']]]]);
     $skin->save();
@@ -223,7 +218,7 @@ class SkinLifecycleTest extends KernelTestBase {
    * The compiled defaults file's CSS, '' when no file is compiled.
    */
   protected function compiledCss(): string {
-    $uri = $this->container->get('state')->get(DefaultsStylesheet::STATE_KEY);
+    $uri = $this->container->get('state')->get(SkinStylesheet::STATE_KEY);
     return $uri === NULL ? '' : (string) file_get_contents($uri);
   }
 
@@ -242,6 +237,56 @@ class SkinLifecycleTest extends KernelTestBase {
   /**
    * Copy as my skin: the merge folded into a skin the active system owns.
    */
+  /**
+   * A member skin is born with its system's default skin's worn defaults.
+   *
+   * The site's own skin that brings none inherits the merge of the
+   * default skin's layers; one that brings its own keeps them; a global
+   * skin, a member of a system whose default skin is unminted, a shipped
+   * skin and the default skin itself are born with what they bring; the
+   * copy gesture still copies its source.
+   */
+  public function testBornWithTheDefaultSkinsDefaults(): void {
+    $this->createShipped('aurora', 'aurora');
+    $worn = $this->load('aurora')->defaults();
+    $this->assertSame(['base:h2' => ['' => ['default' => ['font-size' => '2rem', 'color' => 'red']]]], $worn, 'The default skin wears both layers merged.');
+
+    // The site's own member skin, tokens only: born with the default
+    // skin's worn defaults as its one layer.
+    $this->createOwn('dawn', 'aurora', ['gutter' => '1rem']);
+    $this->assertSame($worn, $this->load('dawn')->packageDefaults());
+    $this->assertSame([], $this->load('dawn')->siteDefaults());
+
+    // Defaults it brings are its own.
+    $own = DaedalusStylishSkin::create(['label' => 'Dusk', 'machine_name' => 'dusk', 'design_system' => 'aurora']);
+    $own->setPackageTokens(['space' => ['gutter' => '1rem']])->setPackageDefaults(['base:p' => ['' => ['default' => ['margin' => '0']]]])->save();
+    $this->assertSame(['base:p' => ['' => ['default' => ['margin' => '0']]]], $this->load('dusk')->packageDefaults());
+
+    // A global skin has no system to inherit from; a system whose
+    // default skin is not minted gives nothing; a shipped skin's
+    // defaults are its package's, even empty; the default skin itself,
+    // minted by the site under the name the system names, inherits from
+    // nobody.
+    DaedalusStylishSkin::create(['label' => 'Loose', 'machine_name' => 'loose'])->setPackageTokens(['space' => ['gutter' => '1rem']])->save();
+    $this->assertSame([], $this->load('loose')->packageDefaults());
+    $this->createOwn('frost', 'borealis', ['gutter' => '1rem']);
+    $this->assertSame([], $this->load('frost')->packageDefaults());
+    $shipped = DaedalusStylishSkin::create(['label' => 'Bare', 'machine_name' => 'bare', 'design_system' => 'aurora']);
+    $shipped->setPackageTokens(['space' => ['gutter' => '1rem']]);
+    $shipped->setShippedSource(self::PROVIDER, ['tokens' => $shipped->packageTokens(), 'animations' => [], 'fonts' => [], 'defaults' => []]);
+    $shipped->save();
+    $this->assertSame([], $this->load('bare')->packageDefaults());
+    DesignSystem::create(['id' => 'blank', 'label' => 'Blank', 'default_skin' => 'first'])->save();
+    $this->createOwn('first', 'blank', ['gutter' => '1rem']);
+    $this->assertSame([], $this->load('first')->packageDefaults());
+
+    // The copy gesture keeps copying its source; a defaults-less source
+    // is a birth like any other and inherits.
+    $this->active()->activate('aurora');
+    $copy = $this->manager()->copyAsMySkin($this->load('dusk'), 'Dusk again');
+    $this->assertSame(['base:p' => ['' => ['default' => ['margin' => '0']]]], $copy->packageDefaults());
+  }
+
   public function testCopyAsMySkin(): void {
     $manager = $this->manager();
     $source = $this->createShipped();
@@ -410,6 +455,8 @@ class SkinLifecycleTest extends KernelTestBase {
     $synced->setPackageTokens(['space' => ['gutter' => '1.5rem', 'tight' => '0.5rem', 'snug' => '0.25rem']]);
     $synced->setShippedSource(self::PROVIDER, [
       'tokens' => $synced->packageTokens(),
+      'animations' => [],
+      'fonts' => [],
       'defaults' => $synced->packageDefaults(),
     ]);
     $synced->setNewRevision(TRUE);

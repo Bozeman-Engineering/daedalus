@@ -17,7 +17,7 @@ use Drupal\daedalus_blueprint\Host\HostInterface;
  * one question "what look does this element have", element-relative, in
  * the variant entity's storage shape:
  * - OWN: the element's root entry ('') and every selector entry under it
- *   ('::.class', '::p', '::> *', '::> pb-text'). The root travels
+ *   ('::.class', '::p', '::> *', '::> d-text'). The root travels
  *   overrides-only (its `variants` list is the axis fold's business,
  *   below); a RULE entry's worn ROOT references travel verbatim as the
  *   captured '::selector' entry's `variants` list (a rule's wear is part

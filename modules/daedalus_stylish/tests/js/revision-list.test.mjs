@@ -1,6 +1,6 @@
 /**
  * Self-asserting tests for the shared revision list, the one history face
- * the variant, swatch and animation cards wear.
+ * the variant and animation cards wear.
  *
  * Run directly (`node tests/js/revision-list.test.mjs`) or via JsSuitesTest
  * in the PHP tier. Renders the component's vnode tree (the JSX compiled by

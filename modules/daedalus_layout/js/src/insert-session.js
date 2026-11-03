@@ -19,7 +19,7 @@
  * caret, the Insert verb's pending anchor with click-to-place and its
  * arrow-key highlight, the armed root on an empty canvas (the blank-page
  * button, the `i` hotkey and the top-bar button stay one door), and
- * acceptsBlueprintTarget (a band places at top level only).
+ * acceptsBlueprintTarget (a section places at top level only).
  *
  * Every door composes a row's drop through one composer (model/drop.js):
  * the blueprint source, click-to-place at the pending anchor, and the
@@ -83,7 +83,7 @@ export const createInsertSession = (app) => {
 
   // Whether a blueprint row may land at a target: the ONE placement
   // predicate every door answers. It is the materials roster's
-  // applicability twin (MaterialsRoster::applicable(): a band, a blueprint
+  // applicability twin (MaterialsRoster::applicable(): a section, a blueprint
   // whose root wears a root-only variant, places at top level only) over
   // the depth of the gap the target's location lands in. The source below
   // declares it as its acceptsTarget, so the pointer drag and the keyboard
@@ -199,7 +199,7 @@ export const createInsertSession = (app) => {
   });
 
   // Blueprints ride SECTION gaps: the same insertion caret a plain section
-  // uses, so one drag places the blueprint as a top-level band or nested
+  // uses, so one drag places the blueprint as a section or nested
   // into any section the predicate offers (the location passes straight
   // into place_blueprint's placement grammar). The blueprint defines its
   // own structure; a plain section is born a container.
@@ -443,7 +443,7 @@ export const createInsertSession = (app) => {
    * The batch the same composer sends for a click-to-place of the row
    * at the root anchor (model/drop.js), under the same gates, with `show`
    * the key the batch names for what it places. Null where that drop is
-   * refused (a block blueprint's canvas with its one root placed, a band
+   * refused (a block blueprint's canvas with its one root placed, a section
    * where the root flow is not offered) or off an editable page: nothing
    * to show, so nothing is requested.
    *

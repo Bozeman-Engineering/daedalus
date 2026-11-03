@@ -97,17 +97,11 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
     // Variant references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->enableModules([self::TARGET]);
@@ -322,7 +316,7 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
     $map = $this->host($blueprint)->styleMap();
     $map['entity:' . $blueprint->uuid()] = ['default' => ['margin' => '1rem']];
     $blueprint->set('daedalus_stylish_styles', json_encode($map));
-    $blueprint->setGroups(['heroes', 'bands']);
+    $blueprint->setGroups(['heroes', 'sections']);
     $blueprint->setFavorite(TRUE);
     $blueprint->save();
     $blueprint = $this->loadBlueprint('call_to_action');
@@ -347,7 +341,7 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
     $this->assertSame('Call to Action', $plan->definition['label']);
     $this->assertSame('Two-column card.', $plan->definition['description']);
     $this->assertNull($plan->definition['design_system']);
-    $this->assertSame(['heroes', 'bands'], $plan->definition['groups'], 'The entity\'s groups ship as the envelope\'s groups key.');
+    $this->assertSame(['heroes', 'sections'], $plan->definition['groups'], 'The entity\'s groups ship as the envelope\'s groups key.');
     $this->assertTrue($plan->definition['favorite'], 'A site favorite ships favorite: true, the key\'s one spelling.');
     $this->assertSame('block', $plan->definition['scope']);
     $this->assertSame('entity_test:entity_test', $plan->definition['subject']);
@@ -389,7 +383,7 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
     foreach (['label', 'description', 'icon', 'design_system', 'offered', 'scope', 'subject', 'groups', 'favorite'] as $key) {
       $this->assertSame($before[$key], $served[$key], "The $key is the entity's.");
     }
-    $this->assertSame(['heroes', 'bands'], $served['groups'], 'The groups round-trip entity to file to entry.');
+    $this->assertSame(['heroes', 'sections'], $served['groups'], 'The groups round-trip entity to file to entry.');
     $this->assertTrue($served['favorite'], 'The favorite round-trips entity to file to entry.');
     $this->assertSame($this->withoutFieldRef(BlueprintLayout::withoutUuids($before['layout'])), $served['layout']);
     $this->assertSame(['entity:' => ['default' => ['margin' => '1rem']]], $served['styles']);
@@ -608,14 +602,14 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
 
     // An offered blueprint ships no key: the default has one spelling on
     // disk, its absence (the key lists pin it).
-    $plan = $this->shipper()->ship($this->createWearing('Band', 'band'), self::TARGET);
+    $plan = $this->shipper()->ship($this->createWearing('Section', 'section'), self::TARGET);
     $this->assertArrayNotHasKey('ai', $plan->definition);
-    $this->assertArrayNotHasKey('ai', Yaml::decode(file_get_contents($this->blueprintFile('band'))));
-    $this->assertTrue($this->discovery()->getBlueprint('band')['offered']);
+    $this->assertArrayNotHasKey('ai', Yaml::decode(file_get_contents($this->blueprintFile('section'))));
+    $this->assertTrue($this->discovery()->getBlueprint('section')['offered']);
     // Likewise the favorite: not one ships no key, and the entry says so.
     $this->assertArrayNotHasKey('favorite', $plan->definition);
-    $this->assertArrayNotHasKey('favorite', Yaml::decode(file_get_contents($this->blueprintFile('band'))));
-    $this->assertFalse($this->discovery()->getBlueprint('band')['favorite']);
+    $this->assertArrayNotHasKey('favorite', Yaml::decode(file_get_contents($this->blueprintFile('section'))));
+    $this->assertFalse($this->discovery()->getBlueprint('section')['favorite']);
   }
 
   /**
@@ -661,13 +655,13 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
     $this->assertInstanceOf(Media::class, Media::load($media->id()));
 
     // A blueprint without an icon ships none: no key, no file, no warning.
-    $plan = $this->shipper()->ship($this->createWearing('Band', 'band'), self::TARGET);
+    $plan = $this->shipper()->ship($this->createWearing('Section', 'section'), self::TARGET);
     $this->assertSame(BlueprintShipper::ICON_NONE, $plan->icon);
     $this->assertNull($plan->iconSource);
     $this->assertArrayNotHasKey('icon', $plan->definition);
     $this->assertSame([], $plan->warnings);
-    $this->assertArrayNotHasKey('icon', Yaml::decode(file_get_contents($this->blueprintFile('band'))));
-    $this->assertNull($this->discovery()->getBlueprint('band')['icon']);
+    $this->assertArrayNotHasKey('icon', Yaml::decode(file_get_contents($this->blueprintFile('section'))));
+    $this->assertNull($this->discovery()->getBlueprint('section')['icon']);
 
     // A media that resolves to no file ships none, and says so.
     $empty = Media::create(['bundle' => $this->createMediaType('file')->id(), 'name' => 'Empty document']);

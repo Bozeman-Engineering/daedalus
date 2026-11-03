@@ -1,0 +1,18 @@
+# The ledger settings form has two doors. The first is drupal/ai's Tools &
+# Automation page (this link); the second is the Daedalus config category
+# (Configuration » Daedalus » AI, the .daedalus link below). Same route, two
+# links; SETTINGS.md at the daedalus repo root rosters both.
+daedalus_ai_ledger.settings:
+  title: 'Daedalus AI Ledger'
+  description: 'The price table behind the usage ledger and the rolling spend caps.'
+  route_name: daedalus_ai_ledger.settings
+  parent: ai.admin_config_tools
+
+# The second door: the Daedalus AI sub-category. The first door is
+# daedalus_ai_ledger.settings above, under ai.admin_config_tools; see
+# SETTINGS.md.
+daedalus_ai_ledger.settings.daedalus:
+  title: 'AI ledger'
+  description: 'The price table behind the usage ledger and the rolling spend caps.'
+  route_name: daedalus_ai_ledger.settings
+  parent: daedalus.admin_config_ai

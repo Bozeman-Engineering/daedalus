@@ -16,6 +16,11 @@ use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\Core\Url;
+use Drupal\daedalus_ai\ModelChoice;
+use Drupal\daedalus_ai\ModelChoiceOption;
+use Drupal\daedalus_ai_ledger\UsageGate;
+use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
 use Drupal\daedalus_ui\Attribute\Sidebar;
 use Drupal\daedalus_ui\ButtonBuilderTrait;
 use Drupal\daedalus_ui\File\FileLane;
@@ -35,6 +40,19 @@ use Drupal\Component\Serialization\Yaml;
  * the collector as a standalone floating button; in Edit Mode that launcher
  * is hidden and the mode's top bar collects the toggle instead (see
  * Edit::buildTopBar).
+ *
+ * The header's kebab carries three groups above its own items, each only
+ * when it has content, all fed through drupalSettings.daedalus_ai: the
+ * curated models a user holding "choose ai model" may run the chat on
+ * (modelChoices, the current one marked), the usage meter's route
+ * (usageUrl) when a configured cap applies to the user: a site window
+ * applies to everyone, a user window to those without "bypass ai usage
+ * caps" (UsageGate::windowsFor() is the one definition), and the AI
+ * context usage display's route (contextDialogUrl, the "Design system
+ * size" row's target) for a user holding "view ai context usage"
+ * (MaterialsBudget::PERMISSION). Budgeting and the model choice are off
+ * until an administrator configures them, so a plain site renders
+ * neither of those keys; the dialog URL is the permission's alone.
  */
 #[Sidebar(
   id: 'daedalus_ai',
@@ -60,6 +78,15 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
   use StringTranslationTrait;
   use ButtonBuilderTrait;
 
+  /**
+   * The usage gate, when the ledger module is installed.
+   *
+   * The ledger (daedalus_ai_ledger) is a dependency of daedalus_ai_memory,
+   * not of this module, so the gate is the one optional service here: NULL
+   * on a site without the ledger, where there is no cap to show.
+   */
+  protected ?UsageGate $usageGate;
+
   public function __construct(
     array $configuration,
     $plugin_id,
@@ -74,8 +101,11 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
     protected AccountProxyInterface $currentUser,
     protected ModePluginManager $modeManager,
     protected FileLane $fileLane,
+    protected ModelChoice $modelChoice,
+    ?UsageGate $usage_gate = NULL,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
+    $this->usageGate = $usage_gate;
   }
 
   /**
@@ -96,6 +126,10 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
       $container->get('current_user'),
       $container->get('plugin.manager.modes'),
       $container->get('daedalus_ui.file_lane'),
+      $container->get('daedalus_ai.model_choice'),
+      $container->get('module_handler')->moduleExists('daedalus_ai_ledger')
+        ? $container->get('daedalus_ai_ledger.usage_gate')
+        : NULL,
     );
   }
 
@@ -167,6 +201,34 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
 
     $deepchat_attributes = $this->getDeepChatStyleAttributes();
 
+    // The kebab's groups: the curated models for a user who may choose,
+    // the meter's route for a user the caps apply to, and the AI context
+    // usage's routes for a user who may read it. Absent keys mean absent
+    // groups; the client never guesses.
+    $daedalus_ai_settings = [
+      // The attachment lane as the client sees it: the context manager's
+      // interceptor refuses a file over the ceiling before uploading
+      // (deep-chat has no size gate of its own) and the widget's attach
+      // button and drop zone accept the same formats the lane does (the
+      // mixedFiles attribute below).
+      'attachments' => [
+        'accepted_formats' => $this->acceptedFormats(),
+        'size_limit' => FileLane::SIZE_LIMIT,
+      ],
+    ];
+    $model_choices = $this->modelChoices();
+    if ($model_choices !== []) {
+      $daedalus_ai_settings['modelChoices'] = $model_choices;
+    }
+    $usage_url = $this->usageUrl();
+    if ($usage_url !== NULL) {
+      $daedalus_ai_settings['usageUrl'] = $usage_url;
+    }
+    $context_dialog_url = $this->contextDialogUrl();
+    if ($context_dialog_url !== NULL) {
+      $daedalus_ai_settings['contextDialogUrl'] = $context_dialog_url;
+    }
+
     return [
       // Per-session CSRF token and message history make the panel uncacheable.
       '#cache' => ['max-age' => 0],
@@ -197,8 +259,11 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
               'data-daedalus-ui-conceal' => 'minimal',
               'title' => $this->t('Chat options'),
               'aria-label' => $this->t('Chat options'),
-              // Opens the shared menu (daedalus_ui/menu) with the Clear
-              // History item; binding lives in daedalus-ai-chat-menu.js.
+              // Opens the shared menu (daedalus_ui/menu): the model and
+              // usage groups when configured, the "Design system size"
+              // row with the permission, and Clear History; binding
+              // lives in daedalus-ai-chat-menu.js.
+              // The usage script marks it data-usage="low" or "out".
               'aria-haspopup' => 'menu',
               'aria-expanded' => 'false',
             ],
@@ -232,7 +297,7 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
         ],
       ],
       '#attached' => [
-        'library' => $this->getLibraries(),
+        'library' => $this->getLibraries($usage_url !== NULL, $context_dialog_url !== NULL),
         'drupalSettings' => [
           'ai_deepchat' => [
             'assistant_id' => $assistant_id,
@@ -244,17 +309,7 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
             'show_copy_icon' => TRUE,
             'structured_results' => FALSE,
           ],
-          // The attachment lane as the client sees it: the context
-          // manager's interceptor refuses a file over the ceiling before
-          // uploading (deep-chat has no size gate of its own) and the
-          // widget's attach button and drop zone accept the same formats
-          // the lane does (the mixedFiles attribute below).
-          'daedalus_ai' => [
-            'attachments' => [
-              'accepted_formats' => $this->acceptedFormats(),
-              'size_limit' => FileLane::SIZE_LIMIT,
-            ],
-          ],
+          'daedalus_ai' => $daedalus_ai_settings,
         ],
       ],
     ];
@@ -277,19 +332,128 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
   }
 
   /**
+   * The permission the editor-preference lane's save route is gated on.
+   *
+   * The choice is stored through daedalus_ui's generic save route, which
+   * admits only users who may use Edit Mode; a user without it could see
+   * the group and never save a pick, so the group is theirs only with both
+   * permissions.
+   */
+  protected const SAVE_PERMISSION = 'use daedalus ui edit mode';
+
+  /**
+   * The curated models the kebab lists, with the current one marked.
+   *
+   * Only for a user holding the choice permission (and the lane's save
+   * permission) and only when the administrator curated at least one
+   * model; otherwise empty and the group is absent. The current one is
+   * the user's valid choice, else the pair the assistant resolves to when
+   * it is in the list (the site default, which is what runs with no
+   * choice stored), else none is marked.
+   *
+   * @return list<array{key: string, model: string, label: string|null, current: bool}>
+   *   One row per curated model, in config order.
+   */
+  protected function modelChoices(): array {
+    if (!$this->currentUser->hasPermission(ModelChoice::PERMISSION) || !$this->currentUser->hasPermission(self::SAVE_PERMISSION)) {
+      return [];
+    }
+    $choices = $this->modelChoice->choices();
+    if ($choices === []) {
+      return [];
+    }
+    $current = $this->modelChoice->current($this->currentUser)?->key();
+    if ($current === NULL) {
+      $pair = $this->aiAssistantRunner->getProviderAndModel();
+      if (!empty($pair['provider_id']) && !empty($pair['model_id'])) {
+        $default = $pair['provider_id'] . ModelChoiceOption::SEPARATOR . $pair['model_id'];
+        foreach ($choices as $option) {
+          if ($option->key() === $default) {
+            $current = $default;
+            break;
+          }
+        }
+      }
+    }
+    return array_map(static fn (ModelChoiceOption $option): array => [
+      'key' => $option->key(),
+      'model' => $option->model,
+      'label' => $option->label,
+      'current' => $option->key() === $current,
+    ], $choices);
+  }
+
+  /**
+   * The usage meter's route, when the user has a meter to read.
+   *
+   * NULL without the ledger module and when no configured window applies
+   * to the user (UsageGate::windowsFor(): the site windows apply to
+   * everyone, the user windows to those without the bypass permission,
+   * the same rule the gate refuses by and the status route answers by).
+   * No bypass check of its own.
+   *
+   * @return string|null
+   *   The status route's path, or NULL.
+   */
+  protected function usageUrl(): ?string {
+    if ($this->usageGate === NULL || $this->usageGate->windowsFor($this->currentUser) === []) {
+      return NULL;
+    }
+    return Url::fromRoute('daedalus_ai_ledger.usage')->toString(TRUE)->getGeneratedUrl();
+  }
+
+  /**
+   * The AI context usage display's route, for a user who may read it.
+   *
+   * The materials budget (daedalus_blueprint's MaterialsBudget: what the
+   * site shares with the AI as materials, against the budget an admin
+   * set) shows as one display, which the kebab's "Design system size"
+   * row opens in the daedalus popup through its one opener
+   * (daedalus_ui/modal, Drupal.Daedalus.openModal), under one permission,
+   * MaterialsBudget::PERMISSION. It rides by route name; the client
+   * never spells a path. NULL without the permission, and the row is
+   * absent.
+   *
+   * @return string|null
+   *   The dialog route's URL, or NULL.
+   */
+  protected function contextDialogUrl(): ?string {
+    if (!$this->currentUser->hasPermission(MaterialsBudget::PERMISSION)) {
+      return NULL;
+    }
+    return Url::fromRoute('daedalus_blueprint.ai_context')->toString(TRUE)->getGeneratedUrl();
+  }
+
+  /**
    * The libraries the chat panel attaches.
    *
    * The panel owns its whole front end (there is no DaedalusAi TOOL, and
    * Sidebar plugins have no attachments seam: build() '#attached' is the
    * seam, as for the Add panel). The edit-mode chrome (selection chips +
    * the layout/view-mode context provider) attaches only where Edit Mode
-   * applies: on non-editable pages the chat is just a chat.
+   * applies: on non-editable pages the chat is just a chat. The usage
+   * script attaches only when there is a meter to fetch, the popup's
+   * opener (the usage display's door) only when the user may read it.
+   *
+   * @param bool $usage
+   *   Whether the usage meter's route is set for this user.
+   * @param bool $context
+   *   Whether the AI context usage display's route is set for this user.
    *
    * @return string[]
    *   Library names for '#attached'.
    */
-  protected function getLibraries(): array {
+  protected function getLibraries(bool $usage, bool $context): array {
     $libraries = ['daedalus_ai/chat'];
+    if ($usage) {
+      $libraries[] = 'daedalus_ai/usage';
+    }
+    if ($context) {
+      // The kebab's "Design system size" row opens the usage display in
+      // the daedalus popup through its one opener; the chat hosts it on
+      // any page, edit mode or not.
+      $libraries[] = 'daedalus_ui/modal';
+    }
     if (isset($this->modeManager->getModePlugins()['edit'])) {
       $libraries[] = 'daedalus_ai/edit_mode';
       $libraries[] = 'daedalus_ai/layout_context';
@@ -430,14 +594,32 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
     $params['dragAndDrop'] = TRUE;
 
     // Injected into deep-chat's shadow DOM. The chat-view rule keeps the
-    // message list and input on separate grid rows. The text-input rules let
+    // message list and input on separate grid rows; the messages rules
+    // anchor the list at its end. The text-input rules let
     // the input grow with its content and scroll once it reaches 350px,
     // overriding the fixed height that ai_chatbot's toolbar style applies
     // inline on the container (hence the !important).
     $auxiliary_style = <<<'CSS'
       #chat-view { grid-template-rows: 1fr auto; }
+      /* The list is a column anchored at its end: a short history sits
+         against the input and grows upward. The spacer is a pseudo-element
+         (deep-chat's message wrapper carries inline margins, which would
+         beat a margin rule here) that takes the free space and shrinks to
+         nothing once the history overflows, so scrolling and
+         scrollToBottom() behave as before. */
+      #messages { display: flex; flex-direction: column; }
+      #messages::before { content: ""; flex: 1 1 auto; }
       #text-input-container { height: auto !important; max-height: 350px; }
       #text-input { max-height: 350px; overflow-y: auto; }
+      /* Safari: with deep-chat's own white-space: normal, WebKit swallows a
+         Space typed exactly at the wrap point of this padded contenteditable
+         flex item (the nbsp lands in the DOM but innerText and the line
+         count do not move, so the key looks dead; WebKit bug 156657's
+         lineage, still live on this geometry). pre-wrap is the textarea
+         text model, cures it, and changes nothing in Chromium. Verified by
+         the WebKit probe beside the safari-deep-chat note (W44); no FJS
+         step can see it, chromedriver never shows the bug. */
+      #text-input { white-space: pre-wrap; }
       /* Match the chrome's thin token-colored scrollbars in place of
          deep-chat's fat hardcoded gray ones. The standard properties win in
          Chromium (setting them disables ::-webkit-scrollbar styling); the

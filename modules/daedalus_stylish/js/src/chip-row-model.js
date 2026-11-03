@@ -6,14 +6,23 @@
  * header is the whole pose UI: each chip renders its axis's contribution
  * to the editing compound (lit = contributes a part, dim = resting), and
  * its menu poses that ONE axis of daedalus_ui's canvas state vector
- * (plus the selection-scoped force state on the state axis). The
- * structural axis (first-child, empty, …: facts, editing-at.js
- * isFactCondition) has no chip and joins no menu: a fact is the
- * element's place in the markup, which no pose can change. This module
+ * (plus the selection-scoped force state on the state axis). Where an
+ * element sits among its siblings is never a condition and so never a
+ * chip: a position is selector text, a qualifier of the compound it
+ * stands on, which no pose can change. This module
  * derives everything the component renders — faces, lit state, menu
  * items, checked marks, and the action each pick dispatches — from the
- * vector + force state + the guide payload's condition table, so the row
- * and the canvas can never disagree.
+ * vector + force state + the guide payload's condition table + the
+ * LITERAL clauses in use on the selected element's rows (editing-at.js
+ * literalClauses), so the row and the canvas can never disagree. The
+ * axis menus list the published references; a literal in use shows as a
+ * chip entry on its axis (a `@container (min-width: 500px)` row's band
+ * on the width menu, a `:checked` row's state on the state menu), faced
+ * by its own canonical text, so it can be posed and lit like a
+ * reference; a literal the canvas cannot pose (a @media width, a
+ * @supports test, `:visited`) is never a chip (condition-clause.js
+ * clausePosable), and the stamp word a literal state poses is
+ * clauseStamp's, never the text.
  *
  * Presentation stays out: faces and labels are typed descriptors (the
  * line-menu model's pattern) the component maps to translated strings;
@@ -36,6 +45,27 @@ import {
   stateConditionNames,
   widthConditionFor,
 } from './editing-at.js';
+import {
+  PSEUDO,
+  clausePosable,
+  clauseStamp,
+} from '../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
+
+/**
+ * The literal width bands in use: the literal clauses deriving a band,
+ * map order (editing-at.js literalClauses).
+ */
+const literalBands = (literals) =>
+  (literals ?? []).filter((clause) => clause.band !== null);
+
+/**
+ * The literal states in use the stamp can pose: the posable pseudo-class
+ * literals, map order.
+ */
+const literalStates = (literals) =>
+  (literals ?? []).filter(
+    (clause) => clause.form === PSEUDO && clausePosable(clause),
+  );
 
 /**
  * The resolved system color scheme — the scheme chip's resting face.
@@ -62,18 +92,32 @@ export const systemScheme = (matchMedia) =>
 const conditionLabel = compoundLabel;
 
 /**
- * The force state, validated against the state-axis vocabulary.
+ * The force state as a chip face: {name, label} for a state-axis
+ * condition name (its guide label) or a posable literal state in use
+ * whose stamp word the force state carries (faced by the literal's own
+ * text, `:checked`); null for anything else.
  */
-const validForceState = (forceState, conditions) =>
-  forceState && conditions?.[forceState]?.axis === 'state' ? forceState : null;
+const forcedState = (forceState, conditions, literals) => {
+  if (!forceState) {
+    return null;
+  }
+  if (conditions?.[forceState]?.axis === 'state') {
+    return { name: forceState, label: conditionLabel(forceState, conditions) };
+  }
+  const literal = literalStates(literals).find(
+    (clause) => clauseStamp(clause) === forceState,
+  );
+  return literal ? { name: forceState, label: literal.text } : null;
+};
 
 /**
  * The width chip's face and lit state.
  *
  * The face is the WRITE TARGET, never canvas geometry: the effective
  * canvas width (posed ?? measured) inside a condition's band wears that
- * condition's label (lit), and a width above every band wears Base (dim:
- * base applies at every width, nothing non-default is posed). Px never
+ * condition's label (lit; a literal band in use its own text), and a
+ * width above every band wears Base (dim: base applies at every width,
+ * nothing non-default is posed). Px never
  * reaches the face; the ruler owns geometry. Because the derivation
  * reads the MEASURED width when nothing is posed, the face is honest at
  * every canvas size: a full-width canvas in the base band says Base and
@@ -82,8 +126,8 @@ const validForceState = (forceState, conditions) =>
  * facade, a satellite before its first snapshot) degrades to Base, the
  * unconditioned layer.
  */
-const widthFace = (width, conditions) => {
-  const active = widthConditionFor(width, conditions);
+const widthFace = (width, conditions, literals) => {
+  const active = widthConditionFor(width, conditions, literals);
   if (active === null) {
     return { face: { kind: 'base' }, lit: false };
   }
@@ -119,25 +163,26 @@ const widthFace = (width, conditions) => {
  * @param {Object} conditions
  *   guide.conditions: name -> {label, wrapper, axis}.
  * @param {Object} options
- *   {scheme: 'light'|'dark' (systemScheme()), hasSelection: boolean}.
+ *   {scheme: 'light'|'dark' (systemScheme()), hasSelection: boolean,
+ *   literals: the literal clauses in use on the selected element's rows
+ *   (editing-at.js literalClauses)}.
  *
  * @return {Array<{axis: string, face: Object, lit: boolean,
  *   disabled: boolean}>}
  */
 export const chipFaces = (vector, forceState, conditions, options = {}) => {
-  const { scheme = 'light', hasSelection = true } = options;
+  const { scheme = 'light', hasSelection = true, literals = [] } = options;
   const pose = { ...DEFAULT_VECTOR, ...(vector ?? {}) };
   const chips = [];
-  if (stateConditionNames(conditions).length > 0) {
-    const forced = validForceState(forceState, conditions);
+  if (
+    stateConditionNames(conditions).length > 0 ||
+    literalStates(literals).length > 0
+  ) {
+    const forced = forcedState(forceState, conditions, literals);
     chips.push({
       axis: 'state',
       face: forced
-        ? {
-            kind: 'condition',
-            name: forced,
-            label: conditionLabel(forced, conditions),
-          }
+        ? { kind: 'condition', name: forced.name, label: forced.label }
         : { kind: 'axis-name' },
       lit: forced !== null,
       disabled: !hasSelection,
@@ -145,7 +190,7 @@ export const chipFaces = (vector, forceState, conditions, options = {}) => {
   }
   chips.push({
     axis: 'width',
-    ...widthFace(effectiveWidth(pose), conditions),
+    ...widthFace(effectiveWidth(pose), conditions, literals),
     disabled: false,
   });
   chips.push({
@@ -182,10 +227,12 @@ export const chipFaces = (vector, forceState, conditions, options = {}) => {
  * the reason the menu needs three entries: two could never force dark
  * on a dark system, leaving dark-only styles unwritable there).
  *
- * - state: No state + the guide's state-axis vocabulary.
+ * - state: No state + the guide's state-axis vocabulary + the posable
+ *   literal states in use (keyed and posed by their stamp word, faced by
+ *   their text).
  * - width: Base (the un-pose entry) + the posable width conditions (no
  *   empty option; `@media` viewport conditions are the popout's business
- *   and excluded),
+ *   and excluded) + the literal width bands in use (keyed by their text),
  *   then the preview-window tail when the host carries the payload.
  * - scheme: resolved-system entry + Light + Dark, checked against the
  *   VECTOR (following the system never checks a forced entry, even when
@@ -195,7 +242,8 @@ export const chipFaces = (vector, forceState, conditions, options = {}) => {
  * @param {string} axis
  *   'state' | 'width' | 'scheme' | 'motion'.
  * @param {Object} options
- *   {vector, forceState, conditions, scheme, previewWindow: boolean}.
+ *   {vector, forceState, conditions, literals, scheme, previewWindow:
+ *   boolean}.
  *
  * @return {Array<Object>}
  */
@@ -204,12 +252,13 @@ export const chipMenuItems = (axis, options = {}) => {
     vector,
     forceState,
     conditions,
+    literals = [],
     scheme = 'light',
     previewWindow = false,
   } = options;
   const pose = { ...DEFAULT_VECTOR, ...(vector ?? {}) };
   if (axis === 'state') {
-    const forced = validForceState(forceState, conditions);
+    const forced = forcedState(forceState, conditions, literals)?.name ?? null;
     return [
       {
         key: '',
@@ -229,11 +278,23 @@ export const chipMenuItems = (axis, options = {}) => {
         checked: forced === name,
         action: { type: 'force-state', state: name },
       })),
+      // A literal state in use: posed by its stamp word (what the
+      // printed dual matches), faced by its own text.
+      ...literalStates(literals).map((clause) => {
+        const stamp = clauseStamp(clause);
+        return {
+          key: stamp,
+          label: { kind: 'condition', name: stamp, label: clause.text },
+          hint: null,
+          checked: forced === stamp,
+          action: { type: 'force-state', state: stamp },
+        };
+      }),
     ];
   }
   if (axis === 'width') {
     const stops = stopsFromConditions(conditions);
-    const active = widthConditionFor(effectiveWidth(pose), conditions);
+    const active = widthConditionFor(effectiveWidth(pose), conditions, literals);
     const items = [
       // The un-pose entry wears Base and returns the canvas to its
       // natural width. Its checkmark tracks the WRITE TARGET like every
@@ -273,6 +334,20 @@ export const chipMenuItems = (axis, options = {}) => {
           action: { type: 'pose', axis: 'width', value: stopPosePx(stop) },
         };
       }),
+      // A literal width band in use: its own text as the face, its
+      // derived band as the hint and the pose, keyed by the text the
+      // write target spells.
+      ...literalBands(literals).map((clause) => ({
+        key: clause.text,
+        label: { kind: 'condition', name: clause.text, label: clause.text },
+        hint: {
+          kind: 'range',
+          ...(clause.band.min !== undefined && { min: clause.band.min }),
+          ...(clause.band.max !== undefined && { max: clause.band.max }),
+        },
+        checked: active === clause.text,
+        action: { type: 'pose', axis: 'width', value: stopPosePx(clause.band) },
+      })),
     ];
     if (previewWindow) {
       items.push(

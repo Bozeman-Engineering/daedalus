@@ -32,7 +32,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * `place_blueprint` with `mode: linked` lands one node
  * (daedalus_blueprint_linked:{machine_name}, the lean tree's
- * `{kind: linked, blueprint}`, the dialect's <pb-linked>) that renders the
+ * `{kind: linked, blueprint}`, the dialect's <d-linked>) that renders the
  * blueprint's document live under the page's contexts: a field block in
  * the blueprint shows the page's own name, an edit of the blueprint
  * reaches the page without a re-place, the node's content is foreign
@@ -86,15 +86,12 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     parent::setUp();
     // The materials roster (the dialect catalog's) reads every stylish
     // storage on a build.
-    foreach (['daedalus_variant', 'daedalus_skin', 'daedalus_swatch', 'daedalus_animation', 'daedalus_font'] as $entity_type) {
+    foreach (['daedalus_variant', 'daedalus_skin'] as $entity_type) {
       $this->installEntitySchema($entity_type);
     }
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $uuid = $this->container->get('uuid');
     $this->blueprintSection = $uuid->generate();
@@ -291,6 +288,44 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
       ]),
       'A capture strips a provenance stamp and keeps a linked node\'s blueprint.',
     );
+
+    // The join declares what it read whether or not anything showed. The
+    // blueprint emptied: the node prints nothing for a visitor, and the
+    // page's render still carries the blueprint's tag, so composing the
+    // blueprint again reaches the page.
+    $blueprint = $this->reload($this->blueprint);
+    $composed = $blueprint->get('layout_builder__layout')->getSections();
+    $blueprint->set('layout_builder__layout', [])->save();
+    $page = $this->reload($page);
+    $html = $this->renderPage($page);
+    $this->assertSame(0, $this->domXpath($html)->query('//*[@data-layout-builder-block-uuid="' . $linked . '"]')->length, "An empty blueprint prints no block markup for a visitor: $html");
+    $build = $this->container->get('entity_type.manager')->getViewBuilder('entity_test')->view($page, 'full');
+    $this->container->get('renderer')->renderInIsolation($build);
+    $this->assertContains('blueprint:' . $this->blueprint->id(), $build['#cache']['tags'], 'The page depends on the empty blueprint.');
+
+    // The name losing its published entity: the derivative follows the
+    // entity, not its status, so the unpublish (which rebuilds the block
+    // definitions) keeps the plugin, and the page's render reaches the
+    // block, which answers the type's list tag through the primitive: the
+    // node prints nothing for a visitor, and the republish's save reaches
+    // the page.
+    $blueprint->setUnpublished()->save();
+    $this->assertNull($this->container->get('daedalus_blueprint.inner_render')->blueprintHost('testimonial'));
+    $this->assertTrue($this->container->get('plugin.manager.block')->hasDefinition(LinkedBlueprintBlock::pluginId('testimonial')), 'The plugin outlives the publish state.');
+    $page = $this->reload($page);
+    $html = $this->renderPage($page);
+    $this->assertSame(0, $this->domXpath($html)->query('//*[@data-layout-builder-block-uuid="' . $linked . '"]')->length, "An unpublished blueprint prints no block markup for a visitor: $html");
+    $build = $this->container->get('entity_type.manager')->getViewBuilder('entity_test')->view($page, 'full');
+    $this->container->get('renderer')->renderInIsolation($build);
+    $list_tags = $this->container->get('entity_type.manager')->getDefinition('blueprint')->getListCacheTags();
+    $this->assertNotEmpty($list_tags);
+    $this->assertSame([], array_diff($list_tags, $build['#cache']['tags']), 'The page depends on the blueprint list.');
+
+    // Republished (and composed again): the page's render shows the
+    // blueprint's markup again, no re-place.
+    $this->reload($this->blueprint)->set('layout_builder__layout', $composed)->setPublished()->save();
+    $html = $this->renderPage($this->reload($page));
+    $this->assertStringContainsString('Page sentinel', $this->linkedElement($this->domXpath($html), $linked, $html)->textContent, "The republish reached the page: $html");
   }
 
   /**
@@ -360,22 +395,22 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     $this->assertSame('default', $node['_element']['showing']['shows']);
     $this->assertNull($node['_element']['showing']['portal'], 'No door for an actor who may not update the blueprint.');
 
-    // The dialect: the node prints as <pb-linked blueprint="">, parses back
+    // The dialect: the node prints as <d-linked blueprint="">, parses back
     // to the linked node, and refuses what cannot be linked.
     $catalog = $this->dialectOptions(TRUE)['dialect_catalog'];
     $print = $this->container->get('daedalus_blueprint.dialect_printer')->print($tree, $catalog)->text;
-    $this->assertMatchesRegularExpression('/<pb-linked id="' . preg_quote($linked, '/') . '"[^>]*blueprint="testimonial"[^>]*\/>/', $print, $print);
+    $this->assertMatchesRegularExpression('/<d-linked id="' . preg_quote($linked, '/') . '"[^>]*blueprint="testimonial"[^>]*\/>/', $print, $print);
     $parser = $this->container->get('daedalus_blueprint.dialect_parser');
-    $parsed = $parser->parseFragment('<pb-container id="c"><pb-linked blueprint="testimonial"/></pb-container>', $catalog);
+    $parsed = $parser->parseFragment('<d-container id="c"><d-linked blueprint="testimonial"/></d-container>', $catalog);
     $this->assertSame([], $parsed->errors);
     $this->assertSame(['kind' => 'linked', 'blueprint' => 'testimonial'], $parsed->tree[0]['children'][0]);
     $codes = static fn ($result): array => array_map(static fn ($error) => $error->code, $result->errors);
-    $this->assertSame(['BLUEPRINT_NOT_LINKABLE'], $codes($parser->parseFragment('<pb-container id="c"><pb-linked blueprint="call_to_action"/></pb-container>', $catalog)), 'A shipped file has no live document.');
-    $this->assertSame(['UNKNOWN_BLUEPRINT'], $codes($parser->parseFragment('<pb-container id="c"><pb-linked blueprint="nope"/></pb-container>', $catalog)));
-    $this->assertSame(['ILLEGAL_ATTR'], $codes($parser->parseFragment('<pb-container id="c"><pb-linked /></pb-container>', $catalog)));
+    $this->assertSame(['BLUEPRINT_NOT_LINKABLE'], $codes($parser->parseFragment('<d-container id="c"><d-linked blueprint="call_to_action"/></d-container>', $catalog)), 'A shipped file has no live document.');
+    $this->assertSame(['UNKNOWN_BLUEPRINT'], $codes($parser->parseFragment('<d-container id="c"><d-linked blueprint="nope"/></d-container>', $catalog)));
+    $this->assertSame(['ILLEGAL_ATTR'], $codes($parser->parseFragment('<d-container id="c"><d-linked /></d-container>', $catalog)));
     $this->createBlueprint(['label' => 'Whole page', 'machine_name' => 'whole_page', 'scope' => 'page']);
     $catalog = $this->dialectOptions(TRUE)['dialect_catalog'];
-    $this->assertSame(['BLUEPRINT_WRONG_SCOPE'], $codes($parser->parseFragment('<pb-container id="c"><pb-linked blueprint="whole_page"/></pb-container>', $catalog)));
+    $this->assertSame(['BLUEPRINT_WRONG_SCOPE'], $codes($parser->parseFragment('<d-container id="c"><d-linked blueprint="whole_page"/></d-container>', $catalog)));
   }
 
   /**
@@ -444,9 +479,11 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     ]);
     $this->assertSame(['BLUEPRINT_DOES_NOT_FIT'], $codes($result), 'The fit is the op door\'s, for every road.');
 
-    // An unpublished blueprint derives no block and links nothing.
+    // An unpublished blueprint derives a block (the derivative follows the
+    // entity, so a join can declare what it read) and links nothing: the
+    // fit gate judges publication, on every road.
     $this->createBlueprint(['label' => 'Draft', 'machine_name' => 'draft', 'status' => 0]);
-    $this->assertFalse($this->container->get('plugin.manager.block')->hasDefinition(LinkedBlueprintBlock::pluginId('draft')));
+    $this->assertTrue($this->container->get('plugin.manager.block')->hasDefinition(LinkedBlueprintBlock::pluginId('draft')), 'The derivative exists for an unpublished entity.');
     $result = $this->operations()->batchOperations($host, [
       ['op' => 'place_blueprint', 'blueprint' => 'draft', 'mode' => 'linked', 'location' => $inside],
     ]);
@@ -454,9 +491,13 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     $result = $this->operations()->batchOperations($host, [
       ['op' => 'add_element', 'plugin_id' => LinkedBlueprintBlock::pluginId('draft'), 'location' => $inside],
     ]);
-    $this->assertSame(['INVALID_PLUGIN_ID'], $codes($result));
+    $this->assertSame(['BLUEPRINT_NOT_FOUND'], $codes($result), 'A raw add_element of an existing derivative is refused at the fit gate, not as an unknown plugin.');
+    $result = $this->operations()->batchOperations($host, [
+      ['op' => 'add_element', 'plugin_id' => LinkedBlueprintBlock::pluginId('nobody'), 'location' => $inside],
+    ]);
+    $this->assertSame(['INVALID_PLUGIN_ID'], $codes($result), 'A name no entity carries has no derivative.');
 
-    // Publishing rebuilds the derivatives; the detached default is unchanged.
+    // Publishing opens the gate; the detached default is unchanged.
     $draft = $this->loadBlueprint('draft');
     $draft->setPublished()->save();
     $this->assertTrue($this->container->get('plugin.manager.block')->hasDefinition(LinkedBlueprintBlock::pluginId('draft')));
@@ -608,8 +649,9 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     $this->assertSame('element', $missing[0][0]);
     $this->assertContains($missing[0][1], ['ELEMENT_NOT_FOUND', 'ANCHOR_NOT_FOUND'], 'An element the document lacks, refused at the door or by the handler.');
 
-    // An unpublished blueprint derives no block and serves no document:
-    // the node shows nothing, and there is nothing to copy.
+    // An unpublished blueprint keeps its derivative but serves no document
+    // (the primitive resolves published entities only): the node shows
+    // nothing, and there is nothing to copy.
     $this->loadBlueprint('testimonial')->setUnpublished()->save();
     $this->assertSame([['element', 'BLUEPRINT_NOT_FOUND']], $detach(['element' => $linked]));
     $this->assertArrayHasKey($linked, $host->sectionStorage()->getSection(0)->getComponents(), 'The node stays.');
@@ -790,7 +832,7 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     // blueprint's (the default it shows), with the portal to the blueprint
     // for an actor who may update it. The default renders in the door.
     $this->assertSame('testimonial', $inner_render->slotDoor('hero', $host)->default());
-    $this->assertNull($inner_render->slotFiller('hero', $frame_host, $page), 'Nothing fills yet.');
+    $this->assertNull($inner_render->slotFiller('hero', $frame_host, $page)->fill, 'Nothing fills yet.');
     $verdict = $stamper->verdictsOn($host, $frame_host, $hero_door);
     $this->assertSame(['content' => FALSE, 'configure' => FALSE, 'style' => FALSE, 'arrange' => FALSE, 'insert' => TRUE], $verdict['can'], 'The frame slot is the page\'s door.');
     $this->assertSame(['content', 'configure', 'style', 'arrange'], $foreign($verdict)['capabilities']);
@@ -849,7 +891,7 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     $this->assertContains($page->uuid(), array_column(array_filter($result->getTargets(), static fn (array $target): bool => $target['field_name'] === TargetType::RESTRUCTURED), 'uuid'), 'And the root restructured.');
     $sections = $host->ownSections();
     $this->assertSame('hero', LayoutSerializer::slotOf(end($sections)));
-    $filler = $inner_render->slotFiller('hero', $frame_host, $page);
+    $filler = $inner_render->slotFiller('hero', $frame_host, $page)->fill;
     $this->assertSame([$page->getEntityTypeId(), $page->id()], [$filler->host->entityTypeId(), $filler->host->id()], 'The page fills the frame slot now.');
     $html = $render();
     $xpath = $this->domXpath($html);
@@ -859,7 +901,7 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString('Claimant sentinel', $door->textContent, "The copy's field block shows the page's name.");
     // Another page of the site keeps the default.
     ['entity' => $other] = $this->createHost();
-    $this->assertNull($inner_render->slotFiller('hero', $frame_host, $other));
+    $this->assertNull($inner_render->slotFiller('hero', $frame_host, $other)->fill);
     // The claimed door's portal is the frame's (the content shown is the
     // page's own now), and claiming again is refused.
     $verdict = $stamper->verdictsOn($host, $frame_host, $hero_door);
@@ -879,7 +921,7 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     $host->entity()->save();
     $page = $this->reload($page);
     $this->assertCount(1, $this->container->get('daedalus_blueprint.node_tree_builder')->build($this->host($page)), 'The fill is gone.');
-    $this->assertNull($inner_render->slotFiller('hero', $frame_host, $page));
+    $this->assertNull($inner_render->slotFiller('hero', $frame_host, $page)->fill);
     // The default again: the blueprint's document as it now stands (the
     // push back above gave it the copy's identity).
     $current = $this->reload($this->blueprint)->get('layout_builder__layout')->getSections()[0]->getThirdPartySetting('daedalus_layout', 'uuid');
@@ -943,7 +985,7 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     ['entity' => $page, 'root_section' => $root] = $this->createHost();
     $host = $this->host($page);
     $this->assertSame('landing', $inner_render->slotDoor('hero', $host)->default());
-    $this->assertNull($inner_render->slotFiller('hero', $frame_host, $page));
+    $this->assertNull($inner_render->slotFiller('hero', $frame_host, $page)->fill);
 
     $result = $this->operations()->batchOperations($host, [
       ['op' => BlueprintOperationHandler::DETACH, 'slot' => 'hero'],
@@ -968,7 +1010,7 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     $this->assertSame($root, $sections[0]->getThirdPartySetting('daedalus_layout', 'uuid'));
     $this->assertSame([], $sections[0]->getComponents());
     $this->assertNull(LayoutSerializer::slotOf($sections[0]));
-    $this->assertNull($inner_render->slotFiller('hero', $frame_host, $this->reload($page)), 'The slot is still unfilled.');
+    $this->assertNull($inner_render->slotFiller('hero', $frame_host, $this->reload($page))->fill, 'The slot is still unfilled.');
   }
 
 }

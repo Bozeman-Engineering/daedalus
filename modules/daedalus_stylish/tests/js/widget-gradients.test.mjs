@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EMPTY_MATERIALS, materialsFrom } from './materials-fixture.mjs';
-import { gradientSwatchOf } from '../../js/src/materials.js';
+import { gradientTokenOf } from '../../js/src/materials.js';
 import {
   backgroundPick,
   backgroundState,
@@ -25,7 +25,7 @@ import {
 import { paletteFallback, stopsFor } from '../../js/src/widget-values.js';
 
 // The guide payload's palette half, as ClientStyleGuide serves it: token
-// scale prefixes resolved, swatches label-sorted with resolved variables.
+// scale prefixes resolved; the roster carries the tokens.
 const guide = {
   // The scheme axis makes 'dark' a scheme key (paintDark reads null
   // without it, whatever the value carries).
@@ -34,22 +34,21 @@ const guide = {
   },
   tokenScales: {
     color: { label: 'Color', shape: 'color', prefix: 'color' },
+    gradient: { label: 'Gradient', shape: 'gradient', prefix: 'gradient' },
   },
   tokens: {
-    color: { accent: '#1a1a2e' },
-  },
-  swatchKinds: { color: { label: 'Colors' }, gradient: { label: 'Gradients' } },
-  swatches: [
-    { machine_name: 'brand_red', label: 'Brand red', kind: 'color', value: '#b91c1c', variable: '--swatch-brand_red' },
-    { machine_name: 'hero_fade', label: 'Hero fade', kind: 'gradient', value: 'linear-gradient(180deg, #000, #fff)', variable: '--swatch-hero_fade' },
-    {
-      machine_name: 'sunset',
-      label: 'Sunset',
-      kind: 'gradient',
-      value: { default: 'radial-gradient(circle, #f97316, #7c2d12)', dark: 'radial-gradient(circle, #431407, #000)' },
-      variable: '--swatch-sunset',
+    color: { accent: '#1a1a2e', 'brand-red': { value: '#b91c1c', origin: 'user' } },
+    gradient: {
+      'hero-fade': { value: 'linear-gradient(180deg, #000, #fff)', origin: 'user' },
+      sunset: {
+        value: { default: 'radial-gradient(circle, #f97316, #7c2d12)', dark: 'radial-gradient(circle, #431407, #000)' },
+        origin: 'user',
+      },
+      // Withheld: never an unconstrained stop, still a reference the
+      // state reads light when curated.
+      quiet: { value: 'linear-gradient(#111, #222)', offered: false },
     },
-  ],
+  },
 };
 
 // The same palette as the materials store carries it.
@@ -58,37 +57,37 @@ const materials = materialsFrom(guide);
 const colorRow = stopsFor(guide, materials, null, paletteFallback(guide, materials));
 const gradientRow = gradientStops(guide, materials, materials, null);
 
-test('gradientStops: unconstrained rows offer every gradient-kind swatch', () => {
-  // var() references in payload order, faces painted from payload data (a
+test('gradientStops: unconstrained rows offer every offered gradient-scale token', () => {
+  // var() references in roster order, faces painted from payload data (a
   // condition-keyed value shows its default entry), never var()
-  // resolution; color swatches and tokens never offer on the gradient
-  // side.
+  // resolution; color tokens never offer on the gradient side, nor does
+  // a withheld gradient token.
   assert.deepEqual(gradientRow.map((stop) => stop.value), [
-    'var(--swatch-hero_fade)', 'var(--swatch-sunset)',
+    'var(--gradient-hero-fade)', 'var(--gradient-sunset)',
   ]);
   assert.deepEqual(gradientRow.map((stop) => stop.paint), [
     'linear-gradient(180deg, #000, #fff)', 'radial-gradient(circle, #f97316, #7c2d12)',
   ]);
-  assert.deepEqual(gradientRow.map((stop) => stop.label), ['Hero fade', 'Sunset']);
-  // Scheme-paired swatches thread their dark half onto the stop (the
+  assert.deepEqual(gradientRow.map((stop) => stop.label), ['hero-fade', 'sunset']);
+  // Scheme-paired tokens thread their dark half onto the stop (the
   // split face's other panel); single-valued stops carry null and stay
   // whole.
   assert.deepEqual(gradientRow.map((stop) => stop.paintDark), [
     null, 'radial-gradient(circle, #431407, #000)',
   ]);
-  // The kind label rides as the group: the swatch-well popover sections
+  // The scale label rides as the group: the token-well popover sections
   // gradient stops under it, after the color groups.
-  assert.deepEqual(gradientRow.map((stop) => stop.group), ['Gradients', 'Gradients']);
+  assert.deepEqual(gradientRow.map((stop) => stop.group), ['Gradient', 'Gradient']);
 });
 
 test('gradientStops: the allowed path carries the scheme pair too', () => {
-  const stops = gradientStops(guide, materials, { allowed: ['var(--swatch-sunset)', 'var(--swatch-hero_fade)', 'linear-gradient(45deg, #111, #999)'] });
+  const stops = gradientStops(guide, materials, { allowed: ['var(--gradient-sunset)', 'var(--gradient-hero-fade)', 'linear-gradient(45deg, #111, #999)'] });
   assert.deepEqual(stops.map((stop) => stop.paint), [
     'radial-gradient(circle, #f97316, #7c2d12)',
     'linear-gradient(180deg, #000, #fff)',
     'linear-gradient(45deg, #111, #999)',
   ]);
-  // Curated swatch references pair exactly like unconstrained stops;
+  // Curated token references pair exactly like unconstrained stops;
   // literal gradient functions never pair.
   assert.deepEqual(stops.map((stop) => stop.paintDark), [
     'radial-gradient(circle, #431407, #000)', null, null,
@@ -101,17 +100,17 @@ test('gradientStops: no palette is the honest empty vocabulary', () => {
 });
 
 test('gradientStops: a bare allowed list closes the offer to its entries', () => {
-  // The server's allowed check is verbatim and exhaustive: a swatch
+  // The server's allowed check is verbatim and exhaustive: a token
   // reference outside the list would only produce rejections, so it never
   // offers. Non-gradient entries (none, url patterns, colors) are
   // background-image vocabulary but not gradient stops.
   assert.deepEqual(gradientStops(guide, materials, { allowed: ['none', 'url(media:abc)'] }), []);
-  const curated = gradientStops(guide, materials, { allowed: ['none', 'var(--swatch-sunset)'] });
-  assert.deepEqual(curated.map((stop) => stop.value), ['var(--swatch-sunset)']);
-  assert.equal(curated[0].label, 'Sunset');
+  const curated = gradientStops(guide, materials, { allowed: ['none', 'var(--gradient-sunset)'] });
+  assert.deepEqual(curated.map((stop) => stop.value), ['var(--gradient-sunset)']);
+  assert.equal(curated[0].label, 'sunset');
   assert.equal(curated[0].paint, 'radial-gradient(circle, #f97316, #7c2d12)');
-  // hero_fade exists in the palette but not in the list: never offered.
-  assert.ok(!curated.some((stop) => stop.value.includes('hero_fade')));
+  // hero-fade exists in the palette but not in the list: never offered.
+  assert.ok(!curated.some((stop) => stop.value.includes('hero-fade')));
 });
 
 test('gradientStops: a curated literal gradient offers, painted as itself', () => {
@@ -126,20 +125,31 @@ test('gradientStops: a curated literal gradient offers, painted as itself', () =
   );
 });
 
-test('gradientStops: a scale constraint without allowed closes the offer', () => {
-  // No token scale shape maps onto images; swatches never extend a
-  // scale-locked space. Allowed entries beside the scale still offer.
+test('gradientStops: a scale constraint without allowed closes the offer to the scale', () => {
+  // A scale of another shape (color) offers nothing gradient: its tokens
+  // are not images, and gradient tokens never extend a scale-locked
+  // space. Allowed entries beside the scale still offer.
   assert.deepEqual(gradientStops(guide, materials, { scale: 'color' }), []);
-  const beside = gradientStops(guide, materials, { scale: 'color', allowed: ['var(--swatch-hero_fade)'] });
-  assert.deepEqual(beside.map((stop) => stop.value), ['var(--swatch-hero_fade)']);
+  const beside = gradientStops(guide, materials, { scale: 'color', allowed: ['var(--gradient-hero-fade)'] });
+  assert.deepEqual(beside.map((stop) => stop.value), ['var(--gradient-hero-fade)']);
+  // background-image bound to the gradient scale: the scale's row (its
+  // offered tokens, the bound color row's rule), as reference stops.
+  const bound = gradientStops(guide, materials, { scale: 'gradient' });
+  assert.deepEqual(bound.map((stop) => stop.value), ['var(--gradient-hero-fade)', 'var(--gradient-sunset)']);
+  assert.deepEqual(bound.map((stop) => stop.label), ['hero-fade', 'sunset']);
+  assert.equal(bound[1].paintDark, 'radial-gradient(circle, #431407, #000)');
+  // Curated stops on the bound row come first and the site-minted
+  // follower rides behind them, as on a color row (scaleRow's follower
+  // rule; only strict enforcement or shipped tokens leave sunset alone).
+  assert.deepEqual(gradientStops(guide, materials, { scale: 'gradient', stops: ['sunset'] }).map((stop) => stop.value), ['var(--gradient-sunset)', 'var(--gradient-hero-fade)']);
 });
 
 test('gradientStops: equivalent spellings collapse into the first stop', () => {
   const stops = gradientStops(guide, materials, {
-    allowed: ['var(--swatch-sunset)', 'VAR(--swatch-sunset)'],
+    allowed: ['var(--gradient-sunset)', 'VAR(--gradient-sunset)'],
   });
   assert.equal(stops.length, 1);
-  assert.equal(stops[0].value, 'var(--swatch-sunset)');
+  assert.equal(stops[0].value, 'var(--gradient-sunset)');
 });
 
 test('singleGradient: one chip-ownable layer answers, everything else null', () => {
@@ -149,15 +159,15 @@ test('singleGradient: one chip-ownable layer answers, everything else null', () 
     singleGradient(guide, materials, 'repeating-radial-gradient(circle, #111 0, #999 10px)'),
     'repeating-radial-gradient(circle, #111 0, #999 10px)',
   );
-  // One var() naming a gradient-kind swatch the guide knows.
-  assert.equal(singleGradient(guide, materials, 'var(--swatch-hero_fade)'), 'var(--swatch-hero_fade)');
+  // One var() naming a gradient-scale token the roster knows.
+  assert.equal(singleGradient(guide, materials, 'var(--gradient-hero-fade)'), 'var(--gradient-hero-fade)');
   // Layered, media, url, color-kind and unknown references: occupancy the
   // color widgets cannot represent.
   assert.equal(singleGradient(guide, materials, 'linear-gradient(#000, #fff), url(media:abc)'), null);
   assert.equal(singleGradient(guide, materials, 'url(media:1b671a64-40d5-491e-99b0-da01ff1f3341)'), null);
   assert.equal(singleGradient(guide, materials, 'url("/photo.jpg")'), null);
-  assert.equal(singleGradient(guide, materials, 'var(--swatch-brand_red)'), null);
-  assert.equal(singleGradient(guide, materials, 'var(--swatch-unminted)'), null);
+  assert.equal(singleGradient(guide, materials, 'var(--color-brand-red)'), null);
+  assert.equal(singleGradient(guide, materials, 'var(--gradient-unminted)'), null);
   assert.equal(singleGradient(guide, materials, 'none'), null);
   assert.equal(singleGradient(guide, materials, ''), null);
   assert.equal(singleGradient(guide, materials, null), null);
@@ -176,8 +186,8 @@ test('backgroundState: unset is honestly nothing', () => {
 
 test('backgroundState: a lone background-color reads through the color stops', () => {
   assert.deepEqual(
-    backgroundState(guide, materials, { 'background-color': 'var(--swatch-brand_red)' }, colorRow, gradientRow),
-    { selected: 'var(--swatch-brand_red)', custom: false, value: null, gradient: null, literal: null },
+    backgroundState(guide, materials, { 'background-color': 'var(--color-brand-red)' }, colorRow, gradientRow),
+    { selected: 'var(--color-brand-red)', custom: false, value: null, gradient: null, literal: null },
   );
   // Off-palette colors are the explicit custom pill, never "nothing set".
   assert.deepEqual(
@@ -186,16 +196,16 @@ test('backgroundState: a lone background-color reads through the color stops', (
   );
 });
 
-test('backgroundState: a gradient-swatch reference lights its gradient stop', () => {
+test('backgroundState: a gradient-token reference lights its gradient stop', () => {
   assert.deepEqual(
-    backgroundState(guide, materials, { 'background-image': 'var(--swatch-hero_fade)' }, colorRow, gradientRow),
-    { selected: 'var(--swatch-hero_fade)', custom: false, value: null, gradient: 'var(--swatch-hero_fade)', literal: null },
+    backgroundState(guide, materials, { 'background-image': 'var(--gradient-hero-fade)' }, colorRow, gradientRow),
+    { selected: 'var(--gradient-hero-fade)', custom: false, value: null, gradient: 'var(--gradient-hero-fade)', literal: null },
   );
   // Spelling variants light the same stop; custom property names are
   // lowercase by minting, so the normalized match is honest.
   assert.equal(
-    backgroundState(guide, materials, { 'background-image': ' VAR(--swatch-sunset) ' }, colorRow, gradientRow).selected,
-    'var(--swatch-sunset)',
+    backgroundState(guide, materials, { 'background-image': ' VAR(--gradient-sunset) ' }, colorRow, gradientRow).selected,
+    'var(--gradient-sunset)',
   );
 });
 
@@ -232,8 +242,8 @@ test('backgroundState: media, layered and foreign images are custom', () => {
   const layered = backgroundState(guide, materials, { 'background-image': 'linear-gradient(#000, #fff), url(media:abc)' }, colorRow, gradientRow);
   assert.equal(layered.custom, true);
   assert.equal(layered.gradient, null);
-  // A color-kind swatch reference in an image slot is foreign occupancy.
-  const foreign = backgroundState(guide, materials, { 'background-image': 'var(--swatch-brand_red)' }, colorRow, gradientRow);
+  // A color-scale token reference in an image slot is foreign occupancy.
+  const foreign = backgroundState(guide, materials, { 'background-image': 'var(--color-brand-red)' }, colorRow, gradientRow);
   assert.equal(foreign.custom, true);
 });
 
@@ -283,7 +293,7 @@ test('backgroundState: the synthetic media stop lights as the media posture', ()
   const beside = backgroundState(
     guide,
     materials,
-    { 'background-color': 'var(--swatch-brand_red)', 'background-image': token },
+    { 'background-color': 'var(--color-brand-red)', 'background-image': token },
     colorRow,
     offer,
   );
@@ -348,24 +358,24 @@ test('backgroundState: a color AND an image is a compound no stop claims', () =>
   const state = backgroundState(
     guide,
     materials,
-    { 'background-color': 'var(--swatch-brand_red)', 'background-image': 'var(--swatch-hero_fade)' },
+    { 'background-color': 'var(--color-brand-red)', 'background-image': 'var(--gradient-hero-fade)' },
     colorRow,
     gradientRow,
   );
   assert.equal(state.selected, null);
   assert.equal(state.custom, true);
-  assert.equal(state.value, 'var(--swatch-brand_red) var(--swatch-hero_fade)');
+  assert.equal(state.value, 'var(--color-brand-red) var(--gradient-hero-fade)');
   // The chip still knows what background-image holds.
-  assert.equal(state.gradient, 'var(--swatch-hero_fade)');
+  assert.equal(state.gradient, 'var(--gradient-hero-fade)');
 });
 
-test('backgroundState: a swatch reference outside a closed vocabulary keeps the chip', () => {
+test('backgroundState: a token reference outside a closed vocabulary keeps the chip', () => {
   // The offer closed (bare allowed list without it), but the committed
   // value IS one gradient the chip represents: no stop, no custom pill.
   const closed = gradientStops(guide, materials, { allowed: ['none'] });
   assert.deepEqual(
-    backgroundState(guide, materials, { 'background-image': 'var(--swatch-hero_fade)' }, colorRow, closed),
-    { selected: null, custom: false, value: null, gradient: 'var(--swatch-hero_fade)', literal: null },
+    backgroundState(guide, materials, { 'background-image': 'var(--gradient-hero-fade)' }, colorRow, closed),
+    { selected: null, custom: false, value: null, gradient: 'var(--gradient-hero-fade)', literal: null },
   );
 });
 
@@ -377,16 +387,16 @@ test('backgroundState: the text recipe\'s occupancy reads as the collision pill'
   // recipe (invisible text). The chip still knows what the image holds.
   const siblings = {
     color: 'transparent',
-    'background-image': 'var(--swatch-hero_fade)',
+    'background-image': 'var(--gradient-hero-fade)',
     'background-clip': 'text',
   };
-  const state = backgroundState(guide, materials, { 'background-image': 'var(--swatch-hero_fade)' }, colorRow, gradientRow, siblings);
+  const state = backgroundState(guide, materials, { 'background-image': 'var(--gradient-hero-fade)' }, colorRow, gradientRow, siblings);
   assert.equal(state.selected, null);
   assert.equal(state.custom, true);
-  assert.equal(state.gradient, 'var(--swatch-hero_fade)');
+  assert.equal(state.gradient, 'var(--gradient-hero-fade)');
   // Keyword case-insensitive, like every recipe read.
   assert.equal(
-    backgroundState(guide, materials, { 'background-image': 'var(--swatch-hero_fade)' }, colorRow, gradientRow, { ...siblings, 'background-clip': 'TEXT' }).custom,
+    backgroundState(guide, materials, { 'background-image': 'var(--gradient-hero-fade)' }, colorRow, gradientRow, { ...siblings, 'background-clip': 'TEXT' }).custom,
     true,
   );
   // A clipped background-color is just as invisible as a clipped image.
@@ -396,8 +406,8 @@ test('backgroundState: the text recipe\'s occupancy reads as the collision pill'
   );
   // A non-text clip does not repurpose the background: the stop lights.
   assert.equal(
-    backgroundState(guide, materials, { 'background-image': 'var(--swatch-hero_fade)' }, colorRow, gradientRow, { 'background-image': 'var(--swatch-hero_fade)', 'background-clip': 'padding-box' }).selected,
-    'var(--swatch-hero_fade)',
+    backgroundState(guide, materials, { 'background-image': 'var(--gradient-hero-fade)' }, colorRow, gradientRow, { 'background-image': 'var(--gradient-hero-fade)', 'background-clip': 'padding-box' }).selected,
+    'var(--gradient-hero-fade)',
   );
 });
 
@@ -424,15 +434,15 @@ test('textGradientState: the plain color row when no recipe property is set', ()
   );
 });
 
-test('textGradientState: the exact recipe with a swatch reference lights its stop', () => {
+test('textGradientState: the exact recipe with a token reference lights its stop', () => {
   const values = {
     color: 'transparent',
-    'background-image': 'var(--swatch-hero_fade)',
+    'background-image': 'var(--gradient-hero-fade)',
     'background-clip': 'text',
   };
   assert.deepEqual(
     textGradientState(guide, materials, values, colorRow, gradientRow),
-    { selected: 'var(--swatch-hero_fade)', custom: false, value: null, gradient: 'var(--swatch-hero_fade)', literal: null },
+    { selected: 'var(--gradient-hero-fade)', custom: false, value: null, gradient: 'var(--gradient-hero-fade)', literal: null },
   );
 });
 
@@ -441,10 +451,10 @@ test('textGradientState: recipe keywords recognize case-insensitively', () => {
   // AI's or advanced-mode respelling of the same recipe still recognizes.
   const values = {
     color: ' Transparent ',
-    'background-image': 'VAR(--swatch-sunset)',
+    'background-image': 'VAR(--gradient-sunset)',
     'background-clip': 'TEXT',
   };
-  assert.equal(textGradientState(guide, materials, values, colorRow, gradientRow).selected, 'var(--swatch-sunset)');
+  assert.equal(textGradientState(guide, materials, values, colorRow, gradientRow).selected, 'var(--gradient-sunset)');
 });
 
 test('textGradientState: a literal-gradient recipe is represented through the chip', () => {
@@ -464,17 +474,17 @@ test('textGradientState: partial recipes are EXPLICITLY custom', () => {
   // its own color, not the gradient. Custom, never a lit stop.
   const noColor = textGradientState(guide, materials, {
     color: 'red',
-    'background-image': 'var(--swatch-hero_fade)',
+    'background-image': 'var(--gradient-hero-fade)',
     'background-clip': 'text',
   }, colorRow, gradientRow);
   assert.equal(noColor.selected, null);
   assert.equal(noColor.custom, true);
-  assert.equal(noColor.value, 'red var(--swatch-hero_fade) text');
+  assert.equal(noColor.value, 'red var(--gradient-hero-fade) text');
   // Gradient + transparent without the clip paints a plain background
   // behind invisible text.
   assert.equal(textGradientState(guide, materials, {
     color: 'transparent',
-    'background-image': 'var(--swatch-hero_fade)',
+    'background-image': 'var(--gradient-hero-fade)',
   }, colorRow, gradientRow).custom, true);
   // A bare clip is a fragment of the recipe.
   assert.equal(
@@ -509,16 +519,16 @@ test('textGradientState: the background widget\'s gradient reads as the collisio
   // even though the color alone would light a stop.
   const state = textGradientState(guide, materials, {
     color: 'var(--color-accent)',
-    'background-image': 'var(--swatch-hero_fade)',
+    'background-image': 'var(--gradient-hero-fade)',
   }, colorRow, gradientRow);
   assert.equal(state.selected, null);
   assert.equal(state.custom, true);
 });
 
 test('textGradientBatch: a pick writes the whole recipe in one batch', () => {
-  assert.deepEqual(textGradientBatch('var(--swatch-hero_fade)'), {
+  assert.deepEqual(textGradientBatch('var(--gradient-hero-fade)'), {
     color: 'transparent',
-    'background-image': 'var(--swatch-hero_fade)',
+    'background-image': 'var(--gradient-hero-fade)',
     'background-clip': 'text',
   });
   assert.deepEqual(textGradientBatch('linear-gradient(90deg, #f00, #00f)'), {
@@ -559,11 +569,11 @@ test('recipe round trip: what the batch writes, the state recognizes', () => {
 test('backgroundPick: a pick writes only its own property on a clean pair', () => {
   // Nothing else set: the batch never carries a null the click did not
   // need (no phantom unsets in the op).
-  assert.deepEqual(backgroundPick({}, { value: 'var(--swatch-brand_red)' }, false), {
-    'background-color': 'var(--swatch-brand_red)',
+  assert.deepEqual(backgroundPick({}, { value: 'var(--color-brand-red)' }, false), {
+    'background-color': 'var(--color-brand-red)',
   });
-  assert.deepEqual(backgroundPick({}, { value: 'var(--swatch-hero_fade)' }, true), {
-    'background-image': 'var(--swatch-hero_fade)',
+  assert.deepEqual(backgroundPick({}, { value: 'var(--gradient-hero-fade)' }, true), {
+    'background-image': 'var(--gradient-hero-fade)',
   });
 });
 
@@ -576,8 +586,8 @@ test('backgroundPick: picking over the occupied other half is an explicit replac
     { 'background-color': '#b91c1c', 'background-image': null },
   );
   assert.deepEqual(
-    backgroundPick({ 'background-color': '#fff' }, { value: 'var(--swatch-sunset)' }, true),
-    { 'background-image': 'var(--swatch-sunset)', 'background-color': null },
+    backgroundPick({ 'background-color': '#fff' }, { value: 'var(--gradient-sunset)' }, true),
+    { 'background-image': 'var(--gradient-sunset)', 'background-color': null },
   );
 });
 
@@ -586,11 +596,11 @@ test('backgroundPick: unpick clears only what is set', () => {
   assert.deepEqual(backgroundPick({ 'background-color': '#fff' }, null), {
     'background-color': null,
   });
-  assert.deepEqual(backgroundPick({ 'background-image': 'var(--swatch-hero_fade)' }, null), {
+  assert.deepEqual(backgroundPick({ 'background-image': 'var(--gradient-hero-fade)' }, null), {
     'background-image': null,
   });
   assert.deepEqual(
-    backgroundPick({ 'background-color': '#fff', 'background-image': 'var(--swatch-hero_fade)' }, null),
+    backgroundPick({ 'background-color': '#fff', 'background-image': 'var(--gradient-hero-fade)' }, null),
     { 'background-color': null, 'background-image': null },
   );
   assert.deepEqual(backgroundPick({}, null), {});
@@ -642,9 +652,9 @@ test('backgroundPick: a pick clears the companion family too', () => {
     },
   );
   assert.deepEqual(
-    backgroundPick({ 'background-image': token, ...MEDIA_COMPANIONS }, { value: 'var(--swatch-sunset)' }, true),
+    backgroundPick({ 'background-image': token, ...MEDIA_COMPANIONS }, { value: 'var(--gradient-sunset)' }, true),
     {
-      'background-image': 'var(--swatch-sunset)',
+      'background-image': 'var(--gradient-sunset)',
       'background-size': null,
       'background-repeat': null,
       'background-position': null,
@@ -671,31 +681,31 @@ test('backgroundPick: a pick over the text recipe clears the recipe\'s set membe
   // half-compound no stop represents.
   const siblings = {
     color: 'transparent',
-    'background-image': 'var(--swatch-hero_fade)',
+    'background-image': 'var(--gradient-hero-fade)',
     'background-clip': 'text',
   };
   assert.deepEqual(
-    backgroundPick({ 'background-image': 'var(--swatch-hero_fade)' }, { value: '#b91c1c' }, false, siblings),
+    backgroundPick({ 'background-image': 'var(--gradient-hero-fade)' }, { value: '#b91c1c' }, false, siblings),
     { 'background-color': '#b91c1c', 'background-image': null, color: null, 'background-clip': null },
   );
   assert.deepEqual(
-    backgroundPick({ 'background-image': 'var(--swatch-hero_fade)' }, { value: 'var(--swatch-sunset)' }, true, siblings),
-    { 'background-image': 'var(--swatch-sunset)', color: null, 'background-clip': null },
+    backgroundPick({ 'background-image': 'var(--gradient-hero-fade)' }, { value: 'var(--gradient-sunset)' }, true, siblings),
+    { 'background-image': 'var(--gradient-sunset)', color: null, 'background-clip': null },
   );
   // Only SET recipe members clear (the corners rule): a container-grade
   // partial (clip without color) never manufactures a phantom color unset
   // the target may not even declare.
   assert.deepEqual(
-    backgroundPick({ 'background-image': 'var(--swatch-hero_fade)' }, { value: '#b91c1c' }, false, {
-      'background-image': 'var(--swatch-hero_fade)',
+    backgroundPick({ 'background-image': 'var(--gradient-hero-fade)' }, { value: '#b91c1c' }, false, {
+      'background-image': 'var(--gradient-hero-fade)',
       'background-clip': 'text',
     }),
     { 'background-color': '#b91c1c', 'background-image': null, 'background-clip': null },
   );
   // Without the marker, siblings change nothing.
   assert.deepEqual(
-    backgroundPick({ 'background-image': 'var(--swatch-hero_fade)' }, { value: '#b91c1c' }, false, {
-      'background-image': 'var(--swatch-hero_fade)',
+    backgroundPick({ 'background-image': 'var(--gradient-hero-fade)' }, { value: '#b91c1c' }, false, {
+      'background-image': 'var(--gradient-hero-fade)',
       'background-clip': 'padding-box',
     }),
     { 'background-color': '#b91c1c', 'background-image': null },
@@ -727,10 +737,10 @@ test('textPick: a gradient pick is the whole recipe batch', () => {
   // Delegates to textGradientBatch: three positive writes replace any
   // prior state without a null in sight.
   assert.deepEqual(
-    textPick({ color: 'red' }, { value: 'var(--swatch-hero_fade)' }, true),
+    textPick({ color: 'red' }, { value: 'var(--gradient-hero-fade)' }, true),
     {
       color: 'transparent',
-      'background-image': 'var(--swatch-hero_fade)',
+      'background-image': 'var(--gradient-hero-fade)',
       'background-clip': 'text',
     },
   );
@@ -743,7 +753,7 @@ test('textPick: a color pick over occupancy is an explicit replacement', () => {
   assert.deepEqual(
     textPick({
       color: 'transparent',
-      'background-image': 'var(--swatch-hero_fade)',
+      'background-image': 'var(--gradient-hero-fade)',
       'background-clip': 'text',
     }, { value: 'var(--color-accent)' }, false),
     { color: 'var(--color-accent)', 'background-image': null, 'background-clip': null },
@@ -752,7 +762,7 @@ test('textPick: a color pick over occupancy is an explicit replacement', () => {
   // replacement, but only the set property clears (no phantom clip
   // unset).
   assert.deepEqual(
-    textPick({ 'background-image': 'var(--swatch-sunset)' }, { value: '#b91c1c' }, false),
+    textPick({ 'background-image': 'var(--gradient-sunset)' }, { value: '#b91c1c' }, false),
     { color: '#b91c1c', 'background-image': null },
   );
 });
@@ -764,7 +774,7 @@ test('textPick: unpick clears only what is set', () => {
   assert.deepEqual(
     textPick({
       color: 'transparent',
-      'background-image': 'var(--swatch-hero_fade)',
+      'background-image': 'var(--gradient-hero-fade)',
       'background-clip': 'text',
     }, null),
     { color: null, 'background-image': null, 'background-clip': null },
@@ -775,7 +785,7 @@ test('textPick: unpick clears only what is set', () => {
 test('textPick round trip: what a pick writes, the state lights', () => {
   const recipe = {
     color: 'transparent',
-    'background-image': 'var(--swatch-hero_fade)',
+    'background-image': 'var(--gradient-hero-fade)',
     'background-clip': 'text',
   };
   colorRow.forEach((stop) => {
@@ -790,18 +800,18 @@ test('textPick round trip: what a pick writes, the state lights', () => {
   });
 });
 
-test('gradientSwatchOf: the chip gate matches one gradient-swatch var(), case-honest', () => {
-  // The edit-in-place gate: exactly one var() naming a gradient-kind
-  // swatch, the var head case-insensitive per CSS (custom property NAMES
+test('gradientTokenOf: the chip gate matches one gradient-token var(), case-honest', () => {
+  // The edit-in-place gate: exactly one var() naming a gradient-scale
+  // token, the var head case-insensitive per CSS (custom property NAMES
   // stay case-sensitive).
-  assert.equal(gradientSwatchOf(guide, materials, 'var(--swatch-hero_fade)')?.name, 'hero_fade');
-  assert.equal(gradientSwatchOf(guide, materials, '  VAR(--swatch-hero_fade)  ')?.name, 'hero_fade');
-  // A color-kind swatch, a foreign var(), a literal, layers: never a gate.
-  assert.equal(gradientSwatchOf(guide, materials, 'var(--swatch-brand_red)'), null);
-  assert.equal(gradientSwatchOf(guide, materials, 'var(--unknown)'), null);
-  assert.equal(gradientSwatchOf(guide, materials, 'linear-gradient(180deg, #000, #fff)'), null);
-  assert.equal(gradientSwatchOf(guide, materials, "var(--swatch-hero_fade), url('media:abc')"), null);
-  assert.equal(gradientSwatchOf(guide, materials, null), null);
+  assert.equal(gradientTokenOf(guide, materials, 'var(--gradient-hero-fade)')?.name, 'hero-fade');
+  assert.equal(gradientTokenOf(guide, materials, '  VAR(--gradient-hero-fade)  ')?.name, 'hero-fade');
+  // A color-scale token, a foreign var(), a literal, layers: never a gate.
+  assert.equal(gradientTokenOf(guide, materials, 'var(--color-brand-red)'), null);
+  assert.equal(gradientTokenOf(guide, materials, 'var(--unknown)'), null);
+  assert.equal(gradientTokenOf(guide, materials, 'linear-gradient(180deg, #000, #fff)'), null);
+  assert.equal(gradientTokenOf(guide, materials, "var(--gradient-hero-fade), url('media:abc')"), null);
+  assert.equal(gradientTokenOf(guide, materials, null), null);
 });
 
 // --- mediaCompanions: the basic media pick's pure seed model. ---
@@ -957,7 +967,7 @@ test('mediaPickReplacements: a media pick replaces the set color half', () => {
   // set background-color clears in the same batch as the token, never
   // buried as a both-set compound the well reads custom.
   assert.deepEqual(
-    mediaPickReplacements({ 'background-color': 'var(--swatch-brand_red)' }),
+    mediaPickReplacements({ 'background-color': 'var(--color-brand-red)' }),
     { 'background-color': null },
   );
   // Nothing set, nothing cleared (the corners rule): no phantom nulls.
@@ -974,7 +984,7 @@ test('mediaPickReplacements: a media pick over the text recipe clears its set me
   // too — only the SET ones (a partial recipe earns no phantom unsets).
   const siblings = {
     color: 'transparent',
-    'background-image': 'var(--swatch-hero_fade)',
+    'background-image': 'var(--gradient-hero-fade)',
     'background-clip': 'text',
   };
   assert.deepEqual(
@@ -994,8 +1004,8 @@ test('backgroundState / textGradientState: a lone inline color rides as literal,
   // literal null (the honest "?" face).
   assert.equal(backgroundState(guide, materials, { 'background-color': 'rgb(1 2 3 / 0.5)' }, colorRow, gradientRow).literal, 'rgb(1 2 3 / 0.5)');
   assert.equal(backgroundState(guide, materials, { 'background-color': ' #abc ' }, colorRow, gradientRow).literal, '#abc');
-  assert.equal(backgroundState(guide, materials, { 'background-color': 'var(--swatch-nope)' }, colorRow, gradientRow).literal, null);
-  assert.equal(backgroundState(guide, materials, { 'background-color': '#abc', 'background-image': 'var(--swatch-hero_fade)' }, colorRow, gradientRow).literal, null);
+  assert.equal(backgroundState(guide, materials, { 'background-color': 'var(--color-nope)' }, colorRow, gradientRow).literal, null);
+  assert.equal(backgroundState(guide, materials, { 'background-color': '#abc', 'background-image': 'var(--gradient-hero-fade)' }, colorRow, gradientRow).literal, null);
   assert.equal(backgroundState(guide, materials, { 'background-color': '#abc' }, colorRow, gradientRow, { 'background-clip': 'text' }).literal, null);
   assert.equal(textGradientState(guide, materials, { color: 'transparent' }, colorRow, gradientRow).literal, 'transparent');
   assert.equal(textGradientState(guide, materials, { color: 'var(--nope)' }, colorRow, gradientRow).literal, null);
@@ -1012,12 +1022,12 @@ test('gradientImageStop: a lone gradient literal no offered stop claims derives 
   assert.equal(stop.group, 'Gradient');
   assert.equal(stop.paint, literal);
   assert.equal(stop.paintDark, null);
-  // Nested swatch references paint through the face rule.
-  const nested = gradientImageStop(guide, materials, 'linear-gradient(var(--swatch-brand_red), #fff)', gradientRow);
+  // Nested token references paint through the face rule.
+  const nested = gradientImageStop(guide, materials, 'linear-gradient(var(--color-brand-red), #fff)', gradientRow);
   assert.equal(nested.paint, 'linear-gradient(#b91c1c, #fff)');
   // A value an offered stop already claims derives nothing: that stop
-  // lights instead (a gradient swatch's var(), an allowed literal).
-  assert.equal(gradientImageStop(guide, materials, 'var(--swatch-hero_fade)', gradientRow), null);
+  // lights instead (a gradient token's var(), an allowed literal).
+  assert.equal(gradientImageStop(guide, materials, 'var(--gradient-hero-fade)', gradientRow), null);
   assert.equal(gradientImageStop(guide, materials, literal, [{ matches: [literal.toLowerCase()] }]), null);
   // Not-exactly-one-gradient values derive nothing: they stay the custom
   // occupancy the state reads already answer.

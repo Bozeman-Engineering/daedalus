@@ -13,8 +13,8 @@ use Drupal\daedalus_blueprint\Materials\MaterialsSchema;
  * Lands the roster's `materials` fragment on every schema that can use it.
  *
  * One projection of the roster for both doors: the JSON door reads
- * `materials` beside `fields` (a variant's styles, a skin's defaults, a
- * swatch's value all reference named values), and the dialect projector
+ * `materials` beside `fields` (a variant's styles, a skin's defaults and
+ * tokens all reference named values), and the dialect projector
  * carries the same key through unchanged. Rides the schema alter seam
  * rather than the builder's own body so the fragment lands on any schema
  * shape a consumer builds (the field handlers' tests alter hand-built
@@ -30,9 +30,9 @@ use Drupal\daedalus_blueprint\Materials\MaterialsSchema;
  * What the model is shown follows scope and bundle: the alter context
  * names the bundle the schema is read for, and its unsaved host
  * (PageHosts::bundleHost()) is the host every offer is judged against.
- * The fragment's blueprints are the favorites among the block blueprints
- * that host is offered (the Add panel's answer for the same bundle), its
- * groups the index of all of them, and a PAGE bundle's schema gains
+ * The fragment's blueprints are the block blueprints that host is
+ * offered (the Add panel's answer for the same bundle), its groups the
+ * index over them, and a PAGE bundle's schema gains
  * `starts`: the page blueprints a page of it may
  * start as (PageStart::starts(), the chooser's answer), the ids
  * page_create's `start` takes. A schema with no bundle host (a type

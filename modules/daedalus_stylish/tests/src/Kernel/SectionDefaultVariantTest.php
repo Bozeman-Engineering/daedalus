@@ -71,6 +71,7 @@ class SectionDefaultVariantTest extends KernelTestBase {
     'layout_builder',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -99,11 +100,8 @@ class SectionDefaultVariantTest extends KernelTestBase {
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
     // The schema build path serves the materials roster, which reads the
-    // published swatches (testLayoutEntryCarriesDefaultsLine).
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // published materials (testLayoutEntryCarriesDefaultsLine).
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
@@ -256,7 +254,7 @@ class SectionDefaultVariantTest extends KernelTestBase {
   }
 
   /**
-   * A nested add skips root-only axes: the width default is page-band only.
+   * A nested add skips root-only axes: the width default is section-only.
    *
    * The layout_onecol qualifies its width axis {depth: root}, so a page-row
    * add writes both defaults while a nested add writes only the style one,
@@ -293,7 +291,7 @@ class SectionDefaultVariantTest extends KernelTestBase {
    * the qualified {variant: onecol_row, depth: root}: a page-row add
    * wears it, a nested add is born without it, and an explicit
    * apply_variant still lands nested — only the DEFAULT is root-scoped,
-   * unlike the width axis where the whole axis is page-band business.
+   * unlike the width axis where the whole axis is section business.
    */
   public function testRootQualifiedDefaultSkipsNested(): void {
     $this->createVariant('onecol_default', 'layout:layout_onecol');

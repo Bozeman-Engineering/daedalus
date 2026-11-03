@@ -5,6 +5,7 @@ import { runDoor } from '../inspector-doors.js';
 import { generateUuid } from '../../../../daedalus_ui/js/edit_mode/utilities/uuid.js';
 import { createRoster } from '../../../../daedalus_ui/js/edit_mode/materials/roster.js';
 import { capableInTree, verdictInTree } from '../../../../daedalus_ui/js/edit_mode/selection/capable-model.js';
+import { layoutOf } from '../../../../daedalus_ui/js/edit_mode/blueprint/document-tree.js';
 import {
   applyDelta,
   assertDelta,
@@ -37,7 +38,7 @@ import { notify } from '../notify.js';
  * from, attached by InspectorPopout) and seated by the same rule
  * (daedalus_ui materials/delta.js), and it listens on the materials
  * wire (`materials:<scope>`, materials-store.js's protocol) for the deltas
- * the leader relays. A gesture this window runs itself (a mint, a swatch
+ * the leader relays. A gesture this window runs itself (a mint, a token
  * edit) applies its response's delta here and posts it on the same wire,
  * so the leader's store learns it; the wire never echoes to the poster, so
  * nothing rings.
@@ -51,19 +52,20 @@ export const createSatelliteSource = (scope) => {
     rootUuid: null,
     // The root's verdict (`_element.can`), null until the leader's first
     // broadcast: the gate's answer for the root and the host's own
-    // fields, which the lean tree does not hold.
+    // fields, which the layout the gate walks does not hold.
     rootCan: null,
-    // The root's three minted words (`_element.type`, `name`, `icon`),
-    // null until the leader's first broadcast: the page row's words,
-    // which the lean tree does not hold.
-    rootElement: null,
     blockTypes: {},
     sectionLayouts: {},
-    // Unknown until the leader's first broadcast (null, never an empty
-    // tree): the readers that gate on tree facts degrade to offering,
-    // and the structural walks (capture, depth, provenance, the page
-    // tree) read it as empty.
-    tree: null,
+    // The document tree (the host entity above the blueprint's layout),
+    // the one structure the leader broadcasts. Unknown until the first
+    // broadcast (null, never an empty document): the readers that gate
+    // on tree facts degrade to offering, and the structural walks
+    // (capture, depth, provenance, the page tree) read it as empty.
+    document: null,
+    // The canvas's self-provenance (a blueprint canvas's machine name),
+    // null until the leader's first broadcast and on every page canvas:
+    // the provenance read then falls back to nothing, never a guess.
+    selfProvenance: null,
     layoutContext: null,
     mediaUrls: {},
     mediaLibraryAvailable: false,
@@ -465,28 +467,23 @@ export const createSatelliteSource = (scope) => {
     getRootUuid: () => state.rootUuid ?? null,
 
     /**
-     * The root's three minted words (type, name, icon) from the leader's
-     * last broadcast, or null before a leader has been heard from: the
-     * page row reads them as every element row reads its node's.
-     */
-    getRootElement: () => state.rootElement ?? null,
-
-    /**
      * THE capability gate over the leader's broadcast (daedalus_ui
      * selection/capable-model.js): a layout element answers from its
-     * tree node's `_element.can`; the root and anything the tree does
-     * not hold (the host's own fields, an inline entity under them)
-     * answer from the root's verdict, exactly as the leader's projection
-     * index lets such rows inherit their element's. Null for everything
-     * until the leader has been heard from.
+     * node's `_element.can` in the layout read out of the document; the
+     * root and anything the layout does not hold (the host's own fields,
+     * an inline entity under them) answer from the root's verdict,
+     * exactly as the leader's projection index lets such rows inherit
+     * their element's. Null for everything until the leader has been
+     * heard from.
      */
     capable: (key, capability) => {
       const uuid = key?.split('::')[0]?.split(':')[1] ?? null;
       if (!uuid) {
         return false;
       }
-      if (uuid !== state.rootUuid && verdictInTree(state.tree, uuid)) {
-        return capableInTree(state.tree, uuid, capability);
+      const layout = layoutOf(state.document);
+      if (uuid !== state.rootUuid && verdictInTree(layout, uuid)) {
+        return capableInTree(layout, uuid, capability);
       }
       return state.rootCan?.[capability] === true;
     },
@@ -502,14 +499,37 @@ export const createSatelliteSource = (scope) => {
     getSectionLayouts: () => state.sectionLayouts ?? {},
 
     /**
-     * The blueprint's lean node tree, from the leader's last broadcast:
-     * the one structure every reader walks (the selector matcher's
-     * ancestor layers and structural facts, composition capture, the
-     * depth and provenance reads, the page tree). Null before it
-     * arrives: capture degrades to single-element entries rather than
-     * guess, and the gated readers degrade to offering.
+     * The blueprint's lean node tree, read back out of the leader's
+     * broadcast document (daedalus_ui document-tree.js layoutOf: the
+     * entity root's children, the sections at the top), the shape every
+     * walker that wants the sections at the top reads (composition
+     * capture, the depth and provenance reads, the axis vocabulary's
+     * nested-section read). Never a second broadcast field: one
+     * structure crosses the wire. Null before the document arrives:
+     * capture degrades to single-element entries rather than guess, and
+     * the gated readers degrade to offering.
      */
-    getTree: () => state.tree ?? null,
+    getTree: () => (state.document ? layoutOf(state.document) : null),
+
+    /**
+     * The document tree from the leader's last broadcast (daedalus_ui
+     * document-tree.js documentTree: the host entity above the
+     * blueprint's layout, keyed by the root's uuid and carrying the
+     * root's annotation): the one structure the leader sends, what the
+     * selector matcher, the style stack's ancestor tier and the code
+     * view's page tree read here exactly as they do on the leader. Null
+     * before a leader has been heard from.
+     */
+    getDocument: () => state.document ?? null,
+
+    /**
+     * The canvas's self-provenance, from the leader's last broadcast:
+     * the blueprint's machine name when the leader's canvas is a
+     * blueprint's own document (its unstamped elements then read as its
+     * own placement, variant-scope.js blueprintProvenance), null before
+     * the first broadcast and on a page canvas.
+     */
+    getSelfProvenance: () => state.selfProvenance ?? null,
 
     /**
      * Mints a v4 uuid for client-built structural ops. The satellite has
@@ -590,7 +610,7 @@ export const createSatelliteSource = (scope) => {
     /**
      * Lands a gesture route's response run from THIS window.
      *
-     * The gesture (a mint, a swatch edit, a delete) already ran over this
+     * The gesture (a mint, a token edit, a delete) already ran over this
      * window's own session; its response's `materials` delta applies to
      * this window's record set and posts on the materials wire, where the
      * leader's store (and any other paired window) applies it. The leader
@@ -616,7 +636,7 @@ export const createSatelliteSource = (scope) => {
     },
 
     /**
-     * Relays a live material-value preview (a token's or a swatch's) to
+     * Relays a live material-value preview (a token's) to
      * the leader page (the canvas lives there); null releases it. The
      * record travels by kind and id: the leader resolves it against its
      * own store.

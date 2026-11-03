@@ -57,3 +57,14 @@ daedalus_ai.attachments_release:
     _csrf_request_header_token: 'TRUE'
   options:
     no_cache: TRUE
+
+# The AI chat settings: assistant, image generation, the curated model list.
+# Listed under Configuration » Daedalus » AI and, as a second door, under
+# drupal/ai's Tools & Automation (daedalus_ai.links.menu.yml, SETTINGS.md).
+daedalus_ai.settings:
+  path: '/admin/config/daedalus/ai/chat'
+  defaults:
+    _form: '\Drupal\daedalus_ai\Form\SettingsForm'
+    _title: 'AI chat'
+  requirements:
+    _permission: 'administer site configuration'

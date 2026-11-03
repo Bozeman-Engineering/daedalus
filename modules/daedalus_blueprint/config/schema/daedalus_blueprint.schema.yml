@@ -66,6 +66,27 @@ daedalus_blueprint.settings:
                 choices:
                   - frame
                   - template
+    # The AI context budget (MaterialsBudget): the ceiling, in estimated
+    # tokens, on what the site shares with the AI as materials, and the
+    # characters-per-token ratio the estimate divides by. Measured
+    # locally in characters by the renderers that produce every material
+    # line (the brief, the schema fragment), never by a provider call;
+    # the ratio is the one number a site tunes against its ledger's
+    # billed prompt sizes. Past the budget, a gesture that would share
+    # more (an offered capture, an update turning offered or favorite on)
+    # is refused with AI_CONTEXT_FULL.
+    ai_context_budget_tokens:
+      type: integer
+      label: 'The AI context budget, in estimated tokens'
+      constraints:
+        Range:
+          min: 1
+    ai_context_characters_per_token:
+      type: integer
+      label: 'Characters per token the estimate divides by'
+      constraints:
+        Range:
+          min: 1
 
 daedalus_blueprint.design_system.*:
   type: config_entity

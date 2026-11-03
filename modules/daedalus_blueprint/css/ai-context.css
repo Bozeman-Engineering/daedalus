@@ -1,0 +1,194 @@
+/**
+ * @file
+ * The AI context usage bar: a disk-usage gauge of the AI context budget.
+ *
+ * One stacked bar of the whole budget, a segment per material kind plus
+ * the system and the free remainder, and a legend under it whose dot
+ * wears the same hue as the segment. The hues are this bar's own tokens
+ * (one per kind, the system muted, free the toggle surface); the
+ * surfaces, text and type ride daedalus_ui's chrome tokens with a
+ * fallback each, since the page at the dialog's path renders outside
+ * edit mode where variables.css is not attached. The dark scheme lifts
+ * the hues the way the chrome palette lifts its accents.
+ */
+
+.daedalus-ai-context {
+  --daedalus-ai-context-token: #0071e3;
+  --daedalus-ai-context-variant: #ff9500;
+  --daedalus-ai-context-blueprint: #28a745;
+  --daedalus-ai-context-animation: #ff2d55;
+  --daedalus-ai-context-font: #17a2b8;
+  --daedalus-ai-context-system: var(--daedalus-text-muted, #6e6e73);
+  --daedalus-ai-context-free: var(--daedalus-toggle-background, #eaeaea);
+  --daedalus-ai-context-over: var(--daedalus-danger, #d70015);
+
+  min-width: 18rem;
+  color: var(--daedalus-text, #1d1d1f);
+  font-family: var(--daedalus-font, inherit);
+  font-size: var(--daedalus-font-size, 0.875rem);
+  line-height: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  .daedalus-ai-context {
+    --daedalus-ai-context-token: #0a84ff;
+    --daedalus-ai-context-variant: #ff9f0a;
+    --daedalus-ai-context-blueprint: #32d74b;
+    --daedalus-ai-context-animation: #ff375f;
+    --daedalus-ai-context-font: #40c8e0;
+    --daedalus-ai-context-free: var(--daedalus-toggle-background, #2c2c2e);
+    --daedalus-ai-context-over: var(--daedalus-danger, #ff453a);
+  }
+}
+
+.daedalus-ai-context__summary {
+  margin: 0 0 0.75rem;
+}
+
+.daedalus-ai-context__over {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--daedalus-ai-context-over);
+}
+
+/* The bar: the segments lay out left to right at their widths (shares
+   of the budget, scaled to fill when the site is over), the free part
+   last. The bar's own background is the free hue, so rounding never
+   leaves a bare sliver at the end. */
+.daedalus-ai-context__bar {
+  display: flex;
+  overflow: hidden;
+  height: 1rem;
+  border-radius: calc(var(--daedalus-border-radius, 0.5rem) / 2);
+  background: var(--daedalus-ai-context-free);
+}
+
+.daedalus-ai-context__segment {
+  flex: 0 0 auto;
+  min-width: 0;
+  background: var(--daedalus-ai-context-system);
+}
+
+.daedalus-ai-context__segment + .daedalus-ai-context__segment {
+  border-left: 1px solid var(--daedalus-background, #fafafa);
+}
+
+.daedalus-ai-context__segment--free {
+  background: var(--daedalus-ai-context-free);
+}
+
+.daedalus-ai-context--over .daedalus-ai-context__bar {
+  box-shadow: 0 0 0 1px var(--daedalus-ai-context-over);
+}
+
+/* The legend: one row per segment, the dot wearing the segment's hue. */
+.daedalus-ai-context__legend {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daedalus-ai-context__entry {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.125rem 0;
+}
+
+.daedalus-ai-context__dot {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 0.1875rem;
+  background: var(--daedalus-ai-context-system);
+}
+
+.daedalus-ai-context__figures {
+  color: var(--daedalus-text-muted, #6e6e73);
+  font-size: var(--daedalus-font-size-small, 0.8125rem);
+}
+
+/* The hue per kind, on the bar's segment and the legend's dot alike. */
+[data-kind="token"] > .daedalus-ai-context__dot,
+.daedalus-ai-context__segment[data-kind="token"] {
+  background: var(--daedalus-ai-context-token);
+}
+
+[data-kind="variant"] > .daedalus-ai-context__dot,
+.daedalus-ai-context__segment[data-kind="variant"] {
+  background: var(--daedalus-ai-context-variant);
+}
+
+[data-kind="blueprint"] > .daedalus-ai-context__dot,
+.daedalus-ai-context__segment[data-kind="blueprint"] {
+  background: var(--daedalus-ai-context-blueprint);
+}
+
+[data-kind="animation"] > .daedalus-ai-context__dot,
+.daedalus-ai-context__segment[data-kind="animation"] {
+  background: var(--daedalus-ai-context-animation);
+}
+
+[data-kind="font"] > .daedalus-ai-context__dot,
+.daedalus-ai-context__segment[data-kind="font"] {
+  background: var(--daedalus-ai-context-font);
+}
+
+[data-kind="free"] > .daedalus-ai-context__dot {
+  background: var(--daedalus-ai-context-free);
+  box-shadow: inset 0 0 0 1px var(--daedalus-lines, #8f8f8f);
+}
+
+/* The form under the bar (AiContextForm): one collapsed section per
+   kind, a checkbox per record with its own weight muted beside the
+   label, tokens grouped under their scale. The sections ride the chrome
+   tokens with a fallback each, like the bar. */
+.daedalus-ai-context-form__kinds {
+  margin-top: 1rem;
+}
+
+.daedalus-ai-context-form__kind {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--daedalus-lines, #d2d2d7);
+  padding: 0;
+}
+
+.daedalus-ai-context-form__kind > summary {
+  padding: 0.5rem 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.daedalus-ai-context-form__kind > summary::marker {
+  color: var(--daedalus-text-muted, #6e6e73);
+}
+
+.daedalus-ai-context-form__kind > .details-wrapper {
+  padding: 0 0 0.75rem;
+}
+
+/* A scale's heading (tokens) or the kind's invisible one. */
+.daedalus-ai-context-form__boxes > legend {
+  padding: 0.25rem 0;
+  color: var(--daedalus-text-muted, #6e6e73);
+  font-size: var(--daedalus-font-size-small, 0.8125rem);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.daedalus-ai-context-form__boxes .form-type-checkbox,
+.daedalus-ai-context-form__boxes .form-type--checkbox {
+  margin: 0.125rem 0;
+}
+
+.daedalus-ai-context-form__weight {
+  color: var(--daedalus-text-muted, #6e6e73);
+  font-size: var(--daedalus-font-size-small, 0.8125rem);
+}
+
+.daedalus-ai-context-form input[type="checkbox"]:disabled + label,
+.daedalus-ai-context-form label:has(input[type="checkbox"]:disabled) {
+  color: var(--daedalus-text-muted, #6e6e73);
+}

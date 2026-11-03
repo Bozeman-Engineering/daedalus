@@ -23,8 +23,9 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * what this covers is THIS bundle's declaration and content provider —
  * the plain div root, the FILTERED (processed) output inside it (the raw
  * {value, format} pair never reaches visitor markup), and the
- * edit-capable CKEditor binding: editor identity, the stamped format and
- * the user's editor-configured formats, and the max-age 0 that keeps the
+ * edit-capable CKEditor binding: editor identity, the stamped format (the
+ * stored one, or the user's default for a format-less item) and the
+ * user's editor-configured formats, and the max-age 0 that keeps the
  * per-session editor settings out of shared caches. Also the module's
  * status report entry for the shipped format its field stamps.
  *
@@ -83,10 +84,14 @@ class FormattedTextBlockComposedRenderTest extends KernelTestBase {
     $this->installConfig(['filter', 'daedalus_edit_formatted_text_block']);
 
     // A restricted format proving the render is the FILTERED output, with
-    // a CKEditor5 editor so the format lists in the editor settings.
+    // a CKEditor5 editor so the format lists in the editor settings. Its
+    // weight puts it ahead of plain_text (10, the fallback every user may
+    // use), so it is the user's default format: the stamp for a format-less
+    // item is the user's first format by weight, as core's form gives it.
     FilterFormat::create([
       'format' => 'restricted',
       'name' => 'Restricted',
+      'weight' => -10,
       'filters' => [
         'filter_html' => [
           'status' => TRUE,
@@ -177,6 +182,22 @@ class FormattedTextBlockComposedRenderTest extends KernelTestBase {
     $settings = Json::decode(html_entity_decode($matches[1], ENT_QUOTES));
     $this->assertSame('restricted', $settings['format'], 'The stored format is the stamped identity.');
     $this->assertArrayHasKey('restricted', $settings['formats'], 'Editor-configured formats the user may use are offered.');
+    $this->assertArrayNotHasKey('plain_text', $settings['formats'], 'An editor-less format the user may use is not offered.');
+
+    // A format-less item stamps the user's default format (their first by
+    // weight: restricted at -10 over the plain_text fallback at 10), never
+    // NULL: a NULL stamp hid a value rendering through the site fallback
+    // behind the editor's own fallback.
+    $unformatted = $this->createBlock([
+      'field_formatted_text_text' => [
+        'value' => '<p>Unformatted</p>',
+      ],
+    ]);
+    $this->assertNull($unformatted->get('field_formatted_text_text')->first()->format, 'The item stores no format.');
+    $html = trim($this->renderComposed($unformatted, $this->editBag()));
+    $this->assertSame(1, preg_match('/data-daedalus-edit-editor-settings="([^"]+)"/', $html, $matches));
+    $settings = Json::decode(html_entity_decode($matches[1], ENT_QUOTES));
+    $this->assertSame('restricted', $settings['format'], 'A format-less item stamps the user\'s default format.');
 
     // The editor settings carry per-session CSRF'd URLs, so an
     // edit-capable render must never be served from a shared cache.

@@ -14,7 +14,7 @@ use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider;
-use Drupal\daedalus_stylish\TokenManager;
+use Drupal\daedalus_stylish\SkinMaterialManager;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
@@ -28,7 +28,7 @@ use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
  *
  * A token is a material of the active skin, minted, changed and removed
  * by name through the material gesture family (kind token) on the same
- * door the swatch, variant and animation gestures use. Pins where a write
+ * door the variant and animation gestures use. Pins where a write
  * lands: the SITE layer of a shipped skin on a consuming site (a mint is
  * site-minted, an update stores only the facts it changes over the
  * package's record, a removal takes the site's record away and reveals
@@ -42,7 +42,7 @@ use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
  * keys, the token's gesture line on the roster, and the write reaching
  * the client through the materials delta.
  */
-#[CoversClass(TokenManager::class)]
+#[CoversClass(SkinMaterialManager::class)]
 #[CoversClass(DaedalusStylishMaterialsProvider::class)]
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -70,6 +70,7 @@ class TokenOpsTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -93,23 +94,20 @@ class TokenOpsTest extends KernelTestBase {
     // The materials roster's daedalus_stylish provider reads all four
     // storages on every build, and every validation builds it.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
-    $this->installConfig(['daedalus_stylish']);
+    // daedalus_blueprint.settings ships the AI context budget MaterialsBudget
+    // reads on every gesture that shares.
+    $this->installConfig(['daedalus_blueprint', 'daedalus_stylish']);
     // The vocabulary the shipped skin and the gestures validate against.
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
       'token_scales' => [
         'space' => ['label' => 'Space', 'shape' => 'dimension'],
         'color' => ['label' => 'Color', 'shape' => 'color'],
         'text' => ['label' => 'Type scale', 'shape' => 'dimension'],
+        'gradient' => ['label' => 'Gradient', 'shape' => 'gradient'],
       ],
       'base' => [
         'h2' => ['property_groups' => ['typography' => []]],
@@ -292,9 +290,9 @@ class TokenOpsTest extends KernelTestBase {
     $this->assertFalse($skin->isModified());
     $this->assertSame('3rem', $this->record('space/gutter')?->value);
 
-    $this->gesture('update', ['offered' => FALSE, 'description' => 'The band gutter.'], 'space/gutter');
+    $this->gesture('update', ['offered' => FALSE, 'description' => 'The section gutter.'], 'space/gutter');
     $skin = $this->loadSkin('aurora');
-    $this->assertSame(['value' => '3rem', 'description' => 'The band gutter.', 'offered' => FALSE], $skin->siteTokens()['space']['gutter']);
+    $this->assertSame(['value' => '3rem', 'description' => 'The section gutter.', 'offered' => FALSE], $skin->siteTokens()['space']['gutter']);
     $this->assertSame('space/gutter: Updated the description. Withheld from rows.', $skin->getRevisionLogMessage());
     $this->assertFalse($this->record('space/gutter')?->offered);
 
@@ -432,8 +430,13 @@ class TokenOpsTest extends KernelTestBase {
     $this->assertSame(['space' => ['4' => ['value' => '1rem', 'description' => '', 'offered' => TRUE]]], $this->loadSkin('mine')->packageTokens(), 'nothing landed');
 
     // The envelope's own refusals: the keys a token needs, and the one it
-    // refuses (its membership is the skin's).
-    $this->assertSame(['group' => 'MISSING_PARAMETER'], $this->refusal('capture', ['label' => 'x', 'value' => '1rem']));
+    // refuses (its membership is the skin's). A missing scale is no
+    // refusal: the value's shape names the first declared scale that fits
+    // (a length lands on space); only a value no declared scale admits
+    // refuses, at group, naming the scales.
+    $this->gesture('capture', ['label' => 'inferred', 'value' => '1rem']);
+    $this->assertSame('1rem', $this->loadSkin('mine')->packageTokens()['space']['inferred']['value'], 'the scale is inferred from the shape');
+    $this->assertSame(['group' => 'STYLE_TOKEN_SCALE_UNFIT'], $this->refusal('capture', ['label' => 'x', 'value' => '1px solid red']));
     $this->assertSame(['label' => 'MISSING_PARAMETER'], $this->refusal('capture', [
       'group' => 'space',
       'value' => '1rem',
@@ -453,6 +456,57 @@ class TokenOpsTest extends KernelTestBase {
   }
 
   /**
+   * A gradient token: minted on the gradient scale, worn by background-image.
+   *
+   * The palette's other half rides the token lane whole: the mint through
+   * the op spine lands a radial-gradient value on the gradient scale, the
+   * roster spells it var(--gradient-plum-veil), and a strict site admits
+   * that reference on background-image while refusing an unminted one in
+   * the scale's namespace. The gradient shape refuses what is not a
+   * gradient (a color, a url() layer) at the gesture's value key.
+   */
+  public function testGradientTokenMintsAndValidatesOnBackgroundImage(): void {
+    $this->activateOwnSkin();
+    $result = $this->batch([
+      'op' => 'save_material',
+      'kind' => 'token',
+      'group' => 'gradient',
+      'label' => 'plum-veil',
+      'value' => 'radial-gradient(circle at 30% 20%, #6b2d5c, #1a1a2e)',
+      'description' => 'The hero veil.',
+    ]);
+    $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
+    $this->assertSame('radial-gradient(circle at 30% 20%, #6b2d5c, #1a1a2e)', $this->loadSkin('mine')->tokens()['gradient']['plum-veil']['value']);
+    $record = $this->record('gradient/plum-veil');
+    $this->assertNotNull($record);
+    $this->assertSame('var(--gradient-plum-veil)', $record->spelling('style'));
+
+    $this->assertSame(['value' => 'INVALID_STYLE_VALUE'], $this->mintRefusal('gradient', 'flat', '#1a1a2e'));
+    $this->assertSame(['value' => 'INVALID_STYLE_VALUE'], $this->mintRefusal('gradient', 'photo', 'url(x.png), linear-gradient(#000, #fff)'));
+    $this->assertSame(['value.dark' => 'INVALID_STYLE_VALUE'], $this->mintRefusal('gradient', 'dusk', ['default' => 'linear-gradient(#000, #fff)', 'dark' => 'red']));
+
+    // The entity kind grants the background group, so background-image is
+    // a property the strict closed world knows; the reference resolves
+    // against the active skin's gradient scale.
+    $this->container->get('state')->set('daedalus_stylish_control_test.kinds', [
+      'entity' => ['property_groups' => ['background' => []]],
+    ]);
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
+    $this->enforce('strict');
+    $validator = $this->container->get('daedalus_stylish.style_map_validator');
+    $validate = static fn (string $value): array => $validator->validate(
+      ['entity:11111111-1111-1111-1111-111111111111' => ['default' => ['background-image' => $value]]],
+      ['theme' => 'stark'],
+    );
+    $this->assertSame([], $validate('var(--gradient-plum-veil)'));
+    $this->assertSame([], $validate('var(--gradient-plum-veil), linear-gradient(#000, #fff)'));
+    $errors = $validate('var(--gradient-dawn)');
+    $this->assertCount(1, $errors);
+    $this->assertSame('STYLE_TOKEN_NOT_MINTED', $errors[0]->getCode());
+    $this->assertSame(['plum-veil'], $errors[0]->getContext()['minted']);
+  }
+
+  /**
    * No active skin: nothing to mint on.
    */
   public function testNoActiveSkinRefuses(): void {
@@ -464,7 +518,7 @@ class TokenOpsTest extends KernelTestBase {
   /**
    * The permissions per verb, with "administer skins" as the administer grade.
    *
-   * The delete-in-use grade admits the removal as the swatch lane admits
+   * The delete-in-use grade admits the removal as the variant lane admits
    * its own (the reference count that decides whether it is needed is the
    * usage lane's).
    */
@@ -476,18 +530,18 @@ class TokenOpsTest extends KernelTestBase {
     $this->assertSame(['' => 'PERMISSION_DENIED'], $this->refusal('update', ['value' => '2rem'], 'space/4'));
     $this->assertSame(['' => 'PERMISSION_DENIED'], $this->refusal('remove', [], 'space/4'));
 
-    $this->setUpCurrentUser([], ['create tokens']);
+    $this->setUpCurrentUser([], ['create skin materials']);
     $this->gesture('capture', ['group' => 'space', 'label' => 'x', 'value' => '1rem']);
     $this->assertSame(['' => 'PERMISSION_DENIED'], $this->refusal('update', ['value' => '2rem'], 'space/x'));
 
-    $this->setUpCurrentUser([], ['update tokens']);
+    $this->setUpCurrentUser([], ['update skin materials']);
     $this->gesture('update', ['value' => '2rem'], 'space/x');
     $this->assertSame(['' => 'PERMISSION_DENIED'], $this->refusal('remove', [], 'space/x'));
 
-    $this->setUpCurrentUser([], ['delete tokens in use']);
+    $this->setUpCurrentUser([], ['delete skin materials in use']);
     $this->assertNull($this->gesture('remove', [], 'space/x')->entity);
 
-    $this->setUpCurrentUser([], ['delete tokens']);
+    $this->setUpCurrentUser([], ['delete skin materials']);
     $this->assertNull($this->gesture('remove', [], 'space/4')->entity);
 
     $this->setUpCurrentUser([], ['administer skins']);
@@ -516,7 +570,7 @@ class TokenOpsTest extends KernelTestBase {
     $schema = ['fields' => [], 'styles' => ['type' => 'daedalus_stylish_styles', 'style_guide' => ['guidance' => 'x']]];
     $context = ['entity_type' => 'entity_test', 'bundle' => 'entity_test', 'view_mode' => 'full', 'cache_tags' => []];
     $this->container->get('module_handler')->alter('daedalus_blueprint_schema', $schema, $context);
-    $this->assertStringContainsString('never save_material a token, a swatch, an animation or a font', $schema['materials']['guidance'], 'the closed gate names tokens');
+    $this->assertStringContainsString('never save_material a token, an animation or a font', $schema['materials']['guidance'], 'the closed gate names tokens');
   }
 
   /**
@@ -524,12 +578,12 @@ class TokenOpsTest extends KernelTestBase {
    */
   public function testGestureLineNamesTheKind(): void {
     $builder = $this->container->get('daedalus_blueprint.materials_roster_builder');
-    $this->assertSame(['token', 'swatch', 'variant', 'animation', 'font'], array_keys($builder->gestureLines()), 'the token line comes first: roster order');
-    $this->assertStringContainsString('group (the scale), label (the token name', $builder->gestureLines()['token']);
+    $this->assertSame(['token', 'variant', 'animation', 'font'], array_keys($builder->gestureLines()), 'the token line comes first: roster order');
+    $this->assertStringContainsString('label (the token name: lowercase, digits, hyphens), value or element + property', $builder->gestureLines()['token']);
     $this->assertInstanceOf(DaedalusStylishMaterialsProvider::class, $builder->gestureProvider(MaterialKind::Token));
 
     $guidance = $this->container->get('daedalus_blueprint.operation_handler_registry')->getGuidance();
-    $this->assertStringContainsString('"kind" (token|swatch|variant|animation|font)', $guidance['save_material']);
+    $this->assertStringContainsString('"kind" (token|variant|animation|font)', $guidance['save_material']);
     $this->assertStringNotContainsString('skins skill', $guidance['save_material']);
   }
 

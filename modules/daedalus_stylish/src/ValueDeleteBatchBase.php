@@ -9,6 +9,7 @@ use Drupal\Core\Entity\RevisionLogInterface;
 use Drupal\Core\Entity\RevisionableInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\daedalus_stylish\Entity\MachineNameInterface;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinAnimationsItem;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 
 /**
@@ -21,9 +22,9 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
  * impossible in principle (after deletion there is no value to materialize
  * from), so every reference is rewritten BEFORE the delete, through the
  * twin's one substitution rule (rewriter()), in whichever store carried it
- * (host map, variant styles, skin defaults, and the skin's tokens for a
- * twin whose reference form can live there), as a regular revisioned
- * save.
+ * (host map, variant styles, skin defaults, and the skin's tokens and
+ * animations where the reference form can live there), as a regular
+ * revisioned save.
  *
  * A rewritten SHIPPED variant or skin reads 'modified' afterwards: an
  * honest divergence from its disk source, preferred over leaving a
@@ -40,12 +41,12 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
  * A twin names its entity type and usage table, binds its rewrite to one
  * material (rewriter()), words its messages, and exposes the delete
  * operation under the name its manager stages. The material the batch
- * carries between requests is its SUBJECT: the material's entity for the
- * entity twins (loaded by entity id), or the token's handle (SkinToken,
- * loaded by its batch id) for the twin whose material is a fact of a skin
- * rather than an entity; the subject hooks (load(), nameOf(), labelOf(),
- * remove()) default to the entity reading and the token twin overrides
- * them.
+ * carries between requests is its SUBJECT: the material's entity for an
+ * entity twin (loaded by entity id), or the material's handle (SkinToken,
+ * SkinAnimation, SkinFont, loaded by its batch id) for the twin whose
+ * material is a fact of a skin rather than an entity; the subject hooks
+ * (load(), nameOf(), labelOf(), remove()) default to the entity reading
+ * and the skin material twin overrides them.
  */
 abstract class ValueDeleteBatchBase {
 
@@ -90,30 +91,73 @@ abstract class ValueDeleteBatchBase {
   /**
    * Rewrites a skin's token values.
    *
-   * Only a twin whose reference form can live in a property-less token
-   * value rewrites there (ValueUsageBase::scanTokens()'s write twin); the
-   * skeleton leaves tokens untouched.
+   * Only a twin whose reference form can live in a token value rewrites
+   * there (ValueUsageBase::scanTokens()'s write twin); the skeleton leaves
+   * tokens untouched. The material is handed in because the walk depends
+   * on it: a var() reference lives in any token, a family only in the
+   * tokens of the scale the guide binds to font-family.
    */
-  protected static function rewriteTokens(array $tokens, \Closure $rewrite, bool &$changed): array {
+  protected static function rewriteTokens(object $material, array $tokens, \Closure $rewrite, bool &$changed): array {
     return $tokens;
   }
 
   /**
-   * Rewrites a skin's token values through a property-blind rewrite.
+   * Rewrites a skin's animation steps.
    *
-   * The var() twins' rewriteTokens(): token values are scalars or
+   * rewriteTokens()'s twin for the skin's motion section
+   * (ValueUsageBase::scanAnimations()'s write twin); the skeleton leaves
+   * animations untouched.
+   */
+  protected static function rewriteAnimations(object $material, array $animations, \Closure $rewrite, bool &$changed): array {
+    return $animations;
+  }
+
+  /**
+   * Rewrites a skin's keyframe step values through a property-aware rewrite.
+   *
+   * The skin material twin's rewriteAnimations(): steps are property maps
+   * under offsets inside the stored records ({name: {steps: {offset:
+   * {property: value}}}}), each value rewritten for its property. The
+   * record's other facts (description, offered) are untouched, and a site
+   * record that states no steps contributes nothing
+   * (SkinAnimationsItem::statedSteps()).
+   */
+  protected static function rewriteAnimationSteps(array $animations, \Closure $rewrite, bool &$changed): array {
+    foreach (SkinAnimationsItem::statedSteps($animations) as $name => $steps) {
+      foreach ($steps as $offset => $declarations) {
+        if (!is_array($declarations)) {
+          continue;
+        }
+        foreach ($declarations as $property => $value) {
+          $rewritten = static::rewriteScalar((string) $property, $value, $rewrite);
+          if ($rewritten !== NULL) {
+            $changed = TRUE;
+            $animations[$name]['steps'][$offset][$property] = $rewritten;
+          }
+        }
+      }
+    }
+    return $animations;
+  }
+
+  /**
+   * Rewrites a skin's token values through the rewrite, one property for all.
+   *
+   * The skin material twin's rewriteTokens(): token values are scalars or
    * condition-keyed scalar maps inside the stored records ({scale: {name:
    * {value, ...}}}), one level flatter than style entries; a token has no
-   * property, and a var() needs none. The record's other facts
-   * (description, offered) are untouched, and a site record that states
-   * no value contributes nothing (SkinTokensItem::statedValues()).
+   * property of its own, so the caller names the one the walk hands the
+   * rewrite ('' for a var() rewrite, which needs none; 'font-family' for
+   * a family rewrite over the font-bound scales). The record's other
+   * facts (description, offered) are untouched, and a site record that
+   * states no value contributes nothing (SkinTokensItem::statedValues()).
    */
-  protected static function rewriteTokenValues(array $tokens, \Closure $rewrite, bool &$changed): array {
+  protected static function rewriteTokenValues(array $tokens, \Closure $rewrite, bool &$changed, string $property = ''): array {
     foreach (SkinTokensItem::statedValues($tokens) as $scale => $values) {
       foreach ($values as $token => $token_value) {
         if (is_array($token_value)) {
           foreach ($token_value as $condition => $conditioned) {
-            $rewritten = static::rewriteScalar('', $conditioned, $rewrite);
+            $rewritten = static::rewriteScalar($property, $conditioned, $rewrite);
             if ($rewritten !== NULL) {
               $changed = TRUE;
               $tokens[$scale][$token]['value'][$condition] = $rewritten;
@@ -121,7 +165,7 @@ abstract class ValueDeleteBatchBase {
           }
           continue;
         }
-        $rewritten = static::rewriteScalar('', $token_value, $rewrite);
+        $rewritten = static::rewriteScalar($property, $token_value, $rewrite);
         if ($rewritten !== NULL) {
           $changed = TRUE;
           $tokens[$scale][$token]['value'] = $rewritten;
@@ -248,9 +292,9 @@ abstract class ValueDeleteBatchBase {
    * The source kind (the usage table's column) picks the store: 'map' the
    * host's style map (wherever the host keeps it: a content host's field, a
    * display host's template setting), 'variant' the variant's styles,
-   * 'skin' the skin's defaults and (rewriteTokens()) its tokens, one
-   * entity, both fields swept in one save. A store the rewrite did not
-   * change is never set.
+   * 'skin' the skin's defaults and (rewriteTokens(), rewriteAnimations())
+   * its tokens and animations, one entity, every field swept in one
+   * save. A store the rewrite did not change is never set.
    *
    * @return bool
    *   TRUE when the source carried references and was saved rewritten;
@@ -303,14 +347,24 @@ abstract class ValueDeleteBatchBase {
         // Each layer is rewritten as stored: a package value a site
         // override hides is a reference too (ValueUsageBase::sourceNames()).
         $tokens_changed = FALSE;
-        $tokens = static::rewriteTokens($entity->packageTokens(), $rewrite, $tokens_changed);
+        $tokens = static::rewriteTokens($material, $entity->packageTokens(), $rewrite, $tokens_changed);
         if ($tokens_changed) {
           $entity->setPackageTokens($tokens);
         }
         $site_tokens_changed = FALSE;
-        $tokens = static::rewriteTokens($entity->siteTokens(), $rewrite, $site_tokens_changed);
+        $tokens = static::rewriteTokens($material, $entity->siteTokens(), $rewrite, $site_tokens_changed);
         if ($site_tokens_changed) {
           $entity->setSiteTokens($tokens);
+        }
+        $animations_changed = FALSE;
+        $animations = static::rewriteAnimations($material, $entity->packageAnimations(), $rewrite, $animations_changed);
+        if ($animations_changed) {
+          $entity->setPackageAnimations($animations);
+        }
+        $site_animations_changed = FALSE;
+        $animations = static::rewriteAnimations($material, $entity->siteAnimations(), $rewrite, $site_animations_changed);
+        if ($site_animations_changed) {
+          $entity->setSiteAnimations($animations);
         }
         $defaults = static::rewriteDefaults($entity->packageDefaults(), $rewrite, $changed);
         if ($changed) {
@@ -321,7 +375,7 @@ abstract class ValueDeleteBatchBase {
         if ($site_changed) {
           $entity->setSiteDefaults($defaults);
         }
-        $changed = $changed || $site_changed || $tokens_changed || $site_tokens_changed;
+        $changed = $changed || $site_changed || $tokens_changed || $site_tokens_changed || $animations_changed || $site_animations_changed;
         break;
 
       default:

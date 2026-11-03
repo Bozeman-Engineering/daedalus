@@ -258,7 +258,7 @@ export const reachesBeyond = (styles, fragment = '') =>
  * own (condition, property) whose longhand grain meets a declaration the
  * reference makes at the same relative key is a shadow. The match is
  * grain-aware, not name-exact (box-model.js sharesGrain): an own
- * `padding` masks a worn `padding-inline` (the band's own padding over
+ * `padding` masks a worn `padding-inline` (the section's own padding over
  * its width inset), an own `padding-top` does not, exactly as the
  * cascade delivers. The walk covers the wearing's whole delivered slice:
  * the wearing key's own entry and the entries beneath it (an element's
@@ -364,7 +364,7 @@ const unsetOps = (tuples) => {
  * Unsetting a shadow lets the variant's value show through (or a
  * later-delivered layer's — the cascade's business, not this gesture's).
  * The shadows are shadowingTuples()' (grain-aware: an own `padding` is
- * unset for a worn `padding-inline`; the band's own top and bottom
+ * unset for a worn `padding-inline`; the section's own top and bottom
  * padding go with it, which is what "follow it fully" means).
  *
  * @param {?object} map

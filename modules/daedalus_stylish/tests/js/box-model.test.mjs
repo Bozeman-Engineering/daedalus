@@ -296,13 +296,13 @@ test('resolveSides handles other box properties via the parameter', () => {
 // group: the worn ancestor layer beneath the rule's own), served for
 // every box family the way stacksOf serves a hand-built stack.
 const OWNER = 'container:cccccccc-1111-2222-3333-444444444444';
-const RULE_OWN = ancestorLayerId(OWNER, '> pb-text');
-const RULE_WORN = ancestorWearLayerId(OWNER, '> pb-text', 'button');
+const RULE_OWN = ancestorLayerId(OWNER, '> d-text');
+const RULE_WORN = ancestorWearLayerId(OWNER, '> d-text', 'button');
 const underRule = (ownEntry, wornEntry, own = null) => {
   const stack = {
     ...stackOf(),
     layers: [
-      layer(RULE_WORN, 'ancestor', wornEntry, { scope: OWNER, variant: 'button', label: 'Button', carrier: { key: OWNER, selector: '> pb-text' } }),
+      layer(RULE_WORN, 'ancestor', wornEntry, { scope: OWNER, variant: 'button', label: 'Button', carrier: { key: OWNER, selector: '> d-text' } }),
       layer(RULE_OWN, 'ancestor', ownEntry, { scope: OWNER, label: 'Hero' }),
       layer('element', 'element', own),
     ],
@@ -380,7 +380,7 @@ test('sideProvenance reads a lone reference shorthand as the reference on every 
 
 test('sideProvenance reads the Site width variant\'s padding-inline as the variant on right and left', () => {
   // The container_site variant (daedalus_stylish_layouts variants.yml)
-  // insets the band with one logical longhand: the ring's inline cells
+  // insets the section with one logical longhand: the ring's inline cells
   // read it as supplied by the variant, with its reference, never as
   // "computed from the theme"; top and bottom stay computed.
   const inset = 'max(var(--space-gutter), calc((100% - var(--layout-max-width)) / 2))';
@@ -739,7 +739,7 @@ test('uniformState reads a whole-shorthand token reference as the uniform value 
 test('uniformState reads a logical pair per side', () => {
   // The Site width variant's padding-inline is outside the grammar: the
   // field measures it as the ring's cells do (sideMeasured), so the
-  // band reads unset (the detented field over the canvas's placeholder,
+  // section reads unset (the detented field over the canvas's placeholder,
   // never a listing of the max() expression), while a worn logical pair
   // the field can spell lists the two sides it moves.
   const inset = 'max(var(--space-gutter), calc((100% - var(--layout-max-width)) / 2))';

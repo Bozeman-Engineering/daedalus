@@ -99,7 +99,7 @@
  * - selectorFor(parentKey, selector, declarations): the complete scoped
  *   CSS rule text applying `declarations` (CSS declarations text) to
  *   every match of a relative selector in its owner's scope (a part's
- *   '.cls', the children '> *', a type '> pb-text') — the behavior owns
+ *   '.cls', the children '> *', a type '> d-text') — the behavior owns
  *   the grammar (scope roots, container scope limits, the printed
  *   targets), so a painted affordance is a truthful preview of the
  *   selector's style reach. Null when the selector is outside the grammar.

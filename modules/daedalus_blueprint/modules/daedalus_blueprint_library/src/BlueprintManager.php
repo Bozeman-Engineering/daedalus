@@ -109,7 +109,7 @@ class BlueprintManager {
    *   batch's live host, so a subtree composed by earlier operations in
    *   the SAME batch captures exactly as staged.
    * @param string $element_uuid
-   *   UUID of the root to capture: a container (top-level band or nested)
+   *   UUID of the root to capture: a container (top-level section or nested)
    *   for a block-scope blueprint, or the host's own uuid for the whole
    *   document as a page-scope blueprint. A block is refused: capture its
    *   container.

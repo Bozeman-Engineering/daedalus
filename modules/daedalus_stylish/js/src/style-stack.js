@@ -18,30 +18,39 @@
  *   then its refinement block, read at the key's relative position;
  * - skin:base:{tag}: the active skin's base:{tag} block, keyed by the
  *   READ SUBJECT's tag (subjectTag: the one element the key reads, from
- *   the blueprint tree's annotation, `_element.markup.tag` for an
- *   element key, the declared part's tag for a part key; a tag tier or a
- *   chain has no subject, so no base layer; no tree, none either, and
+ *   the document's annotation, `_element.markup.tag` for an element
+ *   key, the declared part's tag for a part key; a tag tier or a chain
+ *   has no subject, so no base layer; no document, none either, and
  *   `baseTags` names what the skin carries). It prints unscoped at zero
  *   specificity, so it sits beneath every scoped block whatever order
  *   the stylesheet prints them in;
  * - skin:{scope}: the active PUBLISHED skin's defaults
  *   (guide.skinDefaults), kind block then refinement block;
- * - the ancestor tier: present only when the caller passes the
- *   blueprint's lean node tree (`tree`, with the floor): one GROUP of
- *   layers per ancestor rule position that REACHES the key
- *   (selector-matcher.js reaches(): an ancestor's selector entry whose
- *   targets are this element's root, or, for a tag or part key, the tag
- *   inside it or that part), farthest ancestor first and, per ancestor,
- *   positions in selectorSuffixes() order. A group is the position's
+ * - the ancestor tier: present only when the caller passes the document
+ *   tree (`document`, with the floor: daedalus_ui's
+ *   blueprint/document-tree.js documentTree(), the host entity above
+ *   its sections as the canvas root wrapper stands above them in the
+ *   DOM, never the serializer's layout): one GROUP of layers per
+ *   ancestor rule position that REACHES the key (selector-matcher.js
+ *   reaches(): an ancestor's selector entry whose targets are this
+ *   element's root, or, for a tag or part key, the tag inside it or that
+ *   part), farthest ancestor first and, per ancestor, positions in
+ *   selectorSuffixes() order. The entity is the farthest ancestor of
+ *   every element on the page, so a rule written on it (`entity:X::p`)
+ *   is the first group of every stack it reaches; a field key's tier
+ *   (`block:X:body::.s-abc`, an open render's prose row) carries its
+ *   block's own rules as its nearest ancestor beneath the block's
+ *   ancestors' (the field is inside the block). A group is the position's
  *   map layers with their identities kept: the variants delivered there
  *   (the rule's own wear and its owner's worn fragments, delivery
  *   order), one layer each as ancestor:{owner}::{position}|{variant}
  *   carrying the variant's identity and its `carrier` (the address whose
  *   reference supplies it: the rule, or the owner's root), then the
- *   rule's own entry as ancestor:{owner}::{position}. Each layer folds
- *   the structural facts this element satisfies into the posable
- *   remainder of its compounds on its own (foldFacts), so own beats worn
- *   by order inside the group as it does at the rule's own key. A worn
+ *   rule's own entry as ancestor:{owner}::{position}. A rule's reach is
+ *   structural: a position-qualified rule (`> *:not(:last-child)`)
+ *   reaches the element or not by the matcher's judgement of its place,
+ *   so its layer is in the group whole or absent, and own beats worn by
+ *   order inside the group as it does at the rule's own key. A worn
  *   layer joins the group only where it delivers (a reference is a fact
  *   of its carrier, listed empty or stale at the rule's own key; a
  *   member's tier carries what reaches the member); a group exists when
@@ -93,14 +102,14 @@
  * no entry reads today. The rows keep reading THIS element's stack; only
  * which layer answers `own` (the Unset verb, the settle-against value)
  * moves. A session and an address never coexist (opening a session
- * resets the address), and a floorless or treeless build carries no
+ * resets the address), and a floorless or documentless build carries no
  * ancestor tier, so it carries no editable layer under an address.
  *
  * The stack holds only what the page builder owns: no browser-computed
  * layer.
  */
+import { layoutOf } from '../../../daedalus_ui/js/edit_mode/blueprint/document-tree.js';
 import { entryAtPose } from './condition-cascade.js';
-import { isFactCondition } from './editing-at.js';
 import { createMatcher } from './selector-matcher.js';
 import { fragmentStyles } from './slot-key.js';
 import {
@@ -379,15 +388,15 @@ const mapLayers = ({
 /**
  * The '::selector' suffixes any layer styles at an element key
  * (StyleStack::partSuffixes mirror): the selectors the key's rules'
- * wear continues under them (a rule '::> pb-text' wearing a variant with
- * a '::.link' entry delivers at '::> pb-text .link', the printer's
+ * wear continues under them (a rule '::> d-text' wearing a variant with
+ * a '::.link' entry delivers at '::> d-text .link', the printer's
  * rebase by under()), rules in map order and references in delivery
  * order; then the suffixes each of the key's own worn references'
  * fragment delivers, in delivery order; then the map's own selector
  * entries beside the key, in map order; deduplicated. A generated box
  * is one more suffix of the root: '::&::before' and '::.quote::after'
  * list as siblings of '::.quote', never under it, and a rule's worn
- * '::&::before' entry continues under the rule as '::> pb-text::before'
+ * '::&::before' entry continues under the rule as '::> d-text::before'
  * (the anchor binds to the rule's landing). [] for a key that already
  * carries a selector (selectors do not nest, and a pseudo-element is
  * terminal).
@@ -461,53 +470,6 @@ export const selectorSuffixes = (
 };
 
 /**
- * Folds a rule's structural facts into what it delivers to one element
- * (StyleStack::foldFacts mirror).
- *
- * A condition compound carrying facts (`first-child`, `hover+odd`)
- * applies to the element only when every fact holds for it (the
- * matcher, by the fact's printed wrapper): a compound with an
- * unsatisfied fact drops, a satisfied one delivers under its posable
- * remainder (`default`, `hover`), where its values beat a remainder that
- * carried fewer facts (each fact is one pseudo-class of specificity)
- * and, at equal facts, a later block beats an earlier one. The element's
- * own keys keep their fact conditions raw (the code view lights them);
- * only another element's rule is read from this element's place.
- */
-const foldFacts = (entry, matcher, key, conditions) => {
-  const folded = {};
-  const weights = {};
-  Object.entries(entry).forEach(([condition, properties]) => {
-    const keep = [];
-    let facts = 0;
-    let holds = true;
-    for (const part of condition.split('+')) {
-      if (!isFactCondition(part, conditions)) {
-        keep.push(part);
-      } else {
-        facts += 1;
-        if (!matcher.satisfies(key, conditions[part]?.wrapper ?? '')) {
-          holds = false;
-          break;
-        }
-      }
-    }
-    if (!holds) {
-      return;
-    }
-    const target = keep.length ? keep.join('+') : 'default';
-    Object.entries(properties).forEach(([property, value]) => {
-      if ((weights[target]?.[property] ?? -1) > facts) {
-        return;
-      }
-      (folded[target] ??= {})[property] = value;
-      (weights[target] ??= {})[property] = facts;
-    });
-  });
-  return folded;
-};
-
-/**
  * The ancestor tier: every ancestor rule position reaching the key as a
  * group of layers, farthest ancestor first (StyleStack::ancestorLayers
  * mirror).
@@ -522,8 +484,8 @@ const foldFacts = (entry, matcher, key, conditions) => {
  * contributes its map layers (mapLayers at the ancestor's position: the
  * rule's own wear and the owner's wear at the position, the owner's
  * ordered by the ANCESTOR's axis vocabulary, then the rule's entry) with
- * their identities kept, each folded on its own (foldFacts), the worn
- * ones as worn ancestor layers naming the variant and its carrier where
+ * their identities kept, the worn ones as worn ancestor layers naming
+ * the variant and its carrier where
  * they deliver, the entry as the own ancestor layer. A group exists when
  * any of its layers delivers at the key, and the own layer rides its
  * group empty or not; a position delivering nothing contributes no
@@ -539,13 +501,18 @@ const ancestorLayers = ({
   variants,
   blockTypes,
   sectionLayouts,
-  tree,
+  document,
   matcher,
   editable,
 }) => {
   if (!matcher.has(rootKey)) {
     return placeEditable([], matcher, rootKey, editable);
   }
+  // The depth read behind an ancestor's axis vocabulary walks the LAYOUT
+  // (variant-scope.js isNestedSectionUuid: nested is a find below the
+  // top level); under the document every section sits below the entity
+  // root, so the layout is read back out of it.
+  const layout = layoutOf(document);
   let sub = null;
   if (relative !== '') {
     // The `::p` or `::.cls` tier is ONE unqualified compound reached by
@@ -570,10 +537,9 @@ const ancestorLayers = ({
     // name and answers the host.
     sub = record;
   }
-  const conditions = isPlainObject(guide?.conditions) ? guide.conditions : {};
   const layers = [];
   matcher.ancestors(rootKey).forEach((ancestor) => {
-    const axes = axisVocabulary(guide, ancestor, blockTypes, sectionLayouts, tree);
+    const axes = axisVocabulary(guide, ancestor, blockTypes, sectionLayouts, layout);
     selectorSuffixes(map, ancestor, variants, axes, guide, blockTypes, sectionLayouts).forEach((suffix) => {
       const position = suffix.slice(SUFFIX.length);
       const selector = parseSelector(position);
@@ -591,7 +557,7 @@ const ancestorLayers = ({
         sectionLayouts,
         session: null,
       }).flatMap((layer) => {
-        const styles = foldFacts(layer.styles, matcher, rootKey, conditions);
+        const { styles } = layer;
         if (layer.tier === TIER_ELEMENT) {
           return [ancestorLayer(matcher, ancestor, position, styles)];
         }
@@ -613,8 +579,9 @@ const ancestorLayers = ({
 
 /**
  * The owner's name an ancestor layer carries for the sentences: the
- * tree node's minted `_element.name` (the matcher's `name` fact), null
- * when the tree has no node for the owner.
+ * document node's minted `_element.name` (the matcher's `name` fact; the
+ * host's label for the entity root), null when the document has no node
+ * for the owner.
  */
 const ownerOf = (matcher, owner) => matcher.facts(owner)?.name ?? null;
 
@@ -669,14 +636,14 @@ const ancestorWearLayer = (matcher, owner, position, layer, styles) => ({
  * selectorSuffixes() order (a new key joins the map last); so a rule not
  * yet in the map sits after every layer of an owner at or beyond its
  * own on the ancestor walk and before every nearer owner's. An owner
- * the tree does not place among the key's ancestors (or no tree at
- * all) sits nearest the own entry, the honest fallback: the write must
- * still have an editable layer to read `own` from.
+ * the document does not place among the key's ancestors (or no
+ * document at all) sits nearest the own entry, the honest fallback: the
+ * write must still have an editable layer to read `own` from.
  *
  * @param {Array<object>} layers
  *   The ancestor layers, farthest first.
  * @param {object} matcher
- *   The matcher over the tree.
+ *   The matcher over the document.
  * @param {string} rootKey
  *   The key's root.
  * @param {?{key: string, selector: string}} editable
@@ -721,10 +688,10 @@ const placeEditable = (layers, matcher, rootKey, editable) => {
 };
 
 /**
- * The read subject's tag over an indexed tree (subjectTag's worker).
+ * The read subject's tag over an indexed document (subjectTag's worker).
  *
  * @param {object} matcher
- *   The matcher over the tree (createMatcher).
+ *   The matcher over the document (createMatcher).
  * @param {string} rootKey
  *   The key's root.
  * @param {string} relative
@@ -767,30 +734,31 @@ const subjectTagOf = (matcher, rootKey, relative) => {
  * root tag, the annotation's `_element.markup.tag`), its declared part
  * for a part key (`::.cls`: the part's declared tag, null for a part
  * declaring none), and nothing for a tag tier or a chain (`::p`,
- * `::> *`, `::> pb-text .link`: a rule's matches are many, so no one
+ * `::> *`, `::> d-text .link`: a rule's matches are many, so no one
  * tag stands for them) nor for a generated box (`::&::before`,
  * `::.cls::after`: no element, no tag, floorless like a chain). The tag
  * keys the skin's base:{tag} layer
  * (buildStack) and, through offerTag(), the base variants' offer; it is
- * a fact of the tree, never a canvas read, so the leader and the
- * satellite answer alike. Null without a tree, for a key the tree does
- * not carry (an entity or field key, a bare key outside it) and for
+ * a fact of the document, never a canvas read, so the leader and the
+ * satellite answer alike. Null without a document, for a key the
+ * document does not carry (a host field key, a bare key outside it; the
+ * entity root answers its kind's markup tag, usually none) and for
  * every subjectless key.
  *
- * @param {?Array} tree
- *   The blueprint's lean node tree (source.getTree()), or null.
+ * @param {?Array} document
+ *   The document tree (source.getDocument()), or null.
  * @param {string} key
  *   A full style-map key.
  *
  * @return {?string}
  */
-export const subjectTag = (tree, key) => {
-  if (!Array.isArray(tree) || typeof key !== 'string' || key === '') {
+export const subjectTag = (document, key) => {
+  if (!Array.isArray(document) || typeof key !== 'string' || key === '') {
     return null;
   }
   const pos = key.indexOf(SUFFIX);
   const rootKey = pos === -1 ? key : key.slice(0, pos);
-  return subjectTagOf(createMatcher(tree), rootKey, key.slice(rootKey.length));
+  return subjectTagOf(createMatcher(document), rootKey, key.slice(rootKey.length));
 };
 
 /**
@@ -799,23 +767,23 @@ export const subjectTag = (tree, key) => {
  *
  * The read subject's tag where the key has a subject (subjectTag: an
  * element's rendered root tag, a part's declared tag), and for a TAG
- * RULE the rule's own tag (`::a`, `container:X::> pb-text a`: the last
+ * RULE the rule's own tag (`::a`, `container:X::> d-text a`: the last
  * compound names the tag every match renders as, the landing its wear
- * pairs at, base:a). A type rule or the children (`::> pb-text`,
+ * pairs at, base:a). A type rule or the children (`::> d-text`,
  * `::> *`) name no one tag, so no base variant offers there, the
  * never-over-offering posture; the server would accept a base variant
  * at any landing (Address::pairsWith's base rule), so this gate is the
  * client's alone.
  *
- * @param {?Array} tree
- *   The blueprint's lean node tree (source.getTree()), or null.
+ * @param {?Array} document
+ *   The document tree (source.getDocument()), or null.
  * @param {string} key
  *   A full style-map key.
  *
  * @return {?string}
  */
-export const offerTag = (tree, key) => {
-  const subject = subjectTag(tree, key);
+export const offerTag = (document, key) => {
+  const subject = subjectTag(document, key);
   if (subject !== null) {
     return subject;
   }
@@ -841,8 +809,8 @@ const floorScopes = (scope) =>
 
 /**
  * The scopes a key's stack reads skin blocks for: the subject's
- * base:{tag} scope (when the tree knows the tag; the stack carries its
- * layer once the skin delivers a block there, or a session edits one),
+ * base:{tag} scope (when the document knows the tag; the stack carries
+ * its layer once the skin delivers a block there, or a session edits one),
  * then the family kind's and the refinement's, in the floor's order.
  *
  * The wearing read for a skin document (surface-state.js wearsDocument,
@@ -859,8 +827,8 @@ const floorScopes = (scope) =>
  *   The read subject's key (an element, a part facet, a rule).
  * @param {object} [args.blockTypes]
  * @param {object} [args.sectionLayouts]
- * @param {?Array} [args.tree]
- *   The blueprint's lean node tree, for the subject's tag.
+ * @param {?Array} [args.document]
+ *   The document tree, for the subject's tag.
  *
  * @return {string[]}
  */
@@ -868,7 +836,7 @@ export const skinScopesAt = ({
   key,
   blockTypes = {},
   sectionLayouts = {},
-  tree = null,
+  document = null,
 }) => {
   const pos = key.indexOf('::');
   const rootKey = pos === -1 ? key : key.slice(0, pos);
@@ -877,7 +845,7 @@ export const skinScopesAt = ({
   if (scope === null) {
     return [];
   }
-  const matcher = Array.isArray(tree) ? createMatcher(tree) : null;
+  const matcher = Array.isArray(document) ? createMatcher(document) : null;
   const tag = matcher === null ? null : subjectTagOf(matcher, rootKey, relative);
   return [...(tag === null ? [] : [`base:${tag}`]), ...floorScopes(scope)];
 };
@@ -909,12 +877,13 @@ export const skinScopesAt = ({
  *   Whether the declared, skin and ancestor tiers join the stack (true:
  *   the selected element's full read, DevTools' rule: inherited rules
  *   for the element you are inspecting); false prints the map's layers
- *   only (the tree scopes' sparse rows, the roster's occupancy read).
- * @param {?Array} [args.tree]
- *   The blueprint's lean node tree (source.getTree(): the delivered
- *   `layout`), when the caller holds it: keys the ancestor tier and the
- *   skin's base:{tag} layer (the read subject's tag, subjectTag), both
- *   with the floor. Null leaves both out.
+ *   only (the scope rows' sparse reads, the roster's occupancy read).
+ * @param {?Array} [args.document]
+ *   The document tree (source.getDocument(): daedalus_ui's
+ *   documentTree() over the delivered blueprint, the host entity above
+ *   its sections), when the caller holds it: keys the ancestor tier and
+ *   the skin's base:{tag} layer (the read subject's tag, subjectTag),
+ *   both with the floor. Null leaves both out.
  * @param {?{reference: string, pending: ?object}} [args.session]
  *   An open editing session: the edited document's reference and the
  *   pending session (pending.js) whose staged lines overlay the
@@ -932,7 +901,8 @@ export const skinScopesAt = ({
  *   instead of the element's own (marked when it delivers, inserted
  *   empty at its delivery position when it does not; see the file doc).
  *   Null (the default) keeps the own layer editable, today's stack byte
- *   for byte. Needs the floor and the tree, like the tier it lives in.
+ *   for byte. Needs the floor and the document, like the tier it lives
+ *   in.
  *
  * @return {{key: string, rootKey: string, relative: string, scope:
  *   ?string, layers: Array<object>, baseTags: string[], skin: boolean}}
@@ -956,7 +926,7 @@ export const buildStack = ({
   blockTypes = {},
   sectionLayouts = {},
   floor = true,
-  tree = null,
+  document = null,
   session = null,
   editable = null,
 }) => {
@@ -967,9 +937,11 @@ export const buildStack = ({
   // tiers at its own relative (captureScope of the rule itself would be
   // its landing, the scope its wear pairs at, not its floor).
   const scope = captureScope(rootKey, blockTypes, sectionLayouts);
-  // The tree, indexed once for both tiers it keys: the subject's tag
-  // for the base layer and the ancestor walk.
-  const matcher = floor && Array.isArray(tree) ? createMatcher(tree) : null;
+  // The document, indexed once for both tiers it keys: the subject's
+  // tag for the base layer and the ancestor walk; the map rides along so
+  // an ancestor's rule qualified by a worn variant's class
+  // (`> d-text.daedalus-stylish-variant--featured`) reaches by wear.
+  const matcher = floor && Array.isArray(document) ? createMatcher(document, map) : null;
   const tag = matcher === null ? null : subjectTagOf(matcher, rootKey, relative);
   const skinDefaults = isPlainObject(guide?.skinDefaults)
     ? guide.skinDefaults
@@ -1045,7 +1017,7 @@ export const buildStack = ({
         variants,
         blockTypes,
         sectionLayouts,
-        tree,
+        document,
         matcher,
         editable: address,
       }),

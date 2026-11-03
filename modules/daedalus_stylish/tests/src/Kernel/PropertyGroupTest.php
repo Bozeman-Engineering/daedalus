@@ -30,6 +30,7 @@ class PropertyGroupTest extends KernelTestBase {
   protected static $modules = [
     'system',
     'daedalus_blueprint',
+    'filter',
     'user',
     'field',
     'file',
@@ -506,6 +507,11 @@ class PropertyGroupTest extends KernelTestBase {
     $this->installEntitySchema('file');
     $this->installSchema('file', ['file_usage']);
     $this->installEntitySchema('media');
+    // Importing system's config names the default theme, a law change
+    // that recompiles the variants file over these storages; the six
+    // other methods read no storage, so the lines stay in this one.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['field', 'system', 'image', 'file', 'media']);
     $image_type = $this->createMediaType('image');
     $source_field = $image_type->getSource()->getSourceFieldDefinition($image_type)->getName();

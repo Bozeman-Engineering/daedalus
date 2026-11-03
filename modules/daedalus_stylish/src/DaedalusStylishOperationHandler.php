@@ -15,11 +15,12 @@ use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint\Result\BlueprintWarning;
 use Drupal\daedalus_stylish\Plugin\PropertyGroup\GeneratedContent;
+use Drupal\daedalus_stylish\Selector\RuleMove;
 
 /**
  * Registers Daedalus Stylish's batch operations with daedalus_blueprint.
  *
- * Four element operations join the batch grammar, all built on the layered
+ * Five element operations join the batch grammar, all built on the layered
  * entry model: an entry's own condition-keyed properties are OVERRIDES that layer
  * over the variants its "variants" list references and win on conflict, so
  * following a variant and tweaking on top are not mutually exclusive.
@@ -27,7 +28,7 @@ use Drupal\daedalus_stylish\Plugin\PropertyGroup\GeneratedContent;
  *   into the keyed entry under a condition, null values unset. The entry's
  *   variant references stay untouched — the write lands as overrides on
  *   top of them. The one birth default of the op spine lives here: a
- *   pseudo-element entry ("::&::before", "::> pb-text::after") that the
+ *   pseudo-element entry ("::&::before", "::> d-text::after") that the
  *   patch creates is born with content: "" at default, the existence
  *   switch of a generated box, unless the write sets content there
  *   itself; an existing entry is never re-seeded.
@@ -94,8 +95,27 @@ use Drupal\daedalus_stylish\Plugin\PropertyGroup\GeneratedContent;
  *   the composition is gone, the child owns the wear now), the fragment
  *   lookup itself stays values-only, and no detach ever mints or strands
  *   a nested reference.
+ * - move_style: the rekey gesture, "edit this rule's selector". {key, to}
+ *   names a RULE key (an element's own entry is its identity and has no
+ *   selector to change) and the relative selector it becomes; the plan is
+ *   RuleMove's, over the owner's keys: the rule's own entry and every
+ *   entry continuing it (RelativeSelector::continues(): "> d-text .link",
+ *   "> d-text::before", "> d-text > *" follow "> d-text" to its new
+ *   selector by the same suffix) move WHOLE, every condition, its
+ *   properties and the "variants" list alike, so a rule's worn variants
+ *   continue under the new selector by construction. One op, one history
+ *   entry, no client-composed batch of patches. The moved entries are
+ *   judged at their landings through the one validation engine before
+ *   anything is written (a strict site refuses "> d-text"'s typography
+ *   landing on "> *"; a worn variant is judged against the new landing's
+ *   scope), and a landing already present refuses (merging would silently
+ *   pick winners): STYLE_MOVE_TARGET_EXISTS names it, the rule's own or a
+ *   family member's, an unchanged selector included. The target stays
+ *   with the rule's owner ("to" is a selector, never a key): a rule's
+ *   declarations were judged under one owner's subtree, and moving to
+ *   another owner is a different act (copy, then remove).
  *
- * A fifth operation is the site-scope twin of update_style:
+ * A sixth operation is the site-scope twin of update_style:
  * - update_default: a PATCH against one SCOPE's default styles on the
  *   active skin ({scope, key, condition, properties}: "base:h2",
  *   "kind:container", "block_type:text", "block_plugin:system_menu_block",
@@ -113,9 +133,10 @@ use Drupal\daedalus_stylish\Plugin\PropertyGroup\GeneratedContent;
  *   skin defaults"; the batch's own entity is only the page the gesture
  *   rides (a default has no home but the skin), exactly as a material
  *   gesture rides a page. It is a page-language op (page_edit admits it:
- *   the page language spells no skin default), while the four element ops
+ *   the page language spells no skin default), while the five element ops
  *   are page-only (the page language spells them as CSS and class
- *   attributes).
+ *   attributes; a move is a rule restated under its new selector with
+ *   the old one removed).
  *
  * Both interfaces (the inspector panel's op queue and the AI's batch tool)
  * land here, and everything written is validated by the same
@@ -168,13 +189,13 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
    * {@inheritdoc}
    */
   public function getOperations(): array {
-    return ['update_style', 'apply_variant', 'remove_variant', 'detach_variant', self::UPDATE_DEFAULT];
+    return ['update_style', 'apply_variant', 'remove_variant', 'detach_variant', 'move_style', self::UPDATE_DEFAULT];
   }
 
   /**
    * {@inheritdoc}
    *
-   * The four element ops ask style of the element their key addresses (a
+   * The five element ops ask style of the element their key addresses (a
    * rule key or a field key resolves to its element), so a foreign
    * element's styles, a translation's, or a host the actor may not update
    * are refused at the door before any map is read. update_default writes
@@ -187,6 +208,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
       'apply_variant' => [Requirement::styleKey()],
       'remove_variant' => [Requirement::styleKey()],
       'detach_variant' => [Requirement::styleKey()],
+      'move_style' => [Requirement::styleKey()],
       self::UPDATE_DEFAULT => [],
     ];
   }
@@ -196,11 +218,12 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
    *
    * Styling targets the page's elements, and the page language spells the
    * whole lifecycle itself (styles are CSS, variant wear is set's class
-   * attribute or an axis attribute, detach is set's "detach"), so on a
-   * page-language site the JSON spellings leave eb_edit's roll-call.
+   * attribute or an axis attribute, detach is set's "detach", a rule move
+   * is the rule restated under its new selector with the old removed), so
+   * on a page-language site the JSON spellings leave eb_edit's roll-call.
    */
   public function getPageOnlyOperations(): array {
-    return ['update_style', 'apply_variant', 'remove_variant', 'detach_variant'];
+    return ['update_style', 'apply_variant', 'remove_variant', 'detach_variant', 'move_style'];
   }
 
   /**
@@ -231,6 +254,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
       'apply_variant' => $this->applyVariant($host, $key, $operation),
       'remove_variant' => $this->removeVariant($host, $key, $operation),
       'detach_variant' => $this->detachVariant($host, $key, $operation),
+      'move_style' => $this->moveStyle($host, $key, $operation),
     };
   }
 
@@ -239,13 +263,25 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
    */
   public function getGuidance(): array {
     return [
-      'update_style' => 'with "key" (an element or rule key: "::" plus a relative selector, e.g. ::.class-name, ::> *, ::> pb-text) and "properties" {css-property: value; null unsets}, optional "condition" (the style op is the taught form)',
+      'update_style' => 'with "key" (an element or rule key: "::" plus a relative selector, e.g. ::.class-name, ::> *, ::> d-text) and "properties" {css-property: value; null unsets}, optional "condition" (the style op is the taught form)',
       'apply_variant' => 'with "key" (an element or rule key; a rule wears at its matches, never a composition or root-only axis) and "variant"; dresses it, replacing its same-axis reference (the class and axis attributes are the taught form)',
       'remove_variant' => 'with "key" (an element or rule key) and "variant" (a reference the entry carries); undresses it WITHOUT materializing, so the look changes (dropping the class or nulling the axis attribute is the taught form)',
       'detach_variant' => 'with "key" (an element or rule key) and "variant"; materializes its styles into the entry\'s own properties (a rule\'s parts continue under it) and unlinks it, keeping the look (set\'s detach list is the taught form)',
+      'move_style' => 'with "key" (a rule key) and "to" (the selector it becomes); rekeys the rule and every key continuing it whole, refusing a present landing (restating it under the new selector and removing the old is the taught form)',
       self::UPDATE_DEFAULT => 'with "scope" (base:{tag}, kind:{kind}, block_type:{bundle}, block_plugin:{id}, layout:{id}) and "properties" {css-property: value; null unsets}, optional "key" ("::" plus a relative selector under the scope\'s element) and "condition"; the active skin\'s default look for every element of the scope',
     ];
   }
+
+  /**
+   * The corrective for a condition parameter that is no string at all.
+   *
+   * What a condition MAY be (a published reference, or a literal clause
+   * where the site admits one) is the validator's verdict on the text
+   * (StyleMapValidator::validateCondition(), by enforcement mode); this
+   * hint only names the shapes, so a model handed an array or a number
+   * learns the parameter is text.
+   */
+  protected const CONDITION_HINT = 'A condition is text: a published name ("hover", "narrow"), a literal clause where this site admits one (a feature query "@container (min-width: 500px)" or "@media (hover: hover)", a supports test, a pseudo-class state ":checked"), or clauses on different axes joined with "+" ("narrow+dark"); omit the parameter for "default".';
 
   /**
    * Applies an update_default operation: one scope's defaults, patched.
@@ -272,7 +308,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
     }
     $condition = $operation['condition'] ?? 'default';
     if (!is_string($condition) || $condition === '') {
-      $errors[] = new BlueprintError('condition', 'INVALID_STYLE_CONDITION', 'The condition must be a condition name.', [], 'Condition names are lowercase tokens such as "default", "hover", or "narrow"; omit the parameter for "default".');
+      $errors[] = new BlueprintError('condition', 'INVALID_STYLE_CONDITION', 'The condition must be a condition clause.', [], self::CONDITION_HINT);
     }
     $properties = $operation['properties'] ?? [];
     if (!is_array($properties) || (array_is_list($properties) && $properties !== [])) {
@@ -431,7 +467,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
     $errors = [];
     $condition = $operation['condition'] ?? 'default';
     if (!is_string($condition) || $condition === '') {
-      $errors[] = new BlueprintError('condition', 'INVALID_STYLE_CONDITION', 'The condition must be a condition name.', [], 'Condition names are lowercase tokens such as "default", "hover", or "narrow"; omit the parameter for "default".');
+      $errors[] = new BlueprintError('condition', 'INVALID_STYLE_CONDITION', 'The condition must be a condition clause.', [], self::CONDITION_HINT);
     }
     $properties = $operation['properties'] ?? [];
     if (!is_array($properties) || (array_is_list($properties) && $properties !== [])) {
@@ -445,9 +481,12 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
       return BlueprintResult::structuralFailure($errors);
     }
 
-    // The birth seed: a generated box exists only while the cascade sets
-    // its content, so a pseudo-element entry this op CREATES is born with
-    // content: "" at default unless the write itself sets content there.
+    // The birth seed: a generated box (::before, ::after) exists only
+    // while the cascade sets its content, so an entry this op CREATES at
+    // one is born with content: "" at default unless the write itself sets
+    // content there; every other pseudo-element (::marker, ::placeholder,
+    // ::selection, ::first-letter, ::first-line) exists with its host and
+    // is seeded nothing.
     // Seeded here and nowhere else (no validator corrective, no client
     // seed), because this handler is the one door every lane's writes
     // pass; the seed validates with the write below, so a site that
@@ -458,7 +497,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
     // on no element scope, so no reference is accepted at its key) and
     // detach materializes a fragment's authored content verbatim.
     $map = $this->getStyleMap($host);
-    $seed = !isset($map[$key]) && RelativeSelector::splitKey($key)[1]?->pseudo !== NULL
+    $seed = !isset($map[$key]) && in_array(RelativeSelector::splitKey($key)[1]?->pseudo, RelativeSelector::GENERATED_BOXES, TRUE)
       ? ['default' => [GeneratedContent::CONTENT => GeneratedContent::BOX]]
       : [];
 
@@ -537,6 +576,133 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
     }
 
     return $this->setStyleMap($host, $map, $resolution_warnings);
+  }
+
+  /**
+   * Applies a move_style operation: a rule rekeyed, its family following.
+   *
+   * The plan is RuleMove::plan() over the owner's relative keys (every
+   * map key sharing the rule's owner, the part after "::"); the handler
+   * reads presence itself (the plan names the rule's own key whether or
+   * not the map holds it, so an absent rule moves nothing of its own and
+   * its continuations still follow) and moves each present entry WHOLE
+   * to its landing, in map order, every condition, its properties and
+   * the "variants" list alike. Before anything is written the moved
+   * entries are validated at their landings as a sub-map rooted at this
+   * host, through the one validation engine update_style's patch passes:
+   * the grant at the new landing, a worn variant's scope against the new
+   * rule's landing, a declared part under the new chain. A refused
+   * landing refuses the whole move and writes nothing.
+   *
+   * Refusals, structural first (the op's shape) then semantic (the map):
+   * - STYLE_MOVE_NOT_A_RULE at "key": the key carries no "::" (an
+   *   element's own entry has no selector to change).
+   * - INVALID_STYLE_KEY at "to": "to" is missing or outside the relative
+   *   selector grammar (the grammar's own code, its sentence the hint).
+   * - STYLE_MOVE_TARGET_EXISTS at "to": a landing is already present, the
+   *   rule's own or a family member's (an unchanged selector is its own
+   *   collision: the chrome's no-op gate stands before the op).
+   * - STYLE_MOVE_CONTINUATION_REFUSED at "to": a continuation cannot
+   *   follow because the grammar refuses the rebase (a "to" ending in a
+   *   pseudo-element carries nothing behind its box; a tag "to" carries no
+   *   part class).
+   * - STYLE_MOVE_NOTHING_TO_MOVE at "key": neither the rule nor any
+   *   continuation holds an entry (a row a variant supplies or an ancestor
+   *   rule delivers is not this owner's to move).
+   * Validator errors re-root onto the op: a path at the rule's own
+   * landing reads "to[.{condition}.{property}]"; a continuation's keeps
+   * its landing key, the key that refused.
+   *
+   * @param \Drupal\Core\Entity\HostInterface $host
+   *   The entity whose style map is rekeyed.
+   * @param string $key
+   *   The rule key moving (validateTarget() has judged it a style key and
+   *   the actor's to style).
+   * @param array $operation
+   *   The operation: key and to.
+   */
+  protected function moveStyle(HostInterface $host, string $key, array $operation): BlueprintResult {
+    $errors = [];
+    $split = RelativeSelector::splitKey($key);
+    if ($split === NULL || $split[1] === NULL) {
+      $errors[] = new BlueprintError('key', 'STYLE_MOVE_NOT_A_RULE', sprintf('"%s" names an element, not a rule: only a rule key moves.', $key), [], 'Name the rule as "{key}::{relative selector}", e.g. "container:{uuid}::> d-text"; an element\'s own entry is its identity and has no selector to change. ' . RelativeSelector::GRAMMAR);
+    }
+    $to = $operation['to'] ?? NULL;
+    if (!is_string($to) || $to === '') {
+      $errors[] = new BlueprintError('to', 'MISSING_PARAMETER', 'A non-empty "to" selector is required.', [], 'Provide the relative selector the rule becomes, e.g. "> d-text:has(a)". ' . RelativeSelector::GRAMMAR);
+    }
+    elseif (RelativeSelector::parse($to) === NULL) {
+      $errors[] = new BlueprintError('to', 'INVALID_STYLE_KEY', sprintf('"%s" is not a relative selector.', $to), [], RelativeSelector::GRAMMAR);
+    }
+    if ($errors) {
+      return BlueprintResult::structuralFailure($errors);
+    }
+    [$owner, $rule] = $split;
+    $from = (string) $rule;
+
+    $map = $this->getStyleMap($host);
+    $prefix = $owner . RelativeSelector::SUFFIX;
+    $relatives = [];
+    foreach (array_keys($map) as $map_key) {
+      $map_key = (string) $map_key;
+      if (str_starts_with($map_key, $prefix)) {
+        $relatives[] = substr($map_key, strlen($prefix));
+      }
+    }
+    $plan = RuleMove::plan($relatives, $from, $to);
+    if ($plan->refused()) {
+      ['reason' => $reason, 'key' => $offending] = $plan->refusal;
+      $context = ['key' => $key, 'to' => $to, 'landing' => $prefix . $offending];
+      return BlueprintResult::semanticFailure([
+        match ($reason) {
+          RuleMove::REFUSED_TARGET_EXISTS => new BlueprintError('to', 'STYLE_MOVE_TARGET_EXISTS', sprintf('"%s" already exists: the move of "%s" to "%s" would land on it.', $prefix . $offending, $key, $to), $context, 'A move never merges two rules (which would silently pick winners). Choose a selector no entry of this element holds, or unset the entry in the way (update_style with null values, remove_variant) and move again; an unchanged selector is its own collision.'),
+          RuleMove::REFUSED_CONTINUATION => new BlueprintError('to', 'STYLE_MOVE_CONTINUATION_REFUSED', sprintf('"%s" continues "%s" and cannot follow it to "%s".', $prefix . $offending, $key, $to), $context, 'A rule\'s continuations ("{rule} .part", "{rule} > *", "{rule}::before") follow it to its new selector by the same suffix, and the grammar refuses this rebase: nothing stands behind a generated box ("> d-text::before .link"), and a tag carries no part class ("p .link"). Move the continuation elsewhere first, or choose a "to" that can carry it.'),
+        },
+      ]);
+    }
+
+    $moving = [];
+    foreach ($plan->moves as $source => $target) {
+      if (isset($map[$prefix . $source])) {
+        $moving[$prefix . $source] = $prefix . $target;
+      }
+    }
+    if ($moving === []) {
+      return BlueprintResult::semanticFailure([
+        new BlueprintError('key', 'STYLE_MOVE_NOTHING_TO_MOVE', sprintf('"%s" holds no entry and nothing continues it: there is no rule to move.', $key), ['key' => $key, 'to' => $to], 'A rule exists on this element once it holds styles or wears a variant (update_style, apply_variant). A row a worn variant supplies or an ancestor\'s rule delivers belongs to that variant or ancestor, not to this element: edit the selector there.'),
+      ]);
+    }
+
+    // The one door: the moved entries judged at their landings, as a
+    // sub-map rooted at this host, before anything is written. The stored
+    // values are already canonical (the validator wrote them), so no
+    // input-tier resolution precedes the check.
+    $landing_key = $prefix . $plan->moves[$from];
+    $landed = [];
+    foreach ($moving as $source => $target) {
+      $landed[$target] = $map[$source];
+    }
+    $owned_warnings = [];
+    $errors = $this->validator->validate($landed, ['host' => $host], $owned_warnings);
+    if ($errors) {
+      return BlueprintResult::semanticFailure(array_map(
+        fn (BlueprintError $error) => $error->withPath($this->movePath($error->getPath(), $landing_key)),
+        $errors,
+      ));
+    }
+
+    // Rekeyed in place: every entry keeps its position in the map, the
+    // moved ones under their new keys. A target is never another move's
+    // source (a present landing refused above), so one pass suffices.
+    $rekeyed = [];
+    foreach ($map as $map_key => $entry) {
+      $rekeyed[$moving[$map_key] ?? $map_key] = $entry;
+    }
+
+    return $this->setStyleMap($host, $rekeyed, array_map(
+      fn (BlueprintWarning $warning) => new BlueprintWarning($this->movePath($warning->getPath(), $landing_key), $warning->getCode(), $warning->getMessage()),
+      $owned_warnings,
+    ));
   }
 
   /**
@@ -725,8 +891,8 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
    * The one continuation shared by apply's part carrier and detach's
    * materialization: under an element key the suffix appends
    * ("{key}::.cls"); under a rule key the suffix continues the rule by
-   * descent (RelativeSelector::under(): "container:X::> pb-text" wearing
-   * a "::.link" entry lands at "container:X::> pb-text .link"), the same
+   * descent (RelativeSelector::under(): "container:X::> d-text" wearing
+   * a "::.link" entry lands at "container:X::> d-text .link"), the same
    * rebase delivery prints (CssPrinter::printFragmentStyles() under the
    * rule), so what detach writes is exactly what the reference delivered.
    * A key never carries "::" twice. NULL when the rule's grammar refuses
@@ -1445,6 +1611,23 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
     }
     if (str_starts_with($remainder, "$condition.")) {
       return 'properties.' . substr($remainder, strlen($condition) + 1);
+    }
+    return $path;
+  }
+
+  /**
+   * Maps a validator path onto move_style's parameter space.
+   *
+   * The rule's own landing is what "to" names, so a path at it reads
+   * "to" ("to.{condition}.{property}" beneath); a continuation's landing
+   * is not a parameter and keeps its key, the honest name of what refused.
+   */
+  protected function movePath(string $path, string $landing_key): string {
+    if ($path === $landing_key) {
+      return 'to';
+    }
+    if (str_starts_with($path, "$landing_key.")) {
+      return 'to.' . substr($path, strlen($landing_key) + 1);
     }
     return $path;
   }

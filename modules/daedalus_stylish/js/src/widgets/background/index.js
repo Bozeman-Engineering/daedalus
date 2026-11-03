@@ -31,7 +31,7 @@ import { widgetClasses } from '../lib/widget-classes.js';
 import { Mark } from '../lib/mark.js';
 
 /**
- * background: one swatch well over the background-color +
+ * background: one token well over the background-color +
  * background-image pair.
  *
  * The color half is the shared color well (lib/color-well.js
@@ -39,7 +39,7 @@ import { Mark } from '../lib/mark.js';
  * mint row are the well's own anatomy, and every write it produces (a
  * grid pick, a settled picker literal, a minted reference) comes back
  * through one pick door, mapped here by backgroundPick over the pair and
- * the media companions. Gradient-kind swatches offer AFTER the color
+ * the media companions. Gradient-scale tokens offer AFTER the color
  * stops, gated on background-image's OWN constraints (gradientStops),
  * each committing its var() reference to background-image, and the well
  * tells the mapping which table a pick came from. The well IS the
@@ -67,11 +67,11 @@ import { Mark } from '../lib/mark.js';
  * The gradient lane (gradient-chip.js, the media rows' shared wiring)
  * opens the GradientBuilder for custom authoring (commits write the
  * serialized literal, or the minted var() reference, to background-image)
- * or, when the committed value is exactly one gradient-swatch var(),
- * the edit-in-place swatch session over the swatch's own value. Custom
+ * or, when the committed value is exactly one gradient-token var(),
+ * the edit-in-place token session over the token's own value. Custom
  * authoring hides while background-image's value space is CLOSED
  * (spaceClosed: a scale or allowed list under law, where the builder
- * could only manufacture rejections) unless that committed swatch
+ * could only manufacture rejections) unless that committed token
  * reference makes the session the offer.
  *
  * The image lane fires the pick through the widget contract's
@@ -126,13 +126,14 @@ const Background = ({
   model,
   guide,
   materials,
-  swatches,
+  skinMaterials,
   source,
   onPreview,
   onCommit,
   onPickMedia,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
 }) => {
   const { values, invalid, stage, pick } = useGesture(
     model.home.key,
@@ -181,7 +182,7 @@ const Background = ({
     value: image,
     constraints: model.constraints?.['background-image'] ?? null,
     source,
-    canMint: Boolean(swatches?.canCreate),
+    canMint: Boolean(skinMaterials?.canCreate),
     onPreview: (value) => onPreview({ 'background-image': value }),
     onCommit: (value) => pick({ 'background-image': value }),
   });
@@ -193,7 +194,7 @@ const Background = ({
   const gradientOffered =
     !disabled &&
     (!spaceClosed(guide, model.constraints?.['background-image'] ?? null) ||
-      gradient.swatch !== null);
+      gradient.token !== null);
   const canPickMedia = !disabled && Boolean(source.canPickMedia?.());
   // The seed's computation, at the click (mediaCompanions, the pure
   // half): the bound TARGET's effective declaration is re-derived here
@@ -248,6 +249,7 @@ const Background = ({
     read: model.reads[worn],
     blockTypes: source.getBlockTypes?.() ?? {},
     sectionLayouts: source.getSectionLayouts?.() ?? {},
+    law,
   });
   const unsettable = ownAtPose(model.reads[worn], model.condition);
   // The one pick door (the well's grid, its lanes, the menu's unset): a
@@ -303,7 +305,7 @@ const Background = ({
           ]
         : []),
     ],
-    canMint: Boolean(swatches?.canCreate),
+    canMint: Boolean(skinMaterials?.canCreate),
     source,
     disabled,
     disabledTitle,

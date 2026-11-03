@@ -26,6 +26,7 @@ const Width = ({
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
 }) => (
   <div className={widgetClasses('width', false)}>
     <ChoiceRow
@@ -45,6 +46,7 @@ const Width = ({
       disabledTitle={model.withheld?.['width'] ?? null}
       onPickCondition={onPickCondition}
       onOpenDocument={onOpenDocument}
+      law={law}
       onPreview={onPreview}
       onRelease={onRelease}
       onCommit={onCommit}

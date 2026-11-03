@@ -719,7 +719,7 @@ final class DaedalusUi implements TrustedCallbackInterface {
    * Whether an entity has an editing surface getEditingUrl() can name.
    *
    * A page (an entity with a canonical route) does; a non-page entity (a
-   * swatch, a variant, a skin: site-wide material with no page of its own)
+   * variant, an animation, a skin: site-wide material with no page of its own)
    * does not, and a caller that would navigate to it asks here first instead
    * of catching the missing link template. A site frame's canonical link
    * names daedalus_layout's canvas route, so a frame has an editing

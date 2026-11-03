@@ -1,3 +1,7 @@
 use ai assistant:
   title: 'Use AI assistant'
   description: 'Access the always-on AI assistant chat panel.'
+
+choose ai model:
+  title: 'Choose the AI model the chat runs on'
+  description: 'Pick, from the models an administrator curated, the model the chat sidebar runs on. With nothing curated the choice is not offered.'

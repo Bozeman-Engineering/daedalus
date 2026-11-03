@@ -30,7 +30,7 @@ import { createSlice } from '@reduxjs/toolkit';
  *   `key` is ALWAYS the selected key (the reducer nulls any other), so it
  *   names something on the selected element: a declared part ('.cls'), a
  *   minted instance ('.s-abc'), a tag tier ('p'), a chain seated from
- *   code mode ('> pb-text .quote'). Null means the element itself. The
+ *   code mode ('> d-text .quote'). Null means the element itself. The
  *   subject changes only through selection gestures (tree, canvas,
  *   code-mode row header, keyboard).
  * - The ADDRESS is the WRITE address: where a styling write lands when it

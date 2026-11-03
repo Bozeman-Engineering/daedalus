@@ -3,5 +3,6 @@ description: 'Wraps site CSS (core, contrib, theme) in a cascade layer so unlaye
 type: module
 core_version_requirement: '>=11.3 <11.5'
 package: Daedalus
+configure: daedalus_stylish_layers.settings
 dependencies:
   - daedalus:daedalus

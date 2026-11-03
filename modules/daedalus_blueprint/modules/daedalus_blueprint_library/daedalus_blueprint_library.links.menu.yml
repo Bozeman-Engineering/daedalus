@@ -1,0 +1,13 @@
+# The blueprint library's second door: the UI sub-category of the Daedalus
+# config category (Configuration » Daedalus » UI). The first door is the
+# Blueprints tab on the Content page (entity.blueprint.collection in
+# daedalus_blueprint_library.links.task.yml, base route
+# system.admin_content); the library is content, not configuration, so it
+# has no menu link of its own and this pointer is its only one. Nothing
+# about the page moves. See SETTINGS.md.
+entity.blueprint.collection.daedalus:
+  title: 'Blueprints'
+  description: 'The saved blueprints offered in the Add panel and to the AI.'
+  route_name: entity.blueprint.collection
+  parent: daedalus.admin_config_ui
+  weight: 0

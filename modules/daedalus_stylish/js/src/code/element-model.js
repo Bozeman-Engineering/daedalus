@@ -12,11 +12,19 @@ import { buildStack, deliveredEntry, selectorSuffixes } from '../style-stack.js'
 import { parseKey } from '../style-guide.js';
 import { createMatcher, presentRoster } from '../selector-matcher.js';
 import { axisVocabulary } from '../variant-scope.js';
+import { layoutOf } from '../../../../daedalus_ui/js/edit_mode/blueprint/document-tree.js';
+import { planRuleMove } from '../rule-move.js';
 import {
   ANCHOR,
+  ANCHOR_KIND,
   CLASS_PART,
   CLASS_PATTERN,
-  PSEUDOS,
+  GENERATED_BOXES,
+  HAS,
+  IS,
+  NOT,
+  NTH_POSITIONS,
+  POSITIONS,
   SUFFIX,
   TAG,
   TYPE,
@@ -27,10 +35,13 @@ import {
   parseSelector,
   printSelector,
 } from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
+import { OWNER, digest, reach } from '../../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
+import { widePseudoElements } from '../wide-selectors.js';
+import { vocabularyPseudos } from '../pseudo-vocabularies.js';
 
 /**
  * The offer kind of a generated box option (`&::before`,
- * `> pb-text::after`): the pseudo-element is the selector's terminal, not
+ * `> d-text::after`): the pseudo-element is the selector's terminal, not
  * a compound, so it is not one of the grammar's compound kinds.
  */
 export const PSEUDO = 'pseudo';
@@ -136,12 +147,12 @@ const mapConditions = (map, key, variants, axes, guide) =>
  * element styles. The positions are the stack's own enumeration,
  * selectorSuffixes() (StyleStack::partSuffixes' twin), verbatim: the
  * selectors the element's rules' wear continues under them (a rule
- * '::> pb-text' wearing a variant with a '::.link' entry delivers at
- * '::> pb-text .link'), then the selectors the element's own worn
+ * '::> d-text' wearing a variant with a '::.link' entry delivers at
+ * '::> d-text .link'), then the selectors the element's own worn
  * references supply (each reference read through ITS OWN fragment, the
  * delivery read), then its own '::selector' map entries (a part
  * '::.class', the tag tier '::p', the children '::> *', a type
- * '::> pb-text', their compounds), in delivery order, deduplicated. The
+ * '::> d-text', their compounds), in delivery order, deduplicated. The
  * roster never walks the map itself: a row exists because the stack
  * delivers there, and only the stack knows where variants deliver, so
  * a rule's worn part row prints under the element with zero own entries
@@ -180,9 +191,10 @@ const mapConditions = (map, key, variants, axes, guide) =>
  *   The block types table (a rule's landing vocabulary).
  * @param {object} sectionLayouts
  *   The section layouts table (a rule's landing vocabulary).
- * @param {?Array} tree
- *   The blueprint's lean node tree, when the caller holds it and the
- *   roster is the selection's full body; null lists no ancestor rules.
+ * @param {?Array} document
+ *   The document tree (source.getDocument(): the host entity above its
+ *   sections), when the caller holds it and the roster is the
+ *   selection's full body; null lists no ancestor rules.
  * @param {?{key: string, selector: string}} address
  *   The write address (a rule on an ancestor, or on this key), or null.
  *   Only an ancestor's reaches the stack; an own-key address is a part
@@ -206,7 +218,7 @@ export const elementIslands = (
   axes = null,
   blockTypes = {},
   sectionLayouts = {},
-  tree = null,
+  document = null,
   address = null,
   facet = null,
 ) => {
@@ -216,13 +228,13 @@ export const elementIslands = (
   // rows as a part (placeEditable's fallback seat), a second island for
   // one key.
   const addressedKey =
-    tree === null || address === null || address.key === key
+    document === null || address === null || address.key === key
       ? null
       : facet === null
         ? key
         : `${key}::${facet}`;
   const ancestorsOf = (islandKey) =>
-    tree === null
+    document === null
       ? []
       : ancestorIslands({
           guide,
@@ -232,7 +244,7 @@ export const elementIslands = (
           axes,
           blockTypes,
           sectionLayouts,
-          tree,
+          document,
           editable: islandKey === addressedKey ? address : null,
         });
   const parts = selectorSuffixes(
@@ -261,7 +273,7 @@ export const elementIslands = (
  * inherited rules for the element you are inspecting.
  *
  * Read off the key's own style stack (buildStack with the floor and the
- * tree: the ancestor tier lists every rule position the selector
+ * document: the ancestor tier lists every rule position the selector
  * matcher says reaches the key, farthest ancestor first, a GROUP of
  * layers per position), one row per position, the group's own layer
  * naming it (layers.js ancestorRule), re-ordered NEAREST ancestor first
@@ -280,12 +292,14 @@ export const elementIslands = (
  *
  * @param {object} args
  *   buildStack's arguments for the island key (guide, map, key,
- *   variants, axes, blockTypes, sectionLayouts, tree) plus `editable`,
- *   the write address to place when it names this key's facet, or null.
+ *   variants, axes, blockTypes, sectionLayouts, document) plus
+ *   `editable`, the write address to place when it names this key's
+ *   facet, or null.
  *
  * @return {Array<{owner: string, selector: string, key: string,
  *   conditions: string[], existing: boolean}>}
- *   Nearest ancestor first; [] without a tree or when nothing reaches.
+ *   Nearest ancestor first; [] without a document or when nothing
+ *   reaches.
  */
 export const ancestorIslands = ({
   guide,
@@ -295,7 +309,7 @@ export const ancestorIslands = ({
   axes = null,
   blockTypes = {},
   sectionLayouts = {},
-  tree,
+  document,
   editable = null,
 }) => {
   const stack = buildStack({
@@ -306,9 +320,13 @@ export const ancestorIslands = ({
     axes,
     blockTypes,
     sectionLayouts,
-    tree,
+    document,
     editable,
   });
+  // Each owner's axis vocabulary reads its depth off the LAYOUT (the
+  // sections at the top), never off the document, under whose root
+  // every section would read as nested.
+  const layout = layoutOf(document);
   const groups = [];
   stack.layers.forEach((layer) => {
     if (layer.tier !== TIER_ANCESTOR) {
@@ -341,7 +359,7 @@ export const ancestorIslands = ({
         map,
         group.key,
         variants,
-        axisVocabulary(guide, group.owner, blockTypes, sectionLayouts, tree),
+        axisVocabulary(guide, group.owner, blockTypes, sectionLayouts, layout),
         guide,
       ),
       existing: group.worn > 0 || isEntryObject(map?.[group.key]),
@@ -591,22 +609,14 @@ export const posedRoster = (model, posed, guide) => {
 };
 
 /**
- * The selector charset a gesture line may hold: compounds, the `>`, `+`
- * and `~` combinators, the two qualifiers' parens, spaces, the owner's
- * anchor `&`, and a generated box's `::` with its name (or the start of
- * one) as the line's tail. A single colon opens a qualifier only
- * (`:has(`, `:not(`); any other colon, a semicolon or a brace on the
- * line is a declaration or structure, never a selector being typed. The
- * charset gates; the grammar (canonicalSelector) judges the rest, so
- * `&hover`, `::marker` and `&::before .x` pass here and fail there.
+ * The condition sigil's line: the anchor glued to a word (`&hover`,
+ * `&narrow`), the condition completion's shape and never a selector's.
+ * The one shape read before the digester sees a line: the sigil is the
+ * chrome's shorthand for summoning the condition vocabulary (typing
+ * `&ho` and picking Hover), not a grammar word, and `&:hover {` through
+ * the digester mints the same condition row.
  */
-const SELECTOR_LINE = /^(?:[A-Za-z0-9_.*>+~()& -]|::(?=[A-Za-z]*\s*$)|:(?=has\(|not\())*$/;
-
-/**
- * A line typing the owner's own generated box: the anchor alone, or the
- * anchor with its `::` tail (`&`, `&::`, `&::b`, `&::before`).
- */
-const ANCHOR_LINE = /^\s*&(?:::[A-Za-z]*)?$/;
+const SIGIL_LINE = /&[A-Za-z0-9_-]/;
 
 /**
  * A line's generated-box tail (`::`, `::b`, `::before`), glued to the
@@ -615,23 +625,36 @@ const ANCHOR_LINE = /^\s*&(?:::[A-Za-z]*)?$/;
 const BOX_TAIL = /::([A-Za-z]*)$/;
 
 /**
- * The condition sigil's line: the anchor glued to a word (`&hover`,
- * `&first-child`), the condition completion's shape and never a
- * selector's.
+ * The `:` lane's token: one colon and the pseudo-class name being typed,
+ * glued to the compound before it (`a:ho`, `> d-text:`, `&:`, a bare
+ * `:` at the owner).
  */
-const SIGIL_LINE = /&[A-Za-z0-9_-]/;
+const PSEUDO_TAIL = /(?<![:\s])(:[A-Za-z-]*)$/;
 
 /**
- * Whether a selector line holds a relation (a sibling combinator or a
- * qualifier): the completion offers nothing on one, a relation is typed
- * whole (the `{` mint reads it through the grammar).
+ * A class glued to a tag (`li.act`, `p.`): the tag word and the class
+ * token being typed.
  */
-const RELATION_LINE = /[+~(]/;
+const TAG_CLASS_TAIL = /(?<![\w.:-])([a-z][a-z0-9]*)(\.[A-Za-z0-9_-]*)$/;
 
 /**
- * Every addressable key of a lean tree, document order.
+ * The offer kinds of the `:` lane, beside the grammar's compound kinds:
+ * a published posable state (it peels into the row's condition when it
+ * stands on the last compound), a position pseudo-class (a qualifier),
+ * and an open functional qualifier (`:not(`, `:has(`, `:nth-child(`)
+ * the designer finishes typing, which inserts text instead of minting.
  */
-const documentOrder = (tree) => {
+export const STATE = 'state';
+export const POSITION = 'position';
+export const QUALIFIER = 'qualifier';
+
+/**
+ * Every addressable key of a document tree, document order: the entity
+ * root first (when it carries a key), then the sections and what they
+ * hold. The one consumer is the descendant offer below, whose owner
+ * filter (`matches(key, …, node)` from the owner) never admits the root.
+ */
+const documentOrder = (document) => {
   const keys = [];
   const walk = (list) => {
     (Array.isArray(list) ? list : []).forEach((node) => {
@@ -645,8 +668,64 @@ const documentOrder = (tree) => {
       walk(node.children);
     });
   };
-  walk(tree);
+  walk(document);
   return keys;
+};
+
+/**
+ * The paren and bracket depth at the end of a text: positive inside an
+ * unclosed qualifier or attribute, where the completion offers nothing
+ * (a relation is typed whole; the `{` mint reads it through the
+ * digester).
+ */
+const openDepth = (text) => {
+  let depth = 0;
+  for (const char of text) {
+    if (char === '(' || char === '[') {
+      depth += 1;
+    } else if (char === ')' || char === ']') {
+      depth -= 1;
+    }
+  }
+  return depth;
+};
+
+/**
+ * A settled prefix read the digester's way: `&` alone is the owner (''),
+ * `& > p` is `> p`, `&:hover > ul` keeps the qualified anchor, and a `&`
+ * anywhere but first is no selector.
+ *
+ * @return {?{prefix: string, landing: ?object, partsOwner: ?string}}
+ *   The canonical prefix ('' at the owner), its last compound (null at
+ *   the owner), and the type compound whose parts a class after it
+ *   names (null when the owner's). Null outside the grammar or on a
+ *   settled box (a box takes no continuation).
+ */
+const settledPrefix = (text) => {
+  const trimmed = text.trim();
+  if (trimmed.indexOf(ANCHOR, 1) !== -1) {
+    return null;
+  }
+  const relative =
+    trimmed === ANCHOR
+      ? ''
+      : trimmed.startsWith(ANCHOR) && /[\s>+~]/.test(trimmed[1])
+        ? trimmed.slice(1).trim()
+        : trimmed;
+  if (relative === '') {
+    return { prefix: '', landing: null, partsOwner: null };
+  }
+  const parsed = parseSelector(relative);
+  if (parsed === null || parsed.pseudo !== null) {
+    return null;
+  }
+  const { compounds } = parsed;
+  const types = compounds.filter((compound) => compound.kind === TYPE);
+  return {
+    prefix: printSelector(parsed),
+    landing: compounds.length ? compounds[compounds.length - 1] : null,
+    partsOwner: types.length ? types[types.length - 1].name : null,
+  };
 };
 
 /**
@@ -654,57 +733,69 @@ const documentOrder = (tree) => {
  * being completed.
  *
  * @return {?{prefix: string, child: boolean, last: string,
- *   landing: ?object, box: boolean}}
+ *   landing: ?object, box: boolean, lane: string, partsOwner: ?string}}
  *   `prefix` is the canonical selector typed so far ('' at the owner),
  *   `child` whether a `>` follows it (the next compound is a direct
  *   child), `last` the partial token under the cursor ('' right after a
  *   combinator or a space), `landing` the prefix's last compound or
  *   null at the owner, `box` whether the token is a generated box's
  *   `::` tail (the owner's anchor `&` counts: its only continuations are
- *   its boxes). Null when the text is outside the grammar or holds a
- *   relation (no offer inside a qualifier or after a sibling
- *   combinator).
+ *   its boxes), `lane` which offer the token asks for ('box', 'pseudo'
+ *   for a `:` glued to a compound, 'class' for a `.` token by descent,
+ *   'tag-class' for one glued to a tag, 'compound' for a word),
+ *   `partsOwner` the type whose parts a class names. Null
+ *   when the text is the condition sigil's shape, outside the grammar,
+ *   inside an unclosed qualifier or attribute, or after a sibling
+ *   combinator (a relation is typed whole).
  */
 const splitTyped = (typed) => {
-  if (
-    typeof typed !== 'string' ||
-    !SELECTOR_LINE.test(typed) ||
-    RELATION_LINE.test(typed)
-  ) {
+  if (typeof typed !== 'string' || SIGIL_LINE.test(typed)) {
     return null;
   }
-  if (typed.includes(ANCHOR)) {
-    // The anchor is the whole head of the owner's own box and nothing
-    // else (`& > p` and `&hover` are outside the grammar).
-    return ANCHOR_LINE.test(typed)
-      ? { prefix: '', child: false, last: typed.trim(), landing: null, box: true }
-      : null;
-  }
-  const tail = BOX_TAIL.exec(typed);
-  if (tail === null && typed.includes(SUFFIX)) {
-    // A settled box (`> pb-text::before `) takes no continuation.
+  // A brace or a semicolon is structure or a declaration's end, never
+  // part of a selector being typed.
+  const text = typed.replace(/\s*>\s*/g, ' > ').trimStart();
+  if (text.trim() === '' || /[{};]/.test(text) || openDepth(text) > 0) {
     return null;
   }
+  // A box continues a whole selector, glued (`> d-text::b`, the owner's
+  // through the anchor or a bare `::`); a space before the `::` and a
+  // box on a box are refused as the digester refuses them.
+  const tail = BOX_TAIL.exec(text);
   if (tail !== null) {
-    // A box continues a whole selector, glued (`> pb-text::b`); a space
-    // before the `::`, a bare `::` and a box on a box are refused as the
-    // grammar refuses them.
-    const host = typed.slice(0, tail.index);
-    const parsed = host === '' || /\s$/.test(host) ? null : parseSelector(host);
-    if (parsed === null || parsed.pseudo !== null) {
+    const host = text.slice(0, tail.index);
+    if (/\s$/.test(host)) {
       return null;
     }
-    return {
-      prefix: printSelector(parsed),
-      child: false,
-      last: tail[0],
-      landing: parsed.compounds[parsed.compounds.length - 1],
-      box: true,
-    };
+    const settled = settledPrefix(host === '' ? ANCHOR : host);
+    if (settled === null) {
+      return null;
+    }
+    return { ...settled, child: false, last: tail[0], box: true, lane: 'box' };
   }
-  const text = typed.replace(/\s*>\s*/g, ' > ').trimStart();
-  if (text.trim() === '') {
+  if (text.includes(SUFFIX)) {
+    // A settled box (`> d-text::before `) takes no continuation.
     return null;
+  }
+  // The `:` lane: a pseudo-class being typed on the compound before it
+  // (a bare `:` is the owner's own, the digester's leading-colon sugar).
+  const pseudo = PSEUDO_TAIL.exec(text);
+  if (pseudo !== null) {
+    const head = text.slice(0, pseudo.index);
+    const settled = settledPrefix(head === '' ? ANCHOR : head);
+    if (settled === null) {
+      return null;
+    }
+    return { ...settled, child: false, last: pseudo[1], box: false, lane: 'pseudo' };
+  }
+  // A class glued to a tag (`li.act`): the tag's markup classes.
+  const glued = TAG_CLASS_TAIL.exec(text);
+  if (glued !== null) {
+    const settled = settledPrefix(text.slice(0, glued.index + glued[1].length));
+    if (settled === null || settled.landing?.kind !== TAG) {
+      return null;
+    }
+    return { ...settled, child: false, last: glued[2], box: false, lane: 'tag-class' };
   }
   const open = /\s$/.test(text);
   const tokens = text.trim().split(/\s+/);
@@ -714,51 +805,32 @@ const splitTyped = (typed) => {
     last = '';
   }
   const child = tokens[tokens.length - 1] === '>';
-  const settled = child ? tokens.slice(0, -1) : tokens;
-  if (settled.includes('>')) {
-    // A combinator inside the prefix rides its compound; a dangling one
-    // (`> > p`) is outside the grammar.
-    const parsed = parseSelector(settled.join(' '));
-    if (parsed === null) {
-      return null;
-    }
-    return {
-      prefix: printSelector(parsed),
-      child,
-      last,
-      landing: parsed.compounds[parsed.compounds.length - 1],
-      box: false,
-    };
+  const head = (child ? tokens.slice(0, -1) : tokens).join(' ');
+  if (head === '' && last === ANCHOR) {
+    // The anchor alone: the owner, whose only continuations here are its
+    // boxes (its states and classes are the `:` and `.` lanes).
+    return { prefix: '', child: false, last, landing: null, box: true, lane: 'box', partsOwner: null };
   }
-  if (!settled.length) {
-    return { prefix: '', child, last, landing: null, box: false };
-  }
-  const parsed = parseSelector(settled.join(' '));
-  if (parsed === null) {
+  const settled = head === '' ? { prefix: '', landing: null, partsOwner: null } : settledPrefix(head);
+  if (settled === null) {
     return null;
   }
-  return {
-    prefix: printSelector(parsed),
-    child,
-    last,
-    landing: parsed.compounds[parsed.compounds.length - 1],
-    box: false,
-  };
+  return { ...settled, child, last, box: false, lane: last.startsWith('.') ? 'class' : 'compound' };
 };
 
 /**
  * The selector completion for a selector typed at a declaration position.
  *
  * One completion for every relative selector shape (Plan: the `>`, `.`,
- * `pb-` and tag-word gestures are one gesture): the typed line is a
+ * `d-`, tag-word and `:` gestures are one gesture): the typed line is a
  * selector prefix plus the token under the cursor, and the offer is
  * what that position can address, read off the ELEMENT (the selector
  * matcher over the blueprint tree, the same engine the stack and the
  * canvas paint read), never off the style map:
  * - right after `>`: the universal `*` (every child, present and
  *   future) first, then one type compound per type among the matched
- *   set's direct children (`pb-text`, `pb-container` for a nested
- *   section, `pb-block` for a plugin block), then one tag per declared
+ *   set's direct children (`d-text`, `d-container` for a nested
+ *   section, `d-block` for a plugin block), then one tag per declared
  *   base tag those children's roots render as;
  * - at a descendant position (the owner, or a space after a compound):
  *   one type per type in the matched set's subtree, one tag per
@@ -767,27 +839,37 @@ const splitTyped = (typed) => {
  *   declared parts;
  * - a `.` token: the owner's declared parts (gated on DOM presence, a
  *   declared part absent from the canvas is not offered) or, after a
- *   type, the type's declared parts; on an open site a well-formed
+ *   type, the type's declared parts; glued to a tag (`li.act`) the
+ *   declared parts of the owner the tag stands under, as the markup
+ *   classes the completion can know; on an open site a well-formed
  *   undeclared class additionally earns the explicit "Create this
  *   part" entry (`create`), and nothing else ever creates;
+ * - a `:` glued to a compound (or bare at the owner, `&:` the same): the
+ *   published posable states (STATE options, each labelled by its
+ *   condition; on the last compound the digester peels it into the
+ *   row's condition, before it the state qualifies that compound), the
+ *   position pseudo-classes (POSITION options), then `:nth-child(` and
+ *   its family, `:not(`, `:has(` and `:is(` as QUALIFIER options whose
+ *   pick inserts the text for the designer to finish (`insert`, no
+ *   `selector`); nothing inside an unclosed `(` or `[`;
  * - a `::` tail, or the owner's anchor `&`: the two generated boxes of
  *   the subject before it, `::before` then `::after` (`&::before` and
- *   `&::after` at the owner, `> pb-text::before` after a type, a part's
+ *   `&::after` at the owner, `> d-text::before` after a type, a part's
  *   or a tag's likewise). A box is universal (every element has both),
  *   so nothing gates the offer here; a strict site's undeclared box is
  *   the server's refusal on the first write, as for an undeclared tag.
- *   The `::` must be glued to a whole selector (`> pb-text ::` offers
+ *   The `::` must be glued to a whole selector (`> d-text ::` offers
  *   nothing, as the grammar reads it as every descendant's box), and a
  *   box takes no continuation.
- * Each option carries the FULL canonical selector to mint (`> pb-text`,
- * `> pb-text .text-block-link`, `&::before`), its last compound's kind
- * and name (a box's: the PSEUDO kind and the pseudo name), and the
- * compound's human label (a type's bundle label, a tag's declared
- * label, a part's label; null for `*` and for a box, whose word is the
- * shared box vocabulary the view reads). The editor filters by the
- * typed text; the offer is the whole set for the position. Rows already
- * materialized from the map are the store projection and never pass
- * through here.
+ * Each option carries the FULL canonical selector to mint (`> d-text`,
+ * `> d-text .text-block-link`, `&::before`, `a:hover`), its last
+ * compound's kind and name (a box's: the PSEUDO kind and the pseudo
+ * name; a state's: STATE and the condition name), and the compound's
+ * human label (a type's bundle label, a tag's declared label, a part's
+ * label, a condition's label; null for `*`, a position and a box, whose
+ * words the view reads). The editor filters by the typed text; the
+ * offer is the whole set for the position. Rows already materialized
+ * from the map are the store projection and never pass through here.
  *
  * Unknown facts degrade to offering, never to hiding: with no tree in
  * reach (the satellite before its broadcast) every declared type and
@@ -803,10 +885,14 @@ const splitTyped = (typed) => {
  * own; the options mint the composed selector (`p::before`, `p > *`).
  *
  * @param {string} typed
- *   The line's text before the cursor, as typed ('> pb-', '.qu', 'p').
+ *   The line's text before the cursor, as typed ('> d-', '.qu', 'p').
  * @param {object} context
  *   - key: the owner's selectable key.
- *   - tree: the blueprint's lean node tree, or null when unknown.
+ *   - document: the document tree (source.getDocument(): the host
+ *     entity above its sections, so the page itself is an owner whose
+ *     descendants are everything on it), or null when unknown.
+ *   - map: the host's style map (the matcher's wear: a worn variant's
+ *     class is a document fact), or null.
  *   - parts: the owner's declared parts (partsForKey()).
  *   - partsFor: (type) => a type compound's declared parts, same shape.
  *   - presence: selector → bool DOM-presence facts for the owner's
@@ -814,12 +900,14 @@ const splitTyped = (typed) => {
  *   - closed: whether the guide's world is closed (propertiesClosed()).
  *   - tags: the declared base tag vocabulary ({tag: label}).
  *   - present: the owner's `_element.markup.tags` fact, or null.
- *   - types: the declared type compounds ({'pb-text': 'Text', …}, the
- *     kinds included): the label table, and the universe when the tree
- *     is unknown.
+ *   - types: the declared type compounds ({'d-text': 'Text', …}, the
+ *     kinds included): the label table, and the universe when the
+ *     document is unknown.
+ *   - conditions: the published condition table (guide.conditions,
+ *     name => {label, wrapper, axis}): the `:` lane's states.
  *
- * @return {?{options: Array<{selector: string, kind: string, name: string,
- *   label: ?string}>, create: ?string}}
+ * @return {?{options: Array<{selector?: string, insert?: string,
+ *   kind: string, name: string, label: ?string}>, create: ?string}}
  *   The offer, or null when the typed text is not a selector prefix.
  */
 export const selectorGestureOptions = (typed, context = {}) => {
@@ -827,10 +915,11 @@ export const selectorGestureOptions = (typed, context = {}) => {
   if (split === null) {
     return null;
   }
-  const { prefix, child, last, landing, box } = split;
+  const { prefix, child, last, landing, box, lane, partsOwner } = split;
   const {
     key = null,
-    tree = null,
+    document = null,
+    map = null,
     parts = [],
     partsFor = null,
     presence = null,
@@ -838,13 +927,13 @@ export const selectorGestureOptions = (typed, context = {}) => {
     tags = {},
     present = null,
     types = {},
+    conditions = {},
   } = context;
   const mint = (name) =>
     canonicalSelector([prefix, child ? '>' : '', name].filter(Boolean).join(' '));
   const options = [];
   const seen = new Set();
-  const offer = (kind, name, label) => {
-    const selector = mint(name);
+  const offer = (kind, name, label, selector = mint(name)) => {
     if (selector === null || seen.has(selector)) {
       return;
     }
@@ -853,35 +942,70 @@ export const selectorGestureOptions = (typed, context = {}) => {
   };
   const vocabulary = Array.isArray(tags) ? {} : (tags ?? {});
   const typeTable = types ?? {};
+  // The anchor is the owner: a qualified anchor landing reads as the
+  // owner's own position.
+  const atOwner = landing === null || landing.kind === ANCHOR_KIND;
+  const subject = prefix || ANCHOR;
 
   if (box) {
-    // The subject's boxes, the anchor spelling the owner's own.
-    PSEUDOS.forEach((pseudo) => {
-      const selector = canonicalSelector(`${prefix || ANCHOR}${SUFFIX}${pseudo}`);
-      if (selector !== null) {
-        options.push({ selector, kind: PSEUDO, name: pseudo, label: null });
-      }
+    // The subject's pseudo-elements, the anchor spelling the owner's own:
+    // the two generated boxes first, then the ones with a vocabulary of
+    // their own, then every other the browser knows (the wide tier; the
+    // completion filters by the typed tail). Whether this site admits one
+    // is the validator's verdict at the write.
+    [...GENERATED_BOXES, ...vocabularyPseudos(), ...widePseudoElements()].forEach((pseudo) => {
+      offer(PSEUDO, pseudo, null, canonicalSelector(`${subject}${SUFFIX}${pseudo}`));
     });
     return { options, create: null };
   }
 
-  if (last.startsWith('.')) {
-    const declared =
-      landing === null
-        ? (Array.isArray(parts) ? parts : []).filter(
-            (part) => presence?.[part.id] !== false,
-          )
-        : landing.kind === TYPE && typeof partsFor === 'function'
-          ? (partsFor(landing.name) ?? [])
+  if (lane === 'pseudo') {
+    const table = conditions !== null && typeof conditions === 'object' ? conditions : {};
+    Object.entries(table).forEach(([name, definition]) => {
+      const wrapper = definition?.wrapper;
+      if (typeof wrapper === 'string' && /^:[A-Za-z-]+$/.test(wrapper)) {
+        offer(STATE, name, definition?.label ?? name, canonicalSelector(`${subject}${wrapper}`));
+      }
+    });
+    POSITIONS.forEach((position) => {
+      offer(POSITION, position, null, canonicalSelector(`${subject}:${position}`));
+    });
+    [...NTH_POSITIONS, NOT, HAS, IS].forEach((name) => {
+      options.push({ insert: `${subject}:${name}(`, kind: QUALIFIER, name, label: null });
+    });
+    return { options, create: null };
+  }
+
+  if (lane === 'class' || lane === 'tag-class') {
+    const ownerParts = (Array.isArray(parts) ? parts : []).filter(
+      (part) => presence?.[part.id] !== false,
+    );
+    const typeParts = (type) =>
+      typeof partsFor === 'function' ? (partsFor(type) ?? []) : [];
+    // A class by descent is a part of the owner or of the type before
+    // it; glued to a tag it is a markup class, and the classes the
+    // completion can know are the declared parts of the owner the tag
+    // stands under (the grammar admits any class there).
+    const glued = lane === 'tag-class';
+    const declared = atOwner
+      ? ownerParts
+      : landing.kind === TYPE
+        ? typeParts(landing.name)
+        : glued
+          ? partsOwner === null
+            ? ownerParts
+            : typeParts(partsOwner)
           : [];
-    declared.forEach((part) => offer(CLASS_PART, part.id, part.label));
+    declared.forEach((part) =>
+      offer(CLASS_PART, part.id, part.label, glued ? canonicalSelector(`${prefix}${part.id}`) : mint(part.id)),
+    );
     const wellFormed = CLASS_PATTERN.test(last);
     const isDeclared =
-      landing === null
+      atOwner
         ? (Array.isArray(parts) ? parts : []).some((part) => part.id === last)
         : declared.some((part) => part.id === last);
     const create =
-      !closed && wellFormed && !isDeclared && (landing === null || landing.kind === TYPE)
+      !closed && wellFormed && !isDeclared && (atOwner || landing.kind === TYPE)
         ? mint(last)
         : null;
     return { options, create };
@@ -890,16 +1014,17 @@ export const selectorGestureOptions = (typed, context = {}) => {
   if (child) {
     offer(UNIVERSAL, '*', null);
   }
-  const matcher = tree === null || typeof key !== 'string' ? null : createMatcher(tree);
+  const matcher = document === null || typeof key !== 'string' ? null : createMatcher(document, map);
   if (matcher === null) {
     Object.entries(typeTable).forEach(([name, label]) => offer(TYPE, name, label));
     Object.entries(vocabulary).forEach(([tag, label]) => offer(TAG, tag, label));
   } else {
     // Descendants are the two kind families' matches merged back into
-    // document order (the tree walk), the owner itself never among them.
+    // document order (the document walk), the owner itself never among
+    // them, nor the entity root (nothing targets it from an owner).
     const nodes = child
       ? matcher.matching(key, prefix ? `${prefix} > *` : '> *')
-      : documentOrder(tree).filter(
+      : documentOrder(document).filter(
           (node) =>
             node !== key &&
             (matcher.matches(key, prefix ? `${prefix} ${TYPE_BLOCK}` : TYPE_BLOCK, node) ||
@@ -936,16 +1061,19 @@ export const selectorGestureOptions = (typed, context = {}) => {
  * Nests a selector line typed inside a rule island under the rule: CSS
  * nesting's relative rule, the substitution DialectCssParser::parseRule
  * makes before parsing a nested prelude. `&` is the rule's selector
- * (`&::before` under `p` is `p::before`, `& > a` is `p > a`); a line
- * without it is relative to the rule (`> a` is `p > a`, `.x` is `p .x`).
- * On the owner's own island there is no rule and the line is as typed:
- * the anchor stays the owner's own box, judged as today.
+ * (`&::before` under `p` is `p::before`, `& > a` is `p > a`, `&:hover`
+ * is `p:hover`); a line starting with `:` is `&:` sugar (`:hover` under
+ * `p` is `p:hover`, `::before` is `p::before`); any other line is
+ * relative to the rule (`> a` is `p > a`, `.x` is `p .x`); an `@`
+ * prelude names a condition and nests under nothing. On the owner's
+ * own island there is no rule and the line is as typed: the digester
+ * reads the anchor and the leading colon as the owner's own.
  *
  * Raw text, not a selector: the completion feeds a partial line through
- * here (`&::`, `> pb-`) and reads the offer off the composed position,
+ * here (`&::`, `> d-`) and reads the offer off the composed position,
  * so no grammar judges at this step; composeUnder() is the judged form.
  * One shape is refused before any substitution: the anchor glued to a
- * word (`&hover`, `&first-child`) is the condition sigil's line, never a
+ * word (`&hover`, `&narrow`) is the condition sigil's line, never a
  * selector, and substituting the rule into it would spell a tag
  * (`phover`) the grammar admits.
  *
@@ -966,39 +1094,65 @@ export const nestUnder = (rule, typed) => {
   if (typeof rule !== 'string' || rule === '') {
     return typed;
   }
-  return typed.includes(ANCHOR)
-    ? typed.replaceAll(ANCHOR, rule)
-    : `${rule} ${typed.trimStart()}`;
+  const text = typed.trimStart();
+  if (text.startsWith('@')) {
+    return typed;
+  }
+  if (text.startsWith(':')) {
+    return `${rule}${text}`;
+  }
+  return typed.includes(ANCHOR) ? typed.replaceAll(ANCHOR, rule) : `${rule} ${text}`;
 };
 
 /**
  * Composes a selector typed inside a rule island under the rule and
- * canonicalizes it: nestUnder() then the grammar's judgement, so the
- * result is the selector the island's gesture mints (`&::before` under
- * `p` mints `p::before`, `&::after` under `> pb-text .link` mints
- * `> pb-text .link::after`). The grammar's refusals are the owner's (a
- * partial tail, a box on a box: a rule island that is itself a box
- * takes no continuation), and `&` alone is refused on every island: on
- * the owner's it is outside the grammar, inside a rule island it
- * composes to the rule itself, the row the island already is, so there
- * is nothing to mint.
+ * digests it: nestUnder() then the digester's reading (selector-digest.js
+ * digest: the grammar's judgement, the peel of a state on the last
+ * compound into the row's condition, a list folded into one `:is()`
+ * rule), so the result is what the island's gesture mints: `&::before`
+ * under `p` mints `p::before`, `&::after` under `> d-text .link` mints
+ * `> d-text .link::after`, `a:hover` on the owner's island mints the
+ * `a` row under hover, `&:hover` (or `:hover`) mints the island's own
+ * hover row, `h1, h2` mints the one `*:is(h1, h2)` row (reported
+ * `folded`, so the host can say so once), and a published `@wrapper`
+ * prelude the island's row under that condition. The digester's
+ * refusals are the owner's (a partial tail, a box on a box, the sigil's
+ * shape, a list whose members disagree or share no shape), and the
+ * island's own row with no condition
+ * is nothing to mint: `&` alone on the owner's island, or `&` inside a
+ * rule island (it composes to the rule itself, the row the island
+ * already is).
  *
  * @param {?string} rule
  *   The island's rule selector, null or '' on the owner's own island.
  * @param {string} typed
  *   The line's text, as typed.
+ * @param {{conditions: ?Object, posable: ?string[]}} options
+ *   The digester's options (the guide's condition table).
  *
- * @return {?string}
- *   The composed canonical selector, or null when the grammar refuses it
- *   or it names the rule itself.
+ * @return {?{selector: string, condition: ?string, folded: boolean}}
+ *   The one canonical selector to mint ('' the owner itself, the rule's
+ *   own selector the island's own row; a typed list folded into its
+ *   `:is()` rule) under its condition (null when none) and whether a
+ *   list was folded, or null when the digester refuses the text or it
+ *   names the island's own row with no condition.
  */
-export const composeUnder = (rule, typed) => {
+export const composeUnder = (rule, typed, options = {}) => {
   const text = nestUnder(rule, typed);
-  if (text === null) {
+  if (text === null || text.trim() === '') {
     return null;
   }
-  const composed = canonicalSelector(text.trim());
-  return composed === rule ? null : composed;
+  const answer = digest(text.trim(), options);
+  if (answer.refusal !== null) {
+    return null;
+  }
+  const self = typeof rule === 'string' && rule !== '' ? rule : OWNER;
+  // A wrapper alone is the island's own row under the condition.
+  const selector = answer.selector ?? self;
+  if (selector === self && answer.condition === null) {
+    return null;
+  }
+  return { selector, condition: answer.condition, folded: answer.folded };
 };
 
 /**
@@ -1033,21 +1187,21 @@ export const nestedSpelling = (rule, typed, composed) => {
 };
 
 /**
- * The selector a typed `{` mints, or null when the brace is ordinary text.
+ * What a typed `{` mints, or null when the brace is ordinary text.
  *
- * Typing `p {` (or `> pb-text {`, `.quote {`, `> p + p {`,
- * `> pb-text:has(a) {`, `&::before {`, `.quote::after {`) at a
- * declaration position is the materialize gesture without the pick: the
- * brace lands only when the line before it is a whole selector in the
- * grammar and nothing follows the cursor; the caller swallows the typed
- * selector with the brace and mints the row, canonical (the grammar's
- * spelling). Inside a rule island the line composes under the rule
- * first (composeUnder: `&::before {` in the `p` island mints
- * `p::before`, `> a {` mints `p > a`). A line holding a colon outside
- * `:has(`, `:not(` or a terminal `::before` / `::after` is a
- * declaration, a partial token (`> pb-`, `&::`) or a dangling combinator
- * is not a selector, and a brace there stays text for the lint to name.
- * A minted box row is empty chrome until its first write, which the op
+ * Typing `p {` (or `> d-text {`, `.quote {`, `> p + p {`,
+ * `> d-text:has(a) {`, `&::before {`, `li:hover > ul {`, `a:hover {`,
+ * `h1, h2 {`) at a declaration position is the materialize gesture
+ * without the pick: the brace lands only when the digester reads the
+ * line before it (composeUnder: one grammar, the brace its gate) and
+ * nothing follows the cursor; the caller swallows the typed selector
+ * with the brace and mints the rows, canonical (the grammar's
+ * spelling), under the condition the digester peeled (`a:hover {` is the
+ * `a` row's hover island; `&:hover {` the island's own, the same row the
+ * `&hover` sigil's pick mints). A declaration (`color: red`), a partial
+ * token (`> d-`, `&::`), a dangling combinator or the sigil's shape is
+ * not a selector, and a brace there stays text for the lint to name. A
+ * minted box row is empty chrome until its first write, which the op
  * spine births with `content: ""`; the row then prints that line.
  *
  * @param {string} before
@@ -1056,22 +1210,74 @@ export const nestedSpelling = (rule, typed, composed) => {
  *   The line's text after the cursor.
  * @param {?string} rule
  *   The island's rule selector, null or '' on the owner's own island.
+ * @param {{conditions: ?Object, posable: ?string[]}} options
+ *   The digester's options (the guide's condition table).
  *
- * @return {?string}
- *   The canonical selector to mint.
+ * @return {?{selector: string, condition: ?string, folded: boolean}}
+ *   The canonical selector to mint under its condition, as
+ *   composeUnder() answers.
  */
-export const bracedSelector = (before, after, rule = null) => {
+export const bracedSelector = (before, after, rule = null, options = {}) => {
   if (typeof before !== 'string' || typeof after !== 'string') {
     return null;
   }
-  if (after.trim() !== '' || !SELECTOR_LINE.test(before)) {
+  if (after.trim() !== '') {
     return null;
   }
   const text = before.trim();
   if (text === '') {
     return null;
   }
-  return composeUnder(rule, text);
+  return composeUnder(rule, text, options);
+};
+
+/**
+ * The mint line's reach preview: what the canvas paints while a selector
+ * is being typed, before any brace or pick.
+ *
+ * As each token settles the line is read exactly as the brace would read
+ * it (nestUnder under the island's rule, then the digester), and the
+ * answer is the one selector's structural REACH (selector-digest.js
+ * reach: the posable state qualifiers stripped, since `li:hover > ul`
+ * matches nothing in the DOM until hovered, while positions, classes and
+ * attributes stay because the browser evaluates them live), canonical
+ * and ready for the hover-selector facet (`li:hover > ul` previews
+ * `li > ul`, `> d-text:hover a` previews `> d-text a`, `a:hover` previews
+ * the `a` row's reach `a`). Null while the text does not digest (a
+ * partial token, a dangling combinator, a declaration, the sigil's
+ * shape, a brace or semicolon on the line, an empty line), and for what
+ * the facet cannot paint as one selector: the owner itself (`&`,
+ * `&:hover`; the selected element already shows), a wrapper alone (a
+ * condition, no selector) and a reach with nothing addressable left. A
+ * typed list previews the reach of the one `:is()` rule it folds into
+ * (`h1, h2` previews `*:is(h1, h2)`). The caller hands a non-null
+ * answer to the facet on the island's owner and clears it on null; this
+ * is pure.
+ *
+ * @param {string} typed
+ *   The line's text, as typed.
+ * @param {{rule: ?string, conditions: ?Object, posable: ?string[]}} options
+ *   The island's rule selector (null or '' on the owner's own island)
+ *   and the digester's options (the guide's condition table).
+ *
+ * @return {?string}
+ *   The canonical reach to paint, or null.
+ */
+export const previewReach = (typed, options = {}) => {
+  if (typeof typed !== 'string' || /[{};]/.test(typed)) {
+    return null;
+  }
+  const { rule = null, ...digestOptions } = options;
+  const text = nestUnder(rule, typed);
+  if (text === null || text.trim() === '') {
+    return null;
+  }
+  const answer = digest(text.trim(), digestOptions);
+  if (answer.refusal !== null || answer.selector === null) {
+    return null;
+  }
+  const reached = reach(answer.selector, digestOptions);
+  return reached === null || reached === OWNER ? null : reached;
 };
 
 /**
@@ -1135,6 +1341,136 @@ export const partRemovalOps = (map, key) => {
     ops.push(...conditionRemovalOps(map, key, condition));
   });
   return ops;
+};
+
+/**
+ * Whether an object carries a key of its own (a plan's moves map is a
+ * plain object keyed by selectors, read without the prototype's words).
+ */
+const owns = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+
+/**
+ * The relative keys a rule move on one owner is planned over: the
+ * owner's stored keys (every map entry under `{owner}::`) and the drafted
+ * rows standing on it (a drafted part selector when the owner is the
+ * drafts' element, a drafted condition's row key). A draft is a row the
+ * designer can see, so a landing on one refuses like a landing on a
+ * stored key (the plan's collision rule); a draft keyed to the moved
+ * rule itself is a source the rename carries along.
+ */
+const ruleMoveKeys = (map, drafts, owner) => {
+  const prefix = `${owner}${SUFFIX}`;
+  const relatives = [];
+  const add = (relative) => {
+    if (!relatives.includes(relative)) {
+      relatives.push(relative);
+    }
+  };
+  const addKey = (key) => {
+    if (key.startsWith(prefix)) {
+      add(key.slice(prefix.length));
+    }
+  };
+  Object.keys(map ?? {}).forEach(addKey);
+  if (drafts?.for === owner) {
+    (drafts.parts ?? []).forEach(add);
+  }
+  Object.keys(drafts?.conditions ?? {}).forEach(addKey);
+  return relatives;
+};
+
+/**
+ * Plans a rule row's selector change in the element view: the one
+ * transformation (rule-move.js planRuleMove, the family following) over
+ * the owner's stored and drafted keys, and what the view sends for it.
+ *
+ * A row with something stored under the move (an entry at the rule's
+ * key or at any key continuing it, worn variants included: the op moves
+ * entries whole) sends ONE `move_style {key, to}` through the spine,
+ * where the handler plans the same family over the staged map and
+ * StyleMapValidator judges the landing at the one door. A row with
+ * nothing stored (a draft minted and never written, a seated rule the
+ * map lacks) sends nothing: its rename is the view's alone
+ * (renameDrafts, the spine's re-seat), and a row that is neither (a
+ * variant-supplied row) is the view's to refuse honestly, the × rule.
+ *
+ * @param {object} map
+ *   The style map.
+ * @param {?{for: string, conditions: object, parts: string[]}} drafts
+ *   The view's drafts (`for` the element the part drafts belong to).
+ * @param {string} owner
+ *   The rule's owner key (the selection for a part row, the ancestor for
+ *   a rule row).
+ * @param {string} from
+ *   The row's selector.
+ * @param {string} to
+ *   The selector it becomes (the editor's canonical `to`).
+ *
+ * @return {{refusal: ?{reason: string, key: string},
+ *   moves: ?Object<string, string>, operations: Array<object>}}
+ *   The plan's refusal (rule-move.js REFUSED_*; `moves` null, no ops),
+ *   or the family's key mapping (relative to relative, the rule's own
+ *   first) and zero or one move_style op.
+ */
+export const ruleMovePlan = (map, drafts, owner, from, to) => {
+  const plan = planRuleMove(ruleMoveKeys(map, drafts, owner), from, to);
+  if (plan.refusal !== null) {
+    return { refusal: plan.refusal, moves: null, operations: [] };
+  }
+  const rule = canonicalSelector(from);
+  const stored = Object.keys(plan.moves).some((relative) =>
+    isEntryObject(map?.[`${owner}${SUFFIX}${relative}`]),
+  );
+  return {
+    refusal: null,
+    moves: plan.moves,
+    operations: stored
+      ? [{ op: 'move_style', key: `${owner}${SUFFIX}${rule}`, to: plan.moves[rule] }]
+      : [],
+  };
+};
+
+/**
+ * Renames the drafts a rule move carries: a drafted part selector the
+ * move maps (when the owner is the drafts' element), a drafted
+ * condition's row key under the owner, and the focus standing on one of
+ * them, each to its landing. Drafts under other owners and selectors the
+ * move leaves alone stay as they were. Pure: the view sets the result as
+ * its gesture state.
+ *
+ * @param {{for: string, conditions: object, parts: string[], focus: ?string}} drafts
+ *   The view's drafts.
+ * @param {string} owner
+ *   The moved rule's owner key.
+ * @param {Object<string, string>} moves
+ *   ruleMovePlan()'s moves (relative source to relative landing).
+ *
+ * @return {{for: string, conditions: object, parts: string[], focus: ?string}}
+ */
+export const renameDrafts = (drafts, owner, moves) => {
+  const prefix = `${owner}${SUFFIX}`;
+  const rekey = (key) => {
+    if (typeof key !== 'string' || !key.startsWith(prefix)) {
+      return key;
+    }
+    const relative = key.slice(prefix.length);
+    return owns(moves, relative) ? `${prefix}${moves[relative]}` : key;
+  };
+  const conditions = Object.fromEntries(
+    Object.entries(drafts.conditions ?? {}).map(([key, names]) => [rekey(key), names]),
+  );
+  const parts =
+    drafts.for === owner
+      ? (drafts.parts ?? []).map((selector) =>
+          owns(moves, selector) ? moves[selector] : selector,
+        )
+      : drafts.parts;
+  let { focus } = drafts;
+  if (typeof focus === 'string') {
+    const at = focus.lastIndexOf('|');
+    focus = at === -1 ? rekey(focus) : `${rekey(focus.slice(0, at))}${focus.slice(at)}`;
+  }
+  return { ...drafts, conditions, parts, focus };
 };
 
 /**

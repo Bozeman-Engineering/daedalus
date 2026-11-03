@@ -1,3 +1,7 @@
 enabled_agents: []
-max_history_messages: 100
-keep_recent_turns: 5
+cache_ttl: 5m
+segment_budget_tokens: 80000
+segment_budget_minimum_tokens: 50000
+segment_budget_overrides: []
+segment_headroom_tokens: 32000
+reframe_minimum_tokens: 25000

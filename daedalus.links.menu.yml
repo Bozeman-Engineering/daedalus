@@ -1,0 +1,32 @@
+# The Daedalus config category and its three sub-categories. A settings form
+# joins the door by naming one of the sub-categories as its menu link's
+# parent; a form listed elsewhere too (drupal/ai's menu, Appearance) carries
+# a second link with a different id and the same route_name, and SETTINGS.md
+# at the repo root names both doors. Core's overview controller shows a
+# sub-category only once it lists a link the actor may reach.
+daedalus.admin_config:
+  title: Daedalus
+  description: "The page builder's settings: its AI, the editor's chrome and content types, and styling."
+  parent: system.admin_config
+  route_name: daedalus.admin_config
+
+daedalus.admin_config_ai:
+  title: AI
+  description: 'The AI chat: its assistant and models, what it may create and remember, and what it costs.'
+  parent: daedalus.admin_config
+  route_name: daedalus.admin_config_ai
+  weight: -10
+
+daedalus.admin_config_ui:
+  title: UI
+  description: "The editor's chrome, which content types open in the page builder, and the saved blueprints."
+  parent: daedalus.admin_config
+  route_name: daedalus.admin_config_ui
+  weight: -5
+
+daedalus.admin_config_styling:
+  title: Styling
+  description: 'How styling meets the theme and the AI: skins, design systems, the cascade layer.'
+  parent: daedalus.admin_config
+  route_name: daedalus.admin_config_styling
+  weight: 0

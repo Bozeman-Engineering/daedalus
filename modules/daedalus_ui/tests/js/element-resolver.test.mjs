@@ -161,7 +161,7 @@ const CONTAINER_DECLARATION = {
   },
 };
 
-test('depth is a root-form condition: section as a page band, div nested', () => {
+test('depth is a root-form condition: section at page depth, div nested', () => {
   assert.equal(resolveElement(CONTAINER_DECLARATION, { empty: false }).tag, 'section');
   assert.equal(resolveElement(CONTAINER_DECLARATION, { empty: false }, DEPTH_NESTED).tag, 'div');
 });

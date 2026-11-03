@@ -1,46 +1,59 @@
 label: 'Design'
-description: 'TRIGGER when: about to design, build, restyle or rework a page (or any entity with a layout), plan or add a page section, or change a page''s structure, flow, or overall look. Carries the page design doctrine (think and commit, the two postures, distinctiveness inside the design system, the composition principles, the generic page to avoid), the generation workflow and the few recipes that need a worked example. Also re-invoke it in a long conversation before returning to page work.'
+description: 'TRIGGER when: about to create a new page, or to design, build, restyle or rework a page (or any entity with a layout), plan or add a page section, or change a page''s structure, flow, or overall look. Carries the page design doctrine (think and commit, the creative stance, the composition principles, the template test), the generation workflow and the few recipes that need a worked example. Also re-invoke it in a long conversation before returning to page work.'
 type: default
-# Invoking this skill is a blocking step of the create-entity workflow.
-# CreateEntitySkillType (daedalus_blueprint) renders every discovered skill
-# that declares a step here into its BLOCKING REQUIREMENT checklist. The
-# key is a map of workflow id to the checklist step text.
-#
-# The one page skill: a thinking step, the two postures, distinctiveness
-# inside the system, composition principles, the anti-patterns and the
-# workflow. It carries no section recipe and no page shape: the shape
+# The one page skill: a thinking step, the creative stance, composition
+# principles, the template test and the workflow. It carries no section recipe and no page shape: the shape
 # of a page is decided fresh per page from its subject, so nothing here
 # repeats page to page. It names no material and restates no grammar:
 # the design system brief in the cached instructions carries the
-# system's identity, its axes with their descriptions, its looks, its
-# blueprints and named values; the Page language section carries every
-# write mechanic (ops, selectors, wrappers, class wear, blueprint
-# placement, the motion trigger pair); the schema carries the entity's
-# fields, the full material descriptions and every blueprint printed as
-# a fragment. A fact about one material lives on its record, never here.
+# system's identity and every material with its whole description (its
+# axes and their values, its looks, its named values, animations and
+# fonts, the bindings and deviations) and its blueprints as a menu; the
+# Page language section carries every write mechanic (ops, selectors,
+# wrappers, class wear, blueprint placement, the motion trigger pair);
+# the schema carries the entity's fields and what composing reads on
+# demand: the site's favorite blueprints printed in full as fragments,
+# the rest by group, the animations' steps and the fonts' faces. A fact
+# about one material lives on its
+# record, never here. It restates no workflow rule either: the loop
+# (a matching skill before anything else, plan then wait for the
+# go-ahead, one atomic batch with structure and styling together,
+# targeted edits, save discipline) is
+# the cached Workflow section's alone; the PLAN step here ends at
+# presenting the plan, and the Workflow decides when the build waits.
 # Type and color are the design system's business (the identity, the
 # skin, the tokens), so the doctrine says nothing about them.
-blocking_step_of:
-  create_entity: 'Invoke the design skill (eb_skill design) and hold to it: it carries the design doctrine (think and commit, the two postures, distinctiveness inside the design system, the composition principles, the generic page to avoid) and the generation workflow your plan and your build must follow.'
+#
+# This is also the skill a new page needs, and two things below serve
+# that on purpose; no later edit thins them.
+# 1. The description's first words name creating a new page, so a cold
+#    create (the model standing on an empty page, asked to make one)
+#    matches this skill from the catalog line alone. The page bundles a
+#    new page can be ride the PAGES line of the cached Page language
+#    section, never here.
+# 2. `reframe: true` together with the sentence under "Think, then
+#    commit" that the current page is where the user is standing, not a
+#    model for a new one. The precedent problem: a model used to a run
+#    of tiny edits produces a tiny page, shaped by the page it has been
+#    editing. Invoking this skill reframes the work (the description
+#    asks for it again before returning to page work in a long
+#    conversation): the context spine closes the working transcript's
+#    segment on it once the segment is past its minimum size, so this
+#    doctrine sits near the request instead of under the conversation's
+#    bulk, and the sentence tells the model what the page in front of it
+#    is not.
+reframe: true
 instructions: |
-  This skill is process and taste: how to design a page that reads as one
-  designed thing instead of an assembly of parts. The FACTS live
-  elsewhere and win on conflict: the design system brief in your
-  instructions carries the system you design inside (its identity, its
-  axes and what each value is for, its saved looks, its blueprints and
-  named values), the Page language section carries every write mechanic,
-  and the schema (eb_read_schema) carries the block catalog with each
-  type's anatomy and field guidance, the entity's fields, the materials
-  in full and every blueprint printed as a fragment. This doctrine names
-  no block types and no materials on purpose, and it carries no section
-  recipe: the brief and the catalog say what exists on this site, and
-  what THIS page is made of is decided fresh from its subject.
+  This skill is process and taste: how to design a page that reads as
+  one designed thing instead of an assembly of parts. The facts live
+  elsewhere and win on conflict: the design system brief and the Page
+  language section in your instructions, and the schema (eb_read_schema).
 
   ## Think, then commit
   Before you touch structure, answer five questions in a sentence each:
   what is the subject; who arrives at this page and in what state; what
-  is the ONE job the page must do (a page people come to for outages
-  opens on status, not on a mission statement); what should someone
+  is the ONE job the page must do (a pricing page opens on the prices,
+  not on a mission statement); what should someone
   remember an hour later, the one thing; and which direction you commit
   to for the whole page. Commit to one direction and let it decide
   everything after it: what opens the page, how much the page says,
@@ -48,89 +61,43 @@ instructions: |
   like. Two directions blended, or none chosen, is how a page turns into
   a template. The current page in your context is where the user is
   standing, not a model for a new one: plan a new page from its own
-  subject and job, never from that page's bands.
+  subject and job, never from that page's sections.
 
-  ## The two postures: on brand and workshopping
-  Every design session runs in one of two postures. The posture is the
-  user's call, declared by their intent in the conversation, never read
-  from site config (validation governs what SAVES, not what you
-  should design). Default to on brand; workshop only when the user asks
-  to explore, experiment, or step outside the brand ("workshop
-  something", "try a different direction", "ignore the materials"). If
-  a whole-page request is genuinely ambiguous between them, ask.
-
-  - ON BRAND (the default): the design system is the design, and on
-    brand is a boundary, not a look to copy. A page is on brand when it
-    is a legal arrangement of the system's materials; inside that
-    boundary you have full creative liberty, and the wow comes from what
-    you arrange, not from restyling the brushes. Spend your thinking on
-    an arrangement that fits THIS subject. A page that could be any
-    other page on the site with the copy swapped is a template, not a
-    design; a page that reads as the system's character applied to its
-    own subject is the goal. Propose promoting anything genuinely new
-    rather than minting it.
-  - WORKSHOPPING: the user wants a distinctive take, so the materials
-    are reference, not boundary, and new styling is on the table. Commit
-    to one direction and take ONE real aesthetic risk you can justify;
-    spend that boldness in the page's signature element, the one thing
-    this page will be remembered by, and keep everything around it
-    quiet and disciplined. Before building, critique the plan: work out
-    what you would produce for ANY similar brief, and revise every part
-    of your plan that matches it. Workshopped styling still stays on
-    this page; when a result earns keeping, graduate it deliberately
-    (propose the variant, token, or skin change) and let the user decide
-    what joins the brand.
-
-  ## Distinctive inside the system
-  The system is not a template. The same brushes make many different
-  pages, and the difference is arrangement: what the page leads with,
-  how much room each part takes, where the one picture sits, what is
-  spare and what is dense, what stands alone and what clusters. Every
-  axis offers its values so you can pick the ones this page needs and
-  leave the rest; a material is a choice, never a checklist.
-  Blueprints are the system's pre-approved blocks and its worked
-  examples, never anchors. Per page, decide for each one: fill it with
-  this page's content when it fits, build beside it in the same spirit,
-  or skip it for a better idea. Hand-rolled work from the same materials
-  is as on brand as a placement, and it is where a page gets its own
-  shape. Save a section as a blueprint (save_material with kind
-  blueprint, a page_edit op) only when the user asks; never volunteer
-  it. A saved blueprint is a page of its own: when the user asks to
-  change the blueprint itself (not one placement), edit it with the page
-  tools as entity_type blueprint, and compose a new one from scratch
-  with page_create the way you would a page.
-  Materials first: wear a saved look when one expresses the intent,
-  compose from the named values next, write raw values last. Before
-  overriding a value on an element that wears a look, read the element's
-  stack with explain_element_styles, so the override is judged against
-  the layer it shadows. Novel styling stays on this page;
-  propose promoting it to the materials rather than minting silently.
+  ## Spend it on the page
+  The brand is already in your hands: the brief, the skin and the law
+  carry the identity, and whatever saves belongs to the brand by
+  construction. So spend nothing on restraint and everything on the
+  page. A material is a shortcut, never a limit: when no blueprint or
+  look says what a section must do, build it without hesitation from
+  containers, text, images and styles, in whatever arrangement and
+  nesting the content wants. Invent in structure, arrangement and
+  selection; the values are the brief's.
 
   ## Composition
   Principles, not moves: there is no list of sections to pick from.
   - Hierarchy: one thing dominates the page and one thing dominates
-    each band. Decide what the eye lands on first, second, third, and
+    each section. Decide what the eye lands on first, second, third, and
     give the rest less: less room, less weight, less copy. Keep the
     outline clean: at most one h1 (the page's headline, when the page
     owns it), h2 for sections, h3 within them, never skipping levels.
   - Rhythm: vary the shape and the density down the page. A wide
-    spacious band, then a tight dense one, then a single line, then
-    Columns reads as rhythm; three same-shaped bands back to back read
+    spacious section, then a tight dense one, then a single line, then
+    Columns reads as rhythm; three same-shaped sections back to back read
     as a template. Arrangement is styling: stacked containers for
     reading and for statements, Columns for parallel things, a Row for
     a line of items that keep their own size, nesting to group what
-    must read and move as one, no deeper than the content needs. Air between bands is the page's Layout gap, set once on the
-    page and never as a band's margin; air inside a band is that band's
-    own padding.
-  - Contrast: put the emphasis in one place per band. Not everything
-    can be big, not every item can be a card, not every band needs a
+    must read and move as one, no deeper than the content needs. Air between sections is the page's Layout gap, set once on the
+    page and never as a section's margin; air inside a section is that
+    section's own padding.
+  - Contrast: put the emphasis in one place per section. Not everything
+    can be big, not every item can be a card, not every section needs a
     heading and a button. Negative space is a material; so is density.
   - One signature: name the one section that could only exist for this
     page and build the page around it; everything else supports it.
     Motion is seasoning: where the brief lists animations, give the
-    page's one signature move an entrance (the opening band arriving)
+    page's one signature move an entrance (the opening section arriving)
     and leave the rest still; never animate every section, never body
-    copy, and never loop motion beside reading. Reduced motion is the
+    copy, and never loop motion next to reading. Reduced motion is the
     worn stop's own business, not a reason to hold back.
   - Copy and images are design material, not filler. Copy is specific
     to the subject, concrete over clever, the reader's vocabulary over
@@ -141,60 +108,77 @@ instructions: |
   - One purpose per section. More focused sections beat fewer
     overloaded ones.
 
-  ## The generic page
-  This is what you would produce for any brief, and it is what to
-  revise out of your plan. A hero, then a grid of equal cards, then a
-  call to action: the silhouette every generated page shares. Cards of
-  the same size for things of different importance. Every band the same
-  shape: a heading, a paragraph, three items. A section that exists
-  because pages usually have one, not because this page needs it. Copy
-  that could introduce any organization ("Welcome to our site", "We are
-  passionate about"). A blueprint with the sample copy swapped and
-  nothing else changed. Emphasis spread evenly so nothing leads. If your plan
-  matches any of these, that part was a formula, not a decision; decide
-  it again from the subject.
+  ## The template test
+  Left to habit, every generated page is the same page: a hero, three
+  equal items, a closing call to action, each section a heading, a
+  paragraph and three things, copy that would introduce any
+  organization. On this site the habit has a specific engine: the brief
+  lists jobs, the blueprint menu describes a section per job, and a
+  plan that answers each job with the blueprint whose description names
+  it is
+  the menu laid out in order, not a page designed. A placement is right
+  where a blueprint's job is this page's job; it is the template when every
+  section is one and nothing else was decided. So before presenting a
+  plan, test it: swap in a different subject and keep whatever still
+  fits. Everything that survived the swap was never a decision about
+  this page. Decide those parts again from this subject and its one
+  job. The test is about choosing, not about shapes: a plan that avoids
+  cards by reflex is as unchosen as one that reaches for them.
 
   ## The generation workflow
   One loop, whether creating a page or reworking one:
   1. READ. The current page already rides every turn as its
      page-language print, and your instructions carry the design system
-     brief and the element vocabulary. eb_read_schema adds what those do
-     not carry (the entity's fields, the block catalog's anatomy and
-     field guidance, every material's full description, every blueprint
-     in full): read it before designing a NEW page.
+     brief. Read the schema (eb_read_schema) before designing a NEW
+     page.
   2. SKILLS. Invoke the skins skill only if you are about to change
      site-wide vocabulary (a token, a skin, the site's element
      defaults); composition and styling need no other skill, their
      mechanics are cached.
   3. PLAN. Think, then commit (above): the subject, its audience, the
      page's single job, the one thing to remember, the direction. Then
-     name the one section that could only exist for this page, sketch
-     the sequence of bands in the order the job wants them, and name
-     what each will wear from the brief (which axis values, which
-     looks, which blueprints filled, built beside, or placed as is). In
-     the workshopping posture, critique the plan before building (see
-     the postures). When the workflow requires approval (creating a
-     whole entity), present this plan and wait.
-  4. COMPOSE AND STYLE IN ONE MOTION. Never build bare structure to
-     style later. A NEW page is ONE page_create document: the full
-     nested layout with its styles inline (style="" on the elements, a
-     trailing <style> block for conditions and parts). A new section or
-     block on an EXISTING page is ONE atomic page_edit batch: insert
-     fragments carrying their styles, with sibling style/set ops in the
-     same batch. EDITS to what exists are targeted ops, never rebuilds.
+     name the one section that could only exist for this page,
+     sketch the sequence of sections in the order the job wants them, and
+     for each section say whether it is a placement (which blueprint) or
+     new, and what it will wear from the brief (which axis values,
+     which looks). Run the template test (above) on it and revise what
+     fails. Then present this plan.
+  4. COMPOSE AND STYLE IN ONE MOTION.
+     A section the plan called a placement is written as that
+     blueprint's printed fragment with your content and blueprint="id"
+     on its root: the stamp is what makes it a placement, and a copy
+     without it is a hand-rolled section the site cannot tell apart
+     from one you invented.
      Style a container's children with a selector on the container (one
-     `#band > * { ... }` rule reaches every child in it, now and later;
+     `#section > * { ... }` rule reaches every child in it, now and later;
      a type or tag after the `>` narrows it to one kind), never by
      copying the look onto each child: three identical style="" values
      are three places to drift. A relation narrows the set further
      (`+`, `~`, `:has()`, `:not()`: the child right after another, the
      children that contain a link, every child but one kind), and a
-     position fact (`:not(:last-child)`) is a pseudo-class on the last
-     compound, after the qualifiers.
+     position pseudo-class (`:first-child`, `:not(:last-child)`,
+     `:nth-child(2n+1)`) qualifies the compound it stands on, like
+     `:has()` and `:not()`: it is selector text, never a state. So do
+     a class (`#section.open > *` the children while the section wears
+     a class, `#section > *.active` a child wearing one) and an
+     attribute (`#section [aria-expanded="true"] > *`,
+     `#section > *[aria-current="page"]`): the selector grammar is
+     CSS's, and the site decides what it admits. A state qualifies too
+     when it stands on a compound before the last (`#section:hover > *`
+     the children while the section is hovered, `#section > *:hover a`
+     the links inside a hovered child: the reveal patterns), and on the
+     last compound it is the rule's condition (`#section > *:hover`).
+     A selector list is one block for every member
+     (`#section h2, #section h3 { ... }`), read back as the one rule it
+     is, `#section *:is(h2, h3)`: alternatives at one compound are
+     `:is()` (`#section > *:is(p, h2)` either kind of child,
+     `#section:is(:hover, :focus-within) > *` the children while the
+     section is hovered or holds focus), and a list whose members differ
+     at more than one compound is separate rules.
      A generated box is one more address, never a decorative element
      in the markup: a selector ending in `::before` or `::after` styles
      the box of what it addresses (`#hero::after` the element's own,
-     `#band > *::before` each child's), a state before it
+     `#section > *::before` each child's), a state before it
      (`#cta:hover::after`). The box is born with `content: ""`, the
      line that makes it exist; `content` takes `""`, `none` or one
      media reference (`url('media:<uuid>')`, the image at its own size;
@@ -209,15 +193,16 @@ instructions: |
      runs out of room; Columns hands every child an equal share of the
      line and stacks on narrow pages. Row is for items that keep their
      own size (a line of buttons, a logo strip, a tag list, a label
-     beside a control); Columns is for content that shares the width
-     (two halves of copy, a card grid). There is no display upgrade,
-     so never write a display on a container.
+     next to a control); Columns is for content that shares the width
+     (two halves of copy, a card grid). Never write `display` or
+     `flex-direction` to arrange a container's children; the layout
+     axis does that.
      Centering is the one recipe worth spelling: the container arranges
      its contents and is one box, so the write lands on the container
      itself. `#hero { align-items: center }` centers a stack's children
      horizontally, `justify-content: center` plus a min-height centers
      them vertically, `margin-top: auto` on one child pins it to the
-     band's bottom (auto margins are a stack's per-child vertical
+     section's bottom (auto margins are a stack's per-child vertical
      placement); on a Row, `justify-content` places the items along the
      line (`space-between` spreads them to both edges) and
      `align-items` aligns them across it; on a Columns container,

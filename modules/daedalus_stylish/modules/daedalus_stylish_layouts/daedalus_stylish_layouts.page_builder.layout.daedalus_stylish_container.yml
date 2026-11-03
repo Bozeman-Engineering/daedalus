@@ -19,7 +19,7 @@
 # authorable.
 #
 # The width default is the token-referencing Site width variant, so new
-# page bands share the skin's one content-width number with the header and
+# sections share the skin's one content-width number with the header and
 # footer by construction; the axis is root-only (see the universal
 # declaration), so nested containers are never defaulted a width. The
 # container_layout axis has NO birth default: a new container at any

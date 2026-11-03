@@ -43,6 +43,7 @@ class StyleGuideControlsTest extends KernelTestBase {
   protected static $modules = [
     'system',
     'daedalus_blueprint',
+    'filter',
     'user',
     'field',
     'layout_discovery',
@@ -67,6 +68,10 @@ class StyleGuideControlsTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
+    // Importing daedalus_stylish's config saves its settings, a law change
+    // that recompiles the variants file over these storages.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->styleGuide = $this->container->get('daedalus_stylish.style_guide');
   }

@@ -25,9 +25,9 @@
  * styles all apply server-side. The client-minted uuid names the ROOT
  * element. A detached blueprint is a section drop (its roots are
  * containers): the location IS add_section's one placement grammar, so
- * the same blueprint lands as a top-level band or nested into any region
+ * the same blueprint lands as a section or nested into any region
  * with no client-side wrapping; which gaps are OFFERED is the source's
- * acceptsTarget (a band, top level only). A LINKED placement
+ * acceptsTarget (a section, top level only). A LINKED placement
  * (`data.linked`) is the same op with `mode: 'linked'`: one block node
  * showing the saved blueprint by reference, so it is a block drop (the
  * uuid names that block) and lands where a block lands.

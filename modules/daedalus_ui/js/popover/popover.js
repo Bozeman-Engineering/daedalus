@@ -2,7 +2,7 @@
  * @file
  * The shared floating-surface primitive (Drupal.Daedalus.popover).
  *
- * The one floating surface every pop-up in the chrome rides: menus, swatch
+ * The one floating surface every pop-up in the chrome rides: menus, token
  * and choice wells, color fields, pickers. The surface owns where a
  * pop-up lands and how it leaves; what shows inside is the rider's. Any
  * chrome library declares daedalus_ui/popover as a dependency and

@@ -23,15 +23,15 @@ import { widgetClasses } from '../lib/widget-classes.js';
 import { Mark } from '../lib/mark.js';
 
 /**
- * text_color: one swatch well over the color + text-gradient recipe trio
+ * text_color: one token well over the color + text-gradient recipe trio
  * (color, background-image, background-clip).
  *
  * The color half is the shared color well (lib/color-well.js
  * useColorWell) over `color`: its stops, face, color lane and mint row
  * are the well's own anatomy, and every write it produces (a grid pick,
  * a settled picker literal, a minted reference) comes back through one
- * pick door, mapped here by textPick over the trio. Gradient-kind
- * swatches offer AFTER the color stops, gated on background-image's OWN
+ * pick door, mapped here by textPick over the trio. Gradient-scale
+ * tokens offer AFTER the color stops, gated on background-image's OWN
  * constraints (gradientStops), and the well tells the mapping which
  * table a pick came from.
  *
@@ -51,9 +51,9 @@ import { Mark } from '../lib/mark.js';
  * GradientBuilder for custom authoring (its commits become the
  * 3-property recipe batch, previews painting the whole recipe so the
  * canvas answers mid-drag) or, when background-image holds exactly one
- * gradient-swatch var(), the edit-in-place swatch session. Custom
+ * gradient-token var(), the edit-in-place token session. Custom
  * authoring hides while background-image's value space is closed
- * (spaceClosed) unless that committed swatch reference makes the session
+ * (spaceClosed) unless that committed token reference makes the session
  * the offer.
  *
  * The row is the ordinary basic row: the leading mark (lib/mark.js
@@ -86,12 +86,13 @@ const TextColor = ({
   model,
   guide,
   materials,
-  swatches,
+  skinMaterials,
   source,
   onPreview,
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
 }) => {
   const { values, invalid, stage, pick } = useGesture(
     model.home.key,
@@ -127,7 +128,7 @@ const TextColor = ({
     value: image,
     constraints: model.constraints?.['background-image'] ?? null,
     source,
-    canMint: Boolean(swatches?.canCreate),
+    canMint: Boolean(skinMaterials?.canCreate),
     // The optimistic paint covers the WHOLE gesture: a gradient behind
     // opaque text previews as nothing like the commit, so the recipe's
     // three properties stage together per builder input.
@@ -143,7 +144,7 @@ const TextColor = ({
   const gradientOffered =
     !disabled &&
     (!spaceClosed(guide, model.constraints?.['background-image'] ?? null) ||
-      gradient.swatch !== null);
+      gradient.token !== null);
   // The row's origin (the mark's hue and story) over the color half.
   const origin = originFor({
     guide,
@@ -154,6 +155,7 @@ const TextColor = ({
     read: model.reads.color,
     blockTypes: source.getBlockTypes?.() ?? {},
     sectionLayouts: source.getSectionLayouts?.() ?? {},
+    law,
   });
   // The lit half the Unset gesture would remove: the gradient recipe
   // while one is lit, the color otherwise.
@@ -194,7 +196,7 @@ const TextColor = ({
     stops: imageStops,
     onPick: choose,
     lanes: gradientOffered ? [gradient.lane] : [],
-    canMint: Boolean(swatches?.canCreate),
+    canMint: Boolean(skinMaterials?.canCreate),
     source,
     disabled,
     disabledTitle,

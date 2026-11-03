@@ -1,0 +1,7 @@
+daedalus_ai_upstream.settings:
+  path: '/admin/config/ai/daedalus-upstream'
+  defaults:
+    _form: '\Drupal\daedalus_ai_upstream\Form\SettingsForm'
+    _title: 'Daedalus AI Upstream'
+  requirements:
+    _permission: 'administer ai providers'

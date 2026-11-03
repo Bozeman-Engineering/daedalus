@@ -15,14 +15,14 @@ import { useMintRow } from '../../mint-row.js';
  * over the property's value space.
  *
  * Replaces the advanced color row's native picker + text + six-digit
- * hex regex, the `{}` select, and the color swatch kind's face-as-picker
+ * hex regex, the `{}` select, and the palette's color face-as-picker
  * editor with ONE anatomy the value space shapes:
  * - The select of stops: a face trigger wearing the current value
  *   (colorFace: the worn stop's paint pair, a rostered reference's, a
  *   literal's own paint, the slashed empty face, the raw spelling for a
  *   reference no roster knows) that opens the shared palette popover
  *   over the space's stops as faces (gridEntries; usePalettePopover, the
- *   swatch well's chrome). A pick commits the stop's reference spelling;
+ *   token well's chrome). A pick commits the stop's reference spelling;
  *   the lit stop's pick unsets (the Segments contract) where the
  *   consumer allows it.
  * - The color lane, an OPEN space's literal path: the popover's lane
@@ -36,10 +36,10 @@ import { useMintRow } from '../../mint-row.js';
  *   the spelling of a literal; typing previews per input event and the
  *   settle (blur, Enter) runs the literal settle rule
  *   (color-field-model.js literalSettle: magnetic capture on a detented
- *   space, since typing a swatch's hex IS reaching the swatch; an
+ *   space, since typing a token's hex IS reaching the token; an
  *   emptied field settles '' for unset). An untouched blur never
  *   rewrites provenance.
- * - Save as swatch, the popover's mint row (mint-row.js useMintRow)
+ * - Save as token, the popover's mint row (mint-row.js useMintRow)
  *   when the gate allows and the value is a literal color on an open
  *   space (mintOffered): the site-wide mint through the material op, its
  *   landed record referenced by this value from then on.
@@ -50,7 +50,7 @@ import { useMintRow } from '../../mint-row.js';
  * A hook plus a component: the advanced row places the inline cluster
  * (face | text) on its line and the popover floats under the face (two
  * slots, one preact subtree each, the gradient-chip reason), while the
- * swatch editor stacks both (ColorField). Pure client over the roster and the
+ * palette's editor stacks both (ColorField). Pure client over the roster and the
  * handlers, so it renders in the satellite unchanged.
  *
  * @param {object} options
@@ -59,7 +59,7 @@ import { useMintRow } from '../../mint-row.js';
  *   (a row of another shape; the hooks still run, unconditionally).
  * @param {string} options.value
  *   The authoritative value (the advanced row's lit winner whichever
- *   layer delivers it, the swatch editor's own value, a draft-layered
+ *   layer delivers it, the palette editor's own value, a draft-layered
  *   value); the field layers its own typing over it until it changes
  *   and faces it like any other (colorFace: a variant's or the skin's
  *   colour paints the well exactly as an own one does; the row's mark
@@ -76,9 +76,9 @@ import { useMintRow } from '../../mint-row.js';
  *   The row's rejected-commit state.
  * @param {boolean} [options.unsettable]
  *   Whether the lit stop's pick unsets (false for an editor whose value
- *   must never be empty: the swatch kind's).
+ *   must never be empty: the palette's token editor).
  * @param {boolean} [options.canMint]
- *   The save-as-swatch grant (honest chrome; the op enforces).
+ *   The save-as-token grant (honest chrome; the op enforces).
  * @param {?object} [options.source]
  *   The state source (the mint commits through its batch commit; required
  *   with canMint).
@@ -297,7 +297,7 @@ export const useColorField = ({
 /**
  * The color field as one stacked component: the inline cluster, with
  * the popover floating under it (the grid, the color lane, the mint
- * row). For the swatch kind's editor, where both slots stack anyway.
+ * row). For the palette's token editor, where both slots stack anyway.
  *
  * @param {object} props
  *   useColorField's options.

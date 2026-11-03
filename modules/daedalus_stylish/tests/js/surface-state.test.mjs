@@ -10,7 +10,10 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 import {
+  CATALOG_SECTIONS,
+  DEFAULT_CATALOG_SECTION,
   PLACES,
+  catalogSectionsFor,
   normalizePlace,
   reanchorSession,
   selectionMove,
@@ -21,6 +24,20 @@ import { skinSession, stageLine, updateSession, saveSession } from '../../js/src
 
 test('the vocabulary is the styling place and the materials catalog', () => {
   assert.deepEqual(PLACES, ['styles', 'materials']);
+});
+
+test('the Design system place has two tabs of data and the gated Law tab, the skin first', () => {
+  assert.deepEqual(CATALOG_SECTIONS, ['skin', 'variants', 'law']);
+  assert.equal(DEFAULT_CATALOG_SECTION, 'skin');
+  // The retired tabs the Skin tab folded are out of the vocabulary.
+  for (const retired of ['palette', 'animations', 'fonts']) {
+    assert.equal(CATALOG_SECTIONS.includes(retired), false, retired);
+  }
+  // The Law tab is offered under its gate alone, strictly.
+  assert.deepEqual(catalogSectionsFor(true), ['skin', 'variants', 'law']);
+  assert.deepEqual(catalogSectionsFor(false), ['skin', 'variants']);
+  assert.deepEqual(catalogSectionsFor(undefined), ['skin', 'variants']);
+  assert.deepEqual(catalogSectionsFor('true'), ['skin', 'variants']);
 });
 
 test('normalizePlace lands junk and retired values on styles', () => {

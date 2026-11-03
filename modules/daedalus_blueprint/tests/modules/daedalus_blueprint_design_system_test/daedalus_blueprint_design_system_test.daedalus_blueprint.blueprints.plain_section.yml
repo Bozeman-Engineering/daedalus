@@ -1,0 +1,18 @@
+label: 'Plain section'
+description: 'A full-width section offered under every design system.'
+design_system: ~
+scope: block
+subject: 'entity_test:entity_test'
+layout:
+  -
+    kind: container
+    layout_id: layout_onecol
+    label: 'Plain section'
+    children:
+      -
+        kind: region
+        region: content
+        children:
+          -
+            kind: block
+            block_type: text

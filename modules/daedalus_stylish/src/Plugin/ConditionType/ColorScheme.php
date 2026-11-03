@@ -27,7 +27,6 @@ final class ColorScheme extends ConditionTypeBase {
       'dark' => [
         'label' => $this->t('Dark mode'),
         'wrapper' => '@media (prefers-color-scheme: dark)',
-        'preference' => ['feature' => 'prefers-color-scheme', 'value' => 'dark'],
       ],
     ];
   }

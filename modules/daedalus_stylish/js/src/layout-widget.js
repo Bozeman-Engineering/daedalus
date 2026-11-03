@@ -148,8 +148,8 @@ export const containerChildren = (tree, uuid) => {
  * The container section directly holding an element, with its position.
  *
  * The Column section's parent lookup: only container-flow parents count
- * (the ones the widget can arrange), and only direct children (a page
- * band's parent is the entity, which never answers).
+ * (the ones the widget can arrange), and only direct children (a
+ * section's parent is the entity, which never answers).
  *
  * @param {Array} tree
  *   The lean node tree.
@@ -442,7 +442,7 @@ const ROW_HORIZONTAL_STOPS = [...HORIZONTAL_STOPS, SPREAD_STOP];
  * - stack: both screen axes on the flex column — align-items horizontal
  *   (the cross axis: per-item, so text still wraps at the box), and
  *   justify-content vertical (the main axis: packs the children to the
- *   top, middle or bottom of a band taller than its content).
+ *   top, middle or bottom of a section taller than its content).
  * - row: both screen axes on the flex row — justify-content horizontal
  *   (the main axis: natural-width children packed left, center, right
  *   or spread to the edges), and align-items vertical (the cross axis).
@@ -681,7 +681,7 @@ export const growOps = (
  *
  * Count-aware and GENERATED (split_* entities retire): every def is
  * {weights, equal}, weights one per column. Defs longer than the current
- * count MINT the missing columns (a one-child band goes straight to three
+ * count MINT the missing columns (a one-child section goes straight to three
  * columns in one click); shorter defs reset the trailing children to
  * equal.
  *
@@ -938,7 +938,7 @@ export const rootField = (
   sectionLayouts = {},
 ) => {
   // The root's own declaration through the ordinary resolution path, so a
-  // nested container and a page band answer identically.
+  // nested container and a section answer identically.
   const parsed = parseKey(key);
   const declaration = parsed
     ? declarationForKey(

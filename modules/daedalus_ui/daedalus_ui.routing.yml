@@ -1,8 +1,23 @@
+# The editor chrome colors, under the Daedalus config category's UI
+# sub-category (daedalus.admin_config_ui, the root module's door). The route
+# name and the form id (daedalus_ui_settings) are the contract other modules
+# hang on: bz_render alters the form by id to add its own details.
 daedalus_ui.settings:
-  path: '/admin/config/content/daedalus'
+  path: '/admin/config/daedalus/ui/chrome'
   defaults:
-    _title: 'Daedalus Settings'
+    _title: 'Editor chrome'
     _form: 'Drupal\daedalus_ui\Form\SettingsForm'
+  requirements:
+    _permission: 'administer Daedalus UI configuration'
+
+# The bundle roster: the page builder's state on every bundle, read-only,
+# the second door to the bundle form's Page builder tab (the one write
+# path). Under the same UI sub-category and gate as the chrome form.
+daedalus_ui.bundle_roster:
+  path: '/admin/config/daedalus/ui/content-types'
+  defaults:
+    _title: 'Page builder on content types'
+    _controller: '\Drupal\daedalus_ui\Controller\BundleRoster::build'
   requirements:
     _permission: 'administer Daedalus UI configuration'
 

@@ -10,7 +10,7 @@ import {
 } from './law-model.js';
 
 /**
- * The Law tab: the Materials place's read-only view of the design
+ * The Law tab: the Design system place's read-only view of the design
  * system's law.
  *
  * What the style guide declares, each fact with its origin, read under

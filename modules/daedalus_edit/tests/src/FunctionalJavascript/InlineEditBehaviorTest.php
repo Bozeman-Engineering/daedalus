@@ -1312,9 +1312,15 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     // Re-enter Edit Mode on the node (the save's redirect planted a
     // path-scoped navigationMode=none cookie, so plant edit back on the
     // same path), stage a fresh body edit, then throw it away through the
-    // top bar's confirm dialog: ConfirmDiscardChangesForm's submit loop
-    // deletes the tempstore entries and the redirect renders the committed
-    // values again.
+    // Daedalus menu's "Discard changes…" row (the bar's one menu,
+    // #daedalus-ui-menu, opens the confirm dialog through the modal
+    // opener): ConfirmDiscardChangesForm's submit loop deletes the
+    // tempstore entries and the redirect renders the committed values
+    // again. The trigger is clicked for real (WebDriver): the surface
+    // dismisses on an outside pointerdown and the trigger toggles, so a
+    // synthetic click is not a user's gesture; the row's own click handler
+    // takes a synthetic one. A row's textContent is label + hint, so the
+    // row is matched by its label span.
     $session->executeScript("document.cookie = 'navigationMode=edit; path=' + window.location.pathname + ';';");
     $session->reload();
     $assert_session->waitForElement('css', $wrapper . ' .daedalus-edit-field-value');
@@ -1334,7 +1340,16 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     );
     $this->assertTrue($tempstore->has($committed), 'The doomed edit re-created the tempstore entry.');
 
-    $session->executeScript("document.querySelector('#daedalus-ui-discard-changes').click();");
+    $session->getPage()->find('css', '#edit-mode-top-bar #daedalus-ui-menu')->click();
+    $this->assertJsCondition(
+      "document.querySelector('.daedalus-ui-popover > .daedalus-ui-menu') !== null",
+      20000,
+      'The Daedalus mark opened the menu.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-popover > .daedalus-ui-menu > .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label').textContent === 'Discard changes…').click();"
+    );
     $dialog = $assert_session->waitForElement('css', '.discard-changes-dialog');
     $this->assertNotNull($dialog, 'The discard confirm dialog opened.');
     // Core's dialog behavior clones the confirm form's submit into the
@@ -2225,7 +2240,7 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
         verb.run('block:$fb_uuid');
       })();
       JS);
-    $dialog_form = '#layout-builder-modal form[data-daedalus-edit-configure-dialog="block:' . $fb_uuid . '"]';
+    $dialog_form = '#drupal-modal form[data-daedalus-edit-configure-dialog="block:' . $fb_uuid . '"]';
     $dialog_label = $assert_session->waitForElementVisible('css', "$dialog_form input[name=\"settings[label]\"]", 20000);
     $this->assertNotNull($dialog_label, 'The Configure verb opened the block dialog, its form stamped for the transport.');
     $this->assertSame('Renamed block label', $dialog_label->getValue(), 'The dialog shows the staged placement label.');
@@ -2244,7 +2259,7 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       . " const block = document.querySelector(\"$fb_wrapper\");"
       . " const section = document.querySelector(\"[data-selectable='container:$section_uuid']\");"
       . " const leaf = document.querySelector(\"$fb_label_leaf\");"
-      . " const modal = document.querySelector('#layout-builder-modal');"
+      . " const modal = document.querySelector('#drupal-modal');"
       . " return block === window.__fbBlockBeforeDialog"
       . " && section === window.__fbSectionBeforeDialog"
       . " && !!leaf && leaf !== window.__fbLabelLeafBeforeDialog"

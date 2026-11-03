@@ -34,6 +34,7 @@ class VariantAiSurfaceTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -54,11 +55,8 @@ class VariantAiSurfaceTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
-    // The materials hook queries the swatch and skin storages on the same
-    // alter.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // The materials hook queries the animation, font and skin storages on
+    // the same alter.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
   }
@@ -214,7 +212,7 @@ class VariantAiSurfaceTest extends KernelTestBase {
 
     $door = $this->container->get('daedalus_stylish.field_handler.style_map')->getGuidance();
     $this->assertStringContainsString('a RULE entry ("{key}::{selector}") wears a variant too', $door);
-    $this->assertStringContainsString('::> pb-text wears text variants, ::a link variants', $door);
+    $this->assertStringContainsString('::> d-text wears text variants, ::a link variants', $door);
     $this->assertStringContainsString('a rule never wears a composition variant or a root-only axis', $door);
   }
 

@@ -89,8 +89,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * The fixture is DaedalusFixtureTrait (the daedalus recipe's site as
  * daedalus_editor: strict posture, so every commit below passes the
  * closed world, and the animation reference check is law). The recipe's
- * install sweep imports daedalus_stylish's shipped animations (fade_in, rise, ...)
- * and the block animation-axis variants (block_fade_in, block_rise, ...),
+ * install sweep lands the olivero skin's animations (fade_in, rise, ...)
+ * and its animation-axis variants (olivero_fade_in, olivero_rise, ...),
  * so the roster arrives populated with no fixture layer. One fixture, one
  * scenario: the site install dominates the run cost, so all behavior
  * lives in the single test method.
@@ -434,7 +434,7 @@ class MotionBehaviorTest extends WebDriverTestBase {
    *   runs it: computed animation-name is the spelling and `getAnimations()` is
    *   non-empty.
    * - The mint relay: on the Materials surface's Animations section,
-   *   "+ New animation" opens the mint card, naming it `Wiggle` and
+   *   "+ New animation" opens the mint card, naming it `wiggle` and
    *   saving lands the save_material op; without a reload the store holds
    *   the record, the row lists it, the preview tag carries `@keyframes
    *   motion-wiggle`. Back on the Elements surface in code mode, A's
@@ -449,7 +449,7 @@ class MotionBehaviorTest extends WebDriverTestBase {
    *   mode; the wear bar renders no Animation row (nothing worn) and its
    *   add row opens the variant picker, whose Animation group offers the
    *   shipped family by label; picking `Rise` commits apply_variant (B's
-   *   map entry wears block_rise, the Animation row appears reading Rise),
+   *   map entry wears olivero_rise, the Animation row appears reading Rise),
    *   the canvas B runs `motion-rise`. The Motion chip's
    *   menu poses the canvas at Reduced: the vector stamps the document,
    *   the emulation rewrites the variant's own reduced-motion condition,
@@ -496,17 +496,20 @@ class MotionBehaviorTest extends WebDriverTestBase {
       'The scenario put the style guide in strict enforcement: it runs against the closed world.',
     );
 
-    // The roster the scenario spends: the install sweep imported the
-    // shipped animations and the block family, so the client guide payload
-    // carries them and the compiled keyframes file declares them.
-    $animation_storage = \Drupal::entityTypeManager()->getStorage('daedalus_animation');
-    $this->assertNotEmpty(
-      $animation_storage->loadByProperties(['machine_name' => 'fade_in']),
-      'The recipe install imported the shipped fade_in animation.',
+    // The roster the scenario spends: the install sweep landed the olivero
+    // skin's animations and its motion variants (a skin has no "global"
+    // motion; the package owns its entrance family), so the client guide
+    // payload carries them and the compiled skin file declares them.
+    $skin_storage = \Drupal::entityTypeManager()->getStorage('daedalus_skin');
+    $worn = $skin_storage->loadByProperties(['machine_name' => 'olivero']);
+    $this->assertArrayHasKey(
+      'fade_in',
+      reset($worn)->animations(),
+      'The recipe install landed the olivero skin with its fade_in animation.',
     );
     $this->assertNotEmpty(
-      \Drupal::entityTypeManager()->getStorage('daedalus_variant')->loadByProperties(['machine_name' => 'block_rise']),
-      'The recipe install imported the shipped block_rise variant.',
+      \Drupal::entityTypeManager()->getStorage('daedalus_variant')->loadByProperties(['machine_name' => 'olivero_rise']),
+      'The recipe install landed olivero\'s olivero_rise variant.',
     );
 
     // A real Layout Builder page: the recipe enables styling for the
@@ -638,10 +641,10 @@ class MotionBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "(() => { const menu = document.querySelector('.daedalus-ui-menu'); if (!menu) { return false; }"
       . " const labels = Array.from(menu.querySelectorAll('.daedalus-ui-menu__label')).map((label) => label.textContent);"
-      . " return labels.some((label) => label.includes('Fade in') && label.includes('motion-fade_in'))"
-      . " && labels.some((label) => label.includes('Rise') && label.includes('motion-rise')); })()",
+      . " return labels.some((label) => label.includes('fade_in') && label.includes('motion-fade_in'))"
+      . " && labels.some((label) => label.includes('rise') && label.includes('motion-rise')); })()",
       20000,
-      'The chevron opens the shared menu listing the shipped animations by name beside their spelling (Fade in · motion-fade_in).',
+      'The chevron opens the shared menu listing the skin\'s animations by name beside their spelling (fade_in · motion-fade_in).',
     );
     $session->executeScript("document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));");
     $this->assertJsCondition(
@@ -680,25 +683,33 @@ class MotionBehaviorTest extends WebDriverTestBase {
     );
 
     // ----- The mint relay: a fresh animation reaches every consumer. -----
-    // The Materials place (the chrome row's Materials toggle), Animations
-    // section (the third catalog segment), the "+ New animation" gesture
-    // (offered: the editor role carries "create animations", the human
-    // authoring gate).
+    // The Design system place (the chrome row's Design system toggle), the
+    // Skin tab (the first segment) with its Animations section, then
+    // "+ New" and Animation from its kind picker (offered: the editor
+    // role carries "create skin materials", the human authoring gate).
     $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-inspector__place');
-    $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-inspector__catalog .daedalus-ui-segment:nth-child(3)');
+    $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-inspector__catalog .daedalus-ui-segment:nth-child(1)');
     $this->assertJsCondition(
-      "[...document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-animations .daedalus-stylish-library__name')]"
-      . ".some((name) => name.textContent.trim() === 'Fade in')",
+      "[...document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-skin__section--animation .daedalus-stylish-skin__row-name')]"
+      . ".some((name) => name.textContent.trim() === 'fade_in')",
       20000,
-      'The Animations section lists the shipped animations from the store.',
+      'The Skin tab\'s Animations section lists the shipped animations from the store.',
     );
-    $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-animations .daedalus-stylish-palette__mint-open');
+    $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-skin__new');
     $this->assertNotNull(
-      $assert_session->waitForElement('css', '.daedalus-stylish-animations-mint'),
-      'The "+ New animation" gesture opened the mint card.',
+      $assert_session->waitForElement('css', '.daedalus-ui-menu'),
+      'The "+ New" kind picker opened.',
+    );
+    $session->executeScript(
+      "Array.from(document.querySelectorAll('.daedalus-ui-menu .daedalus-ui-menu__item'))"
+      . ".find((item) => item.querySelector('.daedalus-ui-menu__label')?.textContent.trim() === 'Animation').click();"
+    );
+    $this->assertNotNull(
+      $assert_session->waitForElement('css', '.daedalus-stylish-skin-mint--animation'),
+      'The "+ New" › Animation gesture opened the animation mint card.',
     );
     $this->assertJsCondition(
-      "document.querySelectorAll('.daedalus-stylish-animations-mint .daedalus-stylish-keyframes__handle').length >= 2",
+      "document.querySelectorAll('.daedalus-stylish-skin-mint--animation .daedalus-stylish-keyframes__handle').length >= 2",
       20000,
       'The mint card seeded its keyframes editor with the fade steps.',
     );
@@ -707,21 +718,21 @@ class MotionBehaviorTest extends WebDriverTestBase {
       'Before the mint the preview tag carries no wiggle keyframes.',
     );
 
-    $mint_label = '.daedalus-stylish-animations-mint .daedalus-stylish-library-card__label';
-    $this->typeIntoPanel($mint_label, 'Wiggle');
+    $mint_label = '.daedalus-stylish-skin-mint--animation .daedalus-stylish-skin-mint__name';
+    $this->typeIntoPanel($mint_label, 'wiggle');
     $this->assertJsCondition(
-      "document.querySelector('.daedalus-stylish-animations-mint .daedalus-stylish-library-card__action')?.disabled === false",
+      "document.querySelector('.daedalus-stylish-skin-mint--animation .daedalus-stylish-skin-mint__save')?.disabled === false",
       20000,
       'Naming the animation armed the Save animation gesture.',
     );
-    $this->clickPanel('.daedalus-stylish-animations-mint .daedalus-stylish-library-card__action');
+    $this->clickPanel('.daedalus-stylish-skin-mint--animation .daedalus-stylish-skin-mint__save');
     $this->assertJsCondition(
-      "(() => { return !document.querySelector('.daedalus-stylish-animations-mint')"
+      "(() => { return !document.querySelector('.daedalus-stylish-skin-mint--animation')"
       . " && Drupal.Daedalus.Materials.has('animation', 'wiggle')"
-      . " && [...document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-animations .daedalus-stylish-library__name')]"
-      . ".some((name) => name.textContent === 'Wiggle'); })()",
+      . " && [...document.querySelectorAll('#daedalus_stylish_inspector .daedalus-stylish-skin__section--animation .daedalus-stylish-skin__row-name')]"
+      . ".some((name) => name.textContent === 'wiggle'); })()",
       20000,
-      'The mint landed: the card closed, the store learned the record (the response\'s materials delta) and the list grew the Wiggle row.',
+      'The mint landed: the card closed, the store learned the record (the response\'s materials delta) and the list grew the wiggle row.',
     );
     // The delta-to-stamp seam: the leader source re-printed every rostered
     // animation into its preview tag, the fresh @keyframes included.
@@ -732,9 +743,9 @@ class MotionBehaviorTest extends WebDriverTestBase {
     );
     // The mint persisted as a site-wide entity under strict: authoring is
     // never strict-gated.
-    $animation_storage->resetCache();
-    $minted = $animation_storage->loadByProperties(['machine_name' => 'wiggle']);
-    $this->assertNotEmpty($minted, 'The mint persisted as a daedalus_animation entity (machine name from the label).');
+    $skin_storage->resetCache();
+    $worn = $skin_storage->loadByProperties(['machine_name' => 'olivero']);
+    $this->assertArrayHasKey('wiggle', reset($worn)->animations(), 'The mint persisted on the worn skin (the name is the keyframes ident tail).');
 
     // The completion source: back in the styling place in code mode (a
     // mode click always lands in the styling place, so the one click
@@ -800,7 +811,7 @@ class MotionBehaviorTest extends WebDriverTestBase {
       'Typing motion-w in the island offered exactly the minted spelling as the completion (delta, store, completion source).',
     );
     $this->assertJsCondition(
-      "[...document.querySelectorAll('.cm-tooltip-autocomplete .cm-completionDetail')].some((detail) => detail.textContent.includes('Wiggle'))",
+      "[...document.querySelectorAll('.cm-tooltip-autocomplete .cm-completionDetail')].some((detail) => detail.textContent.includes('wiggle'))",
       20000,
       'The completion is labelled by the animation\'s name.',
     );
@@ -886,9 +897,9 @@ class MotionBehaviorTest extends WebDriverTestBase {
     // block.
     $this->clickPanelXpath($this->pickerOptionXpath('Animation', 'Rise'));
     $this->assertJsCondition(
-      "JSON.stringify($entry_b?.variants ?? []).includes('block_rise')",
+      "JSON.stringify($entry_b?.variants ?? []).includes('olivero_rise')",
       20000,
-      'The picker pick committed apply_variant: block B\'s map entry wears block_rise.',
+      'The picker pick committed apply_variant: block B\'s map entry wears olivero_rise.',
     );
     $this->assertJsCondition(
       "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-variant-picker')"
@@ -1029,9 +1040,9 @@ class MotionBehaviorTest extends WebDriverTestBase {
     );
     $this->pickVariant('Animation', 'Rise');
     $this->assertJsCondition(
-      "JSON.stringify($entry_c?.variants ?? []).includes('block_rise')",
+      "JSON.stringify($entry_c?.variants ?? []).includes('olivero_rise')",
       20000,
-      'Block C wears block_rise.',
+      'Block C wears olivero_rise.',
     );
     $rise_js = 'document.querySelector(' . json_encode($canvas_c) . ").getAnimations().find((animation) => animation.animationName === 'motion-rise')";
     $this->assertJsCondition(
@@ -1165,9 +1176,9 @@ class MotionBehaviorTest extends WebDriverTestBase {
     $this->pickVariant('Animation', 'Fade in');
     $this->assertJsCondition(
       "(() => { const refs = JSON.stringify($entry_b?.variants ?? []);"
-      . " return refs.includes('block_fade_in') && !refs.includes('block_rise'); })()",
+      . " return refs.includes('olivero_fade_in') && !refs.includes('olivero_rise'); })()",
       20000,
-      'Block B now wears block_fade_in in place of block_rise (one axis, one wear).',
+      'Block B now wears olivero_fade_in in place of olivero_rise (one axis, one wear).',
     );
     $this->assertJsCondition(
       "(() => { const row = $animation_row_js; if (!row) { return false; }"
@@ -1216,9 +1227,9 @@ class MotionBehaviorTest extends WebDriverTestBase {
     $hover_row = $this->wornRowXpath('Hover');
     $this->pickVariant('Hover', 'Lift');
     $this->assertJsCondition(
-      "JSON.stringify($entry_b?.variants ?? []).includes('block_lift')",
+      "JSON.stringify($entry_b?.variants ?? []).includes('olivero_lift')",
       20000,
-      'The Hover pick committed apply_variant: block B wears block_lift.',
+      'The Hover pick committed apply_variant: block B wears olivero_lift.',
     );
     $this->assertNotNull(
       $assert_session->waitForElement('xpath', $hover_row),
@@ -1265,7 +1276,7 @@ class MotionBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-variant-picker')"
       . " && ($hover_trigger_js)?.getAttribute('aria-expanded') === 'false'"
-      . " && JSON.stringify($entry_b?.variants ?? []).includes('block_lift')",
+      . " && JSON.stringify($entry_b?.variants ?? []).includes('olivero_lift')",
       20000,
       'A second press on the open trigger closed the picker; the wear is unchanged.',
     );

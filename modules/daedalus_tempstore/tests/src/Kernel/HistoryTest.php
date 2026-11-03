@@ -41,6 +41,7 @@ class HistoryTest extends KernelTestBase {
     'layout_discovery',
     'layout_builder',
     'daedalus_blueprint',
+    'filter',
     'daedalus_tempstore',
     'entity_test',
   ];

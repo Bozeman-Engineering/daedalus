@@ -41,9 +41,9 @@ class SkinAiSurfaceTest extends KernelTestBase {
   protected const THEME = 'stark';
 
   /**
-   * The gutter token's description: the reasoning the schema carries whole.
+   * The gutter token's description, carried whole by the JSON door's fragment.
    */
-  protected const GUTTER_DESCRIPTION = 'The band gutter. Reach for it between a band and its neighbours, never inside a card.';
+  protected const GUTTER_DESCRIPTION = 'The section gutter. Reach for it between a section and its neighbours, never inside a card.';
 
   /**
    * {@inheritdoc}
@@ -53,6 +53,7 @@ class SkinAiSurfaceTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -72,23 +73,17 @@ class SkinAiSurfaceTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
-    // The roster's daedalus_stylish provider queries the swatch and variant
+    // The roster's daedalus_stylish provider queries the variant
     // storages unconditionally on the same alter.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-*, var() and family references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->container->get('state')->set('daedalus_stylish_control_test.site', [
       'token_scales' => [
@@ -141,8 +136,9 @@ class SkinAiSurfaceTest extends KernelTestBase {
     // The named values: the active skin's minted tokens, grouped by scale
     // id, each entry keyed by the RESOLVED variable (the application
     // handle), the value as stored beside the token's whole description
-    // when its author wrote one (the schema is the surface that carries
-    // every material in full; the brief prints the first sentence).
+    // when its author wrote one (this is the JSON door's fragment, every
+    // kind whole; the design system brief states every token whole too,
+    // which is why the dialect door's narrowing drops them).
     // Scale metadata (shape, label, prefix template) is mint-time
     // vocabulary and lives in the skins skill; the worn-skin pointer is
     // the skin lane's business too.
@@ -208,7 +204,19 @@ class SkinAiSurfaceTest extends KernelTestBase {
     $this->container->get('daedalus_stylish.skin_manager')->loadActiveSkin()->set('design_system', 'aurora')->save();
     $composed = $type->compose($definition, []);
     $this->assertStringContainsString('space (dimension, --space-{name})', $composed);
+    $this->assertStringContainsString('Token contract: none declared; any published member skin is wearable.', $composed);
     $this->assertStringContainsString('machine_name aurora, "Aurora"', $composed);
+    // With a contract declared the catalog lists it per scale, gutter
+    // and every other unoffered name included: the AI cannot mint what
+    // the brief hides from it.
+    $site = $this->container->get('state')->get('daedalus_stylish_control_test.site');
+    $site['token_contract'] = ['space' => ['gutter', 'sm'], 'color' => ['accent']];
+    $this->container->get('state')->set('daedalus_stylish_control_test.site', $site);
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
+    $this->assertStringContainsString('Token contract (the names a member skin of the active design system must mint to be wearable, whether or not the worn skin offers them; a new skin mints every one): space: gutter, sm; color: accent.', $type->compose($definition, []));
+    unset($site['token_contract']);
+    $this->container->get('state')->set('daedalus_stylish_control_test.site', $site);
+    $this->container->get('daedalus_stylish.style_guide')->resetCache();
     $this->assertStringContainsString('ACTIVE', $composed);
     // The catalog teaches membership and what ACTIVE means: a skin is a
     // member of the system its design_system field names, and the worn
@@ -244,12 +252,12 @@ class SkinAiSurfaceTest extends KernelTestBase {
     foreach ($retired_teaching as $retired) {
       $this->assertStringNotContainsString($retired, $composed, "The retired teaching \"$retired\" left the skill.");
     }
-    // The palette boundary: tokens vs swatches routing, the reserved
-    // namespace, and the skin-switch persistence contrast.
-    $this->assertStringContainsString('## Tokens vs the palette', $composed);
-    $this->assertStringContainsString('var(--swatch-{machine_name})', $composed);
-    $this->assertStringContainsString('--swatch- namespace is reserved', $composed);
-    $this->assertStringContainsString('persist across a skin switch', $composed);
+    // The palette is tokens: the color and gradient scales, the one
+    // named-value store, minted and captured through the token gesture.
+    $this->assertStringContainsString('## The palette is tokens', $composed);
+    $this->assertStringContainsString('var(--color-{name})', $composed);
+    $this->assertStringContainsString('var(--gradient-{name})', $composed);
+    $this->assertStringContainsString('ONE named-value store', $composed);
     // The unminted-reference rule is generated law, absent here because
     // this site (guarded) does not check it.
     $this->assertStringNotContainsString('unminted references are rejected', $composed);
@@ -259,7 +267,7 @@ class SkinAiSurfaceTest extends KernelTestBase {
     // setting (the mode is opaque to the AI).
     $this->enforce('strict');
     $strict_composed = $type->compose($definition, []);
-    $this->assertStringContainsString('must name a minted token or a PUBLISHED swatch; unminted references are rejected', $strict_composed);
+    $this->assertStringContainsString('must name a minted token; unminted references are rejected', $strict_composed);
     $this->assertDoesNotMatchRegularExpression('/\b(strict|guarded|enforcement)\b/i', $strict_composed);
     $this->enforce('guarded');
 

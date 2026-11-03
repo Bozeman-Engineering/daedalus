@@ -9,7 +9,7 @@ use Drupal\Core\Site\Settings;
 /**
  * The distro lock: one spine fact about who may change shipped materials.
  *
- * A shipped material (a variant, swatch, animation or font synced from a
+ * A shipped material (a variant, animation or font synced from a
  * package's files, a skin's package layer, a blueprint read from a file) is
  * the package's design vocabulary, and the package's files are its one
  * author. On a consuming site the lock HOLDS: the site cannot push into,
@@ -40,7 +40,7 @@ use Drupal\Core\Site\Settings;
  * are an environment property: a dev site needs no role setup, and a
  * production administrator cannot lift a lock that exists to protect
  * production. The lock is consulted by every shipped-material gate on the
- * materials spine (daedalus_stylish's variant, swatch, animation and font
+ * materials spine (daedalus_stylish's variant, animation and font
  * managers, the skin's layer rule, the blueprint-lane field handlers, the
  * materials providers' `updatable` record flag, the blueprint library's
  * read-only hint), so one flag opens every gate at once: with it lifted a

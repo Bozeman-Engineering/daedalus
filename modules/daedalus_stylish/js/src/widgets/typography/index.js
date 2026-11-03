@@ -84,6 +84,7 @@ const Typography = ({
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
 }) => {
   const lit = litValues(model.reads);
   return (
@@ -108,6 +109,7 @@ const Typography = ({
         disabledTitle={model.withheld?.[property] ?? null}
         onPickCondition={onPickCondition}
         onOpenDocument={onOpenDocument}
+        law={law}
         onPreview={onPreview}
         onRelease={onRelease}
         onCommit={onCommit}

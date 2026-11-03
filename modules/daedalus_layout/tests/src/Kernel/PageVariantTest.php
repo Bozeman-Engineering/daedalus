@@ -165,9 +165,6 @@ class PageVariantTest extends KernelTestBase {
     $this->installEntitySchema('media');
     $this->installEntitySchema('blueprint');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
@@ -504,9 +501,9 @@ class PageVariantTest extends KernelTestBase {
     $frame = $this->frameHost();
     $inner_render = $this->container->get('daedalus_blueprint.inner_render');
 
-    $this->assertNull($inner_render->slotFiller('hero', $frame, NULL), 'No subject, nothing fills.');
+    $this->assertNull($inner_render->slotFiller('hero', $frame, NULL)->fill, 'No subject, nothing fills.');
     $empty = $this->lockedPage('Empty sentinel', FALSE);
-    $this->assertNull($inner_render->slotFiller('hero', $frame, $empty), 'A page filling nothing, a template filling nothing.');
+    $this->assertNull($inner_render->slotFiller('hero', $frame, $empty)->fill, 'A page filling nothing, a template filling nothing.');
 
     // The template's own fill of a frame slot is read when the page has
     // none.
@@ -514,14 +511,14 @@ class PageVariantTest extends KernelTestBase {
     $display->appendSection($this->section('layout_onecol', self::TEMPLATE_HERO_FILL, [
       $this->pluginBlock(self::TEMPLATE_HERO_BLOCK, 'system_powered_by_block', 'Template hero sentinel'),
     ], 'hero'))->save();
-    $fill = $inner_render->slotFiller('hero', $frame, $empty);
+    $fill = $inner_render->slotFiller('hero', $frame, $empty)->fill;
     $this->assertNotNull($fill, 'The template fills the frame slot.');
     $this->assertSame('entity_view_display', $fill->host->entityTypeId());
     $this->assertSame(self::TEMPLATE_HERO_FILL, $fill->section->getThirdPartySetting('daedalus_layout', 'uuid'));
 
     // The page's own fill wins over the template's: the innermost.
     $filled = $this->lockedPage('Filled sentinel', TRUE);
-    $fill = $inner_render->slotFiller('hero', $frame, $filled);
+    $fill = $inner_render->slotFiller('hero', $frame, $filled)->fill;
     $this->assertSame('entity_test', $fill->host->entityTypeId());
     $this->assertSame(self::PAGE_HERO_FILL, $fill->section->getThirdPartySetting('daedalus_layout', 'uuid'));
   }

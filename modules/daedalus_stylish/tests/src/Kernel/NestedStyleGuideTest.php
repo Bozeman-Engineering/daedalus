@@ -32,7 +32,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * come from daedalus_stylish_nested_test: a field kind shell (.field__items >
  * .field__item contains value), a card block type (.block__content contains
  * fields > .card__header contains field:field_title > .card__kicker,
- * .card__body), and a layout_onecol shell (.band-content
+ * .card__body), and a layout_onecol shell (.section-content
  * contains regions).
  */
 #[Group('daedalus_stylish')]
@@ -56,6 +56,7 @@ class NestedStyleGuideTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -83,27 +84,19 @@ class NestedStyleGuideTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    // The client payload serves the published swatches, so every build()
-    // consumer needs the swatch entity schema.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-* and var() references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installEntitySchema('user');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->styleGuide = $this->container->get('daedalus_stylish.style_guide');
@@ -155,7 +148,7 @@ class NestedStyleGuideTest extends KernelTestBase {
 
     // Layout: the container part carries the regions slot.
     $layout = $this->styleGuide->getLayout('layout_onecol', self::THEME);
-    $this->assertSame('regions', $layout['elements']['.band-content']['contains']);
+    $this->assertSame('regions', $layout['elements']['.section-content']['contains']);
   }
 
   /**
@@ -425,7 +418,7 @@ class NestedStyleGuideTest extends KernelTestBase {
     $this->assertSame(['field:field_summary'], $content['elements']['.card__body']['contains']);
     $items = $context['anatomy']['kinds']['field']['elements']['.field__items'];
     $this->assertSame('value', $items['elements']['.field__item']['contains']);
-    $this->assertSame('regions', $context['layouts']['layout_onecol']['anatomy']['elements']['.band-content']['contains']);
+    $this->assertSame('regions', $context['layouts']['layout_onecol']['anatomy']['elements']['.section-content']['contains']);
     // A part with no slot has no contains key at all (projection, not
     // NULL noise).
     $this->assertArrayNotHasKey('contains', $header['elements']['.card__kicker']);
@@ -446,7 +439,7 @@ class NestedStyleGuideTest extends KernelTestBase {
     $this->assertSame([
       'kinds.field::.field__item' => 'padding at most 1rem; padding-top at most 1rem; padding-right at most 1rem; padding-bottom at most 1rem; padding-left at most 1rem',
       'block_types.card::.card__header' => 'font-size at most 2rem',
-      'layouts.layout_onecol::.band-content' => 'max-width at most 80rem',
+      'layouts.layout_onecol::.section-content' => 'max-width at most 80rem',
     ], $guide['deviations']);
     // The stylable section is {guidance, entries} and nothing else: no
     // per-element tree, no set or constraint facts beside the phrases.
@@ -475,7 +468,7 @@ class NestedStyleGuideTest extends KernelTestBase {
     // The field kind's nested item and the layout's container are taught
     // the same flat way in their own dimensions.
     $this->assertArrayHasKey('kinds.field::.field__item', $entries);
-    $this->assertStringContainsString('max-width', $entries['layouts.layout_onecol::.band-content']);
+    $this->assertStringContainsString('max-width', $entries['layouts.layout_onecol::.section-content']);
   }
 
   /**
@@ -491,7 +484,7 @@ class NestedStyleGuideTest extends KernelTestBase {
     $this->assertSame('fields', $content['contains']);
     $this->assertSame('field:field_title', $content['elements']['.card__header']['contains']);
     $this->assertSame('value', $payload['kinds']['field']['elements']['.field__items']['elements']['.field__item']['contains']);
-    $this->assertSame('regions', $payload['layouts']['layout_onecol']['elements']['.band-content']['contains']);
+    $this->assertSame('regions', $payload['layouts']['layout_onecol']['elements']['.section-content']['contains']);
   }
 
   /**

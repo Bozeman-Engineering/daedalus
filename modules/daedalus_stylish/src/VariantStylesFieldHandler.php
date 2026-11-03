@@ -14,6 +14,7 @@ use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
 use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
+use Drupal\daedalus_stylish\Vocabulary\VocabularyValueSpaces;
 
 /**
  * The daedalus_blueprint field handler for a variant's styles.
@@ -24,7 +25,13 @@ use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
  * (StyleMapValidator::validateAt() at the variant's scope), the same gate
  * the variant gestures (VariantManager) and disk-shipped variants converge
  * on, so an AI authoring a variant through the generic create/update tools
- * is validated identically to every other surface. The scope string a
+ * is validated identically to every other surface. The one posture
+ * difference is the disk lane's: a shipped_sync write (VariantImporter)
+ * runs that gate on the validator's landing lane
+ * (StyleMapValidator::withLandingLane()), where structure alone is law and
+ * the roster's verdict (VariantConformance) withholds what the site's law
+ * refuses, so a module's shipped variant lands once and is offered or
+ * withheld as the law of the day decides. The scope string a
  * payload submits is the one untrusted address on this road, so this
  * handler is the variant door's string gate (StyleMapValidator::
  * variantScope()) ahead of the address door, and the AI schema fragment
@@ -63,6 +70,8 @@ class VariantStylesFieldHandler extends StyleMapFieldHandler {
    *   The vocabulary roster builder.
    * @param \Drupal\daedalus_blueprint\Host\HostResolver $hostResolver
    *   The host resolver: the style map field's owner is the map's host.
+   * @param \Drupal\daedalus_stylish\Vocabulary\VocabularyValueSpaces $valueSpaces
+   *   The value spaces the fragment prints (bindings, deviations).
    * @param \Closure $importer
    *   Service closure resolving the variant importer, the distro lock's
    *   disk read (does the provider ship this entry right now?). Lazy
@@ -82,10 +91,11 @@ class VariantStylesFieldHandler extends StyleMapFieldHandler {
     MaterialsRosterBuilder $rosterBuilder,
     VocabularyRosterBuilder $vocabulary,
     HostResolver $hostResolver,
+    VocabularyValueSpaces $valueSpaces,
     protected \Closure $importer,
     protected DistroLock $distroLock,
   ) {
-    parent::__construct($validator, $styleGuide, $declarations, $conditionTypes, $valueResolver, $rosterBuilder, $vocabulary, $hostResolver);
+    parent::__construct($validator, $styleGuide, $declarations, $conditionTypes, $valueResolver, $rosterBuilder, $vocabulary, $hostResolver, $valueSpaces);
   }
 
   /**
@@ -168,11 +178,21 @@ class VariantStylesFieldHandler extends StyleMapFieldHandler {
       ));
     }
 
-    $errors = $this->validator->validateAt($resolution->getMap(), $address, [
+    // One door, two postures. A shipped_sync write is the disk lane's
+    // (VariantImporter), and a module's shipped variant lands at the
+    // landing posture (StyleMapValidator::withLandingLane(): the open
+    // posture, structure alone is law), because a module's literal global
+    // is not the site's act and the roster's verdict (VariantConformance)
+    // already judges offering under the law of the day; it withholds what
+    // the law refuses and offers it again when the law changes. Every
+    // other author of this field (the AI's generic tools here,
+    // VariantManager::validateStyles() on push) keeps the full law.
+    $validate = fn (): array => $this->validator->validateAt($resolution->getMap(), $address, [
       'variant_identity' => $this->variantIdentity($options),
       'variant_axis' => $this->resolveAxis($options),
       'design_system' => $this->submittedDesignSystem($options),
     ]);
+    $errors = empty($options['shipped_sync']) ? $validate() : $this->validator->withLandingLane($validate);
     if ($errors) {
       return new FieldHandlerResult(NULL, array_map(
         static fn (BlueprintError $error) => $error->withPath(
@@ -320,7 +340,7 @@ class VariantStylesFieldHandler extends StyleMapFieldHandler {
     $lock = $this->distroLock->holds()
       ? ' Module-shipped variants are READ-ONLY (the distro lock): updating their styles is refused; to change such a look, create a NEW variant with the styles you want (copying the shipped variant\'s styles as a starting point if useful) and apply that instead.'
       : '';
-    return 'A variant\'s styles: an object of element-relative keys ("" for the variant\'s root element, "::" plus a relative selector under it: "::.class-name" a sub-element its scope declares, "::p" its paragraphs, "::> *" its children, "::> pb-text" the text blocks among them) each mapping conditions to CSS properties, e.g. {"": {"default": {"padding": "2rem"}}, "::.cta-text": {"default": {"align-self": "center"}}}. Values are plain semantic CSS; "default" always applies. Media-capable properties accept url(\'media:<uuid>\') image media references here exactly as in the style map (store the token, never a file URL).' . $input_tier . ' The styles validate against the style guide declaration of the variant\'s scope field ("block_type:{bundle}", "block_plugin:{plugin_id}" for plugin blocks such as menus and site branding, "layout:{layout_id}", or "kind:{entity|container|field|block}"), so set scope in the same payload; the field schema\'s style_guide key says what is valid (its scopes catalog, bindings and deviations lines, guidance paragraph, and the condition names under conditions). An entry may also carry a "variants" reference list exactly like a style map entry ({"variants": [{"variant": "machine_name", "fragment": ""}]}, at most one reference per axis): applying the variant distributes each nested reference onto the element its entry\'s slot resolves to, stamped with this variant\'s id as its "via" (the style map\'s provenance: a later switch or removal of this variant removes what it distributed and nothing applied by hand); a nested reference here never carries "via" itself. A nested reference must name an EXISTING variant scoped to the slot\'s element kind, and reference chains must stay acyclic — a variant can never reference itself, directly or through other variants. A variant also carries an axis field, the axis it competes on within its scope: an element wears at most one variant per axis and composes variants across axes. Omit axis for the built-in "style" axis; a scope\'s style_guide.scopes entry lists its additional axes under variant_axes.' . $lock;
+    return 'A variant\'s styles: an object of element-relative keys ("" for the variant\'s root element, "::" plus a relative selector under it: "::.class-name" a sub-element its scope declares, "::p" its paragraphs, "::> *" its children, "::> d-text" the text blocks among them) each mapping conditions to CSS properties, e.g. {"": {"default": {"padding": "2rem"}}, "::.cta-text": {"default": {"align-self": "center"}}}. Values are plain semantic CSS; "default" always applies. Media-capable properties accept url(\'media:<uuid>\') image media references here exactly as in the style map (store the token, never a file URL).' . $input_tier . ' The styles validate against the style guide declaration of the variant\'s scope field ("block_type:{bundle}", "block_plugin:{plugin_id}" for plugin blocks such as menus and site branding, "layout:{layout_id}", or "kind:{entity|container|field|block}"), so set scope in the same payload; the field schema\'s style_guide key says what is valid (its scopes catalog, bindings and deviations lines, guidance paragraph, and the condition names under conditions). An entry may also carry a "variants" reference list exactly like a style map entry ({"variants": [{"variant": "machine_name", "fragment": ""}]}, at most one reference per axis): applying the variant distributes each nested reference onto the element its entry\'s slot resolves to, stamped with this variant\'s id as its "via" (the style map\'s provenance: a later switch or removal of this variant removes what it distributed and nothing applied by hand); a nested reference here never carries "via" itself. A nested reference must name an EXISTING variant scoped to the slot\'s element kind, and reference chains must stay acyclic — a variant can never reference itself, directly or through other variants. A variant also carries an axis field, the axis it competes on within its scope: an element wears at most one variant per axis and composes variants across axes. Omit axis for the built-in "style" axis; a scope\'s style_guide.scopes entry lists its additional axes under variant_axes.' . $lock;
   }
 
   /**

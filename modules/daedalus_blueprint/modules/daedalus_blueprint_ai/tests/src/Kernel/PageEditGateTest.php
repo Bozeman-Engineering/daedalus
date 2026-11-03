@@ -181,7 +181,7 @@ class PageEditGateTest extends BlueprintKernelTestBase {
     ]);
 
     $this->assertStringNotContainsString('Error', $output);
-    $this->assertMatchesRegularExpression('/\n\nUpdated page:\nfields:\n(  .*\n)+<pb-container/', $output, 'The fields block stands between the heading and the document.');
+    $this->assertMatchesRegularExpression('/\n\nUpdated page:\nfields:\n(  .*\n)+<d-container/', $output, 'The fields block stands between the heading and the document.');
     $this->assertStringContainsString("\n  name: Renamed\n", $output);
     $this->assertSame(1, substr_count($output, 'fields:'));
   }
@@ -194,12 +194,12 @@ class PageEditGateTest extends BlueprintKernelTestBase {
       'entity_type' => 'entity_test',
       'entity_id' => $this->entity->id(),
       'ops' => [
-        ['op' => 'set', 'ref' => $this->sectionUuid, 'attrs' => ['name' => 'Band']],
+        ['op' => 'set', 'ref' => $this->sectionUuid, 'attrs' => ['name' => 'Section']],
       ],
     ]);
 
     $this->assertStringNotContainsString('Error', $output);
-    $this->assertStringContainsString("\n\nUpdated page:\n<pb-container", $output);
+    $this->assertStringContainsString("\n\nUpdated page:\n<d-container", $output);
     $this->assertStringNotContainsString('fields:', $output);
   }
 
@@ -262,13 +262,13 @@ class PageEditGateTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString("\n\nUpdated page:\nReading notes:\n- ", $output, 'The echo heads with the reading notes.');
     $this->assertSame(1, substr_count($output, 'Reading notes:'), 'The notes head the echo once.');
     $this->assertStringContainsString("\n- data-unprinted names fields the element holds that the page language cannot spell: a set on the element keeps them, a replace rebuilds the element and loses them.\n", $output);
-    $this->assertStringContainsString("\n- data-partial names printed attributes whose stored value holds more than the print shows (a link's title or options): a set on that attribute replaces the whole stored value with what you write.\n\n<pb-container", $output, 'The partial-field sentence closes the notes; a blank line separates them from the document.');
-    $this->assertMatchesRegularExpression('/\n  <pb-text id="' . preg_quote($text_uuid, '/') . '"( data-can="[^"]*")? data-partial="link"( [a-z]+="[^"]*")*>About<\/pb-text>\n/', $output, 'The written block still names its partial attribute.');
-    preg_match('/<pb-text id="' . preg_quote($text_uuid, '/') . '"[^>]*>/', $output, $element);
+    $this->assertStringContainsString("\n- data-partial names printed attributes whose stored value holds more than the print shows (a link's title or options): a set on that attribute replaces the whole stored value with what you write.\n\n<d-container", $output, 'The partial-field sentence closes the notes; a blank line separates them from the document.');
+    $this->assertMatchesRegularExpression('/\n  <d-text id="' . preg_quote($text_uuid, '/') . '"( data-can="[^"]*")? data-partial="link"( [a-z]+="[^"]*")*>About<\/d-text>\n/', $output, 'The written block still names its partial attribute.');
+    preg_match('/<d-text id="' . preg_quote($text_uuid, '/') . '"[^>]*>/', $output, $element);
     $this->assertStringContainsString(' tag="h3"', $element[0], 'The echo shows the new tag.');
     $this->assertStringContainsString(' link="/about"', $element[0], 'The link still prints as its bare uri.');
     $this->assertStringNotContainsString('About us', $output, 'The title is named, never printed.');
-    $this->assertMatchesRegularExpression('/\n  <pb-block id="' . preg_quote($card_uuid, '/') . '"( data-can="[^"]*")? data-unprinted="field_card_items" type="card" \/>\n/', $output, 'The undeclared block still names its unspellable field.');
+    $this->assertMatchesRegularExpression('/\n  <d-block id="' . preg_quote($card_uuid, '/') . '"( data-can="[^"]*")? data-unprinted="field_card_items" type="card" \/>\n/', $output, 'The undeclared block still names its unspellable field.');
     $this->assertStringNotContainsString('Plans', $output, 'The unspellable values are named, never printed.');
 
     $storage = $this->entityTypeManager->getStorage('entity_test');

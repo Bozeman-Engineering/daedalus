@@ -109,12 +109,13 @@ const CornersBorder = ({
   materials,
   styleMap,
   source = null,
-  swatches = null,
+  skinMaterials = null,
   onPreview,
   onRelease,
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
 }) => {
   const [ringOpen, setRingOpen] = useState(false);
   const granted = model.granted ?? [];
@@ -186,12 +187,13 @@ const CornersBorder = ({
     materials,
     model,
     source,
-    swatches,
+    skinMaterials,
     onPreview,
     onRelease,
     onCommit,
     onPickCondition,
     onOpenDocument,
+    law,
   };
 
   // --- the ring's seams.
@@ -309,6 +311,7 @@ const CornersBorder = ({
         disabledTitle={cornersWithheld}
         onPickCondition={onPickCondition}
         onOpenDocument={onOpenDocument}
+        law={law}
         onPreview={onPreview}
         onRelease={onRelease}
         onCommit={onCommit}
@@ -394,6 +397,7 @@ const CornersBorder = ({
           disabledTitle={offsetWithheld}
           onPickCondition={onPickCondition}
           onOpenDocument={onOpenDocument}
+          law={law}
           onPreview={onPreview}
           onRelease={onRelease}
           onCommit={onCommit}

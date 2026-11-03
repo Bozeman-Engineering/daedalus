@@ -103,7 +103,7 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
         'region' => 'content',
         'configuration' => $this->createInlineBlockConfiguration('text_section', $inner, 'Inner'),
       ],
-    ], ['label' => 'Nested band']);
+    ], ['label' => 'Nested section']);
     $nested->setThirdPartySetting('daedalus_layout', 'uuid', $nested_uuid);
 
     $block = $this->createTextBlock('First', '<p>First</p>');
@@ -180,7 +180,7 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
     $nested_node = $container['children'][1];
     $this->assertSame('container', $nested_node['kind']);
     $this->assertSame($nested_uuid, $nested_node['uuid']);
-    $this->assertSame('Nested band', $nested_node['label']);
+    $this->assertSame('Nested section', $nested_node['label']);
     $this->assertArrayNotHasKey('styles', $nested_node);
     $this->assertSame(['block'], array_column($nested_node['children'], 'kind'));
     $this->assertSame($inner_uuid, $nested_node['children'][0]['uuid']);
@@ -265,6 +265,71 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
     $this->assertSame('cccccccc-3333-4444-8888-000000000001', $tree[0]['children'][0]['uuid']);
     $this->assertArrayNotHasKey('styles', $tree[0]);
     $this->assertArrayNotHasKey('styles', $tree[0]['children'][0]);
+  }
+
+  /**
+   * Document(): the annotated layout with the host above it, never in it.
+   *
+   * The matcher's view of a delivered blueprint: one `entity` node keyed by
+   * the host's uuid (handed in: the serializer emits no root identity),
+   * carrying the root's `_element` as the annotator stamped it and the
+   * layout array verbatim as its children. The key order and the keyless
+   * root are what the client twin (document-tree.test.mjs) locks too.
+   */
+  public function testDocument(): void {
+    $entity = $this->createTestEntity();
+    $block_uuid = 'dddddddd-4444-4444-8888-000000000001';
+    $block = $this->createTextBlock('Solo', '<p>Solo</p>');
+    $section = $this->createSection('eb_test_container', [
+      [
+        'uuid' => $block_uuid,
+        'region' => 'content',
+        'configuration' => $this->createInlineBlockConfiguration('text_section', $block, 'Solo'),
+      ],
+    ]);
+    $entity->get('layout_builder__layout')->appendSection($section);
+    $entity->save();
+    $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
+    $host = $this->host($entity);
+
+    // The annotated blueprint, exactly as the mirror and the explain tool
+    // carry it: the root's words and markup on `_element`, the lean tree
+    // under `layout`, no root uuid anywhere on it.
+    $backend = $this->container->get('daedalus_blueprint.backend_resolver')->resolve('entity_test');
+    $annotated = $this->container->get('daedalus_ui.element_annotator')->annotate($backend->serialize($entity), $host, 'full');
+    $this->assertArrayNotHasKey('uuid', $annotated);
+    $this->assertSame('container', $annotated['layout'][0]['kind']);
+    $this->assertSame($block_uuid, $annotated['layout'][0]['children'][0]['uuid']);
+    foreach (['name', 'type', 'icon', 'markup'] as $word) {
+      $this->assertArrayHasKey($word, $annotated['_element']);
+    }
+
+    $document = NodeTreeBuilder::document($annotated, $host->uuid());
+    $this->assertCount(1, $document);
+    $root = $document[0];
+    $this->assertSame(['kind', 'uuid', '_element', 'children'], array_keys($root));
+    $this->assertSame('entity', $root['kind']);
+    $this->assertSame($entity->uuid(), $root['uuid']);
+    $this->assertSame($annotated['_element'], $root['_element']);
+    $this->assertSame($annotated['layout'], $root['children']);
+    // The derivation reads the blueprint; the serializer's layout keeps the
+    // sections at the top.
+    $this->assertSame(['container'], array_column($annotated['layout'], 'kind'));
+    $this->assertSame($root['children'][0], NodeTreeBuilder::find($root['children'], $annotated['layout'][0]['uuid']));
+
+    // A keyless root: a host with no uuid still gets the node.
+    foreach ([NULL, ''] as $missing) {
+      $keyless = NodeTreeBuilder::document($annotated, $missing);
+      $this->assertSame(['kind', 'uuid', '_element', 'children'], array_keys($keyless[0]));
+      $this->assertNull($keyless[0]['uuid']);
+      $this->assertSame($annotated['layout'], $keyless[0]['children']);
+    }
+
+    // Empty: a sectionless, unannotated blueprint answers a bare root.
+    $this->assertSame(
+      [['kind' => 'entity', 'uuid' => $entity->uuid(), '_element' => NULL, 'children' => []]],
+      NodeTreeBuilder::document(['entity_type' => 'entity_test', 'bundle' => 'entity_test'], $entity->uuid()),
+    );
   }
 
 }

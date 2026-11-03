@@ -65,4 +65,16 @@ interface ModeInterface extends ConfigurableInterface {
    */
   public function buildModeButton(): array;
 
+  /**
+   * Builds the exit control the mode's own top bar renders.
+   *
+   * The entry (buildModeButton(), in core's bar) says what you enter; the
+   * exit says you are done. Both carry .daedalus-ui-mode-button[data-mode],
+   * so daedalus-ui.js's entry/exit state sync reads them as one pair.
+   *
+   * @return array
+   *   A render array for the exit button.
+   */
+  public function buildModeExitButton(): array;
+
 }

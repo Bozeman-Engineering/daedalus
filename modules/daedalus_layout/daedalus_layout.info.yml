@@ -3,7 +3,7 @@ description: "A drop in replacement for the Layout Builder UI."
 type: module
 core_version_requirement: '>=11.3 <11.5'
 package: Daedalus
-configure: daedalus_ui.settings
+configure: daedalus.admin_config
 dependencies:
   - daedalus:daedalus
   - drupal:layout_builder

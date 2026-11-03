@@ -22,7 +22,7 @@
  * `timeline-trigger` / `animation-trigger` and the `@supports not` hold
  * beside any bound block, on element and variant blocks alike. Generated
  * boxes ride both too: the terminal pseudo-element (`&::before`,
- * `.quote::after`, `> pb-text::before`) printed last on every target,
+ * `.quote::after`, `> d-text::before`) printed last on every target,
  * after a state's suffix and the hold's :not(), the anchor continued
  * onto a rule's landing in the rule-wear lane. documentCases exercise the
  * ordering pair (NodeTreeBuilder::styleMapOf / styleMapOf): each case is

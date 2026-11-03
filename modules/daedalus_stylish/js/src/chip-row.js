@@ -2,6 +2,7 @@ import { h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useMenu } from './menu.js';
 import { chipFaces, chipMenuItems, systemScheme } from './chip-row-model.js';
+import { bandRangeText } from './canvas-stops.js';
 
 /**
  * The chip row: the inspector's pose, the pose group's first line.
@@ -19,9 +20,10 @@ import { chipFaces, chipMenuItems, systemScheme } from './chip-row-model.js';
  * lives in chip-row-model.js; this component only maps the typed
  * descriptors to translated strings and dispatches the picked actions:
  * force state through the source, vector poses as partial writes through
- * the source's canvas-vector seam, and the preview-window tail as the
- * popout window.open (leader page only — the satellite host composes no
- * previewWindow opener, so the tail honestly stays away there).
+ * the source's canvas-vector seam, and the preview-window tail through
+ * daedalus_ui's one opener (Drupal.Daedalus.openPreviewWindow; leader
+ * page only — the satellite host passes previewWindow as false, so the
+ * tail honestly stays away there).
  */
 
 /**
@@ -68,10 +70,7 @@ const hintText = (hint) => {
     return undefined;
   }
   if (hint.kind === 'range') {
-    if (hint.min !== undefined && hint.max !== undefined) {
-      return `${hint.min}-${hint.max}px`;
-    }
-    return hint.max !== undefined ? `≤ ${hint.max}px` : `≥ ${hint.min}px`;
+    return bandRangeText(hint);
   }
   return {
     auto: Drupal.t('edits apply everywhere'),
@@ -99,10 +98,15 @@ const CHIP_TITLES = () => ({
  *   The selection-scoped force state.
  * @param {boolean} props.hasSelection
  *   Whether an element is selected (gates the state chip).
- * @param {?object} props.previewWindow
- *   The preview-window opener {url, scope} (the preview route's URL and
- *   the edit session's scope, forwarded as ?scope per the pop-out route
- *   contract), or null where the host has none (the satellite window).
+ * @param {Array<object>} props.literals
+ *   The literal clauses in use on the selected element's rows
+ *   (editing-at.js literalClauses): each posable one is a chip entry on
+ *   its axis.
+ * @param {boolean} props.previewWindow
+ *   Whether a preview window is available to open (the Edit mode
+ *   attached daedalusUi.responsivePreview to this page); false where the
+ *   host has none (the satellite window), and the width menu drops its
+ *   tail.
  */
 export const ChipRow = ({
   source,
@@ -110,7 +114,8 @@ export const ChipRow = ({
   vector,
   forceState,
   hasSelection,
-  previewWindow = null,
+  literals = [],
+  previewWindow = false,
 }) => {
   const conditions = guide.conditions ?? {};
   // The resolved system scheme, kept live: the scheme chip's resting face
@@ -147,14 +152,9 @@ export const ChipRow = ({
     } else if (action.type === 'pose') {
       source.setCanvasVector?.({ [action.axis]: action.value });
     } else if (action.type === 'preview-window' && previewWindow) {
-      // The same page is reachable at several URLs; pass the real one.
-      const page = window.location.pathname + window.location.search;
-      const url = `${previewWindow.url}?scope=${encodeURIComponent(previewWindow.scope)}&url=${encodeURIComponent(page)}`;
-      window.open(
-        url,
-        'daedalus_ui_responsive_preview',
-        'popup=yes,width=520,height=920',
-      );
+      // daedalus_ui's one opener: the window's name, its features and the
+      // pop-out route contract live there (daedalus_ui/preview_window).
+      Drupal.Daedalus.openPreviewWindow();
     }
   };
 
@@ -163,8 +163,9 @@ export const ChipRow = ({
       vector,
       forceState,
       conditions,
+      literals,
       scheme,
-      previewWindow: Boolean(previewWindow),
+      previewWindow,
     }).map((item) =>
       item.separator
         ? item
@@ -180,6 +181,7 @@ export const ChipRow = ({
   const chips = chipFaces(vector, forceState, conditions, {
     scheme,
     hasSelection,
+    literals,
   });
 
   return (

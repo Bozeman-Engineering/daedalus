@@ -12,13 +12,13 @@ use Drupal\daedalus_blueprint\Host\BlueprintHost;
 /**
  * Keeps the linked placement derivatives in step with the blueprints.
  *
- * A linked placement block derives per published block-scope blueprint
- * entity (LinkedBlueprintDeriver), and block plugin definitions are
- * cached without entity dependencies, so a blueprint's birth, a status
- * or label change and its deletion must drop them for the Add panel, the
- * schema and the op door to offer the right set. The entity type is the
- * library module's, known here by its id; on a site without it these
- * hooks never fire for it.
+ * A linked placement block derives per block-scope blueprint entity,
+ * published or not (LinkedBlueprintDeriver; publication is the fit
+ * gate's and the primitive's question), and block plugin definitions are
+ * cached without entity dependencies, so a blueprint's birth, a label
+ * change and its deletion must drop them for the schema and the op door
+ * to know the right set. The entity type is the library module's, known
+ * here by its id; on a site without it these hooks never fire for it.
  */
 final class LinkedBlueprintHooks {
 

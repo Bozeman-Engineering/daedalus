@@ -29,7 +29,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * the root anchor, at most once per document), surfaced by the
  * serializer as the top-level container's `slot` key, written by the
  * instantiator from a tree, printed and parsed by the dialect as
- * <pb-slot name="id">, and kept whole by the verbs that could break it
+ * <d-slot name="id">, and kept whole by the verbs that could break it
  * (move, duplicate, replace, set).
  *
  * Two hosts: an overridable entity_test page exercises the doors (a
@@ -251,7 +251,7 @@ class SlotSectionsTest extends BlueprintKernelTestBase {
     $this->assertSame([$first => NULL, $hero => 'hero'], $this->ownSlots($host));
 
     // The id is a machine name.
-    [$code, $path] = $this->refusal($this->apply($host, [['op' => 'add_section', 'location' => $root, 'slot' => 'Hero band']]));
+    [$code, $path] = $this->refusal($this->apply($host, [['op' => 'add_section', 'location' => $root, 'slot' => 'Hero section']]));
     $this->assertSame(['INVALID_SLOT', 'slot'], [$code, $path]);
     [$code] = $this->refusal($this->apply($host, [['op' => 'add_section', 'location' => $root, 'slot' => '']]));
     $this->assertSame('INVALID_SLOT', $code);
@@ -340,7 +340,7 @@ class SlotSectionsTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * The dialect prints a slot section as <pb-slot name="id"> and parses it back.
+   * The dialect prints a slot section as <d-slot name="id"> and parses it back.
    */
   public function testDialectRoundTrip(): void {
     $hero = (new PhpUuid())->generate();
@@ -355,12 +355,12 @@ class SlotSectionsTest extends BlueprintKernelTestBase {
     $parser = $this->container->get('daedalus_blueprint.dialect_parser');
     $print = $printer->print($this->serializer->serialize($locked), $catalog)->text;
     $expected = <<<HTML
-<pb-slot id="{$this->templateSection}" name="main">
-  <pb-block id="{$this->templateBlock}" plugin="system_powered_by_block" />
-</pb-slot>
-<pb-slot id="{$hero}" name="hero">
-  <pb-block id="{$block}" plugin="system_powered_by_block" />
-</pb-slot>
+<d-slot id="{$this->templateSection}" name="main">
+  <d-block id="{$this->templateBlock}" plugin="system_powered_by_block" />
+</d-slot>
+<d-slot id="{$hero}" name="hero">
+  <d-block id="{$block}" plugin="system_powered_by_block" />
+</d-slot>
 
 HTML;
     $this->assertSame($expected, $print);
@@ -368,7 +368,7 @@ HTML;
     $reparse = $parser->parseDocument($print, $catalog);
     $this->assertSame([], array_map('strval', $reparse->errors));
     $this->assertSame($print, $printer->print($reparse->tree, $catalog)->text, 'print(parse(x)) == x');
-    $this->assertSame('hero', $reparse->tree[1]['slot'], 'name on <pb-slot> parses as the node\'s slot.');
+    $this->assertSame('hero', $reparse->tree[1]['slot'], 'name on <d-slot> parses as the node\'s slot.');
     $this->assertArrayNotHasKey('label', $reparse->tree[1], 'A slot section\'s name is its slot, never a label.');
     $this->assertSame($hero, $reparse->tree[1]['uuid']);
 
@@ -376,25 +376,25 @@ HTML;
     // slot is the word it is called by. A plain container still prints
     // its label as name.
     $labelled = [['kind' => 'container', 'layout_id' => 'eb_test_container', 'uuid' => $hero, 'label' => 'Welcome', 'slot' => 'hero', 'children' => []]];
-    $this->assertSame("<pb-slot id=\"$hero\" name=\"hero\">\n</pb-slot>\n", $printer->print($labelled, $catalog)->text);
+    $this->assertSame("<d-slot id=\"$hero\" name=\"hero\">\n</d-slot>\n", $printer->print($labelled, $catalog)->text);
     $plain = [['kind' => 'container', 'layout_id' => 'eb_test_container', 'uuid' => $hero, 'label' => 'Welcome', 'children' => []]];
-    $this->assertSame("<pb-container id=\"$hero\" name=\"Welcome\">\n</pb-container>\n", $printer->print($plain, $catalog)->text);
+    $this->assertSame("<d-container id=\"$hero\" name=\"Welcome\">\n</d-container>\n", $printer->print($plain, $catalog)->text);
 
     // The grammar: top level only, name required, the fragment door the same.
-    $result = $parser->parseDocument('<pb-container id="c"><pb-slot id="s" name="aside"></pb-slot></pb-container>', $catalog);
+    $result = $parser->parseDocument('<d-container id="c"><d-slot id="s" name="aside"></d-slot></d-container>', $catalog);
     $this->assertSame(['ILLEGAL_CONTAINMENT'], array_map(static fn ($e) => $e->code, $result->errors));
     $this->assertSame(1, $result->errors[0]->line);
-    $result = $parser->parseDocument('<pb-slot id="s"></pb-slot>', $catalog);
+    $result = $parser->parseDocument('<d-slot id="s"></d-slot>', $catalog);
     $this->assertSame(['ILLEGAL_ATTR'], array_map(static fn ($e) => $e->code, $result->errors));
     $this->assertStringContainsString('needs name=', $result->errors[0]->message);
     $result = $parser->parseDocument('<slot name="hero"></slot>', $catalog);
     $this->assertSame(['UNPREFIXED_TAG'], array_map(static fn ($e) => $e->code, $result->errors));
-    $this->assertStringContainsString('<pb-slot>', $result->errors[0]->message);
-    $this->assertTrue($parser->parseFragment('<pb-slot id="s" name="aside"></pb-slot>', $catalog, TRUE)->isValid(), 'At the top level the fragment door takes a slot section.');
-    $this->assertSame(['ILLEGAL_CONTAINMENT'], array_map(static fn ($e) => $e->code, $parser->parseFragment('<pb-slot id="s" name="aside"></pb-slot>', $catalog)->errors), 'Inside a container it does not.');
-    $result = $parser->parseDocument('<pb-slot id="s" name="aside" bogus="1"></pb-slot>', $catalog);
+    $this->assertStringContainsString('<d-slot>', $result->errors[0]->message);
+    $this->assertTrue($parser->parseFragment('<d-slot id="s" name="aside"></d-slot>', $catalog, TRUE)->isValid(), 'At the top level the fragment door takes a slot section.');
+    $this->assertSame(['ILLEGAL_CONTAINMENT'], array_map(static fn ($e) => $e->code, $parser->parseFragment('<d-slot id="s" name="aside"></d-slot>', $catalog)->errors), 'Inside a container it does not.');
+    $result = $parser->parseDocument('<d-slot id="s" name="aside" bogus="1"></d-slot>', $catalog);
     $this->assertSame(['ILLEGAL_ATTR'], array_map(static fn ($e) => $e->code, $result->errors));
-    $this->assertSame('bogus is not an attribute of <pb-slot>', $result->errors[0]->message);
+    $this->assertSame('bogus is not an attribute of <d-slot>', $result->errors[0]->message);
   }
 
   /**
@@ -409,7 +409,7 @@ HTML;
     // Replacing the slot section with the slot written again is one fill:
     // the old section goes, the new one carries the slot.
     $result = $this->apply($host, [
-      ['op' => 'replace', 'ref' => $hero, 'html' => '<pb-slot name="hero"><pb-block plugin="system_powered_by_block" /></pb-slot>'],
+      ['op' => 'replace', 'ref' => $hero, 'html' => '<d-slot name="hero"><d-block plugin="system_powered_by_block" /></d-slot>'],
     ], $options);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $slots = $this->ownSlots($host);
@@ -422,7 +422,7 @@ HTML;
     // Two fragment roots claiming one slot are the duplicate, and the
     // refused batch rolls back whole.
     [$code] = $this->refusal($this->apply($host, [
-      ['op' => 'replace', 'ref' => $filled, 'html' => '<pb-slot name="aside"></pb-slot><pb-slot name="aside"></pb-slot>'],
+      ['op' => 'replace', 'ref' => $filled, 'html' => '<d-slot name="aside"></d-slot><d-slot name="aside"></d-slot>'],
     ], $options));
     $this->assertSame('BLUEPRINT_SLOT_DUPLICATE', $code);
     $this->assertSame([NULL, 'hero'], array_values($this->ownSlots($host)), 'The refused batch rolled back.');
@@ -434,10 +434,10 @@ HTML;
 
     // An insert at the root takes a slot section like a container; inside
     // a container it is refused by the grammar.
-    $result = $this->apply($host, [['op' => 'insert', 'at' => ['ref' => 'root', 'position' => 'beforeend'], 'html' => '<pb-slot name="aside"></pb-slot>']], $options);
+    $result = $this->apply($host, [['op' => 'insert', 'at' => ['ref' => 'root', 'position' => 'beforeend'], 'html' => '<d-slot name="aside"></d-slot>']], $options);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $this->assertSame([NULL, 'hero', 'aside'], array_values($this->ownSlots($host)));
-    [$code] = $this->refusal($this->apply($host, [['op' => 'insert', 'at' => ['ref' => $first, 'position' => 'beforeend'], 'html' => '<pb-slot name="deep"></pb-slot>']], $options));
+    [$code] = $this->refusal($this->apply($host, [['op' => 'insert', 'at' => ['ref' => $first, 'position' => 'beforeend'], 'html' => '<d-slot name="deep"></d-slot>']], $options));
     $this->assertSame('ILLEGAL_CONTAINMENT', $code);
   }
 

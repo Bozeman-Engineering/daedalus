@@ -7,10 +7,22 @@
  * (src/Selector/SelectorMatcher.php, authoritative), locked by
  * SelectorMatcherTest's shared battery through
  * tests/js/selector-matcher-cases.mjs. Both read the same input: the
- * delivered blueprint's lean node tree (`layout`: kind-discriminated
+ * DOCUMENT tree (daedalus_ui's documentTree() in
+ * js/edit_mode/blueprint/document-tree.js; NodeTreeBuilder::document()
+ * on the server): one top-level node of kind `entity`, the host above
+ * its sections exactly as the canvas root wrapper
+ * (`data-selectable="entity:{uuid}"`) stands above them in the DOM, with
+ * the delivered blueprint's lean node tree (`layout`: kind-discriminated
  * container, region and block nodes carrying daedalus_ui's `_element`
- * annotations; the leader reads it off the mirror, the satellite
- * receives it by broadcast).
+ * annotations) as its children. The entity is the one root: the
+ * farthest ancestor of every element, the owner whose `> *` is the
+ * sections, the node whose minted words name the page. Its facts are
+ * the blueprint root's own annotation (`_element.name/type/icon`, the
+ * entity kind's markup); the host's fields render OUTSIDE the canvas
+ * root, so no field markup folds into the root's bag. A document whose
+ * root carries no uuid (a template host, the site frame) keeps the node
+ * as structure nothing addresses: the sections' ancestry holds, nothing
+ * names the root.
  *
  * A rule `{owner}::{selector}` is evaluated the way the browser evaluates
  * the printed `@scope ([data-selectable="{owner}"]) { targets }`: the
@@ -33,7 +45,51 @@
  * of the tree, or, for one unqualified tag reached by descent, when the
  * node carries the tag inside (the bag below); `:not()` holds when its
  * compound does not match the node, a part class there judged by the
- * node's own anatomy (`parts`).
+ * node's own anatomy (`parts`); `:is()` holds when any of its member
+ * compounds matches the node, each member judged exactly as `:not()`'s
+ * compound is (`> *:is(d-text, d-image)` is the two kinds;
+ * `> d-text:is(:hover, :focus-within) a` reaches as `> d-text a`, states
+ * being reach-neutral); a position qualifier (`:first-child`,
+ * `:nth-child(2n+1)`, `:last-of-type`, `:empty` and kin, the grammar's
+ * POSITIONS / NTH_POSITIONS) is judged by structuralHolds over the
+ * node's place among its tree siblings (its index and count, its index
+ * and count among the siblings sharing its root tag for the `-of-type`
+ * forms, and whether it is empty) on a compound the tree matches by
+ * node (`*`, the implied subject, a type, the anchor), and is
+ * reach-neutral on a tag or class compound (holds as if absent: a tag's
+ * position may be a position inside a root, where the tag bag below has
+ * no order); a CLASS qualifier (`li.active`,
+ * `> d-text.daedalus-stylish-variant--featured`) is judged by the node's
+ * WEAR when the class is a variant class (variant-class.js: the class a
+ * worn variant delivers on its element, a fact of the host's style map
+ * the matcher is built with, so "the text blocks wearing Featured" is a
+ * tree question) on a compound the tree matches by node, while a markup
+ * class (the page's JavaScript toggles it, the tree never sees it) and
+ * any class on a tag or class compound are reach-neutral; an ATTRIBUTE
+ * qualifier and a pseudo-class that is no position (a state such as
+ * `:hover`, an unpublished `:visited`) are reach-neutral everywhere
+ * (reach is structural, and the pose lights the state); the anchor `&`,
+ * the leading compound of a qualified-anchor selector (`&:first-child`,
+ * `&:not(:last-child) > *`), matches the scope root alone, its
+ * qualifiers judged against the owner node.
+ *
+ * A block's FIELD is inside its block, in a side table, never in the
+ * tree: an open render's field root (`block:{uuid}:{name}`, the
+ * validator's `field` key form, the key an open render's prose rows
+ * hang under) is a record built from the block node's `_element.fields`
+ * (one per annotated field, kind `field`, address `kind:field` as the
+ * field root's stamp carries, no root tag, its tags and parts from the
+ * field's own markup, its wear from the map, no minted words; a field
+ * annotated `element: false` has no element in any view and gets no
+ * record; a keyless block carries none). has() and facts() answer it,
+ * ancestors() answers the block's ancestors plus the block (the field's
+ * rows inherit the block's rules and its ancestors'), and reaches()
+ * judges its tags and parts with the block's node as its place. A
+ * record is never a node: `matching` never lists it, `matches` is false
+ * for it (a field is not an element a rule targets; `> *` from the block
+ * never sees it), no chain or `:has()` walks through it, and as an owner
+ * it targets nothing (a field's own rules land inside it, where the tree
+ * has no nodes).
  *
  * A node's anatomy is a fact of the node, not of the tree: `parts` is
  * the annotation's declared part tree flattened to `selector → tag`
@@ -70,26 +126,33 @@
  * under a root), so it never reaches inside, parts included. A terminal
  * pseudo-element is a box with no node (it exists iff the cascade sets
  * `content`), so the tree never sees it: matches and matching answer a
- * pseudo rule's HOSTS (`> pb-text::before` matches the text blocks,
+ * pseudo rule's HOSTS (`> d-text::before` matches the text blocks,
  * `&::before` the owner itself), and reaches compares the pseudo by
  * name (the rule's and the position's must agree) before answering the
- * host as it would the pseudo-free position. Structural facts evaluate
- * against the sibling index by their printed wrapper (satisfies,
- * structuralHolds), the twin of the browser's own matching for the
- * parameterless pseudo-classes.
+ * host as it would the pseudo-free position. A reader asking whether the
+ * OWNER itself stands at a position (a stored fact condition's printed
+ * wrapper, until the fact convergence rewrites it into the key) asks
+ * matches with the wrapper as the owner's anchor qualifier
+ * (`matches(key, '&' + wrapper, key)`): one judge, structuralHolds, for
+ * the anchor and for every compound.
  *
  * presentRoster() and typeOfAddress() are the roster over the facts:
  * the one "what is actually here" derivation the code view's selector
  * completion offers from (the types and tags a matched set carries).
  */
 import {
+  ANCHOR_KIND,
   CHILD,
   CLASS_PART,
+  CLASS_QUALIFIER,
   DESCENDANT,
   HAS,
+  IS,
   NEXT,
+  NOT,
+  NTH_POSITIONS,
+  POSITIONS,
   SUBSEQUENT,
-  SUFFIX,
   TAG,
   TYPE,
   TYPE_BLOCK,
@@ -101,6 +164,8 @@ import {
 } from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 import { INSTANCE_PART } from './parts.js';
 import { blockPluginBase } from './style-guide.js';
+import { fragmentClass, isVariantClass } from './variant-class.js';
+import { entryRefs } from './variant-scope.js';
 
 const isPlainObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -109,49 +174,116 @@ const nonEmptyString = (value) =>
   typeof value === 'string' && value !== '' ? value : null;
 
 /**
- * Whether a structural pseudo-class holds at a sibling position.
+ * Whether a canonical `An+B` argument admits a 1-based position
+ * (SelectorMatcher::nthHolds mirror).
  *
- * The tree twin of the browser's own matching for the parameterless
- * structural facts (plus odd and even, the two parameterless spellings
- * of :nth-child) and their :not() negations. The wrapper IS the
- * pseudo-class the printer emits, so evaluating it reads the same text
- * the browser will; a wrapper outside this vocabulary (a site's
- * :nth-child(3n+1)) is unknown and never holds, which a row reads as
- * unlit rather than a promise. Each negation is spelled out rather than
- * derived from a :not() prefix so that an unknown wrapper inside :not()
- * stays unknown instead of holding by negation.
- *
- * @param {string} wrapper
- *   The condition's pseudo-class wrapper.
- * @param {{index: number, count: number, empty: boolean}} place
- *   The 0-based sibling index, the sibling count, and whether the
- *   element is empty.
+ * The argument is the grammar's canonical spelling (canonicalNth: `odd`,
+ * `even`, `n`, `-n`, `2n+1`, `-n+3`, `n-1`, `3`, `0`); p is admitted
+ * when p = An + B for an integer n >= 0. Anything else is a caller bug
+ * and throws.
  */
-export const structuralHolds = (wrapper, { index, count, empty }) => {
-  switch (wrapper) {
-    case ':first-child':
-      return index === 0;
-    case ':last-child':
-      return index === count - 1;
-    case ':only-child':
-      return count === 1;
-    case ':empty':
-      return empty;
-    case ':nth-child(odd)':
-      return index % 2 === 0;
-    case ':nth-child(even)':
-      return index % 2 === 1;
-    case ':not(:first-child)':
-      return index !== 0;
-    case ':not(:last-child)':
-      return index !== count - 1;
-    case ':not(:only-child)':
-      return count !== 1;
-    case ':not(:empty)':
-      return !empty;
-    default:
-      return false;
+export const nthHolds = (argument, position) => {
+  if (argument === 'odd') {
+    return position % 2 === 1;
   }
+  if (argument === 'even') {
+    return position % 2 === 0;
+  }
+  if (/^-?\d+$/.test(argument)) {
+    return position === parseInt(argument, 10);
+  }
+  const match = /^(-?)(\d*)n([+-]\d+)?$/.exec(argument);
+  if (match === null) {
+    throw new TypeError(`"${String(argument)}" is not a canonical An+B.`);
+  }
+  const a = (match[2] === '' ? 1 : parseInt(match[2], 10)) * (match[1] === '-' ? -1 : 1);
+  const b = match[3] === undefined ? 0 : parseInt(match[3], 10);
+  if (a === 0) {
+    return position === b;
+  }
+  const steps = position - b;
+  return steps % a === 0 && steps / a >= 0;
+};
+
+/**
+ * Whether a position qualifier holds at a place among siblings
+ * (SelectorMatcher::structuralHolds mirror).
+ *
+ * The tree twin of the browser's own matching for CSS's tree-structural
+ * pseudo-classes, over the grammar's record (`{name, argument}`: a
+ * POSITIONS name with a null argument, an NTH_POSITIONS name with its
+ * canonical `An+B`). `:nth-child(An+B)` holds at the 1-based position p
+ * when p = An + B for some n >= 0 (`odd` and `even` as CSS reads them);
+ * the `-last-` forms count from the end; the `-of-type` forms read the
+ * place among the siblings sharing the node's root tag, and a node
+ * whose tag the tree does not know is of no type: never first, last or
+ * nth of it. A name outside the position vocabulary is a caller bug and
+ * throws.
+ *
+ * @param {{name: string, argument: ?string}} qualifier
+ *   The grammar's qualifier record.
+ * @param {{index: number, count: number, empty: boolean, typeIndex:
+ *   ?number, typeCount: ?number}} place
+ *   The 0-based sibling index, the sibling count, whether the element is
+ *   empty, and the index and count among the siblings sharing its tag
+ *   (null for an unknown tag).
+ */
+export const structuralHolds = ({ name, argument = null }, { index, count, empty, typeIndex, typeCount }) => {
+  switch (name) {
+    case 'first-child':
+      return index === 0;
+    case 'last-child':
+      return index === count - 1;
+    case 'only-child':
+      return count === 1;
+    case 'empty':
+      return empty;
+    case 'first-of-type':
+      return typeIndex === 0;
+    case 'last-of-type':
+      return typeIndex !== null && typeIndex === typeCount - 1;
+    case 'only-of-type':
+      return typeCount === 1;
+    case 'nth-child':
+      return nthHolds(String(argument), index + 1);
+    case 'nth-last-child':
+      return nthHolds(String(argument), count - index);
+    case 'nth-of-type':
+      return typeIndex !== null && nthHolds(String(argument), typeIndex + 1);
+    case 'nth-last-of-type':
+      return typeIndex !== null && nthHolds(String(argument), typeCount - typeIndex);
+    default:
+      throw new TypeError(`":${String(name)}" is not a position qualifier.`);
+  }
+};
+
+/**
+ * Whether a qualifier name is one of the grammar's position pseudo-classes.
+ */
+const isPosition = (name) => POSITIONS.includes(name) || NTH_POSITIONS.includes(name);
+
+/**
+ * Whether a class qualifier holds against a node's wear
+ * (SelectorMatcher::classHolds mirror): a variant class holds when the
+ * node wears it; a markup class is no tree fact and holds as if absent.
+ */
+const classHolds = (className, wear) => !isVariantClass(className) || wear.includes(className);
+
+/**
+ * The classes a node's worn variants deliver on it (SelectorMatcher::wear
+ * mirror): the element entry's references, each as the class the stamp
+ * carries (fragmentClass); a pair that cannot be a class name stamps
+ * nothing, and a rule key's wear stamps no class and is not here.
+ */
+const wearOf = (map, key) => {
+  const classes = [];
+  (key === null || !isPlainObject(map) ? [] : entryRefs(map[key])).forEach((ref) => {
+    const className = fragmentClass(ref.variant, ref.fragment);
+    if (className !== null && !classes.includes(className)) {
+      classes.push(className);
+    }
+  });
+  return classes;
 };
 
 /**
@@ -169,39 +301,24 @@ export const typeMatches = (type, address) => {
 };
 
 /**
- * The facts one node carries, before its place among its siblings
- * (SelectorMatcher::nodeFacts mirror).
+ * The anatomy a markup annotation carries, with field markups folded in
+ * (SelectorMatcher::anatomy mirror): the one derivation behind a node's
+ * bag and a field record's.
+ *
+ * @param {Object} markup
+ *   The annotation's markup (`_element.markup`, or a field's
+ *   `fields[name].markup`): `tag`, `tags`, `parts`, `hoisted`,
+ *   `instances`.
+ * @param {Array<Object>} fields
+ *   The annotated fields whose markup renders inside the same root (a
+ *   block's, for an open render); [] for a record over one field's markup.
+ *
+ * @return {{tags: string[], parts: Object<string, ?string>}}
  */
-const nodeFacts = (node) => {
-  const kind =
-    typeof node.kind === 'string'
-      ? node.kind
-      : 'layout_id' in node
-        ? 'container'
-        : 'block';
-  const uuid = nonEmptyString(node.uuid);
-  let key = null;
-  let address = null;
-  if (kind === 'container') {
-    key = uuid === null ? null : `container:${uuid}`;
-    const layoutId = nonEmptyString(node.layout_id);
-    address = layoutId === null ? null : `layout:${layoutId}`;
-  } else if (kind === 'block') {
-    key = uuid === null ? null : `block:${uuid}`;
-    const blockType = nonEmptyString(node.block_type);
-    const pluginBase = blockPluginBase(node);
-    if (blockType !== null) {
-      address = `block_type:${blockType}`;
-    } else if (pluginBase !== null) {
-      // The base plugin (a field node's is field_block), as
-      // NodeTreeBuilder::pluginBase derives it for ElementAddress::blockPlugin.
-      address = `block_plugin:${pluginBase}`;
-    }
-  }
-  const markup = isPlainObject(node._element?.markup) ? node._element.markup : {};
+const anatomyOf = (markup, fields) => {
   const tag = nonEmptyString(markup.tag);
-  // The tags the node's rich text carries: on the block's own markup for
-  // a composed render, per field for an open one; both render inside the
+  // The tags the rich text carries: on the block's own markup for a
+  // composed render, per field for an open one; both render inside the
   // root, so the union answers "is there a {tag} inside".
   const tags = [];
   const collect = (list) => {
@@ -212,9 +329,7 @@ const nodeFacts = (node) => {
     });
   };
   collect(markup.tags);
-  Object.values(isPlainObject(node._element?.fields) ? node._element.fields : {}).forEach(
-    (field) => collect(field?.markup?.tags),
-  );
+  fields.forEach((field) => collect(field?.markup?.tags));
   // The anatomy: the declared part tree flattened, a nested part right
   // after its parent with its own tag, then the hoisted parts (the root's
   // own element wearing the class) at the root's tag. A part declaring
@@ -255,11 +370,92 @@ const nodeFacts = (node) => {
     });
   };
   fold(markup.instances);
-  Object.values(isPlainObject(node._element?.fields) ? node._element.fields : {}).forEach(
-    (field) => fold(field?.markup?.instances),
-  );
+  fields.forEach((field) => fold(field?.markup?.instances));
   // A part's tag is inside the root as much as the prose's tags are.
   collect(Object.values(parts));
+  return { tags, parts };
+};
+
+/**
+ * The field records a keyed block node carries, before their wear
+ * (SelectorMatcher::fieldRecords mirror).
+ *
+ * One per annotated field (`_element.fields[name]`) that has an element:
+ * a field annotated `element: false` answers to its key in no view, so
+ * it gets no record. Each is keyed `{block key}:{name}` (the validator's
+ * `field` form), kind `field`, addressed `kind:field` (the field root's
+ * stamp), with no root tag (the tree never knows the field wrapper's),
+ * its tags and parts from the field's own markup, and no minted words.
+ *
+ * @param {Object} node
+ *   The block node.
+ * @param {string} key
+ *   The block's key.
+ *
+ * @return {Array<Object>}
+ */
+const fieldRecords = (node, key) =>
+  Object.entries(isPlainObject(node._element?.fields) ? node._element.fields : {})
+    .filter(([name, field]) => name !== '' && isPlainObject(field) && field.element !== false)
+    .map(([name, field]) => ({
+      key: `${key}:${name}`,
+      kind: 'field',
+      address: 'kind:field',
+      tag: null,
+      ...anatomyOf(isPlainObject(field.markup) ? field.markup : {}, []),
+      name: null,
+      type: null,
+      icon: null,
+    }));
+
+/**
+ * The facts one node carries, before its place among its siblings
+ * (SelectorMatcher::nodeFacts mirror).
+ */
+const nodeFacts = (node) => {
+  const kind =
+    typeof node.kind === 'string'
+      ? node.kind
+      : 'layout_id' in node
+        ? 'container'
+        : 'block';
+  const uuid = nonEmptyString(node.uuid);
+  let key = null;
+  let address = null;
+  if (kind === 'entity') {
+    // The document's root: the host entity, addressed by the bare entity
+    // kind (ElementAddress::ENTITY, the stamp the canvas root wrapper
+    // carries); keyless without a uuid.
+    key = uuid === null ? null : `entity:${uuid}`;
+    address = 'kind:entity';
+  } else if (kind === 'container') {
+    key = uuid === null ? null : `container:${uuid}`;
+    const layoutId = nonEmptyString(node.layout_id);
+    address = layoutId === null ? null : `layout:${layoutId}`;
+  } else if (kind === 'block') {
+    key = uuid === null ? null : `block:${uuid}`;
+    const blockType = nonEmptyString(node.block_type);
+    const pluginBase = blockPluginBase(node);
+    if (blockType !== null) {
+      address = `block_type:${blockType}`;
+    } else if (pluginBase !== null) {
+      // The base plugin (a field node's is field_block), as
+      // NodeTreeBuilder::pluginBase derives it for ElementAddress::blockPlugin.
+      address = `block_plugin:${pluginBase}`;
+    }
+  }
+  const markup = isPlainObject(node._element?.markup) ? node._element.markup : {};
+  const tag = nonEmptyString(markup.tag);
+  // The annotated fields whose markup is inside the root: a block's (an
+  // open render's prose renders inside the block). The entity root's
+  // are NOT: the host's fields render outside the canvas root wrapper,
+  // so an entity rule never reaches them in the browser and the root's
+  // bag is its own markup alone.
+  const fields =
+    kind === 'entity'
+      ? []
+      : Object.values(isPlainObject(node._element?.fields) ? node._element.fields : {});
+  const { tags, parts } = anatomyOf(markup, fields);
   return {
     key,
     kind,
@@ -280,9 +476,9 @@ const nodeFacts = (node) => {
 /**
  * The type compound a node's address spells.
  *
- * `pb-{bundle}` for a block type; the kind spellings for everything the
+ * `d-{bundle}` for a block type; the kind spellings for everything the
  * page language names by kind: a container layout (`layout:…`) is
- * `pb-container`, a plugin block (`block_plugin:…`) is `pb-block`.
+ * `d-container`, a plugin block (`block_plugin:…`) is `d-block`.
  *
  * @param {?string} address
  *   A node's root address (the matcher's facts).
@@ -340,44 +536,67 @@ export const presentRoster = (facts, { inner = false } = {}) => {
 };
 
 /**
- * Builds a matcher over a lean node tree.
+ * Builds a matcher over a document tree.
  *
- * @param {?Array} tree
- *   The ordered top-level container nodes (the blueprint's `layout`).
+ * @param {?Array} document
+ *   The document tree (documentTree() in daedalus_ui's
+ *   js/edit_mode/blueprint/document-tree.js): the one entity node, the
+ *   blueprint's `layout` as its children. A bare layout is a document
+ *   with no root node: the sections are then the roots and nothing
+ *   stands above them.
+ * @param {?Object} map
+ *   The host's style map, for the wear: an element entry's variant
+ *   references are the classes the element is stamped with, which a
+ *   class qualifier naming one is judged against. Without a map no node
+ *   wears anything, and a variant-class qualifier matches no node.
  *
  * @return {{has: Function, facts: Function, ancestors: Function,
- *   matches: Function, matching: Function, reaches: Function,
- *   satisfies: Function}}
+ *   matches: Function, matching: Function, reaches: Function}}
  *   The matcher: has(key), facts(key) → {key, kind, address, tag, tags,
- *   parts, name, type, icon, index, count, childCount, parent} or null
- *   (`parts` the present declared parts and the minted instances inside,
- *   selector → tag, null for a part declaring no tag; `name`, `type` and
+ *   parts, wear, name, type, icon, index, count, childCount, parent} or
+ *   null (`kind` entity, container, block or field; `address` the element
+ *   address, `kind:entity` for the root, `kind:field` for a block's
+ *   field; `parts` the present declared
+ *   parts and the minted instances
+ *   inside, selector → tag, null for a part declaring no tag; `wear` the
+ *   classes its worn variants deliver on it; `name`, `type` and
  *   `icon` the words and the glyph the annotator minted on the node,
  *   `_element.name`, `_element.type` and `_element.icon`, the one
- *   element-naming vocabulary every surface reads), ancestors(key) →
- *   addressable ancestor keys FARTHEST first,
+ *   element-naming vocabulary every surface reads; a field record has
+ *   null words, a null tag, no place (`index` and `count` null,
+ *   `childCount` 0) and its block as `parent`), ancestors(key) →
+ *   addressable ancestor keys FARTHEST first (a field's: its block's,
+ *   then the block),
  *   matches(owner, selector, candidate), matching(owner, selector) →
- *   keys in document order (the hosts for a rule ending in a pseudo),
- *   reaches(owner, selector, candidate, sub) with sub null (the root),
+ *   keys in document order (the hosts for a rule ending in a pseudo;
+ *   never a field key), reaches(owner, selector, candidate, sub) with
+ *   sub null (the root),
  *   a bare tag, a part class, or any of the three with its terminal
- *   pseudo (`&::before`, `a::before`, `.cls::after`), satisfies(key,
- *   wrapper). A selector (rule or sub) is text or parseSelector's record
+ *   pseudo (`&::before`, `a::before`, `.cls::after`). A selector (rule
+ *   or sub) is text or parseSelector's record
  *   `{compounds, pseudo}`; a bare compounds array has dropped the
  *   pseudo and is refused. A selector outside the grammar throws a
  *   TypeError: a rule nothing can print is a caller bug.
  */
-export const createMatcher = (tree) => {
+export const createMatcher = (document, map = null) => {
   const nodes = [];
   const byKey = new Map();
-  // The top-level node indexes in order (the root nodes' sibling list).
+  // The top-level node indexes in order (the root nodes' sibling list:
+  // the one entity node, or the sections of a rootless document).
   const roots = [];
+  // The side table: field key → record (fieldRecords, with its wear and
+  // `parent` the block's node index). Never a node: nothing here is in a
+  // children list, in `roots`, or walked by a chain.
+  const fields = new Map();
   const index = (list, parent) => {
     const siblings = (Array.isArray(list) ? list : []).filter(isPlainObject);
     siblings.forEach((node, position) => {
       const id = nodes.length;
       const children = (Array.isArray(node.children) ? node.children : []).filter(isPlainObject);
+      const own = nodeFacts(node);
       const facts = {
-        ...nodeFacts(node),
+        ...own,
+        wear: wearOf(map, own.key),
         index: position,
         count: siblings.length,
         childCount: children.length,
@@ -393,10 +612,15 @@ export const createMatcher = (tree) => {
       } else {
         nodes[parent].children.push(id);
       }
+      if (own.kind === 'block' && own.key !== null) {
+        fieldRecords(node, own.key).forEach((record) => {
+          fields.set(record.key, { ...record, wear: wearOf(map, record.key), parent: id });
+        });
+      }
       index(children, id);
     });
   };
-  index(tree, null);
+  index(document, null);
 
   // The selector record ({compounds, pseudo}, parseSelector's shape) from
   // text or an already parsed record; a bare compounds array is refused
@@ -438,17 +662,50 @@ export const createMatcher = (tree) => {
     return parent === null ? roots : nodes[parent].children;
   };
   const earlierSiblings = (id) => siblings(id).slice(0, nodes[id].index).reverse();
+  // A node's place among its siblings, as structuralHolds reads it
+  // (SelectorMatcher::place mirror). A block's root holds its content,
+  // which the tree carries no nodes for: a block is never empty; a
+  // container or region wrapper without child nodes is. The type place
+  // is the node's place among the siblings sharing its root tag, null
+  // when the tree does not know the node's tag.
+  const place = (id) => {
+    const facts = nodes[id];
+    let typeIndex = null;
+    let typeCount = null;
+    if (facts.tag !== null) {
+      typeCount = 0;
+      siblings(id).forEach((sibling) => {
+        if (nodes[sibling].tag !== facts.tag) {
+          return;
+        }
+        if (sibling === id) {
+          typeIndex = typeCount;
+        }
+        typeCount += 1;
+      });
+    }
+    return {
+      index: facts.index,
+      count: facts.count,
+      empty: facts.kind !== 'block' && facts.childCount === 0,
+      typeIndex,
+      typeCount,
+    };
+  };
   // Whether the node's facts match a compound's subject: `*` and an
-  // implied subject (a `:not()` argument of qualifiers alone) match
-  // every node; a tag the node's root tag; a type the node's address by
-  // family. A part class matches no node in a chain (anatomy inside a
+  // implied subject (a `:not()` argument or an `:is()` member of
+  // qualifiers alone) match every node; a tag the node's root tag; a
+  // type the node's address by family; the anchor `&` the scope root
+  // alone. A part class matches no node in a chain (anatomy inside a
   // root is not a tree fact, never over-claimed) but IS judged as a
-  // `:not()` argument, the one compound carrying no combinator: a node
-  // whose parts carry the class, hoisted onto its root or nested inside
-  // it, wears the class and is what `:not(.cls)` excludes (the
-  // flattened parts do not tell the two apart, and excluding both is
-  // the reading that never over-claims a reach).
-  const subjectMatches = (id, compound) => {
+  // `:not()` argument or an `:is()` member, the compounds carrying no
+  // combinator: a node whose parts carry the class, hoisted
+  // onto its root or nested inside it, wears the class and is what
+  // `:not(.cls)` excludes (the flattened parts do not tell the two
+  // apart, and excluding both is the reading that never over-claims a
+  // reach); a node wearing the class as a variant class is excluded
+  // the same way.
+  const subjectMatches = (id, compound, anchor) => {
     const facts = nodes[id];
     switch (compound.kind) {
       case null:
@@ -459,21 +716,62 @@ export const createMatcher = (tree) => {
       case TYPE:
         return facts.address !== null && typeMatches(compound.name, facts.address);
       case CLASS_PART:
-        return compound.combinator === null && Object.hasOwn(facts.parts, compound.name);
+        return (
+          compound.combinator === null &&
+          (Object.hasOwn(facts.parts, compound.name) || facts.wear.includes(compound.name.slice(1)))
+        );
+      case ANCHOR_KIND:
+        return id === anchor;
       default:
         return false;
     }
   };
   // Whether one node matches one compound: its subject, then every
-  // qualifier (`:has()` by hasHolds, `:not()` when its compound does not
-  // match the node).
-  const compoundMatches = (id, compound) =>
-    subjectMatches(id, compound) &&
-    compound.qualifiers.every((qualifier) =>
-      qualifier.name === HAS
-        ? hasHolds(id, qualifier.argument)
-        : !compoundMatches(id, qualifier.argument),
-    );
+  // qualifier: `:has()` by hasHolds; `:not()` when its compound does not
+  // match the node; `:is()` when any of its member compounds matches
+  // the node, each member judged as `:not()`'s compound is; a position
+  // qualifier by structuralHolds over the
+  // node's place on a compound the tree matches by node (`*`, the
+  // implied subject, a type, the anchor), reach-neutral on a tag or
+  // class compound (a tag's position may be a position inside a root,
+  // where the bag has no order, so the qualifier holds as if absent
+  // rather than promising an order the tree cannot see). A class
+  // qualifier naming a variant class holds by the node's wear on a
+  // compound read by node (reach-neutral on a tag or class compound,
+  // like a position); a markup class, an attribute and a pseudo-class
+  // that is no position hold as if absent everywhere (the tree carries
+  // no markup classes or attributes, and a state is the pose's to
+  // light, never reach). `anchor` is the
+  // node the chain's lead relates to (the scope root at the top level,
+  // the one node `&` matches; the qualified node inside `:has()`);
+  // `byNode` is false inside a `:not()` or an `:is()` whose host
+  // compound is a tag or a class, so `p:not(:last-child)` and
+  // `p:is(:first-child, :last-child)` are as reach-neutral as
+  // `p:last-child`.
+  const compoundMatches = (id, compound, anchor, byNode = true) => {
+    if (!subjectMatches(id, compound, anchor)) {
+      return false;
+    }
+    const judged = byNode && ![TAG, CLASS_PART].includes(compound.kind);
+    return compound.qualifiers.every((qualifier) => {
+      switch (qualifier.name) {
+        case HAS:
+          return hasHolds(id, qualifier.argument);
+        case NOT:
+          return !compoundMatches(id, qualifier.argument, anchor, judged);
+        case IS:
+          // Any member matches the node, each judged as `:not()`'s
+          // compound is (SelectorMatcher::isHolds mirror): a member of
+          // states alone holds as if absent, so
+          // `> d-text:is(:hover, :focus-within) a` reaches as `> d-text a`.
+          return qualifier.argument.some((member) => compoundMatches(id, member, anchor, judged));
+        case CLASS_QUALIFIER:
+          return !judged || classHolds(qualifier.argument, nodes[id].wear);
+        default:
+          return !isPosition(qualifier.name) || !judged || structuralHolds(qualifier, place(id));
+      }
+    });
+  };
   // Whether a `:has()` argument holds at a node: the argument is a
   // relative selector anchored at the node, holding when any node of the
   // tree matches it with its lead related to this node (chainMatches
@@ -508,7 +806,7 @@ export const createMatcher = (tree) => {
   // node and every lead relates to it (descent strictly inside it, `>` a
   // child of it, `+` right after it, `~` anywhere after it).
   const chainMatches = (id, compounds, i, anchor, anchored) => {
-    if (!compoundMatches(id, compounds[i])) {
+    if (!compoundMatches(id, compounds[i], anchor)) {
       return false;
     }
     const { combinator } = compounds[i];
@@ -554,9 +852,43 @@ export const createMatcher = (tree) => {
     }
     return null;
   };
-  const rootOf = (key) => {
-    const pos = typeof key === 'string' ? key.indexOf(SUFFIX) : -1;
-    return pos === -1 ? key : key.slice(0, pos);
+  // A node's addressable ancestors' keys, farthest first (the order the
+  // stack layers them in: the farthest ancestor is the lowest layer).
+  const ancestorKeys = (id) => {
+    const keys = [];
+    for (let at = nodes[id].parent; at !== null; at = nodes[at].parent) {
+      if (nodes[at].key !== null) {
+        keys.push(nodes[at].key);
+      }
+    }
+    return keys.reverse();
+  };
+  // The facts a key answers: the entry's own, its place, its parent key.
+  const publicFacts = (entry, place, parent) => ({
+    key: entry.key,
+    kind: entry.kind,
+    address: entry.address,
+    tag: entry.tag,
+    tags: entry.tags,
+    parts: entry.parts,
+    wear: entry.wear,
+    name: entry.name,
+    type: entry.type,
+    icon: entry.icon,
+    ...place,
+    parent,
+  });
+  // What reaches() judges a candidate by: its anatomy (tags and parts)
+  // and its place in the tree. A node's own; a field record's tags and
+  // parts at its block's node (the field is inside the block, so a rule
+  // reaching inside the block reaches inside the field).
+  const subjectOf = (key) => {
+    const id = byKey.get(key) ?? null;
+    if (id !== null) {
+      return { place: id, tags: nodes[id].tags, parts: nodes[id].parts };
+    }
+    const record = fields.get(key) ?? null;
+    return record === null ? null : { place: record.parent, tags: record.tags, parts: record.parts };
   };
   // A descendant subject sits INSIDE the node, so the chain before it
   // must match the node itself or any ancestor (the engine's walk from
@@ -576,7 +908,7 @@ export const createMatcher = (tree) => {
 
   // Whether the owner's rule targets the candidate's root. A rule ending
   // in a pseudo-element targets the generated boxes of its hosts, and the
-  // host is what the tree can name: `> pb-text::before` matches every
+  // host is what the tree can name: `> d-text::before` matches every
   // text block child (the box hanging on each), the owner's own pseudo
   // (`&::before`, no compounds) the owner alone. Whether the rule
   // DELIVERS at a key is reaches' question, where the pseudo must agree.
@@ -594,43 +926,35 @@ export const createMatcher = (tree) => {
   };
 
   return {
-    has: (key) => byKey.has(key),
+    has: (key) => byKey.has(key) || fields.has(key),
 
     facts: (key) => {
       const id = byKey.get(key) ?? null;
-      if (id === null) {
-        return null;
+      if (id !== null) {
+        const node = nodes[id];
+        return publicFacts(
+          node,
+          { index: node.index, count: node.count, childCount: node.childCount },
+          addressableParent(id),
+        );
       }
-      const node = nodes[id];
-      return {
-        key: node.key,
-        kind: node.kind,
-        address: node.address,
-        tag: node.tag,
-        tags: node.tags,
-        parts: node.parts,
-        name: node.name,
-        type: node.type,
-        icon: node.icon,
-        index: node.index,
-        count: node.count,
-        childCount: node.childCount,
-        parent: addressableParent(id),
-      };
+      // A field record has no place among siblings (the tree carries no
+      // sibling list for it) and no child nodes; its parent is its block.
+      const record = fields.get(key) ?? null;
+      return record === null
+        ? null
+        : publicFacts(record, { index: null, count: null, childCount: 0 }, nodes[record.parent].key);
     },
 
     ancestors: (key) => {
       const id = byKey.get(key) ?? null;
-      if (id === null) {
-        return [];
+      if (id !== null) {
+        return ancestorKeys(id);
       }
-      const keys = [];
-      for (let at = nodes[id].parent; at !== null; at = nodes[at].parent) {
-        if (nodes[at].key !== null) {
-          keys.push(nodes[at].key);
-        }
-      }
-      return keys.reverse();
+      // A field's ancestors are its block's, then the block itself: the
+      // field's rows inherit the block's rules and its ancestors'.
+      const record = fields.get(key) ?? null;
+      return record === null ? [] : [...ancestorKeys(record.parent), nodes[record.parent].key];
     },
 
     matches,
@@ -699,10 +1023,12 @@ export const createMatcher = (tree) => {
       }
       const { compounds } = rule;
       const root = byKey.get(owner) ?? null;
-      const node = byKey.get(candidate) ?? null;
-      if (root === null || node === null || !inScope(node, root) || !compounds.length) {
+      // The candidate: a node, or a field record judged at its block.
+      const subject = subjectOf(candidate);
+      if (root === null || subject === null || !inScope(subject.place, root) || !compounds.length) {
         return false;
       }
+      const { place, tags, parts } = subject;
       const last = compounds[compounds.length - 1];
       const n = compounds.length;
       const { name } = position;
@@ -715,7 +1041,7 @@ export const createMatcher = (tree) => {
         if (!tagSubject || last.name !== name) {
           return false;
         }
-        return nodes[node].tags.includes(name) && descentReaches(node, compounds, root);
+        return tags.includes(name) && descentReaches(place, compounds, root);
       }
       // A class subject after a type: a declared part is the type's
       // anatomy, a legal address on every node the type matches, whether
@@ -725,31 +1051,15 @@ export const createMatcher = (tree) => {
         return (
           last.name === name &&
           n >= 2 &&
-          (!INSTANCE_PART.test(name) || Object.hasOwn(nodes[node].parts, name)) &&
-          chainMatches(node, compounds, n - 2, root, false)
+          (!INSTANCE_PART.test(name) || Object.hasOwn(parts, name)) &&
+          chainMatches(place, compounds, n - 2, root, false)
         );
       }
       if (!tagSubject) {
         return false;
       }
-      const partTag = nodes[node].parts[name] ?? null;
-      return partTag !== null && partTag === last.name && descentReaches(node, compounds, root);
-    },
-
-    satisfies: (key, wrapper) => {
-      const id = byKey.get(rootOf(key)) ?? null;
-      if (id === null) {
-        return false;
-      }
-      const node = nodes[id];
-      // A block's root holds its content, which the tree carries no
-      // nodes for: a block is never empty; a container or region wrapper
-      // without child nodes is.
-      return structuralHolds(wrapper, {
-        index: node.index,
-        count: node.count,
-        empty: node.kind !== 'block' && node.childCount === 0,
-      });
+      const partTag = parts[name] ?? null;
+      return partTag !== null && partTag === last.name && descentReaches(place, compounds, root);
     },
   };
 };

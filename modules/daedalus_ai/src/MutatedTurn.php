@@ -38,8 +38,8 @@ use Symfony\Component\HttpFoundation\Request;
  *   extended, so the client's undo chrome moves with an AI turn exactly
  *   as with a browser mutation (the end-of-request flush would be too
  *   late for the response).
- * - `materials`: a tool that persisted a NON-PAGE entity (a swatch, a
- *   variant) staged nothing and targets nothing, yet the mint must reach
+ * - `materials`: a tool that persisted a NON-PAGE entity (a variant, an
+ *   animation) staged nothing and targets nothing, yet the mint must reach
  *   the client store. The entity hooks recorded it on the request's
  *   MaterialsChangeSet; the first payload built carries the delta, and a
  *   turn with no page mutation at all answers with a materials-only
@@ -107,7 +107,7 @@ class MutatedTurn {
   /**
    * Builds one payload per mutated entity and clears the collection.
    *
-   * A turn whose tools changed materials without mutating a page (a swatch
+   * A turn whose tools changed materials without mutating a page (a variant
    * mint through eb_create_entity) yields one materials-only payload, so
    * the delta reaches the client store through the same pipeline.
    *

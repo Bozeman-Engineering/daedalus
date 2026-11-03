@@ -17,7 +17,7 @@
  *
  * The gradient chip is part of the widget anatomy, so a single gradient
  * layer the chip can own (a literal gradient function, or one var() naming
- * a gradient-kind swatch) is a REPRESENTED state even when no stop claims
+ * a gradient-scale token) is a REPRESENTED state even when no stop claims
  * it: `gradient` carries it and `custom` stays false. Occupancy by
  * anything else on background-image is the cross-widget collision the
  * custom pill reports honestly.
@@ -27,20 +27,24 @@
  * gesture, beside the media stop it lands as.
  */
 
-import { gradientFallback, normalizeValue } from './widget-values.js';
+import {
+  gradientFallback,
+  normalizeValue,
+  stopsFor,
+} from './widget-values.js';
 import { entryAtPose } from './condition-cascade.js';
 import { mediaTokenUuid } from './media-token.js';
 import { isGradientLayer, splitLayers } from './gradient-model.js';
 import { resolvedConstraintsFor, propertyGranted } from './style-guide.js';
-import { facePair, gradientSwatchOf, inlineLiteral } from './materials.js';
+import { facePair, gradientTokenOf, inlineLiteral } from './materials.js';
 
 /**
  * The single gradient a committed background-image value holds, or null.
  *
  * Non-null exactly when the value is ONE layer the gradient chip can own:
  * a gradient function (any type, repeating included), or one var() naming
- * a gradient-kind swatch the materials roster carries. Layered values,
- * media tokens, url()s, color-kind or unknown var() references all answer
+ * a gradient-scale token the materials roster carries. Layered values,
+ * media tokens, url()s, color-scale or unknown var() references all answer
  * null; they are background-image occupancy the color widgets cannot
  * represent.
  *
@@ -59,7 +63,7 @@ export const singleGradient = (guide, materials, value) => {
     return null;
   }
   const trimmed = value.trim();
-  if (gradientSwatchOf(guide, materials, trimmed) !== null) {
+  if (gradientTokenOf(guide, materials, trimmed) !== null) {
     return trimmed;
   }
   const layers = splitLayers(trimmed);
@@ -72,27 +76,27 @@ export const singleGradient = (guide, materials, value) => {
  * One allowed entry as a gradient stop, or null when it is not one.
  *
  * The guide's EXACT spelling is the canonical write (allowed checks are
- * verbatim on both validators). A var() naming a gradient-kind swatch
- * paints from the swatch record's value and wears its label; a literal
+ * verbatim on both validators). A var() naming a gradient-scale token
+ * paints from the token record's value and wears its name; a literal
  * gradient function paints as itself. Everything else in the list ('none',
  * a url() pattern, a color) is background-image vocabulary but not a
  * gradient stop, so it derives nothing here.
  */
 const allowedGradientStop = (guide, materials, raw) => {
   const value = String(raw ?? '').trim();
-  const swatch = gradientSwatchOf(guide, materials, value);
-  if (swatch !== null) {
+  const token = gradientTokenOf(guide, materials, value);
+  if (token !== null) {
     return {
-      id: swatch.ref,
+      id: token.ref,
       value,
       matches: [normalizeValue(value)],
-      label: swatch.label,
+      label: token.name,
       // The display form, straight from the record (a condition-keyed
-      // value shows its default entry), the swatchOptions rule; the
+      // value shows its default entry), the tokenOptions rule; the
       // scheme pair rides beside it for the split face, null when
       // single-valued. Literal gradients below never pair.
-      paint: swatch.value,
-      paintDark: swatch.valueDark,
+      paint: token.value,
+      paintDark: token.valueDark,
     };
   }
   const layers = splitLayers(value);
@@ -117,18 +121,21 @@ const allowedGradientStop = (guide, materials, raw) => {
  * color property's: the same closed-space rules stopsFor encodes,
  * because a stop must never commit a value the server rejects.
  * - An `allowed:` list is the complete value space (verbatim): only its
- *   gradient-shaped entries (curated gradient-swatch var() spellings,
- *   literal gradient functions) become stops; swatch references outside
+ *   gradient-shaped entries (curated gradient-token var() spellings,
+ *   literal gradient functions) become stops; token references outside
  *   the list never offer.
  * - A `scale:` constraint without an allowed list beside it closes the
- *   property to minted tokens, and no token scale shape maps onto images,
- *   so nothing gradient offers.
- * - Unconstrained rows offer every gradient-kind swatch as its style
- *   spelling, in roster (label) order (gradientFallback, the same tier
- *   an <image> row's value space reads).
- * Equivalent spellings collapse into the first occurrence. No swatches and
- * no curated entries means no gradient stops; committed values still read
- * through the state functions below.
+ *   property to that scale's tokens: a gradient-shaped scale offers its
+ *   row (style-guide.js scaleRow through stopsFor, the curated stops or
+ *   the offered tokens, exactly as a bound color row does), and a scale
+ *   of any other shape offers nothing gradient (its tokens are not
+ *   images).
+ * - Unconstrained rows offer every offered gradient-scale token as its
+ *   style spelling, in roster order (gradientFallback, the same tier an
+ *   <image> row's value space reads).
+ * Equivalent spellings collapse into the first occurrence. No gradient
+ * tokens and no curated entries means no gradient stops; committed
+ * values still read through the state functions below.
  *
  * @param {object} guide
  *   The style guide payload (drupalSettings.daedalusStylish.guide).
@@ -151,7 +158,10 @@ export const gradientStops = (guide, materials, constraints) => {
       .map((raw) => allowedGradientStop(guide, materials, raw))
       .filter((stop) => stop !== null);
   } else if (typeof constraints?.scale === 'string') {
-    stops = [];
+    stops =
+      guide?.tokenScales?.[constraints.scale]?.shape === 'gradient'
+        ? stopsFor(guide, materials, constraints, [])
+        : [];
   } else {
     stops = gradientFallback(guide, materials);
   }
@@ -237,13 +247,13 @@ export const mediaImageStop = (value, urls = null) => {
  * from the palette), the grid shows it lit with its paint, and the lit
  * chip's toggle is the unpick, which the pick mapping's corners rule
  * resolves to clearing what is set. A value an offered stop already
- * claims (an allowed literal, a gradient swatch's var()) derives nothing:
+ * claims (an allowed literal, a gradient token's var()) derives nothing:
  * that stop lights instead. Collisions never reach the stop: a color
  * beside the gradient, a layered value, or the text recipe's occupancy
  * all fall through the state reads to the honest custom face.
  *
  * `paint` is the value's own paint through the one face-paint rule
- * (nested swatch references substituted), the scheme pair beside it.
+ * (nested token references substituted), the scheme pair beside it.
  *
  * @param {object} guide
  *   The style guide payload.
@@ -414,7 +424,7 @@ export const mediaCompanions = (
  * both-set compound the well would read custom. The widget merges this
  * under the seed into onPickMedia's companions ({...replacements,
  * ...seed}); the maps never overlap, and the pipeline routes each null
- * to the box its value lives on exactly as a commit's null (a root band
+ * to the box its value lives on exactly as a commit's null (a root background
  * beside an anchor-bound image is the multi-key batch), so the clear
  * rides the one write rule untouched. The seeded companions themselves
  * are NOT cleared here: replacing image A with image B keeps

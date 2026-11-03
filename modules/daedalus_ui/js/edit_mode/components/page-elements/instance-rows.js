@@ -34,12 +34,19 @@
  * ride the block's own markup (its render is one element), an open
  * render's carriers ride the owning field's annotation, the same node
  * whose selectable element contains them on the canvas. Liveness rides
- * the mirror: every mutation response re-annotates, and the tree renders
- * from the mirror, so committed edits re-row with no DOM observation.
- * Mid-gesture content (typing before blur commits) is ahead of the model
- * until its op round-trips, the annotation is canonical, the canvas is a
- * projection, and the verification observer (markup-verify.js) logs the
- * drift instead of re-deriving rows from it.
+ * the effective blueprint: every mutation response re-annotates, and the
+ * tree renders from the effective tree, so committed edits re-row with no
+ * DOM observation. A STRUCTURAL gesture (a tag picked, a link added) also
+ * reaches the model before its commit: the composed-edit preview drafts
+ * the resolved markup into the blueprint slice's draft slot, and the
+ * effective tree merges it over the edited node's `_element.markup`
+ * while keeping these committed `instances`, so shell rows and tag facts
+ * follow live. Rich-text CONTENT is the one thing still ahead of the
+ * model mid-gesture: typing in a formatted text block mints carriers in
+ * CKEditor that no client walk re-rows until the op round-trips. The
+ * annotation is canonical, the canvas is a projection, and the
+ * verification observer (markup-verify.js) logs that drift instead of
+ * re-deriving rows from it.
  */
 
 import { markupForKey } from '../../blueprint/markup-index';

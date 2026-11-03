@@ -279,16 +279,15 @@ const openSaveDialog = (key) => {
   const { ModePluginBase, Blueprint } = Drupal.Daedalus;
   const context = Blueprint.rootContext();
   pendingGesture = { key };
-  ModePluginBase.dialog({
-    url: ModePluginBase.url('/daedalus-layout/blueprint-save-dialog', {
+  Drupal.Daedalus.openModal(
+    ModePluginBase.url('/daedalus-layout/blueprint-save-dialog', {
       element: uuidOf(key),
       ...(context
         ? { entity_type: context.entityType, entity_id: context.entityId }
         : {}),
     }),
-    width: 480,
-    message: Drupal.t('Loading...'),
-  });
+    { width: 480 },
+  );
 };
 
 /**
@@ -308,17 +307,16 @@ const openUpdateDialog = (key) => {
   const { ModePluginBase, Blueprint } = Drupal.Daedalus;
   const context = Blueprint.rootContext();
   pendingGesture = { key, target };
-  ModePluginBase.dialog({
-    url: ModePluginBase.url('/daedalus-layout/blueprint-update-dialog', {
+  Drupal.Daedalus.openModal(
+    ModePluginBase.url('/daedalus-layout/blueprint-update-dialog', {
       element: uuidOf(key),
       blueprint: target.id,
       ...(context
         ? { entity_type: context.entityType, entity_id: context.entityId }
         : {}),
     }),
-    width: 480,
-    message: Drupal.t('Loading...'),
-  });
+    { width: 480 },
+  );
 };
 
 /**
@@ -336,7 +334,9 @@ const inputsValid = () =>
     .every((input) => !input || input.reportValidity());
 
 const closeDialog = () => {
-  const dialog = document.getElementById('layout-builder-modal');
+  // The daedalus popup is core's modal: the opener lands every dialog on
+  // #drupal-modal.
+  const dialog = document.getElementById('drupal-modal');
   if (dialog) {
     jQuery(dialog).dialog('close');
   }
@@ -353,6 +353,22 @@ const adoptPicks = () =>
   [...document.querySelectorAll('.daedalus-layout-blueprint-save [data-blueprint-adopt]')]
     .filter((input) => input.checked)
     .map((input) => input.getAttribute('data-blueprint-adopt'));
+
+/**
+ * The "Offer to the AI" box off the open dialog: its state, or null when
+ * the dialog rendered none (the update dialog over an unresolved
+ * reference), so the op carries no `offered` and the stored flag stands.
+ *
+ * The box is BlueprintSaveDialog::offeredField(), checked on a save (a
+ * mint offers by default) and prefilled from the stored flag on an
+ * update; the op spine reads `offered` as the record's AI opt-out.
+ */
+const offeredPick = () => {
+  const box = document.querySelector(
+    '.daedalus-layout-blueprint-save [data-blueprint-offered]',
+  );
+  return box ? box.checked : null;
+};
 
 /**
  * The icon pick off the open save dialog, or '' (no picker, or unset).
@@ -382,6 +398,7 @@ const commitSave = (button) => {
     .value.trim();
   const adopt = adoptPicks();
   const icon = iconPick();
+  const offered = offeredPick();
 
   button.disabled = true;
   submitGesture(
@@ -393,6 +410,7 @@ const commitSave = (button) => {
       description,
       ...(adopt.length ? { adopt_variants: adopt } : {}),
       ...(icon ? { icon } : {}),
+      ...(offered === null ? {} : { offered }),
     },
     Drupal.t('Saved blueprint'),
   )
@@ -436,6 +454,7 @@ const commitUpdate = (button) => {
     return;
   }
   const adopt = adoptPicks();
+  const offered = offeredPick();
   button.disabled = true;
   submitGesture(
     {
@@ -444,6 +463,7 @@ const commitUpdate = (button) => {
       id: target.id,
       element: uuidOf(key),
       ...(adopt.length ? { adopt_variants: adopt } : {}),
+      ...(offered === null ? {} : { offered }),
     },
     Drupal.t('Updated blueprint'),
   )

@@ -3,14 +3,16 @@
  *
  * StackEquivalenceTest (the kernel test) builds the same stacks through
  * the PHP StyleStack and pipes the fixtures here as JSON on stdin:
- *   {batteries: [{guide, variants, blockTypes, sectionLayouts, tree,
+ *   {batteries: [{guide, variants, blockTypes, sectionLayouts, document,
  *                 cases: [{key, map, conditions}]}]}
  * one battery per guide payload (with a skin, without), `variants` the
  * roster's delivery records (MaterialRecord::toArray()), the two uuid
  * tables the client's scope capture reads (the blueprint's component
- * block types and section layouts), `tree` the annotated lean node tree
- * the ancestor tier and the base layer's subject tag read (null leaves
- * both out), each case a key, its map and the stored conditions to read
+ * block types and section layouts), `document` the document tree
+ * (NodeTreeBuilder::document() over the annotated blueprint: the host
+ * entity above its sections) the ancestor tier and the base layer's
+ * subject tag read (null leaves both out), each case a key, its map and
+ * the stored conditions to read
  * lines at. stdout is {batteries: [[{stack, lines: {condition:
  * lines}}]]}: buildStack() and layersAt() per case, the axis vocabulary
  * resolved the way the code view resolves it (axisVocabulary over the
@@ -30,7 +32,7 @@ const answer = (battery) => {
   const variants = battery.variants ?? [];
   const blockTypes = battery.blockTypes ?? {};
   const sectionLayouts = battery.sectionLayouts ?? {};
-  const tree = battery.tree ?? null;
+  const document = battery.document ?? null;
   return (battery.cases ?? []).map(({ key, map, conditions = [] }) => {
     const stack = buildStack({
       guide,
@@ -40,7 +42,7 @@ const answer = (battery) => {
       axes: axisVocabulary(guide, key, blockTypes, sectionLayouts),
       blockTypes,
       sectionLayouts,
-      tree,
+      document,
     });
     const lines = {};
     conditions.forEach((condition) => {

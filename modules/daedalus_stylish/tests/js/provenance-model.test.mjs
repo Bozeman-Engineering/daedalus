@@ -70,12 +70,12 @@ const VARIANTS = [
     scope: 'block_type:text',
     value: { '': { narrow: { 'padding-top': '9px' } } },
   }),
-  // A container look whose `::> pb-text` block reaches the block from
+  // A container look whose `::> d-text` block reaches the block from
   // the section's ROOT (the root-carrier shape of a worn ancestor layer).
-  variantRecord('band', {
-    label: 'Band',
+  variantRecord('section', {
+    label: 'Section',
     scope: 'kind:container',
-    value: { '': { default: { gap: '3rem' } }, '::> pb-text': { default: { 'padding-top': '18px' } } },
+    value: { '': { default: { gap: '3rem' } }, '::> d-text': { default: { 'padding-top': '18px' } } },
   }),
 ];
 
@@ -100,7 +100,7 @@ const BOTH = {
 const worn = (refs, own = {}) => ({ [ROOT]: { variants: refs.map((variant) => ({ variant, fragment: '' })), ...own } });
 const STUFF = [{ variant: 'stuff', fragment: '' }];
 
-const stackFor = ({ map = {}, guide = BARE, session = null, tree = null, editable = null } = {}) => buildStack({
+const stackFor = ({ map = {}, guide = BARE, session = null, document = null, editable = null } = {}) => buildStack({
   guide,
   map,
   key: ROOT,
@@ -108,7 +108,7 @@ const stackFor = ({ map = {}, guide = BARE, session = null, tree = null, editabl
   axes: AXES,
   blockTypes: BLOCK_TYPES,
   session,
-  tree,
+  document,
   editable,
 });
 
@@ -117,7 +117,7 @@ const stackFor = ({ map = {}, guide = BARE, session = null, tree = null, editabl
 const SECTION = 'container:cccccccc-1111-2222-3333-444444444444';
 // The section's minted words ride its node: its custom label as the name
 // when renamed, else its type word (the annotator's rule).
-const treeFor = (label = null) => [{
+const documentFor = (label = null) => [{
   kind: 'container',
   uuid: SECTION.slice('container:'.length),
   layout_id: 'daedalus_stylish_container',
@@ -139,7 +139,6 @@ const GUIDE = {
   conditions: { dark: { label: 'Dark', axis: 'scheme' } },
   tokenScales: { spacing: { label: 'Spacing', prefix: 'space', shape: 'dimension' } },
   tokens: { spacing: { 1: '0.25rem', 5: '1.5rem', gutter: { default: '1.5rem', dark: '1.25rem' } } },
-  swatches: [],
 };
 const MATERIALS = materialsFrom(GUIDE);
 const spaceFor = (enforcement) => valueSpaceFor({ ...GUIDE, enforcement }, MATERIALS, 'margin-top', { type: 'dimension' }, { scale: 'spacing' }, 'default');
@@ -324,8 +323,13 @@ test('inherited from the skin at another condition: posed at Medium the skin\'s 
   assert.equal(narrow.header, '100% from the active skin at Narrow');
 });
 
-test('inherited from the declaration: the declared default shows in the defaults hue, the declaring scope named, one doorway to the Law tab at the declaration', () => {
-  const origin = originAt(stackFor({ guide: DECLARED }), 'display', 'default');
+// The law gate as the host attaches it (drupalSettings.daedalusStylish.law,
+// InspectorGates::law()): the Law tab and its doorway are the "view
+// style law" permission's.
+const LAW_OPEN = { law: { canView: true } };
+
+test('inherited from the declaration: the declared default shows in the defaults hue, the declaring scope named, one doorway to the Law tab at the declaration under the law gate', () => {
+  const origin = originAt(stackFor({ guide: DECLARED }), 'display', 'default', LAW_OPEN);
   assert.equal(origin.delivers, true);
   assert.equal(origin.layer, declaredLayerId('block_type:text'));
   assert.equal(origin.color, SKIN_COLOR, 'the defaults tier\'s one hue');
@@ -337,14 +341,30 @@ test('inherited from the declaration: the declared default shows in the defaults
   assert.deepEqual(origin.doorways.map((d) => [d.id, d.label, d.hint, d.disabled === true, d.scope, d.property]), [
     ['declared', 'See the declaration…', 'opens the Law tab at the text block type declaration', false, 'block_type:text', 'display'],
   ]);
-  const medium = originAt(stackFor({ guide: DECLARED }), 'display', 'medium');
+  const medium = originAt(stackFor({ guide: DECLARED }), 'display', 'medium', LAW_OPEN);
   assert.equal(medium.header, 'block from the text block type declaration at Base');
   assert.deepEqual(medium.doorways.map((doorway) => [doorway.id, doorway.scope, doorway.property]), [['declared', 'block_type:text', 'display']], 'no drive doorway: the declaration is shown, not posed');
 });
 
+test('inherited from the declaration without the law gate: the sentence and the hue stand, no doorway (the Law tab is the permission\'s), the gate closed by absence, by false and by a stray value alike', () => {
+  const closed = [undefined, { law: {} }, { law: { canView: false } }, { law: { canView: 'yes' } }];
+  closed.forEach((options) => {
+    const origin = originAt(stackFor({ guide: DECLARED }), 'display', 'default', options);
+    assert.equal(origin.delivers, true);
+    assert.equal(origin.layer, declaredLayerId('block_type:text'));
+    assert.equal(origin.color, SKIN_COLOR);
+    assert.equal(origin.header, 'block from the text block type declaration', 'the declaration is still named');
+    assert.deepEqual(origin.doorways, [], `no doorway under ${JSON.stringify(options ?? null)}`);
+    const medium = originAt(stackFor({ guide: DECLARED }), 'display', 'medium', options);
+    assert.deepEqual(medium.doorways, [], 'nor a drive doorway at another pose');
+  });
+  // The row menu over it: no items, so the native menu rides through.
+  assert.equal(rowMenu({ origin: originAt(stackFor({ guide: DECLARED }), 'display', 'default'), tokens: [] }), null);
+});
+
 test('inherited from an ancestor rule: lit in the floor hue, the sentence names the section and its rule, one doorway edits at the rule', () => {
   const map = { [`${SECTION}::> *`]: { default: { 'padding-top': '8px' }, narrow: { 'padding-top': '4px' } } };
-  const origin = originAt(stackFor({ map, tree: treeFor() }), 'padding-top', 'default');
+  const origin = originAt(stackFor({ map, document: documentFor() }), 'padding-top', 'default');
   assert.equal(origin.delivers, true);
   assert.equal(origin.layer, `ancestor:${SECTION}::> *`);
   assert.equal(origin.color, SKIN_COLOR);
@@ -355,41 +375,41 @@ test('inherited from an ancestor rule: lit in the floor hue, the sentence names 
   // since the menu renders labels as text.
   assert.deepEqual([origin.doorways[0].key, origin.doorways[0].selector, origin.doorways[0].label], [SECTION, '> *', 'Edit at Section (> *)']);
   // A labelled section names itself; the ancestor rule beats the skin beneath it.
-  const labelled = originAt(stackFor({ map, guide: SKIN, tree: treeFor('Hero') }), 'padding-top', 'default');
+  const labelled = originAt(stackFor({ map, guide: SKIN, document: documentFor('Hero') }), 'padding-top', 'default');
   assert.equal(labelled.header, '8px inherited from Hero (> *)');
   // Posed at Medium the ancestor's Base block delivers, and the sentence
   // says where, with the drive doorway beside the rule's.
-  const medium = originAt(stackFor({ map, tree: treeFor() }), 'padding-top', 'medium');
+  const medium = originAt(stackFor({ map, document: documentFor() }), 'padding-top', 'medium');
   assert.equal(medium.header, '8px inherited from Section (> *) at Base');
   assert.deepEqual(doorways(medium), ['ancestor', 'drive']);
   assert.deepEqual(medium.alsoAt.map((entry) => entry.label), ['Narrow']);
   // A child-combinated type rule: the `>` rides literally in the title
   // (the mark is text, an escaped `>` would show as `&gt;`).
-  const typed = { [`${SECTION}::> pb-text`]: { default: { 'padding-top': '6px' }, narrow: { 'padding-top': '3px' } } };
-  const chained = originAt(stackFor({ map: typed, tree: treeFor() }), 'padding-top', 'default');
-  assert.equal(chained.layer, `ancestor:${SECTION}::> pb-text`);
-  assert.equal(chained.header, '6px inherited from Section (> pb-text)');
-  assert.equal(chained.doorways[0].label, 'Edit at Section (> pb-text)');
-  assert.equal(originAt(stackFor({ map: typed, tree: treeFor() }), 'padding-top', 'medium').header, '6px inherited from Section (> pb-text) at Base');
+  const typed = { [`${SECTION}::> d-text`]: { default: { 'padding-top': '6px' }, narrow: { 'padding-top': '3px' } } };
+  const chained = originAt(stackFor({ map: typed, document: documentFor() }), 'padding-top', 'default');
+  assert.equal(chained.layer, `ancestor:${SECTION}::> d-text`);
+  assert.equal(chained.header, '6px inherited from Section (> d-text)');
+  assert.equal(chained.doorways[0].label, 'Edit at Section (> d-text)');
+  assert.equal(originAt(stackFor({ map: typed, document: documentFor() }), 'padding-top', 'medium').header, '6px inherited from Section (> d-text) at Base');
 });
 
 // --- originOf: a variant an ancestor's rule wears ------------------------------
-// The section's `> pb-text` rule wears Stuff (T10's worn ancestor layer,
-// `ancestor:{sec}::> pb-text|stuff`, carrier the rule): the member reads
+// The section's `> d-text` rule wears Stuff (T10's worn ancestor layer,
+// `ancestor:{sec}::> d-text|stuff`, carrier the rule): the member reads
 // the variant's identity (hue, reference, name) and the rule in the
 // switcher's words, with the doorways to the variant and to the carrier.
 
 // The guide names the text type so the rule reads "Text blocks directly
 // in the section" (write-address.js addressLabel).
 const WORDED = { ...BARE, blockTypes: { text: { label: 'Text' } } };
-const WORN_RULE = `${SECTION}::> pb-text`;
+const WORN_RULE = `${SECTION}::> d-text`;
 const wornRule = (own = {}) => ({ [WORN_RULE]: { variants: [{ variant: 'stuff', fragment: '' }], ...own } });
-const wornAt = (map, pose, options = {}) => originAt(stackFor({ map, guide: WORDED, tree: treeFor(options.label ?? null) }), 'padding-top', pose, { guide: WORDED, ...options });
+const wornAt = (map, pose, options = {}) => originAt(stackFor({ map, guide: WORDED, document: documentFor(options.label ?? null) }), 'padding-top', pose, { guide: WORDED, ...options });
 
 test('a variant an ancestor\'s rule wears: lit in the VARIANT\'s hue with the variant as the reference, the sentence naming the variant at the rule in the switcher\'s words, doorways to the variant (anchored at the carrier) and to the carrier rule', () => {
   const origin = wornAt(wornRule(), 'default');
   assert.equal(origin.delivers, true);
-  assert.equal(origin.layer, ancestorWearLayerId(SECTION, '> pb-text', 'stuff'));
+  assert.equal(origin.layer, ancestorWearLayerId(SECTION, '> d-text', 'stuff'));
   assert.equal(origin.reference, 'stuff', 'the mark reads as a variant');
   assert.equal(origin.color, layerColor(variantLayerId('stuff')), 'the same hue an own wearing of Stuff gets');
   assert.notEqual(origin.color, SKIN_COLOR);
@@ -402,7 +422,7 @@ test('a variant an ancestor\'s rule wears: lit in the VARIANT\'s hue with the va
   assert.deepEqual([document.label, document.hint, document.reference, document.condition, document.anchor], ['Edit Stuff at Base…', 'opens the variant', 'stuff', 'default', WORN_RULE]);
   // Edit at the carrier: the rule becomes the styling target, worded as
   // the switcher words it.
-  assert.deepEqual([ancestor.label, ancestor.hint, ancestor.key, ancestor.selector], ['Edit at Text blocks directly in Section', 'writes land on that rule; the selection stays', SECTION, '> pb-text']);
+  assert.deepEqual([ancestor.label, ancestor.hint, ancestor.key, ancestor.selector], ['Edit at Text blocks directly in Section', 'writes land on that rule; the selection stays', SECTION, '> d-text']);
   // A labelled section names itself in the rule's words (the owner's
   // label is read from the group's OWN layer: the worn layer's is the
   // variant's).
@@ -418,19 +438,19 @@ test('a variant an ancestor\'s rule wears: lit in the VARIANT\'s hue with the va
   assert.deepEqual(doorways(medium), ['document', 'ancestor', 'drive']);
   assert.deepEqual(medium.alsoAt.map((entry) => entry.label), ['Narrow']);
   // Without a guide the rule reads as its selector in the owner.
-  const bare = originAt(stackFor({ map: wornRule(), tree: treeFor() }), 'padding-top', 'default');
-  assert.equal(bare.header, '22px from Stuff at pb-text directly in Section');
+  const bare = originAt(stackFor({ map: wornRule(), document: documentFor() }), 'padding-top', 'default');
+  assert.equal(bare.header, '22px from Stuff at d-text directly in Section');
 });
 
 test('the rule\'s own value beats its worn variant inside the group: the own ancestor sentence and doorway, unchanged, with the worn layer beneath', () => {
   const origin = wornAt(wornRule({ default: { 'padding-top': '30px' } }), 'default');
-  assert.equal(origin.layer, ancestorLayerId(SECTION, '> pb-text'));
+  assert.equal(origin.layer, ancestorLayerId(SECTION, '> d-text'));
   assert.equal(origin.reference, null);
   assert.equal(origin.color, SKIN_COLOR);
-  assert.equal(origin.header, '30px inherited from Section (> pb-text)');
-  assert.deepEqual(origin.doorways.map((doorway) => [doorway.id, doorway.label, doorway.key, doorway.selector]), [['ancestor', 'Edit at Section (> pb-text)', SECTION, '> pb-text']]);
-  const read = stackAt(stackFor({ map: wornRule({ default: { 'padding-top': '30px' } }), guide: WORDED, tree: treeFor() }), 'padding-top', 'default', CONDITIONS);
-  assert.deepEqual(read.beneath.map((entry) => entry.id), [ancestorWearLayerId(SECTION, '> pb-text', 'stuff')]);
+  assert.equal(origin.header, '30px inherited from Section (> d-text)');
+  assert.deepEqual(origin.doorways.map((doorway) => [doorway.id, doorway.label, doorway.key, doorway.selector]), [['ancestor', 'Edit at Section (> d-text)', SECTION, '> d-text']]);
+  const read = stackAt(stackFor({ map: wornRule({ default: { 'padding-top': '30px' } }), guide: WORDED, document: documentFor() }), 'padding-top', 'default', CONDITIONS);
+  assert.deepEqual(read.beneath.map((entry) => entry.id), [ancestorWearLayerId(SECTION, '> d-text', 'stuff')]);
 });
 
 test('overriding a variant an ancestor\'s rule wears: the element\'s own identity (the beaten variant lives in the sentence), unset returns the variant\'s value, the variant and carrier doorways beside', () => {
@@ -447,24 +467,24 @@ test('overriding a variant an ancestor\'s rule wears: the element\'s own identit
     ['ancestor', 'Edit at Text blocks directly in Section', 'writes land on that rule; the selection stays'],
   ]);
   assert.equal(origin.doorways[1].anchor, WORN_RULE);
-  assert.deepEqual([origin.doorways[2].key, origin.doorways[2].selector], [SECTION, '> pb-text']);
+  assert.deepEqual([origin.doorways[2].key, origin.doorways[2].selector], [SECTION, '> d-text']);
   const posed = { ...wornRule(), [ROOT]: { medium: { 'padding-top': '24px' } } };
   assert.equal(wornAt(posed, 'medium').header, "Your 24px overrides Stuff's 22px at Text blocks directly in Section, set at Base");
 });
 
-test('a variant the section wears at its ROOT reaching the block through its `::> pb-text` block: named as worn by the owner, no rule to seat, the variant doorway anchored at the owner', () => {
-  const map = { [SECTION]: { variants: [{ variant: 'band', fragment: '' }] } };
+test('a variant the section wears at its ROOT reaching the block through its `::> d-text` block: named as worn by the owner, no rule to seat, the variant doorway anchored at the owner', () => {
+  const map = { [SECTION]: { variants: [{ variant: 'section', fragment: '' }] } };
   const origin = wornAt(map, 'default');
   assert.equal(origin.delivers, true);
-  assert.equal(origin.layer, ancestorWearLayerId(SECTION, '> pb-text', 'band'));
-  assert.equal(origin.reference, 'band');
-  assert.equal(origin.color, layerColor(variantLayerId('band')));
-  assert.equal(origin.header, '18px from Band worn by Section');
-  assert.deepEqual(origin.doorways.map((doorway) => [doorway.id, doorway.label, doorway.anchor]), [['document', 'Edit Band at Base…', SECTION]]);
-  assert.equal(wornAt(map, 'medium').header, '18px from Band worn by Section, set at Base');
+  assert.equal(origin.layer, ancestorWearLayerId(SECTION, '> d-text', 'section'));
+  assert.equal(origin.reference, 'section');
+  assert.equal(origin.color, layerColor(variantLayerId('section')));
+  assert.equal(origin.header, '18px from Section worn by Section');
+  assert.deepEqual(origin.doorways.map((doorway) => [doorway.id, doorway.label, doorway.anchor]), [['document', 'Edit Section at Base…', SECTION]]);
+  assert.equal(wornAt(map, 'medium').header, '18px from Section worn by Section, set at Base');
   assert.deepEqual(doorways(wornAt(map, 'medium')), ['document', 'drive']);
   const over = wornAt({ ...map, [ROOT]: { default: { 'padding-top': '24px' } } }, 'default');
-  assert.equal(over.header, "Your 24px overrides Band's 18px worn by Section");
+  assert.equal(over.header, "Your 24px overrides Section's 18px worn by Section");
   assert.deepEqual(doorways(over), ['unset', 'document']);
 });
 
@@ -473,7 +493,7 @@ test('overriding an ancestor rule: own at pose beats it, in the element hue, uns
     [`${SECTION}::> *`]: { default: { 'padding-top': '8px' } },
     [ROOT]: { default: { 'padding-top': '10px' } },
   };
-  const origin = originAt(stackFor({ map, tree: treeFor() }), 'padding-top', 'default');
+  const origin = originAt(stackFor({ map, document: documentFor() }), 'padding-top', 'default');
   assert.equal(origin.atPose, true);
   assert.equal(origin.layer, ELEMENT_LAYER);
   assert.equal(origin.color, layerColor(ELEMENT_LAYER));
@@ -483,15 +503,15 @@ test('overriding an ancestor rule: own at pose beats it, in the element hue, uns
   // The overriding sentence carries the `>` literally too, at Base and
   // posed elsewhere.
   const typed = {
-    [`${SECTION}::> pb-text`]: { default: { 'padding-top': '8px' } },
+    [`${SECTION}::> d-text`]: { default: { 'padding-top': '8px' } },
     [ROOT]: { default: { 'padding-top': '10px' } },
   };
-  assert.equal(originAt(stackFor({ map: typed, tree: treeFor() }), 'padding-top', 'default').header, "Your 10px overrides Section's 8px (> pb-text)");
+  assert.equal(originAt(stackFor({ map: typed, document: documentFor() }), 'padding-top', 'default').header, "Your 10px overrides Section's 8px (> d-text)");
   const posed = {
-    [`${SECTION}::> pb-text`]: { default: { 'padding-top': '8px' } },
+    [`${SECTION}::> d-text`]: { default: { 'padding-top': '8px' } },
     [ROOT]: { medium: { 'padding-top': '10px' } },
   };
-  assert.equal(originAt(stackFor({ map: posed, tree: treeFor() }), 'padding-top', 'medium').header, "Your 10px overrides Section's 8px (> pb-text) at Base");
+  assert.equal(originAt(stackFor({ map: posed, document: documentFor() }), 'padding-top', 'medium').header, "Your 10px overrides Section's 8px (> d-text) at Base");
 });
 
 test('the skin\'s value sits over the declaration\'s: both present, the origin is the skin\'s and the declaration is beneath', () => {
@@ -555,7 +575,7 @@ test('under a write address the element\'s own value sits ABOVE the editable lay
   // The rule says nothing yet (a virtual editable layer at its
   // position, style-stack.js); the element's own padding wins.
   const own = { [ROOT]: { default: { 'padding-top': '10px' }, narrow: { 'padding-top': '5px' } } };
-  const stack = stackFor({ map: own, tree: treeFor(), editable: address });
+  const stack = stackFor({ map: own, document: documentFor(), editable: address });
   const origin = originAt(stack, 'padding-top', 'default');
   assert.equal(origin.delivers, true);
   assert.equal(origin.layer, ELEMENT_LAYER);
@@ -577,7 +597,7 @@ test('under a write address the element\'s own value sits ABOVE the editable lay
   // in the element hue, the element doorway; no "on this page" (that
   // sentence is the session's, about a document's wearer).
   const both = { ...own, [`${SECTION}::> *`]: { default: { 'padding-top': '8px' } } };
-  const overridden = originAt(stackFor({ map: both, tree: treeFor(), editable: address }), 'padding-top', 'default');
+  const overridden = originAt(stackFor({ map: both, document: documentFor(), editable: address }), 'padding-top', 'default');
   assert.equal(overridden.delivers, true);
   assert.equal(overridden.layer, ELEMENT_LAYER);
   assert.equal(overridden.header, 'Overridden by this element');
@@ -586,7 +606,7 @@ test('under a write address the element\'s own value sits ABOVE the editable lay
   assert.equal(originAt(stack, 'padding-top', 'default', { staged: true }).header, 'Overridden by this element');
   // The rule's own value with nothing on the element: the editable
   // layer delivers at the pose, set here on the rule's layer, no doorway.
-  const ruleOnly = originAt(stackFor({ map: { [`${SECTION}::> *`]: { default: { 'padding-top': '8px' } } }, tree: treeFor(), editable: address }), 'padding-top', 'default');
+  const ruleOnly = originAt(stackFor({ map: { [`${SECTION}::> *`]: { default: { 'padding-top': '8px' } } }, document: documentFor(), editable: address }), 'padding-top', 'default');
   assert.equal(ruleOnly.atPose, true);
   assert.equal(ruleOnly.layer, ancestorLayerId(SECTION, '> *'));
   assert.equal(ruleOnly.tier, 'ancestor');
@@ -595,7 +615,7 @@ test('under a write address the element\'s own value sits ABOVE the editable lay
   assert.deepEqual(ruleOnly.doorways, []);
   // A variant the element wears also sits above the address's layer,
   // and reads as the variant (its document doorway), not as the element.
-  const wornAbove = originAt(stackFor({ map: worn(['stuff']), tree: treeFor(), editable: address }), 'padding-top', 'default');
+  const wornAbove = originAt(stackFor({ map: worn(['stuff']), document: documentFor(), editable: address }), 'padding-top', 'default');
   assert.equal(wornAbove.delivers, true);
   assert.equal(wornAbove.layer, variantLayerId('stuff'));
   assert.equal(wornAbove.header, '22px from Stuff');
@@ -655,7 +675,7 @@ test('in a session the editable layer is the document: its value from another co
   assert.equal(over.atPose, true);
   assert.equal(over.header, 'Your 22px overrides the active skin\'s 1.125rem');
   // The staged document (a pending line) is what the row reads.
-  const pending = { reference: 'stuff', pending: { kind: 'update', lines: [{ id: 'p1', relative: '', condition: 'default', property: 'padding-top', value: '30px' }] } };
+  const pending = { reference: 'stuff', pending: { kind: 'update', moves: [], lines: [{ id: 'p1', relative: '', condition: 'default', property: 'padding-top', value: '30px' }] } };
   assert.equal(originAt(stackFor({ map: worn(['stuff']), guide: SKIN, session: pending }), 'padding-top', 'default').header, 'Your 30px overrides the active skin\'s 1.125rem');
 });
 
@@ -675,7 +695,7 @@ test('in a skin session the scope\'s skin layer is the editable document: its va
   assert.equal(over.header, 'Overridden by this element on this page');
   assert.deepEqual(over.doorways.map((doorway) => [doorway.id, doorway.winner]), [['winner', { variant: null }]]);
   // A staged line is what the row reads as the document's value.
-  const staged = { reference: skinLayerId('block_type:text'), pending: { kind: 'skin', scope: 'block_type:text', lines: [{ id: 's1', relative: '', condition: 'default', property: 'padding-top', value: '4rem' }] } };
+  const staged = { reference: skinLayerId('block_type:text'), pending: { kind: 'skin', moves: [], scope: 'block_type:text', lines: [{ id: 's1', relative: '', condition: 'default', property: 'padding-top', value: '4rem' }] } };
   assert.equal(originAt(stackFor({ guide: SKIN, session: staged }), 'padding-top', 'default').header, '4rem set here');
 });
 
@@ -795,7 +815,7 @@ test('rowMenu: doorways, the Also set at group, then the tokens, separated; the 
 });
 
 test('rowMenu: a declared value opens on its sentence with the Law tab doorway, whose run dispatches the scope and the property', () => {
-  const origin = originAt(stackFor({ guide: DECLARED }), 'display', 'default');
+  const origin = originAt(stackFor({ guide: DECLARED }), 'display', 'default', LAW_OPEN);
   const opened = [];
   const menu = rowMenu({ origin, tokens: [], face: 'block', onDoorway: (doorway) => opened.push([doorway.id, doorway.scope, doorway.property]) });
   assert.equal(menu.header, origin.header);

@@ -131,8 +131,8 @@ class DomOperationsTest extends BlueprintKernelTestBase {
         ],
       ],
       conditions: [
-        'narrow' => '@container (max-width: 767px)',
-        'hover' => ':hover',
+        'narrow' => ['wrapper' => '@container (max-width: 767px)', 'axis' => 'width'],
+        'hover' => ['wrapper' => ':hover', 'axis' => 'state'],
       ],
     );
   }
@@ -163,7 +163,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="intro" heading="Hello">Body copy</pb-basic>',
+        'html' => '<d-basic id="intro" heading="Hello">Body copy</d-basic>',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
       ],
     ], $this->options);
@@ -197,21 +197,21 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-container id="band"><pb-basic id="one" heading="A">x</pb-basic><pb-basic id="two" heading="B">y</pb-basic></pb-container>',
+        'html' => '<d-container id="section"><d-basic id="one" heading="A">x</d-basic><d-basic id="two" heading="B">y</d-basic></d-container>',
         'at' => ['ref' => 'root', 'position' => 'beforeend'],
       ],
     ], $this->options);
 
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $aliases = $result->getAliases();
-    $this->assertSame(['band', 'one', 'two'], array_keys($aliases));
+    $this->assertSame(['section', 'one', 'two'], array_keys($aliases));
 
     $tree = $this->tree();
     $this->assertCount(2, $tree);
-    $band = $tree[1];
-    $this->assertSame('container', $band['kind']);
-    $this->assertSame($aliases['band'], $band['uuid']);
-    $this->assertSame([$aliases['one'], $aliases['two']], array_column($band['children'], 'uuid'));
+    $section = $tree[1];
+    $this->assertSame('container', $section['kind']);
+    $this->assertSame($aliases['section'], $section['uuid']);
+    $this->assertSame([$aliases['one'], $aliases['two']], array_column($section['children'], 'uuid'));
   }
 
   /**
@@ -234,7 +234,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-container id="outer"><pb-container id="inner"><pb-basic id="a" heading="A">x</pb-basic><pb-basic id="b" heading="B">y</pb-basic></pb-container></pb-container>',
+        'html' => '<d-container id="outer"><d-container id="inner"><d-basic id="a" heading="A">x</d-basic><d-basic id="b" heading="B">y</d-basic></d-container></d-container>',
         'at' => ['ref' => 'root', 'position' => 'beforeend'],
       ],
     ], $this->options);
@@ -260,7 +260,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
   public function testBareOpObjectAcceptedAsBatch(): void {
     $result = $this->operations->batchOperations($this->host($this->entity), [
       'op' => 'insert',
-      'html' => '<pb-basic id="solo" heading="One">.</pb-basic>',
+      'html' => '<d-basic id="solo" heading="One">.</d-basic>',
       'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
     ], $this->options);
 
@@ -275,7 +275,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $insert = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="hero" heading="First">.</pb-basic>',
+        'html' => '<d-basic id="hero" heading="First">.</d-basic>',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
       ],
     ], $this->options);
@@ -333,12 +333,12 @@ class DomOperationsTest extends BlueprintKernelTestBase {
 
     $result = $this->container->get('daedalus_blueprint.dom_operation_handler')->applyDocument(
       $this->host($entity),
-      '<pb-container id="hero"><pb-basic id="intro" heading="Hello">.</pb-basic></pb-container><pb-container id="band"></pb-container>',
+      '<d-container id="hero"><d-basic id="intro" heading="Hello">.</d-basic></d-container><d-container id="section"></d-container>',
       $this->options,
     );
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $aliases = $result->getAliases();
-    $this->assertSame(['hero', 'intro', 'band'], array_keys($aliases));
+    $this->assertSame(['hero', 'intro', 'section'], array_keys($aliases));
 
     // The next request starts with an empty overlay; discard() is that
     // request's view of the map.
@@ -354,7 +354,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $insert = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="old" heading="Old">.</pb-basic>',
+        'html' => '<d-basic id="old" heading="Old">.</d-basic>',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
       ],
     ], $this->options);
@@ -364,7 +364,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
       [
         'op' => 'replace',
         'ref' => 'old',
-        'html' => '<pb-basic id="fresh" heading="Fresh">.</pb-basic>',
+        'html' => '<d-basic id="fresh" heading="Fresh">.</d-basic>',
       ],
     ], $this->options);
 
@@ -389,7 +389,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $insert = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="a" heading="A">.</pb-basic><pb-basic id="b" heading="B">.</pb-basic>',
+        'html' => '<d-basic id="a" heading="A">.</d-basic><d-basic id="b" heading="B">.</d-basic>',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
       ],
     ], $this->options);
@@ -416,20 +416,20 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $insert = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-container id="band"><pb-basic id="one" heading="A">x</pb-basic></pb-container>',
+        'html' => '<d-container id="section"><d-basic id="one" heading="A">x</d-basic></d-container>',
         'at' => ['ref' => 'root', 'position' => 'beforeend'],
       ],
     ], $this->options);
     $this->assertTrue($insert->isSuccess(), print_r($insert->toArray()['errors'] ?? [], TRUE));
-    $band = $insert->getAliases()['band'];
-    $this->assertSame([$this->rootUuid, $band], array_column($this->tree(), 'uuid'));
+    $section = $insert->getAliases()['section'];
+    $this->assertSame([$this->rootUuid, $section], array_column($this->tree(), 'uuid'));
 
     $result = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'move', 'ref' => $this->rootUuid, 'at' => ['ref' => 'root', 'position' => 'beforeend']],
     ], $this->options);
 
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
-    $this->assertSame([$band, $this->rootUuid], array_column($this->tree(), 'uuid'));
+    $this->assertSame([$section, $this->rootUuid], array_column($this->tree(), 'uuid'));
     $this->assertContains(['uuid' => $this->entity->uuid(), 'field_name' => TargetType::RESTRUCTURED], $result->getTargets());
   }
 
@@ -440,7 +440,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $insert = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="gone" heading="Bye">.</pb-basic>',
+        'html' => '<d-basic id="gone" heading="Bye">.</d-basic>',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
       ],
     ], $this->options);
@@ -468,7 +468,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $insert = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="card" heading="Before">Old body</pb-basic>',
+        'html' => '<d-basic id="card" heading="Before">Old body</d-basic>',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
       ],
     ], $this->options);
@@ -517,7 +517,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $this->assertSame('Welcome', $this->rootNode()['label']);
     $this->assertNotEmpty($result->getTargets());
     $print = $this->container->get('daedalus_blueprint.dialect_printer')->print($this->tree(), $this->options['dialect_catalog'])->text;
-    $this->assertStringContainsString(sprintf('<pb-container id="%s" name="Welcome">', $this->rootUuid), $print);
+    $this->assertStringContainsString(sprintf('<d-container id="%s" name="Welcome">', $this->rootUuid), $print);
 
     $cleared = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $this->rootUuid, 'attrs' => ['name' => NULL]],
@@ -533,7 +533,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $this->assertSame(['class', 'name', 'style'], $bad->getErrors()[0]->getContext()['legal']);
 
     $insert = $this->operations->batchOperations($this->host($this->entity), [
-      ['op' => 'insert', 'html' => '<pb-basic id="card" heading="A">x</pb-basic>', 'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend']],
+      ['op' => 'insert', 'html' => '<d-basic id="card" heading="A">x</d-basic>', 'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend']],
     ], $this->options);
     $block = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $insert->getAliases()['card'], 'attrs' => ['name' => 'Card']],
@@ -547,14 +547,14 @@ class DomOperationsTest extends BlueprintKernelTestBase {
    * Insert: a named container is born with its name in the label slot.
    *
    * The fragment's name="" rides add_section as layout_settings.label, the
-   * section's one label slot, so the born band reads by its name in the
+   * section's one label slot, so the born section reads by its name in the
    * tree and prints it back, at every depth.
    */
   public function testInsertNamedContainer(): void {
     $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-container id="band" name="Pricing"><pb-container id="inner" name="Plans"></pb-container><pb-basic id="one" heading="A">x</pb-basic></pb-container>',
+        'html' => '<d-container id="section" name="Pricing"><d-container id="inner" name="Plans"></d-container><d-basic id="one" heading="A">x</d-basic></d-container>',
         'at' => ['ref' => 'root', 'position' => 'beforeend'],
       ],
     ], $this->options);
@@ -563,15 +563,15 @@ class DomOperationsTest extends BlueprintKernelTestBase {
 
     $tree = $this->tree();
     $this->assertCount(2, $tree);
-    $this->assertArrayNotHasKey('label', $tree[0], 'The unnamed root band stays unnamed.');
-    $band = $tree[1];
-    $this->assertSame('Pricing', $band['label']);
-    $this->assertSame('Plans', $band['children'][0]['label']);
-    $this->assertSame($aliases['one'], $band['children'][1]['uuid']);
+    $this->assertArrayNotHasKey('label', $tree[0], 'The unnamed root section stays unnamed.');
+    $section = $tree[1];
+    $this->assertSame('Pricing', $section['label']);
+    $this->assertSame('Plans', $section['children'][0]['label']);
+    $this->assertSame($aliases['one'], $section['children'][1]['uuid']);
 
     $print = $this->container->get('daedalus_blueprint.dialect_printer')->print($tree, $this->options['dialect_catalog'])->text;
-    $this->assertStringContainsString(sprintf('<pb-container id="%s" name="Pricing">', $aliases['band']), $print);
-    $this->assertStringContainsString(sprintf('  <pb-container id="%s" name="Plans">', $aliases['inner']), $print);
+    $this->assertStringContainsString(sprintf('<d-container id="%s" name="Pricing">', $aliases['section']), $print);
+    $this->assertStringContainsString(sprintf('  <d-container id="%s" name="Plans">', $aliases['inner']), $print);
   }
 
   /**
@@ -611,7 +611,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="doomed" heading="X">.</pb-basic>',
+        'html' => '<d-basic id="doomed" heading="X">.</d-basic>',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
       ],
       ['op' => 'remove', 'ref' => 'never-existed'],
@@ -641,7 +641,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $this->assertSame('structural', $result->getPhase());
     $codes = array_map(static fn ($error) => $error->getCode(), $result->getErrors());
     $this->assertContains('SUGAR_TAG', $codes);
-    $this->assertStringContainsString('pb-container', $result->getErrors()[0]->getMessage());
+    $this->assertStringContainsString('d-container', $result->getErrors()[0]->getMessage());
     $this->assertCount(1, $this->tree());
   }
 
@@ -664,7 +664,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
       ],
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="intro" heading="Hi">.</pb-basic>',
+        'html' => '<d-basic id="intro" heading="Hi">.</d-basic>',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
       ],
     ], $this->options);
@@ -686,7 +686,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="intro" heading="Hi">.</pb-basic>',
+        'html' => '<d-basic id="intro" heading="Hi">.</d-basic>',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
       ],
       [
@@ -769,7 +769,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * A document's <pb-file> declarations land before its batch.
+   * A document's <d-file> declarations land before its batch.
    *
    * Whatever the source order, the declaration is saved and named before
    * the translated batch runs, so file="name" anywhere in the document
@@ -782,7 +782,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $entity = $this->entityTypeManager->getStorage('entity_test')->create(['name' => 'Fresh page']);
     $result = $handler->applyDocument(
       $this->host($entity),
-      "<pb-container id=\"hero\"><pb-basic id=\"intro\" heading=\"Hello\">.</pb-basic></pb-container>\n<pb-file name=\"logo.svg\" type=\"image/svg+xml\"><svg xmlns=\"http://www.w3.org/2000/svg\"/></pb-file>",
+      "<d-container id=\"hero\"><d-basic id=\"intro\" heading=\"Hello\">.</d-basic></d-container>\n<d-file name=\"logo.svg\" type=\"image/svg+xml\"><svg xmlns=\"http://www.w3.org/2000/svg\"/></d-file>",
       $this->options,
     );
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
@@ -796,7 +796,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $doomed = $this->entityTypeManager->getStorage('entity_test')->create(['name' => 'Doomed page']);
     $result = $handler->applyDocument(
       $this->host($doomed),
-      "<pb-container id=\"hero\"></pb-container>\n<pb-file name=\"bad.svg\" type=\"image/svg+xml\"><svg>" . TestFileDeclarationHandler::REFUSE . "</svg></pb-file>",
+      "<d-container id=\"hero\"></d-container>\n<d-file name=\"bad.svg\" type=\"image/svg+xml\"><svg>" . TestFileDeclarationHandler::REFUSE . "</svg></d-file>",
       $this->options,
     );
     $this->assertFalse($result->isSuccess());
@@ -815,7 +815,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $seed = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="mid" heading="M">.</pb-basic>',
+        'html' => '<d-basic id="mid" heading="M">.</d-basic>',
         'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
       ],
     ], $this->options);
@@ -824,12 +824,12 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="first" heading="F">.</pb-basic>',
+        'html' => '<d-basic id="first" heading="F">.</d-basic>',
         'at' => ['ref' => $this->rootUuid, 'position' => 'afterbegin'],
       ],
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="afterMid" heading="AM">.</pb-basic>',
+        'html' => '<d-basic id="afterMid" heading="AM">.</d-basic>',
         'at' => ['ref' => 'mid', 'position' => 'afterend'],
       ],
     ], $this->options);
@@ -844,7 +844,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $bad = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-container id="x"></pb-container>',
+        'html' => '<d-container id="x"></d-container>',
         'at' => ['ref' => 'root', 'position' => 'beforebegin'],
       ],
     ], $this->options);
@@ -964,7 +964,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-basic id="r1" heading="R1">.</pb-basic><pb-basic id="r2" heading="R2">.</pb-basic>',
+        'html' => '<d-basic id="r1" heading="R1">.</d-basic><d-basic id="r2" heading="R2">.</d-basic>',
         'at' => ['ref' => $twocol, 'position' => 'afterbegin', 'region' => 'second'],
       ],
     ], $this->options);
@@ -977,9 +977,9 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     // Beforeend appends inside the named region; afterbegin leads a filled
     // one, before the region's own first child rather than the section's.
     $result = $this->operations->batchOperations($this->host($this->entity), [
-      $this->insertOp('<pb-basic id="r3" heading="R3">.</pb-basic>', $twocol, 'beforeend', 'second'),
-      $this->insertOp('<pb-basic id="lead" heading="Lead">.</pb-basic>', $twocol, 'afterbegin', 'first'),
-      $this->insertOp('<pb-basic id="r0" heading="R0">.</pb-basic>', $twocol, 'afterbegin', 'second'),
+      $this->insertOp('<d-basic id="r3" heading="R3">.</d-basic>', $twocol, 'beforeend', 'second'),
+      $this->insertOp('<d-basic id="lead" heading="Lead">.</d-basic>', $twocol, 'afterbegin', 'first'),
+      $this->insertOp('<d-basic id="r0" heading="R0">.</d-basic>', $twocol, 'afterbegin', 'second'),
     ], $this->options);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $aliases += $result->getAliases();
@@ -988,7 +988,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
 
     // A container lands in a region as a nested section, its children in it.
     $result = $this->operations->batchOperations($this->host($this->entity), [
-      $this->insertOp('<pb-container id="col"><pb-basic id="in" heading="In">.</pb-basic></pb-container>', $twocol, 'beforeend', 'first'),
+      $this->insertOp('<d-container id="col"><d-basic id="in" heading="In">.</d-basic></d-container>', $twocol, 'beforeend', 'first'),
     ], $this->options);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $aliases += $result->getAliases();
@@ -1011,7 +1011,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     [$twocol, $blocks] = $this->appendLayoutSection('layout_twocol_section', ['first' => 'Left']);
     $left = $blocks['first'];
     $insert = $this->operations->batchOperations($this->host($this->entity), [
-      $this->insertOp('<pb-basic id="a" heading="A">.</pb-basic><pb-basic id="b" heading="B">.</pb-basic>', $this->rootUuid, 'beforeend'),
+      $this->insertOp('<d-basic id="a" heading="A">.</d-basic><d-basic id="b" heading="B">.</d-basic>', $this->rootUuid, 'beforeend'),
     ], $this->options);
     $this->assertTrue($insert->isSuccess(), print_r($insert->toArray()['errors'] ?? [], TRUE));
     $aliases = $insert->getAliases();
@@ -1051,7 +1051,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $before = $this->tree();
 
     $result = $this->operations->batchOperations($this->host($this->entity), [
-      $this->insertOp('<pb-basic id="x" heading="X">.</pb-basic>', $twocol, 'beforeend'),
+      $this->insertOp('<d-basic id="x" heading="X">.</d-basic>', $twocol, 'beforeend'),
     ], $this->options);
     $this->assertFalse($result->isSuccess());
     $this->assertSame('structural', $result->getPhase());
@@ -1071,7 +1071,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $this->assertSame($before, $this->tree(), 'Nothing landed.');
 
     $beside = $this->operations->batchOperations($this->host($this->entity), [
-      $this->insertOp('<pb-container id="after"></pb-container>', $twocol, 'afterend'),
+      $this->insertOp('<d-container id="after"></d-container>', $twocol, 'afterend'),
     ], $this->options);
     $this->assertTrue($beside->isSuccess(), print_r($beside->toArray()['errors'] ?? [], TRUE));
     $this->assertSame([$this->rootUuid, $twocol, $beside->getAliases()['after']], array_column($this->tree(), 'uuid'));
@@ -1086,10 +1086,10 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $before = $this->tree();
 
     $cases = [
-      'root' => $this->insertOp('<pb-container id="x"></pb-container>', 'root', 'beforeend', 'first'),
-      'beside a block' => $this->insertOp('<pb-basic id="x" heading="X">.</pb-basic>', $left, 'afterend', 'first'),
-      'beside the section' => $this->insertOp('<pb-container id="x"></pb-container>', $twocol, 'beforebegin', 'first'),
-      'a container layout' => $this->insertOp('<pb-basic id="x" heading="X">.</pb-basic>', $this->rootUuid, 'beforeend', 'content'),
+      'root' => $this->insertOp('<d-container id="x"></d-container>', 'root', 'beforeend', 'first'),
+      'beside a block' => $this->insertOp('<d-basic id="x" heading="X">.</d-basic>', $left, 'afterend', 'first'),
+      'beside the section' => $this->insertOp('<d-container id="x"></d-container>', $twocol, 'beforebegin', 'first'),
+      'a container layout' => $this->insertOp('<d-basic id="x" heading="X">.</d-basic>', $this->rootUuid, 'beforeend', 'content'),
       'a move' => $this->moveOp($left, $this->rootUuid, 'afterbegin', 'content'),
     ];
     foreach ($cases as $label => $op) {
@@ -1107,7 +1107,7 @@ class DomOperationsTest extends BlueprintKernelTestBase {
 
     // The envelope: a region that is not a name.
     $shape = $this->operations->batchOperations($this->host($this->entity), [
-      $this->insertOp('<pb-basic id="x" heading="X">.</pb-basic>', $twocol, 'beforeend', ''),
+      $this->insertOp('<d-basic id="x" heading="X">.</d-basic>', $twocol, 'beforeend', ''),
     ], $this->options);
     $this->assertSame('BAD_OP', $shape->getErrors()[0]->getCode());
     $this->assertSame('at.region', $shape->getErrors()[0]->getPath());
@@ -1127,9 +1127,9 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $before = $this->tree();
 
     $cases = [
-      'a block, beforeend' => $this->insertOp('<pb-basic id="x" heading="X">.</pb-basic>', $twocol, 'beforeend', 'third'),
-      'a block, afterbegin' => $this->insertOp('<pb-basic id="x" heading="X">.</pb-basic>', $twocol, 'afterbegin', 'third'),
-      'a container' => $this->insertOp('<pb-container id="x"></pb-container>', $twocol, 'beforeend', 'third'),
+      'a block, beforeend' => $this->insertOp('<d-basic id="x" heading="X">.</d-basic>', $twocol, 'beforeend', 'third'),
+      'a block, afterbegin' => $this->insertOp('<d-basic id="x" heading="X">.</d-basic>', $twocol, 'afterbegin', 'third'),
+      'a container' => $this->insertOp('<d-container id="x"></d-container>', $twocol, 'beforeend', 'third'),
       'a move' => $this->moveOp($blocks['first'], $twocol, 'afterbegin', 'third'),
     ];
     foreach ($cases as $label => $op) {
@@ -1156,9 +1156,9 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     [$onecol] = $this->appendLayoutSection('layout_onecol');
 
     $result = $this->operations->batchOperations($this->host($this->entity), [
-      $this->insertOp('<pb-basic id="x" heading="X">.</pb-basic>', $onecol, 'beforeend'),
-      $this->insertOp('<pb-basic id="y" heading="Y">.</pb-basic>', $onecol, 'afterbegin'),
-      $this->insertOp('<pb-basic id="z" heading="Z">.</pb-basic>', $onecol, 'beforeend', 'content'),
+      $this->insertOp('<d-basic id="x" heading="X">.</d-basic>', $onecol, 'beforeend'),
+      $this->insertOp('<d-basic id="y" heading="Y">.</d-basic>', $onecol, 'afterbegin'),
+      $this->insertOp('<d-basic id="z" heading="Z">.</d-basic>', $onecol, 'beforeend', 'content'),
     ], $this->options);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $aliases = $result->getAliases();

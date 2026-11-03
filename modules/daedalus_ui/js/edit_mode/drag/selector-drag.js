@@ -1,5 +1,6 @@
 import store from '../store/store';
 import { elementForKey } from '../selection/resolver';
+import { effectiveBlueprint } from '../blueprint/effective-blueprint';
 import { registerDragSource, makeDragDelegate } from './drag-controller';
 import * as builders from './ops-builders';
 
@@ -122,10 +123,11 @@ const arm = (element) => {
 };
 
 // Arming follows the store: the hover key names WHAT the drag layer means,
-// the mode gates WHETHER dragging is on, an open edit suspends it, and a
-// blueprint replacement means a markup swap may have recreated the armed
-// key's element: re-resolve. Memoized on those four inputs so the
-// per-dispatch cost is comparisons, not DOM queries.
+// the mode gates WHETHER dragging is on, an open edit suspends it, and an
+// effective-blueprint change (a mutation's markup swap may have recreated
+// the armed key's element; a composed edit's draft morphed it) means
+// re-resolve. Memoized on those four inputs so the per-dispatch cost is
+// comparisons, not DOM queries.
 let last = { mode: null, hoverKey: null, editingKey: null, blueprint: null };
 
 const syncArming = () => {
@@ -140,7 +142,7 @@ const syncArming = () => {
     mode: state.mode.mode,
     hoverKey: state.selection.hoverKey,
     editingKey: state.selection.editingKey,
-    blueprint: state.blueprint.blueprint,
+    blueprint: effectiveBlueprint(state),
   };
   if (
     next.mode === last.mode &&

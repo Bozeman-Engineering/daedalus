@@ -41,8 +41,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * on.
  *
  * The matrix is host state by tool; this class carries the eb_edit legs,
- * the two JSON read doors' legs (eb_read_entity in every mode, the markup
- * projection included, and eb_read_element) and the two JSON create
+ * the two JSON read doors' legs (eb_read_entity in every mode and
+ * eb_read_element) and the two JSON create
  * doors' legs (eb_create_entity and eb_validate), which ask the same
  * question of a bundle before any entity exists
  * (PageHosts::isPageBundle()): the override field is a
@@ -372,7 +372,7 @@ class PageLanguageDoorsTest extends BlueprintKernelTestBase {
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity.
    * @param string $mode
-   *   The reading mode: summary, full or markup.
+   *   The reading mode: summary or full.
    *
    * @return string
    *   The tool's readable output.
@@ -386,22 +386,19 @@ class PageLanguageDoorsTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Runs eb_read_element against an entity's block in a mode.
+   * Runs eb_read_element against an entity's block.
    *
    * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
    *   The entity.
-   * @param string $mode
-   *   The reading mode: full or markup.
    *
    * @return string
    *   The tool's readable output.
    */
-  protected function runReadElement(FieldableEntityInterface $entity, string $mode = 'full'): string {
+  protected function runReadElement(FieldableEntityInterface $entity): string {
     return $this->runTool('eb_read_element', [
       'entity_type' => $entity->getEntityTypeId(),
       'entity_id' => (int) $entity->id(),
       'element' => self::BLOCK_UUID,
-      'mode' => $mode,
     ]);
   }
 
@@ -420,13 +417,10 @@ class PageLanguageDoorsTest extends BlueprintKernelTestBase {
 
   /**
    * Eb_read_entity refuses a page that owns a document, in every mode.
-   *
-   * The markup projection of a page goes with the JSON road: the refusal
-   * answers markup mode too, not the empty-socket corrective.
    */
   public function testReadEntityRefusesOwningPageInEveryMode(): void {
     $page = $this->createOwningPage();
-    foreach (['summary', 'full', 'markup'] as $mode) {
+    foreach (['summary', 'full'] as $mode) {
       $output = $this->runReadEntity($page, $mode);
       $this->assertSame($this->readCorrective($page), $output, "Mode $mode is refused.");
       $this->assertStringNotContainsString('eb_test_container', $output, "Mode $mode prints nothing of the document.");
@@ -460,15 +454,13 @@ class PageLanguageDoorsTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Eb_read_element refuses a page's element, in both modes.
+   * Eb_read_element refuses a page's element.
    */
-  public function testReadElementRefusesOwningPageInBothModes(): void {
+  public function testReadElementRefusesOwningPage(): void {
     $page = $this->createOwningPage();
-    foreach (['full', 'markup'] as $mode) {
-      $output = $this->runReadElement($page, $mode);
-      $this->assertSame($this->readCorrective($page), $output, "Mode $mode is refused.");
-      $this->assertStringNotContainsString('system_powered_by_block', $output, "Mode $mode prints nothing of the element.");
-    }
+    $output = $this->runReadElement($page);
+    $this->assertSame($this->readCorrective($page), $output);
+    $this->assertStringNotContainsString('system_powered_by_block', $output, 'The refusal prints nothing of the element.');
   }
 
   /**
@@ -676,7 +668,7 @@ class PageLanguageDoorsTest extends BlueprintKernelTestBase {
   /**
    * The layout sentence a multi-region print's reading notes carry.
    */
-  protected const REGION_SENTENCE = '- A <pb-container> carrying data-layout is a section on that layout rather than the container: its children print directly under it, data-regions lists its regions and each child\'s data-region names the one it sits in. An insert or move into such a section names the region as at: {ref, position, region}; afterbegin or beforeend on it without a region is refused (REGION_REQUIRED), a region anywhere else is refused too (REGION_NOT_APPLICABLE), and nothing creates such a section.';
+  protected const REGION_SENTENCE = '- A <d-container> carrying data-layout is a section on that layout rather than the container: its children print directly under it, data-regions lists its regions and each child\'s data-region names the one it sits in. An insert or move into such a section names the region as at: {ref, position, region}; afterbegin or beforeend on it without a region is refused (REGION_REQUIRED), a region anywhere else is refused too (REGION_NOT_APPLICABLE), and nothing creates such a section.';
 
   /**
    * Asserts a print spells the page on core layouts whole, as read-only facts.
@@ -689,17 +681,17 @@ class PageLanguageDoorsTest extends BlueprintKernelTestBase {
   protected function assertCoreLayoutPrint(string $output, bool $with_block = TRUE): void {
     $this->assertSame(1, substr_count($output, 'Reading notes:'), 'The reading notes head the print once.');
     $this->assertStringContainsString("\n" . self::REGION_SENTENCE . "\n", $output, 'The layout sentence teaches the region address.');
-    $this->assertMatchesRegularExpression('/\n<pb-container( id="[^"]*")?( data-can="[^"]*")? data-layout="layout_onecol">\n/', $output, 'The single-region section carries its layout and no regions.');
-    $this->assertMatchesRegularExpression('/\n<pb-container( id="[^"]*")?( data-can="[^"]*")? data-layout="layout_twocol_section" data-regions="first second">\n/', $output, 'The two-column section carries its layout and both region names.');
-    $this->assertMatchesRegularExpression('/\n  <pb-block id="' . self::COLUMN_BLOCK_UUID . '"( data-can="[^"]*")? data-region="first" plugin="system_powered_by_block" \/>\n/', $output, 'The column\'s block carries its region as a fact.');
-    $block = '/\n  <pb-block id="' . self::BLOCK_UUID . '"( data-can="[^"]*")? plugin="system_powered_by_block" \/>\n/';
+    $this->assertMatchesRegularExpression('/\n<d-container( id="[^"]*")?( data-can="[^"]*")? data-layout="layout_onecol">\n/', $output, 'The single-region section carries its layout and no regions.');
+    $this->assertMatchesRegularExpression('/\n<d-container( id="[^"]*")?( data-can="[^"]*")? data-layout="layout_twocol_section" data-regions="first second">\n/', $output, 'The two-column section carries its layout and both region names.');
+    $this->assertMatchesRegularExpression('/\n  <d-block id="' . self::COLUMN_BLOCK_UUID . '"( data-can="[^"]*")? data-region="first" plugin="system_powered_by_block" \/>\n/', $output, 'The column\'s block carries its region as a fact.');
+    $block = '/\n  <d-block id="' . self::BLOCK_UUID . '"( data-can="[^"]*")? plugin="system_powered_by_block" \/>\n/';
     if ($with_block) {
       $this->assertMatchesRegularExpression($block, $output, 'The single region\'s block carries no region.');
     }
     else {
       $this->assertDoesNotMatchRegularExpression($block, $output, 'The removed block is gone from the echo.');
     }
-    $this->assertStringEndsWith("</pb-container>\n", $output);
+    $this->assertStringEndsWith("</d-container>\n", $output);
   }
 
   /**
@@ -794,8 +786,8 @@ class PageLanguageDoorsTest extends BlueprintKernelTestBase {
     $this->assertMatchesRegularExpression('/does not own\. [^\n]*\nReading notes:\n- /', $output, 'The reading notes follow the notice.');
     $this->assertSame(1, substr_count($output, 'Reading notes:'), 'The reading notes head the print once.');
     $this->assertStringContainsString("\n" . self::REGION_SENTENCE . "\n", $output);
-    $this->assertMatchesRegularExpression('/\n<pb-container( id="[^"]*")?( data-can="[^"]*")? data-layout="layout_twocol_section" data-regions="first second">\n/', $output, 'The template\'s section carries its layout and both region names.');
-    $this->assertMatchesRegularExpression('/\n  <pb-block id="' . self::COLUMN_BLOCK_UUID . '"( data-can="[^"]*")? data-region="first" plugin="system_powered_by_block" \/>\n/', $output);
+    $this->assertMatchesRegularExpression('/\n<d-container( id="[^"]*")?( data-can="[^"]*")? data-layout="layout_twocol_section" data-regions="first second">\n/', $output, 'The template\'s section carries its layout and both region names.');
+    $this->assertMatchesRegularExpression('/\n  <d-block id="' . self::COLUMN_BLOCK_UUID . '"( data-can="[^"]*")? data-region="first" plugin="system_powered_by_block" \/>\n/', $output);
 
     $storage = $this->entityTypeManager->getStorage('entity_test');
     $storage->resetCache();

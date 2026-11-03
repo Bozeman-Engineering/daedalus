@@ -10,14 +10,14 @@ property_groups:
       max-width:
         max: '90rem'
 elements:
-  '.band-content':
+  '.section-content':
     label: 'Container'
     property_groups:
       sizing:
         constraints:
           max-width:
             max: '80rem'
-    # The part's children pseudo-part ("{key}::.band-content > *").
+    # The part's children pseudo-part ("{key}::.section-content > *").
     children:
       property_groups:
         layout: {}

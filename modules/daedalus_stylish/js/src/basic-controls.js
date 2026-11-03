@@ -48,7 +48,7 @@ import './widgets/index.js';
  * a key.
  *
  * Widget component contract (Task-5 implementations plug in here):
- *   ({ model, guide, layout, styleMap, swatches, source, onPreview,
+ *   ({ model, guide, layout, styleMap, tokens, law, source, onPreview,
  *   onRelease, onCommit, onPickCondition, onOpenDocument }) => vnode
  * - model.home: the binding's first present box ({element, key,
  *   stack}), for everything that is not a property (the canvas
@@ -76,7 +76,7 @@ import './widgets/index.js';
  *   validates every commit.
  * - guide: the style guide payload, read-only; materials: the materials
  *   roster the stop rows derive from
- *   (tokens, swatches) the color widgets derive their stops from
+ *   (tokens) the color widgets derive their stops from
  *   (widget-values.js propertyStops, over the property's one fallback).
  * - layout: the selection facts (source.getLayoutContext(); {self, parent}
  *   with self = {display, isContainer, childCount, hasText, parts,
@@ -92,9 +92,13 @@ import './widgets/index.js';
  *   widgets' seam (the box-model diagram and the stroke rows read their
  *   own entry's write layer from it). Never a write surface, and a
  *   widget's OWN values still come from model.reads.
- * - swatches: the swatch gesture gates (drupalSettings.daedalusStylish.swatches,
- *   {canCreate}): honest chrome for the gradient chip's save-as-swatch
- *   gesture (gradient-chip.js canMint); the mint route enforces.
+ * - skinMaterials: the skin material gates (drupalSettings.daedalusStylish.skinMaterials,
+ *   {canCreate}): honest chrome for the wells' and the gradient chip's
+ *   save-as-token gesture (gradient-chip.js canMint); the op enforces.
+ * - law: the law gate (drupalSettings.daedalusStylish.law, {canView}):
+ *   honest chrome for the rows' "See the declaration" doorway
+ *   (provenance-model.js originOf), which exists only while the host
+ *   offers the Law tab.
  * - source: the state source, for the reads and transient chrome only a
  *   host can answer — the canvas placeholder read (source.readCanvas)
  *   and the property-keyed canvas highlight (source.setCanvasHighlight),
@@ -115,7 +119,7 @@ import './widgets/index.js';
  *   to its own (`route`): one key, one update_style op (a recipe, a
  *   border = width + style + color, commits atomically on one box);
  *   several keys (a removal beside the set on another box: a gradient
- *   pick clearing the root's band while the gradient lands on the
+ *   pick clearing the root's background while the gradient lands on the
  *   anchor), one atomic mutate() batch through compoundOperations, so
  *   every part lands or none does. A widget writes only where its rows
  *   read: no gesture reaches a key no row of it reads (the pipeline
@@ -200,7 +204,7 @@ import './widgets/index.js';
  * context, the hosted structural sections leading.
  *
  * `rule` marks a RULE key target (a chain facet seated from a code-mode
- * row header, `container:X::> pb-text`): the panel is then the rule's,
+ * row header, `container:X::> d-text`): the panel is then the rule's,
  * one thing at a time. Its rows are the landing declaration's over the
  * container's rule (controls.js controlModels), read with no layout
  * facts (a set of matched elements has no one display or text fact, so
@@ -239,9 +243,10 @@ export const BasicControls = ({
   styleMap,
   variants = [],
   condition = 'default',
-  swatches = {},
+  skinMaterials = {},
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
   targetSelector = null,
   leading = {},
   rule = false,
@@ -263,7 +268,7 @@ export const BasicControls = ({
     condition,
     layout,
     targetSelector,
-    source.getTree?.() ?? null,
+    source.getDocument?.() ?? null,
     writeAddress,
   );
   // Two filters, two reasons to not render: no registered component (the
@@ -344,10 +349,11 @@ export const BasicControls = ({
         materials={materials}
         layout={layout}
         styleMap={styleMap}
-        swatches={swatches}
+        skinMaterials={skinMaterials}
         source={source}
         onPickCondition={onPickCondition}
         onOpenDocument={onOpenDocument}
+        law={law}
         onPreview={(properties) =>
           route(properties).forEach(({ key, properties: grouped }) =>
             Object.entries(grouped).forEach(([property, value]) =>

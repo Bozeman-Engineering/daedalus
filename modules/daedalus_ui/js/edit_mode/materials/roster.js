@@ -12,7 +12,7 @@
  * ValueGrammarTest::testClientTwinEquivalence through
  * tests/js/materials-cases.mjs. Change MaterialsRoster's predicate and
  * this module in the same commit, or the lock fails. The predicate is a
- * roster method on both sides: a blueprint's band fact resolves its root's
+ * roster method on both sides: a blueprint's section fact resolves its root's
  * wearings against the variant records of the same roster.
  *
  * No entity is read here: the records arrive on the page-load payload
@@ -28,7 +28,6 @@ import { SLOT, slotScope } from './grammar.js';
  */
 export const MATERIAL_KINDS = [
   'token',
-  'swatch',
   'variant',
   'blueprint',
   'animation',
@@ -119,7 +118,7 @@ export const scopesPair = (variantScope, elementScope) => {
  *   The roster: all(), ofKind(kind), get(kind, id), has(kind, id),
  *   isEmpty(), bySpelling(slot, spelling), spellings(slot),
  *   applicable(record, elementScope, topLevel, withinBlueprint),
- *   isBand(blueprint), rootOnlyWears(blueprint).
+ *   isSection(blueprint), rootOnlyWears(blueprint).
  */
 export const createRoster = (records) => {
   const byKind = new Map(MATERIAL_KINDS.map((kind) => [kind, new Map()]));
@@ -165,7 +164,7 @@ export const createRoster = (records) => {
    * The root-only variant records a blueprint's root wears, keyed by id.
    *
    * The twin of MaterialsRoster::rootOnlyWears(): what makes a blueprint a
-   * band, named, so a corrective can spell the variant and its axis. The
+   * section, named, so a corrective can spell the variant and its axis. The
    * record's captured wearings resolve against the variant records of
    * THIS roster; a wearing that names no record here (a variant
    * unpublished since the capture, or one outside the active design
@@ -188,24 +187,24 @@ export const createRoster = (records) => {
   };
 
   /**
-   * Whether a blueprint is a page band: its root wears a root-only variant.
+   * Whether a blueprint is a section: its root wears a root-only variant.
    *
-   * The twin of MaterialsRoster::isBand(), the one derivation behind every
-   * "band" word the client speaks (the palette's absent caret, the
+   * The twin of MaterialsRoster::isSection(), the one derivation behind every
+   * "section" word the client speaks (the palette's absent caret, the
    * click-to-place refusal).
    *
    * @param {object} blueprint
    *   A record in the delivery shape.
    * @return {boolean}
    */
-  const isBand = (blueprint) => rootOnlyWears(blueprint).size > 0;
+  const isSection = (blueprint) => rootOnlyWears(blueprint).size > 0;
 
   /**
    * Whether a material may be worn by an element in a given situation.
    *
    * The twin of MaterialsRoster::applicable(): variants gate on scope
    * pairing, root-only depth and blueprint ownership; a blueprint gates on
-   * one derived fact (a band places at top level only, every other
+   * one derived fact (a section places at top level only, every other
    * blueprint anywhere the placement grammar allows); every other kind
    * applies everywhere.
    *
@@ -215,7 +214,7 @@ export const createRoster = (records) => {
    *   The element's own scope ("block_type:text", "kind:container"); for
    *   a blueprint, the scope its root lands as.
    * @param {boolean} [topLevel=true]
-   *   Whether the element sits at top level (a page band); for a blueprint,
+   *   Whether the element sits at top level (a section); for a blueprint,
    *   where it would land.
    * @param {string|null} [withinBlueprint=null]
    *   The id of the blueprint whose placement the element sits inside.
@@ -228,7 +227,7 @@ export const createRoster = (records) => {
     withinBlueprint = null,
   ) => {
     if (record.kind === 'blueprint') {
-      return topLevel || !isBand(record);
+      return topLevel || !isSection(record);
     }
     if (record.kind !== 'variant') {
       return true;
@@ -254,7 +253,7 @@ export const createRoster = (records) => {
     bySpelling: (slot, spelling) => bySpelling.get(slot)?.get(spelling) ?? null,
     spellings: (slot) => Object.fromEntries(bySpelling.get(slot) ?? []),
     applicable,
-    isBand,
+    isSection,
     rootOnlyWears,
   };
 };

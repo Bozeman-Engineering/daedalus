@@ -6,6 +6,7 @@ namespace Drupal\daedalus_stylish;
 
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
+use Drupal\daedalus_blueprint\Materials\ConditionClause;
 use Drupal\daedalus_ui\ElementModel\ElementResolver;
 use Drupal\daedalus_ui\Render\ElementAddress;
 
@@ -28,11 +29,20 @@ use Drupal\daedalus_ui\Render\ElementAddress;
  * ancestors' rules resolve by proximity, nearest first. Mechanically ONE
  * compound of the chain carries the weight (the last non-universal one,
  * `:scope` included), every other prints inside :where(), `*` never
- * carries any, and a qualifier (`:has()`, `:not()`) takes its argument's
- * weight, so every argument compound prints inside :where() too with its
- * combinators bare (`:has(> :where([data-element="block_type:image"]))`;
- * :where() takes complex selectors, never relative ones, so the wrap is
- * per compound). Part keys keep their dual: the class inside the scope AND
+ * carries any, and a qualifier never adds any: `:has()` and `:not()` take
+ * their argument's weight, so every argument compound prints inside
+ * :where() too with its combinators bare
+ * (`:has(> :where([data-element="block_type:image"]))`; :where() takes
+ * complex selectors, never relative ones, so the wrap is per compound),
+ * and every other qualifier (a class, an attribute, a position, a
+ * pseudo-class, an `:is()`) prints at its compound inside its own :where()
+ * (`li:where(.active) > ul` weighs what `li > ul` weighs), a pseudo-class
+ * spelling a published state as the same force-state dual the condition
+ * suffix prints (forceStateDual()), any other pseudo-class bare, and an
+ * `:is()`'s members bare inside the one :where() around it
+ * (`:where(:is(:is(:hover, …), :is(:focus-within, …)))`, the dual per
+ * posable member).
+ * Part keys keep their dual: the class inside the scope AND
  * on the scope root itself (":scope.cls, .cls" — a collapsed container
  * hoists its part class onto the element carrying the key); a type
  * compound selects by the element address stamp (`[data-element="…"]`,
@@ -45,8 +55,8 @@ use Drupal\daedalus_ui\Render\ElementAddress;
  * tie-and-proximity discipline holds by construction;
  * conditions wrap declarations in pseudo-class selectors or at-rules, and
  * an "a+b" compound composes its parts' wrappers (at-rules nest in part
- * order, pseudo suffixes append: a posable state as an :is() that also
- * matches the editor's data-force-state stamp, a structural fact bare).
+ * order, pseudo suffixes append: a state as an :is() that also matches
+ * the editor's data-force-state stamp).
  * Because @scope preludes name their root by selector, the emitted text is
  * position-independent — where the <style> tag lands in the DOM is purely a
  * delivery concern.
@@ -207,7 +217,7 @@ class CssPrinter {
    * The keyframe offset shape the emit gate admits.
    *
    * `from`, `to`, or a percentage; the stored steps are canonical
-   * percentages already (AnimationStepsItem::canonicalizeSteps()), so this
+   * percentages already (SkinAnimationsItem::canonicalizeSteps()), so this
    * only keeps a value written around the entity out of the at-rule body.
    * Mirrored by printer.js's KEYFRAME_OFFSET_PATTERN, byte for byte.
    */
@@ -337,7 +347,7 @@ class CssPrinter {
     // concrete interior elements (claiming parts included — a real part
     // style must WIN over the co-target, not feed it), and the owner's
     // own generated box (`&::before`) is a selector entry like any other.
-    $pieces = $this->entryPieces(static::hostTargets($selector), $entry, 1, $selector === NULL ? ':scope' : NULL, static::pseudoTail($selector));
+    $pieces = $this->entryPieces(static::hostTargets($selector, $this->conditionTypes->getConditions()), $entry, 1, $selector === NULL ? ':scope' : NULL, static::pseudoTail($selector));
 
     if ($pieces === []) {
       return '';
@@ -351,7 +361,7 @@ class CssPrinter {
   /**
    * Prints one style entry as bare (unscoped) zero-specificity rules.
    *
-   * The defaults lane, every tier of it (DefaultsStylesheet: the base:{tag}
+   * The defaults lane, every tier of it (SkinStylesheet: the base:{tag}
    * tier and the element scopes alike): defaults print as plain selectors
    * OUTSIDE any @scope and at 0-0-0, on purpose. Every authored rule (a
    * per-entity @scope block, a compiled variant, an ancestor's rule for
@@ -392,8 +402,13 @@ class CssPrinter {
    */
   public function printBareEntry(string $selector, ?RelativeSelector $relative, array $entry, bool $co_target = FALSE): string {
     $target = $selector;
+    $conditions = $this->conditionTypes->getConditions();
     foreach ($relative?->compounds ?? [] as $compound) {
-      $target .= static::renderCombinator($compound) . static::renderCompound($compound, FALSE);
+      // The qualified anchor IS the element: its qualifiers glue onto the
+      // element's own selector, no combinator between.
+      $target .= $compound['kind'] === RelativeSelector::ANCHOR_KIND
+        ? static::renderQualifiers($compound, $conditions)
+        : static::renderCombinator($compound) . static::renderCompound($compound, FALSE, $conditions);
     }
     $pieces = $this->entryPieces([$target], $entry, 0, $co_target ? $selector : NULL, static::pseudoTail($relative));
     return $pieces === [] ? '' : implode("\n", $pieces);
@@ -464,44 +479,39 @@ class CssPrinter {
         continue;
       }
       // "default" applies unconditionally; every other condition key — a
-      // single condition or an "a+b" compound — maps each part to a wrapper
-      // via the condition type plugins and COMPOSES them: pseudo-class
-      // suffixes append to the target selector, at-rules nest around the
-      // rule in part order (outermost first). A key with any unknown part
-      // prints nothing — the emit gate's counterpart to the validator's
-      // membership check (a plugin uninstalled after write degrades to
-      // inert data).
+      // single clause or an "a+b" compound — reads through the clause
+      // grammar (ConditionClause) and COMPOSES its clauses' CSS: a
+      // pseudo-class clause appends to the target selector, an at-rule
+      // clause nests around the rule in clause order (outermost first). A
+      // reference prints its published wrapper, a literal its own
+      // canonical text (`@media (hover: hover) { … }`, media and
+      // container told apart by the clause's own prefix, `@supports (…)`
+      // the same way). A key with any unknown clause prints nothing — the
+      // emit gate's counterpart to the validator's membership check (a
+      // plugin uninstalled after write degrades to inert data).
       $suffixes = '';
       $at_rules = [];
       if ($condition !== 'default') {
         $unknown = FALSE;
-        foreach (ConditionTypePluginManager::compoundParts($condition) as $part) {
-          $wrapper = $this->conditionTypes->getWrapper($part);
-          if ($wrapper === NULL) {
+        foreach (ConditionClause::parse($condition, $this->conditionTypes->getConditions()) as $clause) {
+          if ($clause['kind'] === ConditionClause::UNKNOWN) {
             $unknown = TRUE;
             break;
           }
-          if (str_starts_with($wrapper, ':')) {
-            // A structural FACT (":first-child", ":nth-child(odd)") holds
-            // by the element's place in the markup: nothing the editor
-            // does can force it, so it prints bare, the pseudo-class
-            // itself. Every other pseudo-class condition also matches the
-            // editor's forced state (the inspector's DevTools-style :hov):
-            // the canvas stamps data-force-state on the selected element,
-            // and the :is() alternative makes the stored styles render
-            // without the real interaction. Inert everywhere else,
-            // nothing but edit mode ever stamps the attribute, and
-            // specificity is unchanged (:is() takes its most specific
-            // argument; the attribute selector ties the pseudo-class).
-            // The part name is safe inside the quoted attribute value: it
-            // resolved to a wrapper above, so it is a plugin-declared
-            // condition name.
-            $suffixes .= $this->conditionTypes->isFact($part)
-              ? $wrapper
-              : sprintf(':is(%s, [data-force-state~="%s"])', $wrapper, $part);
+          if ($clause['form'] === ConditionClause::PSEUDO) {
+            // A pseudo-class clause is a state (position is selector
+            // grammar, printed at its compound): a posable one prints the
+            // force-state dual (forceStateDual()) with the word the stamp
+            // carries, an unposable one (a state no stamp stands in for,
+            // ConditionClause::UNPOSABLE_STATES) bare. The stamp word is
+            // safe inside the quoted attribute value: a published name or
+            // a bare pseudo-class the grammar read.
+            $suffixes .= ConditionClause::posable($clause)
+              ? static::forceStateDual($clause['css'], ConditionClause::stamp($clause))
+              : $clause['css'];
           }
           else {
-            $at_rules[] = $wrapper;
+            $at_rules[] = $clause['css'];
           }
         }
         if ($unknown) {
@@ -566,6 +576,30 @@ class CssPrinter {
     }
 
     return $pieces;
+  }
+
+  /**
+   * The force-state dual of a posable state: the pseudo-class OR the stamp.
+   *
+   * The ONE spelling behind both places a state prints: the condition
+   * suffix on an entry's target (entryPieces()) and a pseudo-class
+   * qualifier at its compound (renderQualifiers()). A posable state also
+   * matches the editor's forced state (the inspector's DevTools-style
+   * :hov): the canvas stamps data-force-state on the posed element, and
+   * the :is() alternative makes the stored styles render without the
+   * real interaction. Inert everywhere else, nothing but edit mode ever
+   * stamps the attribute, and specificity is unchanged (:is() takes its
+   * most specific argument; the attribute selector ties the
+   * pseudo-class). Mirrored by printer.js's forceStateDual, byte for
+   * byte.
+   *
+   * @param string $wrapper
+   *   The state's pseudo-class wrapper (`:hover`).
+   * @param string $condition
+   *   The published condition name the stamp carries (`hover`).
+   */
+  protected static function forceStateDual(string $wrapper, string $condition): string {
+    return sprintf(':is(%s, [data-force-state~="%s"])', $wrapper, $condition);
   }
 
   /**
@@ -701,8 +735,8 @@ class CssPrinter {
    * declaration block), sits outside any @scope, and is referenced by its
    * bare name from a value (`animation-name: motion-fade_in`), so it prints
    * as its own top-level rule: nothing here composes with conditions,
-   * scope roots or co-targets. Delivered by the compiled animations file
-   * and its workspace inline preview (AnimationStylesheet), and re-printed
+   * scope roots or co-targets. Delivered by the compiled skin file and its
+   * workspace inline preview (SkinStylesheet), and re-printed
    * client-side per settle for the keyframes editor's live preview; the
    * client mirror (printKeyframes in js/src/printer.js) is locked to this
    * output byte for byte by the round-trip equivalence test.
@@ -755,7 +789,7 @@ class CssPrinter {
    * lands, never blocking), and the declaration order is fixed so the
    * compiled file is content-addressed on the faces alone. Delivered by
    * the compiled fonts file and its workspace inline preview
-   * (FontStylesheet); no client mirror, the client never prints a face.
+   * (SkinStylesheet::fontFaces()); no client mirror, the client never prints a face.
    *
    * The emit gate: the family is the quoted spelling
    * (StyleGuide::fontFamily(), a double-quoted string with no raw quote
@@ -827,9 +861,18 @@ class CssPrinter {
    *
    * A sibling combinator prints like `>` (` + `, ` ~ `); a compound's
    * qualifiers print on it, their argument compounds each inside :where()
-   * with bare combinators (renderCompound()), so a qualifier adds no
-   * weight. Type compounds select by the element address stamp
-   * (typeSelector()).
+   * with bare combinators and every other qualifier inside its own
+   * :where() (renderQualifiers()), so a qualifier adds no weight. Type
+   * compounds select by the element address stamp (typeSelector()).
+   *
+   * The QUALIFIED ANCHOR (`&:first-child`, `&:not(:last-child) > *`) is
+   * the owner standing first: it prints as the `:scope` link itself, its
+   * qualifiers glued on, bare or inside :where() by the same discipline
+   * (`:scope:where(:first-child)` weighs what `:scope` weighs;
+   * `:where(:scope):where(:first-child) > [data-element="…"]` what
+   * `> d-text` weighs). A part behind it is still the owner's own part:
+   * the hoisted dual glues the class onto the anchor's print
+   * (`:scope:where(:first-child).quote`).
    *
    * A terminal pseudo-element glues onto every target after the last
    * compound's qualifiers (`:where(:scope) > [data-element="…"]::before`,
@@ -844,14 +887,23 @@ class CssPrinter {
    * the hosts are hostTargets()'s. Mirrored by printer.js's scopeTargets,
    * byte for byte.
    *
+   * @param \Drupal\daedalus_blueprint\Materials\RelativeSelector|null $selector
+   *   The key's relative selector, or NULL for the scope root itself.
+   * @param array $conditions
+   *   The condition table (ConditionTypePluginManager::getConditions(),
+   *   name => definition with `wrapper`): a pseudo-class qualifier that
+   *   spells one of its states prints the force-state dual. Without a
+   *   table no pseudo-class is a published state and every one prints
+   *   bare.
+   *
    * @return string[]
    *   The target selectors, the hoisted dual first when there is one.
    */
-  public static function scopeTargets(?RelativeSelector $selector): array {
+  public static function scopeTargets(?RelativeSelector $selector, array $conditions = []): array {
     $pseudo = static::pseudoTail($selector);
     return array_map(
       static fn (string $host): string => $host . $pseudo,
-      static::hostTargets($selector),
+      static::hostTargets($selector, $conditions),
     );
   }
 
@@ -871,33 +923,57 @@ class CssPrinter {
    *
    * The owner's anchor (`&::before`) hosts on the scoping root itself.
    *
+   * @param \Drupal\daedalus_blueprint\Materials\RelativeSelector|null $selector
+   *   The key's relative selector, or NULL for the scope root itself.
+   * @param array $conditions
+   *   The condition table, as scopeTargets() takes it.
+   *
    * @return string[]
    *   The host selectors, the hoisted dual first when there is one.
    */
-  protected static function hostTargets(?RelativeSelector $selector): array {
+  protected static function hostTargets(?RelativeSelector $selector, array $conditions = []): array {
     if ($selector === NULL || $selector->compounds === []) {
       return [':scope'];
     }
     $compounds = $selector->compounds;
     $carrier = static::lastWeighted($compounds, 0);
     if ($compounds[0]['combinator'] === RelativeSelector::CHILD) {
-      $main = ($carrier === -1 ? ':scope' : ':where(:scope)') . static::renderTail($compounds, $carrier, 0);
+      $main = static::scopeLink($compounds, $carrier === -1, $conditions) . static::renderTail($compounds, $carrier, 0, $conditions);
     }
     else {
-      $main = static::renderCompound($compounds[0], $carrier === 0) . static::renderTail($compounds, $carrier, 1);
+      // A descendant-led chain, or the qualified anchor (which prints as
+      // the :scope link, renderCompound()).
+      $main = static::renderCompound($compounds[0], $carrier === 0, $conditions) . static::renderTail($compounds, $carrier, 1, $conditions);
     }
     if (!$selector->isPartFirst()) {
       return [$main];
     }
-    if (count($compounds) === 1) {
-      return [':scope' . $compounds[0]['name'] . static::renderQualifiers($compounds[0]), $main];
+    // The part stands first, or right behind the qualified anchor.
+    $part = $compounds[0]['kind'] === RelativeSelector::ANCHOR_KIND ? 1 : 0;
+    if (count($compounds) === $part + 1) {
+      $hoisted = static::scopeLink($compounds, TRUE, $conditions) . $compounds[$part]['name'] . static::renderQualifiers($compounds[$part], $conditions);
+      return [$hoisted, $main];
     }
-    if (static::isSibling($compounds[1])) {
+    if (static::isSibling($compounds[$part + 1])) {
       return [$main];
     }
-    $rest_carrier = static::lastWeighted($compounds, 1);
-    $dual = ($rest_carrier === -1 ? ':scope' : ':where(:scope)') . ':where(' . $compounds[0]['name'] . ')' . static::renderQualifiers($compounds[0]) . static::renderTail($compounds, $rest_carrier, 1);
+    $rest_carrier = static::lastWeighted($compounds, $part + 1);
+    $dual = static::scopeLink($compounds, $rest_carrier === -1, $conditions) . ':where(' . $compounds[$part]['name'] . ')' . static::renderQualifiers($compounds[$part], $conditions) . static::renderTail($compounds, $rest_carrier, $part + 1, $conditions);
     return [$dual, $main];
+  }
+
+  /**
+   * Prints the `:scope` link of a chain, bare or inside :where().
+   *
+   * Bare when it carries the weight, else inside :where(); the qualified
+   * anchor's print when the owner stands first (its qualifiers glued
+   * on), the plain scoping root otherwise.
+   */
+  protected static function scopeLink(array $compounds, bool $bare, array $conditions): string {
+    if ($compounds[0]['kind'] === RelativeSelector::ANCHOR_KIND) {
+      return static::renderCompound($compounds[0], $bare, $conditions);
+    }
+    return $bare ? ':scope' : ':where(:scope)';
   }
 
   /**
@@ -925,10 +1001,10 @@ class CssPrinter {
   /**
    * Prints the chain from one compound on, each behind its combinator.
    */
-  protected static function renderTail(array $compounds, int $carrier, int $from): string {
+  protected static function renderTail(array $compounds, int $carrier, int $from, array $conditions): string {
     $printed = '';
     foreach (array_slice($compounds, $from, NULL, TRUE) as $i => $compound) {
-      $printed .= static::renderCombinator($compound) . static::renderCompound($compound, $i === $carrier);
+      $printed .= static::renderCombinator($compound) . static::renderCompound($compound, $i === $carrier, $conditions);
     }
     return $printed;
   }
@@ -957,21 +1033,30 @@ class CssPrinter {
    * else in :where(), then its qualifiers.
    *
    * `*` prints bare (it weighs nothing); an implied subject (inside
-   * `:not()`) prints nothing.
+   * `:not()` or an `:is()` member) prints nothing; the qualified anchor
+   * is the scoping root (`:scope`), the one link every chain hangs from.
+   * Inside a :where() already (`$in_where`: an `:is()` member and
+   * everything it holds) nothing wraps: the subject prints bare and the
+   * qualifiers unwrapped, since the one :where() around the `:is()` has
+   * zeroed the whole member.
    */
-  protected static function renderCompound(array $compound, bool $bare): string {
+  protected static function renderCompound(array $compound, bool $bare, array $conditions, bool $in_where = FALSE): string {
     if ($compound['kind'] === NULL) {
-      return static::renderQualifiers($compound);
+      return static::renderQualifiers($compound, $conditions, $in_where);
     }
     if ($compound['kind'] === RelativeSelector::UNIVERSAL) {
-      return '*' . static::renderQualifiers($compound);
+      return '*' . static::renderQualifiers($compound, $conditions, $in_where);
     }
-    $printed = $compound['kind'] === RelativeSelector::TYPE ? static::typeSelector($compound['name']) : $compound['name'];
-    return ($bare ? $printed : ':where(' . $printed . ')') . static::renderQualifiers($compound);
+    $printed = match ($compound['kind']) {
+      RelativeSelector::TYPE => static::typeSelector($compound['name']),
+      RelativeSelector::ANCHOR_KIND => ':scope',
+      default => $compound['name'],
+    };
+    return ($bare || $in_where ? $printed : ':where(' . $printed . ')') . static::renderQualifiers($compound, $conditions, $in_where);
   }
 
   /**
-   * Prints a compound's qualifiers, each at zero weight.
+   * Prints a compound's qualifiers, each at its compound and at zero weight.
    *
    * `:has()` and `:not()` take their argument's specificity, and the
    * discipline puts ONE weight on the chain, so every argument compound
@@ -979,27 +1064,76 @@ class CssPrinter {
    * relative ones, so the wrap is per compound and the argument's
    * combinators stay bare, its lead glued to its space
    * (`:has(> :where([data-element="block_type:image"]))`,
-   * `:not(:where(p))`, `:not(:has(:where(a)))`).
+   * `:not(:where(p))`, `:not(:has(:where(a)))`). Every other qualifier
+   * weighs 0-1-0 on its own (a class, an attribute, a position, a
+   * pseudo-class), so it prints inside its own :where() at its compound
+   * in the grammar's canonical spelling (`:where(.active)`,
+   * `:where([aria-expanded="true"])`, `:where(:first-child)`,
+   * `:where(:nth-child(2n+1))`, and inside a negation
+   * `:not(:where(:last-child))`): a qualifier narrows the matches and
+   * never moves a rule's weight. A pseudo-class spelling a state the
+   * condition table publishes is posable, so it prints the force-state
+   * dual inside the :where() (`:where(:is(:hover, [data-force-state~=
+   * "hover"]))`: the pose on the `li` reveals `li:hover > ul`); any other
+   * pseudo-class (`:visited`, an unpublished `:checked`) prints bare.
+   * `:is()` takes its most specific member, so it prints inside its own
+   * :where() like the rest, and its members print bare inside it (the
+   * one :where() zeroes them all), each by the same rules: a type by its
+   * address stamp, a posable state as the dual, `:has()` and `:not()`
+   * unwrapped (`:where(:is(:is(:focus-within, [data-force-state~=
+   * "focus-within"]), :is(:hover, [data-force-state~="hover"])))` for
+   * `.menu-item:is(:hover, :focus-within)`, `*:where(:is(h1, h2))` for
+   * the fold of `h1, h2`). Inside such a member (`$in_where`) the wraps
+   * are already paid, so every qualifier prints unwrapped.
    */
-  protected static function renderQualifiers(array $compound): string {
+  protected static function renderQualifiers(array $compound, array $conditions, bool $in_where = FALSE): string {
     $printed = '';
     foreach ($compound['qualifiers'] as $qualifier) {
-      $printed .= $qualifier['name'] === RelativeSelector::HAS
-        ? ':has(' . static::renderArgument($qualifier['argument']) . ')'
-        : ':not(' . static::renderCompound($qualifier['argument'], FALSE) . ')';
+      $printed .= match ($qualifier['name']) {
+        RelativeSelector::HAS => ':has(' . static::renderArgument($qualifier['argument'], $conditions, $in_where) . ')',
+        RelativeSelector::NOT => ':not(' . static::renderCompound($qualifier['argument'], FALSE, $conditions, $in_where) . ')',
+        default => $in_where
+          ? static::renderQualifier($qualifier, $conditions)
+          : ':where(' . static::renderQualifier($qualifier, $conditions) . ')',
+      };
     }
     return $printed;
   }
 
   /**
-   * Prints a `:has()` argument: its lead, then each compound in :where().
+   * The inside of one qualifier's :where() wrap.
+   *
+   * For a qualifier that is no `:has()` or `:not()`: `:is()` over its
+   * members printed bare (renderCompound() inside the :where()), the
+   * force-state dual for a posable state, else the grammar's own spelling.
    */
-  protected static function renderArgument(array $compounds): string {
+  protected static function renderQualifier(array $qualifier, array $conditions): string {
+    if ($qualifier['name'] === RelativeSelector::IS) {
+      return ':is(' . implode(', ', array_map(static fn (array $member): string => static::renderCompound($member, TRUE, $conditions, TRUE), $qualifier['argument'])) . ')';
+    }
+    // Only a bare pseudo-class can spell a state: a class and an attribute
+    // carry their argument, and so does the nth family.
+    if ($qualifier['argument'] === NULL) {
+      $condition = ConditionTypePluginManager::conditionSpelledBy($conditions, $qualifier['name']);
+      if ($condition !== NULL) {
+        return static::forceStateDual(':' . $qualifier['name'], $condition);
+      }
+    }
+    return RelativeSelector::printQualifier($qualifier);
+  }
+
+  /**
+   * Prints a `:has()` argument: its lead, then each compound in :where().
+   *
+   * Inside an `:is()` member (`$in_where`) the compounds print bare: the
+   * member's :where() has zeroed them.
+   */
+  protected static function renderArgument(array $compounds, array $conditions, bool $in_where = FALSE): string {
     $printed = $compounds[0]['combinator'] === RelativeSelector::DESCENDANT
       ? ''
       : static::COMBINATOR_SYMBOLS[$compounds[0]['combinator']] . ' ';
     foreach ($compounds as $i => $compound) {
-      $printed .= ($i === 0 ? '' : static::renderCombinator($compound)) . static::renderCompound($compound, FALSE);
+      $printed .= ($i === 0 ? '' : static::renderCombinator($compound)) . static::renderCompound($compound, FALSE, $conditions, $in_where);
     }
     return $printed;
   }
@@ -1007,9 +1141,9 @@ class CssPrinter {
   /**
    * The selector a type compound matches: the element address stamp.
    *
-   * `pb-text` is `[data-element="block_type:text"]`; the two kind
+   * `d-text` is `[data-element="block_type:text"]`; the two kind
    * families select every member of the family (addressMembers()),
-   * `pb-block` as an :is() list so the compound stays one link of the
+   * `d-block` as an :is() list so the compound stays one link of the
    * chain. Mirrored by printer.js's typeSelector, byte for byte.
    */
   public static function typeSelector(string $type): string {
@@ -1025,7 +1159,7 @@ class CssPrinter {
    * exactly; a kind every address of that kind: kind:block the two block
    * placement families, kind:container the layout family, kind:entity
    * and kind:field their own bare kinds, which are the addresses entity
-   * and field roots wear. The defaults tier (DefaultsStylesheet) and the
+   * and field roots wear. The defaults tier (SkinStylesheet) and the
    * type compounds read here. A base tag derives no selector (the tag IS
    * the selector), and neither does a kind no root resolves through.
    *
@@ -1059,7 +1193,7 @@ class CssPrinter {
    * standard limit would exclude, so the boundary moves to the nested
    * roots' children, which keeps the roots stylable as the part's
    * children while a nested container's identical part markup (whose own
-   * children sit below the shifted limit) stays out; `.cls > pb-text > *`
+   * children sit below the shifted limit) stays out; `.cls > d-text > *`
    * shifts twice, and so on. A part-first selector that continues by a
    * DESCENDANT combinator (`.cls p`) reaches inside nested roots on
    * purpose (doctrine: a tag or type compound has descendant reach,
@@ -1074,7 +1208,10 @@ class CssPrinter {
       return NULL;
     }
     $levels = 0;
-    foreach (array_slice($selector->compounds, 1) as $compound) {
+    // The part stands first, or right behind the qualified anchor (the
+    // owner itself, no level of its own).
+    $after_part = $selector->compounds[0]['kind'] === RelativeSelector::ANCHOR_KIND ? 2 : 1;
+    foreach (array_slice($selector->compounds, $after_part) as $compound) {
       if ($compound['combinator'] !== RelativeSelector::CHILD) {
         return NULL;
       }
@@ -1141,7 +1278,7 @@ class CssPrinter {
       }
       $value = trim((string) $value);
       // The underscore is a legal CSS ident character, present in custom
-      // property names derived from machine names (--swatch-brand_red);
+      // property names derived from machine names (--radius-card_2x);
       // this is a charset hygiene gate, not a vocabulary check (the
       // validator owns vocabulary). Mirrored by printer.js's
       // PROPERTY_PATTERN, byte for byte.

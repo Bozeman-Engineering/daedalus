@@ -25,7 +25,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * the slots the page may fill, the template's elements in the read-only
  * register (data-can="", content kept on a field block of the page's own
  * field), the slot block as the door (data-can="insert") and, after the
- * template, the page's own slot sections writable (<pb-slot name="id">,
+ * template, the page's own slot sections writable (<d-slot name="id">,
  * no data-can). page_edit writes into a slot by inserting inside the door:
  * the first fill is born as the slot section itself, later fills land in
  * it, staged under the page's key and saved with the page, the display
@@ -227,10 +227,10 @@ class PageToolsLockedPageTest extends BlueprintKernelTestBase {
    * Asserts the template prints in the read-only register, the door open.
    */
   protected function assertTemplateReadOnly(string $output, string $message = ''): void {
-    $this->assertStringContainsString('<pb-container id="' . $this->templateSection . '" data-can="">', $output, $message . ' The template container is marked: nothing may be done to it on this page.');
-    $this->assertStringContainsString('<pb-block id="' . $this->templateBlock . '" data-can="" plugin="system_powered_by_block" />', $output, $message . ' The template block is marked.');
-    $this->assertStringContainsString('<pb-block id="' . $this->fieldBlock . '" data-can="content" field="name" />', $output, $message . ' A field block presenting the page\'s own field keeps content.');
-    $this->assertStringContainsString('<pb-block id="' . $this->heroDoor . '" data-can="insert" plugin="daedalus_slot:hero" />', $output, $message . ' The slot block is the door: insert is the page\'s own, nothing else.');
+    $this->assertStringContainsString('<d-container id="' . $this->templateSection . '" data-can="">', $output, $message . ' The template container is marked: nothing may be done to it on this page.');
+    $this->assertStringContainsString('<d-block id="' . $this->templateBlock . '" data-can="" plugin="system_powered_by_block" />', $output, $message . ' The template block is marked.');
+    $this->assertStringContainsString('<d-block id="' . $this->fieldBlock . '" data-can="content" field="name" />', $output, $message . ' A field block presenting the page\'s own field keeps content.');
+    $this->assertStringContainsString('<d-block id="' . $this->heroDoor . '" data-can="insert" plugin="daedalus_slot:hero" />', $output, $message . ' The slot block is the door: insert is the page\'s own, nothing else.');
   }
 
   /**
@@ -239,7 +239,7 @@ class PageToolsLockedPageTest extends BlueprintKernelTestBase {
    * Empty, the read is the notice (template and slots), the page's own
    * fields and the template with its elements marked, no slot section.
    * An insert inside the door is born as the page's slot section, printed
-   * after the template as <pb-slot name="hero"> with no data-can on it or
+   * after the template as <d-slot name="hero"> with no data-can on it or
    * its children, staged (the display untouched); a second insert into
    * the fill, saved, lands both in the page's one slot section; the read
    * after the save prints the same.
@@ -250,7 +250,7 @@ class PageToolsLockedPageTest extends BlueprintKernelTestBase {
     $this->assertStringStartsWith($this->notice() . "\nfields:\n", $output, 'The read says where the layout is edited and which slots the page fills, then answers the page\'s own fields.');
     $this->assertStringContainsString("\n  name: 'Locked page'\n", $output);
     $this->assertTemplateReadOnly($output, 'Empty:');
-    $this->assertStringNotContainsString('<pb-slot', $output, 'Nothing fills the slot yet.');
+    $this->assertStringNotContainsString('<d-slot', $output, 'Nothing fills the slot yet.');
 
     // The first fill: a container inserted inside the door becomes the slot
     // section itself, the page's own.
@@ -258,7 +258,7 @@ class PageToolsLockedPageTest extends BlueprintKernelTestBase {
       'ops' => [
         [
           'op' => 'insert',
-          'html' => '<pb-container id="band"><pb-block field="name"/></pb-container>',
+          'html' => '<d-container id="section"><d-block field="name"/></d-container>',
           'at' => ['ref' => $this->heroDoor, 'position' => 'beforeend'],
         ],
       ],
@@ -267,13 +267,13 @@ class PageToolsLockedPageTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString('persisted: tempstore', $output, 'An unsaved fill stages under the page\'s key.');
     $this->assertStringContainsString('Updated page:', $output);
     $this->assertTemplateReadOnly($output, 'Staged:');
-    $this->assertMatchesRegularExpression('/\n<pb-slot id="([0-9a-f-]{36})" data-alias="band" name="hero">\n  <pb-block id="[0-9a-f-]{36}" field="name" \/>\n<\/pb-slot>\n$/', $output, 'The fill prints after the template as the page\'s own slot section: writable (no data-can), named by the slot, its alias kept.');
+    $this->assertMatchesRegularExpression('/\n<d-slot id="([0-9a-f-]{36})" data-alias="section" name="hero">\n  <d-block id="[0-9a-f-]{36}" field="name" \/>\n<\/d-slot>\n$/', $output, 'The fill prints after the template as the page\'s own slot section: writable (no data-can), named by the slot, its alias kept.');
     $this->assertSame(['system_powered_by_block', self::FIELD_BLOCK, SlotBlock::PLUGIN_ID . ':hero'], $this->savedTemplatePluginIds(), 'The display is untouched: the fill is the page\'s.');
     $this->assertSame([], $this->savedFills(), 'The staged fill is not saved yet.');
 
     $read = $this->runTool('page_read', $this->address());
     $this->assertStringStartsWith($this->notice() . "\nfields:\n", $read);
-    $this->assertMatchesRegularExpression('/\n<pb-slot id="[0-9a-f-]{36}" data-alias="band" name="hero">\n  <pb-block id="[0-9a-f-]{36}" field="name" \/>\n<\/pb-slot>\n$/', $read, 'page_read answers the staged fill, writable.');
+    $this->assertMatchesRegularExpression('/\n<d-slot id="[0-9a-f-]{36}" data-alias="section" name="hero">\n  <d-block id="[0-9a-f-]{36}" field="name" \/>\n<\/d-slot>\n$/', $read, 'page_read answers the staged fill, writable.');
 
     // A second fill lands in the slot section the page already owns, and
     // the save lands both with the page.
@@ -281,18 +281,18 @@ class PageToolsLockedPageTest extends BlueprintKernelTestBase {
       'ops' => [
         [
           'op' => 'insert',
-          'html' => '<pb-block plugin="system_powered_by_block"/>',
-          'at' => ['ref' => 'band', 'position' => 'beforeend'],
+          'html' => '<d-block plugin="system_powered_by_block"/>',
+          'at' => ['ref' => 'section', 'position' => 'beforeend'],
         ],
       ],
       'save' => TRUE,
     ]);
     $this->assertStringNotContainsString('Error', $output);
     $this->assertStringContainsString('persisted: database', $output);
-    $this->assertMatchesRegularExpression('/\n<pb-slot id="[0-9a-f-]{36}" data-alias="band" name="hero">\n  <pb-block id="[0-9a-f-]{36}" field="name" \/>\n  <pb-block id="[0-9a-f-]{36}" plugin="system_powered_by_block" \/>\n<\/pb-slot>\n$/', $output);
+    $this->assertMatchesRegularExpression('/\n<d-slot id="[0-9a-f-]{36}" data-alias="section" name="hero">\n  <d-block id="[0-9a-f-]{36}" field="name" \/>\n  <d-block id="[0-9a-f-]{36}" plugin="system_powered_by_block" \/>\n<\/d-slot>\n$/', $output);
     $this->assertSame(['hero' => [self::FIELD_BLOCK, 'system_powered_by_block']], $this->savedFills(), 'The save landed the page\'s one slot section with both blocks.');
     $this->assertSame(['system_powered_by_block', self::FIELD_BLOCK, SlotBlock::PLUGIN_ID . ':hero'], $this->savedTemplatePluginIds(), 'The display is still untouched.');
-    $this->assertStringContainsString('<pb-slot id="', $this->runTool('page_read', $this->address()), 'The saved fill reads back.');
+    $this->assertStringContainsString('<d-slot id="', $this->runTool('page_read', $this->address()), 'The saved fill reads back.');
   }
 
   /**
@@ -308,12 +308,12 @@ class PageToolsLockedPageTest extends BlueprintKernelTestBase {
     $refused = [
       'root' => [
         'op' => 'insert',
-        'html' => '<pb-container id="band"></pb-container>',
+        'html' => '<d-container id="section"></d-container>',
         'at' => ['ref' => 'root', 'position' => 'beforeend'],
       ],
       'template container' => [
         'op' => 'insert',
-        'html' => '<pb-block plugin="system_powered_by_block"/>',
+        'html' => '<d-block plugin="system_powered_by_block"/>',
         'at' => ['ref' => $this->templateSection, 'position' => 'beforeend'],
       ],
       'template block' => [
@@ -328,7 +328,7 @@ class PageToolsLockedPageTest extends BlueprintKernelTestBase {
       $this->assertStringNotContainsString('Updated page:', $output);
     }
     $this->assertSame([], $this->savedFills(), 'Nothing landed.');
-    $this->assertStringNotContainsString('<pb-slot', $this->runTool('page_read', $this->address()), 'Nothing staged.');
+    $this->assertStringNotContainsString('<d-slot', $this->runTool('page_read', $this->address()), 'Nothing staged.');
 
     $output = $this->runTool('page_edit', $this->address() + [
       'ops' => [['op' => 'set', 'ref' => 'root', 'attrs' => ['name' => 'Renamed']]],

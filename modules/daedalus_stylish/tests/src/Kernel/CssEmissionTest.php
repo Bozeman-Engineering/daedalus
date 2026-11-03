@@ -45,6 +45,7 @@ class CssEmissionTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     // daedalus_stylish_entity_view() consults daedalus_ui's mode state for the
     // entity-root live-attribution stamp.
     'block',
@@ -77,9 +78,6 @@ class CssEmissionTest extends KernelTestBase {
     // The seed's style ops validate through the materials roster, so the
     // fixture carries the material entity schemas the roster reads.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);

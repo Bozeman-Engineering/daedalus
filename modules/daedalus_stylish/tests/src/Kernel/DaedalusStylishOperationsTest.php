@@ -24,7 +24,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
- * Tests the update_style, apply_variant, detach_variant and update_default ops.
+ * Tests the style ops: update_style, the variant ops, move_style, update_default.
  *
  * The operations register with daedalus_blueprint's operation handler registry
  * and ride its batchOperations() grammar. The style guide in play comes from
@@ -50,6 +50,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     'field',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -87,17 +88,11 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('daedalus_variant');
     // Material references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     // Access-transparent like the daedalus_blueprint operations suite: these
@@ -680,9 +675,11 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $this->assertContains('apply_variant', $valid);
     $this->assertContains('remove_variant', $valid);
     $this->assertContains('detach_variant', $valid);
+    $this->assertContains('move_style', $valid);
 
-    $guidance = $this->container->get('daedalus_blueprint.operation_handler_registry')->getGuidance();
-    foreach (['update_style', 'apply_variant', 'remove_variant', 'detach_variant'] as $op) {
+    $registry = $this->container->get('daedalus_blueprint.operation_handler_registry');
+    $guidance = $registry->getGuidance();
+    foreach (['update_style', 'apply_variant', 'remove_variant', 'detach_variant', 'move_style'] as $op) {
       $this->assertArrayHasKey($op, $guidance);
       $line = $guidance[$op];
       // A router line routes to the taught form instead of carrying
@@ -703,6 +700,266 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // look changes) vs unlink (the look stays).
     $this->assertStringContainsString('WITHOUT materializing', $guidance['remove_variant']);
     $this->assertStringContainsString('keeping the look', $guidance['detach_variant']);
+    // The rekey op names both of its parameters and stays JSON-only: a
+    // page-only op the page language never spells (a move is the rule
+    // restated under its new selector with the old one removed).
+    $this->assertStringContainsString('"to"', $guidance['move_style'], 'move_style names its "to" parameter.');
+    $this->assertContains('move_style', $registry->getPageOnlyOperations(), 'move_style is a page-only op.');
+    $this->assertNotContains('move_style', $registry->getPageLanguageOperations(), 'move_style has no page-language spelling.');
+  }
+
+  /**
+   * The move_style rekeys a rule's entry whole, in place, landing canonical.
+   *
+   * The entry moves with every condition; the owner's root entry and a
+   * rule that does not continue the moved one stay where they are, the
+   * moved entry keeps its position in the map, a lenient "to" spelling
+   * lands canonical, and the result re-renders the owner exactly as an
+   * update_style on it would (the same write path answers both).
+   */
+  public function testMoveStyleRekeysTheRule(): void {
+    $owner = "container:{$this->uuid}";
+    $rule = "$owner::> d-testimonial";
+    $entity = $this->createStyledEntity([
+      $owner => ['default' => ['gap' => '1rem']],
+      $rule => ['default' => ['padding' => '2rem'], 'hover' => ['color' => 'purple']],
+      "$owner::> *" => ['default' => ['gap' => '2rem']],
+    ]);
+
+    $result = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'move_style', 'key' => $rule, 'to' => '>d-testimonial:has(a)'],
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame([
+      $owner => ['default' => ['gap' => '1rem']],
+      "$owner::> d-testimonial:has(a)" => ['default' => ['padding' => '2rem'], 'hover' => ['color' => 'purple']],
+      "$owner::> *" => ['default' => ['gap' => '2rem']],
+    ], $this->styleMap($entity), 'The rule moved whole, in place, to the canonical spelling; nothing else moved.');
+
+    $patched = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'update_style', 'key' => $owner, 'properties' => ['gap' => '3rem']],
+    ]);
+    $this->assertTrue($patched->isSuccess());
+    $this->assertNotEmpty($result->getTargets(), 'The move answers a re-render target.');
+    $this->assertEquals($patched->getTargets(), $result->getTargets(), 'The move re-renders the owner as update_style on it does.');
+  }
+
+  /**
+   * The family follows the rule, nested variant references and all.
+   *
+   * Every key continuing the rule (a part by descent, the rule's own
+   * generated box) lands under the new selector by the same suffix; the
+   * "variants" list rides its entry untouched; a rule that merely shares
+   * the prefix without continuing (":not(:has(a))") stays; the whole
+   * resulting map is one the validator accepts. An absent rule moves
+   * nothing of its own while its continuations still follow.
+   */
+  public function testMoveStyleFamilyFollows(): void {
+    $variant = DaedalusStylishVariant::create([
+      'label' => 'Quote card',
+      'machine_name' => 'quote_card',
+      'scope' => 'block_type:testimonial',
+    ]);
+    $variant->setStyles([
+      '' => ['default' => ['padding' => '2rem']],
+      '::.testimonial__quote' => ['default' => ['font-weight' => '700']],
+    ]);
+    $variant->save();
+    $owner = "container:{$this->uuid}";
+    $rule = "$owner::> d-testimonial";
+    $entity = $this->createStyledEntity([
+      $owner => ['default' => ['gap' => '1rem']],
+      $rule => ['default' => ['padding' => '2rem'], 'variants' => [self::ref('quote_card')]],
+      "$rule .testimonial__quote" => ['default' => ['font-weight' => '700'], 'hover' => ['color' => 'purple']],
+      "$rule::before" => ['default' => ['content' => '""', 'padding' => '1rem']],
+      "$owner::> d-testimonial:not(:has(a))" => ['default' => ['padding' => '3rem']],
+    ]);
+
+    $result = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'move_style', 'key' => $rule, 'to' => '> d-testimonial:has(a)'],
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $map = $this->styleMap($entity);
+    $moved = "$owner::> d-testimonial:has(a)";
+    $this->assertSame([
+      $owner => ['default' => ['gap' => '1rem']],
+      $moved => ['default' => ['padding' => '2rem'], 'variants' => [self::ref('quote_card')]],
+      "$moved .testimonial__quote" => ['default' => ['font-weight' => '700'], 'hover' => ['color' => 'purple']],
+      "$moved::before" => ['default' => ['content' => '""', 'padding' => '1rem']],
+      "$owner::> d-testimonial:not(:has(a))" => ['default' => ['padding' => '3rem']],
+    ], $map, 'The rule, its part and its box moved by the same suffix with the variant reference riding; the non-continuing rule stayed.');
+    $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($map, ['host' => $this->host($entity)]), 'The moved map is one the validator accepts whole.');
+
+    // An absent rule: nothing of its own to move, the continuation follows.
+    $entity2 = $this->createStyledEntity([
+      "$rule .testimonial__quote" => ['default' => ['font-weight' => '700']],
+    ]);
+    $result = $this->operations->batchOperations($this->host($entity2), [
+      ['op' => 'move_style', 'key' => $rule, 'to' => '> d-testimonial:has(a)'],
+    ]);
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
+    $this->assertSame([
+      "$moved .testimonial__quote" => ['default' => ['font-weight' => '700']],
+    ], $this->styleMap($entity2), 'The continuation followed an absent rule; no entry was minted for the rule itself.');
+  }
+
+  /**
+   * The moved entries are judged at their landings before anything moves.
+   *
+   * On the strict test guide a container's children ("> *") are granted
+   * layout only, so the testimonial rule's typography refuses to land
+   * there (STYLE_PROPERTY_NOT_DECLARED, re-rooted onto "to"), and a worn
+   * testimonial variant refuses the children landing by scope. Both
+   * refusals are semantic and leave the map exactly as it was.
+   */
+  public function testMoveStyleJudgesTheLanding(): void {
+    $this->enforce('strict');
+    $owner = "container:{$this->uuid}";
+    $rule = "$owner::> d-testimonial";
+    $before = [
+      $owner => ['default' => ['padding' => '1rem']],
+      $rule => ['default' => ['font-size' => '1.5rem']],
+    ];
+    $entity = $this->createStyledEntity($before);
+
+    $result = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'move_style', 'key' => $rule, 'to' => '> *'],
+    ]);
+    $this->assertFalse($result->isSuccess(), 'Typography does not land on the children.');
+    $this->assertSame('semantic', $result->getPhase());
+    $this->assertSame(['STYLE_PROPERTY_NOT_DECLARED'], $this->errorCodes($result)['to.default.font-size'], 'The validator\'s path at the rule\'s landing re-roots onto "to".');
+    $this->assertSame($before, $this->styleMap($entity), 'A refused move writes nothing.');
+
+    DaedalusStylishVariant::create([
+      'label' => 'Quote card',
+      'machine_name' => 'quote_card',
+      'scope' => 'block_type:testimonial',
+    ])->save();
+    $worn = [$rule => ['variants' => [self::ref('quote_card')]]];
+    $entity2 = $this->createStyledEntity($worn);
+    $result = $this->operations->batchOperations($this->host($entity2), [
+      ['op' => 'move_style', 'key' => $rule, 'to' => '> *'],
+    ]);
+    $this->assertFalse($result->isSuccess(), 'A testimonial variant does not land on the children.');
+    $this->assertSame('semantic', $result->getPhase());
+    $codes = [];
+    foreach ($this->errorCodes($result) as $path => $at_path) {
+      $this->assertStringStartsWith('to', $path, "The scope refusal points at the landing ($path).");
+      array_push($codes, ...$at_path);
+    }
+    $this->assertContains('STYLE_VARIANT_SCOPE_MISMATCH', $codes);
+    $this->assertSame($worn, $this->styleMap($entity2), 'A refused move writes nothing.');
+  }
+
+  /**
+   * The semantic refusals: a present landing, a stuck continuation, no rule.
+   *
+   * A landing already present refuses whether it is the rule's own, a
+   * family member's (the rule itself absent), or the unchanged selector;
+   * a "to" ending in a generated box carries no continuation behind it;
+   * a key holding no entry and continued by none has no rule to move.
+   * Every refusal names what refused in its context and leaves the map
+   * untouched.
+   */
+  public function testMoveStyleRefusals(): void {
+    $owner = "container:{$this->uuid}";
+    $rule = "$owner::> d-testimonial";
+    $taken = "$owner::> d-testimonial:has(a)";
+
+    $before = [
+      $rule => ['default' => ['padding' => '2rem']],
+      $taken => ['default' => ['padding' => '3rem']],
+    ];
+    $entity = $this->createStyledEntity($before);
+    $result = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'move_style', 'key' => $rule, 'to' => '> d-testimonial:has(a)'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame('semantic', $result->getPhase());
+    $this->assertSame(['STYLE_MOVE_TARGET_EXISTS'], $this->errorCodes($result)['to']);
+    $this->assertSame($taken, $result->getErrors()[0]->getContext()['landing'], 'The collision names the present key.');
+    $this->assertSame($before, $this->styleMap($entity));
+
+    // The unchanged selector is its own collision.
+    $result = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'move_style', 'key' => $rule, 'to' => '> d-testimonial'],
+    ]);
+    $this->assertSame(['STYLE_MOVE_TARGET_EXISTS'], $this->errorCodes($result)['to']);
+    $this->assertSame($rule, $result->getErrors()[0]->getContext()['landing']);
+
+    // A family member's landing present, the rule itself absent.
+    $before = [
+      "$rule .testimonial__quote" => ['default' => ['font-weight' => '700']],
+      "$taken .testimonial__quote" => ['default' => ['font-weight' => '400']],
+    ];
+    $entity = $this->createStyledEntity($before);
+    $result = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'move_style', 'key' => $rule, 'to' => '> d-testimonial:has(a)'],
+    ]);
+    $this->assertSame(['STYLE_MOVE_TARGET_EXISTS'], $this->errorCodes($result)['to']);
+    $this->assertSame("$taken .testimonial__quote", $result->getErrors()[0]->getContext()['landing'], 'The collision names the family member\'s present landing.');
+    $this->assertSame($before, $this->styleMap($entity));
+
+    // A generated box carries nothing behind it.
+    $before = [
+      $rule => ['default' => ['padding' => '2rem']],
+      "$rule .testimonial__quote" => ['default' => ['font-weight' => '700']],
+    ];
+    $entity = $this->createStyledEntity($before);
+    $result = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'move_style', 'key' => $rule, 'to' => '> d-testimonial::before'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame('semantic', $result->getPhase());
+    $this->assertSame(['STYLE_MOVE_CONTINUATION_REFUSED'], $this->errorCodes($result)['to']);
+    $this->assertSame("$rule .testimonial__quote", $result->getErrors()[0]->getContext()['landing'], 'The refusal names the continuation that cannot follow.');
+    $this->assertSame($before, $this->styleMap($entity));
+
+    // Nothing at the key and nothing continuing it.
+    $before = [$owner => ['default' => ['gap' => '1rem']]];
+    $entity = $this->createStyledEntity($before);
+    $result = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'move_style', 'key' => $rule, 'to' => '> d-testimonial:has(a)'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame('semantic', $result->getPhase());
+    $this->assertSame(['STYLE_MOVE_NOTHING_TO_MOVE'], $this->errorCodes($result)['key']);
+    $this->assertSame($before, $this->styleMap($entity));
+  }
+
+  /**
+   * Malformed moves fail structurally with parameter-space paths.
+   *
+   * An element key (no "::") is not a rule; "to" is required and must be
+   * a relative selector the grammar reads (the grammar's own code and
+   * sentence, as every key door answers).
+   */
+  public function testMoveStyleStructuralFailures(): void {
+    $owner = "container:{$this->uuid}";
+    $rule = "$owner::> d-testimonial";
+    $entity = $this->createStyledEntity([$rule => ['default' => ['padding' => '2rem']]]);
+
+    $result = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'move_style', 'key' => $owner, 'to' => '> d-testimonial:has(a)'],
+    ]);
+    $this->assertFalse($result->isSuccess());
+    $this->assertSame('structural', $result->getPhase());
+    $this->assertSame(['STYLE_MOVE_NOT_A_RULE'], $this->errorCodes($result)['key']);
+
+    $result = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'move_style', 'key' => $rule],
+    ]);
+    $this->assertSame('structural', $result->getPhase());
+    $this->assertSame(['MISSING_PARAMETER'], $this->errorCodes($result)['to']);
+
+    $result = $this->operations->batchOperations($this->host($entity), [
+      ['op' => 'move_style', 'key' => $rule, 'to' => '> d-testimonial::part(x)'],
+    ]);
+    $this->assertSame('structural', $result->getPhase());
+    $this->assertSame(['INVALID_STYLE_KEY'], $this->errorCodes($result)['to']);
+    $this->assertStringContainsString('relative selector', $result->getErrors()[0]->getHint(), 'The grammar sentence is the hint.');
+
+    $this->assertSame([$rule => ['default' => ['padding' => '2rem']]], $this->styleMap($entity), 'No structural failure touched the map.');
   }
 
   /**
@@ -785,8 +1042,8 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
    * refused; detach materializes the root styles at the rule and every
    * part entry continued under the rule by descent (never "::" twice),
    * leaving a map the validator accepts; remove drops the reference; and
-   * a part the rule's grammar refuses (a class under a tag rule) is not
-   * materialized, because it never delivered.
+   * a part under a tag rule (a class qualifies any compound) continues
+   * by descent too, `{rule} .part`, since it delivered.
    */
   public function testVariantOpsAtARule(): void {
     $variant = DaedalusStylishVariant::create(['label' => 'Quote card', 'machine_name' => 'quote_card', 'scope' => 'block_type:testimonial']);
@@ -795,14 +1052,14 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
       '::.testimonial__quote' => ['default' => ['font-weight' => '700']],
     ]);
     $variant->save();
-    DaedalusStylishVariant::create(['label' => 'Band', 'machine_name' => 'band', 'scope' => 'kind:container'])->save();
+    DaedalusStylishVariant::create(['label' => 'Section', 'machine_name' => 'section', 'scope' => 'kind:container'])->save();
     $link = DaedalusStylishVariant::create(['label' => 'Link', 'machine_name' => 'link_style', 'scope' => 'base:a']);
     $link->setStyles([
       '' => ['default' => ['color' => 'red']],
       '::.icon' => ['default' => ['margin' => '0']],
     ]);
     $link->save();
-    $rule = "container:{$this->uuid}::> pb-testimonial";
+    $rule = "container:{$this->uuid}::> d-testimonial";
     $entity = $this->createStyledEntity([
       "container:{$this->uuid}" => ['default' => ['gap' => '1rem']],
     ]);
@@ -820,7 +1077,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // The landing decides the scope: a container variant is refused at
     // the testimonial rule.
     $result = $this->operations->batchOperations($this->host($entity), [
-      ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'band'],
+      ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'section'],
     ]);
     $this->assertFalse($result->isSuccess());
     $this->assertSame(['STYLE_VARIANT_SCOPE_MISMATCH'], $this->errorCodes($result)['variant']);
@@ -858,15 +1115,18 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     ]);
     $this->assertSame('STYLE_VARIANT_NOT_REFERENCED', $result->getErrors()[0]->getCode());
 
-    // A part the rule's grammar refuses (a class under a tag rule) never
-    // delivered, so detach materializes only what reached the page.
+    // A part under a tag rule delivered (a class qualifies any compound),
+    // so detach materializes it continued by descent, `{rule} .part`.
     $tag_rule = "container:{$this->uuid}::a";
     $entity2 = $this->createStyledEntity([$tag_rule => ['variants' => [self::ref('link_style')]]]);
     $result = $this->operations->batchOperations($this->host($entity2), [
       ['op' => 'detach_variant', 'key' => $tag_rule, 'variant' => 'link_style'],
     ]);
     $this->assertTrue($result->isSuccess());
-    $this->assertSame([$tag_rule => ['default' => ['color' => 'red']]], $this->styleMap($entity2));
+    $this->assertSame([
+      $tag_rule => ['default' => ['color' => 'red']],
+      "$tag_rule .icon" => ['default' => ['margin' => '0']],
+    ], $this->styleMap($entity2));
   }
 
   /**
@@ -874,7 +1134,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
    *
    * A pseudo-element exists only while the cascade sets its content, so
    * the first update_style that CREATES a pseudo entry ("::&::before" on
-   * the element, "::> pb-testimonial::before" under a rule) seeds
+   * the element, "::> d-testimonial::before" under a rule) seeds
    * content: "" at default in the same op, whatever condition the write
    * lands on; a write that sets content at default itself is the
    * author's word and is not overridden. Only birth seeds: an existing
@@ -890,7 +1150,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
   public function testPseudoElementBirthSeed(): void {
     $key = "container:{$this->uuid}";
     $box = "$key::&::before";
-    $rule_box = "$key::> pb-testimonial::before";
+    $rule_box = "$key::> d-testimonial::before";
     $entity = $this->createStyledEntity();
 
     // Born with content: the seed lands at default beneath the write, and
@@ -927,7 +1187,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     // An unset-only patch at a box that never existed mints nothing.
     $result = $this->operations->batchOperations($this->host($entity), [
-      ['op' => 'update_style', 'key' => "$key::.band-content::before", 'properties' => ['padding' => NULL]],
+      ['op' => 'update_style', 'key' => "$key::.section-content::before", 'properties' => ['padding' => NULL]],
     ]);
     $this->assertTrue($result->isSuccess());
     $this->assertSame($map, $this->styleMap($entity));
@@ -935,7 +1195,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // A variant fragment is not touched: the wear mints no box entry, a
     // reference at a box key is refused, and detach materializes the
     // fragment as authored (no content, so no box, exactly as delivered).
-    $variant = DaedalusStylishVariant::create(['label' => 'Band', 'machine_name' => 'band', 'scope' => 'kind:container']);
+    $variant = DaedalusStylishVariant::create(['label' => 'Section', 'machine_name' => 'section', 'scope' => 'kind:container']);
     $variant->setStyles([
       '' => ['default' => ['padding' => '3rem']],
       '::&::before' => ['default' => ['padding' => '4rem']],
@@ -943,17 +1203,17 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $variant->save();
     $wearer = $this->createStyledEntity();
     $result = $this->operations->batchOperations($this->host($wearer), [
-      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'band'],
+      ['op' => 'apply_variant', 'key' => $key, 'variant' => 'section'],
     ]);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
-    $this->assertSame([$key => ['variants' => [self::ref('band')]]], $this->styleMap($wearer));
+    $this->assertSame([$key => ['variants' => [self::ref('section')]]], $this->styleMap($wearer));
     $result = $this->operations->batchOperations($this->host($wearer), [
-      ['op' => 'apply_variant', 'key' => $box, 'variant' => 'band'],
+      ['op' => 'apply_variant', 'key' => $box, 'variant' => 'section'],
     ]);
     $this->assertFalse($result->isSuccess());
     $this->assertSame(['STYLE_VARIANT_SCOPE_MISMATCH'], $this->errorCodes($result)['variant']);
     $result = $this->operations->batchOperations($this->host($wearer), [
-      ['op' => 'detach_variant', 'key' => $key, 'variant' => 'band'],
+      ['op' => 'detach_variant', 'key' => $key, 'variant' => 'section'],
     ]);
     $this->assertTrue($result->isSuccess());
     $this->assertSame([
@@ -991,7 +1251,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
 
     $key = "container:{$this->uuid}";
     $box = "$key::&::before";
-    $rule_box = "$key::> pb-testimonial::after";
+    $rule_box = "$key::> d-testimonial::after";
     $entity = $this->createStyledEntity();
 
     // The first write is the content: the seed never lands beneath a
@@ -1029,7 +1289,7 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $skin->setPackageTokens(['space' => ['gutter' => '2rem']]);
     $skin->setPackageDefaults(self::PACKAGE_DEFAULTS);
     if ($shipped) {
-      $skin->setShippedSource('daedalus_stylish_guide_test', ['tokens' => $skin->packageTokens(), 'defaults' => $skin->packageDefaults()]);
+      $skin->setShippedSource('daedalus_stylish_guide_test', ['tokens' => $skin->packageTokens(), 'animations' => [], 'fonts' => [], 'defaults' => $skin->packageDefaults()]);
     }
     $skin->save();
     $this->activateSkin($skin);

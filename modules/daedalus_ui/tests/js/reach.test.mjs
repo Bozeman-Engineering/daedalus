@@ -285,7 +285,7 @@ test('a shell target seated while the Markup view is on climbs to its owner when
     markup(true);
     store.dispatch(setSelected(BLOCK));
     store.dispatch(setTarget({ key: BLOCK, selector: '.image-block-image' }));
-    store.dispatch(setAddress({ key: `container:${SECTION}`, selector: '> pb-image' }));
+    store.dispatch(setAddress({ key: `container:${SECTION}`, selector: '> d-image' }));
     assert.deepEqual(selection().target, { key: BLOCK, selector: '.image-block-image' });
     markup(false);
     assert.equal(selection().selectedKey, BLOCK, 'the owner stays selected');
@@ -305,7 +305,7 @@ test('a seat made while the Markup view is off stands, through unrelated changes
     markup(false);
     store.dispatch(setSelected(BLOCK));
     store.dispatch(setTarget({ key: BLOCK, selector: '.image-block-image' }));
-    store.dispatch(setAddress({ key: `container:${SECTION}`, selector: '> pb-image' }));
+    store.dispatch(setAddress({ key: `container:${SECTION}`, selector: '> d-image' }));
     // Not a flip: the view map is untouched.
     store.dispatch(setMarkedKeys([BLOCK]));
     store.dispatch(setMarkedKeys([]));
@@ -315,7 +315,7 @@ test('a seat made while the Markup view is off stands, through unrelated changes
     // address seats no row, so the re-seat never reads it and it stands.
     markup(true);
     assert.deepEqual(selection().target, { key: BLOCK, selector: '.image-block-image' });
-    assert.deepEqual(selection().address, { key: `container:${SECTION}`, selector: '> pb-image' }, 'the re-seat ignores the address');
+    assert.deepEqual(selection().address, { key: `container:${SECTION}`, selector: '> d-image' }, 'the re-seat ignores the address');
     // An instance row's target is drawn in every view: both flips leave it.
     store.dispatch(setSelected(`block:${TEXT}`));
     store.dispatch(setTarget({ key: `block:${TEXT}`, selector: '.s-i1' }));

@@ -17,10 +17,12 @@ use Drupal\daedalus_stylish\StyleGuide;
  * (the roster sentence), what the site accepts as a whole (the polarity
  * sentence, the design system brief's Law line), the stack every element
  * wears and the tool that shows it (the stack sentence, the brief's one
- * styling pointer) and how a property's value space reads (the
- * value-space line) are stated here and nowhere else, so the cached
- * prompt's STYLES lines and brief (through the dialect catalog) and the
- * schema fragments' stylable entries and bindings cannot drift apart. The
+ * styling pointer) and how a property's value space reads (the bindings
+ * and deviations lines over the value spaces VocabularyValueSpaces
+ * derives) are stated here and nowhere else, so the cached prompt's
+ * STYLES lines and brief (through the dialect catalog) and the schema
+ * fragments' stylable entries, bindings and deviations cannot drift
+ * apart. The
  * roster is taught in EVERY posture; only the sentence saying what
  * happens outside it varies, and that sentence never names a mode or
  * that alternatives exist (the enforcement mode stays opaque to the AI;
@@ -99,12 +101,29 @@ final class VocabularyProse implements VocabularyProseInterface {
    */
   public function polaritySentence(): string {
     if ($this->enforcement === StyleGuide::ENFORCEMENT_STRICT) {
-      return 'Styling on this site is exactly what its rosters list: an element may style only the properties its kind\'s roster permits, a property with a bindings (or deviations) line takes only what that line says (a scale binding means that scale\'s named values only, no swatches and no raw values), and a permitted property with no such line takes any valid CSS value. Anything not listed is invalid; the error tells you what the element permits when you miss.';
+      return 'Styling on this site is exactly what its rosters list: an element may style only the properties its kind\'s roster permits, a property with a bindings (or deviations) line takes only what that line says (a scale binding means that scale\'s named values only, no raw values), and a permitted property with no such line takes any valid CSS value. Anything not listed is invalid; the error tells you what the element permits when you miss.';
     }
     if ($this->enforcement === StyleGuide::ENFORCEMENT_GUARDED) {
-      return 'Any recognized CSS property with a valid value is accepted (unrecognized properties are rejected, with suggestions); where a bindings or deviations line states a rule for a property, that rule holds — a scale binding means that scale\'s named values only, no swatches and no raw values. Prefer the materials over raw values.';
+      return 'Any recognized CSS property with a valid value is accepted (unrecognized properties are rejected, with suggestions); where a bindings or deviations line states a rule for a property, that rule holds — a scale binding means that scale\'s named values only, no raw values. Prefer the materials over raw values.';
     }
     return 'Any recognized CSS property with a valid value is accepted (unrecognized properties are rejected, with suggestions); the bindings and deviations lines are the design language\'s preferences. Prefer the materials over raw values.';
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * Closed: the references alone, and the refusal says so. Otherwise the
+   * literal lane the validator admits by the browser's knowledge
+   * (StyleMapValidator::validateCondition over the wide condition tier),
+   * with the reference preferred where one spells the same query (the
+   * clause grammar folds such a literal to its name anyway).
+   */
+  public function conditionSentence(): string {
+    $references = 'The conditions are the published names, references whose CSS the site owns (a threshold change in the design system rewrites no style)';
+    if ($this->enforcement === StyleGuide::ENFORCEMENT_STRICT) {
+      return $references . '; on this site no other condition exists: a feature query, supports test or pseudo-class of your own is refused, with the published names on its axis.';
+    }
+    return $references . ' and, beside them, any literal the browser knows, written as its own CSS: a @media or @container feature query ("@container (min-width: 500px)", "@media (hover: hover)"), a @supports test or a pseudo-class state (":checked"); a literal equal to a published wrapper IS that reference, a reference is preferred where one says the same, and clauses on different axes join with "+".';
   }
 
   /**
@@ -223,6 +242,32 @@ final class VocabularyProse implements VocabularyProseInterface {
         : self::names($names);
     }
     return $phrases;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function bindingLines(array $bindings): array {
+    $lines = [];
+    foreach ($bindings as $property => $space) {
+      $lines[$property] = self::valueSpaceLine($space);
+    }
+    return $lines;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function deviationLines(array $deviations, array $bindings): array {
+    $lines = [];
+    foreach ($deviations as $key => $spaces) {
+      $phrases = [];
+      foreach ($spaces as $property => $space) {
+        $phrases[] = $property . ' ' . self::deviationPhrase($space, $bindings[$property] ?? NULL);
+      }
+      $lines[$key] = implode('; ', $phrases);
+    }
+    return $lines;
   }
 
   /**

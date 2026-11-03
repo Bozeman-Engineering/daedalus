@@ -7,6 +7,7 @@ import {
   parseSelector,
   printCompound,
 } from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
+import { PSEUDO, UNKNOWN, parseCompound } from '../../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
 
 /**
  * A row's prelude: the nested-rule head a designer would write for it.
@@ -28,16 +29,24 @@ import {
  *   in compound order (`@container (max-width: 640px) &:hover`), which
  *   is the canonical axis order because the compound key is canonical.
  * - A selector row (a part, a chain, a type, a tag) at the default
- *   condition: the chain alone (`> pb-text:has(a)`, `p`), the nesting
+ *   condition: the chain alone (`> d-text:has(a)`, `p`), the nesting
  *   grammar's bare relative prelude.
  * - A selector row under a condition: the chain after `&` with the
- *   states glued to its last compound (`& > pb-text:has(a):hover`),
+ *   states glued to its last compound (`& > d-text:has(a):hover`),
  *   because a state belongs on the addressed element and the dialect
  *   refuses it anywhere else.
  * - The owner's own generated box: `&::before`, its states before the
  *   pseudo-element (`&:hover::before`); a chain's pseudo-element the same
- *   (`& > pb-text:hover::after`), the terminal position CSS gives it.
- * - A condition part the guide does not declare spells as `:name`, so a
+ *   (`& > d-text:hover::after`), the terminal position CSS gives it.
+ * - A condition clause the condition grammar reads as a LITERAL (a
+ *   `@media`, `@container` or `@supports` query the roster does not
+ *   publish, an unpublished pseudo-class) spells as its own canonical
+ *   text, the at-rule as a wrapper and the pseudo-class glued like a
+ *   published state (`@container (min-width: 500px) &`, `&:checked`); a
+ *   reference spells its published wrapper. One grammar reads the key
+ *   here and in the printers (condition-clause.js parseCompound), so the
+ *   row can never disagree with the print.
+ * - A condition clause the grammar cannot read spells as `:name`, so a
  *   row over inert data still reads honestly instead of printing nothing
  *   (the printers' emit gate is theirs; a row must exist to be removed).
  * - A selector outside the grammar prints verbatim, as the map carries
@@ -68,14 +77,13 @@ const conditionPieces = (condition, guide) => {
   const wrappers = [];
   let states = '';
   if (typeof condition === 'string' && condition !== '' && condition !== 'default') {
-    condition.split('+').forEach((part) => {
-      const wrapper = guide?.conditions?.[part]?.wrapper;
-      if (typeof wrapper === 'string' && wrapper.startsWith('@')) {
-        wrappers.push(wrapper);
-      } else if (typeof wrapper === 'string' && wrapper.startsWith(':')) {
-        states += wrapper;
+    parseCompound(condition, guide?.conditions ?? {}).forEach((clause) => {
+      if (clause.kind === UNKNOWN) {
+        states += `:${clause.text}`;
+      } else if (clause.form === PSEUDO) {
+        states += clause.css;
       } else {
-        states += `:${part}`;
+        wrappers.push(clause.css);
       }
     });
   }

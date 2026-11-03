@@ -63,7 +63,7 @@ class SiteGroupsTest extends KernelTestBase {
     assert($groups instanceof SiteGroups);
     $this->assertSame([
       'heroes' => ['label' => 'Heroes', 'description' => 'Full-width openers for the top of a page.'],
-      'bands' => ['label' => 'Bands', 'description' => ''],
+      'sections' => ['label' => 'Sections', 'description' => ''],
     ], $groups->all(), 'The map in declaration order, the description "" when unwritten.');
   }
 
@@ -81,7 +81,7 @@ class SiteGroupsTest extends KernelTestBase {
     assert($catalog instanceof DialectCatalog);
     $expected = [
       'heroes' => ['label' => 'Heroes', 'description' => 'Full-width openers for the top of a page.'],
-      'bands' => ['label' => 'Bands', 'description' => ''],
+      'sections' => ['label' => 'Sections', 'description' => ''],
     ];
     $this->assertSame($expected, $catalog->groups(), 'The catalog carries the groups in declaration order.');
     $this->assertSame($expected, $catalog->offered()->groups(), 'The offered view carries them too.');
@@ -108,7 +108,7 @@ class SiteGroupsTest extends KernelTestBase {
     $this->assertSame(['cards' => ['label' => 'Cards', 'description' => 'Boxed teasers.']], $trimmed, 'Labels and descriptions are trimmed.');
 
     foreach ([
-      'must be a map of group id' => ['heroes', 'bands'],
+      'must be a map of group id' => ['heroes', 'sections'],
       'must be a map of group id to' => 'heroes',
       'keys the group "Heroes"' => ['Heroes' => ['label' => 'Heroes']],
       'keys the group "two-words"' => ['two-words' => ['label' => 'Two']],
@@ -138,7 +138,7 @@ class SiteGroupsTest extends KernelTestBase {
         'groups' => [
           'Bad Id' => ['label' => 'x'],
           'heroes' => [],
-          'bands' => ['label' => 'Bands', 'extra' => 1],
+          'sections' => ['label' => 'Sections', 'extra' => 1],
           'ungrouped' => ['label' => 'Reserved'],
         ],
       ]);
@@ -151,7 +151,7 @@ class SiteGroupsTest extends KernelTestBase {
     // The validated map answers through the service against the site, so a
     // declaration a later layer breaks fails the catalog build that reads it.
     $declarations = $this->container->get('daedalus_ui.page_builder_declarations');
-    $this->assertSame(['heroes', 'bands'], array_keys(SiteGroups::parse($declarations->getSite())));
+    $this->assertSame(['heroes', 'sections'], array_keys(SiteGroups::parse($declarations->getSite())));
   }
 
 }

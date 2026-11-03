@@ -16,11 +16,9 @@ const SatelliteHost = ({
   source,
   guide,
   variants,
-  swatches,
-  tokens,
-  animations,
-  fonts,
+  skinMaterials,
   skin,
+  law,
 }) => {
   const [connected, setConnected] = useState(source.isConnected());
 
@@ -42,11 +40,13 @@ const SatelliteHost = ({
         source={source}
         guide={guide}
         variants={variants}
-        swatches={swatches}
-        tokens={tokens}
-        animations={animations}
-        fonts={fonts}
+        skinMaterials={skinMaterials}
         skin={skin}
+        law={law}
+        // The pop-out page carries no edit-mode settings, so no preview
+        // window is available here; the chip row's width menu drops
+        // its tail.
+        previewWindow={false}
       />
     </div>
   );
@@ -64,11 +64,9 @@ if (scope && mount) {
       source={createSatelliteSource(scope)}
       guide={drupalSettings.daedalusStylish?.guide ?? {}}
       variants={drupalSettings.daedalusStylish?.variants ?? {}}
-      swatches={drupalSettings.daedalusStylish?.swatches ?? {}}
-      tokens={drupalSettings.daedalusStylish?.tokens ?? {}}
-      animations={drupalSettings.daedalusStylish?.animations ?? {}}
-      fonts={drupalSettings.daedalusStylish?.fonts ?? {}}
+      skinMaterials={drupalSettings.daedalusStylish?.skinMaterials ?? {}}
       skin={drupalSettings.daedalusStylish?.skin ?? {}}
+      law={drupalSettings.daedalusStylish?.law ?? {}}
     />,
     mount,
   );

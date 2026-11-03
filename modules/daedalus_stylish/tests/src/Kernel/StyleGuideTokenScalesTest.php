@@ -39,6 +39,7 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
   protected static $modules = [
     'system',
     'daedalus_blueprint',
+    'filter',
     'user',
     'field',
     'layout_discovery',
@@ -63,27 +64,19 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    // The client payload serves the published swatches, so every build()
-    // consumer needs the swatch entity schema.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-* and var() references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installEntitySchema('user');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->styleGuide = $this->container->get('daedalus_stylish.style_guide');
@@ -114,11 +107,13 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
       'weight' => ['label' => 'Weight', 'shape' => 'number'],
       'transition' => ['label' => 'Transition', 'shape' => 'text', 'prefix' => 'trans'],
       'align' => ['label' => 'Alignment', 'shape' => 'keyword', 'keywords' => ['start', 'center', 'end']],
+      'gradient' => ['label' => 'Gradient', 'shape' => 'gradient'],
     ]);
     $scales = $this->styleGuide->getTokenScales(self::THEME);
     // Authoring order is picker order.
-    $this->assertSame(['space', 'color', 'weight', 'transition', 'align'], array_keys($scales));
+    $this->assertSame(['space', 'color', 'weight', 'transition', 'align', 'gradient'], array_keys($scales));
     $this->assertSame('dimension', $scales['space']['shape']);
+    $this->assertSame('gradient', $scales['gradient']['shape']);
     $this->assertSame(['start', 'center', 'end'], $scales['align']['keywords']);
 
     // The one derivation rule: --{prefix}-{name}, prefix defaulting to the
@@ -133,7 +128,7 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
   /**
    * A site without token scales has none: no section, no vocabulary.
    *
-   * Daedalus Stylish ships ten scales at module level, so "no scales" is a site
+   * Daedalus Stylish ships eleven scales at module level, so "no scales" is a site
    * whose declaration withdraws the section (the fixture replaces the lane).
    */
   public function testNoScalesDeclared(): void {
@@ -207,7 +202,7 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
   public function testUnknownShapeFails(): void {
     $this->declareScales(['space' => ['label' => 'Space', 'shape' => 'length']]);
     $this->expectException(StyleGuideException::class);
-    $this->expectExceptionMessageMatches('/token scale "space" must declare a shape of: dimension, number, color, keyword, text/');
+    $this->expectExceptionMessageMatches('/token scale "space" must declare a shape of: dimension, number, color, keyword, text, gradient/');
     $this->styleGuide->getTokenScales(self::THEME);
   }
 

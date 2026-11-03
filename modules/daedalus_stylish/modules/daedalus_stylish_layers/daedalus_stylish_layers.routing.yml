@@ -1,0 +1,11 @@
+# The cascade layer settings form: both keys of daedalus_stylish_layers.settings
+# (enabled, wrapper_layer) under the Daedalus config category's Styling
+# sub-category, the module's one door. The pipeline reads the two keys only
+# through Layers, which this form validates the name with.
+daedalus_stylish_layers.settings:
+  path: '/admin/config/daedalus/styling/cascade-layer'
+  defaults:
+    _title: 'Cascade layer'
+    _form: 'Drupal\daedalus_stylish_layers\Form\SettingsForm'
+  requirements:
+    _permission: 'administer site configuration'

@@ -19,7 +19,7 @@ use Drupal\workspaces\WorkspaceManagerInterface;
 /**
  * Base for services compiling CSS into one shared, hash-busted public file.
  *
- * The shared delivery mechanics behind VariantStylesheet and DefaultsStylesheet
+ * The shared delivery mechanics behind VariantStylesheet and SkinStylesheet
  * (and any future compiled stylesheet): the subclass's css() prints once
  * into a single public file whose name embeds a content hash, so browsers
  * cache it cross-page and every regeneration is a new URL. A library

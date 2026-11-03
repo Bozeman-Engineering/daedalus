@@ -12,3 +12,9 @@ slots:
   main:
     label: Main
     tier: frame
+# The AI context budget: what the site may share with the AI as materials
+# (the cached design system brief plus the schema's materials fragment),
+# in estimated tokens, and the characters-per-token ratio the estimate
+# divides by (MaterialsBudget). Past the budget, sharing more is refused.
+ai_context_budget_tokens: 24000
+ai_context_characters_per_token: 4

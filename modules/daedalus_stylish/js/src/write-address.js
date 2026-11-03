@@ -17,9 +17,9 @@
  * layers, style-stack.js), then the mintable ones nearest ancestor
  * first, each one the matcher confirms reaches the selected facet on
  * the tree and the roster walk declares (on a strict site every
- * compound must land; on an open site only a tag must, since the
- * validator refuses an undeclared tag in every enforcement mode,
- * STYLE_TAG_NOT_DECLARED, and takes the rest grammar-only). Choosing an
+ * compound must land; on an open or guarded site the validator takes
+ * every mintable shape grammar-only, an undeclared tag included, since
+ * admission is by enforcement mode for every vocabulary). Choosing an
  * address seats it as the write address (`Selection.address(key,
  * selector)`); the subject stays what it was, so the rows keep reading
  * the facet the address was chosen from. A mintable one changes nothing
@@ -30,25 +30,25 @@
  * instance part (`.cls`), a tag tier (`a`), and the generated box of
  * any of them (`&::before` the root's, `.cls::after` a part's): a box
  * is one more facet of its host, addressed by the host's shapes with
- * the pseudo appended (`> pb-text::before`, `a::after`), since a rule
+ * the pseudo appended (`> d-text::before`, `a::after`), since a rule
  * ending in a box reaches exactly the hosts the pseudo-free rule
  * reaches (selector-matcher.js reaches). The mintable shapes per
  * ancestor: for the root its children (`> *`), its type by child and by
- * descent (`> pb-text`, `pb-text`) and its root tag (`p`); for a tag
- * tier the tag and the type-then-tag chains (`a`, `> pb-text a`,
- * `pb-text a`); for a DECLARED part its rendered tag and the
- * type-then-part chains (`a`, `> pb-text .text-block-link`, `pb-text
+ * descent (`> d-text`, `d-text`) and its root tag (`p`); for a tag
+ * tier the tag and the type-then-tag chains (`a`, `> d-text a`,
+ * `d-text a`); for a DECLARED part its rendered tag and the
+ * type-then-part chains (`a`, `> d-text .text-block-link`, `d-text
  * .text-block-link`), since a declared class is the type's anatomy,
  * worn by every element of the type, so it names a class of things;
  * for an INSTANCE part (`.s-2kxs`, parts.js INSTANCE_PART, minted onto
  * one element in the world) the class names nothing but the element
  * itself, so its class of things is its TAG: the same three shapes with
- * the tag in the class's place (`p`, `> pb-formatted-text p`,
- * `pb-formatted-text p`), and, before any ancestor's, the element's own
+ * the tag in the class's place (`p`, `> d-formatted-text p`,
+ * `d-formatted-text p`), and, before any ancestor's, the element's own
  * tag tier (`block:X::p`, "Every paragraph here"), the nearest owner
  * that styles every such instance at once (an address on the selected
  * key itself: the spine admits the selection beside its ancestors). A
- * chain facet (`> pb-text`, seated from a code-mode row header) is a
+ * chain facet (`> d-text`, seated from a code-mode row header) is a
  * rule of its own, edited one thing at a time, and has no address set.
  * Nothing derives the subject from the address: the spine carries both
  * facts, so no inverse is needed, and an address the set does not carry
@@ -96,7 +96,7 @@ import {
   CHILD,
   CLASS_PART,
   DESCENDANT,
-  PSEUDOS,
+  GENERATED_BOXES,
   SUFFIX,
   TAG,
   TYPE,
@@ -143,14 +143,15 @@ export const sameAddress = (a, b) =>
   isPlainObject(a) && isPlainObject(b) && addressKey(a) === addressKey(b);
 
 /**
- * The name the sentences give an address's owner: the name the tree
+ * The name the sentences give an address's owner: the name the document
  * carries for its node (the annotator's minted `_element.name`, the
  * same word the subject line and the page tree read; the word
- * provenance-model.js ancestorName gives an ancestor layer), else a
- * generic word for a key the tree has no node for.
+ * provenance-model.js ancestorName gives an ancestor layer; the host's
+ * label for the entity root), else a generic word for a key the
+ * document has no node for.
  *
  * @param {?object} matcher
- *   A matcher over the tree (createMatcher), or null.
+ *   A matcher over the document (createMatcher), or null.
  * @param {string} key
  *   The owner's selectable key.
  *
@@ -368,7 +369,9 @@ const boxOf = (host, pseudo) => `${host ?? ANCHOR}${SUFFIX}${pseudo}`;
 
 /**
  * The generated boxes a facet offers as doorways: the root's own
- * (`&::before`, `&::after`) and a part's (`.cls::before`, `.cls::after`),
+ * (`&::before`, `&::after`) and a part's (`.cls::before`, `.cls::after`;
+ * the two boxes an element always has and a seat births, never the
+ * browser's other pseudo-elements, which are typed in the code view),
  * each kept by the same declaredness rule as a mintable address (on a
  * strict site the host must declare the box, since the first write
  * there is refused otherwise, STYLE_PSEUDO_NOT_DECLARED; open and
@@ -399,7 +402,7 @@ export const boxAddresses = ({
   if (shape === null || shape.pseudo !== null || shape.kind === 'tag') {
     return [];
   }
-  return PSEUDOS.map((pseudo) => ({
+  return GENERATED_BOXES.map((pseudo) => ({
     key,
     selector: boxOf(shape.host, pseudo),
     pseudo,
@@ -411,7 +414,7 @@ export const boxAddresses = ({
  * "This element" for the root (the element's own name is the subject
  * line's word beside the chip, never repeated here), "This link" for a
  * part, "Every link here" for a tag tier, and for a chain facet (a rule
- * of the element's own, `> pb-text`, which has no address set) the
+ * of the element's own, `> d-text`, which has no address set) the
  * rule's sentence in the owner (addressLabel: "Text blocks directly in
  * Welcome"), the same grammar the set's ancestor entries speak. A
  * generated box reads its box word after its host's face, "Before" /
@@ -487,19 +490,12 @@ export const facetLabel = (
  * site every compound must land and a terminal pseudo-element must be
  * declared by its host (the server refuses an undeclared type, part,
  * children section, tag or box there; style-guide.js declaredForKey,
- * the roster's declared()); on an open or guarded site only a tag
- * subject must be a declared base tag (refused in every mode), the
- * rest is grammar-only, today's posture.
+ * the roster's declared()); on an open or guarded site everything is
+ * admitted grammar-only, an undeclared tag included (admission by mode
+ * is one rule for every vocabulary; a mintable tag comes from the live
+ * markup, so the browser knows it).
  */
 const declared = (guide, address, blockTypes, sectionLayouts) => {
-  const compounds = parseSelector(address.selector)?.compounds ?? [];
-  const last = compounds[compounds.length - 1];
-  if (
-    last?.kind === TAG &&
-    findBaseTagDeclaration(guide?.base, last.name) === null
-  ) {
-    return false;
-  }
   if (!propertiesClosed(guide)) {
     return true;
   }
@@ -522,9 +518,10 @@ const declared = (guide, address, blockTypes, sectionLayouts) => {
  *   The selected element's selectable key.
  * @param {?string} args.selector
  *   The facet the target reaches on the element (null for the root).
- * @param {?Array} args.tree
- *   The blueprint's lean node tree; null when unknown (then the set is
- *   the own key alone).
+ * @param {?Array} args.document
+ *   The document tree (source.getDocument(): the host entity above its
+ *   sections, so the page's own rules are addresses too); null when
+ *   unknown (then the set is the own key alone).
  * @param {?Array<object>} [args.variants]
  *   The variant records the stack reads references through.
  * @param {?Array<string>} [args.axes]
@@ -550,7 +547,7 @@ export const addressSet = ({
   map,
   key,
   selector = null,
-  tree = null,
+  document = null,
   variants = [],
   axes = null,
   blockTypes = {},
@@ -566,7 +563,7 @@ export const addressSet = ({
     return [];
   }
   const { kind, host, pseudo } = shape;
-  const matcher = Array.isArray(tree) ? createMatcher(tree) : null;
+  const matcher = Array.isArray(document) ? createMatcher(document, map) : null;
   const set = [
     {
       key,
@@ -647,7 +644,7 @@ export const addressSet = ({
     axes,
     blockTypes,
     sectionLayouts,
-    tree,
+    document,
   });
   const rules = stack.layers
     .filter(
@@ -665,7 +662,7 @@ export const addressSet = ({
   // The mintable rules: what each ancestor could carry for this facet,
   // kept when the matcher confirms the reach and the roster declares it.
   // A box facet is addressed by its host's shapes with the box appended
-  // (`> pb-text::before`, `a::after`), judged at the box position (the
+  // (`> d-text::before`, `a::after`), judged at the box position (the
   // matcher requires the names to agree, then answers the host). A part
   // facet's chains end in the class of things: the class for a declared
   // part, the tag for an instance part (the matcher answers a tag rule
@@ -781,8 +778,8 @@ export const withheldReason = (kind, { property, address, owner, part = null }) 
  * @param {string[]} args.properties
  * @param {object} [args.blockTypes]
  * @param {object} [args.sectionLayouts]
- * @param {?Array} [args.tree]
- *   The tree, for the owner's name in the reason.
+ * @param {?Array} [args.document]
+ *   The document tree, for the owner's name in the reason.
  *
  * @return {Object<string, string>}
  *   property → reason; {} when the address grants them all.
@@ -793,10 +790,10 @@ export const withheldAt = ({
   properties,
   blockTypes = {},
   sectionLayouts = {},
-  tree = null,
+  document = null,
 }) => {
   const declaration = addressDeclaration(guide, address, blockTypes, sectionLayouts);
-  const owner = ownerName(Array.isArray(tree) ? createMatcher(tree) : null, address.key);
+  const owner = ownerName(Array.isArray(document) ? createMatcher(document) : null, address.key);
   const withheld = {};
   (Array.isArray(properties) ? properties : []).forEach((property) => {
     if (!propertyGranted(declaration, property)) {

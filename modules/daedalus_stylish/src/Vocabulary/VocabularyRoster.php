@@ -30,12 +30,12 @@ use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
  * What it holds, for the address (a root: "kind:container",
  * "block_type:text", "layout:layout_onecol", "base:a"; or a relative
  * selector under one: "kind:block::.part", "kind:block::p",
- * "layout:x::> pb-text .link"):
+ * "layout:x::> d-text .link"):
  * - grants: the declared property groups with their allowlists resolved,
  *   group id => the property names it grants, in declaration order;
  *   granted() flattens them. A grant is a function of the declaration
  *   alone: placement curates offers and birth, never legality, so the
- *   roster carries no depth and one answer serves a page band and a
+ *   roster carries no depth and one answer serves a section and a
  *   container nested inside it. Grants are stated over longhands and a
  *   shorthand family (PropertyGroupInterface::getShorthands(): padding
  *   over its four sides, gap over row-gap and column-gap, border-radius
@@ -124,6 +124,43 @@ final class VocabularyRoster implements VocabularyRosterInterface {
    * while the roster still carries the derived grant for open sites.
    */
   public const KIND_PSEUDO = 'pseudo';
+
+  /**
+   * The undeclared() kind of a class qualifier that is no declared part.
+   *
+   * A class on a compound (`li.active`, `&.open`, `> d-text.featured`) is
+   * a markup class the page's JavaScript or a worn variant sets; where
+   * no declared part of the compound's owner matches it, the walk reports
+   * it by this kind, named by the class, so strict refuses it
+   * (STYLE_CLASS_NOT_DECLARED) while open and guarded admit it on the
+   * compound's own landing.
+   */
+  public const KIND_CLASS = 'class_qualifier';
+
+  /**
+   * The undeclared() kind of an attribute qualifier.
+   *
+   * `[aria-expanded="true"] > ul`, `a[href^="http"]`: a predicate on the
+   * markup, never a declaration. Reported by this kind, named by the
+   * attribute, so strict refuses it (STYLE_ATTRIBUTE_NOT_DECLARED) while
+   * open and guarded admit it on the compound's own landing.
+   */
+  public const KIND_ATTRIBUTE = 'attribute';
+
+  /**
+   * The undeclared() kind of a pseudo-class no published condition spells.
+   *
+   * `a:visited`, `input:checked` on a site whose roster publishes no
+   * `checked`: a pseudo-class the browser knows (the wide selector tier)
+   * that is no state this site publishes. Reported by this kind, named by
+   * the pseudo-class, so strict refuses it (STYLE_STATE_NOT_DECLARED,
+   * naming the published states) while open and guarded admit it on the
+   * compound's own landing. A word the tier does not know rides the same
+   * record with `known` FALSE and the nearest names in `similar`, as does
+   * a tag outside the tier: the validator refuses those in every mode
+   * (STYLE_SELECTOR_UNKNOWN).
+   */
+  public const KIND_PSEUDO_CLASS = 'pseudo_class';
 
   /**
    * Constructs a roster; VocabularyRosterBuilder is the live source.
@@ -491,9 +528,14 @@ final class VocabularyRoster implements VocabularyRosterInterface {
   /**
    * The first selector compound the walk found undeclared, or NULL.
    *
-   * @return array{combinator: ?string, kind: string, name: string, qualifiers: array, position: int}|null
+   * @return array|null
    *   The compound (RelativeSelector's shape plus its position in its
-   *   own chain), NULL when the address names a declared place.
+   *   own chain; a qualifier the walk refused rides the same shape under
+   *   its own kind, KIND_CLASS, KIND_ATTRIBUTE or KIND_PSEUDO_CLASS, named
+   *   by the class, attribute or pseudo-class), NULL when the address
+   *   names a declared place. A tag or pseudo-class the wide selector
+   *   tier does not know carries `known` FALSE and the tier's nearest
+   *   names in `similar`.
    */
   public function undeclared(): ?array {
     return $this->undeclared;
@@ -523,14 +565,14 @@ final class VocabularyRoster implements VocabularyRosterInterface {
    * The landing: for a root address the root itself (an element wears a
    * variant on its own box); for a selector address the element its LAST
    * compound names, since a rule's wear is delivered at the rule's
-   * targets: a type compound's root address (`> pb-text` lands on
-   * block_type:text, `> pb-container` on kind:container:
+   * targets: a type compound's root address (`> d-text` lands on
+   * block_type:text, `> d-container` on kind:container:
    * RelativeSelector::typeAddress()), a tag compound's base tag (`a` on
    * base:a, `> p + p` on base:p). NULL where the targets are no element
-   * scope: a part (`.cls`, `> pb-text .link`: a part is its element's
+   * scope: a part (`.cls`, `> d-text .link`: a part is its element's
    * anatomy, and variants are worn by elements), the children (`> *`,
-   * `> *:not(pb-image)`), a `:not()`-only compound and a generated box
-   * (`&::before`, `> pb-text::after`: a pseudo-element is a box of its
+   * `> *:not(d-image)`), a `:not()`-only compound and a generated box
+   * (`&::before`, `> d-text::after`: a pseudo-element is a box of its
    * host, no element, and the anchor names no compound at all). There
    * no variant pairs, and the validator refuses a reference with a
    * corrective naming it. Derived from the address alone: the walk's
@@ -560,7 +602,7 @@ final class VocabularyRoster implements VocabularyRosterInterface {
    *
    * Variants whose scope pairs with the address's landing (the family
    * rule at landingScope(); none pairs where the landing is no element
-   * scope), and every token, swatch, animation and blueprint; each record
+   * scope), and every token, animation, font and blueprint; each record
    * carries its own depth and ownership stamps for the placement-aware
    * consumers.
    *
@@ -649,7 +691,7 @@ final class VocabularyRoster implements VocabularyRosterInterface {
     $needle = strtolower($property);
     $segment = explode('-', $needle, 2)[0];
     $family = [];
-    $scored = [];
+    $rest = [];
     foreach ($this->granted() as $candidate) {
       if ($candidate === $needle) {
         continue;
@@ -658,15 +700,9 @@ final class VocabularyRoster implements VocabularyRosterInterface {
         $family[] = $candidate;
         continue;
       }
-      $distance = levenshtein($needle, $candidate);
-      // Needle-contains-candidate only counts for candidates long enough
-      // to mean something ("zzzx" does not mean the writer wanted "x").
-      if ($distance <= 3 || str_contains($candidate, $needle) || (strlen($candidate) >= 4 && str_contains($needle, $candidate))) {
-        $scored[$candidate] = $distance;
-      }
+      $rest[] = $candidate;
     }
-    asort($scored);
-    return array_slice([...$family, ...array_keys($scored)], 0, $limit);
+    return array_slice([...$family, ...NearMisses::rank($needle, $rest, $limit)], 0, $limit);
   }
 
   /**

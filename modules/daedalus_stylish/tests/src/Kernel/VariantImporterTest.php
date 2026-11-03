@@ -59,6 +59,7 @@ class VariantImporterTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -82,15 +83,13 @@ class VariantImporterTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and every compile and validation builds it.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    // The daedalus-stylish-install sweep imports daedalus_stylish's own entrance variants,
-    // whose motion-* references mirror into the animation usage table.
-    $this->installSchema('daedalus_stylish', ['daedalus_animation_usage']);
+    // The daedalus-stylish-install sweep imports the enabled packages' shipped
+    // variants, whose motion-* and var() references mirror into the skin
+    // material usage table.
+    $this->installSchema('daedalus_stylish', ['daedalus_skin_material_usage']);
     $this->installConfig(['daedalus_stylish']);
     // The importer switches to an administrative account (shipped variants
     // are code, not user input); give the switcher one to find.
@@ -188,10 +187,10 @@ class VariantImporterTest extends KernelTestBase {
     // An absent key leaves the stored description alone: wide_section ships
     // none, so a site-authored description survives every sync.
     $wide = $this->loadVariant('wide_section');
-    $wide->setDescription('Site-authored: a spacious band.');
+    $wide->setDescription('Site-authored: a spacious section.');
     $wide->save();
     $this->importer()->sync(['daedalus_stylish_variants_test']);
-    $this->assertSame('Site-authored: a spacious band.', $this->loadVariant('wide_section')->getDescription());
+    $this->assertSame('Site-authored: a spacious section.', $this->loadVariant('wide_section')->getDescription());
   }
 
   /**
@@ -335,15 +334,23 @@ class VariantImporterTest extends KernelTestBase {
   }
 
   /**
-   * A shipped variant failing spine validation is FAILED with its errors.
+   * A shipped variant failing structural validation is FAILED with its errors.
+   *
+   * The importer fails the sync on structure only; the law is the verdict's.
+   * A property no group owns (INVALID_STYLE_PROPERTY) is structure, so the
+   * entry is refused and lands nothing. A value the site's law refuses (a
+   * padding over the guide's max, a literal off a bound scale) lands
+   * CREATED on the landing lane and is withheld by VariantConformance
+   * instead, the face ShippedSyncTest::testLawRefusedGlobalLandsWithheld
+   * pins.
    */
   public function testInvalidShippedVariantFailsLoudly(): void {
     $this->enableModules(['daedalus_stylish_variants_test_invalid']);
     $report = $this->importer()->sync(['daedalus_stylish_variants_test_invalid']);
-    $this->assertSame(VariantImporter::FAILED, $report->outcome('daedalus_stylish_variants_test_invalid', 'overflowing_section'));
-    $codes = array_map(static fn ($error) => $error->getCode(), $report->errors('daedalus_stylish_variants_test_invalid', 'overflowing_section'));
-    $this->assertContains('STYLE_VALUE_ABOVE_MAX', $codes);
-    $this->assertNull($this->loadVariant('overflowing_section'));
+    $this->assertSame(VariantImporter::FAILED, $report->outcome('daedalus_stylish_variants_test_invalid', 'misspelled_section'));
+    $codes = array_map(static fn ($error) => $error->getCode(), $report->errors('daedalus_stylish_variants_test_invalid', 'misspelled_section'));
+    $this->assertContains('INVALID_STYLE_PROPERTY', $codes);
+    $this->assertNull($this->loadVariant('misspelled_section'));
     // The definition after the refused one still lands: a tolerant sync
     // records the failure instead of stopping at it.
     $this->assertSame(VariantImporter::CREATED, $report->outcome('daedalus_stylish_variants_test_invalid', 'fitting_section'));

@@ -12,8 +12,8 @@ site:
     slogan: 'Extra slogan'
   # Maps merge: the extra module adds a group beside the base module's.
   groups:
-    bands:
-      label: Bands
+    sections:
+      label: Sections
 instances:
   '.in-*':
     # Maps merge across module layers in the instances lane too: the tag

@@ -81,11 +81,38 @@ export const bandEdgeTicks = (bands) => {
 };
 
 /**
- * The band containing a width, or null.
+ * Every band containing a width, in band order.
  *
- * Null width (nothing posed, nothing measured yet) and a width above
- * every band both answer null: the ruler then highlights nothing, which
- * is exactly right for the bandless space above the contributed ceilings.
+ * A contributed vocabulary tiles the space (one band holds at a width);
+ * a band MARKED in use beside it (a literal width clause typed in a
+ * style, nested inside a published band or overlapping two) holds at
+ * the same width as the band it sits in, and the ruler lights every
+ * band that holds, which is the honest answer to "what applies at this
+ * width". Null width (nothing posed, nothing measured yet) and a width
+ * above every band both answer none.
+ *
+ * @param {Array} bands
+ *   Normalized bands.
+ * @param {?number} width
+ *   The effective canvas width.
+ *
+ * @return {Array}
+ *   The containing bands, [] when none.
+ */
+export const bandsHolding = (bands, width) =>
+  width === null || width === undefined
+    ? []
+    : bands.filter(
+        (band) =>
+          width >= (band.min ?? 0) &&
+          (band.max === undefined || width <= band.max),
+      );
+
+/**
+ * The first band containing a width, or null.
+ *
+ * The constrained rule's read (any band holding constrains the canvas);
+ * the highlight reads bandsHolding, every band.
  *
  * @param {Array} bands
  *   Normalized bands.
@@ -93,20 +120,9 @@ export const bandEdgeTicks = (bands) => {
  *   The effective canvas width.
  *
  * @return {?Object}
- *   The containing band, or null.
+ *   The first containing band, or null.
  */
-export const bandFor = (bands, width) => {
-  if (width === null || width === undefined) {
-    return null;
-  }
-  return (
-    bands.find(
-      (band) =>
-        width >= (band.min ?? 0) &&
-        (band.max === undefined || width <= band.max),
-    ) ?? null
-  );
-};
+export const bandFor = (bands, width) => bandsHolding(bands, width)[0] ?? null;
 
 /**
  * Whether the canvas is constrained in any way, the ruler's visibility

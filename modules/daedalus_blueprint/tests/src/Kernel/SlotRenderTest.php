@@ -9,6 +9,7 @@ use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Plugin\Context\Context;
 use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\Plugin\Context\EntityContext;
+use Drupal\Core\Render\Element;
 use Drupal\daedalus_blueprint\Entity\Frame;
 use Drupal\daedalus_blueprint\Entity\FrameInterface;
 use Drupal\daedalus_blueprint\Frame\RouteOutput;
@@ -293,7 +294,7 @@ class SlotRenderTest extends BlueprintKernelTestBase {
    * @return array{0: \Drupal\daedalus_blueprint_library\Entity\Blueprint, 1: string}
    *   The blueprint and its section's uuid.
    */
-  protected function blueprint(string $machine_name, bool $published = TRUE): array {
+  protected function blueprint(string $machine_name, bool $published = TRUE, bool $composed = TRUE): array {
     $section = (new PhpUuid())->generate();
     $blueprint = Blueprint::create([
       'type' => 'section',
@@ -304,7 +305,7 @@ class SlotRenderTest extends BlueprintKernelTestBase {
       'subject_type' => 'entity_test_rev',
       'subject_bundle' => 'entity_test_rev',
       'status' => $published ? 1 : 0,
-      ContentHost::LAYOUT_FIELD => [$this->ownSection($section, NULL, [$this->nameBlock((new PhpUuid())->generate())])],
+      ContentHost::LAYOUT_FIELD => $composed ? [$this->ownSection($section, NULL, [$this->nameBlock((new PhpUuid())->generate())])] : [],
     ]);
     $blueprint->save();
     return [$blueprint, $section];
@@ -363,11 +364,11 @@ class SlotRenderTest extends BlueprintKernelTestBase {
     [$page, $section, $block] = $this->lockedPage('Page A sentinel', TRUE);
 
     // The primitive's answer: the page fills hero, nothing fills aside.
-    $fill = $this->innerRender->slotFiller('hero', $this->outerOf($page), $page);
+    $fill = $this->innerRender->slotFiller('hero', $this->outerOf($page), $page)->fill;
     $this->assertNotNull($fill);
     $this->assertSame([$page->getEntityTypeId(), $page->id()], [$fill->host->entityTypeId(), $fill->host->id()], 'The page is the innermost filler.');
     $this->assertSame($section, $fill->section->getThirdPartySetting('daedalus_layout', 'uuid'), 'With its slot section.');
-    $this->assertNull($this->innerRender->slotFiller('aside', $this->outerOf($page), $page), 'Nothing fills aside.');
+    $this->assertNull($this->innerRender->slotFiller('aside', $this->outerOf($page), $page)->fill, 'Nothing fills aside.');
 
     // The render: the template around, the page's section inside the slot
     // block, its field block showing the page's own name.
@@ -391,6 +392,16 @@ class SlotRenderTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString('Powered by', $html);
     $this->assertSame(0, $this->inLayout($html, 'Page B sentinel'), "An unfilled slot shows nothing of the page: $html");
     $this->assertSame(0, $this->domXpath($html)->query('//*[@data-layout-builder-block-uuid="' . $this->slotBlock . '"]')->length, "No slot block markup for a visitor: $html");
+
+    // The door's own build still declares the page it read: a page that
+    // gains its first fill flips the door, and the door names it rather
+    // than leaning on the page's view around it.
+    $door = $this->container->get('plugin.manager.block')->createInstance(SlotBlock::PLUGIN_ID . ':hero', $this->template->getComponent($this->slotBlock)->get('configuration'));
+    $door->setContext('entity', EntityContext::fromEntity($other));
+    $door->setContext('view_mode', new Context(new ContextDefinition('string'), 'full'));
+    $build = $door->build();
+    $this->assertTrue(Element::isEmpty($build), 'Nothing shows.');
+    $this->assertContains($other->getEntityTypeId() . ':' . $other->id(), $build['#cache']['tags'], 'The empty door depends on the page.');
   }
 
   /**
@@ -430,6 +441,27 @@ class SlotRenderTest extends BlueprintKernelTestBase {
     $this->placeSlot('no_such_blueprint');
     $this->assertSame(0, $this->inLayout($this->renderPage($page), 'Page C sentinel'));
     $this->assertNull($this->innerRender->blueprintHost('no_such_blueprint'));
+
+    // The door declares what it read whether or not anything showed. A
+    // default with no sections yet shows nothing, and the page's render
+    // still carries the blueprint's tag: composing the blueprint reaches
+    // every page showing the empty door.
+    [$empty] = $this->blueprint('hero_empty', TRUE, FALSE);
+    $this->placeSlot('hero_empty');
+    $html = $this->renderPage($page);
+    $this->assertSame(0, $this->domXpath($html)->query('//*[@data-layout-builder-block-uuid="' . $this->slotBlock . '"]')->length, "An empty default prints no slot block markup for a visitor: $html");
+    $build = $this->entityTypeManager->getViewBuilder('entity_test_rev')->view($page, 'full');
+    $this->container->get('renderer')->renderInIsolation($build);
+    $this->assertContains('blueprint:' . $empty->id(), $build['#cache']['tags'], 'The render depends on the empty default.');
+
+    // A default naming no published blueprint carries the type's list
+    // tag: publishing one under the name reaches the page.
+    $this->placeSlot('no_such_blueprint');
+    $build = $this->entityTypeManager->getViewBuilder('entity_test_rev')->view($page, 'full');
+    $this->container->get('renderer')->renderInIsolation($build);
+    $list_tags = $this->entityTypeManager->getDefinition('blueprint')->getListCacheTags();
+    $this->assertNotEmpty($list_tags);
+    $this->assertSame([], array_diff($list_tags, $build['#cache']['tags']), 'The render depends on the blueprint list.');
   }
 
   /**
@@ -458,7 +490,7 @@ class SlotRenderTest extends BlueprintKernelTestBase {
     // The template canvas itself: the subject is the bundle's sample, which
     // fills nothing, so the slot wears the stand-in there too.
     $sample = $this->container->get('layout_builder.sample_entity_generator')->get('entity_test_rev', 'entity_test_rev');
-    $this->assertNull($this->innerRender->slotFiller('hero', $this->outerOf($sample), $sample), 'The sample fills nothing.');
+    $this->assertNull($this->innerRender->slotFiller('hero', $this->outerOf($sample), $sample)->fill, 'The sample fills nothing.');
     $html = $this->renderCanvas($sample);
     $this->assertSame(BlockStandIn::SLOT, $this->slotElement($this->domXpath($html), $html)->getAttribute('data-block-stand-in'));
   }
@@ -490,12 +522,29 @@ class SlotRenderTest extends BlueprintKernelTestBase {
     // Nothing beneath fills: the default, the blueprint's own section
     // under the page as the subject.
     [$page] = $this->lockedPage('Page G sentinel', FALSE);
-    $this->assertNull($this->innerRender->slotFiller('aside', $frame_host, $page));
+    $lookup = $this->innerRender->slotFiller('aside', $frame_host, $page);
+    $this->assertNull($lookup->fill);
     $html = $render($page);
     $xpath = $this->domXpath($html);
     $slot = $aside($xpath, $html);
     $this->assertSame(1, $xpath->query('.//*[@data-selectable="container:' . $default_section . '"]', $slot)->length, "The default fills the frame slot: $html");
     $this->assertStringContainsString('Page G sentinel', $slot->textContent, "Under the page's contexts.");
+
+    // The door declares every document the lookup walked, though none
+    // filled: the page (its first fill would flip the door) and its
+    // template (a fill of its own would too), never the frame it sits
+    // in. The frame render carries both on the door's account alone: no
+    // route output of the page is inside it here.
+    $page_tag = $page->getEntityTypeId() . ':' . $page->id();
+    $display_tags = $this->lockedDisplay()->getCacheTags();
+    $this->assertNotEmpty($display_tags);
+    $this->assertContains($page_tag, $lookup->cacheability->getCacheTags(), 'The lookup read the page.');
+    $this->assertSame([], array_diff($display_tags, $lookup->cacheability->getCacheTags()), 'And its template.');
+    $this->assertNotContains(FrameInterface::ENTITY_TYPE_ID . ':stark', $lookup->cacheability->getCacheTags(), 'The outer is excluded.');
+    $build = $this->innerRender->renderFrame($frame_host, new RouteOutput(['#markup' => 'Route output'], 'Title'), $page);
+    $this->container->get('renderer')->renderInIsolation($build);
+    $this->assertContains($page_tag, $build['#cache']['tags'], "The frame render depends on a page filling nothing yet.");
+    $this->assertSame([], array_diff($display_tags, $build['#cache']['tags']), 'And on the template filling nothing yet.');
 
     // The template fills the frame slot with a section of its own: every
     // page of the bundle shows it over the default.
@@ -508,7 +557,7 @@ class SlotRenderTest extends BlueprintKernelTestBase {
         'configuration' => ['id' => 'system_powered_by_block', 'label' => 'Template aside', 'label_display' => '0'],
       ],
     ]))->save();
-    $fill = $this->innerRender->slotFiller('aside', $frame_host, $page);
+    $fill = $this->innerRender->slotFiller('aside', $frame_host, $page)->fill;
     $this->assertSame('entity_view_display', $fill->host->entityTypeId(), 'The template is the filler.');
     $html = $render($page);
     $xpath = $this->domXpath($html);
@@ -521,7 +570,7 @@ class SlotRenderTest extends BlueprintKernelTestBase {
     $page_block = $uuids->generate();
     $page->set(ContentHost::LAYOUT_FIELD, [$this->ownSection($page_fill, 'aside', [$this->nameBlock($page_block)])])->save();
     $page = $this->entityTypeManager->getStorage('entity_test_rev')->loadUnchanged($page->id());
-    $fill = $this->innerRender->slotFiller('aside', $frame_host, $page);
+    $fill = $this->innerRender->slotFiller('aside', $frame_host, $page)->fill;
     $this->assertSame('entity_test_rev', $fill->host->entityTypeId(), 'The page is the innermost filler.');
     $html = $render($page);
     $xpath = $this->domXpath($html);
@@ -532,7 +581,7 @@ class SlotRenderTest extends BlueprintKernelTestBase {
     $this->assertSame(0, $xpath->query('.//*[@data-selectable="container:' . $default_section . '"]', $slot)->length, 'Over the default.');
     // Another page of the bundle still shows the template's fill.
     [$other] = $this->lockedPage('Page H sentinel', FALSE);
-    $this->assertSame('entity_view_display', $this->innerRender->slotFiller('aside', $frame_host, $other)->host->entityTypeId());
+    $this->assertSame('entity_view_display', $this->innerRender->slotFiller('aside', $frame_host, $other)->fill->host->entityTypeId());
 
     // An OVERRIDABLE page's own render leaves its fill out: the fill's
     // place is the frame's slot, where it renders once. A slot section
@@ -656,6 +705,10 @@ class SlotRenderTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString('Stand-in sentinel', $main->item(0)->textContent, 'Main prints the stand-in.');
     $this->assertStringNotContainsString('Route output sentinel', $main->item(0)->textContent);
     $this->assertSame(0, $xpath->query('.//main', $main->item(0))->length, 'With no landmark of its own.');
+    // The frame door asked the roster for its route slot, so the frame
+    // render declares the roster: a tier moved reaches every page.
+    $roster_tag = 'config:' . SlotBlock::CONFIG_NAME;
+    $this->assertContains($roster_tag, $build['#cache']['tags'], 'The frame render around a blueprint depends on the roster.');
 
     // Around a page's route: main hosts the output, the door its default.
     $build = $this->innerRender->renderFrame($frame_host, $output($resolver->fromEntity($page)), $page);
@@ -665,6 +718,31 @@ class SlotRenderTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString('Route output sentinel', $xpath->query('.//main[@role="main"]', $main)->item(0)->textContent, "Main prints the route output on a page: $html");
     $this->assertStringNotContainsString('Stand-in sentinel', $html, 'No stand-in anywhere.');
     $this->assertSame(1, $xpath->query('//*[@data-layout-builder-block-uuid="' . $aside_door . '"]//*[@data-selectable="container:' . $aside_section . '"]')->length, 'The door shows its default.');
+    $this->assertContains($roster_tag, $build['#cache']['tags'], 'The frame render around a page depends on the roster.');
+
+    // Door by door: every frame door declares the roster on its own build,
+    // whatever it shows (the route output, the stand-in, its default); a
+    // template door never asks the roster and carries nothing of it.
+    $view_mode = new Context(new ContextDefinition('string'), 'full');
+    $frame_door = function (string $uuid, string $slot, RouteOutput $route) use ($frame, $view_mode, $page): array {
+      $door = $this->container->get('plugin.manager.block')->createInstance(SlotBlock::PLUGIN_ID . ':' . $slot, $frame->getSection(0)->getComponent($uuid)->get('configuration'));
+      $door->setContext('entity', EntityContext::fromEntity($page));
+      $door->setContext('view_mode', $view_mode);
+      $door->setContext(FrameHost::CONTEXT_ID, EntityContext::fromEntity($frame));
+      $door->setContext(RouteOutput::CONTEXT_ID, new Context(new ContextDefinition('any'), $route));
+      return $door->build();
+    };
+    $this->assertContains($roster_tag, $frame_door($main_slot, FrameHost::MAIN_SLOT, $output($resolver->fromEntity($page)))['#cache']['tags'], 'The door printing the route output.');
+    $this->assertContains($roster_tag, $frame_door($main_slot, FrameHost::MAIN_SLOT, $output($resolver->fromEntity($aside_default)))['#cache']['tags'], 'Main printing the stand-in.');
+    $default_build = $frame_door($aside_door, 'aside', $output($resolver->fromEntity($page)));
+    $this->assertContains($roster_tag, $default_build['#cache']['tags'], 'The door showing its default.');
+    $this->assertContains('blueprint:' . $aside_default->id(), $default_build['#cache']['tags'], 'Merged onto the default it already carried.');
+    $template_door = $this->container->get('plugin.manager.block')->createInstance(SlotBlock::PLUGIN_ID . ':hero', $this->template->getComponent($this->slotBlock)->get('configuration'));
+    $template_door->setContext('entity', EntityContext::fromEntity($page));
+    $template_door->setContext('view_mode', $view_mode);
+    $template_build = $template_door->build();
+    $this->assertContains($page->getEntityTypeId() . ':' . $page->id(), $template_build['#cache']['tags'], 'A template door declares what it walked.');
+    $this->assertNotContains($roster_tag, $template_build['#cache']['tags'], 'And never the roster: it asks no tier.');
   }
 
   /**

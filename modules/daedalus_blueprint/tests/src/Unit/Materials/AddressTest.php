@@ -47,7 +47,8 @@ class AddressTest extends UnitTestCase {
       'tag' => ['block_type:text::p', 'block_type', 'text', 'p'],
       'children' => ['layout:layout_onecol::> *', 'layout', 'layout_onecol', '> *'],
       'part children' => ['kind:block::.Card_1 > *', 'kind', 'block', '.Card_1 > *'],
-      'type chain' => ['kind:container::> pb-text .link', 'kind', 'container', '> pb-text .link'],
+      'type chain' => ['kind:container::> d-text .link', 'kind', 'container', '> d-text .link'],
+      'part under part' => ['kind:container::.a .b', 'kind', 'container', '.a .b'],
     ];
   }
 
@@ -72,7 +73,6 @@ class AddressTest extends UnitTestCase {
       'empty id' => ['kind:'],
       'bad id charset' => ['layout:Bad-Name'],
       'uuid element key' => ['container:aaaaaaaa-1111-2222-3333-444444444444'],
-      'bad part' => ['kind:container::.a .b'],
       'retired children spelling' => ['kind:container::>'],
       'retired part children spelling' => ['kind:container::.a::>'],
       'doubled children' => ['kind:container::>::>'],
@@ -93,7 +93,7 @@ class AddressTest extends UnitTestCase {
     $this->assertSame('kind:container::.inner > *', (string) Address::of('kind', 'container', '.inner > *'));
     // A selector given as text canonicalizes; as an object it rides as is.
     $this->assertSame('kind:container::.inner > *', (string) Address::of('kind', 'container', '.inner>*'));
-    $this->assertSame('kind:container::> pb-text', (string) Address::of('kind', 'container', RelativeSelector::fromString('> pb-text')));
+    $this->assertSame('kind:container::> d-text', (string) Address::of('kind', 'container', RelativeSelector::fromString('> d-text')));
     $this->assertTrue(Address::kind('block')->equals(Address::fromString('kind:block')));
     $this->assertFalse(Address::kind('block')->equals(Address::blockType('block')));
     foreach ([['kind', 'Bad-Name'], ['nope', 'x'], ['layout', '']] as [$family, $id]) {
@@ -153,7 +153,7 @@ class AddressTest extends UnitTestCase {
       'an element scope is never a base wildcard' => ['block_type:cta', 'base:a', FALSE],
       'unknown families pair only exactly' => ['kind:field', 'kind:entity', FALSE],
       'unknown family exact' => ['kind:field', 'kind:field', TRUE],
-      'selectors ride their element' => ['kind:container', 'layout:layout_onecol::> pb-text', TRUE],
+      'selectors ride their element' => ['kind:container', 'layout:layout_onecol::> d-text', TRUE],
       'a part never pairs across families' => ['kind:block::.title', 'kind:container', FALSE],
     ];
   }

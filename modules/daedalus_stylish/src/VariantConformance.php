@@ -45,7 +45,7 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * new wearing, a stale row on its existing wearers.
  *
  * The universe the judge validates in is the provider's own UNJUDGED
- * records (tokens, swatches, every offered variant, animations), handed
+ * records (tokens, every offered variant, animations, fonts), handed
  * to the validator outright (withUniverse()) instead of read from the
  * roster: the roster withholds what this verdict names, so a judge that
  * read build() would recurse into the roster being built from it. The
@@ -71,9 +71,16 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * declarations, the three material list tags for the entities, a cache
  * rebuild for code), so every law input invalidates it through the
  * tags it already busts, with no subscriber wiring. The request memo is
- * reset with the variant repository's (_daedalus_variant_change(),
- * VariantWorkspaceSubscriber): a gesture that saves a variant and
- * re-reads the roster in one request judges the fresh entity.
+ * reset with the roster's: MaterialsRosterBuilder::reset() cascades to
+ * every provider's reset(), and DaedalusStylishMaterialsProvider's calls
+ * reset() here. The law key does not carry every law input (a skin's
+ * minted tokens and the declarations are not in it), so a law change
+ * that keeps the key (a skin write minting a token a withheld variant
+ * references) would otherwise answer from the pre-change memo for the
+ * rest of the request; every law-change site already resets the roster,
+ * and the verdict is forgotten with it. Nothing resets this memo on its
+ * own: a gesture that saves a variant and re-reads the roster in one
+ * request judges the fresh entity because the save reset the roster.
  */
 final class VariantConformance {
 
@@ -220,10 +227,13 @@ final class VariantConformance {
   }
 
   /**
-   * Forgets the request's verdicts (a variant changed mid-request).
+   * Forgets the request's verdicts (a material or the law changed).
    *
-   * The persistent entry is not touched: the write that calls this
-   * invalidates daedalus_variant_list itself.
+   * Called by DaedalusStylishMaterialsProvider::reset(), the roster's
+   * cascade (MaterialsRosterBuilder::reset()); no other site resets the
+   * verdict, so the memo can never outlive the roster it fed. The
+   * persistent entry is not touched: the write that reset the roster
+   * invalidates a tag the provider's cache metadata names.
    */
   public function reset(): void {
     $this->memo = [];

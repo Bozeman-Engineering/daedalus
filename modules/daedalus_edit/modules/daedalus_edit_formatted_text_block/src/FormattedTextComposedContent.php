@@ -8,6 +8,8 @@ use Drupal\block_content\BlockContentInterface;
 use Drupal\Component\Plugin\PluginManagerInterface;
 use Drupal\Component\Serialization\Json;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Session\AccountProxyInterface;
+use Drupal\daedalus_blueprint\Compat\FilterFormats;
 use Drupal\daedalus_ui\Render\ComposedBlockContentInterface;
 
 /**
@@ -30,6 +32,8 @@ final class FormattedTextComposedContent implements ComposedBlockContentInterfac
   public function __construct(
     protected EntityTypeManagerInterface $entityTypeManager,
     protected PluginManagerInterface $editorManager,
+    protected FilterFormats $filterFormatRepository,
+    protected AccountProxyInterface $currentUser,
   ) {}
 
   /**
@@ -62,9 +66,12 @@ final class FormattedTextComposedContent implements ComposedBlockContentInterfac
 
     // The gesture's text format: the value's stored format, or the default
     // format the field would get for the acting user while the field is
-    // still empty. The stamp is identity for the editor's fallback; the
+    // still empty (core's rule: the first format the user may use, by
+    // weight; the same default the blueprint spine fills a format-less
+    // write with). The stamp is identity for the editor's fallback; the
     // value's own format (read from the mirror) wins when they disagree.
-    $format = $item?->format ?? filter_default_format();
+    $format = $item?->format
+      ?? $this->filterFormatRepository->getDefaultFormat($this->currentUser)->id();
     // The format picker widget and a mid-gesture switch both work from
     // what is stamped here: every text format the acting user may use that
     // has a text editor configured, in the formats' weight order. Editor-less
@@ -72,10 +79,8 @@ final class FormattedTextComposedContent implements ComposedBlockContentInterfac
     // secret degraded mode), and the blueprint spine rejects inaccessible
     // formats on write regardless of what any client sends.
     $formats = [];
-    foreach (filter_formats() as $candidate) {
-      if ($candidate->access('use')) {
-        $formats[$candidate->id()] = $candidate->label();
-      }
+    foreach ($this->filterFormatRepository->getFormatsForAccount($this->currentUser) as $candidate) {
+      $formats[$candidate->id()] = $candidate->label();
     }
     $editors = $this->entityTypeManager->getStorage('editor')->loadMultiple(array_keys($formats));
     $formats = array_intersect_key($formats, $editors);

@@ -8,7 +8,7 @@
  * in exactly one change until the selection fills it, and every property
  * of every change stages with the token and lands in the same gesture:
  * one change is one op (the advanced row's, or a basic pick whose seed
- * groups on one box), several changes (a replaced band's null on the box
+ * groups on one box), several changes (a replaced background's null on the box
  * it lives on) are one atomic batch under the one label.
  *
  * Run directly (`node tests/js/media-picker.test.mjs`) or via
@@ -24,7 +24,7 @@ import { EMPTY_MATERIALS } from './materials-fixture.mjs';
 
 const KEY = 'block:aaaaaaaa-1111-2222-3333-444444444444';
 // A second box of the same binding (a linked text block's root beside its
-// anchor): where a replaced band's null routes to.
+// anchor): where a replaced background's null routes to.
 const OTHER = 'block:cccccccc-1111-2222-3333-444444444444';
 const ROOT = 'bbbbbbbb-1111-2222-3333-444444444444';
 const PICKED = '123e4567-e89b-12d3-a456-426614174000';
@@ -104,7 +104,7 @@ const createApp = () => {
     },
     applied: [],
     // The materials facade: a fixed roster and the change subscription the
-    // source's swatch delivery extension binds to.
+    // source's token delivery extension binds to.
     materialsListeners: [],
     Materials: {
       getRoster: () => app.materials,
@@ -238,7 +238,7 @@ test('several changes: a null companion on another box rides one atomic batch un
   const source = createLeaderSource(app, {}, mediaUrls);
   // route() over {image: placeholder, size: cover, color: null} on a
   // two-box binding: the set members group on the anchor (KEY), the
-  // replaced band's null lands on the root it lives on (OTHER).
+  // replaced background's null lands on the root it lives on (OTHER).
   source.pickMedia({
     condition: 'default',
     property: 'background-image',

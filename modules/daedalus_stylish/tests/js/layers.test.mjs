@@ -57,14 +57,14 @@ test('layerTier and layerScope read the id grammar back: the prefix, then the de
 });
 
 test('ancestor ids: the own spelling names the position, the worn spelling appends the variant; ancestorRule reads the position from both, ancestorVariant the variant from the worn one', () => {
-  const own = ancestorLayerId('container:x', '> pb-text .link');
-  const worn = ancestorWearLayerId('container:x', '> pb-text .link', 'button');
-  assert.equal(own, 'ancestor:container:x::> pb-text .link');
-  assert.equal(worn, 'ancestor:container:x::> pb-text .link|button');
+  const own = ancestorLayerId('container:x', '> d-text .link');
+  const worn = ancestorWearLayerId('container:x', '> d-text .link', 'button');
+  assert.equal(own, 'ancestor:container:x::> d-text .link');
+  assert.equal(worn, 'ancestor:container:x::> d-text .link|button');
   assert.equal(isAncestorLayer(own), true);
   assert.equal(isAncestorLayer(worn), true);
-  assert.deepEqual(ancestorRule(own), { key: 'container:x', selector: '> pb-text .link' });
-  assert.deepEqual(ancestorRule(worn), { key: 'container:x', selector: '> pb-text .link' });
+  assert.deepEqual(ancestorRule(own), { key: 'container:x', selector: '> d-text .link' });
+  assert.deepEqual(ancestorRule(worn), { key: 'container:x', selector: '> d-text .link' });
   assert.equal(ancestorVariant(own), null);
   assert.equal(ancestorVariant(worn), 'button');
   // A `+` or `~` combinator, a `:has()` qualifier: the position keeps
@@ -96,12 +96,12 @@ test('layerColor is stable per layer and fixed for the element layer', () => {
   assert.match(aqua, /^hsl\(\d+ 70% 60%\)$/);
 });
 
-test('variant hues avoid the element blue band', () => {
+test('variant hues avoid the element blue hue range', () => {
   // Every derived hue keeps at least the guard distance from the element
   // layer's 213 hue, so the top layer stays visually reserved.
   ['aqua', 'cta_card', 'split_50_50', 'wide_1024', 'calm', 'pop'].forEach((name) => {
     const hue = Number(/^hsl\((\d+) /.exec(layerColor(variantLayerId(name)))[1]);
-    assert.ok(Math.abs(hue - 213) >= 24, `${name} hue ${hue} clears the element band`);
+    assert.ok(Math.abs(hue - 213) >= 24, `${name} hue ${hue} clears the element hue`);
   });
 });
 
@@ -120,9 +120,9 @@ test('every floor layer shares the fixed SKIN_COLOR by tier prefix, clear of the
 });
 
 test('an ancestor rule\'s own layer shares the floor hue; a variant the rule wears is that variant\'s hue, the same as an own wearing of it', () => {
-  assert.equal(layerColor(ancestorLayerId('container:x', '> pb-text')), SKIN_COLOR);
-  assert.equal(layerColor(ancestorLayerId('container:x', 'pb-text .text-block-link')), SKIN_COLOR);
-  const worn = layerColor(ancestorWearLayerId('container:x', 'pb-text .text-block-link', 'aqua'));
+  assert.equal(layerColor(ancestorLayerId('container:x', '> d-text')), SKIN_COLOR);
+  assert.equal(layerColor(ancestorLayerId('container:x', 'd-text .text-block-link')), SKIN_COLOR);
+  const worn = layerColor(ancestorWearLayerId('container:x', 'd-text .text-block-link', 'aqua'));
   assert.equal(worn, layerColor(variantLayerId('aqua')), 'one variant, one hue, whoever wears it');
   assert.notEqual(worn, SKIN_COLOR);
   // The position never colors the worn layer: the same variant through

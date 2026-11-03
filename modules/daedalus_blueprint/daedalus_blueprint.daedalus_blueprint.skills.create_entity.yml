@@ -1,8 +1,0 @@
-label: 'Create Entity'
-description: 'TRIGGER when: about to create a new page or any other entity. Discovers available entity types and bundles, and provides the creation workflow; its checklist names the skills a page needs, so load it first.'
-type: create_entity
-instructions: |
-  General principles:
-  - Match the structure to the entity type's purpose.
-  - Prefer concrete, specific content over generic placeholder text.
-  - A new page's first document has one source. When the bundle's schema read lists starts, a page blueprint among them is a whole page already designed for this bundle: prefer it (start: its id) to authoring the page from nothing, then refine with page_edit. template keeps the bundle's default layout; blank is an empty page to build on; layout is the whole page authored by you. Never pass start and layout together.

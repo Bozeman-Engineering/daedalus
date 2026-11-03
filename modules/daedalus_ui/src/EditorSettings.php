@@ -44,7 +44,32 @@ class EditorSettings {
    *   The stored value, or $default.
    */
   public function get(string $namespace, string $key, mixed $default = NULL): mixed {
-    $user = $this->loadCurrentUser();
+    return $this->getFor($this->currentUser, $namespace, $key, $default);
+  }
+
+  /**
+   * Gets a preference value for a given account.
+   *
+   * The same read as get() for an account a caller names (a runner
+   * reading the user a turn runs as, a form reading the account it
+   * edits), so no reader loads the user entity and the settings field
+   * for itself.
+   *
+   * @param \Drupal\Core\Session\AccountInterface $account
+   *   The account whose preference is read.
+   * @param string $namespace
+   *   The owning module's machine name.
+   * @param string $key
+   *   The preference key within the namespace.
+   * @param mixed $default
+   *   Value returned when the preference is unset or the account is
+   *   anonymous.
+   *
+   * @return mixed
+   *   The stored value, or $default.
+   */
+  public function getFor(AccountInterface $account, string $namespace, string $key, mixed $default = NULL): mixed {
+    $user = $this->loadUser($account);
     if (!$user) {
       return $default;
     }
@@ -102,10 +127,23 @@ class EditorSettings {
    *   The current user, or NULL.
    */
   protected function loadCurrentUser(): ?UserInterface {
-    if (!$this->currentUser->isAuthenticated()) {
+    return $this->loadUser($this->currentUser);
+  }
+
+  /**
+   * Loads an account's user entity, or NULL when anonymous.
+   *
+   * @param \Drupal\Core\Session\AccountInterface $account
+   *   The account.
+   *
+   * @return \Drupal\user\UserInterface|null
+   *   The user entity, or NULL.
+   */
+  protected function loadUser(AccountInterface $account): ?UserInterface {
+    if (!$account->isAuthenticated()) {
       return NULL;
     }
-    return $this->entityTypeManager->getStorage('user')->load($this->currentUser->id());
+    return $this->entityTypeManager->getStorage('user')->load($account->id());
   }
 
 }

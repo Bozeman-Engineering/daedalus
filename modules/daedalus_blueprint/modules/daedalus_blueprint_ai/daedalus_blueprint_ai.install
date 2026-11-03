@@ -1,0 +1,40 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for Daedalus Blueprint AI.
+ */
+
+/**
+ * Remove the daedalus_blueprint_ai_anthropic module from the site.
+ *
+ * Its subscribers (the page language on the system prompt, the skills
+ * obligation and catalog) moved into daedalus_blueprint_ai, so the module
+ * left the package. A site that still enables it would name a module
+ * missing from disk; take it out of the extension registry and the schema
+ * registry the way an uninstall does.
+ */
+function daedalus_blueprint_ai_update_11101(): void {
+  \Drupal::configFactory()->getEditable('core.extension')
+    ->clear('module.daedalus_blueprint_ai_anthropic')
+    ->save();
+  \Drupal::keyValue('system.schema')->delete('daedalus_blueprint_ai_anthropic');
+}
+
+/**
+ * Remove the two retired observability modules from the site.
+ *
+ * daedalus_blueprint_ai_dev_tools and daedalus_blueprint_ai_log_repair left
+ * the package for bz_diagnostics with no update path, so a site that
+ * enabled them still lists two modules missing from disk, and every module
+ * install (the ledger's, for one) fails on them. Take them out of the
+ * extension registry and the schema registry the way an uninstall does.
+ */
+function daedalus_blueprint_ai_update_11102(): void {
+  \Drupal::configFactory()->getEditable('core.extension')
+    ->clear('module.daedalus_blueprint_ai_dev_tools')
+    ->clear('module.daedalus_blueprint_ai_log_repair')
+    ->save();
+  \Drupal::keyValue('system.schema')->delete('daedalus_blueprint_ai_dev_tools');
+  \Drupal::keyValue('system.schema')->delete('daedalus_blueprint_ai_log_repair');
+}

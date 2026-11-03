@@ -48,7 +48,11 @@ interface PropertyGroupInterface {
    *     wide-tier groups carry plain strings (server-side vocabulary,
    *     generated data); every consumer casts to string.
    *   - type: (string) value type — one of 'dimension', 'number', 'keyword',
-   *     'ident', 'animation_name', 'color', 'family', 'text', 'any'. 'ident' is
+   *     'ident', 'animation_name', 'color', 'gradient', 'family', 'text',
+   *     'any'. 'gradient' is a named <image>: one or more comma-separated
+   *     gradient functions or var() layers (PropertyGroupBase::
+   *     validateGradient(), the grammar a gradient-shaped token scale
+   *     validates against). 'ident' is
    *     a CSS custom-ident (will-change targets, transition properties):
    *     identifier grammar, with CSS-wide keywords, "default", and "--"
    *     prefixes reserved. 'animation_name' is the ident grammar for a

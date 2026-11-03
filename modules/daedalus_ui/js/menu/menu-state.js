@@ -14,7 +14,7 @@
  * (Drupal.Daedalus.popover), which owns placement, dismissal, and
  * Escape; the host keeps the list's roving focus and keyboard.
  *
- * The item grammar (submenus cut; nothing needs one):
+ * The item grammar:
  * - label: string, required.
  * - icon: optional inline SVG markup (fill="currentColor", the verb-menu
  *   convention).
@@ -44,8 +44,31 @@
  *   the keyboard's focus already being there. Opaque like run: an
  *   opener paints what the item would do (the stylish address chip
  *   paints the hovered rule's reach on the canvas) and takes it down.
+ * - items: optional array; a SUBMENU row. The row holds a nested list in
+ *   this same grammar (one level: a flyout never holds a submenu) and
+ *   nothing to do itself: no run, never checked, never confirm (each
+ *   throws beside items). Its flyout opens beside the row (ArrowRight,
+ *   Enter, Space, a click, or the host's pointer intent) with its first
+ *   focusable item active, and the row is the flyout's parent while it
+ *   stands: the keyboard moves inside the flyout, ArrowLeft and Escape
+ *   close the flyout alone, and the active top row moving anywhere else
+ *   closes it. A flyout item activates like a top item (a confirm arms
+ *   inside the flyout, preview follows its active item) and a run closes
+ *   the WHOLE menu. A disabled submenu row (reason and all) opens
+ *   nothing. The row's own preview, if any, follows it as the active top
+ *   row, flyout open or not.
  * - {separator: true}: a rule between groups. Never focusable; never
  *   leads, trails, or doubles (open() trims them).
+ * - {caption: string}: a group's caption inside the list (the "Model" and
+ *   "Usage left" headings of the chat kebab), rendered like the menu's
+ *   header. Never focusable; carries nothing else.
+ * - {label, meter: 0..1, hint?}: a read-only meter row (the chat kebab's
+ *   usage windows): the label, a track filled to the fraction, and the
+ *   hint on a second line. Never focusable and never runs (no run; a
+ *   separator's treatment with a face), so a keyboard user steps over it
+ *   as over a rule; the host renders it role="menuitem" aria-disabled so
+ *   a screen reader still reads the label and hint in sequence. Under
+ *   0.1 the host marks it low, at 0 out.
  *
  * open() places the menu one of two ways: at viewport coordinates
  * {x, y} (a pointer), or under an `anchor` Element (a trigger button),
@@ -55,12 +78,23 @@
  * passes 'end' so its menu hangs inward). Where that lands is the
  * surface's placement math (js/popover/placement.js). An optional
  * `header` captions the list.
+ *
+ * The state carries `sub`: null while no flyout stands, else
+ * {index, activeIndex, armedIndex} for the one open flyout (the submenu
+ * row's top index, the flyout's own active and armed rows; -1 active
+ * when a pointer opened it and nothing inside is pointed at yet). The
+ * top `activeIndex` stays on the submenu row the whole time, so a close
+ * lands the keyboard back on it. The keyboard entries (moveActive,
+ * moveActiveToFirst/Last) address the flyout while one stands; the
+ * pointer entries name the list they are in (setActive/activate for the
+ * top list, setSubActive/activateSub for the flyout).
  */
 
 /**
  * @type {?{x: ?number, y: ?number, anchor: ?Element, align: string,
  *   header: ?string, items: object[], onClose: ?Function,
- *   activeIndex: number, armedIndex: ?number}}
+ *   activeIndex: number, armedIndex: ?number,
+ *   sub: ?{index: number, activeIndex: number, armedIndex: ?number}}}
  */
 let state = null;
 
@@ -89,50 +123,6 @@ export const getState = () => state;
 export const isOpen = () => state !== null;
 
 /**
- * Validates and normalizes one item against the grammar. Invalid items
- * throw: a malformed adapter is a bug to surface, not to skip quietly.
- */
-const normalizeItem = (item, index) => {
-  if (item && item.separator === true) {
-    return { separator: true };
-  }
-  if (!item || typeof item.label !== 'string' || item.label === '') {
-    throw new Error(`Menu item ${index} requires a label.`);
-  }
-  if (typeof item.run !== 'function' && !item.disabled) {
-    throw new Error(
-      `Menu item "${item.label}" requires run() unless disabled.`,
-    );
-  }
-  return {
-    separator: false,
-    label: item.label,
-    icon: item.icon ?? null,
-    disabled: item.disabled === true,
-    reason: item.reason ?? null,
-    title: item.title ?? null,
-    hint: item.hint ?? null,
-    checked: typeof item.checked === 'boolean' ? item.checked : null,
-    danger: item.danger === true,
-    confirm: !!item.confirm,
-    // A string confirm IS the armed label; with `true` the host derives
-    // one from the label (Drupal.t lives host-side, keeping this pure).
-    confirmLabel: typeof item.confirm === 'string' ? item.confirm : null,
-    run: item.run ?? null,
-    preview: typeof item.preview === 'function' ? item.preview : null,
-  };
-};
-
-/**
- * Tells one item it became (or stopped being) the active item. The
- * state is already settled and notified when this runs, so a preview
- * that reads getState() sees the item it is told about.
- */
-const previewAt = (items, index, active) => {
-  items[index]?.preview?.(active);
-};
-
-/**
  * Drops separators that would lead, trail, or double: an adapter builds
  * its groups conditionally and must not have to trim the rules itself.
  */
@@ -153,10 +143,141 @@ const trimSeparators = (items) =>
     );
 
 /**
+ * Validates and normalizes one item against the grammar. Invalid items
+ * throw: a malformed adapter is a bug to surface, not to skip quietly.
+ * `nested` is true inside a submenu's items, where a second level is
+ * refused.
+ */
+const normalizeItem = (item, index, nested = false) => {
+  if (item && item.separator === true) {
+    return { separator: true };
+  }
+  if (item && item.caption !== undefined) {
+    if (typeof item.caption !== 'string' || item.caption === '') {
+      throw new Error(`Menu item ${index} requires a non-empty caption.`);
+    }
+    return { caption: item.caption };
+  }
+  if (!item || typeof item.label !== 'string' || item.label === '') {
+    throw new Error(`Menu item ${index} requires a label.`);
+  }
+  if (item.meter !== undefined) {
+    if (
+      typeof item.meter !== 'number' ||
+      Number.isNaN(item.meter) ||
+      item.meter < 0 ||
+      item.meter > 1
+    ) {
+      throw new Error(
+        `Menu item "${item.label}" requires a meter between 0 and 1.`,
+      );
+    }
+    return {
+      separator: false,
+      meter: item.meter,
+      label: item.label,
+      hint: item.hint ?? null,
+    };
+  }
+  const submenu = item.items !== undefined;
+  if (submenu) {
+    if (nested) {
+      throw new Error(
+        `Menu item "${item.label}" nests a submenu inside a flyout; one level only.`,
+      );
+    }
+    if (!Array.isArray(item.items)) {
+      throw new Error(
+        `Menu item "${item.label}" requires items as an array.`,
+      );
+    }
+    if (item.run !== undefined) {
+      throw new Error(
+        `Menu item "${item.label}" has items, so it carries no run().`,
+      );
+    }
+    if (item.checked !== undefined) {
+      throw new Error(
+        `Menu item "${item.label}" has items, so it is never checked.`,
+      );
+    }
+    if (item.confirm !== undefined) {
+      throw new Error(
+        `Menu item "${item.label}" has items, so it never confirms.`,
+      );
+    }
+  } else if (typeof item.run !== 'function' && !item.disabled) {
+    throw new Error(
+      `Menu item "${item.label}" requires run() unless disabled.`,
+    );
+  }
+  const items = submenu
+    ? trimSeparators(
+        item.items.map((entry, position) =>
+          normalizeItem(entry, position, true),
+        ),
+      )
+    : null;
+  if (submenu && items.length === 0) {
+    throw new Error(`Menu item "${item.label}" requires at least one item.`);
+  }
+  return {
+    separator: false,
+    meter: null,
+    label: item.label,
+    icon: item.icon ?? null,
+    disabled: item.disabled === true,
+    reason: item.reason ?? null,
+    title: item.title ?? null,
+    hint: item.hint ?? null,
+    checked: typeof item.checked === 'boolean' ? item.checked : null,
+    danger: item.danger === true,
+    confirm: !!item.confirm,
+    // A string confirm IS the armed label; with `true` the host derives
+    // one from the label (Drupal.t lives host-side, keeping this pure).
+    confirmLabel: typeof item.confirm === 'string' ? item.confirm : null,
+    run: item.run ?? null,
+    preview: typeof item.preview === 'function' ? item.preview : null,
+    items,
+  };
+};
+
+/**
+ * Whether an item can be the active (focused) item: separators, captions
+ * and meter rows are inert, stepped over by the keyboard and never run.
+ */
+export const isFocusable = (item) =>
+  !item.separator && item.caption === undefined && item.meter === null;
+
+/**
+ * Whether an item is a submenu row: it opens a flyout instead of running.
+ */
+export const isSubmenu = (item) => isFocusable(item) && item.items !== null;
+
+const firstFocusable = (items) => items.findIndex(isFocusable);
+
+const lastFocusable = (items) => items.findLastIndex(isFocusable);
+
+/**
+ * Tells one item it became (or stopped being) the active item. The
+ * state is already settled and notified when this runs, so a preview
+ * that reads getState() sees the item it is told about.
+ */
+const previewAt = (items, index, active) => {
+  items[index]?.preview?.(active);
+};
+
+/** The open flyout's items, or null. */
+const subItems = () =>
+  state?.sub ? state.items[state.sub.index].items : null;
+
+/**
  * Opens the menu with a fresh item list. An open menu is replaced (its
  * onClose fires first): the second-contextmenu dismissal rule. No items
  * means NO menu (the caller leaves the native menu alone): returns false
- * so adapters can decide not to preventDefault.
+ * so adapters can decide not to preventDefault. The first focusable item
+ * is the active one; a list of inert rows alone (captions and meters) has
+ * none active, and the keyboard has nothing to move.
  *
  * @param {object} spec
  *   {items, x?, y?, anchor?, align?, header?, onClose?}: either an anchor
@@ -181,7 +302,9 @@ export const open = ({
   if (align !== 'start' && align !== 'end') {
     throw new Error(`A menu aligns 'start' or 'end', not "${align}".`);
   }
-  const normalized = trimSeparators((items ?? []).map(normalizeItem));
+  const normalized = trimSeparators(
+    (items ?? []).map((item, index) => normalizeItem(item, index)),
+  );
   if (normalized.length === 0) {
     return false;
   }
@@ -196,31 +319,94 @@ export const open = ({
     header: typeof header === 'string' && header !== '' ? header : null,
     items: normalized,
     onClose,
-    activeIndex: 0,
+    activeIndex: firstFocusable(normalized),
     armedIndex: null,
+    sub: null,
   };
   notify();
-  previewAt(normalized, 0, true);
+  previewAt(normalized, state.activeIndex, true);
   return true;
 };
 
 /**
- * Closes the menu. Idempotent; fires onClose exactly once per open.
+ * Closes the menu, flyout and all. Idempotent; fires onClose exactly
+ * once per open. The flyout's active item hears preview(false) before
+ * the top row does.
  */
 export const close = () => {
   if (!state) {
     return;
   }
-  const { onClose, items, activeIndex } = state;
+  const { onClose, items, activeIndex, sub } = state;
+  const flyout = subItems();
   state = null;
   notify();
+  if (sub) {
+    previewAt(flyout, sub.activeIndex, false);
+  }
   previewAt(items, activeIndex, false);
   onClose?.();
 };
 
 /**
- * Sets the active (focused) item; pointer hover and roving focus share
- * this. Out-of-range indexes and separators are ignored.
+ * Closes the open flyout alone (ArrowLeft, Escape inside it, the active
+ * top row moving elsewhere). The submenu row stays the active top row,
+ * so the keyboard lands back on it. Nothing open: nothing happens.
+ */
+export const closeSub = () => {
+  if (!state?.sub) {
+    return;
+  }
+  const { sub } = state;
+  const flyout = subItems();
+  state = { ...state, sub: null };
+  notify();
+  previewAt(flyout, sub.activeIndex, false);
+};
+
+/**
+ * Opens the flyout of the submenu row at `index` (ArrowRight, Enter,
+ * Space, a click, or the host's pointer intent). The row becomes the
+ * active top row and any armed top item disarms. Already open there:
+ * nothing changes. Not a submenu row, or disabled: nothing opens.
+ *
+ * @param {number} index
+ *   The submenu row's top index.
+ * @param {object} options
+ *   {focusFirst?}: whether the flyout's first focusable item becomes
+ *   active (the keyboard's open, default true) or nothing inside is
+ *   active yet (a pointer's open: the pointer says what it points at).
+ *
+ * @return {boolean}
+ *   Whether a flyout stands open at that row afterwards.
+ */
+export const openSub = (index, { focusFirst = true } = {}) => {
+  if (!state) {
+    return false;
+  }
+  const item = state.items[index];
+  if (!item || !isSubmenu(item) || item.disabled) {
+    return false;
+  }
+  if (state.sub?.index === index) {
+    return true;
+  }
+  setActive(index);
+  const activeIndex = focusFirst ? firstFocusable(item.items) : -1;
+  state = {
+    ...state,
+    armedIndex: null,
+    sub: { index, activeIndex, armedIndex: null },
+  };
+  notify();
+  previewAt(item.items, activeIndex, true);
+  return true;
+};
+
+/**
+ * Sets the active (focused) top item; pointer hover and roving focus
+ * share this. Out-of-range indexes and inert rows are ignored. Moving
+ * off the submenu row whose flyout stands closes the flyout.
  */
 export const setActive = (index) => {
   if (
@@ -228,10 +414,11 @@ export const setActive = (index) => {
     index < 0 ||
     index >= state.items.length ||
     index === state.activeIndex ||
-    state.items[index].separator
+    !isFocusable(state.items[index])
   ) {
     return;
   }
+  closeSub();
   const previous = state.activeIndex;
   state = { ...state, activeIndex: index };
   notify();
@@ -240,36 +427,94 @@ export const setActive = (index) => {
 };
 
 /**
- * Moves the active item by delta, wrapping and stepping over separators:
- * the ArrowDown/ArrowUp contract. Disabled items are included (focusable,
- * per the grammar).
+ * Sets the active item inside the open flyout (a pointer enter on a
+ * flyout row). No flyout, an out-of-range index, or an inert row:
+ * ignored.
+ */
+export const setSubActive = (index) => {
+  const flyout = subItems();
+  if (
+    !flyout ||
+    index < 0 ||
+    index >= flyout.length ||
+    index === state.sub.activeIndex ||
+    !isFocusable(flyout[index])
+  ) {
+    return;
+  }
+  const previous = state.sub.activeIndex;
+  state = { ...state, sub: { ...state.sub, activeIndex: index } };
+  notify();
+  previewAt(flyout, previous, false);
+  previewAt(flyout, index, true);
+};
+
+/**
+ * Steps an index by delta through a list, wrapping and stepping over
+ * inert rows; from -1 (nothing active) a step lands on the first or the
+ * last focusable row by its direction.
+ */
+const stepped = (items, from, delta) => {
+  if (from === -1) {
+    return delta > 0 ? firstFocusable(items) : lastFocusable(items);
+  }
+  const count = items.length;
+  let index = from;
+  do {
+    index = (((index + delta) % count) + count) % count;
+  } while (!isFocusable(items[index]) && index !== from);
+  return index;
+};
+
+/**
+ * Moves the active item by delta, wrapping and stepping over inert rows
+ * (separators, captions, meters): the ArrowDown/ArrowUp contract.
+ * Disabled items are included (focusable, per the grammar). While a
+ * flyout stands the move is inside it: the keyboard's one list is the
+ * one it is in.
  */
 export const moveActive = (delta) => {
   if (!state) {
     return;
   }
-  const count = state.items.length;
-  let index = state.activeIndex;
-  do {
-    index = (((index + delta) % count) + count) % count;
-  } while (state.items[index].separator && index !== state.activeIndex);
-  setActive(index);
+  const flyout = subItems();
+  if (flyout) {
+    setSubActive(stepped(flyout, state.sub.activeIndex, delta));
+    return;
+  }
+  if (firstFocusable(state.items) === -1) {
+    return;
+  }
+  setActive(stepped(state.items, state.activeIndex, delta));
 };
 
-/** Home. */
-export const moveActiveToFirst = () => setActive(0);
+/** Home: the first focusable row of the list the keyboard is in. */
+export const moveActiveToFirst = () => {
+  const flyout = subItems();
+  if (flyout) {
+    setSubActive(firstFocusable(flyout));
+  } else if (state) {
+    setActive(firstFocusable(state.items));
+  }
+};
 
-/** End. */
+/** End: the last focusable row of the list the keyboard is in. */
 export const moveActiveToLast = () => {
-  if (state) {
-    setActive(state.items.length - 1);
+  const flyout = subItems();
+  if (flyout) {
+    setSubActive(lastFocusable(flyout));
+  } else if (state) {
+    setActive(lastFocusable(state.items));
   }
 };
 
 /**
- * Activates an item: Enter/Space on the active item, or a click.
+ * Activates a top item: Enter/Space on the active item, or a click.
  *
- * - Disabled, or a separator: nothing ('noop').
+ * - Disabled, or an inert row (a separator, a caption, a meter): nothing
+ *   ('noop').
+ * - A submenu row: opens its flyout with the first focusable item active
+ *   ('opened'); the menu stays.
  * - Confirm item, not armed: arms it ('armed'); the label swap is the
  *   host's rendering of armedIndex. Arming a different item disarms the
  *   first; only one item is ever armed.
@@ -277,15 +522,19 @@ export const moveActiveToLast = () => {
  *   dialog or mutation the action raises), returns 'run'.
  *
  * @return {string}
- *   'noop' | 'armed' | 'run'.
+ *   'noop' | 'opened' | 'armed' | 'run'.
  */
 export const activate = (index) => {
   if (!state) {
     return 'noop';
   }
   const item = state.items[index];
-  if (!item || item.separator || item.disabled) {
+  if (!item || !isFocusable(item) || item.disabled) {
     return 'noop';
+  }
+  if (isSubmenu(item)) {
+    openSub(index);
+    return 'opened';
   }
   // A click lands on the item it names whether or not a pointer enter
   // made it active first (a synthetic click never did): the active item
@@ -293,6 +542,36 @@ export const activate = (index) => {
   setActive(index);
   if (item.confirm && state.armedIndex !== index) {
     state = { ...state, armedIndex: index };
+    notify();
+    return 'armed';
+  }
+  const { run } = item;
+  close();
+  run();
+  return 'run';
+};
+
+/**
+ * Activates an item inside the open flyout: Enter/Space on its active
+ * item, or a click on a flyout row. The same contract as activate()
+ * (noop, arm, run), with the flyout's own armed row and a run that
+ * closes the whole menu. No flyout: 'noop'.
+ *
+ * @return {string}
+ *   'noop' | 'armed' | 'run'.
+ */
+export const activateSub = (index) => {
+  const flyout = subItems();
+  if (!flyout) {
+    return 'noop';
+  }
+  const item = flyout[index];
+  if (!item || !isFocusable(item) || item.disabled) {
+    return 'noop';
+  }
+  setSubActive(index);
+  if (item.confirm && state.sub.armedIndex !== index) {
+    state = { ...state, sub: { ...state.sub, armedIndex: index } };
     notify();
     return 'armed';
   }

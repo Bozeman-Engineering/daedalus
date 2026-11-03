@@ -56,7 +56,7 @@ export const CHROME_SELECTOR = [
  * the inline stylesheet daedalus_stylish prints inside the entity root
  * (<style data-daedalus-stylish-entity>), scripts, templates and link tags. A grid
  * or flex gap ignores them, so a counter that saw them would open the gap
- * gate on a one-band page (the style tag beside the one section) and a
+ * gate on a one-section page (the style tag beside the one section) and a
  * text check would read a stylesheet's rules as page copy. hasText and
  * childCount skip them beside the chrome above.
  */
@@ -138,9 +138,9 @@ export const childCount = (element) => {
  * part's FIRST canvas match under the selection lays out (the same
  * first-match rule the placeholder read uses), read from the DOM the way
  * childCount is. It is what an element-bound control's gate reads (the
- * page's Gap control bound to the layout root: a gap between one band is
+ * page's Gap control bound to the layout root: a gap between one section is
  * a no-op), and it counts the part's OWN children, never a flow
- * container resolved through it (a one-band layout root would otherwise
+ * container resolved through it (a one-section layout root would otherwise
  * be climbed through to the entity root). A selector with no match is
  * omitted, which a gate reads as unknown and degrades to offering;
  * whether the part EXISTS is the presence map's question, the model's

@@ -96,6 +96,24 @@ class BlueprintDeserializerTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * Tests creating an entity of a type with no bundle key, bundle unnamed.
+   */
+  public function testDeserializeCreatesWithoutBundleForTypeWithoutBundleKey(): void {
+    $this->installEntitySchema('entity_test_no_bundle');
+
+    $result = $this->deserializer->deserialize([
+      'entity_type' => 'entity_test_no_bundle',
+      'fields' => ['name' => 'Implied bundle'],
+    ]);
+
+    $this->assertTrue($result->isSuccess(), print_r($result->toArray(), TRUE));
+    $entity = $result->getEntity();
+    $this->assertSame('entity_test_no_bundle', $entity->getEntityTypeId());
+    $this->assertSame('entity_test_no_bundle', $entity->bundle());
+    $this->assertSame('Implied bundle', $entity->get('name')->value);
+  }
+
+  /**
    * Tests updating an existing entity via _root_entity.
    */
   public function testDeserializeUpdatesExistingEntity(): void {
@@ -825,9 +843,6 @@ class BlueprintDeserializerTest extends BlueprintKernelTestBase {
   protected function setUpStyleStore(): void {
     $this->enableModules(['daedalus_stylish', 'daedalus_stylish_unbound_test']);
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);

@@ -32,7 +32,7 @@ const guide = {
 };
 
 const ROOT = 'container:11111111-1111-1111-1111-111111111111';
-const RULE = `${ROOT}::> pb-text`;
+const RULE = `${ROOT}::> d-text`;
 const OTHER = '22222222-2222-2222-2222-222222222222';
 
 let current = null;
@@ -82,11 +82,11 @@ test('a copied #id block is a root chunk, and the declaration after it is read a
 });
 
 test('a part block and a copied rule block in one text are two chunks in order', () => {
-  const text = `.quote { color: red; }\n#${OTHER} > pb-text:hover { gap: 1rem }`;
+  const text = `.quote { color: red; }\n#${OTHER} > d-text:hover { gap: 1rem }`;
   const chunks = structuralChunks(text);
   assert.deepEqual(
     chunks.map((chunk) => [chunk.prelude, chunk.root]),
-    [['.quote', false], [`#${OTHER} > pb-text:hover`, true]],
+    [['.quote', false], [`#${OTHER} > d-text:hover`, true]],
   );
   assert.equal(chunks[1].from, 23);
   assert.equal(text.slice(chunks[1].from, chunks[1].to), chunks[1].text);
@@ -94,10 +94,28 @@ test('a part block and a copied rule block in one text are two chunks in order',
 
 test('a relative-selector block and a tag block are chunks (the grammar knows them)', () => {
   assert.deepEqual(
-    structuralChunks('> pb-text { color: red; }').map((chunk) => chunk.prelude),
-    ['> pb-text'],
+    structuralChunks('> d-text { color: red; }').map((chunk) => chunk.prelude),
+    ['> d-text'],
   );
   assert.deepEqual(structuralChunks('p { color: red; }').map((chunk) => chunk.prelude), ['p']);
+});
+
+test('the digester decides what is a block: a list, a state on any compound, a class glued to a tag; the sigil and a declaration are not', () => {
+  // The WHERE opened: preludes the old regex gate called text are blocks
+  // the door reads (one digester, the paste door asking it).
+  assert.deepEqual(
+    structuralChunks('h1, h2 { margin: 0; }\nli:hover > ul { display: block; }\nli.active > a { color: red; }\n[aria-expanded="true"] > ul { display: block; }').map((chunk) => chunk.prelude),
+    ['h1, h2', 'li:hover > ul', 'li.active > a', '[aria-expanded="true"] > ul'],
+  );
+  // An unpublished wrapper is still a block: the door answers it with the
+  // published wrappers (and a literal clause is landing 3's).
+  assert.deepEqual(structuralChunks('padding: 1rem\n@supports (display: grid) { gap: 1rem; }').map((chunk) => chunk.kind), []);
+  assert.deepEqual(structuralChunks('@supports (display: grid) { gap: 1rem; }').map((chunk) => chunk.prelude), ['@supports (display: grid)']);
+  // A declaration that lost its semicolon before a brace is no block
+  // (the digester refuses `padding: 1rem`), and the sigil's shape is the
+  // chrome's, never a prelude.
+  assert.deepEqual(structuralChunks('padding: 1rem\nh1 { margin: 0; }'), []);
+  assert.deepEqual(structuralChunks('color: red;\n&hover { color: blue; }').map((chunk) => chunk.kind), ['rule'], 'csstree reads the sigil as a nested rule; the door refuses it with the corrective');
 });
 
 test('an unclosed block is not a chunk (mid-typing; the door takes it once it closes)', () => {
@@ -145,6 +163,18 @@ test('conditionWrap spells the island condition as nesting on one line each side
   assert.equal(
     conditionWrap('color: red;', 'hover+narrow+dark', guide),
     '@container (max-width: 767px) { @media (prefers-color-scheme: dark) { &:hover { color: red; } } }',
+  );
+  // A literal clause wraps as its own text (the WHEN landing): an
+  // at-rule literal nests like a published wrapper, a pseudo-class
+  // literal glues to the anchor, beside the references.
+  assert.equal(
+    conditionWrap('color: red;', '@container (min-width: 500px)', guide),
+    '@container (min-width: 500px) { color: red; }',
+  );
+  assert.equal(conditionWrap('color: red;', ':checked', guide), '&:checked { color: red; }');
+  assert.equal(
+    conditionWrap('color: red;', 'hover+@media (hover: hover)', guide),
+    '@media (hover: hover) { &:hover { color: red; } }',
   );
   // Lines are the text's: the wrapper adds none.
   const wrapped = conditionWrap('color: red;\n&:focus { gap: 0 }', 'hover', guide);
@@ -199,14 +229,14 @@ test('entries become one additive update_style batch, default bare, wear as appl
       { key: RULE, condition: 'default', properties: {} },
       { key: RULE, condition: 'narrow', properties: { margin: '0' } },
     ],
-    [{ key: RULE, variant: 'band' }],
+    [{ key: RULE, variant: 'section' }],
   );
   assert.equal(count, 4);
   assert.deepEqual(operations, [
     { op: 'update_style', key: ROOT, properties: { color: 'red', gap: '1rem' } },
     { op: 'update_style', key: ROOT, condition: 'hover', properties: { color: 'blue' } },
     { op: 'update_style', key: RULE, condition: 'narrow', properties: { margin: '0' } },
-    { op: 'apply_variant', key: RULE, variant: 'band' },
+    { op: 'apply_variant', key: RULE, variant: 'section' },
   ]);
   // Nothing unsets: a pasted block sets what it names.
   assert.ok(operations.every((op) => Object.values(op.properties ?? {}).every((value) => value !== null)));
@@ -216,8 +246,8 @@ test('entries become one additive update_style batch, default bare, wear as appl
 test('documentSlot maps a door key back onto the island slot, continued by the nested tail', () => {
   assert.equal(documentSlot(ROOT, ROOT, ''), '');
   assert.equal(documentSlot(ROOT, ROOT, 'block(text,1)'), 'block(text,1)');
-  assert.equal(documentSlot(`${ROOT}::> pb-text`, ROOT, ''), '::> pb-text');
-  assert.equal(documentSlot(`${ROOT}::> pb-text`, ROOT, 'block(text,1)'), 'block(text,1)::> pb-text');
+  assert.equal(documentSlot(`${ROOT}::> d-text`, ROOT, ''), '::> d-text');
+  assert.equal(documentSlot(`${ROOT}::> d-text`, ROOT, 'block(text,1)'), 'block(text,1)::> d-text');
   assert.equal(documentSlot(`${RULE} > a`, RULE, 'block(text,1)::.quote'), 'block(text,1)::.quote > a');
   // A stranger: another element, or a key that merely shares a prefix.
   assert.equal(documentSlot(`container:${OTHER}`, ROOT, ''), null);

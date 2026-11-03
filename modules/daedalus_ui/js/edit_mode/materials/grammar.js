@@ -38,7 +38,6 @@
  */
 export const KIND = Object.freeze({
   TOKEN: 'token',
-  SWATCH: 'swatch',
   VARIANT: 'variant',
   BLUEPRINT: 'blueprint',
   ANIMATION: 'animation',
@@ -122,7 +121,6 @@ export const isSlot = (slot) =>
  */
 export const isMaterialKind = (kind) =>
   kind === KIND.TOKEN ||
-  kind === KIND.SWATCH ||
   kind === KIND.VARIANT ||
   kind === KIND.BLUEPRINT ||
   kind === KIND.ANIMATION ||

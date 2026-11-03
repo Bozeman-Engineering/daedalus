@@ -107,7 +107,7 @@ class SkinManager {
   /**
    * Saves a skin as a new revision carrying a gesture's log line.
    *
-   * The token gestures (TokenManager) and update_default
+   * The token gestures (SkinMaterialManager) and update_default
    * (DaedalusStylishOperationHandler) end here: an ordinary revisioned
    * save by the current user, so a bad edit is one restore away and a
    * save inside a workspace stages.
@@ -302,7 +302,7 @@ class SkinManager {
   /**
    * The skin card's read: the active system's skins and what may be worn.
    *
-   * One live read behind the Palette's skin card (the skins route): the
+   * One live read behind the Skin tab's skin card (the skins route): the
    * active design system, the skin it wears right now (skinNameFor()),
    * the site's stored choice, the unit's default_skin, and every member
    * skin by label with the facts the card's gestures key on: whether it

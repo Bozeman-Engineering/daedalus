@@ -58,12 +58,12 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
       blockTypes: [],
       // Table order is the canonical compound order: narrow+hover.
       conditions: [
-        'narrow' => '@container (max-width: 767px)',
-        'dark' => '@media (prefers-color-scheme: dark)',
-        'hover' => ':hover',
+        'narrow' => ['wrapper' => '@container (max-width: 767px)', 'axis' => 'width'],
+        'dark' => ['wrapper' => '@media (prefers-color-scheme: dark)', 'axis' => 'scheme'],
+        'hover' => ['wrapper' => ':hover', 'axis' => 'state'],
       ],
       roster: new MaterialsRoster([
-        new MaterialRecord(kind: MaterialKind::Variant, id: 'band', label: 'Band', group: 'style', spellings: [MaterialRecord::SLOT_CLASS => 'band'], scope: Address::fromString('kind:container')),
+        new MaterialRecord(kind: MaterialKind::Variant, id: 'section', label: 'Section', group: 'style', spellings: [MaterialRecord::SLOT_CLASS => 'section'], scope: Address::fromString('kind:container')),
         new MaterialRecord(kind: MaterialKind::Variant, id: 'testimonial_emphatic', label: 'Emphatic', group: 'emphasis', spellings: [MaterialRecord::attrSlot('block_type:testimonial', 'emphasis') => 'emphatic'], scope: Address::fromString('block_type:testimonial')),
       ], new CacheableMetadata()),
     );
@@ -73,7 +73,7 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
    * An annotated subtree: a styled, worn section holding a styled block.
    *
    * The section carries a default entry, a compound condition, its own
-   * wear (band), a child-selector rule wearing band with a hover
+   * wear (section), a child-selector rule wearing section with a hover
    * condition, and a children rule; the text block one default entry;
    * the last block nothing.
    */
@@ -87,12 +87,12 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
         '_element' => ['type' => 'Section', 'name' => 'Welcome'],
         'styles' => [
           '' => [
-            'variants' => [['variant' => 'band', 'fragment' => '']],
+            'variants' => [['variant' => 'section', 'fragment' => '']],
             'default' => ['color' => 'red'],
             'narrow+hover' => ['color' => 'green'],
           ],
-          '::> pb-container' => [
-            'variants' => [['variant' => 'band', 'fragment' => '']],
+          '::> d-container' => [
+            'variants' => [['variant' => 'section', 'fragment' => '']],
             'default' => ['gap' => '1rem'],
             'hover' => ['gap' => '2rem'],
           ],
@@ -125,13 +125,13 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
     $text = self::TEXT;
     $expected = <<<CSS
       /* Section: Welcome */
-      /* wears class="band" */
+      /* wears class="section" */
       #$section { color: red; }
       @container (max-width: 767px) {
         #$section:hover { color: green; }
       }
-      #$section > pb-container { class: band; gap: 1rem; }
-      #$section > pb-container:hover { gap: 2rem; }
+      #$section > d-container { class: section; gap: 1rem; }
+      #$section > d-container:hover { gap: 2rem; }
       #$section > * { margin: 0; }
       /* Text: Welcome! */
       #$text { font-weight: bold; }
@@ -156,12 +156,106 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
     $this->assertSame([
       [self::SECTION, '', 'default', ['color' => 'red']],
       [self::SECTION, '', 'narrow+hover', ['color' => 'green']],
-      [self::SECTION, '::> pb-container', 'variants', [['variant' => 'band', 'fragment' => '']]],
-      [self::SECTION, '::> pb-container', 'default', ['gap' => '1rem']],
-      [self::SECTION, '::> pb-container', 'hover', ['gap' => '2rem']],
+      [self::SECTION, '::> d-container', 'variants', [['variant' => 'section', 'fragment' => '']]],
+      [self::SECTION, '::> d-container', 'default', ['gap' => '1rem']],
+      [self::SECTION, '::> d-container', 'hover', ['gap' => '2rem']],
       [self::SECTION, '::> *', 'default', ['margin' => '0']],
       [self::TEXT, '', 'default', ['font-weight' => 'bold']],
     ], $tuples);
+  }
+
+  /**
+   * The qualified anchor prints its qualifiers on the id.
+   *
+   * `::&:first-child` is the owner when it is the first child, so its
+   * rule is `#id:first-child { }`, never `#id &:first-child`; the chain
+   * behind the anchor follows the id as any chain does, a state glues
+   * after the chain and the box last, and a position on a compound in
+   * the chain prints at its compound in the canonical spelling. The
+   * parser's read of these spellings is later work (selector-digest T4
+   * and T10: `#id:first-child > *` is still refused by its "a state goes
+   * on the last compound" rule, and a trailing `:not(:last-child)` still
+   * peels as a fact), so this test prints and does not parse back.
+   */
+  public function testAnchorQualifiersPrintOnTheId(): void {
+    $section = self::SECTION;
+    $tree = [
+      [
+        'kind' => 'container',
+        'uuid' => self::SECTION,
+        'layout_id' => 'layout_onecol',
+        'styles' => [
+          '::&:first-child' => ['default' => ['margin-top' => '0']],
+          '::&:not(:last-child) > *' => ['default' => ['margin-bottom' => '1rem'], 'hover' => ['color' => 'blue']],
+          '::&:first-child::after' => ['default' => ['color' => 'red']],
+          '::> *:not(:last-child)' => ['default' => ['gap' => '0']],
+          '::> d-text:nth-child(2n+1)' => ['narrow' => ['color' => 'green']],
+        ],
+      ],
+    ];
+    $expected = <<<CSS
+      #$section:first-child { margin-top: 0; }
+      #$section:not(:last-child) > * { margin-bottom: 1rem; }
+      #$section:not(:last-child) > *:hover { color: blue; }
+      #$section:first-child::after { color: red; }
+      #$section > *:not(:last-child) { gap: 0; }
+      @container (max-width: 767px) {
+        #$section > d-text:nth-child(2n+1) { color: green; }
+      }
+
+    CSS;
+    $print = $this->printer->printStyles($tree, $this->catalog);
+    $this->assertSame($expected, $print->text);
+    $this->assertSame([], $print->notes);
+  }
+
+  /**
+   * A class, attribute or pseudo-class qualifier prints at its compound.
+   *
+   * The dialect's CSS spelling of a qualified key is the canonical
+   * selector itself (`#id li:hover > ul { }` is how CSS says it): a
+   * qualifier prints at the compound it stands on, the anchor's glue
+   * onto the id (`#id.open > ul`), the addressed element's STATES still
+   * glue after the whole chain (`#id > d-text:hover a:hover` for the
+   * `::> d-text:hover a` rule under `hover`) and its generated box last
+   * of all. The parser's read of the anchor's class is T10's (`#id.class`
+   * is still refused as "variants ride class"), so this test prints and
+   * does not parse back.
+   */
+  public function testQualifiersPrintAtTheirCompound(): void {
+    $section = self::SECTION;
+    $tree = [
+      [
+        'kind' => 'container',
+        'uuid' => self::SECTION,
+        'layout_id' => 'layout_onecol',
+        'styles' => [
+          '::li:hover > ul' => ['default' => ['display' => 'block']],
+          '::&.open > ul' => ['default' => ['display' => 'block']],
+          '::> d-text:hover a' => ['hover' => ['color' => 'blue']],
+          '::*[aria-expanded="true"] > ul' => ['narrow' => ['display' => 'none']],
+          '::> d-text:has(a:hover)::after' => ['default' => ['color' => 'red']],
+          '::&.open' => ['default' => ['color' => 'red'], 'hover' => ['color' => 'blue']],
+          '::li.active:hover[aria-current="page"] > a' => ['default' => ['color' => 'purple']],
+        ],
+      ],
+    ];
+    $expected = <<<CSS
+      #$section li:hover > ul { display: block; }
+      #$section.open > ul { display: block; }
+      #$section > d-text:hover a:hover { color: blue; }
+      @container (max-width: 767px) {
+        #$section *[aria-expanded="true"] > ul { display: none; }
+      }
+      #$section > d-text:has(a:hover)::after { color: red; }
+      #$section.open { color: red; }
+      #$section.open:hover { color: blue; }
+      #$section li.active:hover[aria-current="page"] > a { color: purple; }
+
+    CSS;
+    $print = $this->printer->printStyles($tree, $this->catalog);
+    $this->assertSame($expected, $print->text);
+    $this->assertSame([], $print->notes);
   }
 
   /**
@@ -189,13 +283,13 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
         '_element' => ['type' => 'Text', 'name' => 'Text'],
       ],
     ], $this->catalog)->text);
-    $this->assertSame("  /* Section */\n  /* wears class=\"band\" */\n", $this->printer->printStyles([
+    $this->assertSame("  /* Section */\n  /* wears class=\"section\" */\n", $this->printer->printStyles([
       [
         'kind' => 'container',
         'uuid' => self::SECTION,
         'layout_id' => 'layout_onecol',
         '_element' => ['type' => 'Section', 'name' => 'Section'],
-        'styles' => ['' => ['variants' => [['variant' => 'band', 'fragment' => '']]]],
+        'styles' => ['' => ['variants' => [['variant' => 'section', 'fragment' => '']]]],
         'children' => [
           [
             'kind' => 'region',
@@ -241,8 +335,8 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
             'sepia' => ['color' => 'brown'],
           ],
           ':field_body' => ['default' => ['gap' => '1rem']],
-          '::> pb-text ::after' => ['default' => ['content' => '""']],
-          '::> pb-container' => [
+          '::> d-text ::after' => ['default' => ['content' => '""']],
+          '::> d-container' => [
             'variants' => [['variant' => 'ghost', 'fragment' => '']],
             'default' => ['gap' => '2rem'],
           ],
@@ -257,29 +351,29 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
       ],
     ];
     $expected_details = [
-      "#$section wears variant \"ghost\", which spells as neither an axis attribute of <pb-container> nor a published style class",
+      "#$section wears variant \"ghost\", which spells as neither an axis attribute of <d-container> nor a published style class",
       "#$section carries the condition \"sepia\", which is not in the catalog vocabulary",
       "#$section carries the field-scoped style local \":field_body\", which the page language does not spell",
-      "#$section carries the style local \"::> pb-text ::after\", which is outside the relative selector grammar",
-      "#$section wears variant \"ghost\" on its rule > pb-container, which spells as neither an axis attribute nor a published style class",
-      '<pb-container> carries conditions or parts, which have no print on an element without an id',
+      "#$section carries the style local \"::> d-text ::after\", which is outside the relative selector grammar",
+      "#$section wears variant \"ghost\" on its rule > d-container, which spells as neither an axis attribute nor a published style class",
+      '<d-container> carries conditions or parts, which have no print on an element without an id',
     ];
 
     // The document print: the tag keeps its spellable attributes, the
     // <style> block carries the comments in print order among the rules.
     $print = $this->printer->print($tree, $this->catalog);
     $this->assertSame(<<<HTML
-    <pb-container id="$section" style="color: red">
-      <pb-container>
-      </pb-container>
-    </pb-container>
+    <d-container id="$section" style="color: red">
+      <d-container>
+      </d-container>
+    </d-container>
     <style>
       /* {$expected_details[0]} */
       /* {$expected_details[1]} */
       /* {$expected_details[2]} */
       /* {$expected_details[3]} */
       /* {$expected_details[4]} */
-      #$section > pb-container { gap: 2rem; }
+      #$section > d-container { gap: 2rem; }
       /* {$expected_details[5]} */
     </style>
 
@@ -292,7 +386,7 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
     $this->assertSame([], array_map('strval', $reparse->errors));
     $this->assertSame([
       '' => ['default' => ['color' => 'red']],
-      '::> pb-container' => ['default' => ['gap' => '2rem']],
+      '::> d-container' => ['default' => ['gap' => '2rem']],
     ], $reparse->tree[0]['styles'], 'The comments blank; the entries the grammar spells read back.');
 
     // The CSS print: the same comments among the element's lines (the
@@ -306,7 +400,7 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
       /* {$expected_details[2]} */
       /* {$expected_details[3]} */
       /* {$expected_details[4]} */
-      #$section > pb-container { gap: 2rem; }
+      #$section > d-container { gap: 2rem; }
       /* {$expected_details[0]} */
       /* {$expected_details[5]} */
 
@@ -324,7 +418,7 @@ class DialectPrinterStylesTest extends BlueprintKernelTestBase {
     $this->assertSame([], array_map('strval', $errors));
     $this->assertSame([
       [self::SECTION, '', 'default', ['color' => 'red']],
-      [self::SECTION, '::> pb-container', 'default', ['gap' => '2rem']],
+      [self::SECTION, '::> d-container', 'default', ['gap' => '2rem']],
     ], $tuples);
   }
 

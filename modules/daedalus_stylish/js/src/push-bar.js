@@ -3,6 +3,8 @@ import { useState } from 'preact/hooks';
 import { saveMaterial, updateMaterial } from './material-gestures.js';
 import { documentLayerId, layerColor } from './code/layers.js';
 import {
+  dismissLine,
+  payloadRows,
   sessionCount,
   sessionStyles,
   skinPushOperations,
@@ -52,6 +54,13 @@ import {
  *   the skin's delivery (leader-source.js refreshDefaults: the skin's
  *   defaults as the panel reads them and the recompiled CSS on the
  *   canvas), so the pushed look lands without a reload.
+ *
+ * A line-staging session's staged MOVES (a rule's selector edit in the
+ * document, pending.js stageMove) have no island to print in, so the bar
+ * lists them under its row, one pending row each ("from → to") with the
+ * dismiss mark the islands give a pending line; a variant push ships
+ * them inside the merged styles, a skin push as update_default nulls at
+ * the old keys and sets at the new.
  *
  * The variant commits are material gesture ops (save_material /
  * update_material, kind variant: the ops the AI submits) and the skin
@@ -106,7 +115,10 @@ export const commitSession = ({
   if (session.kind === 'skin') {
     return source
       .commitBatch({
-        operations: skinPushOperations(session),
+        operations: skinPushOperations(
+          session,
+          guide?.skinDefaults?.[session.scope] ?? {},
+        ),
         label: Drupal.t('Pushed skin defaults for !scope', {
           '!scope': skinScopeLabel(session.scope, guide),
         }),
@@ -186,10 +198,12 @@ export const commitSession = ({
   // (session-frame-model.js mintConsent), so what the chip says is what
   // Save commits. The anchor's placement provenance rides the save only
   // while the session is linked; unlinked (or no provenance) sends
-  // nothing and the variant is born general-purpose.
+  // nothing and the variant is born general-purpose. On a blueprint's
+  // own canvas the unstamped anchor's provenance is the canvas's self
+  // (its own first placement), so a look minted there is born its own.
   const consent = mintConsent(
     session,
-    blueprintProvenance(anchor, tree),
+    blueprintProvenance(anchor, tree, source.getSelfProvenance?.() ?? null),
     source.getMaterials(),
   );
   return saveMaterial(
@@ -240,6 +254,7 @@ export const commitSession = ({
  *   - usages: the update session's wearer count (the Inspector's one
  *     fetch per session entry, shared with the frame's blast line), or
  *     null while unanswered.
+ *   - onSession: writes the session back (a move row's dismiss).
  *   - onClose: closes the session (Discard and a successful commit alike).
  */
 export const PushBar = ({
@@ -249,6 +264,7 @@ export const PushBar = ({
   variants,
   session,
   usages = null,
+  onSession,
   onClose,
 }) => {
   const [busy, setBusy] = useState(false);
@@ -266,6 +282,9 @@ export const PushBar = ({
     ? null
     : saveStyles(styleMap ?? {}, session.anchor, tree, library, session.axis);
   const count = sessionCount(session, capture);
+  // The staged moves as rows (pending.js payloadRows: the selector a
+  // rule leaves as `part`, the one it lands at as `move.to`).
+  const moveRows = update ? payloadRows({}, null, session.moves) : [];
 
   const commit = () => {
     if (busy || count === 0 || (!update && !session.label.trim())) {
@@ -360,6 +379,31 @@ export const PushBar = ({
           {impactText()}
         </span>
       </div>
+      {moveRows.map((row) => (
+        <div
+          key={row.move.id}
+          className="daedalus-stylish-push-bar__move"
+          data-pending-move={row.move.id}
+        >
+          <span className="daedalus-stylish-push-bar__move-text">
+            {Drupal.t('Selector')}{' '}
+            <code>{row.part}</code>
+            {' → '}
+            <code>{row.move.to}</code>
+          </span>
+          <button
+            type="button"
+            className="daedalus-stylish-draft__toggle"
+            disabled={busy}
+            title={Drupal.t(
+              'Pending selector change, committed by Push. Click to dismiss; the rule keeps its stored selector.',
+            )}
+            onClick={() => onSession(dismissLine(session, row.move.id))}
+          >
+            ×
+          </button>
+        </div>
+      ))}
     </div>
   );
 };

@@ -227,7 +227,7 @@ class BlueprintDoorsTest extends BlueprintKernelTestBase {
    */
   public function testCanvasEntersEditModeOnFirstVisit(): void {
     $blueprint = $this->createBlueprint(['label' => 'Card', 'machine_name' => 'card']);
-    $other = $this->createBlueprint(['label' => 'Band', 'machine_name' => 'band']);
+    $other = $this->createBlueprint(['label' => 'Section', 'machine_name' => 'section']);
     $mode_state = $this->container->get(ModeState::class);
     $path = $blueprint->toUrl()->toString();
 

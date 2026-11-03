@@ -49,6 +49,7 @@ class ElementDiscoveryTest extends KernelTestBase {
     'block',
     'block_content',
     'daedalus_blueprint',
+    'filter',
     // Rendering entities with daedalus_stylish enabled consults daedalus_ui's
     // mode state (the live-attribution seams), which needs the full chain.
     'layout_discovery',
@@ -72,6 +73,10 @@ class ElementDiscoveryTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('block_content');
+    // Importing daedalus_stylish's config saves its settings, a law change
+    // that recompiles the variants file over these storages.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('theme_installer')->install([self::THEME]);
 

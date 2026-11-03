@@ -197,11 +197,10 @@ const registerVerbs = (app) => {
       const path = key.startsWith('container:')
         ? `/layout_builder/configure/section/${info.storageType}/${info.storageId}/${info.sectionDelta}?section_uuid=${uuidOf(key)}`
         : `/layout_builder/update/block/${info.storageType}/${info.storageId}/${info.sectionDelta}/${info.region}/${info.blockUuid}`;
-      ModePluginBase.dialog({
-        url: ModePluginBase.url(path),
-        width: 900,
-        message: Drupal.t('Loading form...'),
-      });
+      // Core's Layout Builder form opens in the daedalus popup through the
+      // one opener; the Configure form alter's close command targets its
+      // #drupal-modal.
+      Drupal.Daedalus.openModal(ModePluginBase.url(path), { width: 900 });
     },
   });
 

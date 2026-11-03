@@ -88,7 +88,10 @@ final class BundleEditFormAlter {
       || !$this->sectionOwner->ensureGroup($form, $form_state, DaedalusUiBundleEditFormAlter::GROUP_CREATION)) {
       return;
     }
-    $host = $this->pageHosts->bundleHost($bundle_of, (string) $bundle_entity->id());
+    // A new bundle (the add form) has no display yet, so its pages carry
+    // no layout of their own: the control is disabled with that reason,
+    // as on an existing bundle whose Layout Builder is off.
+    $host = $bundle_entity->isNew() ? NULL : $this->pageHosts->bundleHost($bundle_of, (string) $bundle_entity->id());
     $own_layout = $host !== NULL && $this->pageStart->takesStart($host);
     $control = [
       '#type' => 'checkbox',

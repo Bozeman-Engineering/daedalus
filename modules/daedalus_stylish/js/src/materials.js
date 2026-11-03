@@ -1,7 +1,7 @@
 /**
- * The materials store as the inspector reads it: tokens, swatches and
- * animations projected into the shapes the pickers, wells, faces,
- * completions and lint consume.
+ * The materials store as the inspector reads it: tokens, animations and
+ * fonts projected into the shapes the pickers, wells, faces, completions
+ * and lint consume.
  *
  * The roster (`materials`, a daedalus_ui materials/roster.js index over
  * the delivery-shape records) arrives through the state source: the
@@ -11,11 +11,11 @@
  * read from a global, so the node tests build one from records
  * (tests/js/materials-fixture.mjs) exactly as the store would. `guide`
  * still owns the DECLARATIONS a record's `group` joins against: a token
- * scale's label/shape/keywords (guide.tokenScales) and a swatch kind's
- * label (guide.swatchKinds) are vocabulary facts no record carries.
+ * scale's label/shape/keywords (guide.tokenScales) are vocabulary facts
+ * no record carries.
  *
- * Spelling lives on the record: a token's or swatch's `spellings.style`
- * is the committable var() reference as the value grammar spells it, and
+ * Spelling lives on the record: a token's `spellings.style` is the
+ * committable var() reference as the value grammar spells it, and
  * an animation's `spellings.animation` is the keyframes ident a motion
  * value wears (motion-{name}), so nothing here wraps var() or parses a
  * prefix. Whether a value IS such a reference is the grammar's answer
@@ -37,8 +37,8 @@ import {
 } from './style-guide.js';
 
 /**
- * A record's committable style spelling ('var(--swatch-brand_red)'), or
- * null for a record with none in the style slot.
+ * A record's committable style spelling ('var(--color-accent)'), or null
+ * for a record with none in the style slot.
  */
 export const styleReference = (record) => {
   const spelling = record?.spellings?.[SLOT.STYLE];
@@ -46,8 +46,8 @@ export const styleReference = (record) => {
 };
 
 /**
- * The custom property a token's or swatch's style spelling delivers as
- * ('--swatch-brand_red'), read back from the spelling: the one place the
+ * The custom property a token's style spelling delivers as
+ * ('--color-accent'), read back from the spelling: the one place the
  * client needs the bare property name is the token scope lane (preview.js:
  * the live drafts and the committed materials' delivery on the token
  * scope element), and the prompt's PHP reader
@@ -81,20 +81,6 @@ const tokenEntry = (guide, record) => {
     record,
   };
 };
-
-/**
- * One swatch record as a picker/completion entry.
- */
-const swatchEntry = (guide, record) => ({
-  name: record.id,
-  label: record.label !== '' ? record.label : record.id,
-  kind: record.group,
-  kindLabel: guide?.swatchKinds?.[record.group]?.label ?? record.group,
-  ref: styleReference(record),
-  value: tokenDisplayValue(record.value),
-  valueDark: schemeDisplayValue(guide, record.value),
-  record,
-});
 
 /**
  * Every rostered token, optionally shape-filtered, roster order.
@@ -135,36 +121,7 @@ export const scaleTokens = (guide, materials, scale) =>
   tokenOptions(guide, materials).filter((entry) => entry.scale === scale);
 
 /**
- * Every rostered swatch, optionally kind-filtered, roster order (label).
- *
- * `value` is the display form (a condition map shows its 'default' entry)
- * and `valueDark` the scheme pair (schemeDisplayValue; null when
- * single-valued): faces paint from this data, never from var() resolution,
- * because the panel DOM may sit outside the token scope.
- *
- * @param {?object} guide
- *   The style guide payload (swatchKinds; conditions for the scheme pair).
- * @param {object} materials
- *   The materials roster.
- * @param {?string[]} kinds
- *   Swatch kind ids to include (e.g. ['color']); null for all.
- *
- * @return {Array<{name: string, label: string, kind: string,
- *   kindLabel: string, ref: string, value: string, valueDark: ?string,
- *   record: object}>}
- */
-export const swatchOptions = (guide, materials, kinds = null) =>
-  materials
-    .ofKind(KIND.SWATCH)
-    .map((record) => swatchEntry(guide, record))
-    .filter(
-      (entry) =>
-        entry.ref !== null &&
-        (!Array.isArray(kinds) || kinds.includes(entry.kind)),
-    );
-
-/**
- * The token or swatch a style value IS, as a picker entry, or null.
+ * The token a style value IS, as a picker entry, or null.
  *
  * The grammar's whole-value read: exactly one material reference (no
  * fallback, whitespace tolerated) resolves to its record; a literal, a
@@ -172,7 +129,7 @@ export const swatchOptions = (guide, materials, kinds = null) =>
  * null, and the caller paints the raw spelling honestly.
  *
  * @return {?object}
- *   A tokenOptions/swatchOptions entry (kind told apart by `record.kind`).
+ *   A tokenOptions entry.
  */
 export const materialOf = (guide, materials, value) => {
   // The var keyword is case-insensitive per spec (custom property NAMES
@@ -182,13 +139,9 @@ export const materialOf = (guide, materials, value) => {
   const spelled =
     typeof value === 'string' ? value.trim().replace(/^var\(/i, 'var(') : value;
   const resolved = resolveValue(spelled, SLOT.STYLE, materials);
-  if (resolved.kind === KIND.TOKEN) {
-    return tokenEntry(guide, resolved.record);
-  }
-  if (resolved.kind === KIND.SWATCH) {
-    return swatchEntry(guide, resolved.record);
-  }
-  return null;
+  return resolved.kind === KIND.TOKEN
+    ? tokenEntry(guide, resolved.record)
+    : null;
 };
 
 /**
@@ -329,31 +282,31 @@ export const inlineLiteral = (materials, value) => {
 };
 
 /**
- * The gradient-kind swatch a value IS, or null: the edit-in-place gate
+ * The gradient-scale token a value IS, or null: the edit-in-place gate
  * shared by the gradient chip, the media rows and the background widgets.
  *
+ * A token on a scale the guide declares with the gradient shape (the
+ * suite's `gradient` scale, or any package's); the shape is the scale's
+ * declaration, so an undeclared scale's token never gates.
+ *
  * @return {?object}
- *   The swatchOptions entry, or null for anything else (a literal
- *   gradient, a layered value, a color swatch, a token, an unknown name).
+ *   The tokenOptions entry, or null for anything else (a literal
+ *   gradient, a layered value, a color token, an unknown name).
  */
-export const gradientSwatchOf = (guide, materials, value) => {
+export const gradientTokenOf = (guide, materials, value) => {
   const entry = materialOf(guide, materials, value);
-  return entry !== null &&
-    entry.record.kind === KIND.SWATCH &&
-    entry.kind === 'gradient'
-    ? entry
-    : null;
+  return entry !== null && entry.shape === 'gradient' ? entry : null;
 };
 
 /**
  * A value with every material reference painted from roster data.
  *
  * The one face-paint rule wherever a palette value renders (gradient stop
- * colors, palette card faces, the color kind's editor face): each var()
- * inside the value that resolves to a token or swatch is substituted by
- * that record's display value, so a color swatch aliasing a token and a
- * gradient whose stops reference palette colors both paint without var()
- * resolution (the panel DOM may sit outside the token scope). References
+ * colors, palette card faces, the color editor's face): each var() inside
+ * the value that resolves to a token is substituted by that record's
+ * display value, so a color token aliasing another and a gradient whose
+ * stops reference palette colors both paint without var() resolution
+ * (the panel DOM may sit outside the token scope). References
  * the roster lacks stay verbatim and the face degrades honestly. The
  * scheme pass (`scheme` true) paints the dark half of a split face: the
  * value's own scheme entry when it carries one, and every reference from
@@ -380,7 +333,7 @@ export const paintValue = (guide, materials, value, scheme = false) => {
   }
   const painted = new Map();
   references(base, SLOT.STYLE, materials).forEach((reference) => {
-    if (reference.kind !== KIND.TOKEN && reference.kind !== KIND.SWATCH) {
+    if (reference.kind !== KIND.TOKEN) {
       return;
     }
     const display = scheme
@@ -397,7 +350,7 @@ export const paintValue = (guide, materials, value, scheme = false) => {
   // Every reference the grammar found is a whole var(...) call as written;
   // substitute each call whose canonical spelling painted, fallbacks
   // included (a var(--x, red) paints as --x's value, the fallback being
-  // what the browser would show only if the swatch were missing).
+  // what the browser would show only if the token were missing).
   return base.replace(
     /var\(\s*(--[A-Za-z0-9_-]+)\s*(?:,[^()]*)?\)/g,
     (whole, name) => painted.get(`var(${name})`) ?? whole,
@@ -407,7 +360,7 @@ export const paintValue = (guide, materials, value, scheme = false) => {
 /**
  * The face pair for one value (the stop-shape contract's paint/paintDark
  * at library scope): `paintDark` is non-null exactly when the scheme
- * pass paints differently, so a single-valued swatch keeps a whole face.
+ * pass paints differently, so a single-valued token keeps a whole face.
  *
  * @return {{paint: string, paintDark: ?string}}
  */

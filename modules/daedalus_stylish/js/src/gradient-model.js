@@ -99,7 +99,7 @@ export const splitLayers = (value) => {
  * Whether a layer is a gradient function (the builder's edit target).
  *
  * A var() layer is NOT a gradient here even when it references a gradient
- * swatch: the reference is opaque and the builder must not unfold it.
+ * token: the reference is opaque and the builder must not unfold it.
  */
 export const isGradientLayer = (layer) => {
   if (typeof layer !== 'string') {

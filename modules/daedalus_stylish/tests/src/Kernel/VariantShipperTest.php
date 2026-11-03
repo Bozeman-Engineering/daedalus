@@ -53,6 +53,7 @@ class VariantShipperTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -110,11 +111,8 @@ class VariantShipperTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    $this->installSchema('daedalus_stylish', ['daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', ['daedalus_skin_material_usage']);
     $this->installConfig(['daedalus_stylish']);
     $this->setUpCurrentUser([], [], TRUE);
     $this->enableModules([self::TARGET]);

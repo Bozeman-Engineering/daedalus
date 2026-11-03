@@ -125,7 +125,7 @@ class PeekTest extends BrowserTestBase {
     // The skin: the token scope wraps the content and the defaults link
     // rides the head.
     $this->assertElement($document, '.daedalus-stylish-token-scope', TRUE);
-    $this->assertElement($document, 'link[rel="stylesheet"][href*="/daedalus_stylish/defaults-"]', TRUE);
+    $this->assertElement($document, 'link[rel="stylesheet"][href*="/daedalus_stylish/skin-"]', TRUE);
     // None of the frame's slot doors, no page chrome, no pop-out chrome, no
     // Edit Mode, no heading.
     foreach ([

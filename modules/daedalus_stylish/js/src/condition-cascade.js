@@ -16,11 +16,7 @@
  * this pose" with the same order — the two can never disagree.
  */
 
-/**
- * A condition key's compound parts (a single condition is the compound
- * of one; ConditionTypePluginManager::compoundParts() mirror).
- */
-export const compoundParts = (condition) => condition.split('+');
+import { compoundParts } from '../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
 
 /**
  * Whether a condition block applies whenever a posed compound does.

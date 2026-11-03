@@ -26,17 +26,18 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * unit as install config (strict, its own skin, the module as package),
  * a skin minting every scale the layered guide declares, a guide whose
  * site section carries only deltas over the suite's bindings, per-block-
- * type and per-layout files, and variants, swatches and animations as
- * members. The class proves the package the way a site meets it:
+ * type and per-layout files, variants as members and the skin's
+ * animations. The class proves the package the way a site meets it:
  * installed and activated, the guide builds clean under strict, every
  * property the suite or the package binds resolves to a scale the skin
  * mints (the bindings define the minimum skin, with no fallback), the
  * skin's own defaults validate under the site's law, the activation
  * lands every shipped member with nothing failed, and every shipped
- * variant conforms under the law it ships (the roster offers it). The
- * suite's literal-timed entrance and hover variants are withheld under
- * this system by construction (a strict site whose timing is law
- * refuses a literal duration); the package's on-guide twins stand in.
+ * variant conforms under the law it ships (the roster offers it). Nothing
+ * on the site is withheld: the suite ships no literal-timed motion
+ * globals (the starter and olivero skin packages own them, and neither
+ * lands here), and daedalus_edit_text_block's literal `button` is not
+ * enabled; the package's on-guide looks stand on their own.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -60,22 +61,14 @@ class GuideExampleSystemTest extends KernelTestBase {
   protected const SYSTEM = 'guide_example';
 
   /**
-   * The suite's globals a strict timing law withholds under this system.
+   * The globals a strict timing law withholds under this system: none.
    *
-   * Each carries a literal duration or easing (so it resolves on any
-   * skin), or the transition shorthand the package withdraws; the
-   * package ships its on-guide twins.
+   * The suite itself ships no literal-timed motion globals any more; the
+   * starter and olivero skin packages own them, and neither lands here
+   * (the starter package is not enabled, the olivero package is deferred
+   * whole while its system is inactive).
    */
-  protected const SUITE_LITERAL_MOTION = [
-    'block_fade_in',
-    'block_lift',
-    'block_rise',
-    'block_scale_in',
-    'container_fade_in',
-    'container_lift',
-    'container_rise',
-    'container_scale_in',
-  ];
+  protected const SUITE_LITERAL_MOTION = [];
 
   /**
    * {@inheritdoc}
@@ -89,6 +82,7 @@ class GuideExampleSystemTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -109,9 +103,10 @@ class GuideExampleSystemTest extends KernelTestBase {
    * The site is met in the order a real one is built, and the order the
    * law scenarios take: the recipe's open reference (olivero) is the
    * active system while the suite's own globals (daedalus_stylish's and
-   * daedalus_stylish_layouts' variants and animations) land, since a site always
-   * has a skin and the suite's bindings make a skinless site refuse
-   * every token reference; then the package is enabled after the schemas
+   * daedalus_stylish_layouts' variants) land, the way a real site always
+   * has a skin (the disk lane lands a global whose tokens are unminted
+   * withheld, not refused, so the order is realism rather than a landing
+   * condition); then the package is enabled after the schemas
    * exist and the site switches to its system the way a recipe's
    * activation action does it: the activation syncs the package under
    * its own law, which is what lands its members (the importers defer a
@@ -121,16 +116,10 @@ class GuideExampleSystemTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish', 'daedalus_blueprint']);
     // The importers switch to an administrative account (shipped
@@ -197,7 +186,7 @@ class GuideExampleSystemTest extends KernelTestBase {
     $this->assertFalse($this->styleGuide->getBlockType('formatted_text', self::THEME)['controls']['position']);
     $layout = $this->styleGuide->getLayout('daedalus_stylish_container', self::THEME);
     $this->assertSame('container_site', $layout['default_variants']['width'], 'the suite\'s width default stands beside the package\'s');
-    $this->assertSame(['variant' => 'guide_band_plain', 'depth' => 'root'], $layout['default_variants']['surface']);
+    $this->assertSame(['variant' => 'guide_section_plain', 'depth' => 'root'], $layout['default_variants']['surface']);
     $this->assertSame(['variant' => 'guide_rhythm_standard', 'depth' => 'root'], $layout['default_variants']['rhythm']);
     $this->assertSame(['title-2', 'title-3', 'body', 'caption'], $this->styleGuide->getInstances(self::THEME)['.s-*']['property_groups']['typography']['constraints']['font-size']['stops']);
     foreach (['strong', 'em', 'small', 'hr', 'figure', 'figcaption'] as $tag) {
@@ -253,7 +242,7 @@ class GuideExampleSystemTest extends KernelTestBase {
     $this->assertSame(['scale' => 'space', 'allowed' => ['0', 'auto']], $served['margin-top'], 'the package\'s margin binding expands to its sides');
 
     // The everyday ladders are the skin's: the six steps are offered,
-    // the fine steps, the band-scale step, the gutter and the band
+    // the fine steps, the section-scale step, the gutter and the section
     // tokens are not (legal and referenced, off the rows); the whole
     // type ramp and the tracking trio are offered. The row a
     // scale-bound property offers where no element curates it is
@@ -264,7 +253,7 @@ class GuideExampleSystemTest extends KernelTestBase {
     $offered = static fn (array $scale): array => $names(array_filter($scale, static fn (array $record): bool => $record['offered']));
     $this->assertSame(['2', '4', '6', '8', '12', '16'], $offered($tokens['space']));
     $this->assertSame(
-      ['1', '2', '3', '4', '6', '8', '12', '16', '24', 'gutter', 'band-compact', 'band', 'band-spacious'],
+      ['1', '2', '3', '4', '6', '8', '12', '16', '24', 'gutter', 'section-compact', 'section', 'section-spacious'],
       $names($tokens['space']),
       'the skin still mints every step',
     );
@@ -282,12 +271,12 @@ class GuideExampleSystemTest extends KernelTestBase {
     $this->assertSame([...$steps, '0'], $roster->scaleStops('padding'), 'a container\'s padding row leads with the six offered steps and the zero literal');
     $this->assertSame([...$steps, '0'], $roster->scaleStops('padding-left'), 'the expanded side offers the same row');
     $this->assertSame([...$steps, '0'], $roster->scaleStops('gap'));
-    $this->assertCount(14, $roster->scaleValues('padding'), 'legality is the whole scale plus the literal: nine steps, the gutter, three band tokens and zero');
+    $this->assertCount(14, $roster->scaleValues('padding'), 'legality is the whole scale plus the literal: nine steps, the gutter, three section tokens and zero');
     $this->assertSame(['scale' => 'stroke', 'allowed' => ['0']], $served['border-left-width'], 'the stroke binding expands to its sides');
     $this->assertSame(['scale' => 'color', 'allowed' => ['transparent', 'currentColor']], $served['border-top-color'], 'the border-color binding expands to its sides');
     $this->assertSame(['allowed' => ['1', '2', '3', 'infinite']], $served['animation-iteration-count'], 'a bare allowed list is a closed value space');
     $this->assertSame(['min' => '0', 'max' => '10'], $served['z-index']);
-    $this->assertArrayNotHasKey('background-color', $served, 'backgrounds stay unbound so swatches stay legal');
+    $this->assertArrayNotHasKey('background-color', $served, 'backgrounds stay unbound so the palette tokens stay legal');
     $this->assertArrayNotHasKey('opacity', $served, 'opacity stays unbound so the entrances\' opacity 0 steps validate');
 
     $defaults = $this->validator->validateDefaults($skin->defaults(), ['theme' => self::THEME, 'skin_tokens' => $tokens]);
@@ -300,8 +289,8 @@ class GuideExampleSystemTest extends KernelTestBase {
    * The activation in setUp synced the package; a sync by hand answers
    * unchanged for every shipped definition of every kind with nothing
    * failed and nothing deferred. Every shipped variant is offered by the
-   * roster under the law it ships, so none is withheld; the only withheld
-   * variants on the site are the suite's literal-timed globals.
+   * roster under the law it ships, so none is withheld, and nothing else
+   * on the site is either (SUITE_LITERAL_MOTION says why).
    */
   public function testShippedMembersLandAndConform(): void {
     $sync = $this->container->get('daedalus_stylish.shipped_sync');
@@ -309,7 +298,7 @@ class GuideExampleSystemTest extends KernelTestBase {
     $report = $sync->sync();
     $this->assertFalse($report->hasFailures(), implode("\n", $report->failureLines()));
     $shipped = [];
-    foreach (['animations' => 'animation', 'swatches' => 'swatch', 'skins' => 'skin', 'variants' => 'variant'] as $file => $kind) {
+    foreach (['skins' => 'skin', 'variants' => 'variant'] as $file => $kind) {
       $names = array_keys($this->shipped($file));
       $shipped[$kind] = $names;
       $this->assertNotEmpty($names, "the package ships $file");
@@ -325,6 +314,9 @@ class GuideExampleSystemTest extends KernelTestBase {
         $this->assertSame(self::PACKAGE, $entity->getProvider());
       }
     }
+    // The keyframe materials ride the skin: its animations section.
+    $shipped['animation'] = array_keys($this->shipped('skins')[self::SYSTEM]['animations']);
+    $this->assertNotEmpty($shipped['animation'], 'the skin ships animations');
 
     $conformance = $this->container->get('daedalus_stylish.variant_conformance');
     assert($conformance instanceof VariantConformance);
@@ -338,8 +330,23 @@ class GuideExampleSystemTest extends KernelTestBase {
     foreach ($shipped['variant'] as $name) {
       $this->assertTrue($roster->has(MaterialKind::Variant, $name), "the roster offers $name");
     }
-    foreach ($shipped['swatch'] as $name) {
-      $this->assertTrue($roster->has(MaterialKind::Swatch, $name), "the roster offers $name");
+    // The palette beyond the roles rides the skin: the paints no role
+    // token says sit on the color and gradient scales as described,
+    // offered tokens, and the roster offers each as scale/name.
+    $skin_tokens = $this->shipped('skins')[self::SYSTEM]['tokens'];
+    $palette = ['color' => array_intersect_key($skin_tokens['color'], array_flip(['amber-wash'])), 'gradient' => $skin_tokens['gradient']];
+    $this->assertSame(['amber-wash'], array_keys($palette['color']), 'the amber wash on the color scale');
+    $this->assertSame(['amber-glow', 'ink-fade'], array_keys($palette['gradient']), 'the amber glow and the ink fade on the gradient scale');
+    foreach ($palette as $scale => $tokens) {
+      foreach ($tokens as $name => $token) {
+        $this->assertNotSame('', trim($token['description'] ?? ''), "$scale $name says what it is and when to reach for it");
+        $this->assertTrue($token['offered'] ?? TRUE, "$scale $name is offered: the palette leads the unbound background rows");
+      }
+    }
+    foreach ($palette as $scale => $tokens) {
+      foreach (array_keys($tokens) as $name) {
+        $this->assertTrue($roster->has(MaterialKind::Token, "$scale/$name"), "the roster offers the $scale token $name");
+      }
     }
     foreach ($shipped['animation'] as $name) {
       $this->assertTrue($roster->has(MaterialKind::Animation, $name), "the roster offers $name");
@@ -349,7 +356,7 @@ class GuideExampleSystemTest extends KernelTestBase {
     }
     $withheld_names = array_keys($withheld);
     sort($withheld_names);
-    $this->assertSame(self::SUITE_LITERAL_MOTION, $withheld_names, 'the only withheld variants are the suite\'s literal-timed motion globals, whose on-guide twins the package ships');
+    $this->assertSame(self::SUITE_LITERAL_MOTION, $withheld_names, 'nothing on the site is withheld: the suite ships no literal-timed motion globals');
   }
 
 }

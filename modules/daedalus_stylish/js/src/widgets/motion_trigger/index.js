@@ -61,6 +61,7 @@ const MotionTrigger = ({
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
 }) => {
   const { key: targetKey, selector: targetSelector } = styleTarget(
     model.keys['animation-trigger'] ?? model.home.key,
@@ -97,6 +98,7 @@ const MotionTrigger = ({
           disabledTitle={model.withheld?.[property] ?? null}
           onPickCondition={onPickCondition}
           onOpenDocument={onOpenDocument}
+          law={law}
           onPreview={onPreview}
           onRelease={onRelease}
           onCommit={commitPair}

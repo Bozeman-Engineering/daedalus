@@ -166,9 +166,9 @@ const runOnSelection = (verb) => {
  *     (the icon row on the primary's chip, selection-frame.js);
  *     unflagged verbs live behind the chip's chevron in the context
  *     menu, and nothing appears in both. Default false.
- *   - document: optional bool. The verb opts onto the top bar's DOCUMENT
- *     menu, the caret beside Save (tool_manager/top-bar.js), the surface
- *     for whole-page gestures: the menu lists the root entity's verbs
+ *   - document: optional bool. The verb opts onto the top bar menu's
+ *     DOCUMENT group (tool_manager/top-bar.js), the surface for
+ *     whole-page gestures: the group lists the root entity's verbs
  *     that carry the flag, through the same applies gate as every other
  *     face, so a document verb registers on kinds ['entity'] and refines
  *     applies() to the root key. It keeps its other faces (the root's
@@ -183,9 +183,9 @@ const runOnSelection = (verb) => {
  *     applicable member sits, that member is the control's main button,
  *     the rest wait behind its caret in weight order, and a group with
  *     one applicable member is the plain button it would be alone. Menus
- *     (the context menu, the tree's row menu, the document menu) and the
- *     hotkeys never read the key: they list the members flat in weight
- *     order. Default null.
+ *     (the context menu, the tree's row menu, the top bar menu's document
+ *     group) and the hotkeys never read the key: they list the members
+ *     flat in weight order. Default null.
  *   - widget: optional function(key, container, context) — a
  *     custom-rendered menu entry (a stepper, a popover control, a small
  *     control cluster) instead of a button. Called with the

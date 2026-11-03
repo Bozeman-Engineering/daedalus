@@ -16,6 +16,10 @@ editing_ui:
 verbs:
   js:
     js/verbs/daedalus-layout-verbs.js: { attributes: { type: 'module' }}
+  dependencies:
+    # The Configure form and the blueprint save and update dialogs open in
+    # the daedalus popup through the one opener.
+    - daedalus_ui/modal
 
 # The Add panel: one list of folding sets (Favorites, each group, All)
 # over everything the canvas can place, with its search, its star, its
@@ -47,6 +51,9 @@ add_panel:
     # The star and the collapse pair name themselves through the shared
     # tooltip.
     - daedalus_ui/tooltip
+    # The row menu's "Edit details…" dialog opens in the daedalus popup
+    # through the one opener.
+    - daedalus_ui/modal
 
 # Canvas display preferences (container outlines) plus edit-mode
 # interaction suppression. Contributed to the Edit Mode settings panel by

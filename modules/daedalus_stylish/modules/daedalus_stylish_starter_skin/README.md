@@ -34,12 +34,12 @@ lands the change.
 ## Building a design system off it
 
 Building a system is authoring on the canvas: activate a starting
-point, make the look in Edit Mode's Materials place with the page as
+point, make the look in Edit Mode's Design system place with the page as
 the preview, and ship the result to disk. Nothing is re-valued in YAML
 by hand any more; the skin file is the machine's to write.
 
 **A site that never ships** (a tenant) needs no module of its own. With
-`starter` active, the skin card in the Palette offers "Copy as my
+`starter` active, the skin card on the Skin tab offers "Copy as my
 skin": the copy is unlocked and a member of the active design system
 (`starter` here; a copy always lands in the system the site is
 running, whatever its source belonged to); `starter` is packaged and
@@ -57,7 +57,7 @@ your own, because a design system ships into its package and
    no default skin) and activate it (`drush
    daedalus-blueprint:design-system:activate SYSTEM`). It has no skin
    yet, so nothing can be minted on it and the skin card says so.
-2. In Edit Mode, open the Palette's skin card and copy the starter's
+2. In Edit Mode, open the Skin tab's skin card and copy the starter's
    skin (the copy's source select offers every skin on the site; pick
    `Starter`). The copy lands in your system, and because your unit has
    no package and no default skin yet, it becomes the unit's
@@ -82,13 +82,13 @@ Two alternates reach the same place:
   = TRUE`, then `drush cr`) so skin writes land in the package layer
   the ship reads.
 
-Then author: re-value tokens in the Palette's skin section (live on the
+Then author: re-value tokens on the Skin tab (live on the
 canvas, every condition the scale's shape allows), give each token the
 description a designer would want, mark the tokens the basic rows
 should not lead with `offered: false` (site-wide stop curation is the
 token's flag, never a guide list), enter "Edit skin…" from any row the
-skin supplies to change that scope's defaults, and mint variants,
-swatches, animations and fonts as members. Stay `open` while the look
+skin supplies to change that scope's defaults, mint animations and
+fonts on the skin, and variants as members. Stay `open` while the look
 is being found (the guide shapes offers, a typed literal still
 commits).
 
@@ -113,5 +113,6 @@ literals; `null` withdrawals), and switch the system's enforcement to
 authored in files and shown in the inspector's Law tab.
 `daedalus_stylish_olivero_skin` is the finished open shape of that path and
 `daedalus_stylish_guide_example` the finished strict one, with
-per-block-type and per-layout files, variants, swatches, animations and
-a blueprint as members; grow toward whichever posture the site wants.
+per-block-type and per-layout files, a skin carrying its palette and
+motion, variants and a blueprint as members; grow toward whichever
+posture the site wants.

@@ -7,33 +7,74 @@
  * container-breakpoint conditions and their site-configured thresholds), so
  * daedalus_stylish derives them from the client guide payload's condition table and
  * registers them through the plain global queue
- * (window.DaedalusUiCanvasStops). Only conditions carrying a `band`
- * fact register: the condition type declares one exactly for the bands
- * the page-level query container measures (the ones the canvas resize
- * re-evaluates; ConditionTypeInterface::getConditions()), and a @media
- * width condition (a site-provided viewport vocabulary) declares none
- * because it answers to the viewport, which the popout preview owns. The
- * wrapper text is the printer's business; nothing here reads it.
+ * (window.DaedalusUiCanvasStops). A width-axis condition registers the
+ * band the clause grammar derives from its wrapper (condition-clause.js
+ * clauseBand, the one reader of wrapper text): the inclusive px edges of
+ * a @container width query, which the page-level query container
+ * measures and the canvas resize re-evaluates. A @media width condition
+ * (a site-provided viewport vocabulary) derives none because it answers
+ * to the viewport, which the popout preview owns; so does an edge in a
+ * unit the canvas cannot pose in px.
  *
  * A stop is a BAND, not a threshold: {min?, max?, label, name}, missing
  * edges unbounded. The shipped base-at-top vocabulary projects narrow as
  * {max} and medium as {min, max}; the unconditioned base band above them
  * has no condition, so it never appears here.
+ *
+ * The published references are the ruler's permanent vocabulary (the
+ * queue, drained once). A LITERAL width clause in use on the selected
+ * element's rows (editing-at.js literalClauses) is marked on the ruler
+ * while it is in use, through the facade's mark() lane (index.js wires
+ * the selection and the map to it), projected by literalStops: the same
+ * band shape, named by the clause's canonical text and labelled by its
+ * edges, since the text is too long for a band's span and the edges are
+ * what the ruler is about.
  */
 
+import { WIDTH_AXIS, clauseBand } from '../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
+
 /**
- * A finite px edge of a band fact, or undefined when the fact omits it.
+ * A band's edges as the short range text the chip hints and the ruler
+ * labels print: `400-480px`, `≤ 767px`, `≥ 1920px`.
+ *
+ * @param {{min?: number, max?: number}} band
  */
-const edge = (value) =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+export const bandRangeText = (band) => {
+  if (band.min !== undefined && band.max !== undefined) {
+    return `${band.min}-${band.max}px`;
+  }
+  return band.max !== undefined ? `≤ ${band.max}px` : `≥ ${band.min}px`;
+};
+
+/**
+ * Projects the literal width clauses in use into ruler bands.
+ *
+ * @param {Array<Object>} clauses
+ *   Literal clause records (editing-at.js literalClauses); those
+ *   deriving no band (a @media width, a preference, a state) project
+ *   nothing.
+ *
+ * @return {Array}
+ *   Bands [{min?, max?, label, name}] in the given order (the ruler
+ *   normalizes and sorts); the name is the clause's canonical text, the
+ *   label its range text.
+ */
+export const literalStops = (clauses) =>
+  (clauses ?? [])
+    .filter((clause) => clause.band !== null)
+    .map((clause) => ({
+      ...clause.band,
+      label: bandRangeText(clause.band),
+      name: clause.text,
+    }));
 
 /**
  * Derives width bands from the guide payload's condition table.
  *
  * @param {Object} conditions
  *   drupalSettings.daedalusStylish.guide.conditions: name -> {label, wrapper,
- *   axis, band?} ('default' is a plain string and skipped like any entry
- *   without a band fact).
+ *   axis} ('default' is a plain string and skipped like any entry off the
+ *   width axis).
  *
  * @return {Array}
  *   Bands [{min?, max?, label, name}], ascending. min/max are the band's
@@ -43,21 +84,19 @@ const edge = (value) =>
 export const stopsFromConditions = (conditions) => {
   const stops = [];
   for (const [name, definition] of Object.entries(conditions ?? {})) {
-    const band = definition?.axis === 'width' ? definition.band : null;
-    if (band === null || typeof band !== 'object') {
+    if (definition?.axis !== WIDTH_AXIS || typeof definition.wrapper !== 'string') {
       continue;
     }
-    const min = edge(band.min);
-    const max = edge(band.max);
-    if (min === undefined && max === undefined) {
+    const band = clauseBand(definition.wrapper);
+    if (band === null) {
       continue;
     }
     const stop = { label: String(definition.label ?? name), name };
-    if (min !== undefined) {
-      stop.min = min;
+    if (band.min !== undefined) {
+      stop.min = band.min;
     }
-    if (max !== undefined) {
-      stop.max = max;
+    if (band.max !== undefined) {
+      stop.max = band.max;
     }
     stops.push(stop);
   }

@@ -42,8 +42,8 @@ test('capableIn reads the entry\'s verdict, a part address through its element, 
   assert.equal(capableIn(index, `block:${BLOCK}`, 'content'), true);
   assert.equal(capableIn(index, `block:${BLOCK}`, 'style'), false);
   // A part answers its owning element's verdict.
-  assert.equal(capableIn(index, `block:${BLOCK}::> pb-text`, 'content'), true);
-  assert.equal(capableIn(index, `block:${BLOCK}::> pb-text`, 'arrange'), false);
+  assert.equal(capableIn(index, `block:${BLOCK}::> d-text`, 'content'), true);
+  assert.equal(capableIn(index, `block:${BLOCK}::> d-text`, 'arrange'), false);
   // No verdict, no capability: an entry the annotator never stamped, an
   // address the index does not place, no key, no index.
   assert.equal(capableIn(index, 'block:unstamped', 'content'), false);

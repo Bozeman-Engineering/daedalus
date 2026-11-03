@@ -169,6 +169,14 @@ abstract class DaedalusAiKernelTestBase extends KernelTestBase {
     $this->installEntitySchema('file');
     $this->installSchema('file', 'file_usage');
     $this->installEntitySchema('media');
+    // Importing system's config names the default theme, a law change
+    // that recompiles daedalus_stylish's variants file over these
+    // storages when a child enables the module for its seam; the four
+    // children without it never reach that subscriber.
+    if ($this->container->get('module_handler')->moduleExists('daedalus_stylish')) {
+      $this->installEntitySchema('daedalus_variant');
+      $this->installEntitySchema('daedalus_skin');
+    }
     $this->installConfig(['field', 'system', 'image', 'file', 'media', 'filter', 'text']);
 
     // An authenticated user is required: the gate's per-user level reads

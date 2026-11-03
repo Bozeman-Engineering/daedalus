@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
+use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_ui\ElementModel\DeclarationOrigin;
@@ -46,14 +47,14 @@ use Drupal\daedalus_stylish\Vocabulary\VocabularyRosterBuilder;
  * of its own.
  *
  * Declarations only: the site's MATERIALS (the active skin's tokens, the
- * published swatches, the variants, the blueprints) are not guide data and
+ * variants, the animations, the blueprints) are not guide data and
  * do not ride here. They ride the materials delivery payload beside the
  * blueprint mirror on the same render (daedalus_blueprint's
  * MaterialsDelivery, attached by daedalus_ui's BlueprintMirror) and
  * the `materials` delta on every mutation response, one record shape for
  * every kind, so a mint lands in every picker at once. The group
- * vocabularies the pickers sort materials under (token scales, swatch
- * kinds) ARE declarations and stay here.
+ * vocabularies the pickers sort materials under (the token scales) ARE
+ * declarations and stay here.
  *
  * Theme resolution is PageBuilderDeclarations::siteTheme() (the site
  * default theme), matching validation and the AI schema: the guide the
@@ -70,10 +71,10 @@ class ClientStyleGuide {
     protected PageBuilderDeclarations $declarations,
     protected ControlWidgetPluginManager $controlWidgets,
     protected SkinManager $skinManager,
-    protected SwatchKindPluginManager $swatchKinds,
     protected VariantConformance $variantConformance,
     protected VocabularyRosterBuilder $rosterBuilder,
     protected EntityTypeBundleInfoInterface $bundleInfo,
+    protected ActiveDesignSystem $activeDesignSystem,
   ) {}
 
   /**
@@ -115,6 +116,9 @@ class ClientStyleGuide {
    * @return array
    *   - enforcement: (string) the site's enforcement mode — open, guarded,
    *     or strict (strict is the closed world).
+   *   - designSystem: the active design system as {id, label} (the
+   *     Design system place's header: the system the site wears beside
+   *     its enforcement mode), NULL when none is active.
    *   - groups: property definitions per group id, in inspector panel order
    *     (weight, id), each {label, properties: {name: definition}} with
    *     labels cast to plain strings, plus `pseudo: true` on a group
@@ -175,7 +179,7 @@ class ClientStyleGuide {
    *     client-side, which is already the effective node), carrying the
    *     bundle's human `label` (the block_content type's, the one name
    *     every type surface wears: the code view's selector rows and its
-   *     completion label a `pb-{bundle}` compound by it) when the bundle
+   *     completion label a `d-{bundle}` compound by it) when the bundle
    *     exists on the site (a declaration for a dormant bundle serves
    *     none). A composed
    *     bundle's node carries its composed: true as authored (the render
@@ -259,12 +263,6 @@ class ClientStyleGuide {
    *     binding (font-size -> the type scale) shapes stop rows everywhere
    *     without per-node authoring; the built-in stop tables stay the
    *     no-binding, no-skin fallback.
-   *   - swatchKinds: kind plugin id => {label} in discovery order — the
-   *     served vocabulary the palette picker groups user swatches under,
-   *     labels cast to plain strings (the token scales' swatch
-   *     counterpart: the client never hardcodes kind labels). The swatches
-   *     themselves are materials and ride the materials delivery payload
-   *     as swatch records grouped by kind.
    *   - declaredDefaults: the declared defaults tier
    *     (StyleGuide::declaredDefaults()): every kind, block type, block
    *     plugin, and layout declaration's own `defaults` (a kind's under
@@ -303,7 +301,7 @@ class ClientStyleGuide {
    *     conforms.
    *   - law: the LAW projection, what the style guide declares with the
    *     origin of every declared fact, read under the active design
-   *     system's enforcement mode (the Materials place's Law tab, a
+   *     system's enforcement mode (the Design system place's Law tab, a
    *     read-only view: the guide is authored in files and shown here).
    *     Self-contained: the tab reads this key alone, so its rosters
    *     restate the served nodes' answers (the same roster reads, never a
@@ -384,13 +382,16 @@ class ClientStyleGuide {
       }
     }
 
+    // Label, wrapper and axis: the client derives the band the ruler marks
+    // and the preference the emulation matches from the wrapper through
+    // the clause grammar's twin (condition-clause.js), as the server does.
     $conditions = [];
     foreach ($this->conditionTypes->getConditions() as $name => $definition) {
       $conditions[$name] = [
         'label' => (string) $definition['label'],
         'wrapper' => $definition['wrapper'],
         'axis' => $definition['axis'],
-      ] + array_intersect_key($definition, ['band' => TRUE, 'preference' => TRUE, 'fact' => TRUE]);
+      ];
     }
 
     $axis_labels = [];
@@ -467,13 +468,6 @@ class ClientStyleGuide {
       $skin_defaults = array_filter($skin->defaults(), 'is_array');
     }
 
-    // The kind vocabulary the palette groups swatches under (the swatches
-    // themselves ride the materials delivery payload).
-    $swatch_kinds = [];
-    foreach ($this->swatchKinds->getDefinitions() as $id => $definition) {
-      $swatch_kinds[$id] = ['label' => (string) $definition['label']];
-    }
-
     // Widget definitions are declaration-only (id, label, section, owned
     // properties); sorted by id so the payload is deterministic across
     // discovery order.
@@ -488,8 +482,13 @@ class ClientStyleGuide {
       ];
     }
 
+    $system = $this->activeDesignSystem->load();
     return [
       'enforcement' => $this->styleGuide->enforcement(),
+      'designSystem' => $system === NULL ? NULL : [
+        'id' => (string) $system->id(),
+        'label' => (string) $system->label(),
+      ],
       'groups' => $groups,
       'conditions' => $conditions,
       'containerRoots' => $this->conditionTypes->containerRootsEnabled(),
@@ -504,7 +503,6 @@ class ClientStyleGuide {
       'controlSections' => ControlSection::roster(),
       'constraintDefaults' => $this->styleGuide->constraintDefaults($theme),
       'tokenScales' => $token_scales,
-      'swatchKinds' => $swatch_kinds,
       'declaredDefaults' => $this->styleGuide->declaredDefaults($theme),
       'skinDefaults' => $skin_defaults,
       'axisLabels' => $axis_labels,

@@ -1188,7 +1188,7 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
       'layout' => [
         [
           'kind' => 'container',
-          'uuid' => 'renamed-band-uuid',
+          'uuid' => 'renamed-section-uuid',
           'layout_id' => 'daedalus_stylish_container',
           'label' => 'Welcome',
           'children' => [
@@ -1221,7 +1221,7 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
         ],
         [
           'kind' => 'container',
-          'uuid' => 'fresh-band-uuid',
+          'uuid' => 'fresh-section-uuid',
           'layout_id' => 'layout_onecol',
           'children' => [
             [
@@ -1264,9 +1264,9 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     // bundle label.
     $this->assertSame(['Hello there', 'Landing page'], $names($annotated));
 
-    // A renamed band: the custom label is its name, Section its type.
+    // A renamed section: the custom label is its name, Section its type.
     $renamed = $tree[0];
-    $this->assertSame('renamed-band-uuid', $renamed['uuid']);
+    $this->assertSame('renamed-section-uuid', $renamed['uuid']);
     $this->assertSame(['Welcome', 'Section'], $names($renamed));
 
     // A fresh text block with content: its first line, and the block
@@ -1284,9 +1284,9 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
     $this->assertSame(mb_substr($long, 0, 79) . '…', $nested['children'][0]['_element']['name']);
     $this->assertSame(['Text', 'Text block'], $names($nested['children'][1]));
 
-    // A fresh, unrenamed band: Section twice.
+    // A fresh, unrenamed section: Section twice.
     $fresh = $tree[1];
-    $this->assertSame('fresh-band-uuid', $fresh['uuid']);
+    $this->assertSame('fresh-section-uuid', $fresh['uuid']);
     $this->assertSame(['Section', 'Section'], $names($fresh));
 
     // The heading-style block: the rendered label is CONTENT, so it names

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Dialect;
 
+use Drupal\daedalus_blueprint\Materials\ConditionClause;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
+use Drupal\daedalus_blueprint\Materials\SelectorDigest;
 use Drupal\daedalus_blueprint\Materials\ValueKind;
 use Drupal\daedalus_blueprint\Materials\ValueReference;
 use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
@@ -20,14 +22,28 @@ use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
  * style entries: the selector is `#id` plus a RELATIVE SELECTOR under it
  * (RelativeSelector, the one suffix grammar every style key speaks: a
  * declared part or rich-text instance class `.x`, a declared base tag
- * `p`, the children `> *`, a block type among them `> pb-text`, their
- * compounds `> pb-text .link`, the relations `> p + p`,
- * `> pb-text:has(a)`, `> *:not(pb-image)`), so the local key is '' (the
+ * `p`, the children `> *`, a block type among them `> d-text`, their
+ * compounds `> d-text .link`, the relations `> p + p`,
+ * `> d-text:has(a)`, `> *:not(d-image)`, any of several compounds at
+ * one position `> *:is(p, div)`), so the local key is '' (the
  * element) or '::' plus the selector in its canonical spelling; the
- * wrapper nesting and the selector's states (on the addressed element,
- * after its qualifiers: `#id:hover`, `#id > pb-text:has(a):hover`,
- * `#id > *:not(pb-image):not(:last-child)`) pick the condition, and the
- * declarations are the entry's property map. CSS nesting is accepted as
+ * at-rule nesting (a published wrapper read as its reference, any other
+ * `@media` / `@container` / `@supports` query the condition grammar reads
+ * as a literal clause: ConditionClause through the digester's WHEN half)
+ * and the posable states on the LAST compound
+ * (`#id:hover`, `#id > d-text:has(a):hover`, peeled by name whatever
+ * their order among its qualifiers) pick the condition, every other
+ * qualifier stays selector text (`#id li:hover > ul`, `#id.open > ul`,
+ * `#id [aria-expanded="true"] > ul`, `#id a:visited`,
+ * `#id > *:not(:last-child)`), a selector list is ONE rule folded into
+ * `:is()` where its members differ (`#id h1, #id h2` lands at
+ * `::*:is(h1, h2)`) or refused whole (members sharing no shape, a fold
+ * that would put two states on the last compound), and the
+ * declarations are the entry's property map. The reader is
+ * SelectorDigest, the one digester every
+ * door shares; grammar is CSS's and admission (an undeclared tag,
+ * class, attribute or state) is the validator's verdict by enforcement
+ * mode, never a refusal here. CSS nesting is accepted as
  * sugar and flattened (`#id { p { … } &:hover { … } @media … { … } }`
  * reads as the flat rules it means); the print is always flat.
  * A rule also WEARS: `class: button` and `{axis}: {value}` inside a
@@ -47,8 +63,8 @@ use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
  * grammar error never hides a grant miss on the same bytes.
  * The value grammar is enforced here too, through the catalog's value
  * grammar over the materials roster: every var() must name a published
- * material (a skin token or a swatch; the dialect's API word for a
- * rostered var() name stays "token"), url() is only a media reference, a
+ * material (a skin token: the dialect's API word for a rostered var()
+ * name is "token"), url() is only a media reference, a
  * generation request or a file reference, and math functions, !important and custom
  * property definitions are refused. The corrective names the rule and,
  * for a miss, the nearest published materials the writer could have
@@ -91,49 +107,20 @@ final class DialectCssParser {
   private const URL_RE = '/url\(\s*(["\']?)(.*?)\1\s*\)/is';
 
   /**
-   * One pseudo-class as a selector spells it: ":hover", ":nth-child(odd)".
+   * The selector grammar's root: #id, then everything after it.
    *
-   * A state or a structural fact on the addressed element is written as
-   * the wrapper the printer emits; the catalog resolves the text back to
-   * the condition (DialectCatalog::pseudoClassCondition()). A negated
-   * fact nests one pseudo-class in the parens (":not(:last-child)"); a
-   * qualifier (":has(a)", ":not(pb-image)") reads by the same shape and
-   * is told apart by its argument (isQualifier()).
+   * An id runs to the first character that cannot be part of one; the
+   * rest (qualifiers glued to the id, a chain after a space or a
+   * combinator, the generated box, or nothing) is owner-relative text
+   * for the digester (SelectorDigest), the anchor spelled where the id
+   * stood.
    */
-  private const PSEUDO_RE = ':[A-Za-z-]+(?:\((?:[A-Za-z0-9+ -]*|:[A-Za-z-]+)\))?';
-
-  /**
-   * The selector grammar's outer shape: #id, its pseudo-classes, the rest.
-   *
-   * The rest is a relative selector (RelativeSelector's grammar) with the
-   * addressed element's states and facts on its last compound, or nothing.
-   */
-  private const SELECTOR_RE = '/^#(?<id>[^\s:>.+~]+)(?<idstates>(?:' . self::PSEUDO_RE . ')*)(?<rest>.*)$/s';
-
-  /**
-   * The pseudo-class a selector ends with, its argument one paren deep.
-   *
-   * The peel's step: ":hover", ":not(:last-child)", ":has(a)",
-   * ":not(:has(a))" each match at the end of a selector; which of them
-   * peels as a state and which stays on the compound is isQualifier()'s.
-   */
-  private const TRAILING_PSEUDO_RE = '/(?<pseudo>:(?<name>[A-Za-z-]+)(?:\((?<argument>[^()]*(?:\([^()]*\)[^()]*)*)\))?)$/';
-
-  /**
-   * The pseudo-element a selector ends with, glued to what precedes it.
-   *
-   * Read before anything else so `after` never reads as a state and the
-   * chain parser never sees a `::`: the head is everything before the
-   * `::` and ends in a non-space (`#t ::after` would address every
-   * descendant's box in CSS and matches nothing here), the name is
-   * judged against RelativeSelector::PSEUDOS by the caller.
-   */
-  private const PSEUDO_ELEMENT_RE = '/^(?<head>.*\S)::(?<pseudo>[A-Za-z-]+)$/sD';
+  private const ROOT_RE = '/^#(?<id>[^\s:>.+~\[,]+)(?<rest>.*)$/s';
 
   /**
    * The corrective's one-line grammar for a refused selector.
    */
-  private const SELECTOR_GRAMMAR = '#id (the element), #id .part (a declared part), #id p (its paragraphs, a declared tag), #id > * (its direct children), #id > pb-text (the text blocks among them), compounds such as #id > pb-text .link and #id > p + p (the next sibling; ~ any later sibling), a compound narrowed by :has(…) or :not(…) (#id > pb-text:has(a), #id > *:not(pb-image)); states and position facts last, on the addressed element (#id:hover, #id > pb-text:first-child, #id > *:not(pb-image):not(:last-child)); a generated box last of all, glued to the last compound after its states (#id::after the element\'s own, #id > pb-text::before each text block\'s, #id:hover::after): ::before and ::after only, nothing after them';
+  private const SELECTOR_GRAMMAR = '#id (the element), #id .part (a declared part), #id p (its paragraphs, a tag), #id > * (its direct children), #id > d-text (the text blocks among them), compounds such as #id > d-text .link and #id > p + p (the next sibling; ~ any later sibling), in CSS\'s own selector grammar: a compound is narrowed by a class (#id li.active > ul, #id.open > ul the element wearing a class), an attribute (#id [aria-expanded="true"] > ul, #id a[href^="http"]; the operators =, ~=, |=, ^=, $=, *=), a position pseudo-class (#id > d-text:first-child, #id > *:not(:last-child), #id li:nth-child(2n+1), #id:first-child > *), :has(…) or :not(…) (#id > d-text:has(a), #id > *:not(d-image)), each qualifying the compound it stands on; a published state on the LAST compound is the rule\'s condition (#id:hover, #id > d-text:has(a):hover) and a state on any compound before it qualifies that compound (#id li:hover > ul, #id:hover > d-text); a pseudo-class the site does not publish stays selector text (#id a:visited); :is(…) is any of several compounds at one position (#id > *:is(p, div), #id li:is(:hover, :focus-within) > ul; :where() reads as :is()), and a selector list is ONE rule, folded into :is() where its members differ (#id h1, #id h2 is #id *:is(h1, h2)); a list whose members share no shape, or whose fold would put two states on the last compound, is written as separate rules; tags, types and pseudo-class names read in any case; a pseudo-element last of all, glued to the last compound after its states (#id::after the element\'s own generated box, #id > d-text::before each text block\'s, #id:hover::after; #id li::marker, #id input::placeholder, #id::selection, #id p::first-letter, #id p::first-line and any other the browser knows, each stylable with the properties its specification allows), a bare name with nothing after it (no ::part(), no ::slotted()); no html, body, :root or another element\'s id';
 
   public function __construct(
     private readonly DialectCatalog $catalog,
@@ -408,9 +395,18 @@ final class DialectCssParser {
    * adds its condition; any other nested prelude composes with this rule's
    * selector by CSS nesting's relative rule (`&` is the parent selector,
    * a prelude without `&` is relative to it, and one starting with `:` is
-   * `&:` sugar for the parent's own state), then parses as a rule of its
-   * own, recursively. The declarations outside the nested blocks are this
+   * `&:` sugar for the parent's own state; a list composes member by
+   * member, as CSS nesting reads it), then parses as a rule of its own,
+   * recursively. The declarations outside the nested blocks are this
    * rule's.
+   *
+   * A selector list (`#id h1, #id h2`) is one rule: the digester folds
+   * it into one `:is()` selector (`#id *:is(h1, h2)`) or refuses it, so a
+   * rule lands on one local. A nested prelude under a list parent
+   * distributes textually over the parent's WRITTEN members and its own
+   * (`#id h2, #id h3 { a {} }` re-enters as `#id h2 a, #id h3 a`), and
+   * that list text folds or is refused here like any other: one fold
+   * path, the digester's.
    *
    * A rule's WEAR declarations (peelWear()) come out first: `class: x` and
    * `{axis}: {value}` on a `::` local land as a second assignment whose
@@ -421,17 +417,19 @@ final class DialectCssParser {
   private function parseRule(string $selector, string $body, array $wrappers, int $line, int $body_line, ?array $known_ids, array &$assignments, array &$errors): void {
     ['declarations' => $declarations, 'nested' => $nested] = self::splitNested($body);
     $target = $this->parseSelector($selector, $line, $known_ids, $errors);
-    $references = [];
-    if ($target !== NULL) {
-      ['declarations' => $declarations, 'references' => $references] = $this->peelWear($declarations, $target, $wrappers, $known_ids[$target['id']] ?? NULL, $body_line, $errors);
+    if ($target === NULL) {
+      $this->parseDeclarations($declarations, $body_line, sprintf('rule "%s"', $selector), $errors);
     }
-    $properties = $this->parseDeclarations($declarations, $body_line, sprintf('rule "%s"', $selector), $errors);
-    if ($target !== NULL && $references !== []) {
-      $assignments[] = [$target['id'], $target['local'], 'variants', $references];
-    }
-    if ($target !== NULL && ($properties !== [] || ($nested === [] && $references === []))) {
-      $condition = $this->catalog->canonicalCompound(array_merge($wrappers, $target['states']));
-      $assignments[] = [$target['id'], $target['local'], $condition, $properties];
+    else {
+      ['declarations' => $kept, 'references' => $references] = $this->peelWear($declarations, $target, $wrappers, $known_ids[$target['id']] ?? NULL, $body_line, $errors);
+      $properties = $this->parseDeclarations($kept, $body_line, sprintf('rule "%s"', $selector), $errors);
+      if ($references !== []) {
+        $assignments[] = [$target['id'], $target['local'], 'variants', $references];
+      }
+      if ($properties !== [] || ($nested === [] && $references === [])) {
+        $condition = $this->catalog->canonicalCompound(array_merge($wrappers, $target['states']));
+        $assignments[] = [$target['id'], $target['local'], $condition, $properties];
+      }
     }
     foreach ($nested as ['prelude' => $prelude, 'body' => $inner, 'offset' => $offset]) {
       $inner_line = $body_line + $offset;
@@ -442,13 +440,18 @@ final class DialectCssParser {
         }
         continue;
       }
-      if (str_starts_with($prelude, ':')) {
-        $prelude = '&' . $prelude;
+      $members = [];
+      foreach (SelectorDigest::splitList($selector) as $parent) {
+        foreach (SelectorDigest::splitList($prelude) as $member) {
+          if (str_starts_with($member, ':')) {
+            $member = '&' . $member;
+          }
+          $members[] = str_contains($member, '&')
+            ? str_replace('&', $parent, $member)
+            : $parent . ' ' . $member;
+        }
       }
-      $composed = str_contains($prelude, '&')
-        ? str_replace('&', $selector, $prelude)
-        : $selector . ' ' . $prelude;
-      $this->parseRule($composed, $inner, $wrappers, $inner_line, $inner_line, $known_ids, $assignments, $errors);
+      $this->parseRule(implode(', ', $members), $inner, $wrappers, $inner_line, $inner_line, $known_ids, $assignments, $errors);
     }
   }
 
@@ -526,7 +529,7 @@ final class DialectCssParser {
         continue;
       }
       if ($target['local'] === '') {
-        $errors[] = new DialectError('WEAR_ON_ELEMENT', sprintf('"%s: %s" in the rule for #%s: an element wears variants on its own tag (class="", its axis attributes; the set op\'s attrs), never in a rule; a declaration wears at a rule\'s matches (#%s > pb-text { %s: %s })', $name, $value, $target['id'], $target['id'], $name, $value), $line, ['attribute' => $name, 'value' => $value], 'Wear on the element rides its attributes: set {ref, attrs: {class: "..."}} or the axis attribute; a rule under #id wears on the elements it matches.');
+        $errors[] = new DialectError('WEAR_ON_ELEMENT', sprintf('"%s: %s" in the rule for #%s: an element wears variants on its own tag (class="", its axis attributes; the set op\'s attrs), never in a rule; a declaration wears at a rule\'s matches (#%s > d-text { %s: %s })', $name, $value, $target['id'], $target['id'], $name, $value), $line, ['attribute' => $name, 'value' => $value], 'Wear on the element rides its attributes: set {ref, attrs: {class: "..."}} or the axis attribute; a rule under #id wears on the elements it matches.');
         continue;
       }
       if ($wrappers !== [] || $target['states'] !== []) {
@@ -557,8 +560,8 @@ final class DialectCssParser {
    *
    * The landing is the element the rule's last compound names (the roster
    * walk's, VocabularyRoster::landingScope() on the styling side): a type
-   * compound is that type's element (`> pb-text` the text block, `>
-   * pb-container` any container, `> pb-block` any other block), so its
+   * compound is that type's element (`> d-text` the text block, `>
+   * d-container` any container, `> d-block` any other block), so its
    * axis view and class roster are the element's own
    * (DialectCatalog::axesFor(), classRosterFor()); a tag compound is a
    * base tag with no axes (base variants spell as classes); the element
@@ -590,7 +593,7 @@ final class DialectCssParser {
       ];
     }
     $relative = RelativeSelector::parse(substr($local, strlen(RelativeSelector::SUFFIX)));
-    // A generated box (`&::before`, `> pb-text::after`) is no element:
+    // A generated box (`&::before`, `> d-text::after`) is no element:
     // it lands on no scope and wears nothing, the validator's verdict on
     // any reference at a box key (STYLE_VARIANT_SCOPE_MISMATCH).
     if ($relative === NULL || $relative->pseudo !== NULL) {
@@ -663,62 +666,59 @@ final class DialectCssParser {
   }
 
   /**
-   * The condition a wrapper prelude names, or NULL (the error appended).
+   * The condition clause an at-rule prelude spells, or NULL (error appended).
+   *
+   * The digester's WHEN half (SelectorDigest::digest() over the catalog's
+   * condition table): a prelude equal to a published wrapper is that
+   * reference, any other `@media`, `@container` or `@supports` query the
+   * condition grammar reads is a literal clause in its canonical text
+   * (admitted or refused by the validator's enforcement mode, never
+   * here), and text the grammar cannot read is UNKNOWN_WRAPPER with the
+   * digester's corrective.
    */
   private function wrapperCondition(string $prelude, int $line, array &$errors): ?string {
-    $condition = $this->catalog->conditionForWrapper($prelude);
-    if ($condition !== NULL) {
-      return $condition;
+    $digest = SelectorDigest::digest($prelude, ['conditions' => $this->catalog->conditions()]);
+    if ($digest['refusal'] !== NULL) {
+      ['code' => $code, 'message' => $message, 'hint' => $hint] = $digest['refusal'];
+      $errors[] = new DialectError($code, $message, $line, ['prelude' => $prelude], $hint);
+      return NULL;
     }
-    $legal = [];
-    foreach ($this->catalog->atRuleWrappers() as $name => $wrapper) {
-      $legal[] = sprintf('%s  (%s)', $wrapper, $name);
-    }
-    $hint = '';
-    if (str_starts_with(strtolower($prelude), '@media') && preg_match('/(max|min)-width/', $prelude)) {
-      $hint = '; width conditions are container queries here';
-    }
-    $errors[] = new DialectError('UNKNOWN_WRAPPER', sprintf('"%s" is not a published condition wrapper%s', $prelude, $hint), $line, [
-      'prelude' => $prelude,
-      'published_wrappers' => $this->catalog->atRuleWrappers(),
-    ], sprintf('Published wrappers: %s.', implode('; ', $legal)));
-    return NULL;
+    return $digest['condition'];
   }
 
   /**
-   * Parses and validates one selector against the published grammar.
+   * Parses one selector: the `#id` root, then the digester's reading.
    *
-   * `#id`, optionally followed by a relative selector under it
-   * (RelativeSelector: read leniently, stored canonical) and by the
-   * addressed element's states on the last compound, after its
-   * qualifiers (peelStates()), and last of all by the generated box
-   * (`::before` / `::after`, PSEUDO_ELEMENT_RE): `#id::after` is the
-   * element's own box (the anchor's local, `::&::after`), `#id >
-   * pb-text:hover::before` each text block's, the state before the box
-   * as CSS spells it. Each compound is judged against the
-   * vocabulary as the roster walk will (judgeChain()): a declared part
-   * is owned by the element it follows (the id's element, or the type
-   * compound before it; containers skip ownership as before), an
-   * instance class must exist in the id's rich body when it addresses
-   * that body directly, a tag must be a declared text tag, a type must
-   * be a declared block type or one of the two kind spellings, a `>` or
-   * a type reaches children, which only a container has, a sibling
-   * compound resolves where its predecessor did, and a qualifier's
-   * argument is judged from the compound it narrows. A leading `+` or
-   * `~` (the owner's siblings, outside its subtree) and a qualifier on
-   * `#id` itself (a condition with a parameter, which no condition is)
-   * are refused with the spelling that means what was meant.
+   * The dialect owns the root and the document: `#id` names the element
+   * (every member of a selector list the same one), the known ids say
+   * whether it exists, and the compounds are judged against the
+   * document's vocabulary of parts, instances and types (judgeChain()).
+   * Everything after the id is owner-relative selector text and the
+   * digester's (SelectorDigest::digest(), the one reader of typed or
+   * pasted selectors): the qualifiers glued to the id are the anchor's
+   * (`#id.open > ul` is `&.open > ul`, `#id:first-child::after` is
+   * `&:first-child::after`), a chain after a space or combinator is
+   * relative, the generated box is terminal, a state on the LAST
+   * compound (or on the id alone) peels into the rule's condition
+   * (`#id > d-text:hover` is `::> d-text` under hover) while a state on
+   * any compound before it stays a qualifier of that compound (`#id
+   * li:hover > ul`, `#id:hover > d-text`), a list folds into one `:is()`
+   * selector under the one condition its members share (`#id > p, #id >
+   * h2` is `::> *:is(h2, p)`) or is refused where it does not fold, and
+   * what cannot be addressed under an element (`:root`, another id, a
+   * leading sibling combinator, a box behind a space or inside a
+   * qualifier, a second box) is refused with the digester's correctives.
+   * Whether a tag, a class, an attribute or a pseudo-class is admitted
+   * on this site is the validator's verdict by enforcement mode, never
+   * the parser's.
    *
    * @return array|null
    *   ['id' => string, 'local' => string, 'states' => string[]] when the
-   *   selector parses, NULL when it was rejected.
+   *   selector parses ('' the element itself, '::' plus the canonical
+   *   selector for a rule), NULL when it was rejected.
    */
   public function parseSelector(string $selector, ?int $line, ?array $known_ids, array &$errors): ?array {
     $selector = trim($selector);
-    if (str_contains($selector, ',')) {
-      $errors[] = new DialectError('SELECTOR_LIST', 'one selector per rule; split the comma-separated list into separate rules', $line);
-      return NULL;
-    }
     if ($selector === ':root' || str_starts_with($selector, ':root')) {
       $errors[] = new DialectError('BAD_SELECTOR', ':root is not addressable; tokens are the palette and elements are addressed by #id', $line);
       return NULL;
@@ -727,171 +727,55 @@ final class DialectCssParser {
       $errors[] = new DialectError('BAD_SELECTOR', sprintf('bare class selector "%s"; address the element as #id (variants ride class="" on the element)', $selector), $line);
       return NULL;
     }
-    // The terminal pseudo-element comes off first (the generated box of
-    // whatever the selector addresses), so `after` never reads as a
-    // state and the chain never carries a `::`; only the two boxes exist.
-    $pseudo = NULL;
-    $head = $selector;
-    if (preg_match(self::PSEUDO_ELEMENT_RE, $selector, $pm)) {
-      if (!in_array($pm['pseudo'], RelativeSelector::PSEUDOS, TRUE)) {
-        $errors[] = new DialectError('BAD_SELECTOR', sprintf('"%s": ::%s is not an addressable pseudo-element; the generated boxes are ::before and ::after (%s::before, %s::after)', $selector, $pm['pseudo'], $pm['head'], $pm['head']), $line, [
-          'selector' => $selector,
-          'pseudo_elements' => RelativeSelector::PSEUDOS,
-        ], 'Style a generated box as ::before or ::after on the element (#id::after) or on a compound under it (#id > pb-text::before); no other pseudo-element is addressable.');
+    $id = NULL;
+    $rests = [];
+    foreach (SelectorDigest::splitList($selector) as $member) {
+      if (!preg_match(self::ROOT_RE, $member, $m)) {
+        $errors[] = new DialectError('BAD_SELECTOR', sprintf('"%s": element/universal selectors are not accepted; the grammar is %s', $selector, self::SELECTOR_GRAMMAR), $line);
         return NULL;
       }
-      $pseudo = $pm['pseudo'];
-      $head = $pm['head'];
+      if ($id !== NULL && $m['id'] !== $id) {
+        $errors[] = new DialectError('SELECTOR_LIST', sprintf('"%s": one element per rule; a selector list folds into one rule under the same element (#%s h1, #%s h2 is #%s *:is(h1, h2)), and another element takes a rule of its own', $selector, $id, $id, $id), $line);
+        return NULL;
+      }
+      $id = $m['id'];
+      // The anchor stands where the id stood: what is glued to it
+      // qualifies the element itself, a chain after a space or a
+      // combinator is relative, and a `::` behind a space stays behind
+      // one for the digester to refuse.
+      $rests[] = RelativeSelector::ANCHOR . $m['rest'];
     }
-    if (!str_starts_with($head, '#') || !preg_match(self::SELECTOR_RE, $head, $m)) {
-      $errors[] = new DialectError('BAD_SELECTOR', sprintf('"%s": element/universal selectors are not accepted; the grammar is %s', $selector, self::SELECTOR_GRAMMAR), $line);
-      return NULL;
-    }
-
-    $id = $m['id'];
     if (!preg_match(DialectParser::ID_RE, $id)) {
       $errors[] = new DialectError('BAD_ID', sprintf('illegal id "%s" in selector', $id), $line);
     }
-    $rest = $m['rest'];
-    if (str_contains(preg_replace('/\((?:[^()]|\([^()]*\))*\)/', '', $rest), RelativeSelector::SUFFIX)) {
-      // A `::` the peel did not take: behind a space (every descendant's
-      // box in CSS, nothing here), before a state, or a second one. One
-      // inside a qualifier's parens is the relative grammar's refusal.
-      $spelling = $pseudo === NULL ? 'after' : $pseudo;
-      $errors[] = preg_match('/\s::/', $selector)
-        ? new DialectError('BAD_SELECTOR', sprintf('"%s": a pseudo-element is glued to the compound whose box it is (#%s::%s the element\'s own box, #%s > pb-text::%s each text block\'s); "::" behind a space would address every descendant\'s box', $selector, $id, $spelling, $id, $spelling), $line)
-        : new DialectError('BAD_SELECTOR', sprintf('"%s": a pseudo-element is terminal and one per selector; the states and position facts go before it (#%s:hover::%s, #%s > pb-text:first-child::%s) and nothing follows it (%s)', $selector, $id, $spelling, $id, $spelling, self::SELECTOR_GRAMMAR), $line);
+    $digest = SelectorDigest::digest(implode(', ', $rests), ['conditions' => $this->catalog->conditions()]);
+    if ($digest['refusal'] !== NULL) {
+      ['code' => $code, 'message' => $message, 'hint' => $hint] = $digest['refusal'];
+      $errors[] = new DialectError($code, sprintf('%s (in "%s")', $message, $selector), $line, [
+        'selector' => $selector,
+        'grammar' => RelativeSelector::GRAMMAR,
+      ], $hint);
       return NULL;
     }
-    $relative = NULL;
-    preg_match_all('/' . self::PSEUDO_RE . '/', $m['idstates'], $pseudo_matches);
-    $pseudos = $pseudo_matches[0];
-    // A qualifier narrows a compound after #id, never #id itself: "when
-    // this element holds a link" would be a condition with a parameter,
-    // and conditions are parameterless names. The id's pseudo-classes
-    // carry the qualifier's name even when the pseudo charset cannot read
-    // its argument (`:has(> a)`, `:not(.x)`: the name reads, the rest is
-    // what follows it), so the name is the tell.
-    if (array_filter($pseudos, self::isQualifier(...)) !== []) {
-      $errors[] = new DialectError('BAD_SELECTOR', sprintf('"%s": :has() and :not() narrow a compound after #%s, never #%s itself (#%s > pb-text:has(a) narrows the text blocks among its children); the element\'s own conditions are the published states and position facts (%s)', $selector, $id, $id, $id, self::SELECTOR_GRAMMAR), $line);
-      return NULL;
-    }
-    if ($rest !== '') {
-      // The owner anchors a rule inside its own subtree; its siblings are
-      // outside it, addressed under their own id or from the parent.
-      if (preg_match('/^\s*[+~]/', $rest)) {
-        $errors[] = new DialectError('BAD_SELECTOR', sprintf('"%s": a rule styles inside #%s\'s own subtree, and #%s\'s siblings are outside it; address a sibling under its own id, or from the parent as a relation among its children (#parent > pb-text + pb-text). Between compounds + and ~ are grammar (%s)', $selector, $id, $id, self::SELECTOR_GRAMMAR), $line);
-        return NULL;
-      }
-      if (!preg_match('/^[\s>]/', $rest)) {
-        // The measured fluency spill: a compound #id.class.
-        if (str_starts_with($rest, '.')) {
-          $errors[] = new DialectError('BAD_SELECTOR', sprintf('"%s": compound #id.class selectors are not accepted; style variants ride class="" on the element itself (the set op)', $selector), $line);
-        }
-        else {
-          $errors[] = new DialectError('BAD_SELECTOR', sprintf('"%s" does not match the selector grammar (%s)', $selector, self::SELECTOR_GRAMMAR), $line);
-        }
-        return NULL;
-      }
-      $rest = trim($rest);
-      if ($pseudos !== []) {
-        $errors[] = new DialectError('BAD_SELECTOR', sprintf('"%s": a state qualifies the addressed element, so it goes on the last compound (#%s %s%s)', $selector, $id, $rest, $m['idstates']), $line);
-        return NULL;
-      }
-      ['selector' => $rest, 'states' => $pseudos] = self::peelStates($rest);
-      // The box rides its chain's last compound in the storage grammar
-      // (`> pb-text::after`), glued back behind the peeled states.
-      $spelled = $rest . ($pseudo === NULL ? '' : RelativeSelector::SUFFIX . $pseudo);
-      $relative = RelativeSelector::parse($spelled);
-      if ($relative === NULL) {
-        $errors[] = new DialectError('BAD_SELECTOR', sprintf('"%s": "%s" is not a relative selector the grammar accepts (%s). Only an element\'s own subtree is addressable: no pseudo-classes but :has(), :not() and, after them, the published states and position facts on the addressed element; no attributes, no leading sibling combinator; a part class stands first or right after a type', $selector, $spelled, self::SELECTOR_GRAMMAR), $line, [
-          'selector' => $selector,
-          'grammar' => RelativeSelector::GRAMMAR,
-        ], RelativeSelector::GRAMMAR);
-        return NULL;
-      }
-    }
-    elseif ($pseudo !== NULL) {
-      // The element's own generated box: the anchor's selector, a rule
-      // of the element's key like any other, with #id's states as its
-      // conditions (#id:hover::after).
-      $relative = RelativeSelector::parse(RelativeSelector::ANCHOR . RelativeSelector::SUFFIX . $pseudo);
-    }
-
-    // Each pseudo-class resolves by its printed wrapper to a published
-    // state or structural fact; the corrective names the two apart.
-    $states = [];
-    foreach ($pseudos as $pseudo) {
-      $condition = $this->catalog->pseudoClassCondition($pseudo);
-      if ($condition === NULL) {
-        $wrappers = $this->catalog->conditions();
-        $spell = static fn (array $names): string => implode(', ', array_map(static fn (string $name): string => $wrappers[$name], $names));
-        $facts = $this->catalog->factConditions();
-        $errors[] = new DialectError('UNKNOWN_STATE', sprintf('%s is not a published state or position fact', $pseudo), $line, [
-          'state' => ltrim($pseudo, ':'),
-          'published_states' => $this->catalog->stateConditions(),
-          'published_facts' => $facts,
-        ], sprintf('Legal states: %s.', $spell($this->catalog->stateConditions())) . ($facts === [] ? '' : sprintf(' Position facts: %s.', $spell($facts))));
-        return NULL;
-      }
-      $states[] = $condition;
-    }
+    $states = $digest['condition'] === NULL ? [] : ConditionClause::split($digest['condition']);
 
     $known = $known_ids[$id] ?? NULL;
     if ($known === NULL && $known_ids !== NULL) {
       $errors[] = new DialectError('UNKNOWN_ID_SELECTOR', sprintf('#%s matches no element in the document', $id), $line);
       return NULL;
     }
+    $spelled = $digest['selector'];
+    if ($spelled === SelectorDigest::OWNER) {
+      return ['id' => $id, 'local' => '', 'states' => $states];
+    }
+    $relative = RelativeSelector::parse($spelled);
     // The anchor's box (`&::before`) has no compounds to judge: every
     // element has both boxes, and what may be styled there is the
     // validator's question (the roster's derived or declared grant).
-    if ($relative !== NULL && $relative->count() > 0 && !$this->judgeCompounds($relative, $id, $known, $line, $errors)) {
+    if ($relative->count() > 0 && !$this->judgeCompounds($relative, $id, $known, $line, $errors)) {
       return NULL;
     }
-
-    return ['id' => $id, 'local' => $relative === NULL ? '' : '::' . $relative, 'states' => $states];
-  }
-
-  /**
-   * Splits a selector's trailing pseudo-classes off as its states.
-   *
-   * A right-to-left scan: each pseudo-class the text ends with peels
-   * while it is a state or a fact (`:hover`, `:first-child`,
-   * `:not(:last-child)`), and the scan stops at the first qualifier
-   * (`:has(…)`, or `:not(…)` whose argument is a compound), which stays
-   * on its compound for the grammar. States and facts therefore come
-   * last, after the qualifiers: `> pb-text:has(a):hover`.
-   *
-   * @return array{selector: string, states: string[]}
-   *   The selector without its states, and the peeled pseudo-classes in
-   *   source order.
-   */
-  private static function peelStates(string $rest): array {
-    $states = [];
-    while (preg_match(self::TRAILING_PSEUDO_RE, $rest, $m) && !self::isQualifier($m['pseudo'])) {
-      array_unshift($states, $m['pseudo']);
-      $rest = substr($rest, 0, -strlen($m['pseudo']));
-    }
-    return ['selector' => $rest, 'states' => $states];
-  }
-
-  /**
-   * Whether a pseudo-class is a qualifier of the selector grammar.
-   *
-   * `:has` always (with or without the argument the pseudo charset
-   * could read); `:not` when its argument is a compound rather than one
-   * pseudo-class (`:not(pb-image)`, `:not(.featured)`, `:not(:has(a))`)
-   * or unreadable. `:not(:last-child)` is a fact: one pseudo-class
-   * inside, and that one no qualifier itself.
-   */
-  private static function isQualifier(string $pseudo): bool {
-    if (!preg_match('/^:(?<name>has|not)(?:\((?<argument>.*)\))?$/s', $pseudo, $m)) {
-      return FALSE;
-    }
-    if ($m['name'] === RelativeSelector::HAS || !isset($m['argument'])) {
-      return TRUE;
-    }
-    return !preg_match('/^:(?!has\b|not\b)[A-Za-z-]+(?:\([A-Za-z0-9+ -]*\))?$/', trim($m['argument']));
+    return ['id' => $id, 'local' => '::' . $relative, 'states' => $states];
   }
 
   /**
@@ -914,11 +798,13 @@ final class DialectCssParser {
    */
   private function judgeCompounds(RelativeSelector $relative, string $id, ?array $known, ?int $line, array &$errors): bool {
     $owner_tag = $known === NULL ? NULL : self::tagOf($known);
-    // The element's own children (a leading `>`) and the types among its
-    // descendants are a container's to address: a block has no child
-    // elements of the page (its parts' children, `.s-x > *`, are its own
-    // rich text and stay addressable).
-    $addresses_children = $relative->first()['combinator'] === RelativeSelector::CHILD || array_filter($relative->compounds, static fn (array $compound): bool => $compound['kind'] === RelativeSelector::TYPE) !== [];
+    // The element's own children (a leading `>`, behind the qualified
+    // anchor or not) and the types among its descendants are a
+    // container's to address: a block has no child elements of the page
+    // (its parts' children, `.s-x > *`, are its own rich text and stay
+    // addressable).
+    $lead = $relative->first()['kind'] === RelativeSelector::ANCHOR_KIND ? ($relative->compounds[1] ?? NULL) : $relative->first();
+    $addresses_children = ($lead['combinator'] ?? NULL) === RelativeSelector::CHILD || array_filter($relative->compounds, static fn (array $compound): bool => $compound['kind'] === RelativeSelector::TYPE) !== [];
     if ($addresses_children && $known !== NULL && !$known['container']) {
       $errors[] = new DialectError('BAD_SELECTOR', sprintf('#%s %s: children are addressed on containers only (#%s is a <%s>); a block is styled as a whole (#%s), by its declared parts (#%s .part) or its text tags (#%s p)', $id, $relative, $id, $owner_tag, $id, $id, $id), $line);
       return FALSE;
@@ -938,7 +824,7 @@ final class DialectCssParser {
    * predecessor did (the sibling of a type is another child of the same
    * owner, the sibling of a part a part of the same owner), so the
    * context before the predecessor is restored for it; a sibling LEAD
-   * (`:has(+ pb-image)`) restores the context the qualified compound was
+   * (`:has(+ d-image)`) restores the context the qualified compound was
    * judged in, since its siblings are that owner's children.
    *
    * @param array[] $compounds
@@ -979,12 +865,15 @@ final class DialectCssParser {
    * Judges one compound: its subject in the context, then its qualifiers.
    *
    * A `:has()` argument is a chain walked from the compound's landing (a
-   * type's landing owns the argument's parts: `> pb-text:has(.link)`); a
+   * type's landing owns the argument's parts: `> d-text:has(.link)`); a
    * `:not()` compound with a subject is judged where the qualified
    * compound stands (the negated class is an alternative subject at the
-   * same position, never the type's part: `> pb-text:not(.band)` on a
-   * container declaring `.band`), and one with an implied subject judges
-   * only its qualifiers from the landing (`> pb-text:not(:has(a))`).
+   * same position, never the type's part: `> d-text:not(.section)` on a
+   * container declaring `.section`), and one with an implied subject judges
+   * only its qualifiers from the landing (`> d-text:not(:has(a))`); an
+   * `:is()` qualifier's every member is judged the same way (every
+   * alternative's words must be the site's: `> *:is(d-image, d-text)`,
+   * `.menu-item:is(:focus-within, :hover) > ul`).
    *
    * @return array{0: ?string, 1: bool}|null
    *   The landing (the context the next compound is judged in), or NULL
@@ -1033,23 +922,6 @@ final class DialectCssParser {
         }
         break;
 
-      case RelativeSelector::TAG:
-        // The element-scoped tag tier: #id p styles ALL of the element's
-        // text elements of a declared text tag, present and future. The
-        // vocabulary is the owner's selector roster, the styling layer's
-        // one declaration of a prose tag's styleability, never the
-        // identity namespaces.
-        $tags = $owner_tag === NULL ? $this->catalog->textTags() : $this->catalog->tagsOf($owner_tag);
-        if ($tags === []) {
-          $errors[] = new DialectError('BAD_SELECTOR', sprintf('#%s %s: descendant elements are not addressable by tag on this site (it declares no text tags); an element is styled as a whole (#%s), its declared parts as #%s .part-class, its direct children as #%s > *', $id, $relative, $id, $id, $id), $line);
-          return NULL;
-        }
-        if (!in_array($name, $tags, TRUE)) {
-          $errors[] = new DialectError('STYLE_TAG_NOT_DECLARED', sprintf('%s is not an addressable text tag; addressable tags: %s. One identified element is #id .s-x, ONE list\'s items are #id .s-x > *; any other tag is governed by the text format and is not a styling target', $name, implode(', ', $tags)), $line);
-          return NULL;
-        }
-        break;
-
       case RelativeSelector::TYPE:
         // A type compound names one of the owner's children: the spine's
         // type list under a container, nothing under a block (a block
@@ -1081,9 +953,20 @@ final class DialectCssParser {
         }
         continue;
       }
-      $negated = $qualifier['argument'];
-      if ($this->judgeCompound($negated, $id, $relative, $known, $negated['kind'] === NULL ? $landing : $context, $line, $errors) === NULL) {
-        return NULL;
+      // A `:not()` argument is one predicate compound, an `:is()` holds
+      // several: each is judged where the qualified compound stands (a
+      // subject in its context, an implied subject from its landing).
+      $members = match ($qualifier['name']) {
+        RelativeSelector::NOT => [$qualifier['argument']],
+        RelativeSelector::IS => $qualifier['argument'],
+        // A position qualifier is structure: nothing of the vocabulary
+        // to judge (the roster builder skips it the same way).
+        default => [],
+      };
+      foreach ($members as $member) {
+        if ($this->judgeCompound($member, $id, $relative, $known, $member['kind'] === NULL ? $landing : $context, $line, $errors) === NULL) {
+          return NULL;
+        }
       }
     }
     return $landing;
@@ -1125,7 +1008,7 @@ final class DialectCssParser {
    * node the page language prints, so ownership answers can never differ
    * between them: `container` for a container node, `block_type` the
    * declared inline bundle (NULL for a plugin block and for an undeclared
-   * bundle, which the page language prints as <pb-block>), `plugin_id`
+   * bundle, which the page language prints as <d-block>), `plugin_id`
    * the plugin block's BASE id (field_block for a field node), and `body`
    * the element's rich text (staged
    * content) when its type declares a rich body, else NULL.
@@ -1245,15 +1128,15 @@ final class DialectCssParser {
    * The grammar lists what must resolve (each var(), each media or
    * generate url()); a reference the roster does not carry is an
    * UNKNOWN_TOKEN whose corrective ranks the nearest materials that CAN
-   * be written in a style value, tokens and swatches alike, so a swatch
-   * typo is corrected toward the swatch and never toward the token list.
+   * be written in a style value (the tokens of every scale), so a typo is
+   * corrected toward the nearest token.
    */
   private function validateValue(string $property, string $value, ?int $line, array &$errors): void {
     foreach ($this->catalog->references($value, MaterialRecord::SLOT_STYLE) as $reference) {
       if ($reference->kind !== ValueKind::Unknown) {
         continue;
       }
-      $errors[] = self::unknownReference('UNKNOWN_TOKEN', sprintf('%s in %s is not a published token: no skin token or swatch is spelled var(%s)', $reference->spelling, $property, $reference->id), $reference, MaterialRecord::SLOT_STYLE, $this->catalog, 'Reference a published token or swatch by its var() spelling (the MATERIALS section in your instructions), or write a single CSS value.', $line);
+      $errors[] = self::unknownReference('UNKNOWN_TOKEN', sprintf('%s in %s is not a published token: no skin token is spelled var(%s)', $reference->spelling, $property, $reference->id), $reference, MaterialRecord::SLOT_STYLE, $this->catalog, 'Reference a published token by its var() spelling (the MATERIALS section in your instructions), or write a single CSS value.', $line);
     }
     if (preg_match('/(?:^|[\s(,])(clamp|calc|min|max)\s*\(/', $value, $m)) {
       // The corrective is the catalog's: the width-band lane that exists

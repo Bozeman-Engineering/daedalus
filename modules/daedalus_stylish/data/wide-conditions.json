@@ -1,0 +1,418 @@
+{
+  "webrefCss": "8.7.8",
+  "media": {
+    "any-hover": {
+      "type": "discrete",
+      "syntax": "none | hover",
+      "values": [
+        "none",
+        "hover"
+      ]
+    },
+    "any-pointer": {
+      "type": "discrete",
+      "syntax": "none | coarse | fine",
+      "values": [
+        "none",
+        "coarse",
+        "fine"
+      ]
+    },
+    "aspect-ratio": {
+      "type": "range",
+      "syntax": "<ratio>",
+      "values": null
+    },
+    "color": {
+      "type": "range",
+      "syntax": "<integer>",
+      "values": null
+    },
+    "color-gamut": {
+      "type": "discrete",
+      "syntax": "srgb | p3 | rec2020",
+      "values": [
+        "srgb",
+        "p3",
+        "rec2020"
+      ]
+    },
+    "color-index": {
+      "type": "range",
+      "syntax": "<integer>",
+      "values": null
+    },
+    "device-aspect-ratio": {
+      "type": "range",
+      "syntax": "<ratio>",
+      "values": null
+    },
+    "device-height": {
+      "type": "range",
+      "syntax": "<length>",
+      "values": null
+    },
+    "device-width": {
+      "type": "range",
+      "syntax": "<length>",
+      "values": null
+    },
+    "display-mode": {
+      "type": "discrete",
+      "syntax": "application | fullscreen | standalone | minimal-ui | browser | picture-in-picture",
+      "values": [
+        "application",
+        "fullscreen",
+        "standalone",
+        "minimal-ui",
+        "browser",
+        "picture-in-picture"
+      ]
+    },
+    "display-state": {
+      "type": "discrete",
+      "syntax": "normal | minimized | maximized | fullscreen",
+      "values": [
+        "normal",
+        "minimized",
+        "maximized",
+        "fullscreen"
+      ]
+    },
+    "dynamic-range": {
+      "type": "discrete",
+      "syntax": "standard | high",
+      "values": [
+        "standard",
+        "high"
+      ]
+    },
+    "environment-blending": {
+      "type": "discrete",
+      "syntax": "opaque | additive | subtractive",
+      "values": [
+        "opaque",
+        "additive",
+        "subtractive"
+      ]
+    },
+    "forced-colors": {
+      "type": "discrete",
+      "syntax": "none | active",
+      "values": [
+        "none",
+        "active"
+      ]
+    },
+    "grid": {
+      "type": "discrete",
+      "syntax": "<mq-boolean>",
+      "values": [
+        "0",
+        "1"
+      ]
+    },
+    "height": {
+      "type": "range",
+      "syntax": "<length>",
+      "values": null
+    },
+    "horizontal-viewport-segments": {
+      "type": "range",
+      "syntax": "<integer>",
+      "values": null
+    },
+    "hover": {
+      "type": "discrete",
+      "syntax": "none | hover",
+      "values": [
+        "none",
+        "hover"
+      ]
+    },
+    "inverted-colors": {
+      "type": "discrete",
+      "syntax": "none | inverted",
+      "values": [
+        "none",
+        "inverted"
+      ]
+    },
+    "monochrome": {
+      "type": "range",
+      "syntax": "<integer>",
+      "values": null
+    },
+    "nav-controls": {
+      "type": "discrete",
+      "syntax": "none | back",
+      "values": [
+        "none",
+        "back"
+      ]
+    },
+    "orientation": {
+      "type": "discrete",
+      "syntax": "portrait | landscape",
+      "values": [
+        "portrait",
+        "landscape"
+      ]
+    },
+    "overflow-block": {
+      "type": "discrete",
+      "syntax": "none | scroll | paged",
+      "values": [
+        "none",
+        "scroll",
+        "paged"
+      ]
+    },
+    "overflow-inline": {
+      "type": "discrete",
+      "syntax": "none | scroll",
+      "values": [
+        "none",
+        "scroll"
+      ]
+    },
+    "pointer": {
+      "type": "discrete",
+      "syntax": "none | coarse | fine",
+      "values": [
+        "none",
+        "coarse",
+        "fine"
+      ]
+    },
+    "prefers-color-scheme": {
+      "type": "discrete",
+      "syntax": "light | dark",
+      "values": [
+        "light",
+        "dark"
+      ]
+    },
+    "prefers-contrast": {
+      "type": "discrete",
+      "syntax": "no-preference | less | more | custom",
+      "values": [
+        "no-preference",
+        "less",
+        "more",
+        "custom"
+      ]
+    },
+    "prefers-reduced-data": {
+      "type": "discrete",
+      "syntax": "no-preference | reduce",
+      "values": [
+        "no-preference",
+        "reduce"
+      ]
+    },
+    "prefers-reduced-motion": {
+      "type": "discrete",
+      "syntax": "no-preference | reduce",
+      "values": [
+        "no-preference",
+        "reduce"
+      ]
+    },
+    "prefers-reduced-transparency": {
+      "type": "discrete",
+      "syntax": "no-preference | reduce",
+      "values": [
+        "no-preference",
+        "reduce"
+      ]
+    },
+    "resizable": {
+      "type": "discrete",
+      "syntax": "true | false",
+      "values": [
+        "true",
+        "false"
+      ]
+    },
+    "resolution": {
+      "type": "range",
+      "syntax": "<resolution> | infinite",
+      "values": null
+    },
+    "scan": {
+      "type": "discrete",
+      "syntax": "interlace | progressive",
+      "values": [
+        "interlace",
+        "progressive"
+      ]
+    },
+    "scripting": {
+      "type": "discrete",
+      "syntax": "none | initial-only | enabled",
+      "values": [
+        "none",
+        "initial-only",
+        "enabled"
+      ]
+    },
+    "shape": {
+      "type": "discrete",
+      "syntax": "rect | round",
+      "values": [
+        "rect",
+        "round"
+      ]
+    },
+    "ua-color-scheme": {
+      "type": "discrete",
+      "syntax": "light | dark",
+      "values": [
+        "light",
+        "dark"
+      ]
+    },
+    "update": {
+      "type": "discrete",
+      "syntax": "none | slow | fast",
+      "values": [
+        "none",
+        "slow",
+        "fast"
+      ]
+    },
+    "vertical-viewport-segments": {
+      "type": "range",
+      "syntax": "<integer>",
+      "values": null
+    },
+    "video-color-gamut": {
+      "type": "discrete",
+      "syntax": "srgb | p3 | rec2020",
+      "values": [
+        "srgb",
+        "p3",
+        "rec2020"
+      ]
+    },
+    "video-dynamic-range": {
+      "type": "discrete",
+      "syntax": "standard | high",
+      "values": [
+        "standard",
+        "high"
+      ]
+    },
+    "width": {
+      "type": "range",
+      "syntax": "<length>",
+      "values": null
+    }
+  },
+  "container": {
+    "aspect-ratio": {
+      "type": "range",
+      "syntax": "<ratio>",
+      "values": null
+    },
+    "block-size": {
+      "type": "range",
+      "syntax": "<length>",
+      "values": null
+    },
+    "fallback": {
+      "type": "discrete",
+      "syntax": "none | [ [<dashed-ident> || <try-tactic>] | <position-area-query> ]",
+      "values": null
+    },
+    "height": {
+      "type": "range",
+      "syntax": "<length>",
+      "values": null
+    },
+    "inline-size": {
+      "type": "range",
+      "syntax": "<length>",
+      "values": null
+    },
+    "orientation": {
+      "type": "discrete",
+      "syntax": "portrait | landscape",
+      "values": [
+        "portrait",
+        "landscape"
+      ]
+    },
+    "scrollable": {
+      "type": "discrete",
+      "syntax": "none | top | right | bottom | left | block-start | inline-start | block-end | inline-end | x | y | block | inline",
+      "values": [
+        "none",
+        "top",
+        "right",
+        "bottom",
+        "left",
+        "block-start",
+        "inline-start",
+        "block-end",
+        "inline-end",
+        "x",
+        "y",
+        "block",
+        "inline"
+      ]
+    },
+    "scrolled": {
+      "type": "discrete",
+      "syntax": "none | top | right | bottom | left | block-start | inline-start | block-end | inline-end | x | y | block | inline",
+      "values": [
+        "none",
+        "top",
+        "right",
+        "bottom",
+        "left",
+        "block-start",
+        "inline-start",
+        "block-end",
+        "inline-end",
+        "x",
+        "y",
+        "block",
+        "inline"
+      ]
+    },
+    "snapped": {
+      "type": "discrete",
+      "syntax": "none | x | y | block | inline | both",
+      "values": [
+        "none",
+        "x",
+        "y",
+        "block",
+        "inline",
+        "both"
+      ]
+    },
+    "stuck": {
+      "type": "discrete",
+      "syntax": "none | top | right | bottom | left | block-start | inline-start | block-end | inline-end",
+      "values": [
+        "none",
+        "top",
+        "right",
+        "bottom",
+        "left",
+        "block-start",
+        "inline-start",
+        "block-end",
+        "inline-end"
+      ]
+    },
+    "width": {
+      "type": "range",
+      "syntax": "<length>",
+      "values": null
+    }
+  }
+}

@@ -58,8 +58,8 @@ class ConfigureDialogCommitTest extends FormCommitTestBase {
   /**
    * A request shaped like the dialog form's AJAX submit.
    *
-   * The dialog was opened through ModePluginBase.dialog() with the mode on
-   * the query, which core's #ajax keeps on every submit; the core route
+   * The dialog was opened through Drupal.Daedalus.openModal() with the mode
+   * on the query, which core's #ajax keeps on every submit; the core route
    * carries the section storage the response's root is derived from.
    */
   protected function dialogRequest(string $route_name, string $pattern, string $path, NestedSectionStorageInterface $storage, array $raw, string $storage_type = 'overrides', ?string $storage_id = NULL): Request {

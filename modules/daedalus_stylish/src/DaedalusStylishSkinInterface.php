@@ -16,14 +16,20 @@ use Drupal\user\EntityOwnerInterface;
  * A skin: a site's look as daedalus_stylish data.
  *
  * The site-scope host of the styling tiers that have no per-element home:
- * design TOKENS (per name a record of value, description and offered)
- * and SITE ELEMENT DEFAULTS (live per-scope styles like "sections
- * constrain to 80rem", overridden by any per-entity map by cascade). Each
- * tier is two layers: the PACKAGE layer a module ships (tokens, defaults:
+ * design TOKENS (per name a record of value, description and offered),
+ * ANIMATIONS (per name a record of keyframe steps, description and
+ * offered, delivered as @keyframes motion-{name}), FONTS (per name a
+ * record of family, faces, description and offered, delivered as one
+ * @font-face per face) and SITE ELEMENT
+ * DEFAULTS (live per-scope styles like "sections constrain to 80rem",
+ * overridden by any per-entity map by cascade). Each tier is two layers:
+ * the PACKAGE layer a module ships (tokens, animations, fonts, defaults:
  * sync's fields, the shipper's read, the source hash's payload) and the
- * SITE layer over it (site_tokens, site_defaults: what the site added or
- * changed, by name), merged per token fact and per default property into
- * the skin as worn (tokens(), defaults()), the read of every consumer
+ * SITE layer over it (site_tokens, site_animations, site_fonts,
+ * site_defaults: what the site added or changed, by name), merged per
+ * record fact and per default property into the skin as worn (tokens(),
+ * animations(), fonts(), defaults()),
+ * the read of every consumer
  * but the disk lane. A skin with no provider is the site's own: one
  * layer, the package one, edited directly. Token NAMES and values are
  * data here; the scales they validate against are code — the site
@@ -120,6 +126,129 @@ interface DaedalusStylishSkinInterface extends ShippedSourceInterface, ContentEn
   public function tokens(): array;
 
   /**
+   * Returns the package layer's animation records: the motion the skin ships.
+   *
+   * The disk lane's field, part of the payload the source hash covers,
+   * and the one layer of a skin the site made itself. Every other reader
+   * wants animations(), the skin as worn.
+   *
+   * @return array
+   *   {name: {steps, description, offered}} — names fitting
+   *   SkinAnimationsItem::NAME (the keyframes ident tail of
+   *   motion-{name}), each a record (SkinAnimationsItem::RECORD_KEYS)
+   *   whose steps map canonical offsets ("0%", "50%", "100%") to CSS
+   *   property values. Empty array when the layer mints no animations.
+   */
+  public function packageAnimations(): array;
+
+  /**
+   * Sets the package layer's animations.
+   *
+   * @param array $animations
+   *   Name-keyed animation records; see packageAnimations(). A bare steps
+   *   map in place of a record is shorthand for {steps} and is
+   *   canonicalized on the way in (SkinAnimationsItem::
+   *   canonicalizeAnimations()), offsets included.
+   */
+  public function setPackageAnimations(array $animations): static;
+
+  /**
+   * Returns the site layer's animations: what the site added or changed.
+   *
+   * @return array
+   *   {name: partial record} — per animation the facts the site states
+   *   (any of SkinAnimationsItem::RECORD_KEYS); a fact absent here shows
+   *   through from the package layer, a name absent from the package is
+   *   site-minted and states its steps. Empty array when the site changed
+   *   nothing.
+   */
+  public function siteAnimations(): array;
+
+  /**
+   * Sets the site layer's animations.
+   *
+   * @param array $animations
+   *   Name-keyed partial records; see siteAnimations(). A bare steps map
+   *   in place of a record is shorthand for {steps}
+   *   (SkinSiteAnimationsItem::canonicalizeSiteAnimations()).
+   */
+  public function setSiteAnimations(array $animations): static;
+
+  /**
+   * Returns the skin's animations as worn: the site layer over the package's.
+   *
+   * The read of every consumer but the disk lane (the compiled skin file's
+   * @keyframes blocks, the roster, the reference universe). Records merge
+   * per key; see SkinAnimationsItem::mergeLayers() for the rule and the
+   * order.
+   *
+   * @return array
+   *   Full records in the packageAnimations() shape.
+   */
+  public function animations(): array;
+
+  /**
+   * Returns the package layer's font records: the type the skin ships.
+   *
+   * The disk lane's field, part of the payload the source hash covers
+   * (its faces content-addressed, see DaedalusStylishSkin::shippedData()),
+   * and the one layer of a skin the site made itself. Every other reader
+   * wants fonts(), the skin as worn.
+   *
+   * @return array
+   *   {name: {family, faces, description, offered}} — names fitting
+   *   SkinFontsItem::NAME (the roster id), each a record
+   *   (SkinFontsItem::RECORD_KEYS) whose faces are canonical {weight,
+   *   style, source: {file: uuid}} maps naming the managed files the
+   *   font store holds for the skin. Empty array when the layer mints no
+   *   fonts.
+   */
+  public function packageFonts(): array;
+
+  /**
+   * Sets the package layer's fonts.
+   *
+   * @param array $fonts
+   *   Name-keyed font records; see packageFonts(). Records canonicalize on
+   *   the way in (SkinFontsItem::canonicalizeFonts()): facts fill, faces
+   *   settle.
+   */
+  public function setPackageFonts(array $fonts): static;
+
+  /**
+   * Returns the site layer's fonts: what the site added or changed.
+   *
+   * @return array
+   *   {name: partial record} — per font the facts the site states (any of
+   *   SkinFontsItem::RECORD_KEYS); a fact absent here shows through from
+   *   the package layer, a name absent from the package is site-minted and
+   *   states its family and faces. Empty array when the site changed
+   *   nothing.
+   */
+  public function siteFonts(): array;
+
+  /**
+   * Sets the site layer's fonts.
+   *
+   * @param array $fonts
+   *   Name-keyed partial records; see siteFonts()
+   *   (SkinSiteFontsItem::canonicalizeSiteFonts()).
+   */
+  public function setSiteFonts(array $fonts): static;
+
+  /**
+   * Returns the skin's fonts as worn: the site layer over the package's.
+   *
+   * The read of every consumer but the disk lane (the compiled skin file's
+   * @font-face blocks, the roster, the file hold). Records merge per key;
+   * see SkinFontsItem::mergeLayers() for the rule and the order.
+   *
+   * @return array
+   *   Full records in the packageFonts() shape.
+   */
+  public function fonts(): array;
+
+  /**
    * Returns the package layer's site element defaults: what the skin ships.
    *
    * The disk lane's field, the payload the source hash covers, and the
@@ -195,9 +324,10 @@ interface DaedalusStylishSkinInterface extends ShippedSourceInterface, ContentEn
    * @param string $provider
    *   The module whose MODULE.daedalus_stylish.skins.yml ships the skin.
    * @param array $shipped_data
-   *   The shipped payload — {tokens: ..., defaults: ...} — exactly as
-   *   shipped; its hash becomes the stored source_hash both comparisons
-   *   run against.
+   *   The shipped payload — {tokens: ..., animations: ..., fonts: ...,
+   *   defaults: ...} — exactly as shipped (fonts content-addressed, each
+   *   face's source {hash: sha256}); its hash becomes the stored
+   *   source_hash both comparisons run against.
    */
   public function setShippedSource(string $provider, array $shipped_data): static;
 
@@ -215,7 +345,8 @@ interface DaedalusStylishSkinInterface extends ShippedSourceInterface, ContentEn
    * Whether the shipped defaults have changed since the last import/sync.
    *
    * @param array $shipped_data
-   *   The payload ({tokens, defaults}) as currently shipped on disk.
+   *   The payload ({tokens, animations, fonts, defaults}) as currently
+   *   shipped on disk.
    */
   public function hasNewDefaults(array $shipped_data): bool;
 

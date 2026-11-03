@@ -31,8 +31,8 @@ import { useStopMenu } from '../../stop-menu.js';
  *
  * Every settle is a magnetic capture on a detented space (the
  * DimensionField's doctrine): a settled value that value-matches a stop
- * emits the stop's reference spelling, so typing a swatch's hex IS
- * reaching the swatch and no second write path exists. The component is
+ * emits the stop's reference spelling, so typing a token's hex IS
+ * reaching the token and no second write path exists. The component is
  * controlled (`value` is the shown text: the committed value or the
  * consumer's draft echo) and speaks the inspector's preview/settle
  * contract through two callbacks, each consumer keeping its own
@@ -44,7 +44,7 @@ import { useStopMenu } from '../../stop-menu.js';
  *   when nothing changed.
  *
  * An optional `face` is text the input wears INSTEAD of the value while
- * it is not focused (the media row's gradient-swatch label over the
+ * it is not focused (the media row's gradient-token name over the
  * truncated var() spelling); focus swaps the real value back in, so
  * editing as text stays exactly what it was, and a blur that still
  * reads the face (landing before the focus swap re-rendered) settles
@@ -129,7 +129,7 @@ export const TextField = ({
     >
       <input
         type="text"
-        className={`daedalus-stylish-inspector__input daedalus-ui-input${wearsFace ? ' daedalus-stylish-inspector__input--swatch-face' : ''}`}
+        className={`daedalus-stylish-inspector__input daedalus-ui-input${wearsFace ? ' daedalus-stylish-inspector__input--token-face' : ''}`}
         value={wearsFace ? face : shown}
         aria-label={label}
         title={title}

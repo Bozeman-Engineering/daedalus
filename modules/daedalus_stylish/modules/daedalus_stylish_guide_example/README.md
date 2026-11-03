@@ -6,7 +6,7 @@ two reference systems daedalus_stylish ships. `daedalus_stylish_olivero_skin` is
 one (the styling recipe's finished look; its guide shapes offers and
 never refuses), this is the strict one (every binding is law, the world
 of stylable properties is closed, every `var()` must name a minted
-token or a published swatch). Read it as three things: the contrib
+token). Read it as three things: the contrib
 authoring reference for a designed site (each file models the
 recommended shape and says why), the fixture strict-posture scenarios
 activate (a test that needs law activates this system rather than
@@ -22,16 +22,14 @@ follows.
 | File | Role |
 |------|------|
 | `config/install/daedalus_blueprint.design_system.guide_example.yml` | The design system itself: the unit the skin, guide, materials and blueprint are members of, the thing the site activates, the identity paragraph the AI is told the system is, and `enforcement: strict`. |
-| `daedalus_stylish_guide_example.daedalus_stylish.skins.yml` | The skin: token records (light and dark, banded; `offered: false` on the tokens the rows should not lead with) on every declared scale, and site element defaults. The DATA half; on a site it is the package layer a tenant's site layer sits over. |
+| `daedalus_stylish_guide_example.daedalus_stylish.skins.yml` | The skin: token records (light and dark, banded; `offered: false` on the tokens the rows should not lead with) on every declared scale, and site element defaults. The DATA half; on a site it is the package layer a tenant's site layer sits over. The palette beyond the roles rides the same file: the Amber wash color token and the Amber glow and Ink fade gradient tokens, each with a description. |
 | `daedalus_stylish_guide_example.page_builder.yml` | The style guide: the token scales, the token contract (the names the skin must mint and the stops may name), the package's bindings as deltas over the suite's, the prose tags it opens, the container axes (each with its description and the properties it owns), the motion grants, the in-body ramp on the instances lane. The LAW half. |
-| `daedalus_stylish_guide_example.page_builder.layout.daedalus_stylish_container.yml` | Birth defaults for page bands (surface, rhythm). |
+| `daedalus_stylish_guide_example.page_builder.layout.daedalus_stylish_container.yml` | Birth defaults for sections (surface, rhythm). |
 | `daedalus_stylish_guide_example.page_builder.block_type.text.yml` | Text block stops; the link part as the site's button; the `button` variant axis and what it owns; element-bound controls. |
 | `daedalus_stylish_guide_example.page_builder.block_type.image.yml` | Image part constraints; Rounded as the birth default. |
 | `daedalus_stylish_guide_example.page_builder.block_type.formatted_text.yml` | Withdraws the Position control from prose. |
-| `daedalus_stylish_guide_example.daedalus_stylish.variants.yml` | The component library: bands, rhythms, cards and tiles, text looks, buttons, image frames, motion. Every look carries a description saying what it is and when to reach for it. |
-| `daedalus_stylish_guide_example.daedalus_stylish.swatches.yml` | The palette: three backgrounds beyond the role tokens, each with a description. |
-| `daedalus_stylish_guide_example.daedalus_stylish.animations.yml` | Three keyframe materials paired with animation-axis variants. |
-| `daedalus_stylish_guide_example.daedalus_blueprint.blueprints.card.yml` | The composition: a band of three cards, as a page-language fragment. |
+| `daedalus_stylish_guide_example.daedalus_stylish.variants.yml` | The component library: sections, rhythms, cards and tiles, text looks, buttons, image frames, motion. Every look carries a description saying what it is and when to reach for it. |
+| `daedalus_stylish_guide_example.daedalus_blueprint.blueprints.card.yml` | The composition: a section of three cards, as a page-language fragment. |
 
 ## Enable
 
@@ -46,7 +44,7 @@ drush daedalus-blueprint:design-system:activate guide_example
 `drush en` installs the package as a dormant unit on a site that still
 wears olivero: the system exists, its members wait. Activation is what
 lands and brings the package into force: it syncs the package's skin,
-variants, swatches and animations from disk under the package's own law
+variants and animations from disk under the package's own law
 (the guide's declarations layer above the suite's only while its system
 is active, so the skin's own scales and the variants on its axes are
 refused while it is dormant and land on the switch), the Guide Example
@@ -69,7 +67,7 @@ drush daedalus_stylish:sync daedalus_stylish_guide_example
 Guide (`page_builder`) edits need only a cache rebuild; the design
 system entity is config and re-imports with `drush config:import` or a
 recipe. On a consuming site the shipped skin is locked and the site's
-token and defaults edits land in its site layer (the Palette, "Edit
+token and defaults edits land in its site layer (the Skin tab, "Edit
 skin…"); a developer editing the skin itself lifts the distro lock and
 ships the system back with `drush daedalus-blueprint:design-system:ship
 guide_example`, which rewrites the per-id files and reports an edit to
@@ -104,8 +102,9 @@ deltas:
   outlawed by construction);
 - closed lists and ranges: iteration counts, text-transform, z-index.
 
-Backgrounds are deliberately unbound so the palette (published
-swatches, `var(--swatch-*)`) works on bands and cards; padding-inline
+Backgrounds are deliberately unbound so the palette (the skin's color
+and gradient tokens, `var(--color-*)` and `var(--gradient-*)`) works on
+sections and cards; padding-inline
 is unbound because the suite's width variants spell it as `max()`;
 opacity is unbound because every fade entrance starts at 0. The
 `transition` shorthand is withdrawn from the container and block grants
@@ -123,14 +122,14 @@ this module:
   pictures must be. It is printed verbatim at the head of the brief.
 - Each variant axis's `description` carries the rules across its values
   (alternate Plain and Tint, Accent once for the call to action, one
-  Primary per band) and `owns` names the properties its values write
-  (rhythm owns the band's vertical padding, width its horizontal inset
+  Primary per section) and `owns` names the properties its values write
+  (rhythm owns the section's vertical padding, width its horizontal inset
   and max-width, button the link part's fill, corners and padding): a
   hand-written owned property is answered with a warning naming the
   axis, never an error.
-- Each variant, swatch, animation and blueprint carries a `description`
+- Each variant, palette token, animation and blueprint carries a `description`
   written as "what it is; reach for it when", including its
-  cardinalities (one Eyebrow and one Lead per band, never a Card in a
+  cardinalities (one Eyebrow and one Lead per section, never a Card in a
   Card).
 
 A fact about one material or one axis lives on that record or
@@ -143,7 +142,7 @@ skill.
 `muted`, `border`, `accent`, `accent-hover`, `accent-contrast` and the
 `inverse-*` trio. The type ramp is `display`, `title-1`, `title-2`,
 `title-3`, `body`, `caption`. Tracking is `tight`, `normal`, `wide`.
-Space is a rem ladder plus the `gutter` and three banded `band-*`
+Space is a rem ladder plus the `gutter` and three banded `section-*`
 tokens. Elevation is `shadow-sm|md|lg`; timing is `duration-*` and
 `easing-*`; strokes are `hairline|thin|thick`; radii are `sm`, `md`,
 `lg`, `pill`; layout is `max-width`, `narrow`, `measure`.
@@ -171,10 +170,10 @@ Legality stays the whole scale. The Law tab in Edit Mode shows every
 grant, constraint, stop list, axis and birth default of this system
 with the file it came from.
 
-**Bands.** Every top-level container wears a surface (Plain, Tint,
+**Sections.** Every top-level container wears a surface (Plain, Tint,
 Elevated, Inverse, Accent) and a rhythm (Compact, Standard, Spacious),
-both root-only axes. A band the editor adds arrives Plain and Standard
-at Site width (the op door's birth defaults); a band the AI writes
+both root-only axes. A section the editor adds arrives Plain and Standard
+at Site width (the op door's birth defaults); a section the AI writes
 wears exactly what its document states. Every container stacks its
 children with the site gap by skin default (blocks carry no outer
 margin), so a stacked container never writes a display or a gap;

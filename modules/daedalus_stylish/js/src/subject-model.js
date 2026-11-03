@@ -60,14 +60,15 @@ import {
 } from './write-address.js';
 
 /**
- * The element word: the name the tree carries for the key (the
+ * The element word: the name the document carries for the key (the
  * annotator's minted `_element.name`: the custom label, the content
  * excerpt or the type word, one vocabulary with the page tree, the
- * canvas chips and the AI), else "Element" for a key the tree has no
- * node for.
+ * canvas chips and the AI; the host's label for the entity root), else
+ * "Element" for a key the document has no node for.
  *
  * @param {?object} matcher
- *   A matcher over the tree (selector-matcher.js createMatcher), or null.
+ *   A matcher over the document (selector-matcher.js createMatcher), or
+ *   null.
  * @param {string} key
  *   The selected element's selectable key.
  *
@@ -77,14 +78,15 @@ export const elementWord = (matcher, key) =>
   matcher?.facts?.(key)?.name ?? Drupal.t('Element');
 
 /**
- * The element's face: the glyph the tree carries for the key (the
+ * The element's face: the glyph the document carries for the key (the
  * annotator's minted `_element.icon`, a URL, the same spine as the
- * word: the matcher's facts), else null when the tree has no node for
- * the key, the node carries no icon, or there is no tree at all. The
- * pill omits its icon zone on null, as the page tree does.
+ * word: the matcher's facts), else null when the document has no node
+ * for the key, the node carries no icon, or there is no document at all.
+ * The pill omits its icon zone on null, as the page tree does.
  *
  * @param {?object} matcher
- *   A matcher over the tree (selector-matcher.js createMatcher), or null.
+ *   A matcher over the document (selector-matcher.js createMatcher), or
+ *   null.
  * @param {string} key
  *   The selected element's selectable key.
  *
@@ -101,14 +103,15 @@ export const elementIcon = (matcher, key) =>
  * @param {object} args.guide
  *   The style guide payload.
  * @param {?object} args.matcher
- *   A matcher over the tree, or null.
+ *   A matcher over the document, or null.
  * @param {{key: string, selector: ?string}} args.own
  *   The selected facet's own address (the selected key, its selector or
  *   null for the root).
  * @param {Array<{key: string, selector: ?string, label: string,
  *   existing: boolean}>} args.addresses
  *   The facet's address set (addressSet), [] when the panel offers none
- *   (no tree, a chain facet, a mode or posture that writes nowhere else).
+ *   (no document, a chain facet, a mode or posture that writes nowhere
+ *   else).
  * @param {?{key: string, selector: string}} args.address
  *   The write address the rows write at (the spine's, when it is not
  *   the subject's own key), or null while a write lands on the own key.

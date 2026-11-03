@@ -6,6 +6,7 @@ namespace Drupal\Tests\daedalus_ui\Functional;
 
 use Drupal\block_content\Entity\BlockContentType;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
+use Drupal\field\Entity\FieldConfig;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use Drupal\taxonomy\Entity\Vocabulary;
@@ -27,7 +28,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * group hides while the switch is off (core's #states, pinned here as the
  * attribute it rides; the hiding itself is core's). A bundle of a third
  * entity type gets the same section because its bundle config type names
- * the settings schema. This tier sees the served form and the stored
+ * the settings schema, and the add form gets it with a new bundle's
+ * defaults (on). This tier sees the served form and the stored
  * settings; no browser is needed because every control saves with the
  * form.
  *
@@ -214,7 +216,7 @@ class BundleFormSectionTest extends BrowserTestBase {
    */
   public function testBlockTypeFace(): void {
     $assert_session = $this->assertSession();
-    // The site declares heroes and bands; the type stores one of them
+    // The site declares heroes and sections; the type stores one of them
     // beside an id nothing declares any more.
     \Drupal::service('module_installer')->install(['daedalus_layout_site_groups_test']);
     $this->rebuildContainer();
@@ -229,34 +231,34 @@ class BundleFormSectionTest extends BrowserTestBase {
     $assert_session->elementTextContains('css', 'label[for="edit-daedalus-layout-favorite"]', 'Favorite');
     $assert_session->elementTextContains('css', '[data-daedalus-ui-group="add_panel"]', 'Groups');
     $assert_session->checkboxChecked('daedalus_layout_groups[heroes]');
-    $assert_session->checkboxNotChecked('daedalus_layout_groups[bands]');
+    $assert_session->checkboxNotChecked('daedalus_layout_groups[sections]');
     $assert_session->checkboxChecked('daedalus_layout_groups[retired]');
     $assert_session->elementTextContains('css', 'label[for="edit-daedalus-layout-groups-heroes"]', 'Heroes');
-    $assert_session->elementTextContains('css', 'label[for="edit-daedalus-layout-groups-bands"]', 'Bands');
+    $assert_session->elementTextContains('css', 'label[for="edit-daedalus-layout-groups-sections"]', 'Sections');
     $assert_session->elementTextContains('css', 'label[for="edit-daedalus-layout-groups-retired"]', 'retired');
     $this->assertSame(
-      ['daedalus_layout_groups[heroes]', 'daedalus_layout_groups[bands]', 'daedalus_layout_groups[retired]'],
+      ['daedalus_layout_groups[heroes]', 'daedalus_layout_groups[sections]', 'daedalus_layout_groups[retired]'],
       array_map(static fn($input) => $input->getAttribute('name'), $this->getSession()->getPage()->findAll('css', '[data-daedalus-ui-group="add_panel"] input[name^="daedalus_layout_groups"]')),
       'The declared groups lead in declaration order; the undeclared stored id follows.',
     );
 
     // Clearing the favorite and filing under a second group: the
     // undeclared id survives the save untouched.
-    $this->submitForm(['daedalus_layout_favorite' => FALSE, 'daedalus_layout_groups[bands]' => TRUE], 'Save');
+    $this->submitForm(['daedalus_layout_favorite' => FALSE, 'daedalus_layout_groups[sections]' => TRUE], 'Save');
     $assert_session->statusCodeEquals(200);
     $block_type = BlockContentType::load('text');
     $this->assertNull($block_type->getThirdPartySetting('daedalus_layout', 'favorite'), 'Not a favorite is the key\'s absence.');
-    $this->assertSame(['heroes', 'bands', 'retired'], $block_type->getThirdPartySetting('daedalus_layout', 'groups'));
+    $this->assertSame(['heroes', 'sections', 'retired'], $block_type->getThirdPartySetting('daedalus_layout', 'groups'));
     $this->assertStringContainsString('text.svg', $block_type->getThirdPartySetting('daedalus_layout', 'icon'), 'The shipped icon survives.');
 
     // Back to a favorite, out of every group: the list is the key's absence.
     $this->drupalGet('/admin/structure/block-content/manage/text');
     $assert_session->checkboxNotChecked('daedalus_layout_favorite');
-    $assert_session->checkboxChecked('daedalus_layout_groups[bands]');
+    $assert_session->checkboxChecked('daedalus_layout_groups[sections]');
     $this->submitForm([
       'daedalus_layout_favorite' => TRUE,
       'daedalus_layout_groups[heroes]' => FALSE,
-      'daedalus_layout_groups[bands]' => FALSE,
+      'daedalus_layout_groups[sections]' => FALSE,
       'daedalus_layout_groups[retired]' => FALSE,
     ], 'Save');
     $block_type = BlockContentType::load('text');
@@ -294,6 +296,93 @@ class BundleFormSectionTest extends BrowserTestBase {
     $vocabulary = Vocabulary::load('topics');
     $this->assertTrue($vocabulary->getThirdPartySetting('daedalus_ui', 'enabled'));
     $this->assertSame('edit', $vocabulary->getThirdPartySetting('daedalus_ui', 'initial_mode'));
+  }
+
+  /**
+   * The add form: a new bundle starts on, and the first save writes it.
+   *
+   * The add form has no id, no label and no display, so the section
+   * shows a new bundle's defaults: the switch checked and named by the
+   * type, the layout fact saying where Layout Builder is turned on (no
+   * link to a display that does not exist), starting designs disabled
+   * with their reason, styling checked as the gate's default. The first
+   * save writes each as an explicit value: `enabled` TRUE on the type,
+   * the style field created once the bundle exists (it depends on the
+   * saved type), a cleared box an explicit off (and, for styling, the
+   * opt-out that keeps auto-enablement away). Nothing assumes the default
+   * at runtime: a bundle created by code with nothing stored still reads
+   * as off (::testThirdEntityTypeBundle()). Block types the same.
+   */
+  public function testCreateFormDefaultsOn(): void {
+    $assert_session = $this->assertSession();
+    $field_manager = $this->fieldManager();
+
+    $this->drupalGet('/admin/structure/types/add');
+    $assert_session->statusCodeEquals(200);
+    $assert_session->checkboxChecked('daedalus_ui_enabled');
+    $assert_session->elementTextContains('css', 'label[for="edit-daedalus-ui-enabled"]', 'Build content of this type in the page builder');
+    $this->assertSame(['Layout', 'When a page is created', 'Styling'], $this->groupLegends());
+    $assert_session->elementTextContains('css', '[data-daedalus-ui-group="layout"]', 'Pages of this type have no layout to build yet: once the type is saved, turn on Layout Builder on their display.');
+    $assert_session->elementNotExists('css', '[data-daedalus-ui-group="layout"] a');
+    $assert_session->checkboxNotChecked('initial_mode');
+    $this->assertTrue($assert_session->elementExists('css', '[data-daedalus-ui-group="creation"] input[name="daedalus_layout_offer_starts"]')->hasAttribute('disabled'));
+    $assert_session->elementTextContains('css', '[data-daedalus-ui-group="creation"]', 'Needs pages that carry a layout of their own.');
+    $assert_session->checkboxChecked('daedalus_stylish_enabled');
+    $assert_session->elementNotExists('css', '[data-daedalus-ui-group="styling"] .messages--warning');
+
+    // Saved as offered: on, with the style field born after the type.
+    $this->submitForm(['name' => 'Landing', 'type' => 'landing'], 'Save');
+    $assert_session->statusCodeEquals(200);
+    $node_type = NodeType::load('landing');
+    $this->assertNotNull($node_type);
+    $this->assertTrue($node_type->getThirdPartySetting('daedalus_ui', 'enabled'));
+    $this->assertSame('none', $node_type->getThirdPartySetting('daedalus_ui', 'initial_mode'));
+    $this->assertFalse($node_type->getThirdPartySetting('daedalus_layout', 'offer_starts'));
+    $this->assertTrue($field_manager->isEnabled('node', 'landing'));
+    $field = FieldConfig::loadByName('node', 'landing', DaedalusStylishFieldManager::FIELD_NAME);
+    $this->assertContains('node.type.landing', $field->getDependencies()['config'], 'The style field depends on the type it was created after.');
+    $this->drupalGet('/admin/structure/types/manage/landing');
+    $assert_session->checkboxChecked('daedalus_ui_enabled');
+    $assert_session->elementTextContains('css', 'label[for="edit-daedalus-ui-enabled"]', 'Build Landing content in the page builder');
+    $assert_session->checkboxChecked('daedalus_stylish_enabled');
+
+    // Cleared on the add form: an explicit off at the first save, and the
+    // styling opt-out recorded so the gate never defaults it on later.
+    $this->drupalGet('/admin/structure/types/add');
+    $this->submitForm([
+      'name' => 'Brochure',
+      'type' => 'brochure',
+      'daedalus_ui_enabled' => FALSE,
+      'daedalus_stylish_enabled' => FALSE,
+    ], 'Save');
+    $brochure = NodeType::load('brochure');
+    $this->assertNotNull($brochure);
+    $this->assertFalse($brochure->getThirdPartySetting('daedalus_ui', 'enabled'));
+    $this->assertFalse($field_manager->isEnabled('node', 'brochure'));
+    $this->assertTrue($field_manager->isOptedOut('node', 'brochure'));
+    $this->drupalGet('/admin/structure/types/manage/brochure');
+    $assert_session->checkboxNotChecked('daedalus_ui_enabled');
+    $assert_session->checkboxNotChecked('daedalus_stylish_enabled');
+
+    // The block type add form the same.
+    $this->drupalGet('/admin/structure/block-content/add');
+    $assert_session->statusCodeEquals(200);
+    $assert_session->checkboxChecked('daedalus_ui_enabled');
+    $assert_session->elementTextContains('css', 'label[for="edit-daedalus-ui-enabled"]', 'Use blocks of this type in the page builder');
+    $assert_session->fieldNotExists('initial_mode');
+    $assert_session->fieldValueEquals('presentation', 'auto');
+    $assert_session->checkboxChecked('daedalus_stylish_enabled');
+    $this->submitForm(['label' => 'Section', 'id' => 'section'], 'Save');
+    $assert_session->statusCodeEquals(200);
+    $block_type = BlockContentType::load('section');
+    $this->assertNotNull($block_type);
+    $this->assertTrue($block_type->getThirdPartySetting('daedalus_ui', 'enabled'));
+    $this->assertSame('auto', $block_type->getThirdPartySetting('daedalus_ui', 'presentation'));
+    $this->assertNull($block_type->getThirdPartySetting('daedalus_ui', 'initial_mode'));
+    $this->assertTrue($field_manager->isEnabled('block_content', 'section'));
+    $this->drupalGet('/admin/structure/block-content/manage/section');
+    $assert_session->checkboxChecked('daedalus_ui_enabled');
+    $assert_session->elementTextContains('css', 'label[for="edit-daedalus-ui-enabled"]', 'Use Section blocks in the page builder');
   }
 
   /**

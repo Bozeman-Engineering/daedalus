@@ -37,13 +37,7 @@ trait ScopeKeyedSchemaTrait {
   public function getSchemaAdditions(FieldDefinitionInterface $definition): array {
     $theme = $this->declarations->siteTheme();
     $rosters = $this->rosters($theme);
-    $style_guide = [];
-    if ($bindings = $this->bindingLines($theme)) {
-      $style_guide['bindings'] = $bindings;
-    }
-    if ($deviations = $this->deviationLines($rosters, $theme)) {
-      $style_guide['deviations'] = $deviations;
-    }
+    $style_guide = $this->valueSpaceLines($rosters, $theme);
     $style_guide['stylable'] = $this->stylableEntries($rosters, $theme);
     $style_guide['guidance'] = $this->scopeGuidance() . ' ' . $this->prose()->polaritySentence();
     $style_guide['conditions'] = $this->conditionsSchema();

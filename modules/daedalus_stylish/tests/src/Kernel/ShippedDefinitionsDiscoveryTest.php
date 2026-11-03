@@ -25,7 +25,7 @@ use Symfony\Component\Console\Tester\CommandTester;
  * form; daedalus_stylish_variants_files_test_invalid ships the same machine name in
  * both, which discovery must refuse before anything imports. Exercised
  * through the variants importer, the lane's founding member: the skins,
- * swatches, and animations importers share the discovery by construction.
+ * importers share the discovery by construction.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -41,6 +41,7 @@ class ShippedDefinitionsDiscoveryTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'layout_discovery',
     'layout_builder',
     'navigation',
@@ -60,11 +61,8 @@ class ShippedDefinitionsDiscoveryTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    $this->installSchema('daedalus_stylish', ['daedalus_animation_usage']);
+    $this->installSchema('daedalus_stylish', ['daedalus_skin_material_usage']);
     $this->installConfig(['daedalus_stylish']);
     $this->setUpCurrentUser([], [], TRUE);
   }
@@ -192,7 +190,7 @@ class ShippedDefinitionsDiscoveryTest extends KernelTestBase {
 
     // A module shipping nothing is told which files it could ship.
     $this->assertSame(Command::SUCCESS, $tester->execute(['module' => 'system']));
-    $this->assertStringContainsString('system is not enabled or ships no daedalus_stylish definitions: no system.daedalus_stylish.fonts.yml, system.daedalus_stylish.animations.yml, system.daedalus_stylish.swatches.yml, system.daedalus_stylish.skins.yml, system.daedalus_stylish.variants.yml or a per-id file beside one (e.g. system.daedalus_stylish.variants.*.yml).', $tester->getDisplay());
+    $this->assertStringContainsString('system is not enabled or ships no daedalus_stylish definitions: no system.daedalus_stylish.skins.yml, system.daedalus_stylish.variants.yml or a per-id file beside one (e.g. system.daedalus_stylish.variants.*.yml).', $tester->getDisplay());
 
     $this->enableModules(['daedalus_stylish_variants_files_test_invalid']);
     $command = SyncCommand::create($this->container);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint_ai;
 
+use Drupal\Component\Plugin\Exception\ContextException;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
@@ -24,13 +25,10 @@ use Drupal\daedalus_blueprint\Host\BlueprintHost;
 use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint\Host\PageHosts;
-use Drupal\daedalus_blueprint\Markup\MarkupProjection;
 use Drupal\daedalus_blueprint\Materials\MaterialGestureOperationHandler;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
-use Drupal\daedalus_blueprint\Markup\StructuralAuditor;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint\Result\BlueprintResultInterface;
-use Drupal\daedalus_blueprint\Result\TargetType;
 use Drupal\daedalus_blueprint_ai\Event\AiToolActionEvent;
 use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -41,8 +39,9 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  * Base class for daedalus_blueprint AI function call tools.
  *
  * Provides shared infrastructure: entity loading, access checks, persistence
- * routing (save vs tempstore), result formatting, and the malformed
- * structured-parameter guard.
+ * routing (save vs tempstore), result formatting, and the parameter guard
+ * (a malformed structured value or an invented parameter becomes a
+ * corrective tool result instead of an exception out of the agent loop).
  */
 abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements ExecutableFunctionCallInterface {
 
@@ -126,20 +125,6 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
   protected BundleListBuilder $bundleListBuilder;
 
   /**
-   * The markup-projection socket (the element model's HTML print format).
-   *
-   * @var \Drupal\daedalus_blueprint\Markup\MarkupProjection
-   */
-  protected MarkupProjection $markupProjection;
-
-  /**
-   * The structural auditor over the markup projection.
-   *
-   * @var \Drupal\daedalus_blueprint\Markup\StructuralAuditor
-   */
-  protected StructuralAuditor $structuralAuditor;
-
-  /**
    * The host resolver.
    *
    * @var \Drupal\daedalus_blueprint\Host\HostResolver
@@ -180,8 +165,6 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
     $instance->eventDispatcher = $container->get('event_dispatcher');
     $instance->backendResolver = $container->get('daedalus_blueprint.backend_resolver');
     $instance->bundleListBuilder = $container->get('daedalus_blueprint.bundle_list_builder');
-    $instance->markupProjection = $container->get('daedalus_blueprint.markup_projection');
-    $instance->structuralAuditor = $container->get('daedalus_blueprint.structural_auditor');
     $instance->hostResolver = $container->get('daedalus_blueprint.host_resolver');
     $instance->catalogBuilder = $container->get('daedalus_blueprint.dialect_catalog_builder');
     $instance->pageHosts = $container->get('daedalus_blueprint.page_hosts');
@@ -194,9 +177,9 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
    * The two JSON read doors (eb_read_entity, eb_read_element) refuse a
    * page (PageHosts::isPage()) toward page_read, whole, in every mode: a page's own
    * fields ride before its document print and the print carries every
-   * element by id, so nothing a page knows needs the JSON road (its markup
-   * projection included; the per-turn print projects the current page
-   * itself, not through a tool). The refusal sits before any read of the
+   * element by id, so nothing a page knows needs the JSON road (the
+   * per-turn print carries the current page itself, not through a
+   * tool). The refusal sits before any read of the
    * document, so a never-edited page's template seed is no longer a side
    * effect of a read. A template has no fields, so its corrective names
    * the print alone. One spelling for both doors, so the model learns one
@@ -696,13 +679,20 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
   /**
    * {@inheritdoc}
    *
-   * Guards structured ('map') parameters against unusable values. A value
-   * the data layer cannot hold (a plain string that is not JSON, a scalar)
-   * makes Map::setValue() throw, and the agent loop hydrates tools
-   * (populateValues() during response conversion) with no try/catch around
-   * it, so the throw would crash the whole loop instead of producing a tool
-   * result the model can correct from. The corrective is stashed here and
-   * emitted by requireValidParams() at the top of execute().
+   * Guards parameters against two things a model sends that the plugin
+   * layer answers with an exception, where the agent loop hydrates tools
+   * with no try/catch around it (ai_agents replays every stored argument of
+   * a thread's tool calls through setContextValue() when it rebuilds the
+   * agent between legs), so the throw would end the whole turn as an error
+   * instead of producing a tool result the model can correct from:
+   * - A structured ('map') value the data layer cannot hold (a plain string
+   *   that is not JSON, a scalar): Map::setValue() throws
+   *   InvalidArgumentException.
+   * - A parameter the tool never declared (a model inventing one, such as
+   *   page_edit's 'save' sent to eb_create_entity): getContextDefinition()
+   *   throws ContextException before any value is set.
+   * The corrective is stashed here and emitted by requireValidParams() at
+   * the top of execute().
    */
   public function setContextValue($name, $value) {
     try {
@@ -713,6 +703,15 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
         "Invalid value for the '%s' parameter: expected structured data (an object or array matching the parameter description), got a value that could not be interpreted as one. Re-send the call with '%s' as a native JSON structure, not an encoded string.",
         $name,
         $name,
+      );
+      return $this;
+    }
+    catch (ContextException $e) {
+      $this->parameterCorrectives[$name] = sprintf(
+        "Unknown parameter '%s': %s has no such parameter (it declares: %s). Re-send the call with only the parameters it declares.",
+        $name,
+        $this->getFunctionName(),
+        implode(', ', array_keys($this->getContextDefinitions())),
       );
       return $this;
     }
@@ -748,157 +747,6 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
    */
   protected function formatArray(array $data): string {
     return Yaml::dump($data, 10, 2);
-  }
-
-  /**
-   * Formats a markup projection for tool output, legend included.
-   *
-   * The projection is the element model's HTML print format (see
-   * \Drupal\daedalus_blueprint\Markup\MarkupProjectorInterface); the legend
-   * spells its reading conventions concretely so the projection stands on
-   * its own inside a tool result. A NULL projection with no projector
-   * installed is the socket standing empty — the corrective names the
-   * modes that do work instead of inventing markup.
-   *
-   * @param string|null $html
-   *   The projected HTML, or NULL when nothing answered.
-   *
-   * @return string
-   *   The tool output.
-   */
-  protected function formatMarkupProjection(?string $html): string {
-    if ($html === NULL) {
-      return $this->markupProjection->hasProjector()
-        ? 'No markup projection answered for this target.'
-        : 'Markup mode is unavailable: no markup projector is installed (the page builder supplies one). Use the data modes instead.';
-    }
-    return implode("\n", [
-      'Key-annotated markup (the element model\'s print format, not rendered output):',
-      '- data-key is the element\'s selectable key; data-type is its type.',
-      '- an inner element\'s class composes a sub-element key: KEY::.class-name (the "::" suffix is a relative selector; KEY::> * is every direct child, KEY::p every paragraph).',
-      '- wrappers with no declared tag print as <div>; text is excerpted, not complete.',
-      '',
-      $html,
-    ]);
-  }
-
-  /**
-   * Appends the write echo to a formatted mutation result.
-   *
-   * Mutating tool results carry the resolved markup of the elements they
-   * changed, projected through the markup-projection socket, so the model
-   * verifies its write in the same turn it made it instead of opening a
-   * read-back-then-style loop (intent decays across turns; tool results
-   * are same-turn). The echo reuses formatMarkupProjection()'s framing so
-   * write results and markup-mode reads speak one print format.
-   *
-   * With no projector installed the echo is silently absent: a write
-   * result is not the place to advertise a missing markup mode, and the
-   * result YAML already says what happened.
-   *
-   * The echo also carries the structural audit: heading-ladder and
-   * dead-link advisories over the projected fragments, corrective-shaped
-   * and NON-blocking (the result's success is already sealed; advisories
-   * never fail a save). Each fragment is audited on its own, because
-   * heading order across unrelated fragments is not document order.
-   *
-   * @param string $output
-   *   The formatted result output (the YAML the tool already emits).
-   * @param \Drupal\daedalus_blueprint\Result\BlueprintResultInterface $result
-   *   The successful mutation result carrying the staged host and its
-   *   change targets.
-   * @param bool $whole_entity
-   *   TRUE to echo the whole entity's projection regardless of targets
-   *   (entity creation: the whole page is the affected target).
-   *
-   * @return string
-   *   The output with the markup echo appended, or unchanged when nothing
-   *   projects.
-   */
-  protected function withMarkupEcho(string $output, BlueprintResultInterface $result, bool $whole_entity = FALSE): string {
-    $projections = $this->projectAffectedTargets($result, $whole_entity);
-    if ($projections === []) {
-      return $output;
-    }
-    $output .= "\n" . $this->formatMarkupProjection(implode("\n", $projections));
-
-    $advisories = [];
-    foreach ($projections as $html) {
-      $advisories[] = $this->structuralAuditor->audit($html);
-    }
-    $advisories = array_values(array_unique(array_merge(...$advisories)));
-    if ($advisories !== []) {
-      $output .= "\n\nStructural advisories (non-blocking; the write is saved):\n- "
-        . implode("\n- ", $advisories);
-    }
-    return $output;
-  }
-
-  /**
-   * Projects the result's affected targets as key-annotated markup.
-   *
-   * One projection per affected element: the root entity target projects
-   * the whole page (a restructure or root-field write changes the page's
-   * arrangement), element targets project individually, and a removed
-   * target prints an HTML comment naming the UUID, because gone-ness is
-   * the fact to verify and the model owns no markup for it. Projections
-   * nested inside another target's projection are dropped, so a batch
-   * that composes a section and its children echoes the section once
-   * with the children where they mounted.
-   *
-   * @param \Drupal\daedalus_blueprint\Result\BlueprintResultInterface $result
-   *   The successful mutation result.
-   * @param bool $whole_entity
-   *   TRUE to project the whole entity regardless of targets.
-   *
-   * @return string[]
-   *   The projected fragments, one per surviving target, or empty when
-   *   nothing projects (no projector installed, a config-entity result,
-   *   or no target the projector answers for).
-   */
-  private function projectAffectedTargets(BlueprintResultInterface $result, bool $whole_entity): array {
-    if (!$this->markupProjection->hasProjector() || !$result instanceof BlueprintResult) {
-      return [];
-    }
-    $host = $result->getHost();
-    if ($host === NULL) {
-      return [];
-    }
-
-    if ($whole_entity) {
-      $html = $this->markupProjection->projectHost($host);
-      return $html === NULL ? [] : [$html];
-    }
-
-    $targets = [];
-    foreach ($result->getTargets() as $target) {
-      $targets[(string) $target['uuid']][] = (string) $target['field_name'];
-    }
-
-    $projections = [];
-    foreach ($targets as $uuid => $field_names) {
-      if (in_array(TargetType::REMOVED, $field_names, TRUE)) {
-        $projections[$uuid] = sprintf('<!-- %s: removed, no longer on the page -->', $uuid);
-        continue;
-      }
-      $projections[$uuid] = $uuid === $host->uuid()
-        ? $this->markupProjection->projectHost($host)
-        : $this->markupProjection->projectElement($host, $uuid);
-    }
-    $projections = array_filter($projections, static fn (?string $html) => $html !== NULL);
-
-    // Drop projections nested inside another target's projection: keyed
-    // boxes print their UUID in data-key, so containment is literal.
-    foreach ($projections as $uuid => $html) {
-      foreach ($projections as $other_uuid => $other_html) {
-        if ($other_uuid !== $uuid && str_contains($other_html, $uuid)) {
-          unset($projections[$uuid]);
-          break;
-        }
-      }
-    }
-
-    return array_values($projections);
   }
 
   /**

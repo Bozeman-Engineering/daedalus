@@ -13,7 +13,7 @@ import {
   strokeUnsetProperties,
 } from './stroke-model.js';
 import { useColorWell } from './color-well.js';
-import { wellFace } from './swatch-well-model.js';
+import { wellFace } from './token-well-model.js';
 import { ChoiceList } from './choice-row.js';
 import { DimensionField } from './dimension-field.js';
 import { Mark } from './mark.js';
@@ -57,7 +57,7 @@ import { useRowMenu } from './use-row-menu.js';
  * offer, the picker lane, the mint row) with the stroke's color face
  * as its state (strokeState's per-part read: the lit stop, or the
  * painted literal face for an inline color). The style well is the
- * swatch well's posture over the style vocabulary (the built-in four
+ * token well's posture over the style vocabulary (the built-in four
  * or the guide's `allowed:` list), each stop faced as the line style
  * itself; a set style the offer lacks draws as its own line when the
  * keyword paints one (groove, inset) and as the honest "?" face
@@ -119,8 +119,8 @@ import { useRowMenu } from './use-row-menu.js';
  *   The state source (the mint row commits through it, the row menu's
  *   ancestor doorway seats the target on it, the origin's words read
  *   its block types and layouts).
- * @param {?object} [props.swatches]
- *   The swatch grants ({canCreate}).
+ * @param {?object} [props.skinMaterials]
+ *   The skin material grants ({canCreate}: the color well's save-as-token).
  * @param {Function} props.onPreview
  * @param {Function} props.onRelease
  * @param {Function} props.onCommit
@@ -138,7 +138,7 @@ export const StrokeRow = ({
   write,
   tools = null,
   source = null,
-  swatches = null,
+  skinMaterials = null,
   disabled = false,
   disabledTitle = null,
   onPreview,
@@ -146,6 +146,7 @@ export const StrokeRow = ({
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
 }) => {
   // Each property's stack is its own box's (the model's per-property
   // read): a part the address rule sent to another candidate reads and
@@ -235,6 +236,7 @@ export const StrokeRow = ({
             read: reads[part],
             blockTypes: source?.getBlockTypes?.() ?? {},
             sectionLayouts: source?.getSectionLayouts?.() ?? {},
+            law,
           })
         : null,
     ]),
@@ -296,7 +298,7 @@ export const StrokeRow = ({
         : null,
     }),
     onPick: pickPart('color'),
-    canMint: Boolean(swatches?.canCreate),
+    canMint: Boolean(skinMaterials?.canCreate),
     source,
     disabled,
     disabledTitle,
@@ -436,10 +438,10 @@ const drawnStyle = (value) => {
 };
 
 /**
- * The style well + its popover: the swatch well's posture (a face
+ * The style well + its popover: the token well's posture (a face
  * button wearing the shown value, the offer behind it) over a line
- * style vocabulary. The face is the swatch well's own derivation
- * (swatch-well-model.js wellFace, the shown value's drawable keyword as
+ * style vocabulary. The face is the token well's own derivation
+ * (token-well-model.js wellFace, the shown value's drawable keyword as
  * its literal): the lit stop's line, the shown value's own line when it
  * paints one the offer lacks, the "?" custom face otherwise, the
  * slashed empty face when no layer delivers a style. The popover is
@@ -504,7 +506,7 @@ const useStyleWell = ({
     <button
       {...triggerProps}
       type="button"
-      className={`daedalus-stylish-swatch-well daedalus-stylish-stroke-well daedalus-stylish-swatch-well--${face.kind}${open ? ' daedalus-stylish-swatch-well--open' : ''}`}
+      className={`daedalus-stylish-token-well daedalus-stylish-stroke-well daedalus-stylish-token-well--${face.kind}${open ? ' daedalus-stylish-token-well--open' : ''}`}
       aria-label={label}
       title={disabled ? (disabledTitle ?? undefined) : title}
       disabled={disabled}
@@ -516,7 +518,7 @@ const useStyleWell = ({
   const popover = !open
     ? null
     : portal(
-        <div className="daedalus-stylish-swatch-popover daedalus-stylish-choice-popover">
+        <div className="daedalus-stylish-token-popover daedalus-stylish-choice-popover">
           <ChoiceList
             offer={offer}
             selected={lit?.id ?? null}

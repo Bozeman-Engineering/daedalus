@@ -15,8 +15,8 @@ use Drupal\daedalus_blueprint\Host\HostInterface;
  * kinds' entities are read into records: it knows the entity, the
  * published rule, the sort order, and the spellings (the reserved
  * variable prefix, the attribute derivation); nothing downstream re-walks
- * the storage. daedalus_stylish provides tokens, swatches, variants and
- * animations; daedalus_blueprint_library provides blueprints.
+ * the storage. daedalus_stylish provides tokens, variants, animations and
+ * fonts; daedalus_blueprint_library provides blueprints.
  *
  * A provider is also the ONE implementation of its kinds' gestures: the
  * material gesture family (save_material / update_material /
@@ -32,7 +32,7 @@ interface MaterialsProviderInterface {
    *
    * Published materials only (the roster IS the published set), each
    * kind in the order its consumers list it (weight-then-label for
-   * variants, label for swatches, skin order for tokens).
+   * variants, label for animations and fonts, skin order for tokens).
    *
    * @return \Drupal\daedalus_blueprint\Materials\MaterialRecord[]
    *   The records. Ids must be unique within a kind and spellings unique
@@ -56,16 +56,37 @@ interface MaterialsProviderInterface {
    *
    * One clause per kind, taught on the cached prompt's MATERIALS mint line
    * after "save_material {kind, label, ...}:" (the provider is the one
-   * place that knows its kind's keys). The op and the gate are not the
-   * provider's to restate: the prompt names save_material once and frames
-   * every clause with "only when the user asks". A kind with no gesture is
-   * absent, and a kind taught here is a kind capture() / update() /
-   * remove() perform.
+   * place that knows its kind's keys). The op and the user's gate are not
+   * the provider's to restate: the prompt names save_material once and
+   * frames every clause with "only when the user asks". A kind with no
+   * gesture is absent, and a kind taught here is a kind capture() /
+   * update() / remove() perform, whatever the site's posture over the
+   * AI's mints (mintPosture()) says: the dispatch is by kind and the
+   * gate is judged by origin inside the lane.
    *
    * @return array<string, string>
    *   Kind value => the sentence.
    */
   public function gestureLines(): array;
+
+  /**
+   * The site's posture over the AI's mints of this provider's kinds.
+   *
+   * NULL while every gesture taught here is open to the AI; otherwise one
+   * sentence saying which of this provider's lanes the site has closed
+   * to the AI and what to offer instead. A closed lane refuses inside
+   * capture() by origin; this is the advertisement that precedes the
+   * refusal, stated once here and taught beside the gesture lines on the
+   * cached prompt's MINT line (a mint can be asked on any turn, so the
+   * posture rides the always-on layer) and on the JSON door's materials
+   * guidance (the provider's own schema hook). A provider that gates no
+   * lane answers NULL. The posture is a fact of the provider's config, so
+   * cacheMetadata() names the config it reads.
+   *
+   * @return string|null
+   *   The sentence, or NULL while the lanes are open.
+   */
+  public function mintPosture(): ?string;
 
   /**
    * Mints a material of a kind this provider owns (save_material).
@@ -136,5 +157,18 @@ interface MaterialsProviderInterface {
    * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
    */
   public function remove(MaterialKind $kind, string $id, array $options): MaterialGestureResult;
+
+  /**
+   * Drops whatever the provider memoizes per request about its records' inputs.
+   *
+   * Called by MaterialsRosterBuilder::reset() after the builder drops its
+   * own rosters, so the roster and every memo its records derive from are
+   * one derived value forgotten together: a law or material change
+   * mid-request resets the roster once and no provider keeps answering
+   * from the pre-change world. A provider with no per-request memo does
+   * nothing. Persisted caches are not the provider's to touch here; they
+   * ride the tags cacheMetadata() names.
+   */
+  public function reset(): void;
 
 }

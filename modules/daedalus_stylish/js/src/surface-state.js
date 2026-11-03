@@ -71,6 +71,35 @@ export const normalizePlace = (place) =>
   PLACES.includes(place) ? place : 'styles';
 
 /**
+ * The Design system place's tabs, in tab order.
+ *
+ * The place is the design system the site wears; its data content is
+ * exactly two things, the SKIN (tokens, animations, fonts: everything
+ * that swaps with the skin) and the VARIANTS (looks written in the
+ * skin's vocabulary, members of the system), and its code half, the
+ * LAW, hidden behind a permission granted to no role (InspectorGates::
+ * law()). The retired section ids ('palette', 'animations', 'fonts': the
+ * three tabs the Skin tab folded) fall outside the vocabulary.
+ */
+export const CATALOG_SECTIONS = ['skin', 'variants', 'law'];
+
+/**
+ * The tab the place opens on: the skin, what the site wears.
+ */
+export const DEFAULT_CATALOG_SECTION = 'skin';
+
+/**
+ * The tabs offered to this window: the law tab only under its gate.
+ *
+ * @param {boolean} lawOffered
+ *   The law gate (drupalSettings.daedalusStylish.law.canView === true).
+ *
+ * @return {string[]}
+ */
+export const catalogSectionsFor = (lawOffered) =>
+  CATALOG_SECTIONS.filter((section) => section !== 'law' || lawOffered === true);
+
+/**
  * Whether a wear key's entry wears the edited document.
  *
  * A reference IS the variant's record id (one identity, one string), so

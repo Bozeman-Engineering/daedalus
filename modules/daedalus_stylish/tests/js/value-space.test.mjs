@@ -41,8 +41,8 @@ const test = (name, run) => tests.push([name, run]);
 
 // A guide payload in the served shape: two dimension scales (spacing
 // deliberately collides 6 with gutter at the default condition; gutter
-// separates under dark), a condition-keyed type token, an empty scale,
-// and one dimension-valued swatch.
+// separates under dark), a condition-keyed type token and an empty
+// scale.
 const makeGuide = (enforcement) => ({
   enforcement,
   conditions: {
@@ -68,19 +68,10 @@ const makeGuide = (enforcement) => ({
       'title-2': { default: '1.5rem', dark: '1.75rem', 'narrow+dark': '2rem' },
     },
   },
-  swatches: [
-    {
-      machine_name: 'hero_gap',
-      label: 'Hero gap',
-      kind: 'dimension',
-      variable: '--swatch-hero_gap',
-      value: { default: '1rem', dark: '2rem' },
-    },
-  ],
 });
 
-// The fixture's tokens and swatch as the materials store carries them
-// (enforcement is a guide fact; the roster is the same on every posture).
+// The fixture's tokens as the materials store carries them (enforcement
+// is a guide fact; the roster is the same on every posture).
 const MATERIALS = materialsFrom(makeGuide('guarded'));
 
 const DIMENSION = { type: 'dimension' };
@@ -90,17 +81,19 @@ const DIMENSION = { type: 'dimension' };
 // fallback (FALLBACKS.padding, the spacing steps) the fallback cases read.
 const BARE = 'margin-top';
 
-// A color guide: one color scale and one color swatch, the materials a
-// color-shaped property's space reads (the store is its fallback).
+// A color guide: a color scale with a shipped and a site-minted token
+// and a gradient scale, the materials a color-shaped property's space
+// reads (the store is its fallback).
 const colorGuide = {
   enforcement: 'guarded',
-  tokenScales: { color: { label: 'Color', prefix: 'color', shape: 'color' } },
-  tokens: { color: { accent: '#1a1a2e' } },
-  swatchKinds: { color: { label: 'Colors' }, gradient: { label: 'Gradients' } },
-  swatches: [
-    { machine_name: 'lime_green', label: 'Lime green', kind: 'color', value: '#4dff8c' },
-    { machine_name: 'hero_fade', label: 'Hero fade', kind: 'gradient', value: 'linear-gradient(#000, #fff)' },
-  ],
+  tokenScales: {
+    color: { label: 'Color', prefix: 'color', shape: 'color' },
+    gradient: { label: 'Gradient', prefix: 'gradient', shape: 'gradient' },
+  },
+  tokens: {
+    color: { accent: '#1a1a2e', 'lime-green': { value: '#4dff8c', origin: 'user' } },
+    gradient: { 'hero-fade': { value: 'linear-gradient(#000, #fff)', origin: 'user' } },
+  },
 };
 const COLOR_MATERIALS = materialsFrom(colorGuide);
 
@@ -350,34 +343,34 @@ test('the space passes definition and constraints through', () => {
 });
 
 test('a color property\'s space reads the materials store', () => {
-  // Unconstrained: every color token then every color swatch, as
+  // Unconstrained: every offered color token, shipped or site-minted, as
   // reference stops displaying their values (the store IS the color
-  // fallback, so a swatch minted mid-session is in every color space at
-  // once); the gradient swatch never enters a color space.
+  // fallback, so a token minted mid-session is in every color space at
+  // once); the gradient token never enters a color space.
   const space = valueSpaceFor(colorGuide, COLOR_MATERIALS, 'color', { type: 'color' }, null);
   assert.equal(space.kind, 'detented');
   assert.deepEqual(space.stops.map((stop) => stop.value), ['#1a1a2e', '#4dff8c']);
-  assert.deepEqual(space.stops.map((stop) => stop.ref), ['var(--color-accent)', 'var(--swatch-lime_green)']);
-  assert.deepEqual(space.stops.map((stop) => stop.tokens[0].name), ['accent', 'Lime green']);
-  assert.deepEqual(space.stops.map((stop) => stop.tokens[0].kind), ['token', 'swatch']);
+  assert.deepEqual(space.stops.map((stop) => stop.ref), ['var(--color-accent)', 'var(--color-lime-green)']);
+  assert.deepEqual(space.stops.map((stop) => stop.tokens[0].name), ['accent', 'lime-green']);
+  assert.deepEqual(space.stops.map((stop) => stop.tokens[0].kind), ['token', 'token']);
   // Native option text: the material's name beside the display value.
-  assert.deepEqual(space.stops.map(stopLabel), ['accent · #1a1a2e', 'Lime green · #4dff8c']);
+  assert.deepEqual(space.stops.map(stopLabel), ['accent · #1a1a2e', 'lime-green · #4dff8c']);
   // The presentation payload rides every stop (the widget stop table's
   // paint / paintDark / group / media carried through, not dropped): the
   // color field's grid and the wells paint from it.
   assert.deepEqual(space.stops.map((stop) => stop.paint), ['#1a1a2e', '#4dff8c']);
   assert.deepEqual(space.stops.map((stop) => stop.paintDark), [null, null]);
-  assert.deepEqual(space.stops.map((stop) => stop.group), ['Color', 'Colors']);
+  assert.deepEqual(space.stops.map((stop) => stop.group), ['Color', 'Color']);
   assert.deepEqual(space.stops.map((stop) => stop.media), [false, false]);
   assert.deepEqual(space.stops.map((stop) => stop.thumbnail), [null, null]);
-  // Typing the swatch's value IS reaching the swatch (case-insensitive).
-  assert.equal(magneticCapture(space.stops, '#4DFF8C').ref, 'var(--swatch-lime_green)');
+  // Typing the token's value IS reaching the token (case-insensitive).
+  assert.equal(magneticCapture(space.stops, '#4DFF8C').ref, 'var(--color-lime-green)');
   assert.equal(magneticCapture(space.stops, '#123456'), null);
   // A closing constraint under law: the curated set, literals labeled as
   // themselves, references by their material.
-  const closed = valueSpaceFor(colorGuide, COLOR_MATERIALS, 'color', { type: 'color' }, { allowed: ['#111', 'var(--swatch-lime_green)'] });
+  const closed = valueSpaceFor(colorGuide, COLOR_MATERIALS, 'color', { type: 'color' }, { allowed: ['#111', 'var(--color-lime-green)'] });
   assert.equal(closed.kind, 'closed');
-  assert.deepEqual(closed.stops.map(stopLabel), ['#111', 'Lime green · #4dff8c']);
+  assert.deepEqual(closed.stops.map(stopLabel), ['#111', 'lime-green · #4dff8c']);
   assert.equal(stopLabel(closed.stops[0]), '#111');
   // A curated list is its own one section (no group on either entry:
   // the grid renders it headerless); a curated reference still paints
@@ -385,12 +378,13 @@ test('a color property\'s space reads the materials store', () => {
   assert.deepEqual(closed.stops.map((stop) => [stop.paint, stop.group]), [['#111', null], ['#4dff8c', null]]);
 });
 
-test('an image property\'s space reads the store\'s gradient swatches', () => {
+test('an image property\'s space reads the store\'s gradient tokens', () => {
   const space = valueSpaceFor(colorGuide, COLOR_MATERIALS, 'background-image', { type: 'text', media: true }, null);
   assert.equal(space.kind, 'detented');
-  assert.deepEqual(space.stops.map((stop) => stop.ref), ['var(--swatch-hero_fade)']);
+  assert.deepEqual(space.stops.map((stop) => stop.ref), ['var(--gradient-hero-fade)']);
   assert.equal(space.stops[0].value, 'linear-gradient(#000, #fff)');
-  assert.equal(space.stops[0].tokens[0].name, 'Hero fade');
+  assert.equal(space.stops[0].tokens[0].name, 'hero-fade');
+  assert.equal(space.stops[0].tokens[0].scale, 'gradient');
 });
 
 test('a keyword property is detented around its keywords; law closes it only with a constraint', () => {
@@ -419,7 +413,7 @@ test('spaceClosed: a closing constraint while constraints are law, per property'
   assert.equal(spaceClosed(guarded, {}), false);
   assert.equal(spaceClosed(guarded, { allowed: [] }), false);
   assert.equal(spaceClosed(guarded, { min: '0' }), false);
-  assert.equal(spaceClosed(guarded, { allowed: ['var(--swatch-hero_fade)'] }), true);
+  assert.equal(spaceClosed(guarded, { allowed: ['var(--gradient-hero-fade)'] }), true);
   assert.equal(spaceClosed(guarded, { scale: 'color' }), true);
   assert.equal(spaceClosed(makeGuide('strict'), { scale: 'color' }), true);
   assert.equal(spaceClosed(makeGuide('open'), { scale: 'color' }), false);
@@ -651,10 +645,14 @@ test('a condition-keyed token resolves its cascade winner at the pose', () => {
   assert.equal(displayAt(guide, MATERIALS, ref, 'narrow+dark'), '2rem', 'the compound entry beats its single part');
 });
 
-test('a swatch reference resolves the same way', () => {
+test('a site-minted token\'s reference resolves the same way', () => {
   const guide = makeGuide('open');
-  assert.equal(displayAt(guide, MATERIALS, 'var(--swatch-hero_gap)'), '1rem');
-  assert.equal(displayAt(guide, MATERIALS, 'var(--swatch-hero_gap)', 'dark'), '2rem');
+  const minted = materialsFrom({
+    tokenScales: guide.tokenScales,
+    tokens: { spacing: { 'hero-gap': { value: { default: '1rem', dark: '2rem' }, origin: 'user' } } },
+  });
+  assert.equal(displayAt(guide, minted, 'var(--space-hero-gap)'), '1rem');
+  assert.equal(displayAt(guide, minted, 'var(--space-hero-gap)', 'dark'), '2rem');
 });
 
 test('an unknown reference answers null; the face paints the raw spelling', () => {
@@ -777,8 +775,7 @@ const FACE_MATERIALS = materialsFrom(faceGuide);
 const shadowSpace = (constraints = { scale: 'shadow' }) => valueSpaceFor(faceGuide, FACE_MATERIALS, 'box-shadow', { type: 'text' }, constraints);
 
 test('stopFace: a numeric stop faces as its value whoever minted it', () => {
-  // 0.25rem for a spacing token (numbers read; the name is the hover),
-  // 1rem for the dimension swatch the space also carries.
+  // 0.25rem for a spacing token (numbers read; the name is the hover).
   const space = spacingSpace('guarded');
   assert.deepEqual(space.stops.map(stopFace), ['0.25rem', '0.5rem', '1rem', '1.5rem', '2rem']);
   assert.equal(space.stops[0].tokens[0].name, '1', 'the name still rides the token');
@@ -791,9 +788,9 @@ test('stopFace: a non-numeric material stop faces as its name', () => {
   assert.deepEqual(space.stops.map(stopFace), ['sm', 'md', 'lg']);
   assert.deepEqual(space.stops.map((stop) => stop.label), [null, null, null], 'a token stop carries no literal label; its name rides tokens');
   assert.deepEqual(space.stops.map((stop) => stop.id), ['var(--shadow-sm)', 'var(--shadow-md)', 'var(--shadow-lg)'], 'the widget stop id rides through');
-  // A color swatch likewise: the name, not the hex.
+  // A color token likewise: the name, not the hex.
   const colors = valueSpaceFor(colorGuide, COLOR_MATERIALS, 'color', { type: 'color' }, null);
-  assert.deepEqual(colors.stops.map(stopFace), ['accent', 'Lime green']);
+  assert.deepEqual(colors.stops.map(stopFace), ['accent', 'lime-green']);
 });
 
 test('stopFace: a curated literal faces as its label twin where one exists', () => {

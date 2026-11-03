@@ -2,7 +2,7 @@
  * @file
  * Locks the palette grid's pure half (palette-picker-model.js): the
  * shared grid's palette grouping and its listbox navigation (moved here
- * from the swatch well when the grid became the shared visual offer
+ * from the token well when the grid became the shared visual offer
  * surface). The offer itself is every property's value space
  * (widget-values.test.mjs fallbackFor / propertyStops); the grid derives
  * none. Run with:
@@ -15,15 +15,15 @@ import { groupedStops, listboxHome, listboxTarget } from '../../js/src/palette-p
 const stops = [
   { id: 'var(--color-accent)', value: 'var(--color-accent)', label: 'accent', paint: '#1a1a2e', paintDark: '#e8e8f0', group: 'Color' },
   { id: 'var(--color-surface)', value: 'var(--color-surface)', label: 'surface', paint: '#ffffff', paintDark: null, group: 'Color' },
-  { id: 'var(--swatch-brand_red)', value: 'var(--swatch-brand_red)', label: 'Brand red', paint: '#b91c1c', paintDark: null, group: 'Colors' },
-  { id: 'var(--swatch-hero_fade)', value: 'var(--swatch-hero_fade)', label: 'Hero fade', paint: 'linear-gradient(#000, #fff)', paintDark: null, group: 'Gradients' },
+  { id: 'var(--brand-red)', value: 'var(--brand-red)', label: 'red', paint: '#b91c1c', paintDark: null, group: 'Brand' },
+  { id: 'var(--gradient-hero-fade)', value: 'var(--gradient-hero-fade)', label: 'hero-fade', paint: 'linear-gradient(#000, #fff)', paintDark: null, group: 'Gradient' },
 ];
 
 test('groupedStops: sections per group label, first-seen order', () => {
   assert.deepEqual(groupedStops(stops), [
     { label: 'Color', stops: [stops[0], stops[1]] },
-    { label: 'Colors', stops: [stops[2]] },
-    { label: 'Gradients', stops: [stops[3]] },
+    { label: 'Brand', stops: [stops[2]] },
+    { label: 'Gradient', stops: [stops[3]] },
   ]);
 });
 

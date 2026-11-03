@@ -47,10 +47,21 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   part's stored letter-spacing) persists unconditionally as the one home
  *   for the orphaned style; relinking remounts the row, re-offers the
  *   completion, and the stored style lands back on the fresh anchor. The
- *   seams are pure wiring: the markup view recomposes off a canvas
- *   MutationObserver, the completion reads live presence facts at
- *   keystroke time, and only a browser can watch all three surfaces agree
- *   across one link toggle.
+ *   seams are pure wiring: the markup view composes off the effective
+ *   tree's annotation (placement-gated), the completion reads live
+ *   presence facts at keystroke time, and only a browser can watch all
+ *   three surfaces agree across one link toggle.
+ * - The live model during an open edit: a composed preview (a tag pick,
+ *   a link typed) reaches the blueprint's draft slot through the one
+ *   call in element-preview.js, so every reader of the effective tree
+ *   follows the gesture BEFORE blur: the page-elements row's tag fact
+ *   reads the picked tag, the markup view mounts the Link row, and
+ *   partPresence (the Stylish inspector's layout-context input) reports
+ *   the part, while the mirror's committed fields keep the server's word.
+ *   Escape re-previews the snapshot, so the draft returns to the
+ *   committed shape; a blur commits, and the facts hold across the
+ *   response that replaces the mirror and clears the draft. Only a
+ *   browser runs the chain (editor → twin → morph → draft → tree render).
  * - Links are selection surfaces, not navigation: a real double-click on
  *   the rendered anchor of the selected block must open the leaf's edit
  *   instead of leaving the page (the pointer grammar's capture-phase click
@@ -432,6 +443,40 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       'The text block edit is staged in tempstore, not committed to the node.',
     );
 
+    // Reveal the page-elements tree with its Markup view BEFORE the next
+    // edit opens, through the Show menu's real entry (the view slice seeds
+    // from localStorage only at boot, so the entry is the one live
+    // doorway, the same wiring a user drives). The Show menu rides the
+    // shared menu primitive: its entries are labelled menuitemcheckbox
+    // buttons (.daedalus-ui-menu__item > .daedalus-ui-menu__label), and
+    // activating one closes the menu before flipping the axis. The order
+    // matters: the page-elements panel declares no data-keeps-edit, so a
+    // press in it (the Show menu, expand all) while an edit is open is the
+    // session's commit case; with no edit open the presses are inert. The
+    // panel and the view stand from here on: the live-model steps below
+    // read the tree while an edit is open, and phase 2 reads it again.
+    $session->executeScript("Drupal.Daedalus.SidebarManager.openSidebar('page_elements');");
+    $this->assertJsCondition(
+      "!!document.querySelector('.daedalus-ui-tree') && !!document.querySelector('.daedalus-ui-show-menu__button')",
+      20000,
+      'The page-elements tree mounted with its Show menu.',
+    );
+    $this->setMarkupView(TRUE);
+    // Rows collapse; one expand-all press (the page elements root row's
+    // control over the tree's one outline) writes every foldable row's
+    // posture explicitly, and an explicit posture outlives the rows it
+    // was written for (outline/collapse.js), so the block row stays
+    // rendered through every swap below without another press. The
+    // row's tag fact reads the COMMITTED tag first, so the h2 read in
+    // the gesture below is a change, not a coincidence.
+    $block_row_tag = "document.querySelector('[data-tree-key=\"block:$component_uuid\"] .daedalus-ui-outline__tag')?.textContent";
+    $session->executeScript("document.querySelector('.daedalus-ui-tree__tools .daedalus-ui-expand-all')?.click();");
+    $this->assertJsCondition(
+      "$block_row_tag === 'h3'",
+      20000,
+      'Markup view on, expanded: the block row shows the committed tag fact h3.',
+    );
+
     // The tag picker: it lives behind the Tag entry's </> toggle on the
     // chip. The toggle acts on CLICK like every face button (its mousedown
     // only preventDefaults, keeping the caret in the text), while the tag
@@ -480,6 +525,31 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       JS,
       20000,
       'The tag picker previewed h3 to h2 in place (root retagged, nested anchor kept as the live surface) without ending the edit.',
+    );
+    // The live model: the same previewed tree the morph just painted is
+    // handed to the blueprint's draft slot (element-preview.js
+    // applyResolved → Blueprint.draftMarkup), and every reader of the
+    // effective tree follows it before any commit. The page-elements
+    // row's tag fact (markup-view.js toViewTree reading markup-index
+    // rootTag over the effective tree) reads h2 while the edit is still
+    // open and nothing has been sent; the facade's markupForKey is the
+    // same door one step down. The mirror itself keeps the committed
+    // h3: the draft is a sibling, never a write into the server's word.
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        const node = Blueprint.componentForUuid(Blueprint.getBlueprint(), '$component_uuid');
+        const committed = JSON.stringify(node?.block_fields?.field_text_tag ?? node?.field_text_tag ?? null);
+        return $block_row_tag === 'h2'
+          && Blueprint.markupForKey('block:$component_uuid')?.tag === 'h2'
+          && committed.includes('"h3"')
+          && Drupal.Daedalus.Edit.CurrentlyEditingElement !== null
+          && window.__blueprintPosts === 1;
+      })()
+      JS,
+      20000,
+      'Before blur: the page-elements row reads the previewed tag fact h2 off the effective tree while the committed tag is still h3 and nothing was sent.',
     );
     // The picker is the kit's segmented control: the pressed tag wears the
     // kit's active modifier beside its aria-pressed, the others neither.
@@ -549,6 +619,15 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       20000,
       'Escape restored the snapshot (h3 back) and sent no mutation.',
     );
+    // The cancel leg of the draft's lifecycle: Escape restores the
+    // snapshot through writeProperties, which re-previews, so the draft
+    // slot returns to the committed shape by the same door that set it
+    // (no edit-session hook clears it). The row follows back to h3.
+    $this->assertJsCondition(
+      "$block_row_tag === 'h3' && Drupal.Daedalus.Blueprint.markupForKey('block:$component_uuid')?.tag === 'h3'",
+      20000,
+      'After Escape: the page-elements row reads h3 again, the cancel having re-previewed the committed shape into the draft.',
+    );
 
     // The link round trip. Unlink first: clear the link input. The client
     // preview resolves the unlinked tree through the resolver twin and the
@@ -594,18 +673,27 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       'The unlink preview unmounted the anchor and re-seated the typing surface on the root, text intact, before any commit.',
     );
     // Blur commits: the swap re-renders the root as the bare tag element.
+    // The release signal is the COMMITTED field: since page-elements-panel
+    // T1 the effective tree carries the preview (the bare root and the
+    // draft without the href are true before any response), and only the
+    // mirror's `block_fields`, replaced after the swap, says the response
+    // landed and the node the next reopen double-clicks is the swapped one.
     $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();');
     $this->assertJsCondition(
       <<<JS
       (() => {
         const root = document.querySelector("$leaf");
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        const node = Blueprint.componentForUuid(Blueprint.getBlueprint(), '$component_uuid');
+        const committed = JSON.stringify(node?.block_fields?.field_text_url ?? node?.field_text_url ?? null);
         return window.__blueprintPosts === 2
           && !!root && root.matches("h3[data-daedalus-edit-text]")
-          && !JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()).includes('example.com');
+          && !JSON.stringify(Blueprint.getBlueprint()).includes('example.com')
+          && !committed.includes('example.com');
       })()
       JS,
       20000,
-      'The unlink committed and the swap re-rendered the bare tag root.',
+      'The unlink committed, the mirror no longer holds the fixture uri, and the swap re-rendered the bare tag root.',
     );
 
     // The conditional-part honesty, browser-verified: unlinked, no element
@@ -702,7 +790,12 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // Tab out commits: the link input is not one of the editor's edge
     // inputs, so the keydown falls through the popover to the session's
     // Tab grammar, which commits the gesture — "type the link, Tab, move
-    // on".
+    // on". The release signal is the COMMITTED url: since
+    // page-elements-panel T1 the effective tree carries the preview (the
+    // resolved anchor and its href are true before any response), and only
+    // the mirror's `block_fields`, replaced after the swap, says the
+    // response landed and the node the next reopen double-clicks is the
+    // swapped one.
     $session->executeScript(<<<JS
       document.querySelector(".daedalus-edit-link-input").dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
@@ -710,13 +803,17 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition(
       <<<JS
       (() => {
+        const Blueprint = Drupal.Daedalus.Blueprint;
+        const node = Blueprint.componentForUuid(Blueprint.getBlueprint(), '$component_uuid');
+        const committed = JSON.stringify(node?.block_fields?.field_text_url ?? node?.field_text_url ?? null);
         return window.__blueprintPosts === 3
           && !!document.querySelector("h3{$leaf} > a[href='https://drupal.org/'][data-daedalus-edit-text]")
-          && JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()).includes('https://drupal.org/');
+          && JSON.stringify(Blueprint.getBlueprint()).includes('https://drupal.org/')
+          && committed.includes('https://drupal.org/');
       })()
       JS,
       20000,
-      'Tab out of the link input committed the typed uri and the swap re-rendered the nested anchor.',
+      'Tab out of the link input committed the typed uri, the mirror holds it, and the swap re-rendered the nested anchor.',
     );
     // The wearing survived the whole link round trip: the server-rendered
     // relinked anchor carries the part class and the button styling again.
@@ -956,22 +1053,17 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     $presence_error = $session->evaluateScript('window.__presenceStyleError ?? null');
     $this->assertNull($presence_error, 'Styling the link part failed: ' . ($presence_error ?? ''));
 
-    // Select the block on the spine and reveal the page-elements tree
-    // with its Markup view through the Show menu's real entry (the view
-    // slice seeds from localStorage only at boot, so the entry is the one
-    // live doorway, the same wiring a user drives). The Show menu rides
-    // the shared menu primitive: its entries are labelled
-    // menuitemcheckbox buttons (.daedalus-ui-menu__item > .daedalus-ui-menu__label), and
-    // activating one closes the menu before flipping the axis.
+    // Select the block on the spine. The page-elements tree and its
+    // Markup view have stood since the tag-picker step above.
     //
     // The select is the popped-out inspector's road (app.Selection.select,
     // the daedalus_stylish leader's write): a landing, and a landing never
     // opens an editor, so it lands a PLAIN selection and opens nothing
     // (the editor door opens only by gesture: Enter, a double-click, the
-    // Edit verb). No edit is open when
-    // the chrome below is clicked, so the Show menu press (the
-    // page-elements panel declares no data-keeps-edit; the open edit's
-    // press decision would commit an edit on such a press) is inert.
+    // Edit verb). No edit is open when the chrome below is clicked, so
+    // the expand-all press (the page-elements panel declares no
+    // data-keeps-edit; the open edit's press decision would commit an
+    // edit on such a press) is inert.
     $session->executeScript("Drupal.Daedalus.Selection.select('block:$component2_uuid');");
     $this->assertJsCondition(
       <<<JS
@@ -988,19 +1080,19 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       20000,
       "Selection.select (the inspector's road) landed a plain selection on the linked block: no edit open, the frame plain.",
     );
-    $session->executeScript("Drupal.Daedalus.SidebarManager.openSidebar('page_elements');");
     $this->assertJsCondition(
       "!!document.querySelector('.daedalus-ui-tree') && !!document.querySelector('.daedalus-ui-show-menu__button')",
       20000,
-      'The page-elements tree mounted with its Show menu.',
+      'The page-elements tree, open since the tag-picker step, is still mounted with its Show menu.',
     );
-    $this->setMarkupView(TRUE);
 
     // Linked: the markup view mounts the Link shell row (placement-gated
-    // by compose through its live canvas channel: the anchor resolved as
-    // its own element). Rows collapse; the poll presses expand all (the
-    // page elements root row's control over the tree's one outline) on
-    // the way, the keyboard-free twin of a user expanding the tree.
+    // by compose through the markup-index partPlacement channel over the
+    // effective tree's annotation: the anchor resolved as its own
+    // element). The fresh block's rows collapse; the poll presses expand
+    // all (the page elements root row's control over the tree's one
+    // outline) on the way, the keyboard-free twin of a user expanding the
+    // tree.
     $expand_all = "document.querySelector('.daedalus-ui-tree__tools .daedalus-ui-expand-all')?.click()";
     $link_row = "[...document.querySelectorAll('.daedalus-ui-tree__row--part .daedalus-ui-outline__name')].some((el) => el.textContent === 'Link')";
     $this->assertJsCondition(
@@ -1137,8 +1229,8 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     $presence_error = $session->evaluateScript('window.__presenceUnlinkError ?? null');
     $this->assertNull($presence_error, 'Unlinking the presence-gating block failed: ' . ($presence_error ?? ''));
 
-    // A frame plus a settle beat before the negatives: the tree's
-    // recompose is MutationObserver-driven and a driven browser has been
+    // A frame plus a settle beat before the negatives: the tree
+    // re-renders off the replaced mirror and a driven browser has been
     // seen to lag a frame (build notes). Each negative below pairs with a
     // positive read in the same pass so a stale surface cannot fake it.
     $session->executeScript(<<<JS
@@ -1191,38 +1283,82 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     );
     $session->executeScript($clear_gesture);
 
-    // Relink: presence returns, the element projections reactivate with
-    // no manual refresh (the observer's class vocabulary sees the anchor
-    // arrive), and the stored style lands back on the fresh anchor.
+    // Relink through the Link verb, the gesture rather than the op, so the
+    // live model is seen mid-gesture: the typed uri previews the linked
+    // tree through the resolver twin, the morph mounts the anchor, and
+    // the same resolved tree reaches the draft slot. BEFORE blur, every
+    // reader of the effective tree reports the part: the facade's
+    // partPresence (the one input the Stylish inspector's layout context
+    // reads live, leader-source getLayoutContext, so the inspector offers
+    // the Link part), the markup view's Link row (compose's placement
+    // gate over the effective annotation; no expand-all press, which
+    // would commit the edit: the block row's explicit expanded posture
+    // from the presses above outlives its childless spell), the code
+    // view's part header row standing, and the stored part style landing
+    // on the PREVIEWED anchor through the key-rooted emission. The
+    // committed url is still absent: the mirror holds the server's word
+    // until the response. Unlinked, the root is the typing surface, so
+    // the double-click lands on the leaf itself.
+    $committed_url = "(() => { const Blueprint = Drupal.Daedalus.Blueprint;"
+      . " const node = Blueprint.componentForUuid(Blueprint.getBlueprint(), '$component2_uuid');"
+      . " return JSON.stringify(node?.block_fields?.field_text_url ?? node?.field_text_url ?? null); })()";
+    $link_presence = "Drupal.Daedalus.Blueprint.partPresence('block:$component2_uuid', '.text-block-link')";
+    $this->reopenEdit("block:$component2_uuid", $leaf2);
+    $this->assertJsCondition(
+      "Drupal.Daedalus.Edit.CurrentlyEditingElement !== null && !!document.querySelector(\"[data-daedalus-edit-toggle='link']\")"
+      . " && $link_presence === false && !($link_row)",
+      20000,
+      'Double-clicking the unlinked leaf opened the edit for the relink gesture: the part absent from the model and the tree.',
+    );
+    $session->executeScript(<<<JS
+      document.querySelector("[data-daedalus-edit-toggle='link']").click();
+      JS);
+    $this->assertJsCondition(
+      "!!document.querySelector(\".daedalus-edit-link-input\")",
+      20000,
+      'The Link toggle opened the link popover on the surface for the relink gesture.',
+    );
     $session->executeScript(<<<JS
       (() => {
-        const Blueprint = Drupal.Daedalus.Blueprint;
-        Blueprint.mutate(Object.assign({}, Blueprint.rootContext(), {
-          operations: [{
-            op: 'update_element',
-            element: '$component2_uuid',
-            properties: { field_text_url: { uri: 'https://drupal.org/' } },
-          }],
-        })).catch((error) => {
-          window.__presenceRelinkError = error.message;
-        });
+        const input = document.querySelector(".daedalus-edit-link-input");
+        input.value = 'https://drupal.org/';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
       })();
       JS);
     $this->assertJsCondition(
-      "window.__presenceRelinkError !== undefined"
-      . " || (() => { const anchor = document.querySelector(\"h3{$leaf2} > a.text-block-link\");"
-      . " return !!anchor && getComputedStyle(anchor).letterSpacing === '4px'; })()",
+      <<<JS
+      (() => {
+        const anchor = document.querySelector("h3{$leaf2} > a.text-block-link[href='https://drupal.org/']");
+        return !!anchor && getComputedStyle(anchor).letterSpacing === '4px'
+          && Drupal.Daedalus.Edit.CurrentlyEditingElement !== null
+          && $link_presence === true
+          && $link_row
+          && !!document.querySelector("$part_row")
+          && !($committed_url).includes('https://drupal.org/');
+      })()
+      JS,
       20000,
-      'Relinked: the part is back and its stored style applies to the anchor again.',
+      'Before blur: the link preview reached the model: partPresence reports the part, the markup view mounted the Link row with no press, the inspector part row stands, the stored style landed on the previewed anchor, and the committed url is still absent.',
     );
-    $presence_error = $session->evaluateScript('window.__presenceRelinkError ?? null');
-    $this->assertNull($presence_error, 'Relinking the presence-gating block failed: ' . ($presence_error ?? ''));
+    // Blur commits: the response replaces the mirror (clearing the draft)
+    // and the facts hold across it, no flicker back to the unlinked
+    // shape: the committed url now carries the uri, and every reader
+    // answers the same as it did mid-gesture.
+    $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();');
     $this->assertJsCondition(
-      "(() => {"
-      . " $expand_all;"
-      . " return $link_row; })()",
+      <<<JS
+      (() => {
+        const anchor = document.querySelector("h3{$leaf2} > a.text-block-link");
+        return ($committed_url).includes('https://drupal.org/')
+          && Drupal.Daedalus.Edit.CurrentlyEditingElement === null
+          && !!anchor && getComputedStyle(anchor).letterSpacing === '4px'
+          && $link_presence === true
+          && $link_row
+          && !!document.querySelector("$part_row");
+      })()
+      JS,
       20000,
-      'Relinked: the markup view Link row remounted with no manual refresh.',
+      'After the response: the relink committed, the part is back with its stored style, and partPresence, the Link row and the inspector part row hold.',
     );
 
     // ——— The link autocomplete cutover. The seam is core's REAL
@@ -1338,7 +1474,7 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     // the body gets a viewport of scroll room and the edited block
     // scrolls up past the viewport's top edge (its bottom edge at 0). The
     // chip model then flips the chip under the block (no room above the
-    // rail), the chip sits in the bar's band, and the surface, preferring
+    // rail), the chip sits inside the bar, and the surface, preferring
     // ABOVE the toggle, finds 2px there and flips below the chip, so the
     // popover straddles the bar's bottom edge. The scroll itself
     // dismisses the open link popover (outside-scroll dismissal is the
@@ -1430,6 +1566,52 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     $this->assertTrue(
       $geometry['aboveIsShort'] && $geometry['belowChip'],
       "Above the toggle is short, so the surface flipped the picker below the chip ($facts).",
+    );
+
+    // ——— The commit leg of the live model, on the picker left open above.
+    // A tag pick previews h2 into the draft (the row reads h2 while the
+    // committed tag is still h3), and the blur commits it: the response
+    // replaces the mirror with h2, the draft clears, and the row reads
+    // h2 across the round trip with nothing flickering back. Last so the
+    // h3 reads above stay what they were. ———
+    $block2_row_tag = "document.querySelector('[data-tree-key=\"block:$component2_uuid\"] .daedalus-ui-outline__tag')?.textContent";
+    $committed_tag = "(() => { const Blueprint = Drupal.Daedalus.Blueprint;"
+      . " const node = Blueprint.componentForUuid(Blueprint.getBlueprint(), '$component2_uuid');"
+      . " return JSON.stringify(node?.block_fields?.field_text_tag ?? node?.field_text_tag ?? null); })()";
+    $this->assertJsCondition(
+      "$block2_row_tag === 'h3' && ($committed_tag).includes('\"h3\"')",
+      20000,
+      'The second block\'s row reads the committed tag fact h3 before the pick.',
+    );
+    $session->executeScript(<<<JS
+      document.querySelector("[data-daedalus-edit-popover='tags'] button[data-tag='h2']")
+        .dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      JS);
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        return !!document.querySelector("h2{$leaf2} > a[data-daedalus-edit-text]")
+          && Drupal.Daedalus.Edit.CurrentlyEditingElement !== null
+          && $block2_row_tag === 'h2'
+          && ($committed_tag).includes('"h3"');
+      })()
+      JS,
+      20000,
+      'Before blur: the pick retagged the root to h2 in place and the row reads h2 off the draft while the committed tag is still h3.',
+    );
+    $session->executeScript('Drupal.Daedalus.Edit.CurrentlyEditingElement.plugin.blur();');
+    $this->assertJsCondition(
+      <<<JS
+      (() => {
+        return ($committed_tag).includes('"h2"')
+          && Drupal.Daedalus.Edit.CurrentlyEditingElement === null
+          && !!document.querySelector("h2{$leaf2} > a.text-block-link")
+          && $block2_row_tag === 'h2'
+          && Drupal.Daedalus.Blueprint.markupForKey('block:$component2_uuid')?.tag === 'h2';
+      })()
+      JS,
+      20000,
+      'After the response: the tag committed as h2, the swap rendered the h2 root, and the row and markupForKey read h2 off the replaced mirror.',
     );
   }
 

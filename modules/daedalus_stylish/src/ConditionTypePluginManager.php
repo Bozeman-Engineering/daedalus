@@ -9,6 +9,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Plugin\DefaultPluginManager;
 use Drupal\daedalus_stylish\Attribute\ConditionType;
+use Drupal\daedalus_blueprint\Materials\ConditionClause;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 
 /**
@@ -20,20 +21,23 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
  * is not a condition — it is the reserved always-applies entry key handled
  * by the printer and validator directly.
  *
- * Also the authority on the COMPOUND grammar: conditions live on axes
- * (state/structural/width/scheme/motion, declared per condition type), a style entry
- * may key on an "a+b" compound holding at most one condition per axis, and
- * the canonical part order is axis-declaration order
- * (canonicalizeCondition()) — accepted in any order on write, normalized
- * server-side, exactly the posture variant references take toward axis
- * order. A single condition is the compound of one.
+ * The COMPOUND grammar is ConditionClause's, read over this table:
+ * conditions live on axes (state/width/scheme/motion, declared per
+ * condition type), a style entry may key on an "a+b" compound of clauses
+ * holding at most one clause per axis (a clause a published name or a
+ * literal the browser knows), and the canonical clause order is
+ * axis-declaration order (canonicalizeCondition()) — accepted in any order
+ * on write, normalized server-side, exactly the posture variant references
+ * take toward axis order. A single condition is the compound of one. The
+ * methods here are the manager's adapters over the grammar, handing it the
+ * table; the client twin reads the guide payload's table the same way.
  */
 final class ConditionTypePluginManager extends DefaultPluginManager {
 
   /**
    * The delimiter joining a compound condition's parts.
    */
-  public const COMPOUND_DELIMITER = '+';
+  public const COMPOUND_DELIMITER = ConditionClause::DELIMITER;
 
   /**
    * Lazily built flattened map of condition name to definition.
@@ -113,10 +117,58 @@ final class ConditionTypePluginManager extends DefaultPluginManager {
   }
 
   /**
+   * The published condition a pseudo-class name is the CSS of, or NULL.
+   *
+   * The roster's read of "is this pseudo-class a state this site
+   * publishes": a qualifier ":hover" on any compound names the condition
+   * whose wrapper is ":hover" (the twin of DialectCatalog::
+   * pseudoClassCondition() on the AI side). The name is bare ("hover",
+   * never ":hover"), as the grammar records a pseudo-class qualifier.
+   *
+   * @param string $name
+   *   The bare pseudo-class name.
+   *
+   * @return string|null
+   *   The condition name, or NULL when no published condition is spelled
+   *   by that pseudo-class.
+   */
+  public function conditionForPseudoClass(string $name): ?string {
+    return static::conditionSpelledBy($this->getConditions(), $name);
+  }
+
+  /**
+   * The condition a pseudo-class name spells, over a condition table.
+   *
+   * The one lookup behind conditionForPseudoClass(), static so a reader
+   * holding the table rather than the manager (CssPrinter's static target
+   * seams, handed getConditions() by their caller) asks the same question
+   * the same way; the client twin is style-guide.js conditionForPseudoClass
+   * over the guide payload's `conditions`.
+   *
+   * @param array $conditions
+   *   A condition table: name => definition with a `wrapper` key
+   *   (getConditions()'s shape, or the client payload's).
+   * @param string $name
+   *   The bare pseudo-class name.
+   *
+   * @return string|null
+   *   The condition name, or NULL when no condition in the table is
+   *   spelled by that pseudo-class.
+   */
+  public static function conditionSpelledBy(array $conditions, string $name): ?string {
+    foreach ($conditions as $condition => $definition) {
+      if (($definition['wrapper'] ?? NULL) === ':' . $name) {
+        return (string) $condition;
+      }
+    }
+    return NULL;
+  }
+
+  /**
    * Gets the axis a condition name lives on.
    *
    * @return string|null
-   *   The axis ("state", "structural", "width", "scheme", "motion"), or
+   *   The axis ("state", "width", "scheme", "motion"), or
    *   NULL for an unknown condition.
    */
   public function getAxis(string $name): ?string {
@@ -124,76 +176,54 @@ final class ConditionTypePluginManager extends DefaultPluginManager {
   }
 
   /**
-   * Whether a condition is a structural fact rather than a posable state.
-   *
-   * The one read behind every fact consumer (the printers' bare wrapper,
-   * the client payload, the AI schema, the dialect catalog): a fact is
-   * whatever its plugin declared `fact: TRUE`
-   * (ConditionTypeInterface::getConditions()). Unknown names are not facts.
-   */
-  public function isFact(string $name): bool {
-    return ($this->getConditions()[$name]['fact'] ?? FALSE) === TRUE;
-  }
-
-  /**
    * The condition axes, in axis-declaration order.
    *
-   * The canonical compound part order: the order axes first appear across
-   * the flattened condition table (itself (weight, id)-ordered across the
-   * types). One vocabulary point, so the validator's one-per-axis check,
+   * The canonical compound clause order: the order axes first appear
+   * across the flattened condition table (itself (weight, id)-ordered
+   * across the types), ConditionClause::axisOrder() over the table. One
+   * vocabulary point, so the validator's one-per-axis check,
    * canonicalizeCondition(), and any UI grouping can never disagree.
    *
    * @return string[]
    *   The axis names, each once, in first-appearance order.
    */
   public function conditionAxes(): array {
-    $axes = [];
-    foreach ($this->getConditions() as $definition) {
-      $axes[$definition['axis']] = TRUE;
-    }
-    return array_keys($axes);
+    return ConditionClause::axisOrder($this->getConditions());
   }
 
   /**
-   * Splits a condition entry key into its compound parts.
+   * Splits a condition entry key into its compound clauses.
    *
-   * The ONE compound grammar: parts joined by "+". A single condition is
-   * the compound of one — every consumer (validator membership, printer
-   * wrapper composition, container detection) iterates parts through here
-   * so the grammar cannot fork.
+   * The ONE compound split (ConditionClause::split()): clauses joined by
+   * "+" at the top level, a "+" inside a literal's parentheses being the
+   * literal's own. A single condition is the compound of one — every
+   * consumer (validator membership, printer wrapper composition, container
+   * detection) iterates clauses through here so the grammar cannot fork.
    *
    * @return string[]
-   *   The parts, in spelled order.
+   *   The clause texts, in spelled order.
    */
   public static function compoundParts(string $condition): array {
-    return explode(self::COMPOUND_DELIMITER, $condition);
+    return ConditionClause::split($condition);
   }
 
   /**
-   * Canonicalizes a compound condition's part order.
+   * Canonicalizes a compound condition's spelling.
    *
-   * Write paths accept parts in any order (AI-friendly: "dark+narrow" and
+   * Write paths accept clauses in any order (AI-friendly: "dark+narrow" and
    * "narrow+dark" name the same condition) and normalize the stored
-   * spelling here — parts sort by their axis's position in
-   * conditionAxes(), the orderedEntryRefs() posture applied to conditions.
-   * Unknown parts sort after every placed part, keeping spelled order
-   * among themselves, so canonicalization never invents or drops anything;
-   * validity is the validator's job. Non-compound keys (single conditions,
-   * "default", reserved entry keys) pass through untouched.
+   * spelling here (ConditionClause::canonical() over the table): clauses
+   * sort by their axis's position in conditionAxes(), the
+   * orderedEntryRefs() posture applied to conditions, a literal prints its
+   * canonical text and a literal spelling a published wrapper prints the
+   * published name. Unknown words sort after every placed clause, keeping
+   * spelled order among themselves, so canonicalization never invents or
+   * drops anything; validity is the validator's job. "default" and the
+   * reserved entry keys are unknown words of one, so they pass through
+   * untouched.
    */
   public function canonicalizeCondition(string $condition): string {
-    if (!str_contains($condition, self::COMPOUND_DELIMITER)) {
-      return $condition;
-    }
-    $order = array_flip($this->conditionAxes());
-    $sortable = [];
-    foreach (self::compoundParts($condition) as $index => $part) {
-      $axis = $this->getAxis($part);
-      // The index tiebreak keeps the sort stable across PHP versions.
-      $sortable[] = [$axis !== NULL ? $order[$axis] : PHP_INT_MAX, $index, $part];
-    }
-    usort($sortable, static fn (array $a, array $b) => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
-    return implode(self::COMPOUND_DELIMITER, array_column($sortable, 2));
+    return ConditionClause::canonical($condition, $this->getConditions());
   }
 
   /**
@@ -254,10 +284,10 @@ final class ConditionTypePluginManager extends DefaultPluginManager {
   /**
    * Canonicalizes the condition keys of a single named VALUE, for storage.
    *
-   * The one-value slice of the token/swatch grammar ({condition: css} with
+   * The one-value slice of the token grammar ({condition: css} with
    * a 'default' entry): plain strings pass through untouched, condition
    * keys get canonical compound spellings — the write-side posture every
-   * value store shares (swatch values are the first caller).
+   * value store shares (token values are the one caller).
    *
    * @see self::normalizeMapConditions()
    */
@@ -275,13 +305,13 @@ final class ConditionTypePluginManager extends DefaultPluginManager {
   /**
    * Whether a condition wraps any declarations in a container query.
    *
-   * Compound-aware: a compound uses containers when ANY of its parts does
-   * ("narrow+dark" nests an @container wrapper).
+   * Compound-aware: a compound uses containers when ANY of its clauses is
+   * of the container form ("narrow+dark" nests an @container wrapper; so
+   * does a literal "@container (min-width: 500px)").
    */
   public function isContainerCondition(string $name): bool {
-    foreach (self::compoundParts($name) as $part) {
-      $wrapper = $this->getWrapper($part);
-      if ($wrapper !== NULL && str_starts_with($wrapper, '@container')) {
+    foreach (ConditionClause::parse($name, $this->getConditions()) as $clause) {
+      if ($clause['form'] === ConditionClause::CONTAINER) {
         return TRUE;
       }
     }
@@ -291,19 +321,17 @@ final class ConditionTypePluginManager extends DefaultPluginManager {
   /**
    * Whether a condition tests the user's color scheme preference.
    *
-   * Keyed on the declared preference fact
-   * (ConditionTypeInterface::getConditions(): preference.feature is
-   * "prefers-color-scheme"), never on the wrapper's text, the same read the
-   * canvas emulation matches a forced scheme against. Compound-aware like
-   * isContainerCondition(): "narrow+dark" is a scheme condition because one
-   * of its parts is. The defaults file reads this to decide whether the
-   * skin's values follow the visitor's scheme and so whether the UA's own
-   * chrome must too (CssPrinter::COLOR_SCHEME_RULE).
+   * Keyed on the preference the clause grammar derives from the clause's
+   * CSS (ConditionClause: preference.feature is "prefers-color-scheme"),
+   * the same read the canvas emulation matches a forced scheme against.
+   * Compound-aware like isContainerCondition(): "narrow+dark" is a scheme
+   * condition because one of its clauses is. The defaults file reads this
+   * to decide whether the skin's values follow the visitor's scheme and so
+   * whether the UA's own chrome must too (CssPrinter::COLOR_SCHEME_RULE).
    */
   public function isSchemeCondition(string $name): bool {
-    foreach (self::compoundParts($name) as $part) {
-      $feature = $this->getConditions()[$part]['preference']['feature'] ?? NULL;
-      if ($feature === 'prefers-color-scheme') {
+    foreach (ConditionClause::parse($name, $this->getConditions()) as $clause) {
+      if (($clause['preference']['feature'] ?? NULL) === 'prefers-color-scheme') {
         return TRUE;
       }
     }

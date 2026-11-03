@@ -22,7 +22,7 @@
 import { strict as assert } from 'node:assert';
 import { createLeaderSource } from '../../js/src/sources/leader-source.js';
 import { compoundOperations, createControlWidgetRegistry } from '../../js/src/controls.js';
-import { EMPTY_MATERIALS, animationRecord, fontRecord, roster, swatchRecord } from './materials-fixture.mjs';
+import { EMPTY_MATERIALS, animationRecord, fontRecord, roster, tokenRecord } from './materials-fixture.mjs';
 import { printKeyframes } from '../../js/src/printer.js';
 
 const UUID_A = 'aaaaaaaa-1111-2222-3333-444444444444';
@@ -109,7 +109,7 @@ const createApp = () => {
     },
     applied: [],
     // The materials facade: a fixed roster and the change subscription the
-    // source's swatch delivery extension binds to.
+    // source's token delivery extension binds to.
     materialsListeners: [],
     Materials: {
       getRoster: () => app.materials,
@@ -165,7 +165,7 @@ test('the materials delivery follows the materials store through the token scope
   const app = createApp();
   tokenScope = createRoot();
   // The lane prints a condition under the guide's wrapper, as the compiled
-  // swatch file does.
+  // skin file does.
   const source = createLeaderSource(app, {
     conditions: { dark: { label: 'Dark', wrapper: '@media (prefers-color-scheme: dark)', axis: 'scheme' } },
   });
@@ -178,26 +178,26 @@ test('the materials delivery follows the materials store through the token scope
   // record's custom property as an @scope block on the token scope
   // element in the preview sheet, its literals inline there as slots,
   // every condition under its wrapper.
-  const brand = swatchRecord('brand_red', 'color', '#b91c1c', 'Brand red');
-  const paper = swatchRecord('paper', 'color', { default: '#fdfdf6', dark: '#15151a' }, 'Paper');
+  const brand = tokenRecord('color', 'brand-red', '#b91c1c', 'color', { origin: 'user' });
+  const paper = tokenRecord('color', 'paper', { default: '#fdfdf6', dark: '#15151a' }, 'color', { origin: 'user' });
   const minted = roster(brand, paper);
   app.fireMaterialsChange(minted);
   assert.ok(previewCss().includes('@scope (.daedalus-stylish-token-scope)'));
-  assert.ok(previewCss().includes('--swatch-brand_red: var(--daedalus-stylish-live-1);'));
-  assert.ok(previewCss().includes('--swatch-paper: var(--daedalus-stylish-live-2);'));
+  assert.ok(previewCss().includes('--color-brand-red: var(--daedalus-stylish-live-1);'));
+  assert.ok(previewCss().includes('--color-paper: var(--daedalus-stylish-live-2);'));
   assert.ok(previewCss().includes('@media (prefers-color-scheme: dark)'), 'the paired value keeps its dark entry under its wrapper');
-  assert.ok(previewCss().includes('--swatch-paper: var(--daedalus-stylish-live-3);'));
+  assert.ok(previewCss().includes('--color-paper: var(--daedalus-stylish-live-3);'));
   assert.deepEqual(tokenScope.props, {
     '--daedalus-stylish-live-1': '#b91c1c',
     '--daedalus-stylish-live-2': '#fdfdf6',
     '--daedalus-stylish-live-3': '#15151a',
   });
   assert.deepEqual(seen, [minted]);
-  // A removed swatch leaves the lane (the delete rewrote every reference
+  // A removed token leaves the lane (the delete rewrote every reference
   // to the literal value, so the compiled file's stale property, where
   // one exists, changes no look); the other record keeps its delivery.
   app.fireMaterialsChange(roster(brand));
-  assert.ok(!previewCss().includes('--swatch-paper'));
+  assert.ok(!previewCss().includes('--color-paper'));
   assert.deepEqual(tokenScope.props, { '--daedalus-stylish-live-1': '#b91c1c' });
   // A preview lands a draft on the same property; null releases it back
   // to the record's own delivery; a record the store lost previews
@@ -209,7 +209,7 @@ test('the materials delivery follows the materials store through the token scope
   source.previewMaterial(null, '#00ff00');
   assert.deepEqual(tokenScope.props, { '--daedalus-stylish-live-1': '#b91c1c' });
   // A gesture route's response lands through the op queue's response path.
-  const response = { swatch: { machine_name: 'brand_red' }, materials: { upsert: [brand], remove: [] } };
+  const response = { materials: { upsert: [brand], remove: [] } };
   source.applyResponse(response);
   assert.deepEqual(app.applied, [response]);
   tokenScope = null;
@@ -232,9 +232,9 @@ test('the animation delivery extension prints the roster and substitutes session
   app.fireMaterialsChange(roster(fade, spin));
   assert.equal(animationCss(), `${printKeyframes('motion-fade_in', fade.value)}\n${printKeyframes('motion-spin', spin.value)}`);
   // The materials delivery and the animation extension share the change
-  // subscription; a swatch-only change delivers the swatch through the
+  // subscription; a token-only change delivers the token through the
   // token scope lane and leaves the keyframes sheet's text alone.
-  const brand = swatchRecord('brand_red', 'color', '#b91c1c', 'Brand red');
+  const brand = tokenRecord('color', 'brand-red', '#b91c1c', 'color', { origin: 'user' });
   app.fireMaterialsChange(roster(fade, spin, brand));
   assert.deepEqual(Object.values(tokenScope.props), ['#b91c1c']);
   assert.ok(animationCss().includes('@keyframes motion-spin'));
@@ -278,9 +278,9 @@ test('the font delivery re-reads the @font-face print exactly when the roster\'s
   try {
     createLeaderSource(app);
     // The boot roster is the compiled file's content: nothing to deliver,
-    // and an unrelated store change (a swatch) reads nothing either.
+    // and an unrelated store change (a token) reads nothing either.
     app.fireMaterialsChange(EMPTY_MATERIALS);
-    app.fireMaterialsChange(roster(swatchRecord('brand_red', 'color', '#b91c1c', 'Brand red')));
+    app.fireMaterialsChange(roster(tokenRecord('color', 'brand-red', '#b91c1c', 'color', { origin: 'user' })));
     await settle();
     assert.deepEqual(reads, []);
     assert.equal(fontsTag, null);
@@ -289,7 +289,7 @@ test('the font delivery re-reads the @font-face print exactly when the roster\'s
     const inter = fontRecord('inter', 'Inter', 'Inter', [{ weight: '400', style: 'normal', source: { file: 'f1' } }]);
     app.fireMaterialsChange(roster(inter));
     await settle();
-    assert.deepEqual(reads, ['/daedalus_stylish/fonts/stylesheet']);
+    assert.deepEqual(reads, ['/daedalus_stylish/skin/fonts/stylesheet']);
     assert.equal(fontsCss(), '\n@font-face { font-family: "Inter"; }\n');
     // A label or description edit changes no at-rule: no read.
     app.fireMaterialsChange(roster(fontRecord('inter', 'Renamed', 'Inter', inter.value.faces, { description: 'x' })));
@@ -402,17 +402,17 @@ test('a key-less material op batch releases nothing and reports without an eleme
   // A staged preview on another key must survive a material op's batch:
   // save_material addresses no style key, so the release set is empty.
   source.preview(CHILD, 'default', 'text-align', 'center');
-  const operation = { op: 'save_material', kind: 'swatch', label: 'Ember', group: 'color', value: '#ff5a1f' };
-  const request = source.commitBatch({ operations: [operation], label: 'Added the swatch Ember' });
+  const operation = { op: 'save_material', kind: 'token', label: 'ember', group: 'color', value: '#ff5a1f' };
+  const request = source.commitBatch({ operations: [operation], label: 'Saved the color as the token ember' });
   assert.deepEqual(app.mutations[0].operations, [operation]);
-  const payload = { success: true, materials: { upsert: [{ kind: 'swatch', id: 'ember' }], remove: [] } };
+  const payload = { success: true, materials: { upsert: [{ kind: 'token', id: 'color/ember' }], remove: [] } };
   app.pending[0].resolve(payload);
   // The batch resolves with the applied payload (the caller reads its
   // record from the delta) and the unrelated preview still paints.
   assert.deepEqual(await request, payload);
   assert.ok(previewCss().includes('text-align: var(--daedalus-stylish-live-1)'));
   // A failure reports once, flashing no element (there is none).
-  const failing = source.commitBatch({ operations: [operation], label: 'Added the swatch Ember' });
+  const failing = source.commitBatch({ operations: [operation], label: 'Saved the color as the token ember' });
   const failure = new Error('That label is taken.');
   app.pending[1].reject(failure);
   await assert.rejects(failing, failure);
@@ -732,6 +732,95 @@ test('getMarkup serves the mirror annotation through the app facade', () => {
   const source = createLeaderSource(app, {});
   assert.equal(source.getMarkup(CHILD), markup);
   assert.equal(source.getMarkup('block:other'), null);
+});
+
+test('getSelfProvenance names a blueprint canvas by its read and nothing else', () => {
+  const app = createApp();
+  const source = createLeaderSource(app, {});
+  // The default fixture (no entity_type) is no blueprint canvas.
+  assert.equal(source.getSelfProvenance(), null);
+  // A blueprint host's read carries the identity key and the machine name
+  // scalar (BlueprintSerializer: entity_type, fields.machine_name).
+  app.Blueprint.getBlueprint = () => ({ entity_type: 'blueprint', fields: { machine_name: 'section' }, layout: [] });
+  assert.equal(source.getSelfProvenance(), 'section');
+  // A node's read with a machine_name field of its own is still no
+  // blueprint canvas; a blueprint read without the name answers nothing.
+  app.Blueprint.getBlueprint = () => ({ entity_type: 'node', fields: { machine_name: 'section' } });
+  assert.equal(source.getSelfProvenance(), null);
+  app.Blueprint.getBlueprint = () => ({ entity_type: 'blueprint', fields: {} });
+  assert.equal(source.getSelfProvenance(), null);
+  app.Blueprint.getBlueprint = () => null;
+  assert.equal(source.getSelfProvenance(), null);
+});
+
+test('getDocument is the document tree over the mirror, keyed by the envelope\'s root uuid; getTree stays the layout', () => {
+  const app = createApp();
+  const source = createLeaderSource(app, {});
+  const HOST = 'cccccccc-1111-2222-3333-444444444444';
+  const layout = [{ kind: 'container', uuid: UUID_B, children: [{ kind: 'block', uuid: UUID_A }] }];
+  const element = { type: 'Basic page', name: 'Welcome', icon: null, markup: {} };
+  app.Blueprint.getBlueprint = () => ({ styles: {}, layout, _element: element });
+  app.Blueprint.getRoot = () => ({ uuid: HOST });
+  // One entity node above the sections (daedalus_ui documentTree): the
+  // uuid is the envelope's (getRoot(), the mirror's root; the serializer
+  // emits none), the annotation the blueprint root's, the children the
+  // very layout array the walkers read through getTree().
+  const document = source.getDocument();
+  assert.deepEqual(document, [{ kind: 'entity', uuid: HOST, _element: element, children: layout }]);
+  assert.equal(document[0].children, layout);
+  assert.equal(source.getTree(), layout);
+  // No root on the envelope: a keyless root; the sections keep their ancestry.
+  app.Blueprint.getRoot = () => null;
+  assert.equal(source.getDocument()[0].uuid, null);
+  // No mirror yet: an empty document beside the empty layout.
+  app.Blueprint.getBlueprint = () => null;
+  assert.deepEqual(source.getDocument(), []);
+  assert.deepEqual(source.getTree(), []);
+  // The root's words ride the document's root node, never a read of
+  // their own beside the tree.
+  assert.equal('getRootElement' in source, false);
+});
+
+test('getDocument answers one reference per blueprint state: the same array until the mirror or the root changes', () => {
+  const app = createApp();
+  const source = createLeaderSource(app, {});
+  const HOST = 'cccccccc-1111-2222-3333-444444444444';
+  const layout = [{ kind: 'container', uuid: UUID_B, children: [{ kind: 'block', uuid: UUID_A }] }];
+  let blueprint = { styles: {}, layout, _element: { name: 'Welcome', type: 'Page', icon: null, markup: {} } };
+  app.Blueprint.getBlueprint = () => blueprint;
+  app.Blueprint.getRoot = () => ({ uuid: HOST });
+  // The mirror is a store: getBlueprint() is one object until a reducer
+  // replaces it, and getTree() answers its very `layout`. The document
+  // holds the same identity, so a `[document]` memo in the panel indexes
+  // the page once per blueprint state, never once per render.
+  const first = source.getDocument();
+  assert.equal(source.getDocument(), first);
+  assert.equal(source.getDocument(), first);
+  assert.equal(first[0].children, source.getTree());
+  // A reducer replaced the blueprint (a structurally equal one included):
+  // a new document, derived over the new object.
+  blueprint = { ...blueprint, layout: [...layout] };
+  const second = source.getDocument();
+  assert.notEqual(second, first);
+  assert.equal(second[0].children, blueprint.layout);
+  assert.equal(source.getDocument(), second);
+  // The root changed under the same blueprint: a new document keyed by it.
+  app.Blueprint.getRoot = () => ({ uuid: UUID_A });
+  const third = source.getDocument();
+  assert.notEqual(third, second);
+  assert.equal(third[0].uuid, UUID_A);
+  assert.equal(source.getDocument(), third);
+  // The root went away: keyless, and again one reference.
+  app.Blueprint.getRoot = () => null;
+  const keyless = source.getDocument();
+  assert.notEqual(keyless, third);
+  assert.equal(keyless[0].uuid, null);
+  assert.equal(source.getDocument(), keyless);
+  // No mirror: the empty document is held the same way.
+  app.Blueprint.getBlueprint = () => null;
+  const empty = source.getDocument();
+  assert.deepEqual(empty, []);
+  assert.equal(source.getDocument(), empty);
 });
 
 let failures = 0;

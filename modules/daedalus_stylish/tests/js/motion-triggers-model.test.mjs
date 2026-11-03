@@ -106,7 +106,7 @@ test('parseAnimationTrigger: none, empty and malformed read null', () => {
 });
 
 test('observerOptions: entry shrinks the root by the fraction of the element height, threshold 0; the end is not read (every end is honoured as exit 100%)', () => {
-  // A 400px band in a 900px viewport: entry 20% is 80px in.
+  // A 400px section in a 900px viewport: entry 20% is 80px in.
   assert.deepEqual(observerOptions({ edge: 'entry', percent: 20 }, 400, 900), { threshold: 0, rootMargin: '0px 0px -80px 0px' });
   // The curated stop and the bare start's native range (`entry 20% entry
   // 100%`) shape the same observer: the documented polyfill approximation.
@@ -127,7 +127,7 @@ test('observerOptions: contain is fully entered plus the fraction of the free sp
   // contain 100% = the start edge at the scrollport's start edge.
   assert.equal(observerOptions({ edge: 'contain', percent: 100 }, 400, 900).rootMargin, '0px 0px -899px 0px');
   assert.equal(observerOptions({ edge: 'contain', percent: 50 }, 400, 900).rootMargin, '0px 0px -650px 0px');
-  // cover 50% on a 400px band is 650px in (half of the 1300px sweep).
+  // cover 50% on a 400px section is 650px in (half of the 1300px sweep).
   assert.equal(observerOptions({ edge: 'cover', percent: 50 }, 400, 900).rootMargin, '0px 0px -650px 0px');
   assert.equal(observerOptions({ edge: 'cover', percent: 0 }, 400, 900).rootMargin, '0px');
 });

@@ -12,7 +12,7 @@ import { elementIcon, elementWord, subjectChip } from './subject-model.js';
  * The subject line: the selection pill, "at", the address chip.
  *
  * The first line of the inspector's sentence, universal: every mode of
- * the styling place and the Materials place mount it for a selection
+ * the styling place and the Design system place mount it for a selection
  * (the model, subject-model.js, says what the words are). The pill is
  * the selected element in the outline row grammar's selected-row dress
  * (daedalus_ui panel-controls.css: the wash, the kind icon as a mask,
@@ -55,7 +55,7 @@ export const SubjectLine = ({
   source,
   selected,
   targetKey,
-  tree,
+  document,
   own,
   addresses,
   address,
@@ -66,8 +66,8 @@ export const SubjectLine = ({
 }) => {
   const menu = useMenu();
   const matcher = useMemo(
-    () => (Array.isArray(tree) ? createMatcher(tree) : null),
-    [tree],
+    () => (Array.isArray(document) ? createMatcher(document) : null),
+    [document],
   );
   const chip = subjectChip({
     guide,

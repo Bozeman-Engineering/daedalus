@@ -10,6 +10,7 @@ import {
   partTag,
   partLabel,
 } from '../../blueprint/markup-index';
+import { effectiveBlueprint } from '../../blueprint/effective-blueprint';
 
 /**
  * THE selection index over the panel's projected tree, BOTH tiers:
@@ -43,7 +44,7 @@ import {
  * (owner, selector); the string form is used only as this map's key
  * (selectorAddress). Rows exist only for placed shell parts, instance
  * carriers and delivered boxes: a facet the index does not place (the
- * children '> *', a type '> pb-text', a tag tier, a box nothing
+ * children '> *', a type '> d-text', a tag tier, a box nothing
  * delivers) seats on the selected element, as does a placed row the
  * panel is not currently drawing (reach.js seatAddress). The write
  * address (a rule on an ancestor, the slice's `address`) is no row and
@@ -99,10 +100,13 @@ let index = null;
 /**
  * What the index reads, by reference: a change in any of the three
  * re-derives it (the generated-box rows read all three through
- * generated-rows.js; the rest of the tree rides the mirror alone).
+ * generated-rows.js; the rest of the tree rides the mirror alone). The
+ * mirror read is the EFFECTIVE tree (effective-blueprint.js): a
+ * composed-edit preview drafts its resolved markup beside the mirror, and
+ * the index re-derives on it exactly as on a mutation response.
  */
 const indexSourceOf = (state) => ({
-  mirror: state.blueprint.blueprint,
+  mirror: effectiveBlueprint(state),
   records: state.materials.records,
   behavior: getPartBehavior(),
 });
@@ -147,12 +151,12 @@ export const splitAddress = (address) => {
  * Pre-order: an owner's entry is set before its subtree walks, so a part
  * row can ask whether its owner is presented by the time it is reached.
  */
-const buildIndex = (state) => {
+const buildIndex = (root, blueprint) => {
   const map = new Map();
   const tree = withGeneratedRows(
     toViewTree(
-      compose(state.blueprint, drupalSettings.daedalusUi?.anatomy, {
-        root: state.root,
+      compose(blueprint, drupalSettings.daedalusUi?.anatomy, {
+        root,
         targets: true,
         placement: partPlacement,
       }),
@@ -241,17 +245,17 @@ const buildIndex = (state) => {
  */
 export const projectionIndex = () => {
   const state = store.getState();
-  if (!state.blueprint.blueprint || !state.blueprint.root) {
+  const source = indexSourceOf(state);
+  if (!source.mirror || !state.blueprint.root) {
     return null;
   }
-  const source = indexSourceOf(state);
   if (
     indexSource?.mirror !== source.mirror ||
     indexSource?.records !== source.records ||
     indexSource?.behavior !== source.behavior
   ) {
     indexSource = source;
-    index = buildIndex(state.blueprint);
+    index = buildIndex(state.blueprint.root, source.mirror);
   }
   return index;
 };

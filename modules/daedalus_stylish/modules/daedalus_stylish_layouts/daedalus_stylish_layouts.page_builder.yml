@@ -17,7 +17,7 @@
 #
 # - width: the constrained content width, spelled as a padding-inline stop
 #   (a gutter for free below the max). Root-only (depth: root) for OFFER
-#   and BIRTH: full width vs constrained middle is page-band business, so
+#   and BIRTH: full width vs constrained middle is section business, so
 #   a nested section (always constrained by its parent container) gets
 #   neither the axis's offer nor its birth default. Placement curates
 #   offers and birth, never legality: the grant below is the same at
@@ -36,7 +36,7 @@
 #   wear-the-axis warning, doctrine rather than legality.
 # - animation: the entrance a container wears (the block kind's twin,
 #   declared in daedalus_stylish.page_builder.yml), fed by the shipped entrance
-#   variants below in daedalus_stylish_layouts.daedalus_stylish.variants.yml. A page band
+#   variants below in daedalus_stylish_layouts.daedalus_stylish.variants.yml. A section
 #   fading in at load is the canonical motion demo. Offered at every
 #   depth, no birth default: a container is born still. An axis variant
 #   spells as an attribute value in the SCOPE's own slot
@@ -74,12 +74,12 @@ container:
   #
   # The stack is a FLEX COLUMN, not a grid. A single-column grid stretches
   # its rows (`align-content: normal` acts as stretch on auto tracks), so
-  # a band taller than its content spreads that surplus between its
+  # a section taller than its content spreads that surplus between its
   # children, the space nobody asked for; a flex column packs its children
   # at the top (items grow 0), still honors the gap, and gives per-child
   # vertical placement a real spelling (free main-axis space goes to auto
   # margins before justify-content, so a child with `margin-top: auto`
-  # sits at the band's foot). It is also ONE arranging model with the
+  # sits at the section's foot). It is also ONE arranging model with the
   # Columns variant below: the variant flips the direction, and its
   # narrow block IS the stack. The gap is declared beside it because the
   # stack holds only what the page builder owns: a plain stack's zero gap
@@ -96,7 +96,7 @@ container:
   variant_axes:
     - width:
         depth: root
-        description: 'How wide a page band lets its content run: the site column every band shares, a narrower measure for reading, or edge to edge inside the site gutter. A band''s background spans the screen at every width, so Full width is about the content reaching the edges, never the way to get a full-bleed background. A page band states it; a nested container inherits its band and never wears it.'
+        description: 'How wide a section lets its content run: the site column every section shares, a narrower measure for reading, or edge to edge inside the site gutter. A section''s background spans the screen at every width, so Full width is about the content reaching the edges, never the way to get a full-bleed background. A section states it; a nested container inherits its section''s width and never wears it.'
         owns:
           - padding-left
           - padding-right
@@ -108,12 +108,12 @@ container:
           - flex-direction
     - animation:
         label: 'Animation'
-        description: 'The entrance a container plays as it enters the view. A container is born still; reach for an entrance on a band that should arrive, not on every band.'
+        description: 'The entrance a container plays as it enters the view. A container is born still; reach for an entrance on a section that should arrive, not on every section.'
     - hover:
         label: 'Hover'
         description: 'The feel a container answers a pointer with. The variant carries its own hover state, so the wear never carries a condition.'
   # The root's ordered forms; first match wins, so the empty forms precede
-  # their populated twins. Two facts swap the form: depth (a page band is
+  # their populated twins. Two facts swap the form: depth (a section is
   # a real <section>; nested, a container is a plain grouping <div>) and
   # emptiness (no components), which carries the declared drop-affordance
   # marker — the ONE emptiness fact every consumer reads (the render, the
@@ -141,9 +141,9 @@ container:
     # Placement curates offers and birth, never legality: a container's
     # grant is its declaration's grant at every depth, so the whole
     # spacing group is granted here, the `padding` shorthand and the
-    # inline sides included (a page band padded on four sides, a nested
+    # inline sides included (a section padded on four sides, a nested
     # card likewise). The width variants and the skins' container
-    # defaults spell the band's inline inset as padding-inline; an own
+    # defaults spell the section's inline inset as padding-inline; an own
     # padding write that masks that inset is a layer mask like any other,
     # surfaced by the inspector's provenance (the worn variant shows what
     # was overridden, Reset overrides restores it), never prevented by
@@ -151,7 +151,7 @@ container:
     spacing: {}
     background: {}
     layout: {}
-    # Motion: a page band fading in as it scrolls into view is the
+    # Motion: a section fading in as it scrolls into view is the
     # canonical animation demo, and transitions ride the same group.
     # Effects (transform and opacity) ride beside it, the block kind's
     # twin: the hover axis's Lift moves with a transform, an entrance

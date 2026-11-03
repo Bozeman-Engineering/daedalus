@@ -38,7 +38,10 @@ import { highlightRects } from './canvas-painters.js';
  * arithmetic and a box has no rect, only its hosts do, and tinting the
  * host's padding for the box's would lie about where the value lives.
  */
-export const createCanvasHighlight = ({ app, source }) => {
+export const createCanvasHighlight = ({ app, source, guide = {} }) => {
+  // The posable states, for the structural reach a state-qualified rule
+  // measures (computed-read.js resolveTargets).
+  const conditions = guide?.conditions ?? {};
   const root = document.getElementById('daedalus-root');
   if (!root) {
     return null;
@@ -58,7 +61,7 @@ export const createCanvasHighlight = ({ app, source }) => {
   // see the file doc), else every element the target hits.
   const measurable = () =>
     spec && pseudoOf(spec.selector) === null
-      ? resolveTargets(spec.key, spec.selector)
+      ? resolveTargets(spec.key, spec.selector, conditions)
       : [];
   const tracker = app.geometry.createTracker({
     resolve: (index) => {

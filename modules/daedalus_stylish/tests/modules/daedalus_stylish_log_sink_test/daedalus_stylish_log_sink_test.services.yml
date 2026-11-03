@@ -1,0 +1,10 @@
+services:
+  # The sink: a tagged logger every container built while this module is
+  # enabled carries, keeping the daedalus_stylish channel in a static
+  # array (an anonymous logger added to one container's factory is dropped
+  # with that container, and the install hooks under test log into the
+  # next one).
+  daedalus_stylish_log_sink_test.log_sink:
+    class: Drupal\daedalus_stylish_log_sink_test\LogSink
+    tags:
+      - { name: logger }

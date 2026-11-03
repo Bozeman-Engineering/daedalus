@@ -54,7 +54,7 @@ class BlueprintSchemaCatalogTest extends BlueprintKernelTestBase {
     $guidance = $materials['guidance'];
     // The placement spelling is the page language's element; the retired
     // op and its location grammar never come back.
-    $this->assertStringContainsString('<pb-blueprint name="id"/>', $guidance);
+    $this->assertStringContainsString('<d-blueprint name="id"/>', $guidance);
     $this->assertStringNotContainsString('place_blueprint', $guidance);
     $this->assertStringNotContainsString('{anchor, placement', $guidance);
     // Blueprints are framed as one of the site's materials, and the
@@ -72,15 +72,16 @@ class BlueprintSchemaCatalogTest extends BlueprintKernelTestBase {
     // action needs an image block type this site has none of, so it is
     // not offered to entity_test and is absent here (the roster still
     // carries it), as it is absent from the Add panel on the same canvas.
-    // The listing is the site favorites (the hero ships favorite: true);
-    // the index beside it counts the hero under the reserved bucket, since
+    // The listing is every shared block blueprint (the hero's favorite:
+    // true is the Add panel's listing and means nothing here); the index
+    // beside it counts the hero under the reserved bucket, since
     // its groups (heroes, openers) are ids no layer declares on this
     // kernel and an undeclared id counts nowhere.
     $this->assertSame([
       'label' => 'Hero',
       'description' => 'Single-column hero banner with a heading.',
       'scope' => 'block',
-      'unprintable' => 'The page language cannot print this blueprint (<pb-container> is a section on the "layout_onecol" layout, which the page language does not spell); place it as <pb-blueprint name="hero"/> and style the placed elements once they print with ids.',
+      'unprintable' => 'The page language cannot print this blueprint (<d-container> is a section on the "layout_onecol" layout, which the page language does not spell); place it as <d-blueprint name="hero"/> and style the placed elements once they print with ids.',
     ], $materials['blueprints']['hero']);
     $this->assertSame(['hero'], array_keys($materials['blueprints']));
     $this->assertSame([DialectCatalog::UNGROUPED => ['blueprints' => 1]], $materials['groups']);
@@ -92,12 +93,12 @@ class BlueprintSchemaCatalogTest extends BlueprintKernelTestBase {
     // Saving a content blueprint refreshes the catalog: the roster's cache
     // tags were declared on the schema cache entry. Its document is one
     // container-layout section holding a plugin block, which the page
-    // language prints as a fragment. A favorite, so the default listing
-    // prints it; the index counts it beside the hero.
+    // language prints as a fragment. Shared (the default) and no
+    // favorite, so the default listing prints it; the index counts it
+    // beside the hero.
     $blueprint = $this->createBlueprint([
       'label' => 'My Block',
       'description' => 'A content blueprint holding one block.',
-      'favorite' => TRUE,
     ], [$this->section('eb_test_container', [$this->pluginComponent('system_powered_by_block')])]);
 
     $schema = $this->schemaBuilder()->getSchema('entity_test', 'entity_test');
@@ -106,8 +107,8 @@ class BlueprintSchemaCatalogTest extends BlueprintKernelTestBase {
     $this->assertSame('block', $entry['scope'], 'A content blueprint advertises its scope.');
     $this->assertSame(['label', 'description', 'scope', 'entity_id', 'fragment'], array_keys($entry), 'A saved blueprint carries the page id the AI reads it back by.');
     $this->assertSame((string) $blueprint->id(), $entry['entity_id']);
-    $this->assertStringStartsWith('<pb-container', $entry['fragment'], 'A container-layout document prints as a fragment.');
-    $this->assertStringContainsString('<pb-block plugin="system_powered_by_block" />', $entry['fragment']);
+    $this->assertStringStartsWith('<d-container', $entry['fragment'], 'A container-layout document prints as a fragment.');
+    $this->assertStringContainsString('<d-block plugin="system_powered_by_block" />', $entry['fragment']);
     $this->assertStringNotContainsString(' id="', $entry['fragment'], 'A fragment prints without ids.');
 
     // The AI opt-out: a withheld blueprint leaves the schema (the fragment
@@ -172,8 +173,8 @@ class BlueprintSchemaCatalogTest extends BlueprintKernelTestBase {
         'entity_id' => (string) $page->id(),
       ],
     ], $schema['starts']);
-    $this->assertSame(['hero'], array_keys($schema['materials']['blueprints']), 'The fragment lists the block-scope favorites alone.');
-    $this->assertSame([DialectCatalog::UNGROUPED => ['blueprints' => 2]], $schema['materials']['groups'], 'The index counts block scope alone, the non-favorite included.');
+    $this->assertSame(['hero', 'my_block'], array_keys($schema['materials']['blueprints']), 'The fragment lists every shared block blueprint, page scope excluded.');
+    $this->assertSame([DialectCatalog::UNGROUPED => ['blueprints' => 2]], $schema['materials']['groups'], 'The index counts block scope alone.');
     $this->assertStringNotContainsString('Whole page', json_encode($schema['materials']));
     $this->assertStringNotContainsString('Withheld from the AI', json_encode($schema));
 

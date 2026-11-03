@@ -17,7 +17,7 @@ use Drupal\daedalus_stylish\ControlWidgetBase;
  * child's placement vocabulary. A container parent is always a flex box
  * by the declared tier (a flex column stacked, a flex row under Columns),
  * so the cross axis is align-self and the main axis of a stack is the
- * auto-margin pair: `margin-top: auto` pins a child to a tall band's
+ * auto-margin pair: `margin-top: auto` pins a child to a tall section's
  * bottom, `margin-bottom: auto` to its top, both center it (free space
  * goes to auto margins before justify-content, CSS Flexbox 8.1). A
  * hand-made grid parent keeps align-self + justify-self. Root-bound on

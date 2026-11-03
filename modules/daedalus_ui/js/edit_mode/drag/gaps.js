@@ -520,7 +520,7 @@ export const containerKeyForLocation = (location) => {
 };
 
 /**
- * Whether a placement location lands in the root flow (a page band's
+ * Whether a placement location lands in the root flow (a section's
  * position): the container it inserts into is the projection root, the
  * page entity itself, rather than a container on the page.
  *

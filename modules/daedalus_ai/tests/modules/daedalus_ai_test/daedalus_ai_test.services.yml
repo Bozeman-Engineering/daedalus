@@ -6,3 +6,8 @@ services:
       - '@file.repository'
     tags:
       - { name: daedalus_ai.deferred_processor }
+
+  # What the stub provider (daedalus_ai_test_stub) was handed, for tests
+  # that drive the real prompt assembly and read the ChatInput back.
+  daedalus_ai_test.chat_capture:
+    class: Drupal\daedalus_ai_test\ChatCapture

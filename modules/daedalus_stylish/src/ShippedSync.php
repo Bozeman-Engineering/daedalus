@@ -5,66 +5,64 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityDefinitionUpdateManagerInterface;
-use Drupal\Core\Installer\InstallerKernel;
 use Drupal\Core\Logger\LoggerChannelInterface;
-use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 
 /**
  * The one activation lane for module-shipped daedalus_stylish definitions.
  *
- * Modules ship fonts, animations, swatches, skins, and variants as YAML
- * beside their code (see ShippedDefinitionsImporter); this orchestrator
- * runs the five importers over a module set in dependency order and
- * answers with one report per kind. The order is the reference graph: a
- * skin's font token and a variant's stack name a family ("Inter"), a
- * variant may name an animation (motion-*), a swatch (--swatch-*), or a
- * token the active skin mints (var(--space-4)), and a strict site refuses
- * a reference to a material that is not published yet. Fonts, then
- * animations, then swatches, then skins, then variants lets one module
- * ship a self-referencing package that lands clean in a single run; in
- * any other order the variants fail on their own module's materials (one
- * site's did).
+ * Modules ship skins (with their tokens, animations, fonts and defaults)
+ * and variants as YAML beside their code (see ShippedDefinitionsImporter);
+ * this orchestrator runs the two importers over a module set in
+ * dependency order and answers with one report per kind. The order is
+ * the reference graph: a variant may name an animation (motion-*) or a
+ * token the active skin mints (var(--space-4), var(--color-accent)), and
+ * the roster's verdict (VariantConformance) withholds a variant naming a
+ * material that is not published yet. Skins, then variants lets one
+ * module ship a self-referencing package whose variants are offered the
+ * moment the run ends; in any other order the variants land withheld on
+ * their own module's materials until the next verdict.
  *
- * Four entries, all thin: hook_rebuild() (every enabled module, at the
- * end of drupal_flush_all_caches(), so `drush cr`, the UI's clear-all,
- * `drush updb`, and site install all activate shipped definitions),
- * hook_modules_installed() (the batch, or everything when daedalus_stylish itself
- * installs, because a provider may have been enabled before the system
- * that can host its files existed), a design system being activated
- * (every enabled module, because the site's law is the active system's
- * and an activation is when a definition the previous law refused can
- * land: the incoming package, which the importers defer whole while its
- * system is inactive, and everything a site install's batch left
- * waiting), and the `daedalus_stylish:sync` drush command. Rebuild, install and
- * the activation log their outcomes; the command prints them. A deferred
- * package is silent in the log (a converged state, like unchanged) and
- * named by the command.
+ * Five entries, all thin: hook_rebuild() (every enabled module, at the
+ * end of drupal_flush_all_caches(), so `drush cr`, the UI's clear-all
+ * and `drush updb` all activate shipped definitions; core's installer no
+ * longer ends in a rebuild), hook_modules_installed() (the batch, or
+ * everything when daedalus_stylish itself installs, because a provider
+ * may have been enabled before the system that can host its files
+ * existed), a design system becoming the active one, by its activation
+ * or by its config landing under a pointer that already names it (every
+ * enabled module, because the importers defer a package whole while its
+ * system is not the active, landed one, and the system becoming active
+ * is what lands it), the default theme landing, by system.theme's
+ * default changing to an installed theme or by the theme the default
+ * already names being installed (every enabled module, because the skins
+ * kind waits while the named default theme is not installed: a skin's
+ * defaults validate against the default theme's guide, which is the
+ * site's only once the theme's chain layers; config import writes
+ * system.theme late, so an install from exported config lands its
+ * package's skin at that save), and the `daedalus_stylish:sync` drush
+ * command. Rebuild, install, the activation and the theme landing log
+ * their outcomes; the command prints them. A deferred package or kind is
+ * silent in the log (a converged state, like unchanged) and named by the
+ * command. The two law changes through config (the pointer, the default
+ * theme) reach here through DesignSystemSwitchSubscriber, the one sweep
+ * that resets the roster and the guide before the sync and recompiles
+ * after it; the install hooks reset the guide before syncing for the
+ * same reason (a sync runs under the guide of the moment).
  *
- * The install entry waits while the site itself is being installed
- * (InstallerKernel::installationAttempted()) and has no design system
- * yet: the installer enables the modules before the recipe's config and
- * actions land, so the batch runs
- * on a site with no design system and no skin, where a global naming a
- * bound token (daedalus_stylish_layouts' Columns variant, gap var(--space-gutter))
- * is refused with nothing minted, and the recipe's activation action
- * lands it moments later. A refusal the same install resolves is not a
- * failure `drush si` should report, so the batch syncs nothing, silently
- * (a recipe installs its ingredients in many batches and the entry fires
- * for each; a line per batch is a wall of them, and nothing in it is
- * actionable mid-install), and the activation lands every enabled
- * module's definitions whole. Once the activation has given the site its
- * law, a later ingredient's batch (the recipe installs its block types
- * after the styling ingredient, each shipping variants scoped to its own
- * type) syncs at install like a batch outside the installer: nothing the
- * activation could resolve is pending any more, and the installer ends
- * with no cache rebuild, so a batch that kept waiting would land only at
- * the site's first `drush cr`. An install that activates no system (a
- * recipe or profile listing daedalus_stylish alone) lands its globals at the
- * site's first cache rebuild, whose log carries whatever that sync
- * refuses. Outside the installer (`drush en`,
- * a recipe applied to an existing site) the batch syncs as before: the
- * site has its law already, and a recipe's activation on such a site
- * still re-syncs what its batch refused.
+ * A definition fails the sync on structure alone (VariantImporter; a
+ * shipped variant validates on the validator's landing lane): whether
+ * the site's law of the day offers it is the roster's verdict, so a
+ * global the current law refuses (daedalus_stylish_layouts' Columns
+ * variant, gap var(--space-gutter), on a site with nothing minted) lands
+ * withheld and is offered and delivered, with no re-sync, once a skin
+ * mints the token or the law opens (every law change recompiles the
+ * variants file; _daedalus_stylish_delivery_compile()). Hence the
+ * install entry syncs every batch as it installs, inside the installer
+ * or out: a fresh install's batches land their globals before the
+ * recipe's activation gives the site its system (withheld until it
+ * does), a batch after the activation lands under the site's law, and
+ * the installer ends with no cache rebuild to wait for. Each batch logs
+ * its outcomes (unchanged is silent).
  *
  * Activating on cache rebuild is a deliberate departure from core, which
  * writes content on install and in update hooks only. A module's blueprint
@@ -76,7 +74,7 @@ use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
  * command), validation failures surface in the log rather than a command's
  * output, and every rebuild pays a YAML parse plus a hash compare per
  * shipping module (an unchanged definition is a no-op). Nothing is
- * clobbered: a site-edited variant, swatch or animation is KEPT by its
+ * clobbered: a site-edited variant is KEPT by its
  * importer, and a skin's site edits live in its own site layer, which the
  * skins importer never writes (it has no KEPT: the package layer is
  * locked on a consuming site, so new defaults always land under the
@@ -85,12 +83,8 @@ use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 final class ShippedSync {
 
   public function __construct(
-    protected FontImporter $fonts,
-    protected AnimationImporter $animations,
-    protected SwatchImporter $swatches,
     protected SkinImporter $skins,
     protected VariantImporter $variants,
-    protected ActiveDesignSystem $activeDesignSystem,
     protected EntityDefinitionUpdateManagerInterface $updateManager,
     protected LoggerChannelInterface $logger,
   ) {}
@@ -99,13 +93,13 @@ final class ShippedSync {
    * The importers in dependency order, keyed by kind.
    *
    * @return array<string, \Drupal\daedalus_stylish\ShippedDefinitionsImporter>
-   *   Fonts, animations, swatches, skins, variants: each kind after every
-   *   kind it may reference (a skin's font token and a variant's stack
-   *   name a family, so the fonts land first).
+   *   Skins, variants: each kind after every kind it may reference (a
+   *   variant's motion-{name} names a skin's animation and its var() a
+   *   skin's token, so the skins land before the variants).
    */
   public function importers(): array {
     $importers = [];
-    foreach ([$this->fonts, $this->animations, $this->swatches, $this->skins, $this->variants] as $importer) {
+    foreach ([$this->skins, $this->variants] as $importer) {
       $importers[$importer->kind()] = $importer;
     }
     return $importers;
@@ -124,7 +118,7 @@ final class ShippedSync {
    *   no file of a kind are simply not providers of it.
    *
    * @return \Drupal\daedalus_stylish\ShippedSyncReport
-   *   The five kinds' reports, in sync order.
+   *   The three kinds' reports, in sync order.
    */
   public function sync(?array $modules = NULL): ShippedSyncReport {
     $reports = [];
@@ -141,32 +135,32 @@ final class ShippedSync {
    * modules shipping definitions may have been enabled before daedalus_stylish
    * existed, and their defaults must arrive the moment the system that can
    * host them does. Otherwise only the just-installed modules sync.
-   * During a site install a batch that arrives before the site has a
-   * design system waits silently instead (see the class comment): the
-   * recipe's activation, or failing that the site's first cache rebuild,
-   * syncs it. A batch after the activation syncs at install: the site
-   * has its law, and the installer ends with no rebuild to catch up on.
-   * Outcomes are logged.
+   * A site install's batches sync as they install, the ones before the
+   * recipe's activation included (see the class comment): a global the
+   * site cannot offer yet lands withheld, nothing is refused for law, and
+   * the installer ends with no rebuild to catch up on. Outcomes are
+   * logged.
    *
    * @param string[] $modules
    *   The installed batch.
    */
   public function onInstall(array $modules): void {
-    if (InstallerKernel::installationAttempted() && $this->activeDesignSystem->load() === NULL) {
-      return;
-    }
     $this->log($this->sync(in_array('daedalus_stylish', $modules, TRUE) ? NULL : $modules));
   }
 
   /**
    * Reacts to a cache rebuild (hook_rebuild()): every enabled module syncs.
    *
-   * Guarded: when entity definition updates are pending (new code pulled
-   * whose base fields or entity types are not installed yet), saving
-   * entities against the stale schema would break the rebuild itself, so
-   * the sync is skipped with one error line. `drush updb` installs the
-   * updates and ends in a cache rebuild, which then syncs. Outcomes are
-   * logged.
+   * Guarded: when entity definition updates are pending on a kind's own
+   * entity type (new daedalus_stylish code pulled whose base fields are
+   * not installed yet), saving entities against the stale schema would
+   * break the rebuild itself, so the sync is skipped with one error line
+   * naming the types. daedalus_stylish ships the update hooks that
+   * install its own changes, so `drush updb` installs them and ends in a
+   * cache rebuild, which then syncs. Pending updates on any other entity
+   * type (a core or contrib type a site's stack altered without an update
+   * hook) are not this lane's concern and never block it: the sync reads
+   * and writes the kinds' storages alone. Outcomes are logged.
    *
    * @return bool
    *   TRUE when the sync ran, FALSE when the guard skipped it; the
@@ -174,8 +168,12 @@ final class ShippedSync {
    *   ride the same guard, since they read the same storages.
    */
   public function onRebuild(): bool {
-    if ($this->updateManager->needsUpdates()) {
-      $this->logger->error('Shipped daedalus_stylish definitions were not synced: entity definition updates are pending. Run `drush updb`; the cache rebuild at its end syncs them.');
+    $pending = array_keys(array_intersect_key(
+      $this->updateManager->getChangeList(),
+      array_flip(array_map(static fn (ShippedDefinitionsImporter $importer): string => $importer->entityTypeId(), $this->importers())),
+    ));
+    if ($pending !== []) {
+      $this->logger->error('Shipped daedalus_stylish definitions were not synced: entity definition updates are pending for @types. Run `drush updb` (daedalus_stylish ships the update hooks that install them); the cache rebuild at its end syncs them.', ['@types' => implode(', ', $pending)]);
       return FALSE;
     }
     $this->log($this->sync());
@@ -185,34 +183,49 @@ final class ShippedSync {
   /**
    * Reacts to a design system becoming the active one: every module syncs.
    *
-   * A member validates against its own system's tokens and materials,
-   * but against the SITE's law, and the site's law is the active
-   * system's: its enforcement, the guide's design-system stratum (axes,
-   * scales, bindings) its package layers through daedalus_ui, and
-   * the tokens its default skin mints. An activation changes all of it
-   * at once, so it is the moment a definition the previous law refused
-   * can land, and every enabled module syncs. Two cases meet here. The
-   * incoming package: the importers defer a package whole while its
-   * system is inactive (install, the system's config landing, every
-   * rebuild in between: nothing of it is read), so the activation is
-   * what lands it, under its own law, in the activation itself. The
-   * globals: a fresh install's batch waits for the installer
-   * (onInstall()), so nothing has landed when the recipe's activation
-   * action gives the site its system, and the sweep here lands every
-   * enabled module's definitions, a fresh site whole without a cache
-   * rebuild; on an existing site a recipe's batch syncs under the law
-   * the site had, and the sweep lands what that law refused (a global
-   * naming a token on a scale the suite binds, with nothing minted).
-   * A converged definition is unchanged and silent, so a later
-   * activation of an already landed site logs nothing. The caller has
-   * reset the declarations before this runs
-   * (DesignSystemSwitchSubscriber). A site-built system packages nothing
-   * of its own, and the globals sync under its law like any other
-   * activation; the outgoing system's members are not touched (their
-   * entities stay, the roster simply stops offering them). Outcomes are
-   * logged.
+   * The sweep exists for the incoming package: the importers defer a
+   * package whole while its system is inactive (install, the system's
+   * config landing, every rebuild in between: nothing of it is read,
+   * because its variants' axes and parts are the system's own stratum,
+   * layered only while it is active), so the activation is what lands
+   * it, under its own law, in the activation itself and with no cache
+   * rebuild (a recipe's activation action lands a fresh site's package
+   * this way; an install from exported config writes the pointer before
+   * the system's entity imports, so there the entity's landing is the
+   * activation and lands it). Nothing else needs the sweep: the globals
+   * landed with their batches, and the ones the outgoing law could not offer were
+   * never refused by the sync, only withheld by the roster's verdict,
+   * which re-judges them under the incoming law on its own. Every enabled
+   * module syncs because the package's provider is not known here; a
+   * converged definition is unchanged and silent, so a later activation
+   * of an already landed site logs nothing. The caller has reset the
+   * declarations before this runs (DesignSystemSwitchSubscriber). A
+   * site-built system packages nothing of its own; the outgoing system's
+   * members are not touched (their entities stay, the roster simply
+   * stops offering them). Outcomes are logged.
    */
   public function onDesignSystemActivated(): void {
+    $this->log($this->sync());
+  }
+
+  /**
+   * Reacts to the default theme landing: every module syncs.
+   *
+   * The sweep exists for the skins kind: SkinImporter defers every
+   * skin-shipping module while system.theme names a default theme that is
+   * not installed (its defaults validate against the default theme's
+   * guide, whose chain layers only once the theme is installed), and the
+   * theme landing is what lands them. Two saves land it: system.theme's
+   * default changing to an installed theme (config import's order, where
+   * the installer's stark stands in until the config phase imports
+   * system.theme; a recipe's set-default action), and the install of the
+   * theme the default already names (hook_themes_installed()). Every
+   * enabled module syncs because the waiting providers are not known
+   * here; a converged definition is unchanged and silent, so a default
+   * theme change on a landed site logs nothing. The caller has reset the
+   * guide before this runs. Outcomes are logged.
+   */
+  public function onDefaultThemeChanged(): void {
     $this->log($this->sync());
   }
 

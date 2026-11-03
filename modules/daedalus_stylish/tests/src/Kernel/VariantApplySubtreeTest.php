@@ -76,22 +76,16 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
     // Variant references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-* and var() references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installEntitySchema('user');
     // Access-transparent like the operations suite: these tests verify
@@ -1155,7 +1149,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     // element wears), a type compound its own kind (a rule's matches may
     // be any layout), and the full address keeps the layout.
     $this->assertNull($validator->captureScope("container:{$ids['nsec']}::.daedalus-stylish-layout-container", $context));
-    $this->assertSame('kind:container', (string) $validator->captureScope("container:{$ids['nsec']}::> pb-container", $context));
+    $this->assertSame('kind:container', (string) $validator->captureScope("container:{$ids['nsec']}::> d-container", $context));
     $this->assertSame('layout:daedalus_stylish_container::.daedalus-stylish-layout-container', (string) $validator->keyAddress("container:{$ids['nsec']}::.daedalus-stylish-layout-container", $context));
     // An ordinary inline block still scopes by block type, and a block
     // INSIDE the nested section resolves too (the locator walks depth).
@@ -1192,7 +1186,7 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'container(1)' => ['default' => ['gap' => '2rem']],
     ])->save();
     [$entity, $ids] = $this->buildComposition([]);
-    $rule = "container:{$ids['sec']}::> pb-container";
+    $rule = "container:{$ids['sec']}::> d-container";
 
     $result = $this->operations->batchOperations($this->host($entity), [
       ['op' => 'apply_variant', 'key' => $rule, 'variant' => 'card'],

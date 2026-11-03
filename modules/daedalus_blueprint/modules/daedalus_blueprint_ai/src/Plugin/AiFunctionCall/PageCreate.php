@@ -11,8 +11,10 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\ai\Attribute\FunctionCall;
 use Drupal\ai\OperationType\Chat\Tools\ToolsFunctionInput;
 use Drupal\ai\Service\FunctionCalling\FunctionCallInterface;
+use Drupal\daedalus_blueprint\BundleListBuilder;
 use Drupal\daedalus_blueprint\Host\PageStart;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
+use Drupal\daedalus_blueprint\Tool\ParameterProse;
 use Drupal\daedalus_blueprint_ai\DialectCatalogPrompt;
 use Drupal\daedalus_blueprint_ai\PageToolBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -34,7 +36,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * page lands with its fields alone and no document is seeded under it.
  * Either source is applied to the in-memory entity ahead of the one save
  * that lands entity and document together. Non-page entities (config,
- * variants, swatches, skins, media, a bundle no page document renders)
+ * variants, skins, media, a bundle no page document renders)
  * stay on eb_create_entity's JSON blueprint; this tool is for pages. A
  * saved blueprint is a page of its own (entity_type blueprint, whose
  * document is material for its subject's pages), so it is born here too:
@@ -46,38 +48,39 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
   id: 'daedalus_blueprint:page_create',
   function_name: 'page_create',
   name: 'Page Create',
-  description: 'Creates a new page in one gesture. Workflow: (1) Call eb_skill for create_entity (its checklist names the skills a new page needs). (2) Call eb_read_schema for the chosen type+bundle. (3) Present your plan to the user and wait for approval. (4) Call this tool: entity fields (title etc.) in "fields", and the page\'s first document from ONE source: "start" or "layout". "start" is one of three: "template" (the bundle\'s default layout, the one a page made in the UI gets), "blank" (an empty page), or the id of a page blueprint (a whole saved page, copied into the new page; the bundle\'s schema read lists the ones offered for it under "starts"). "layout" is the whole page authored as ONE page-language document (top-level <pb-container> elements, styles inline or in a trailing <style> block); compose and style together. The bundle decides: when its pages own their layout, pass exactly one of start or layout; when they fill a locked template\'s slots, pass fields and optionally start (template, or a page blueprint of slot fills from the bundle\'s starts; never layout) and fill the slots with page_edit afterwards; when they render the template outright, pass neither (fields only). Saves and publishes the new page at once (a page must exist before edits can stage; every page_edit after this stages until the user saves). Returns the page URL, id echoes, and the page print. A saved blueprint is authored the same way: entity_type blueprint, bundle blueprint, fields {label, description, scope (block: one root container placed into pages; page: a whole page, a start for new pages), subject_type and subject_bundle (the kind of page it is for, whose fields its field blocks name)}, layout its composition.',
+  description: 'Creates a new page in one gesture: entity fields (title etc.) in "fields", and the page\'s first document as "start" or "layout". "start" is one of three: "template" (the bundle\'s default layout, the one a page made in the UI gets), "blank" (an empty page), or the id of a page blueprint (a whole saved page, copied into the new page; the bundle\'s schema read lists the ones offered for it under "starts"). "layout" is the whole page authored as one page-language document (top-level <d-container> elements, styles inline or in a trailing <style> block). The bundle decides which it takes, and start and layout are never passed together: pages that own their layout take exactly one of them; pages that fill a locked template\'s slots take fields and optionally start (template, or a page blueprint of slot fills from the bundle\'s starts), never layout, the slots filled with page_edit afterwards; pages that render the template outright take neither (fields only). Saves and publishes the new page at once. Returns the page URL, id echoes, and the page print. A saved blueprint is authored the same way: entity_type blueprint, bundle blueprint, fields {label, description, scope (block: one root container placed into pages; page: a whole page, a start for new pages), subject_type and subject_bundle (the kind of page it is for, whose fields its field blocks name)}, layout its composition.',
   group: 'modification_tools',
   context_definitions: [
     'entity_type' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Entity Type'),
       required: TRUE,
-      description: new TranslatableMarkup('The entity type ID (e.g. node).'),
+      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+      description: new TranslatableMarkup(ParameterProse::ENTITY_TYPE),
     ),
     'bundle' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Bundle'),
       required: TRUE,
-      description: new TranslatableMarkup('The bundle (e.g. page). eb_read_schema teaches the entity-level fields per bundle.'),
+      description: new TranslatableMarkup('The bundle (e.g. page); the PAGES line names the page bundles.'),
     ),
     'fields' => new ContextDefinition(
       data_type: 'map',
       label: new TranslatableMarkup('Fields'),
       required: FALSE,
-      description: new TranslatableMarkup('Entity field values (title, ...), never layout: the layout parameter carries the page content.'),
+      description: new TranslatableMarkup('Entity field values (title, ...) as eb_read_schema prints them for the bundle; never layout: the layout parameter carries the page content.'),
     ),
     'start' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Start'),
       required: FALSE,
-      description: new TranslatableMarkup('The page\'s first document, picked: "template" (the bundle\'s default layout), "blank" (an empty page) or a page blueprint id from the bundle\'s schema read (its "starts" list). Exactly one of start or layout for a bundle whose pages own their layout; optional (template, or a blueprint of slot fills) for a bundle whose pages fill a locked template\'s slots; omitted for a bundle whose pages render the template outright.'),
+      description: new TranslatableMarkup('The page\'s first document, picked: "template" (the bundle\'s default layout), "blank" (an empty page) or a page blueprint id from the bundle\'s schema read (its "starts" list).'),
     ),
     'layout' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Layout'),
       required: FALSE,
-      description: new TranslatableMarkup("The page's first document, authored: the whole page as one page-language document. Exactly one of start or layout for a bundle whose pages own their layout; omitted for a bundle whose pages render the template (the slots of a locked bundle are filled with page_edit on the new page)."),
+      description: new TranslatableMarkup("The page's first document, authored: the whole page as one page-language document."),
     ),
   ],
 )]
@@ -113,7 +116,7 @@ class PageCreate extends PageToolBase {
    * The wire description closes with the birth rule the cached container
    * line states, from the same axes (DialectCatalogPrompt::
    * totalStatementProse()): a document is a total statement, and which
-   * axes a band states is the site's data, never this attribute's.
+   * axes a section states is the site's data, never this attribute's.
    */
   public function normalize(): ToolsFunctionInput {
     $function = parent::normalize();
@@ -127,7 +130,7 @@ class PageCreate extends PageToolBase {
    */
   public function execute() {
     // The tool-input fact rides an event before anything judges the input,
-    // so dev tools capture exactly what arrived, guards included.
+    // so a diagnostic capture sees exactly what arrived, guards included.
     $this->dispatchToolInput();
     if (!$this->requireValidParams()) {
       return;
@@ -138,7 +141,7 @@ class PageCreate extends PageToolBase {
     if (!$this->requireDocumentHostType($entity_type) || !$this->requireFieldableType($entity_type)) {
       return;
     }
-    if (!$this->requireVisibleEntityType($entity_type, $bundle)) {
+    if (!$this->requirePageBundleNamed($entity_type, $bundle)) {
       return;
     }
 
@@ -160,9 +163,10 @@ class PageCreate extends PageToolBase {
     $owns_document = $takes_start && !$locked;
     if (!$takes_start && ($bundle_host === NULL || $this->hostResolver->renderHost($bundle_host) === $bundle_host)) {
       $this->output = sprintf(
-        'Error: %s/%s is not a page bundle (no page document renders its entities), so page_create is not its door: create it with eb_create_entity.',
+        'Error: %s/%s is not a page bundle (no page document renders its entities), so page_create is not its door: create it with eb_create_entity. %s',
         $entity_type,
         $bundle,
+        $this->pageBundlesSentence(),
       );
       return;
     }
@@ -299,6 +303,53 @@ class PageCreate extends PageToolBase {
     $notice = $owns_document ? NULL : $this->hostNotice($host);
     $this->output = $this->formatArray($this->createdResult($result, $entity))
       . "\n\nCreated page:\n" . ($notice === NULL ? '' : $notice . "\n") . $this->hostPrinter->print($host, $this->conversationContext->get())->forReader();
+  }
+
+  /**
+   * Guards that the bundle is known and visible, else names the page bundles.
+   *
+   * The visibility guard refuses what the catalog lists and hides, in the
+   * wording every tool shares; an unknown bundle of a known type passes
+   * it (nothing hides what does not exist) and would be judged by the
+   * host facts of a bundle that is not there. A create names its bundle
+   * cold, so page_create judges both here and every refusal ends with the
+   * page bundles this site has (pageBundlesSentence()): the corrective
+   * names the door instead of stopping at "unknown".
+   *
+   * @param string $entity_type
+   *   The entity type ID.
+   * @param string $bundle
+   *   The bundle.
+   *
+   * @return bool
+   *   TRUE if the tool may proceed. FALSE if the bundle is unknown or
+   *   hidden; the output property is set with the refusal.
+   */
+  protected function requirePageBundleNamed(string $entity_type, string $bundle): bool {
+    if (!$this->requireVisibleEntityType($entity_type, $bundle)) {
+      $this->output .= ' ' . $this->pageBundlesSentence();
+      return FALSE;
+    }
+    if (!isset($this->bundleListBuilder->getVisibleBundles()[$entity_type]['bundles'][$bundle])) {
+      $this->output = sprintf('Unknown or hidden bundle: %s/%s. %s', $entity_type, $bundle, $this->pageBundlesSentence());
+      return FALSE;
+    }
+    return TRUE;
+  }
+
+  /**
+   * The page bundles this site has, as a corrective's closing sentence.
+   *
+   * The same projection the cached PAGES line prints (BundleListBuilder::
+   * getPageBundles()), in the same spelling, so a model that mis-named a
+   * bundle reads the right one here and finds it on the line.
+   */
+  protected function pageBundlesSentence(): string {
+    $pages = $this->bundleListBuilder->getPageBundles();
+    if ($pages === []) {
+      return 'This site has no page bundle: nothing is page_create\'s to make.';
+    }
+    return 'The page bundles are ' . implode(', ', array_map([BundleListBuilder::class, 'pageBundleName'], $pages)) . '.';
   }
 
   /**

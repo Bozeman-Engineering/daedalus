@@ -23,7 +23,9 @@ use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
  * This service is what a consumer holds to read a tree without a
  * blueprint: build() for a host's tree, the style map reads for the
  * printers, and the static node helpers (find(), labelRendered()) every
- * tree walker shares.
+ * tree walker shares. document() is the one read that is NOT the tree: the
+ * matcher's view of a delivered blueprint, the layout with the host above
+ * it (its docblock says why that node never enters the layout).
  *
  * The flat style map (selectable keys to condition-keyed entries) is a
  * derived delivery index of the tree for the CSS printers, not the
@@ -78,6 +80,57 @@ class NodeTreeBuilder {
    */
   public function buildOwn(HostInterface $host): array {
     return $this->layoutSerializer->serialize($host, NULL, $host->ownSections());
+  }
+
+  /**
+   * The document tree: a delivered blueprint's layout with the host above it.
+   *
+   * The selector matcher's input (daedalus_stylish's SelectorMatcher and
+   * the style stack's ancestor tier), never the serializer's shape. The
+   * layout is the canonical page representation with the sections at the
+   * top, and every layout walker keeps reading it as such; a reader asking
+   * about CONTAINMENT needs one more node, because in the DOM the host
+   * entity's canvas root wrapper (`data-selectable="entity:{uuid}"`) stands
+   * above the sections and a rule written on the entity reaches every
+   * element on the page. The document is that view: ONE top-level node of
+   * kind `entity`, keyed by the host's uuid, carrying the blueprint root's
+   * own `_element` annotation as delivered (the annotator's words, the
+   * entity kind's markup, the field facts) and the layout as its children.
+   * Nothing is annotated here and the layout array rides through verbatim.
+   * The client twin is documentTree() in daedalus_ui's
+   * js/edit_mode/blueprint/document-tree.js; the two answer the same shape
+   * for the same blueprint (NodeTreeBuilderTest::testDocument and
+   * document-tree.test.mjs lock the keys on both sides).
+   *
+   * The root's uuid is not on the blueprint (the serializer emits no root
+   * identity; the envelope carries it beside the blueprint on the client,
+   * the host answers it on the server), so the caller hands it in. A host
+   * with no uuid still gets the root node, keyless: the matcher treats a
+   * node without a uuid as structure nothing addresses, so the sections
+   * keep their ancestry and nothing names the root.
+   *
+   * @param array $blueprint
+   *   A delivered blueprint (BlueprintSerializer::serialize(), usually
+   *   annotated by daedalus_ui's BlueprintElementAnnotator): `layout` and
+   *   `_element` are read, nothing else.
+   * @param string|null $uuid
+   *   The host's uuid (HostInterface::uuid()), or NULL for a keyless root.
+   *
+   * @return array
+   *   `[['kind' => 'entity', 'uuid' => ..., '_element' => ..., 'children'
+   *   => ...]]`: `uuid` the uuid given (NULL when none or empty), `_element`
+   *   the blueprint root's annotation (NULL when unannotated), `children`
+   *   the blueprint's `layout` (empty when the document has no sections).
+   */
+  public static function document(array $blueprint, ?string $uuid): array {
+    return [
+      [
+        'kind' => 'entity',
+        'uuid' => is_string($uuid) && $uuid !== '' ? $uuid : NULL,
+        '_element' => $blueprint['_element'] ?? NULL,
+        'children' => is_array($blueprint['layout'] ?? NULL) ? $blueprint['layout'] : [],
+      ],
+    ];
   }
 
   /**

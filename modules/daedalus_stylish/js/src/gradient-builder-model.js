@@ -155,7 +155,7 @@ export const knobAngle = (dx, dy) =>
 /**
  * The seed gradient as a value string: a mint surface's starting draft.
  *
- * The palette's "New swatch" card needs a committable value before the
+ * The palette's "New token" card needs a committable value before the
  * user touches a control (the builder itself emits only on gestures), and
  * the seed must honor the same stop vocabulary the builder renders with.
  *

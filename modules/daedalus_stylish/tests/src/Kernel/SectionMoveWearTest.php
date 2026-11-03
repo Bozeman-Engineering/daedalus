@@ -55,6 +55,7 @@ class SectionMoveWearTest extends KernelTestBase {
     'layout_builder',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -85,11 +86,8 @@ class SectionMoveWearTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and the strip reads the roster's depth stamp.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
@@ -98,9 +96,7 @@ class SectionMoveWearTest extends KernelTestBase {
     // tables.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     \Drupal::service('module_installer')->install(['daedalus_stylish_layouts']);
@@ -178,42 +174,42 @@ class SectionMoveWearTest extends KernelTestBase {
   }
 
   /**
-   * A host with two root bands, the first nesting one container.
+   * A host with two root sections, the first nesting one container.
    *
-   * Every section is minted by ops, so the bands are born wearing the
+   * Every section is minted by ops, so the sections are born wearing the
    * shipped width default (container_site) and the nested container is
    * born wearing nothing (the root-only axis is skipped at nested depth).
    *
    * @return array{0: \Drupal\entity_test\Entity\EntityTest, 1: string, 2: string, 3: string}
-   *   The entity, the first band's uuid, the second band's uuid, the
+   *   The entity, the first section's uuid, the second section's uuid, the
    *   nested container's uuid.
    */
   protected function createHost(): array {
     $entity = EntityTest::create(['name' => 'host']);
     $entity->save();
     $uuid_service = $this->container->get('uuid');
-    $band_a = $uuid_service->generate();
-    $band_b = $uuid_service->generate();
+    $section_a = $uuid_service->generate();
+    $section_b = $uuid_service->generate();
     $nested = $uuid_service->generate();
     $this->batch($entity, [
-      ['op' => 'add_section', 'uuid' => $band_a, 'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside']],
-      ['op' => 'add_section', 'uuid' => $band_b, 'location' => ['anchor' => $band_a, 'placement' => 'after']],
-      ['op' => 'add_section', 'uuid' => $nested, 'location' => ['anchor' => $band_a, 'placement' => 'inside']],
+      ['op' => 'add_section', 'uuid' => $section_a, 'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside']],
+      ['op' => 'add_section', 'uuid' => $section_b, 'location' => ['anchor' => $section_a, 'placement' => 'after']],
+      ['op' => 'add_section', 'uuid' => $nested, 'location' => ['anchor' => $section_a, 'placement' => 'inside']],
     ]);
-    $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $this->styleMap($entity)["container:$band_a"] ?? NULL);
-    $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $this->styleMap($entity)["container:$band_b"] ?? NULL);
+    $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $this->styleMap($entity)["container:$section_a"] ?? NULL);
+    $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $this->styleMap($entity)["container:$section_b"] ?? NULL);
     $this->assertArrayNotHasKey("container:$nested", $this->styleMap($entity));
-    return [$entity, $band_a, $band_b, $nested];
+    return [$entity, $section_a, $section_b, $nested];
   }
 
   /**
    * Root to nested strips the width, keeps every-depth wear and own styles.
    */
   public function testRootToNestedStrips(): void {
-    [$entity, $band_a, $band_b] = $this->createHost();
-    $key = "container:$band_a";
+    [$entity, $section_a, $section_b] = $this->createHost();
+    $key = "container:$section_a";
 
-    // The band wears the house width, Columns, and an own style block.
+    // The section wears the house width, Columns, and an own style block.
     $this->batch($entity, [
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
     ]);
@@ -225,10 +221,10 @@ class SectionMoveWearTest extends KernelTestBase {
       'default' => ['padding-top' => '2rem'],
     ], $this->styleMap($entity)[$key]);
 
-    // Inside the other band: the root-only width is stripped, the
+    // Inside the other section: the root-only width is stripped, the
     // every-depth Columns reference and the own block stay in place.
-    $result = $this->move($entity, $band_a, $band_b, 'inside');
-    $this->assertTrue($this->isNested($entity, $band_a));
+    $result = $this->move($entity, $section_a, $section_b, 'inside');
+    $this->assertTrue($this->isNested($entity, $section_a));
     $this->assertSame([
       'variants' => [['variant' => 'columns', 'fragment' => '']],
       'default' => ['padding-top' => '2rem'],
@@ -236,14 +232,14 @@ class SectionMoveWearTest extends KernelTestBase {
     $this->assertDaedalusStylishTarget($result, $entity, TRUE);
     $this->assertMapValid($entity);
 
-    // A band wearing only its width is left with nothing: the entry is
+    // A section wearing only its width is left with nothing: the entry is
     // dropped rather than kept as an empty object.
     $bare = $this->container->get('uuid')->generate();
     $this->batch($entity, [
-      ['op' => 'add_section', 'uuid' => $bare, 'location' => ['anchor' => $band_b, 'placement' => 'after']],
+      ['op' => 'add_section', 'uuid' => $bare, 'location' => ['anchor' => $section_b, 'placement' => 'after']],
     ]);
     $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $this->styleMap($entity)["container:$bare"] ?? NULL);
-    $result = $this->move($entity, $bare, $band_b, 'inside');
+    $result = $this->move($entity, $bare, $section_b, 'inside');
     $this->assertTrue($this->isNested($entity, $bare));
     $this->assertArrayNotHasKey("container:$bare", $this->styleMap($entity));
     $this->assertDaedalusStylishTarget($result, $entity, TRUE);
@@ -254,7 +250,7 @@ class SectionMoveWearTest extends KernelTestBase {
    * Nested to root redresses with the shipped defaults on unworn axes only.
    */
   public function testNestedToRootRedresses(): void {
-    [$entity, $band_a, , $nested] = $this->createHost();
+    [$entity, $section_a, , $nested] = $this->createHost();
     $key = "container:$nested";
 
     // The nested container wears Columns and an own style block; out to
@@ -265,7 +261,7 @@ class SectionMoveWearTest extends KernelTestBase {
     $map = $this->styleMap($entity);
     $map[$key]['default'] = ['padding-top' => '2rem'];
     $this->writeStyleMap($entity, $map);
-    $result = $this->move($entity, $nested, $band_a, 'after');
+    $result = $this->move($entity, $nested, $section_a, 'after');
     $this->assertFalse($this->isNested($entity, $nested));
     $this->assertSame([
       'variants' => [['variant' => 'columns', 'fragment' => ''], ['variant' => 'container_site', 'fragment' => '']],
@@ -277,10 +273,10 @@ class SectionMoveWearTest extends KernelTestBase {
     // A nested container wearing nothing comes out wearing the defaults.
     $blank = $this->container->get('uuid')->generate();
     $this->batch($entity, [
-      ['op' => 'add_section', 'uuid' => $blank, 'location' => ['anchor' => $band_a, 'placement' => 'inside']],
+      ['op' => 'add_section', 'uuid' => $blank, 'location' => ['anchor' => $section_a, 'placement' => 'inside']],
     ]);
     $this->assertArrayNotHasKey("container:$blank", $this->styleMap($entity));
-    $result = $this->move($entity, $blank, $band_a, 'after');
+    $result = $this->move($entity, $blank, $section_a, 'after');
     $this->assertFalse($this->isNested($entity, $blank));
     $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $this->styleMap($entity)["container:$blank"] ?? NULL);
     $this->assertDaedalusStylishTarget($result, $entity, TRUE);
@@ -292,12 +288,12 @@ class SectionMoveWearTest extends KernelTestBase {
     $worn_key = "container:$worn";
     $worn_entry = ['variants' => [['variant' => 'container_md', 'fragment' => '']]];
     $this->batch($entity, [
-      ['op' => 'add_section', 'uuid' => $worn, 'location' => ['anchor' => $band_a, 'placement' => 'inside']],
+      ['op' => 'add_section', 'uuid' => $worn, 'location' => ['anchor' => $section_a, 'placement' => 'inside']],
     ]);
     $map = $this->styleMap($entity);
     $map[$worn_key] = $worn_entry;
     $this->writeStyleMap($entity, $map);
-    $result = $this->move($entity, $worn, $band_a, 'after');
+    $result = $this->move($entity, $worn, $section_a, 'after');
     $this->assertFalse($this->isNested($entity, $worn));
     $this->assertSame($worn_entry, $this->styleMap($entity)[$worn_key] ?? NULL);
     $this->assertDaedalusStylishTarget($result, $entity, FALSE);
@@ -308,8 +304,8 @@ class SectionMoveWearTest extends KernelTestBase {
    * Root to root leaves the entry byte-identical: a reorder never restyles.
    */
   public function testRootToRootUntouched(): void {
-    [$entity, $band_a, $band_b] = $this->createHost();
-    $key = "container:$band_a";
+    [$entity, $section_a, $section_b] = $this->createHost();
+    $key = "container:$section_a";
 
     $this->batch($entity, [
       ['op' => 'apply_variant', 'key' => $key, 'variant' => 'columns'],
@@ -319,8 +315,8 @@ class SectionMoveWearTest extends KernelTestBase {
     $this->writeStyleMap($entity, $map);
     $before = $this->styleMap($entity);
 
-    $result = $this->move($entity, $band_a, $band_b, 'after');
-    $this->assertFalse($this->isNested($entity, $band_a));
+    $result = $this->move($entity, $section_a, $section_b, 'after');
+    $this->assertFalse($this->isNested($entity, $section_a));
     $this->assertSame($before, $this->styleMap($entity));
     $this->assertDaedalusStylishTarget($result, $entity, FALSE);
   }
@@ -329,7 +325,7 @@ class SectionMoveWearTest extends KernelTestBase {
    * Nested to nested strips: depth is nested on both sides.
    */
   public function testNestedToNestedStrips(): void {
-    [$entity, , $band_b, $nested] = $this->createHost();
+    [$entity, , $section_b, $nested] = $this->createHost();
     $key = "container:$nested";
 
     // The whole-map lane smuggles a root-only width onto the nested
@@ -343,8 +339,8 @@ class SectionMoveWearTest extends KernelTestBase {
     $this->writeStyleMap($entity, $map);
     $this->assertMapValid($entity);
 
-    // Into the other band's region: still nested, and the width goes.
-    $result = $this->move($entity, $nested, $band_b, 'inside');
+    // Into the other section's region: still nested, and the width goes.
+    $result = $this->move($entity, $nested, $section_b, 'inside');
     $this->assertTrue($this->isNested($entity, $nested));
     $this->assertSame(['variants' => [['variant' => 'columns', 'fragment' => '']]], $this->styleMap($entity)[$key] ?? NULL);
     $this->assertDaedalusStylishTarget($result, $entity, TRUE);
@@ -355,7 +351,7 @@ class SectionMoveWearTest extends KernelTestBase {
    * A component move touches nothing: blocks wear no root-only axis.
    */
   public function testComponentMoveTouchesNothing(): void {
-    [$entity, $band_a, , $nested] = $this->createHost();
+    [$entity, $section_a, , $nested] = $this->createHost();
 
     $block = $this->container->get('uuid')->generate();
     $this->batch($entity, [
@@ -363,7 +359,7 @@ class SectionMoveWearTest extends KernelTestBase {
         'op' => 'add_element',
         'plugin_id' => 'system_powered_by_block',
         'uuid' => $block,
-        'location' => ['anchor' => $band_a, 'placement' => 'inside'],
+        'location' => ['anchor' => $section_a, 'placement' => 'inside'],
       ],
     ]);
     $map = $this->styleMap($entity);
@@ -371,7 +367,7 @@ class SectionMoveWearTest extends KernelTestBase {
     $this->writeStyleMap($entity, $map);
     $before = $this->styleMap($entity);
 
-    // Root band to nested container, the depth case a section would
+    // Root section to nested container, the depth case a section would
     // answer; the block's entry and every other are untouched.
     $result = $this->move($entity, $block, $nested, 'inside');
     $this->assertSame($before, $this->styleMap($entity));

@@ -555,12 +555,12 @@ test('isRootFlowLocation: the page entity is the root flow; every container is n
   assert.ok(!isRootFlowLocation({ anchor: 'nope', placement: 'after' }) && !isRootFlowLocation(null), 'an unresolvable location is not the root flow');
 });
 
-test('a band blueprint source accepts exactly the gaps the resolvers flag rootFlow', () => {
+test('a section blueprint source accepts exactly the gaps the resolvers flag rootFlow', () => {
   const { main } = buildPage();
   globalThis.document = { querySelector: (selector) => (selector === '[data-main-entity]' ? main : null) };
   const roster = createRoster([
     { kind: 'variant', id: 'container_site', label: 'Site', description: '', value: null, group: 'width', spellings: { 'attr:kind:container:width': 'site' }, scope: 'kind:container', applies: { depth: 'root' }, owned_by: null, published: true, weight: 0, icon: null, origin: 'shipped', updatable: false },
-    { kind: 'blueprint', id: 'band', label: 'Band', description: '', value: null, group: null, spellings: { blueprint: 'band' }, scope: null, applies: { wears: ['container_site'] }, owned_by: null, published: true, weight: 0, icon: null, origin: 'user', updatable: true },
+    { kind: 'blueprint', id: 'section', label: 'Section', description: '', value: null, group: null, spellings: { blueprint: 'section' }, scope: null, applies: { wears: ['container_site'] }, owned_by: null, published: true, weight: 0, icon: null, origin: 'user', updatable: true },
     { kind: 'blueprint', id: 'card', label: 'Card', description: '', value: null, group: null, spellings: { blueprint: 'card' }, scope: null, applies: [], owned_by: null, published: true, weight: 0, icon: null, origin: 'user', updatable: true },
   ]);
   // The source spec the Add panel declares for a section-rooted blueprint:
@@ -572,17 +572,17 @@ test('a band blueprint source accepts exactly the gaps the resolvers flag rootFl
   const gaps = enumerateGapTargets(source.targets);
   assert.ok(gaps.length > 3, 'the fixture enumerates root and nested section gaps');
   const flagged = gaps.filter((gap) => gap.rootFlow === true).map((gap) => gap.gapId);
-  const offered = gaps.filter((gap) => source.acceptsTarget(gap, { blueprintId: 'band' })).map((gap) => gap.gapId);
+  const offered = gaps.filter((gap) => source.acceptsTarget(gap, { blueprintId: 'section' })).map((gap) => gap.gapId);
   assert.deepEqual(offered, flagged, 'the location read and the DOM-derived rootFlow flag name the same gaps');
-  assert.deepEqual(offered, ['AAA|before', 'AAA|after', 'BBB|after'], 'a band is offered the root flow only');
+  assert.deepEqual(offered, ['AAA|before', 'AAA|after', 'BBB|after'], 'a section is offered the root flow only');
   assert.deepEqual(
     gaps.filter((gap) => source.acceptsTarget(gap, { blueprintId: 'card' })).map((gap) => gap.gapId),
     gaps.map((gap) => gap.gapId),
-    'a blueprint that is no band is offered every gap',
+    'a blueprint that is no section is offered every gap',
   );
   // The click door builds a bare {location} from its anchor: the same
   // answers, with no rootFlow flag to read.
-  assert.ok(source.acceptsTarget({ location: { anchor: 'BBB', placement: 'after' } }, { blueprintId: 'band' }), 'after a top-level container: offered');
-  assert.ok(!source.acceptsTarget({ location: { anchor: 'CCC', placement: 'after' } }, { blueprintId: 'band' }), 'after a nested container: refused');
+  assert.ok(source.acceptsTarget({ location: { anchor: 'BBB', placement: 'after' } }, { blueprintId: 'section' }), 'after a top-level container: offered');
+  assert.ok(!source.acceptsTarget({ location: { anchor: 'CCC', placement: 'after' } }, { blueprintId: 'section' }), 'after a nested container: refused');
   assert.ok(source.acceptsTarget({ location: { anchor: 'CCC', placement: 'after' } }, { blueprintId: 'card' }));
 });

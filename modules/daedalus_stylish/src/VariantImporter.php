@@ -43,7 +43,19 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * so disk-shipped variants are validated by exactly the machinery AI-created
  * and UI-saved variants go through (the validator's address door,
  * StyleMapValidator::validateAt(), via the variant styles field
- * handler). What the spine deliberately does NOT own is the save:
+ * handler). The door is the same; the posture is the disk lane's own: a
+ * shipped_sync write runs on the validator's landing lane
+ * (StyleMapValidator::withLandingLane()), where structure alone is law
+ * (grammar, unknown properties and selector words, unknown scope, part
+ * or axis, dangling, mis-scoped or cyclic references, machine-name and
+ * spelling collisions, an unavailable owner). A definition FAILS the
+ * sync only on structure. The site's law (strict's closed property
+ * world, bound scales, minted tokens) is the roster's verdict
+ * (VariantConformance): a module's literal global is not the site's act,
+ * so it lands published and the verdict withholds it under the law of
+ * the day, offering it again when the law changes, with no re-sync and
+ * no error line on every rebuild. What the spine deliberately does NOT
+ * own is the save:
  * daedalus_blueprint never saves implicitly ("the caller decides"), and this
  * importer is the caller. It saves directly, live and published, the only
  * correct semantics for shipped defaults. It never saves through
@@ -68,7 +80,7 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  *
  * Activation runs through ShippedSync: every cache rebuild (`drush cr`),
  * module install, and `drush daedalus_stylish:sync [MODULE]` sync the variants after
- * the animations, swatches, and skins they may reference.
+ * the fonts, animations, and skins they may reference.
  */
 class VariantImporter extends ShippedDefinitionsImporter {
 
@@ -98,7 +110,8 @@ class VariantImporter extends ShippedDefinitionsImporter {
    * an update leaves stored ownership alone, exactly like axis.
    *
    * Description: when to reach for this look, the payload the style
-   * materials roster serves to the AI (the schema's materials.variants). Syncs
+   * materials roster serves to the AI (whole on the design system brief;
+   * the JSON door's schema prints it under materials.variants). Syncs
    * like ownership, independently of the styles outcome: a description
    * added to the file later must land even when the styles never changed
    * (see syncDescription()). An absent key leaves the stored description
@@ -178,6 +191,13 @@ class VariantImporter extends ShippedDefinitionsImporter {
   /**
    * {@inheritdoc}
    */
+  public function entityTypeId(): string {
+    return 'daedalus_variant';
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   protected function shippedException(string $module, string $name, array $errors): ShippedVariantException {
     return new ShippedVariantException($module, $name, $errors);
   }
@@ -223,7 +243,7 @@ class VariantImporter extends ShippedDefinitionsImporter {
     $this->checkDefinitionShape($module, $name, $definition);
     $styles = $definition['styles'];
 
-    $storage = $this->entityTypeManager->getStorage('daedalus_variant');
+    $storage = $this->entityTypeManager->getStorage($this->entityTypeId());
     $existing = $storage->loadByProperties(['machine_name' => $name]);
     $variant = reset($existing) ?: NULL;
     assert($variant === NULL || $variant instanceof DaedalusStylishVariantInterface);
@@ -346,7 +366,7 @@ class VariantImporter extends ShippedDefinitionsImporter {
       return;
     }
     $spelling = DaedalusStylishMaterialsProvider::attrValue($scope, $name, (string) $definition['label']);
-    $storage = $this->entityTypeManager->getStorage('daedalus_variant');
+    $storage = $this->entityTypeManager->getStorage($this->entityTypeId());
     $ids = $storage->getQuery()->accessCheck(FALSE)
       ->condition('status', 1)
       ->condition('scope', $definition['scope'])
@@ -484,11 +504,17 @@ class VariantImporter extends ShippedDefinitionsImporter {
 
   /**
    * Deserializes a shipped definition through the blueprint spine, loudly.
+   *
+   * What throws here is structure: the styles field handler validates a
+   * shipped_sync write on the validator's landing lane, so a definition
+   * the site's law refuses lands and is the verdict's to withhold (see
+   * the class doc).
    */
   protected function deserialize(string $module, string $name, array $blueprint): DaedalusStylishVariantInterface {
     // shipped_sync: disk is the one author the distro lock protects, so the
     // importer's own writes pass the styles field handler's read-only gate
     // (VariantStylesFieldHandler); every other blueprint write refuses.
+    // The same flag puts the styles validation on the landing lane.
     // A shipped sync acts for the site (files on disk are the author), so
     // the capability gate is not asked: the system posture.
     $result = $this->deserializer->deserialize($blueprint, ['shipped_sync' => TRUE, 'system' => TRUE]);

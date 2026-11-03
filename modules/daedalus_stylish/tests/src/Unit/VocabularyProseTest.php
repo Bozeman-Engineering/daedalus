@@ -130,8 +130,20 @@ class VocabularyProseTest extends UnitTestCase {
     $this->assertStringContainsString("the design language's preferences", $open->polaritySentence());
     $this->assertSame($guarded->rosterSentence(), $open->rosterSentence(), 'Only the closed world refuses outside the roster.');
     $this->assertNotSame($strict->rosterSentence(), $guarded->rosterSentence());
+    // The WHEN side's twin: the references everywhere, the literal lane
+    // (a feature query, a supports test, a pseudo-class state the browser
+    // knows) beside them only outside the closed world, the reference
+    // preferred where one says the same.
+    $this->assertStringContainsString('references whose CSS the site owns', $strict->conditionSentence());
+    $this->assertStringContainsString('no other condition exists', $strict->conditionSentence());
+    $this->assertStringNotContainsString('@supports', $strict->conditionSentence());
+    $this->assertSame($guarded->conditionSentence(), $open->conditionSentence(), 'Only the closed world refuses a literal condition.');
+    $this->assertStringContainsString('any literal the browser knows', $open->conditionSentence());
+    $this->assertStringContainsString('"@container (min-width: 500px)", "@media (hover: hover)"', $open->conditionSentence());
+    $this->assertStringContainsString('a @supports test or a pseudo-class state (":checked")', $open->conditionSentence());
+    $this->assertStringContainsString('a literal equal to a published wrapper IS that reference', $open->conditionSentence());
     foreach ([$strict, $guarded, $open] as $prose) {
-      $this->assertDoesNotMatchRegularExpression('/\b(strict|guarded|enforcement)\b/i', $prose->rosterSentence() . ' ' . $prose->polaritySentence());
+      $this->assertDoesNotMatchRegularExpression('/\b(strict|guarded|enforcement)\b/i', $prose->rosterSentence() . ' ' . $prose->polaritySentence() . ' ' . $prose->conditionSentence());
     }
     $this->expectException(\InvalidArgumentException::class);
     new VocabularyProse('loose');
@@ -172,6 +184,47 @@ class VocabularyProseTest extends UnitTestCase {
     ], ['scale' => 'color']));
     $this->assertSame('at most 2rem', VocabularyProse::deviationPhrase(['max' => '2rem'], ['max' => '4rem']));
     $this->assertSame('space values a only', VocabularyProse::deviationPhrase(['scale' => 'space', 'stops' => ['a']], NULL));
+  }
+
+  /**
+   * The bindings and deviations lines over the catalog's value spaces.
+   *
+   * The two renderers the JSON door's style_guide and the brief share:
+   * one line per binding in the given order, one line per deviating
+   * place joining its phrases with "; ", a scale narrowed to stops
+   * reading as curation against its binding and anything else as a
+   * value-space line. Keys pass through untouched (the caller labels the
+   * places), and neither line varies with the posture.
+   */
+  public function testBindingAndDeviationLines(): void {
+    $bindings = [
+      'font-size' => ['scale' => 'text'],
+      'padding' => ['scale' => 'space', 'allowed' => ['0']],
+      'max-width' => ['max' => '90rem'],
+    ];
+    $deviations = [
+      'kind:container' => ['max-width' => ['max' => '80rem']],
+      'block_type:button' => [
+        'background-color' => ['scale' => 'color', 'stops' => ['brand-1', 'brand-2']],
+        'font-size' => ['scale' => 'text', 'stops' => ['sm', 'md']],
+      ],
+      'block_type:text::.text-block-link' => ['font-family' => ['allowed' => ['Inter', 'Georgia']]],
+    ];
+    foreach ([StyleGuide::ENFORCEMENT_STRICT, StyleGuide::ENFORCEMENT_OPEN] as $mode) {
+      $prose = new VocabularyProse($mode);
+      $this->assertSame([
+        'font-size' => 'text values',
+        'padding' => 'space values; also allowed: 0',
+        'max-width' => 'at most 90rem',
+      ], $prose->bindingLines($bindings));
+      $this->assertSame([
+        'kind:container' => 'max-width at most 80rem',
+        'block_type:button' => 'background-color color values brand-1, brand-2 only; font-size limited to sm, md',
+        'block_type:text::.text-block-link' => 'font-family one of: Inter, Georgia',
+      ], $prose->deviationLines($deviations, $bindings));
+      $this->assertSame([], $prose->bindingLines([]));
+      $this->assertSame([], $prose->deviationLines([], $bindings));
+    }
   }
 
 }

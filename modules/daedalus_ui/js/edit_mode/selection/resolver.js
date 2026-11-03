@@ -76,6 +76,7 @@
 import store from '../store/store';
 import { projectionIndex } from '../components/page-elements/projection-index';
 import { isSubjectField } from '../blueprint/subject-field';
+import { effectiveBlueprint } from '../blueprint/effective-blueprint';
 import { selectableIn } from './capable-model';
 
 export const POLICY = {
@@ -200,8 +201,9 @@ export const presentationBoundaryItem = (item, items = null) => {
  * selectable and editable: the key it commits is the root row's.
  */
 const rootKeyForEditTarget = (key) => {
-  const { root, blueprint } = store.getState().blueprint;
-  const target = blueprint?._element?.presentation?.edit_target;
+  const state = store.getState();
+  const { root } = state.blueprint;
+  const target = effectiveBlueprint(state)?._element?.presentation?.edit_target;
   return target && root && key === `field:${root.uuid}:${target}`
     ? `entity:${root.uuid}`
     : key;
@@ -271,8 +273,8 @@ export const keyForEditableItem = (item) => {
   // A row-less field answers its subject's verdict at the gate
   // (capable-model.js subjectKeyOf), the same inheritance the index
   // applies to the field rows it does place.
-  const mirror = store.getState().blueprint;
-  return isSubjectField(mirror.blueprint, mirror.root, key) &&
+  const state = store.getState();
+  return isSubjectField(effectiveBlueprint(state), state.blueprint.root, key) &&
     selectableIn(index, key)
     ? key
     : null;

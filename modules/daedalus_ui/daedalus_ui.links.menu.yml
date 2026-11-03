@@ -1,6 +1,20 @@
+# The editor chrome form's one door: the UI sub-category of the Daedalus
+# config category (Configuration » Daedalus » UI), the root module's door.
+# SETTINGS.md at the daedalus repo root rosters it.
 daedalus_ui.settings:
-  title: Daedalus
-  description: Configure Daedalus settings
-  parent: system.admin_config_content
+  title: 'Editor chrome'
+  description: 'The colors of the page builder chrome: toolbars and sidebars, their accents, and highlights.'
+  parent: daedalus.admin_config_ui
   route_name: daedalus_ui.settings
-  weight: 10
+  weight: -10
+
+# The bundle roster, the second door to the bundle form's Page builder tab
+# (the first door: each bundle's own form under Structure, the one write
+# path). Read-only; listed beside the chrome form. SETTINGS.md rosters the
+# per-bundle settings it mirrors.
+daedalus_ui.bundle_roster:
+  title: 'Page builder on content types'
+  description: 'Which content and block types are built in the page builder, and how; links to each type.'
+  parent: daedalus.admin_config_ui
+  route_name: daedalus_ui.bundle_roster
+  weight: -5

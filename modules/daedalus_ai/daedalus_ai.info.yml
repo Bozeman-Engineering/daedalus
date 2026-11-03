@@ -5,7 +5,7 @@ package: Daedalus
 core_version_requirement: '>=11.3 <11.5'
 php: 8.1
 lifecycle: experimental
-configure: daedalus_ui.settings
+configure: daedalus_ai.settings
 dependencies:
   - daedalus:daedalus
   # The attachment store holds a conversation's files on file.usage.
@@ -13,8 +13,16 @@ dependencies:
   - daedalus:daedalus_ui
   # The chat sidebar speaks ai 1.5's chat-turn request contract (a
   # chat_processor_plugin and its plugin_configuration in the body);
-  # ai_chatbot's /api/deepchat refuses the pre-1.5 body since 1.5.0.
-  - ai:ai_chatbot (>=1.5)
+  # ai_chatbot's /api/deepchat refuses the pre-1.5 body since 1.5.0, and
+  # the chat library loads the ai_chatbot/deepchat.bundle library that
+  # 1.5.1 split out of ai_chatbot/deepchat. The 1.5.1 floor is enforced
+  # by composer (this project's conflict entry on drupal/ai <1.5.1 and
+  # the recipe's drupal/ai ^1.5.1), never by an
+  # info.yml version constraint: core's check only sees the version key
+  # drupal.org's packaging writes, so it fails on every git checkout and
+  # dev release (Dependency::isCompatible() answers FALSE for an empty
+  # version and for 1.5.x-dev alike).
+  - ai:ai_chatbot
   - ai_agents:ai_agents
   - daedalus:daedalus_blueprint
   - daedalus:daedalus_blueprint_ai

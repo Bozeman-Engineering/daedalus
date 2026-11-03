@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Dialect;
 
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Masterminds\HTML5\Parser\Scanner;
 use Masterminds\HTML5\Parser\Tokenizer;
 
@@ -14,7 +15,7 @@ use Masterminds\HTML5\Parser\Tokenizer;
  * the lean node tree, parsed back to the same tree, so the spine adds no
  * second validation path; what parses cleanly hits the same validators
  * every other consumer hits. This parser owns the STRUCTURAL grammar:
- * tags (pb- prefixed, sugar and unprefixed spellings get correctives),
+ * tags (d- prefixed, sugar and unprefixed spellings get correctives),
  * attributes (fields under short names via the catalog's contracts, axes,
  * class variants), bodies (plain text collapsed, rich text opaque and
  * routed through the text format filter downstream), ids, containment,
@@ -49,63 +50,66 @@ class DialectParser {
    * HTML spellings at element position, each corrective naming the form.
    */
   private const SUGAR = [
-    'div' => 'use <pb-container> for grouping (a container renders as one element)',
-    'section' => 'use <pb-container>; top-level containers render as page bands',
-    'h1' => 'use <pb-text tag="h1">',
-    'h2' => 'use <pb-text tag="h2">',
-    'h3' => 'use <pb-text tag="h3">',
-    'h4' => 'use <pb-text tag="h4">',
-    'h5' => 'use <pb-text tag="h5">',
-    'h6' => 'use <pb-text tag="h6">',
-    'p' => 'use <pb-text> for a single line or <pb-formatted-text> for rich copy',
-    'span' => 'use <pb-text tag="span">',
-    'a' => 'use <pb-text url="...">',
-    'button' => 'use <pb-text url="...">',
-    'ul' => 'use <pb-formatted-text> (lists are rich text)',
-    'ol' => 'use <pb-formatted-text> (lists are rich text)',
-    'li' => 'use <pb-formatted-text> (lists are rich text)',
-    'header' => 'use <pb-container>',
-    'footer' => 'use <pb-container>',
-    'article' => 'use <pb-container>',
-    'aside' => 'use <pb-container>',
-    'main' => 'use <pb-container>',
-    'nav' => 'use <pb-container>',
-    'table' => 'use <pb-formatted-text> if the format allows tables',
-    'figure' => 'use <pb-container> with a <pb-image> and a <pb-text> caption',
-    'img' => 'use <pb-image>; reference existing media with media="id or label", mint one with generate="prompt" + alt, or place a file this conversation holds with file="name" + alt (src is not writable)',
-    'image' => 'use <pb-image>; reference existing media with media="id or label", mint one with generate="prompt" + alt, or place a file this conversation holds with file="name" + alt (src is not writable)',
+    'div' => 'use <d-container> for grouping (a container renders as one element)',
+    'section' => 'use <d-container>; a top-level container renders as a <section>',
+    'h1' => 'use <d-text tag="h1">',
+    'h2' => 'use <d-text tag="h2">',
+    'h3' => 'use <d-text tag="h3">',
+    'h4' => 'use <d-text tag="h4">',
+    'h5' => 'use <d-text tag="h5">',
+    'h6' => 'use <d-text tag="h6">',
+    'p' => 'use <d-text> for a single line or <d-formatted-text> for rich copy',
+    'span' => 'use <d-text tag="span">',
+    'a' => 'use <d-text url="...">',
+    'button' => 'use <d-text url="...">',
+    'ul' => 'use <d-formatted-text> (lists are rich text)',
+    'ol' => 'use <d-formatted-text> (lists are rich text)',
+    'li' => 'use <d-formatted-text> (lists are rich text)',
+    'header' => 'use <d-container>',
+    'footer' => 'use <d-container>',
+    'article' => 'use <d-container>',
+    'aside' => 'use <d-container>',
+    'main' => 'use <d-container>',
+    'nav' => 'use <d-container>',
+    'table' => 'use <d-formatted-text> if the format allows tables',
+    'figure' => 'use <d-container> with a <d-image> and a <d-text> caption',
+    'img' => 'use <d-image>; reference existing media with media="id or label", mint one with generate="prompt" + alt, or place a file this conversation holds with file="name" + alt (src is not writable)',
+    'image' => 'use <d-image>; reference existing media with media="id or label", mint one with generate="prompt" + alt, or place a file this conversation holds with file="name" + alt (src is not writable)',
   ];
 
   /**
-   * Unprefixed tag spellings; correctives name the pb- form.
+   * Unprefixed tag spellings; the corrective names the prefixed form.
+   *
+   * Each is a dialect tag minus its prefix, so the target is the prefix
+   * glued back on (unprefixedTarget()), never a second spelling of it.
    */
   private const UNPREFIXED = [
-    'container' => 'pb-container',
-    'slot' => 'pb-slot',
-    'text' => 'pb-text',
-    'formatted-text' => 'pb-formatted-text',
-    'teaser' => 'pb-teaser',
-    'block' => 'pb-block',
-    'field' => 'pb-field',
-    'blueprint' => 'pb-blueprint',
-    'linked' => 'pb-linked',
+    'container',
+    'slot',
+    'text',
+    'formatted-text',
+    'teaser',
+    'block',
+    'field',
+    'blueprint',
+    'linked',
   ];
 
   /**
    * The file declaration's tag and its two attributes.
    */
-  public const FILE_TAG = 'pb-file';
+  public const FILE_TAG = RelativeSelector::TYPE_PREFIX . 'file';
   private const FILE_ATTRS = ['name', 'type'];
 
   /**
    * Parses a full page document: top-level containers plus <style> blocks.
    *
-   * The top level holds <pb-container> elements, <pb-slot> sections (a
+   * The top level holds <d-container> elements, <d-slot> sections (a
    * container filling a slot of the document around this one, top level
-   * only) and <pb-blueprint> references (a placement lands as its root;
+   * only) and <d-blueprint> references (a placement lands as its root;
    * the same set the insert door admits at the page's root anchor);
-   * blocks belong inside a container, a linked placement (<pb-linked>, a
-   * block) among them. Beside them, write-only: <style> blocks and <pb-file
+   * blocks belong inside a container, a linked placement (<d-linked>, a
+   * block) among them. Beside them, write-only: <style> blocks and <d-file
    * name type> declarations (bytes the author wrote, carried on the
    * result's files for the op layer to save before the tree lands; they
    * never print, since after commit a declared file is media).
@@ -120,7 +124,7 @@ class DialectParser {
     foreach ($root->children as $child) {
       if (!$child instanceof RawElement) {
         if (trim($child['#text']) !== '') {
-          $walk->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" at top level: wrap copy in a <pb-container>', self::excerpt($child['#text'])), $child['#line']);
+          $walk->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" at top level: wrap copy in a <d-container>', self::excerpt($child['#text'])), $child['#line']);
         }
         continue;
       }
@@ -135,13 +139,13 @@ class DialectParser {
         }
         continue;
       }
-      if (!in_array($child->tag, [...DialectWalk::CONTAINER_TAGS, 'pb-blueprint'], TRUE) && !isset(self::SUGAR[$child->tag]) && !isset(self::UNPREFIXED[$child->tag])) {
+      if (!in_array($child->tag, [...DialectWalk::CONTAINER_TAGS, DialectWalk::BLUEPRINT_TAG], TRUE) && !isset(self::SUGAR[$child->tag]) && self::unprefixedTarget($child->tag) === NULL) {
         if ($catalog->blockType((string) DialectCatalog::blockTypeForTag($child->tag)) !== NULL || in_array($child->tag, [
-          'pb-block',
-          'pb-field',
+          DialectWalk::BLOCK_TAG,
+          DialectWalk::FIELD_TAG,
           DialectWalk::LINKED_TAG,
         ], TRUE)) {
-          $walk->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('top level of a page holds <pb-container> elements; <%s> belongs inside one', $child->tag), $child->line);
+          $walk->errors[] = new DialectError('ILLEGAL_CONTAINMENT', sprintf('top level of a page holds <d-container> elements; <%s> belongs inside one', $child->tag), $child->line);
         }
       }
       $node = $walk->element($child, 0);
@@ -171,7 +175,7 @@ class DialectParser {
   }
 
   /**
-   * Reads one <pb-file> declaration's grammar: name, type, a raw body.
+   * Reads one <d-file> declaration's grammar: name, type, a raw body.
    *
    * The body is the RAWTEXT the tree builder captured (an SVG's own
    * markup, a stylesheet, CSV rows), trimmed at both ends; what the bytes
@@ -196,7 +200,7 @@ class DialectParser {
           sprintf('<%s> takes name and type only; "%s" is not an attribute of a file declaration', self::FILE_TAG, (string) $attr),
           $el->line,
           ['attribute' => (string) $attr, 'legal' => self::FILE_ATTRS],
-          'A file declaration is <pb-file name="logo.svg" type="image/svg+xml">the bytes</pb-file>; what places the file is the element (file="logo.svg") or the CSS (url(\'file:logo.svg\')).',
+          'A file declaration is <d-file name="logo.svg" type="image/svg+xml">the bytes</d-file>; what places the file is the element (file="logo.svg") or the CSS (url(\'file:logo.svg\')).',
         );
         $valid = FALSE;
       }
@@ -205,7 +209,7 @@ class DialectParser {
     $type = trim((string) $el->attr('type'));
     $content = trim($el->text());
     if ($name === '' || str_contains($name, '/') || str_contains($name, '\\')) {
-      $errors[] = new DialectError('FILE_DECLARATION', sprintf('<%s> needs name="<filename>" (a bare filename with its extension, the handle later writes address it by)', self::FILE_TAG), $el->line, ['name' => $name], 'Write <pb-file name="logo.svg" type="image/svg+xml">...</pb-file>; the name is what file="" and url(\'file:...\') refer to.');
+      $errors[] = new DialectError('FILE_DECLARATION', sprintf('<%s> needs name="<filename>" (a bare filename with its extension, the handle later writes address it by)', self::FILE_TAG), $el->line, ['name' => $name], 'Write <d-file name="logo.svg" type="image/svg+xml">...</d-file>; the name is what file="" and url(\'file:...\') refer to.');
       $valid = FALSE;
     }
     if ($type === '') {
@@ -242,7 +246,7 @@ class DialectParser {
     foreach ($root->children as $child) {
       if (!$child instanceof RawElement) {
         if (trim($child['#text']) !== '') {
-          $walk->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" at fragment top level: wrap copy in <pb-text> or <pb-formatted-text>', self::excerpt($child['#text'])), $child['#line']);
+          $walk->errors[] = new DialectError('STRAY_TEXT', sprintf('bare text "%s" at fragment top level: wrap copy in <d-text> or <d-formatted-text>', self::excerpt($child['#text'])), $child['#line']);
         }
         continue;
       }
@@ -251,7 +255,7 @@ class DialectParser {
         continue;
       }
       if ($child->tag === self::FILE_TAG) {
-        $walk->errors[] = new DialectError('FILE_IN_FRAGMENT', sprintf('<%s> is not legal in an op payload; declare the file with the file op ({op: "file", name, type, content}) ahead of the op that places it', self::FILE_TAG), $child->line, [], 'A <pb-file> declaration belongs at the top level of a page_create document; in a page_edit batch the file op carries the same name, type and content.');
+        $walk->errors[] = new DialectError('FILE_IN_FRAGMENT', sprintf('<%s> is not legal in an op payload; declare the file with the file op ({op: "file", name, type, content}) ahead of the op that places it', self::FILE_TAG), $child->line, [], 'A <d-file> declaration belongs at the top level of a page_create document; in a page_edit batch the file op carries the same name, type and content.');
         continue;
       }
       $node = $walk->element($child, $top_level ? 0 : 1);
@@ -309,7 +313,7 @@ class DialectParser {
     }
     return $tag === 'a'
       ? sprintf('%s; add %s for a call-to-action', $corrective, $hint)
-      : sprintf('use <pb-text url="..." %s>', $hint);
+      : sprintf('use <d-text url="..." %s>', $hint);
   }
 
   /**
@@ -320,7 +324,7 @@ class DialectParser {
    *   when the site has no text type, or its rosters offer neither.
    */
   private static function callToActionHint(DialectCatalog $catalog): ?string {
-    $type = DialectCatalog::blockTypeForTag('pb-text');
+    $type = 'text';
     if ($type === NULL || $catalog->blockType($type) === NULL) {
       return NULL;
     }
@@ -335,10 +339,10 @@ class DialectParser {
   }
 
   /**
-   * The pb- spelling an unprefixed tag names, or NULL.
+   * The prefixed spelling an unprefixed tag names, or NULL.
    */
   public static function unprefixedTarget(string $tag): ?string {
-    return self::UNPREFIXED[$tag] ?? NULL;
+    return in_array($tag, self::UNPREFIXED, TRUE) ? RelativeSelector::TYPE_PREFIX . $tag : NULL;
   }
 
   /**

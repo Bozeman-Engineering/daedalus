@@ -27,10 +27,13 @@ the two are exclusive there and opening Explode parks the inspector.
 Because the sidebar manager remembers open panels in a cookie, a page
 reloaded with Explode open comes back exploded.
 
-Each plane wears a muted outline, a translucent surface so the layers
-below read through, a soft shadow and a label chip on its top edge naming
-the element (blocks name their type, since the plane already shows what
-the block says). The selection paints oversized: the primary in the
+Each plane wears a muted outline, a soft shadow and a label chip on its
+top edge naming the element (blocks name their type, since the plane
+already shows what the block says). A plane whose element paints no
+background of its own gets a translucent surface so it reads as a slab
+with the layers below showing through; a plane with its own background
+(a colored section, a hero photo, a button's fill) keeps it, since that
+is what makes the plane recognizable. The selection paints oversized: the primary in the
 selection color with a heavy stroke standing off the plane, a glow and a
 larger chip, members of a multi-selection lighter, hover dashed, every
 measure divided by the stage scale so the treatment reads at the same
@@ -126,8 +129,9 @@ theme exactly; the sheet is inert once the attribute drops.
 The printed sheet reads, and never sets, four custom properties a theme
 may define: `--daedalus-explode-perspective` (default `2400px`),
 `--daedalus-explode-duration` (the explode and return transition,
-`600ms`), `--daedalus-explode-surface` (the plane's translucent surface,
-`rgb(255 255 255 / 0.72)`) and `--daedalus-explode-shadow`.
+`600ms`), `--daedalus-explode-surface` (the translucent surface of a
+plane with no background of its own, `rgb(255 255 255 / 0.72)`) and
+`--daedalus-explode-shadow`.
 
 ## Development
 

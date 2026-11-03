@@ -11,9 +11,9 @@ use Drupal\ai\Service\FunctionCalling\FunctionCallInterface;
 use Drupal\ai\OperationType\Chat\Tools\ToolsFunctionInput;
 use Drupal\daedalus_blueprint\Dialect\DialectCatalog;
 use Drupal\daedalus_blueprint\Dialect\DialectSchemaProjector;
-use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialsProse;
 use Drupal\daedalus_blueprint\Materials\MaterialsSchema;
+use Drupal\daedalus_blueprint\Tool\ParameterProse;
 use Drupal\daedalus_blueprint_ai\DaedalusBlueprintToolBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -22,30 +22,34 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *
  * A page-builder bundle (one carrying a layout the dialect catalog can
  * write) answers in the page language's view (DialectSchemaProjector):
- * the entity fields, what each element is for, the materials (every kind,
- * full text), and none of the JSON layout grammar the cached catalog would
- * contradict. Every other bundle answers with the JSON blueprint schema,
- * the grammar eb_create_entity and eb_edit take.
+ * the entity fields, what each element is for, the materials the cached
+ * design system brief does not carry (MaterialsSchema::dialect(): the
+ * blueprints in full, the animations' steps, the fonts' faces; the
+ * tokens and variants are the brief's, whole), and none of the
+ * JSON layout grammar the cached catalog would contradict. Every other
+ * bundle answers with the JSON blueprint schema, the grammar
+ * eb_create_entity and eb_edit take, its materials every kind in full.
  *
- * The materials' blueprints are the site favorites in full, with the
- * group index beside them (MaterialsSchema); `group` names one group (a
- * declared id, or DialectCatalog::UNGROUPED) to list in full instead,
+ * The materials' blueprints are every shared block blueprint in full,
+ * with the group index beside them (MaterialsSchema); `group` names one
+ * group (a declared id, or DialectCatalog::UNGROUPED) to list alone,
  * narrowed AFTER the cached schema is read (MaterialsSchema::narrow(): the
- * schema cache key never carries it). An unknown group answers a
- * corrective naming the ids.
+ * schema cache key never carries it) and before the projection narrows
+ * the kinds. An unknown group answers a corrective naming the ids.
  */
 #[FunctionCall(
   id: 'daedalus_blueprint:read_schema',
   function_name: 'eb_read_schema',
   name: 'Read Schema',
-  description: 'Reads an entity type\'s schema. A page-builder bundle (pages): the entity fields page_create takes, what each page-language element is for, and the materials in full. Any other bundle: the fields in the JSON shape eb_create_entity and eb_edit take. Read it before designing a new page or minting a material.',
+  description: 'Reads an entity type\'s schema. A page-builder bundle (pages): the entity fields page_create takes, what each page-language element is for, and the materials the design system brief does not carry (the blueprints in full, the animations\' steps, the fonts\' faces). Any other bundle: the fields in the JSON shape eb_create_entity and eb_edit take. Read it before designing a new page or minting a material.',
   group: 'information_tools',
   context_definitions: [
     'entity_type' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Entity Type'),
       required: TRUE,
-      description: new TranslatableMarkup('The entity type ID (e.g. node, block_content).'),
+      // phpcs:ignore Drupal.Semantics.FunctionT.NotLiteralString
+      description: new TranslatableMarkup(ParameterProse::ENTITY_TYPE),
     ),
     'bundle' => new ContextDefinition(
       data_type: 'string',
@@ -63,7 +67,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
       data_type: 'string',
       label: new TranslatableMarkup('Group'),
       required: FALSE,
-      description: new TranslatableMarkup('A group id from the schema\'s materials.groups, or ungrouped: materials.blueprints then lists that group\'s blueprints in full instead of the site favorites.'),
+      description: new TranslatableMarkup('A group id from the schema\'s materials.groups, or ungrouped: materials.blueprints then lists that group\'s blueprints alone.'),
     ),
   ],
 )]
@@ -93,15 +97,16 @@ class ReadSchema extends DaedalusBlueprintToolBase {
    * {@inheritdoc}
    *
    * The wire description derives what the attribute cannot: the material
-   * kinds the schema carries in full (MaterialKind, so a kind added to
-   * the roster is named here by data) and the mint gate (MaterialsProse,
-   * the one sentence every mint surface states).
+   * kinds the dialect schema carries (MaterialsSchema::dialectKinds(),
+   * the same list the projector narrows by, so the description and the
+   * shape cannot drift apart) and the mint gate (MaterialsProse, the one
+   * sentence every mint surface states).
    */
   public function normalize(): ToolsFunctionInput {
     $function = parent::normalize();
     $function->setDescription(sprintf(
-      'Reads an entity type\'s schema. A page-builder bundle (pages): the entity fields page_create takes, what each page-language element is for, and the materials in full (%s, each with its whole description). Any other bundle: the fields in the JSON shape eb_create_entity and eb_edit take. Read it before designing a new page or minting a material (%s).',
-      implode(', ', array_map(static fn (MaterialKind $kind): string => $kind->plural(), MaterialKind::cases())),
+      'Reads an entity type\'s schema. A page-builder bundle (pages): the entity fields page_create takes, what each page-language element is for, and the materials the design system brief does not carry (%s: the blueprints in full, the animations\' steps, the fonts\' faces; every token and variant is on the brief, whole). Any other bundle: the fields in the JSON shape eb_create_entity and eb_edit take. Read it before designing a new page or minting a material (%s).',
+      implode(', ', MaterialsSchema::dialectKinds()),
       rtrim(MaterialsProse::mintGateSentence(), '.'),
     ));
     return $function;
@@ -130,8 +135,8 @@ class ReadSchema extends DaedalusBlueprintToolBase {
 
     try {
       $schema = $this->schemaBuilder->getSchema($entity_type, $bundle ?: $entity_type, $view_mode);
-      // One group in full, in place of the favorites: narrowed here, after
-      // the cached schema is read, so the cache key carries no group.
+      // One group alone, a filter over the shared set: narrowed here,
+      // after the cached schema is read, so the cache key carries no group.
       if ($group !== '') {
         if (!isset($schema[DialectSchemaProjector::MATERIALS])) {
           $this->output = sprintf('Error: group narrows materials.blueprints, and the schema of %s/%s carries no materials.', $entity_type, $bundle ?: $entity_type);
@@ -141,7 +146,7 @@ class ReadSchema extends DaedalusBlueprintToolBase {
         if (!in_array($group, $ids, TRUE)) {
           $declared = array_diff($ids, [DialectCatalog::UNGROUPED]);
           $this->output = sprintf(
-            'Error: unknown group "%s". %s; %s lists the blueprints in no group. Pass one of them, or omit group for the site favorites.',
+            'Error: unknown group "%s". %s; %s lists the blueprints in no group. Pass one of them, or omit group for every shared blueprint.',
             $group,
             $declared === [] ? 'This site declares no groups' : 'The groups are ' . implode(', ', $declared) . ' (materials.groups in the schema read)',
             DialectCatalog::UNGROUPED,

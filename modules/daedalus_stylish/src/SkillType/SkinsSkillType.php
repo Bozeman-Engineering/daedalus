@@ -13,18 +13,18 @@ use Drupal\daedalus_stylish\StyleGuide;
 /**
  * Skill type for the skins skill: live skin state + the skin operations.
  *
- * On the CreateEntitySkillType pattern: compose() runs fresh per
- * invocation, so the response opens with the live catalog (the declared
- * scales, every skin with its entity id and machine name, which one the
- * site wears, and whether a shipped skin carries a site layer) before the
- * skill file's static teaching of the operations (the token gestures with
- * kind token, update_default, the create door and the gestures that are a
- * person's). The catalog is what the static instructions cannot carry:
- * which skin the operations write, and the entity ids the generic read
- * and create doors take. The skill definition's permission key
- * ('administer skins') gates who sees and may invoke the skill; skins are
- * the design system, and changing it is access-gated even though the
- * token vocabulary itself is not.
+ * The response is composed fresh per invocation (compose() runs each time),
+ * so it opens with the live catalog (the declared scales, every skin with
+ * its entity id and machine name, which one the site wears, and whether a
+ * shipped skin carries a site layer) before the skill file's static
+ * teaching of the operations (the token gestures with kind token,
+ * update_default, the create door and the gestures that are a person's).
+ * The catalog is what the static instructions cannot carry: which skin the
+ * operations write, and the entity ids the generic read and create doors
+ * take. The skill definition's permission key ('administer skins') gates
+ * who sees and may invoke the skill; skins are the design system, and
+ * changing it is access-gated even though the token vocabulary itself is
+ * not.
  */
 class SkinsSkillType implements SkillTypeInterface {
 
@@ -69,6 +69,17 @@ class SkinsSkillType implements SkillTypeInterface {
         $scale_lines[] = $entry;
       }
       $lines[] = 'Declared token scales: ' . implode(', ', $scale_lines) . '.';
+      $contract = $this->styleGuide->getTokenContract($theme);
+      if ($contract === []) {
+        $lines[] = 'Token contract: none declared; any published member skin is wearable.';
+      }
+      else {
+        $contract_lines = [];
+        foreach ($contract as $scale => $names) {
+          $contract_lines[] = $scale . ': ' . implode(', ', $names);
+        }
+        $lines[] = 'Token contract (the names a member skin of the active design system must mint to be wearable, whether or not the worn skin offers them; a new skin mints every one): ' . implode('; ', $contract_lines) . '.';
+      }
     }
 
     $active = $this->skinManager->activeSkinName();
@@ -102,7 +113,7 @@ class SkinsSkillType implements SkillTypeInterface {
     // validator actually checks it (closed-world sites), so the static
     // instructions must not state it. Fact-shaped, never names a mode.
     if ($this->styleGuide->propertiesClosed()) {
-      $lines[] = 'A var() reference inside a token or default value must name a minted token or a PUBLISHED swatch; unminted references are rejected.';
+      $lines[] = 'A var() reference inside a token or default value must name a minted token; unminted references are rejected.';
     }
 
     return implode("\n", $lines);

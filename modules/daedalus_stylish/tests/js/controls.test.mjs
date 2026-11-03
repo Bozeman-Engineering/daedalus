@@ -10,6 +10,7 @@ import { compoundOperations, createControlWidgetRegistry, controlModels, control
 import { originFor } from '../../js/src/choice-row-model.js';
 import { buildStack, editableLayer } from '../../js/src/style-stack.js';
 import { EMPTY_MATERIALS } from './materials-fixture.mjs';
+import { documentTree } from '../../../daedalus_ui/js/edit_mode/blueprint/document-tree.js';
 
 // Drupal.t at call time: the projection labels every candidate box
 // (write-address.js boxLabel, "element" for the root) and the origins
@@ -193,12 +194,12 @@ test('offered: the gate receives the control model, so an element-bound gate rea
     },
   });
   const bound = boundTo('.daedalus-layout-layout', true);
-  const oneBand = { self: { childCount: 1, parts: { '.daedalus-layout-layout': true }, partChildCount: { '.daedalus-layout-layout': 1 } }, parent: null };
-  const twoBands = { self: { ...oneBand.self, partChildCount: { '.daedalus-layout-layout': 2 } }, parent: null };
-  assert.equal(registry.offered('bound_gated', bound, oneBand), false);
-  assert.equal(registry.offered('bound_gated', bound, twoBands), true);
+  const oneSection = { self: { childCount: 1, parts: { '.daedalus-layout-layout': true }, partChildCount: { '.daedalus-layout-layout': 1 } }, parent: null };
+  const twoSections = { self: { ...oneSection.self, partChildCount: { '.daedalus-layout-layout': 2 } }, parent: null };
+  assert.equal(registry.offered('bound_gated', bound, oneSection), false);
+  assert.equal(registry.offered('bound_gated', bound, twoSections), true);
   assert.deepEqual(seen, ['.daedalus-layout-layout', '.daedalus-layout-layout']);
-  assert.equal(registry.offered('bound_gated', { ...bound, reads: ownReads({ gap: '1rem' }) }, oneBand), true);
+  assert.equal(registry.offered('bound_gated', { ...bound, reads: ownReads({ gap: '1rem' }) }, oneSection), true);
   assert.equal(seen.length, 2);
 });
 
@@ -267,8 +268,8 @@ test('offered: presence outranks the gate, and gates still see element-bound mod
 
 // The projection with a layout context and a drilled part: the trailing
 // arguments, named.
-const project = (guide, key, styleMap, { blockTypes: types = blockTypes, variants = [], condition = 'default', context = null, targetSelector = null, tree = null } = {}) =>
-  controlModels(guide, key, types, styleMap, {}, variants, condition, context, targetSelector, tree);
+const project = (guide, key, styleMap, { blockTypes: types = blockTypes, variants = [], condition = 'default', context = null, targetSelector = null, document = null } = {}) =>
+  controlModels(guide, key, types, styleMap, {}, variants, condition, context, targetSelector, document);
 
 test('offered: the element-bound Image width model from controlModels gates on presence', () => {
   // End-to-end over the real projection: the guide fixture's width
@@ -1005,8 +1006,10 @@ test('the choice row\'s origin at a pose: the defaults tier delivers from Base, 
   const [, width] = controlModels(posed, BLOCK, blockTypes, styleMap, {}, [], 'medium');
   // A row over an owned property hands its read; a row over another
   // property of the same target reads the stack itself.
-  const rowAt = (model, condition, property) => originFor({
-    guide: posed, materials: EMPTY_MATERIALS, condition, property, stack: model.home.stack, read: model.reads[property] ?? null,
+  // `law` is the host's law gate (drupalSettings.daedalusStylish.law): the
+  // declared tier's doorway exists only under it.
+  const rowAt = (model, condition, property, law = {}) => originFor({
+    guide: posed, materials: EMPTY_MATERIALS, condition, property, stack: model.home.stack, read: model.reads[property] ?? null, law,
   });
   assert.deepEqual(width.home.stack.layers.map((layer) => layer.id), ['declared:block_type:image', 'skin:block_type:image', 'element']);
   const skin = rowAt(width, 'medium', 'max-width');
@@ -1014,11 +1017,14 @@ test('the choice row\'s origin at a pose: the defaults tier delivers from Base, 
   assert.equal(skin.layer, 'skin:block_type:image');
   assert.equal(skin.title, '90% from the active skin at Base');
   assert.deepEqual(skin.doorways.map((doorway) => doorway.id), ['skin'], 'the skin session, never a drive');
-  const declared = rowAt(width, 'medium', 'display');
+  const declared = rowAt(width, 'medium', 'display', { canView: true });
   assert.equal(declared.delivers, true);
   assert.equal(declared.layer, 'declared:block_type:image');
   assert.equal(declared.title, 'block from the image block type declaration at Base');
   assert.deepEqual(declared.doorways.map((doorway) => [doorway.id, doorway.scope, doorway.property]), [['declared', 'block_type:image', 'display']], 'a declaration is code: the one doorway opens the Law tab at it');
+  const gated = rowAt(width, 'medium', 'display');
+  assert.equal(gated.title, declared.title, 'without the law gate the declaration is still named');
+  assert.deepEqual(gated.doorways, [], 'and the row has no doorway to the Law tab');
   // The map's own Base value still beats the tier at Medium: lit,
   // inherited from Base, not unsettable at Medium.
   assert.equal(rowAt(width, 'medium', 'width').title, '50% from Base');
@@ -1345,16 +1351,16 @@ test('instance controls are root-bound: an element binding is malformed and drop
 
 test('compoundOperations: one wire op per change, default condition omitted', () => {
   // A gesture spanning boxes (a background replacement on a linked
-  // block: the gradient placed on the anchor, the root's authored band
+  // block: the gradient placed on the anchor, the root's authored background
   // cleared beside it), one change per key in one batch (one undo
   // label, atomic server-side). 'default' stays off the wire, matching
   // commit().
   const ops = compoundOperations([
-    { key: `${BLOCK}::.text-block-link`, properties: { 'background-image': 'var(--swatch-hero_fade)' } },
+    { key: `${BLOCK}::.text-block-link`, properties: { 'background-image': 'var(--gradient-hero-fade)' } },
     { key: BLOCK, properties: { 'background-color': null } },
   ]);
   assert.deepEqual(ops, [
-    { op: 'update_style', key: `${BLOCK}::.text-block-link`, properties: { 'background-image': 'var(--swatch-hero_fade)' } },
+    { op: 'update_style', key: `${BLOCK}::.text-block-link`, properties: { 'background-image': 'var(--gradient-hero-fade)' } },
     { op: 'update_style', key: BLOCK, properties: { 'background-color': null } },
   ]);
 });
@@ -1370,7 +1376,7 @@ test('compoundOperations: a non-default condition rides its wire op', () => {
 
 test('a container\'s granted subset is the same at every placement depth', () => {
   // Placement curates offers and birth, never legality: the served node
-  // is depth-blind and so is its grant. A narrowed grant binds the band
+  // is depth-blind and so is its grant. A narrowed grant binds the section
   // and the container nested inside it alike, and the layout tree (the
   // axis vocabulary's depth read) never enters the grant.
   const ROOT = 'cccccccc-1111-2222-3333-444444444444';
@@ -1391,20 +1397,22 @@ test('a container\'s granted subset is the same at every placement depth', () =>
     },
   });
   const layout = [{ kind: 'container', uuid: ROOT, layout_id: 'layout_onecol', children: [{ kind: 'container', uuid: NESTED, layout_id: 'layout_onecol', children: [] }] }];
-  const granted = (guide, uuid, tree) => controlModels(guide, `container:${uuid}`, {}, {}, {}, [], 'default', null, null, tree)
+  // The document the projection takes (its layout is the depth read).
+  const document = documentTree({ layout }, null);
+  const granted = (guide, uuid, document) => controlModels(guide, `container:${uuid}`, {}, {}, {}, [], 'default', null, null, document)
     .find((model) => model.id === 'spacing').granted;
 
   const narrowed = guideFor({ ...container, grants: { spacing: ['padding-top', 'padding-bottom', 'padding-inline', 'gap'] } });
-  assert.deepEqual(granted(narrowed, ROOT, layout), ['padding-top', 'padding-bottom', 'gap'], 'the band offers the declared sides');
-  assert.deepEqual(granted(narrowed, NESTED, layout), ['padding-top', 'padding-bottom', 'gap'], 'nested: the same grant');
-  assert.deepEqual(granted(narrowed, NESTED, []), ['padding-top', 'padding-bottom', 'gap'], 'no tree: the same grant');
+  assert.deepEqual(granted(narrowed, ROOT, document), ['padding-top', 'padding-bottom', 'gap'], 'the section offers the declared sides');
+  assert.deepEqual(granted(narrowed, NESTED, document), ['padding-top', 'padding-bottom', 'gap'], 'nested: the same grant');
+  assert.deepEqual(granted(narrowed, NESTED, []), ['padding-top', 'padding-bottom', 'gap'], 'no document: the same grant');
 
   // The whole group (the shipped container's grant): four sides and the
-  // shorthand for the band and the nested card alike.
+  // shorthand for the section and the nested card alike.
   const whole = guideFor(container);
   const everything = ['padding', 'padding-top', 'padding-bottom', 'padding-left', 'gap'];
-  assert.deepEqual(granted(whole, ROOT, layout), everything, 'the band offers four sides');
-  assert.deepEqual(granted(whole, NESTED, layout), everything);
+  assert.deepEqual(granted(whole, ROOT, document), everything, 'the section offers four sides');
+  assert.deepEqual(granted(whole, NESTED, document), everything);
 });
 
 // The address rule (resolveCandidates) over the text block's two boxes:
@@ -1435,9 +1443,9 @@ const textSkin = {
     'base:a': { '': { default: { color: 'blue' } } },
   },
 };
-// The tree the candidates' tags come from: the text block renders as a
+// The document the candidates' tags come from: the text block renders as a
 // p root with its link part declared as an anchor.
-const textTree = [
+const textDocument = [
   { kind: 'block', uuid: UUID_A, block_type: 'text', _element: { markup: { tag: 'p', parts: { '.text-block-link': { tag: 'a' } } } } },
 ];
 const textCandidate = (guide, styleMap, key, element, present) => ({
@@ -1448,7 +1456,7 @@ const textCandidate = (guide, styleMap, key, element, present) => ({
   // part label, "element" for the root); the address rule's "Also set on".
   label: element === '' ? 'element' : 'link',
   present,
-  stack: buildStack({ guide, map: styleMap, key, variants: buttonLibrary, blockTypes: textTypes, tree: textTree }),
+  stack: buildStack({ guide, map: styleMap, key, variants: buttonLibrary, blockTypes: textTypes, document: textDocument }),
 });
 // The text block's binding: the link first, the root second.
 const linkThenRoot = (styleMap, { guide = {}, linked = true } = {}) => [
@@ -1468,7 +1476,7 @@ test('resolveCandidates: a plain linked block with nothing authored addresses th
   assert.equal(reads['background-image'].alsoOn, null);
 });
 
-test('resolveCandidates: a band authored before the link keeps reading the root', () => {
+test('resolveCandidates: a root background authored before the link keeps reading the root', () => {
   // The orphan case: a root background set while unlinked still paints
   // once the block is linked, so the one row reads it (authored beats
   // list order) and writes it back where it lives. The image, authored
@@ -1509,10 +1517,10 @@ test('resolveCandidates: Button worn, Size from the root skin and Weight from th
   assert.deepEqual(Object.values(reads).map((read) => read.alsoOn), [null, null, null], 'a tier value on the other box hides nothing');
 });
 
-test('resolveCandidates: Button plus a root band resolves to the anchor and names the band as alsoOn', () => {
+test('resolveCandidates: Button plus a root background resolves to the anchor and names the root background as alsoOn', () => {
   // Two authored values for one property: the Button's link background
-  // and the root's own band. List order decides within the authored
-  // level (the anchor), and the band is the second authored value the
+  // and the root's own background. List order decides within the authored
+  // level (the anchor), and the root's background is the second authored value the
   // row's menu must name ("Also set on element"), by the other
   // candidate's label and its raw value; the image, authored nowhere,
   // names none.
@@ -1638,11 +1646,11 @@ test('resolveGroup: a media pick with a size authored on the root lands the imag
 });
 
 test('resolveGroup: a background replacement is the one legitimate multi-key batch', () => {
-  // A root band authored, a gradient pick: the pick's set member (the
+  // A root background authored, a gradient pick: the pick's set member (the
   // image) means the anchor (nothing authored for it: first present),
   // while its null member (the color it replaces) is a removal and
-  // routes per property to the root, where the band lives. Two keys,
-  // one atomic batch (compoundOperations), the root's band cleared and
+  // routes per property to the root, where the background lives. Two keys,
+  // one atomic batch (compoundOperations), the root's background cleared and
   // the gradient placed on the anchor.
   const styleMap = { [BLOCK]: { default: { 'background-color': 'gold' } } };
   const candidates = linkThenRoot(styleMap);
@@ -1651,14 +1659,14 @@ test('resolveGroup: a background replacement is the one legitimate multi-key bat
   assert.equal(image, LINK);
   assert.equal(color, BLOCK);
   assert.deepEqual(compoundOperations([
-    { key: image, properties: { 'background-image': 'var(--swatch-hero_fade)' } },
+    { key: image, properties: { 'background-image': 'var(--gradient-hero-fade)' } },
     { key: color, properties: { 'background-color': null } },
   ]), [
-    { op: 'update_style', key: LINK, properties: { 'background-image': 'var(--swatch-hero_fade)' } },
+    { op: 'update_style', key: LINK, properties: { 'background-image': 'var(--gradient-hero-fade)' } },
     { op: 'update_style', key: BLOCK, properties: { 'background-color': null } },
   ]);
-  // A color pick over the band is a set of one and lands where the
-  // band lives: the replacement writes back to the root, one key.
+  // A color pick over the root background is a set of one and lands where the
+  // background lives: the replacement writes back to the root, one key.
   assert.equal(resolveGroup(candidates, ['background-color'], 'default'), BLOCK);
 });
 
@@ -1675,7 +1683,7 @@ test('resolveGroup: a tier-delivered member decides before list order, an author
   assert.equal(resolveGroup(linkThenRoot({ [BLOCK]: {} }, { guide: rootTier }), STROKE, 'default'), BLOCK);
   assert.equal(resolveGroup(linkThenRoot({ [BLOCK]: {}, [LINK]: { default: { 'border-color': 'red' } } }, { guide: rootTier }), STROKE, 'default'), LINK);
   // The worn Button (authored at the anchor) is a level-1 member for a
-  // background group even beside a root band: list order within the
+  // background group even beside a root background: list order within the
   // authored level, the same answer the per-property rule gives.
   assert.equal(resolveGroup(linkThenRoot({ [BLOCK]: { ...wearingButton, default: { 'background-color': 'gold' } } }), ['background-color', 'background-image'], 'default'), LINK);
 });
@@ -1690,7 +1698,7 @@ test('resolveGroup: presence and reach filter the candidates; nothing addressabl
   assert.equal(resolveGroup(linkThenRoot(styleMap, { linked: null }), TRIO, 'default'), LINK, 'unknown presence counts as present');
   const [link, root] = linkThenRoot(styleMap);
   assert.equal(resolveGroup([{ ...link, write: null }, root], TRIO, 'default'), BLOCK);
-  assert.equal(resolveGroup([{ ...link, write: 'container:X::> pb-text .text-block-link' }, root], TRIO, 'default'), 'container:X::> pb-text .text-block-link');
+  assert.equal(resolveGroup([{ ...link, write: 'container:X::> d-text .text-block-link' }, root], TRIO, 'default'), 'container:X::> d-text .text-block-link');
   assert.equal(resolveGroup([{ ...link, write: null }, { ...root, write: null }], TRIO, 'default'), null);
   assert.equal(resolveGroup([{ ...link, present: false }, { ...root, present: false }], TRIO, 'default'), null);
   assert.equal(resolveGroup([], TRIO, 'default'), null);
@@ -1733,11 +1741,11 @@ const textGuide = {
 const linked = { self: { parts: { '.text-block-link': true } } };
 const unlinked = { self: { parts: { '.text-block-link': false } } };
 const projectText = (styleMap, options = {}) =>
-  project(textGuide, BLOCK, styleMap, { blockTypes: textTypes, variants: buttonLibrary, context: linked, tree: textTree, ...options });
+  project(textGuide, BLOCK, styleMap, { blockTypes: textTypes, variants: buttonLibrary, context: linked, document: textDocument, ...options });
 
 test('controlModels: a two-box binding resolves per property; the home is the first present box', () => {
-  // The Button worn at the anchor plus a root band: Background reads the
-  // anchor (list order within the authored level) and names the band on
+  // The Button worn at the anchor plus a root background: Background reads the
+  // anchor (list order within the authored level) and names the root's background on
   // the row's read as alsoOn, by the root's box label ("element",
   // write-address.js boxLabel) and its value; a second box is an address
   // fact, not other-pose styling, so styledElsewhere stays false.
@@ -1754,7 +1762,7 @@ test('controlModels: a two-box binding resolves per property; the home is the fi
   assert.equal(background.stacks['background-color'].key, LINK);
   assert.equal(background.reads['background-color'].winner.value, '#1a1a2e');
   assert.equal(background.reads['background-color'].winner.variant, 'button');
-  assert.deepEqual(background.reads['background-color'].alsoOn, { label: 'element', value: 'gold' }, 'the root band is a second authored value, named on the read');
+  assert.deepEqual(background.reads['background-color'].alsoOn, { label: 'element', value: 'gold' }, 'the root background is a second authored value, named on the read');
   assert.equal(background.reads['background-image'].alsoOn, null);
   assert.equal(background.styledElsewhere, false, 'a second box is not other-pose styling');
   assert.deepEqual(typography.keys, { 'font-family': LINK, 'font-size': BLOCK, 'font-weight': LINK });
@@ -1769,7 +1777,7 @@ test('controlModels: a two-box binding resolves per property; the home is the fi
   assert.deepEqual(width.keys, { width: BLOCK });
   // The reads ARE the resolver's: one read per owned property, none twice.
   assert.deepEqual(Object.keys(background.reads), SURFACE);
-  // The tree keyed the anchor's skin base:a layer (the part's declared
+  // The document keyed the anchor's skin base:a layer (the part's declared
   // tag), the root's p.
   assert.deepEqual(background.candidates[0].stack.layers.map((layer) => layer.id), ['skin:base:a', 'variant:button', 'element']);
 });
@@ -1838,7 +1846,7 @@ test('controlModels: a drilled shell part filters the bindings and forces the pa
   assert.deepEqual(fill.candidates.map((candidate) => candidate.element), ['.text-block-link', '']);
   assert.equal(fill.home.element, '.text-block-link');
   // Forced first, but authored still outranks list order: the root's
-  // own band keeps reading the root.
+  // own background keeps reading the root.
   assert.deepEqual(fill.keys, { 'background-color': BLOCK, 'background-image': LINK });
   // Undrilled, the declaration's order stands.
   const plain = projectText(styleMap).find((model) => model.id === 'fill');
@@ -1874,7 +1882,7 @@ const strokeGuide = {
   controlWidgets: { corners_border: { label: 'Border', section: 'surface', properties: [...STROKE, ...TOP_SIDE] } },
 };
 const projectStroke = (styleMap) =>
-  project(strokeGuide, BLOCK, styleMap, { blockTypes: textTypes, variants: buttonLibrary, context: linked, tree: textTree });
+  project(strokeGuide, BLOCK, styleMap, { blockTypes: textTypes, variants: buttonLibrary, context: linked, document: textDocument });
 
 test('landing: a colour authored on the first box moves a whole stroke off the width\'s read box, and the model answers it', () => {
   // Colour authored on the link (the first candidate), width on the root
@@ -1902,7 +1910,7 @@ test('landing: a colour authored on the first box moves a whole stroke off the w
   assert.equal(border.landing([]), border.home.key);
   // The unlinked block: the absent anchor takes no part, so the stroke
   // lands on the root, its colour orphan out of play.
-  const [unlinkedBorder] = project(strokeGuide, BLOCK, styleMap, { blockTypes: textTypes, variants: buttonLibrary, context: unlinked, tree: textTree });
+  const [unlinkedBorder] = project(strokeGuide, BLOCK, styleMap, { blockTypes: textTypes, variants: buttonLibrary, context: unlinked, document: textDocument });
   assert.equal(unlinkedBorder.landing(STROKE), BLOCK);
 });
 
@@ -1915,7 +1923,7 @@ const CHILD_UUID = 'cccccccc-1111-2222-3333-444444444444';
 const LINKED_UUID = 'eeeeeeee-1111-2222-3333-444444444444';
 const CONTAINER = `container:${CONTAINER_UUID}`;
 const CHILD = `block:${CHILD_UUID}`;
-const TARGET = `${CONTAINER}::> pb-text`;
+const TARGET = `${CONTAINER}::> d-text`;
 const childrenGuide = {
   kinds: {
     block: { grants: { typography: ['color'] } },
@@ -1936,7 +1944,7 @@ const childrenGuide = {
   conditions: {},
 };
 const childTypes = { [CHILD_UUID]: 'text', [LINKED_UUID]: 'text' };
-const childrenTree = (linked) => [
+const childrenDocument = (linked) => [
   {
     kind: 'container',
     uuid: CONTAINER_UUID,
@@ -1958,11 +1966,11 @@ const childrenTree = (linked) => [
 // mirror's answer for the selected element); a rule key must never read
 // it, so every projection here passes one that would mislead.
 const containerContext = { self: { parts: { '.text-block-link': true } } };
-const projectRule = (styleMap, tree) =>
-  controlModels(childrenGuide, TARGET, childTypes, styleMap, {}, [], 'default', containerContext, null, tree);
+const projectRule = (styleMap, document) =>
+  controlModels(childrenGuide, TARGET, childTypes, styleMap, {}, [], 'default', containerContext, null, document);
 
 test('a rule key models the landing type\'s controls over the container\'s rule, a part present where a matched child carries it', () => {
-  const [model, ...rest] = projectRule({}, childrenTree(true));
+  const [model, ...rest] = projectRule({}, childrenDocument(true));
   assert.deepEqual(rest, []);
   assert.equal(model.id, 'text_color');
   assert.equal(model.section, 'text');
@@ -1978,12 +1986,12 @@ test('a rule key models the landing type\'s controls over the container\'s rule,
   // Nothing authored anywhere: the declaration's order stands, the link
   // first.
   assert.equal(model.keys.color, `${TARGET} .text-block-link`);
-  // No tree (a satellite before its broadcast): the part's presence is
+  // No document (a satellite before its broadcast): the part's presence is
   // unknown, never the selection context's answer.
   const [treeless] = projectRule({}, null);
   assert.deepEqual(treeless.candidates.map((candidate) => candidate.present), [null, true]);
   assert.equal(treeless.keys.color, `${TARGET} .text-block-link`);
-  // A tree that does not carry the owner answers unknown too.
+  // A document that does not carry the owner answers unknown too.
   const [unknownOwner] = projectRule({}, []);
   assert.deepEqual(unknownOwner.candidates.map((candidate) => candidate.present), [null, true]);
 });
@@ -1991,23 +1999,23 @@ test('a rule key models the landing type\'s controls over the container\'s rule,
 test('a rule key\'s absent part drops out and the rows address the rule itself', () => {
   // No matched child renders the anchor: the matcher's answer over the
   // known set drops the link candidate, so a pick writes at
-  // container:X::> pb-text and paints on every text block.
-  const [model] = projectRule({}, childrenTree(false));
+  // container:X::> d-text and paints on every text block.
+  const [model] = projectRule({}, childrenDocument(false));
   assert.deepEqual(model.candidates.map((candidate) => candidate.present), [false, true]);
   assert.equal(model.home.element, '');
   assert.equal(model.keys.color, TARGET);
   // The rule's own entry is the row's value, unsettable at the pose.
-  const [set] = projectRule({ [TARGET]: { default: { color: 'red' } } }, childrenTree(false));
+  const [set] = projectRule({ [TARGET]: { default: { color: 'red' } } }, childrenDocument(false));
   assert.equal(litValues(set.reads).color, 'red');
   assert.equal(ownAtPose(set.reads.color, 'default'), true);
   assert.equal(set.home.stack.rootKey, CONTAINER);
-  assert.equal(set.home.stack.relative, '::> pb-text');
+  assert.equal(set.home.stack.relative, '::> d-text');
   // The matched set is the RULE's, not the container's children as a
   // whole: a rule matching nothing that renders the anchor reads absent
   // even when a sibling outside the match does.
   const [outside] = controlModels(childrenGuide, TARGET, childTypes, {}, {}, [], 'default', null, null, [
     {
-      ...childrenTree(false)[0],
+      ...childrenDocument(false)[0],
       children: [
         { kind: 'block', uuid: CHILD_UUID, block_type: 'text', _element: { markup: { tag: 'p', parts: {} } } },
         { kind: 'block', uuid: LINKED_UUID, block_type: 'image', _element: { markup: { tag: 'figure', parts: { '.text-block-link': { tag: 'a' } } } } },
@@ -2018,18 +2026,18 @@ test('a rule key\'s absent part drops out and the rows address the rule itself',
 });
 
 test('a bare children rule and a tag land on declarations without controls', () => {
-  assert.deepEqual(controlModels(childrenGuide, `${CONTAINER}::> *`, childTypes, {}, {}, [], 'default', null, null, childrenTree(false)), []);
+  assert.deepEqual(controlModels(childrenGuide, `${CONTAINER}::> *`, childTypes, {}, {}, [], 'default', null, null, childrenDocument(false)), []);
   assert.deepEqual(controlModels(childrenGuide, `${CONTAINER}::> p`, childTypes, {}), []);
   // A shell part still models nothing of its own (the owner's lift).
   assert.deepEqual(controlModels(childrenGuide, `${CHILD}::.text-block-link`, childTypes, {}), []);
 });
 
 test('a child\'s own rows read the container\'s rule as the inherited origin', () => {
-  const tree = childrenTree(false);
+  const document = childrenDocument(false);
   const context = { self: { parts: { '.text-block-link': false } } };
   const rule = { [TARGET]: { default: { color: 'red' } } };
   const project = (styleMap) =>
-    controlModels(childrenGuide, CHILD, childTypes, styleMap, {}, [], 'default', context, null, tree)[0];
+    controlModels(childrenGuide, CHILD, childTypes, styleMap, {}, [], 'default', context, null, document)[0];
   const inherited = project(rule);
   assert.equal(inherited.keys.color, CHILD, 'the row still writes the child itself');
   assert.equal(inherited.reads.color.winner.tier, 'ancestor');
@@ -2039,7 +2047,7 @@ test('a child\'s own rows read the container\'s rule as the inherited origin', (
     guide: childrenGuide, materials: EMPTY_MATERIALS, condition: 'default', property: 'color', stack: inherited.home.stack, read: inherited.reads.color,
   });
   assert.equal(origin.delivers, true);
-  assert.equal(origin.title, 'red inherited from Hero (> pb-text)');
+  assert.equal(origin.title, 'red inherited from Hero (> d-text)');
   assert.deepEqual(origin.doorways.map((doorway) => doorway.id), ['ancestor']);
   // The child's own color wins by proximity: overriding, with the
   // container's value named beneath.
@@ -2049,15 +2057,15 @@ test('a child\'s own rows read the container\'s rule as the inherited origin', (
     guide: childrenGuide, materials: EMPTY_MATERIALS, condition: 'default', property: 'color', stack: own.home.stack, read: own.reads.color,
   });
   assert.equal(overriding.atPose, true);
-  assert.equal(overriding.title, "Your blue overrides Hero's red (> pb-text)");
-  // Without the tree the ancestor tier is out of reach: the row reads
+  assert.equal(overriding.title, "Your blue overrides Hero's red (> d-text)");
+  // Without the document the ancestor tier is out of reach: the row reads
   // unset (a satellite before its broadcast).
   const treeless = controlModels(childrenGuide, CHILD, childTypes, rule, {}, [], 'default', context)[0];
   assert.equal(treeless.reads.color.winner, null);
 });
 
 test('a variant the container\'s rule wears reaches a child as an ancestor layer, never as a wearing: not set here, no honesty hint', () => {
-  const tree = childrenTree(false);
+  const document = childrenDocument(false);
   const context = { self: { parts: { '.text-block-link': false } } };
   // A text look with a Narrow block: at its wearer the block flags
   // styledElsewhere (styling the pose does not show).
@@ -2068,7 +2076,7 @@ test('a variant the container\'s rule wears reaches a child as an ancestor layer
     value: { '': { default: { color: 'red' }, narrow: { color: 'blue' } } },
   }];
   const styleMap = { [TARGET]: { variants: [{ variant: 'accent', fragment: '' }] } };
-  const [child] = controlModels(childrenGuide, CHILD, childTypes, styleMap, {}, accent, 'default', context, null, tree);
+  const [child] = controlModels(childrenGuide, CHILD, childTypes, styleMap, {}, accent, 'default', context, null, document);
   // The child's row lights the rule's worn value, the winner naming the
   // variant through the ancestor tier (the mark can wear its hue)...
   assert.equal(litValues(child.reads).color, 'red');
@@ -2083,7 +2091,7 @@ test('a variant the container\'s rule wears reaches a child as an ancestor layer
   assert.equal(child.styledElsewhere, false);
   // At the rule itself the same reference IS a wearing: set, and its
   // Narrow block flags the hint.
-  const [rule] = controlModels(childrenGuide, TARGET, childTypes, styleMap, {}, accent, 'default', containerContext, null, tree);
+  const [rule] = controlModels(childrenGuide, TARGET, childTypes, styleMap, {}, accent, 'default', containerContext, null, document);
   assert.equal(rule.reads.color.winner.tier, 'variant');
   assert.equal(styledAt(rule.reads), true);
   assert.equal(rule.styledElsewhere, true);
@@ -2120,10 +2128,10 @@ const ADDRESS_GUIDE = {
 };
 const LINKED_CHILD = `block:${LINKED_UUID}`;
 const LINKED_LINK = `${LINKED_CHILD}::.text-block-link`;
-const TEXT_RULE = `${CONTAINER}::> pb-text`;
+const TEXT_RULE = `${CONTAINER}::> d-text`;
 const linkedContext = { self: { parts: { '.text-block-link': true } } };
-const projectAt = (writeAddress, { styleMap = {}, targetSelector = null, tree = childrenTree(true), key = LINKED_CHILD, context = linkedContext } = {}) =>
-  controlModels(ADDRESS_GUIDE, key, childTypes, styleMap, {}, [], 'default', context, targetSelector, tree, writeAddress);
+const projectAt = (writeAddress, { styleMap = {}, targetSelector = null, document = childrenDocument(true), key = LINKED_CHILD, context = linkedContext } = {}) =>
+  controlModels(ADDRESS_GUIDE, key, childTypes, styleMap, {}, [], 'default', context, targetSelector, document, writeAddress);
 const byId = (models) => Object.fromEntries(models.map((model) => [model.id, model]));
 
 // Two projections are the same model when their data agree and their
@@ -2143,14 +2151,14 @@ test('writeAddress: null, a malformed address and the facet\'s own key all give 
   const plain = projectAt(null);
   assert.deepEqual(plain.map((model) => model.withheld), [{}, {}, {}]);
   sameModels(projectAt({ key: LINKED_CHILD, selector: null }), plain);
-  sameModels(projectAt({ key: LINKED_CHILD, selector: '>pb-text' }), plain);
+  sameModels(projectAt({ key: LINKED_CHILD, selector: '>d-text' }), plain);
   sameModels(projectAt('nonsense'), plain);
   const drilled = projectAt(null, { targetSelector: '.text-block-link' });
   sameModels(projectAt({ key: LINKED_CHILD, selector: '.text-block-link' }, { targetSelector: '.text-block-link' }), drilled);
   // A rule key takes an address like any facet (the pins below); one
   // naming its own key is the own key.
-  const rule = controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenTree(true));
-  sameModels(controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenTree(true), { key: CONTAINER, selector: '> pb-text' }), rule);
+  const rule = controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenDocument(true));
+  sameModels(controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenDocument(true), { key: CONTAINER, selector: '> d-text' }), rule);
 });
 
 test('writeAddress: a tag-tier subject rebases its root candidate to the address, as the root facet does; without one it writes at its own rule key', () => {
@@ -2168,7 +2176,7 @@ test('writeAddress: a tag-tier subject rebases its root candidate to the address
   };
   const TIER = `${LINKED_CHILD}::a`;
   const tierAt = (writeAddress) =>
-    byId(controlModels(tierGuide, TIER, childTypes, {}, {}, [], 'default', null, null, childrenTree(true), writeAddress));
+    byId(controlModels(tierGuide, TIER, childTypes, {}, {}, [], 'default', null, null, childrenDocument(true), writeAddress));
   const own = tierAt(null);
   assert.equal(own.link_weight.keys['font-weight'], TIER, 'without an address the tier writes at its own rule key');
   assert.deepEqual(own.link_weight.candidates.map((candidate) => candidate.write), [TIER]);
@@ -2183,12 +2191,12 @@ test('writeAddress: a tag-tier subject rebases its root candidate to the address
 });
 
 test('writeAddress: a chain subject takes an address the same way (no mode decides whether one may stand)', () => {
-  // The container's `> pb-text` rule under its own `> *`: the text
+  // The container's `> d-text` rule under its own `> *`: the text
   // type's root-bound rows rebase to the children rule, the part-bound
   // ones continue it by descent where the matcher confirms the reach.
-  const rule = byId(controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenTree(true)));
+  const rule = byId(controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenDocument(true)));
   assert.equal(rule.typography.keys['font-size'], TEXT_RULE);
-  const under = byId(controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenTree(true), { key: CONTAINER, selector: '> *' }));
+  const under = byId(controlModels(ADDRESS_GUIDE, TEXT_RULE, childTypes, {}, {}, [], 'default', null, null, childrenDocument(true), { key: CONTAINER, selector: '> *' }));
   assert.equal(under.typography.keys['font-size'], `${CONTAINER}::> *`, 'the root candidate rebases to the address');
   assert.equal(under.typography.candidates.find((candidate) => candidate.element === '').write, `${CONTAINER}::> *`);
   // A rule's root is its owner, not one matched element, so the matcher
@@ -2204,7 +2212,7 @@ test('writeAddress: a chain subject takes an address the same way (no mode decid
 });
 
 test('writeAddress: a root facet rebases every candidate to the address, the facet\'s own to the address itself, a part by descent', () => {
-  const address = { key: CONTAINER, selector: '> pb-text' };
+  const address = { key: CONTAINER, selector: '> d-text' };
   const { text_color: color, typography, link_weight: link } = byId(projectAt(address));
   // The candidates still read the SELECTED element's boxes (their keys
   // and stacks are the element's); the write keys are the rebased ones.
@@ -2265,28 +2273,29 @@ test('writeAddress: a granted property the address\'s landing withholds is repor
   assert.deepEqual(models.typography.constraints, { 'font-weight': { allowed: ['700'] } }, 'the address\'s constraints');
   assert.deepEqual(models.link_weight.withheld, {});
   // The children rule grants gap alone: a root facet under it withholds
-  // color (the part candidate cannot continue `> *`, the root lands on
-  // the children section).
+  // color at the address's landing, while the write key rebases the
+  // part candidate under it (a class follows any compound, so the part
+  // continues `> *`).
   const children = byId(projectAt({ key: CONTAINER, selector: '> *' })).text_color;
-  assert.equal(children.keys.color, `${CONTAINER}::> *`);
+  assert.equal(children.keys.color, `${CONTAINER}::> * .text-block-link`);
   assert.equal(children.withheld.color, 'color is not allowed at "> *" on Hero: the style guide does not grant it there. Choose this element alone to set it here.');
 });
 
 test('writeAddress: a binding none of whose boxes the address reaches withholds every granted property with the reach reason', () => {
-  // No tree: the matcher cannot confirm the part chain, so the part-only
+  // No document: the matcher cannot confirm the part chain, so the part-only
   // binding is out of reach; the two-box bindings route to the root.
-  const address = { key: CONTAINER, selector: '> pb-text' };
-  const models = byId(projectAt(address, { tree: null }));
+  const address = { key: CONTAINER, selector: '> d-text' };
+  const models = byId(projectAt(address, { document: null }));
   assert.equal(models.text_color.keys.color, TEXT_RULE);
   assert.deepEqual(models.text_color.withheld, {});
   assert.equal(models.link_weight.keys['font-weight'], LINKED_LINK, 'the reads still address the element');
   assert.deepEqual(models.link_weight.candidates.map((candidate) => candidate.write), [null], 'beyond the address: no write key');
   assert.equal(resolveGroup(models.link_weight.candidates, ['font-weight'], 'default'), null, 'and no group answer');
   assert.deepEqual(models.link_weight.withheld, {
-    'font-weight': '"> pb-text" on the parent element does not reach the link this row styles; choose an address that does, or this element alone.',
+    'font-weight': '"> d-text" on the parent element does not reach the link this row styles; choose an address that does, or this element alone.',
   });
   assert.deepEqual(models.link_weight.granted, ['font-weight']);
-  // With the tree the chain is confirmed and the row writes there.
+  // With the document the chain is confirmed and the row writes there.
   assert.equal(byId(projectAt(address)).link_weight.keys['font-weight'], `${TEXT_RULE} .text-block-link`);
 });
 

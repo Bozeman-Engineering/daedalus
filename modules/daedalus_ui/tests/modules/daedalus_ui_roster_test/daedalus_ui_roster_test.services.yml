@@ -1,0 +1,5 @@
+services:
+  daedalus_ui_roster_test.fixture_column:
+    class: Drupal\daedalus_ui_roster_test\EventSubscriber\FixtureColumn
+    tags:
+      - { name: event_subscriber }

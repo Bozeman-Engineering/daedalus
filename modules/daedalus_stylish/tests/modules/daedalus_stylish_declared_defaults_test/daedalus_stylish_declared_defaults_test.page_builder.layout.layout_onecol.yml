@@ -1,8 +1,8 @@
 # A layout shipping declared defaults for its own scope, root and part,
 # with a width condition beside the default one.
 elements:
-  '.band-inner':
-    label: 'Inner band'
+  '.section-inner':
+    label: 'Inner section'
     property_groups:
       sizing: {}
 defaults:
@@ -11,6 +11,6 @@ defaults:
       display: grid
     narrow:
       display: block
-  '::.band-inner':
+  '::.section-inner':
     default:
       max-width: 80rem

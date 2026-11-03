@@ -30,6 +30,7 @@ final class DistroLockTest extends KernelTestBase {
     'system',
     'user',
     'daedalus_blueprint',
+    'filter',
   ];
 
   /**

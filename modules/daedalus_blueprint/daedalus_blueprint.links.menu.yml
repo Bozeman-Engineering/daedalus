@@ -6,3 +6,14 @@ entity.design_system.collection:
   route_name: entity.design_system.collection
   parent: system.themes_page
   weight: 10
+
+# The design systems' second door: the Styling sub-category of the Daedalus
+# config category (Configuration » Daedalus » Styling). The first door is
+# entity.design_system.collection above, under Appearance
+# (system.themes_page); nothing about the page moves. See SETTINGS.md.
+entity.design_system.collection.daedalus:
+  title: 'Design systems'
+  description: 'Manage the site''s design systems and activate one.'
+  route_name: entity.design_system.collection
+  parent: daedalus.admin_config_styling
+  weight: 10

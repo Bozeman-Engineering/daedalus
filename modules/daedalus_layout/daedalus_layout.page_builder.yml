@@ -9,7 +9,7 @@
 # daedalus_layout declares it: shell ownership follows template ownership, and this
 # shell is markup a module renders inside {{ content }}, not anything a
 # theme's entity template guarantees. That is the whole point of it: the
-# page is the top of the container tree, and a gap between root bands needs
+# page is the top of the container tree, and a gap between root sections needs
 # an arranging box we own. The entity root (the theme's <article>) never
 # was that box, and core's content wrapper has no class and is not ours.
 #
@@ -51,9 +51,9 @@ entity:
   #
   # A flex column, not a grid, the container kind's own model
   # (daedalus_stylish_layouts.page_builder.yml): a one-column grid splits
-  # a tall root's surplus height between its bands (`align-content`
-  # stretches auto rows), while a flex column packs the bands at the top,
-  # honors the page gap, and lets a band pin itself to the foot with an
+  # a tall root's surplus height between its sections (`align-content`
+  # stretches auto rows), while a flex column packs the sections at the top,
+  # honors the page gap, and lets a section pin itself to the foot with an
   # auto margin. Every level of the container tree arranges the same way.
   # A flex column with no gap is visually the flush stacking of before.
   defaults:

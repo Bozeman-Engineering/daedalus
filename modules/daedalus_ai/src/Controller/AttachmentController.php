@@ -46,9 +46,9 @@ final class AttachmentController extends ControllerBase {
    * Saves a multipart `file` for the `thread_id` and holds it.
    *
    * @return \Symfony\Component\HttpFoundation\JsonResponse
-   *   {name, mime, size}: the saved filename (renamed on collision, so it is
-   *   the name to use), the stored MIME type and the size in bytes. A file
-   *   the lane refuses is a 400 naming the reasons.
+   *   {name, mime, size}: the lane's clean filename (renamed on collision,
+   *   so it is the name to use), the stored MIME type and the size in bytes.
+   *   A file the lane refuses is a 400 naming the reasons.
    */
   public function attach(Request $request): JsonResponse {
     $upload = $request->files->get('file');

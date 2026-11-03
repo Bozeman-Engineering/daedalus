@@ -36,6 +36,7 @@ class StyleGuideAxesTest extends KernelTestBase {
   protected static $modules = [
     'system',
     'daedalus_blueprint',
+    'filter',
     'user',
     'field',
     'layout_discovery',
@@ -63,9 +64,6 @@ class StyleGuideAxesTest extends KernelTestBase {
     // Every build() consumer builds the materials roster (the minted
     // corpus behind the stop warnings), which reads all three daedalus_stylish
     // material tables.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
@@ -316,7 +314,7 @@ class StyleGuideAxesTest extends KernelTestBase {
         [
           'width' => [
             'depth' => StyleGuide::DEPTH_ROOT,
-            'description' => 'How wide a band lets its content run.',
+            'description' => 'How wide a section lets its content run.',
             'owns' => ['padding-left', 'padding-right', 'max-width'],
           ],
         ],
@@ -331,7 +329,7 @@ class StyleGuideAxesTest extends KernelTestBase {
 
     $section = $this->styleGuide->getKind('container', self::THEME);
     $this->assertSame(['style', 'width', 'flow', 'tone'], StyleGuide::axes($section));
-    $this->assertSame(['width' => 'How wide a band lets its content run.', 'flow' => 'How the children arrange.'], StyleGuide::axisDescriptions($section));
+    $this->assertSame(['width' => 'How wide a section lets its content run.', 'flow' => 'How the children arrange.'], StyleGuide::axisDescriptions($section));
     $this->assertSame(['width' => ['padding-left', 'padding-right', 'max-width']], StyleGuide::axisOwns($section));
     $media = $this->styleGuide->getBlockType('media', self::THEME);
     $this->assertSame([], StyleGuide::axisDescriptions($media));
@@ -345,7 +343,7 @@ class StyleGuideAxesTest extends KernelTestBase {
       'width' => [
         'label' => NULL,
         'root_only' => TRUE,
-        'description' => 'How wide a band lets its content run.',
+        'description' => 'How wide a section lets its content run.',
         'owns' => ['padding-left', 'padding-right', 'max-width'],
       ],
       'flow' => ['label' => 'Flow', 'root_only' => FALSE, 'description' => 'How the children arrange.', 'owns' => []],

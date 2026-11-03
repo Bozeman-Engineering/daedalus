@@ -29,7 +29,7 @@ use Drupal\daedalus_blueprint\Materials\RelativeSelector;
  * convergence runs after it (tag priority), so a hoisted legacy children
  * entry converges in the same pass.
  */
-class RelativeSelectorConvergence {
+class RelativeSelectorConvergence implements StyleStoreConvergenceInterface {
 
   /**
    * The legacy spellings this convergence retires, as the suffix reads.
@@ -145,10 +145,7 @@ class RelativeSelectorConvergence {
   }
 
   /**
-   * Converges every daedalus_variant's styles, across ALL revisions.
-   *
-   * @return string[]
-   *   Report lines.
+   * {@inheritdoc}
    */
   public function convergeVariants(): array {
     $lines = [];
@@ -176,10 +173,7 @@ class RelativeSelectorConvergence {
   }
 
   /**
-   * Converges every daedalus_skin's defaults, across ALL revisions.
-   *
-   * @return string[]
-   *   Report lines.
+   * {@inheritdoc}
    */
   public function convergeSkins(): array {
     $lines = [];

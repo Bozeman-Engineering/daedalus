@@ -3,12 +3,12 @@
  * The color field's pure half (color-field.js is the preact component):
  * the sRGB color parse every face-and-picker surface shares, the face a
  * color value wears over its value space, the palette grid's entries
- * for that space, and the save-as-swatch gate. No DOM, no preact,
+ * for that space, and the save-as-token gate. No DOM, no preact,
  * node-tested (tests/js/color-field-model.test.mjs).
  *
  * One color editor for every color slot in the inspector: the advanced
- * color rows and the color swatch kind's value editor mount the same
- * field over a value space (value-space.js valueSpaceFor), and the basic
+ * color rows and the color token's value editor mount the same field
+ * over a value space (value-space.js valueSpaceFor), and the basic
  * wells' color lane reads the same face and settle rule, so the offer,
  * the capture rule and the face read are derived once here and rendered
  * once there.
@@ -136,13 +136,13 @@ export const pickerHex = (paint, resolve = null) => {
  * - 'stop': a reference the space offers (value-space.js wearing); the
  *   stop's own paint pair, the display value as text, the token behind
  *   it for provenance.
- * - 'reference': a rostered token or swatch outside the space (a color
- *   token on a row whose scale binding excludes it): painted and
+ * - 'reference': a rostered token outside the space (a color token on a
+ *   row whose scale binding excludes it): painted and
  *   displayed from record data, blessed but stopless.
  * - 'literal': an inline color the grammar calls literal (a hex, rgb(),
  *   a named color, a var() with a fallback tail): painted as itself
  *   through the one face-paint rule (nested references substituted), the
- *   spelling as text. The only kind the save-as-swatch gesture offers
+ *   spelling as text. The only kind the save-as-token gesture offers
  *   over, and the well's painted custom face in basic mode.
  * - 'unknown': a reference the roster lacks or an inline media value: the
  *   raw spelling as text and paint, the face degrading honestly.
@@ -282,11 +282,11 @@ export const gridEntries = (space, face) => {
 };
 
 /**
- * Whether the save-as-swatch gesture renders: the grant (honest chrome;
- * the mint route enforces), an OPEN space (a closed one commits stops
- * only, and a swatch minted outside its vocabulary would never be
- * offered there), and a literal color to save (a reference already IS a
- * material; unknown and unset have nothing to mint).
+ * Whether the save-as-token gesture renders: the grant (honest chrome;
+ * the op enforces), an OPEN space (a closed one commits stops only, and
+ * a token minted outside its vocabulary would never be offered there),
+ * and a literal color to save (a reference already IS a material;
+ * unknown and unset have nothing to mint).
  *
  * @param {{kind: string}} space
  * @param {{kind: string}} face
@@ -304,8 +304,8 @@ export const mintOffered = (space, face, canMint) =>
  * The one rule behind every literal door (typed text, the native
  * picker's change event): an emptied spelling settles '' (unset); on a
  * detented space magnetic capture runs (value-space.js magneticCapture:
- * reaching a swatch's own hex IS reaching the swatch, so the commit is
- * the swatch's reference and the canvas previews the stop's display
+ * reaching a token's own hex IS reaching the token, so the commit is
+ * the token's reference and the canvas previews the stop's display
  * value when the typed spelling differs from it); anything else commits
  * as typed, trimmed.
  *
@@ -337,21 +337,21 @@ export const literalSettle = (space, text) => {
 };
 
 /**
- * The color palette as a value space (the color swatch kind's editor:
- * a swatch's value has no property, so the space is the unconstrained
+ * The color palette as a value space (the color token's editor: a
+ * token's value has no property, so the space is the unconstrained
  * color offer, and authoring is never law-gated), minus one reference
- * the editor must not offer nor capture: a swatch cannot alias itself
+ * the editor must not offer nor capture: a token cannot alias itself
  * (one var() cycle and the property is invalid everywhere it is used).
  * A stop whose collision set held the excluded reference drops it from
  * the set (and the stop when nothing remains), so a twin by value can
- * neither show nor capture the swatch's own spelling.
+ * neither show nor capture the token's own spelling.
  *
  * @param {?object} guide
  *   The style guide payload.
  * @param {object} materials
  *   The materials roster.
  * @param {?string} [exclude]
- *   The style spelling to leave out ('var(--swatch-x)'), or null.
+ *   The style spelling to leave out ('var(--color-x)'), or null.
  *
  * @return {object}
  *   A value space (valueSpaceFor's shape).

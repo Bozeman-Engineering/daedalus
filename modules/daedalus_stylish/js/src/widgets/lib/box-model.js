@@ -87,7 +87,7 @@ export const OPPOSITE_SIDE = {
 /**
  * The sides a box family's LOGICAL longhand addresses, in the horizontal
  * writing mode (the only one the canvas poses in). `padding-inline` is
- * the width story's spelling (the one-box container's inset on the band
+ * the width story's spelling (the one-box container's inset on the section
  * itself) and reads as the left and right sides it moves.
  */
 export const LOGICAL_SIDES = {

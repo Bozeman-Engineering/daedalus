@@ -4,6 +4,11 @@ services:
   # daedalus_ui.composed_block_content collector pattern).
   daedalus_edit_formatted_text_block.composed_content:
     class: Drupal\daedalus_edit_formatted_text_block\FormattedTextComposedContent
-    arguments: ['@entity_type.manager', '@plugin.manager.editor']
+    arguments:
+      - '@entity_type.manager'
+      - '@plugin.manager.editor'
+      # Core 11.3 compatibility (CORE_11_3_COMPAT.md).
+      - '@daedalus_blueprint.compat.filter_formats'
+      - '@current_user'
     tags:
       - { name: daedalus_ui.composed_block_content }

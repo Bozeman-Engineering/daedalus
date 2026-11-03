@@ -31,7 +31,7 @@ use Drupal\daedalus_blueprint\Result\BlueprintError;
  * re-rooted to `&`, so a block copied from another element ("Copy CSS"
  * prints `#<uuid>` rules, wrappers around the conditioned ones) pastes onto
  * the key it was pasted into instead of failing on a foreign id. Under a
- * rule key `&` is the rule, so `& > pb-text` continues it by descent, as
+ * rule key `&` is the rule, so `& > d-text` continues it by descent, as
  * nesting means. Ownership answers (`known_ids`) come from the STAGED tree
  * by the derivation the style op uses (DialectCssParser::knownIds()).
  *
@@ -82,7 +82,7 @@ final class CssFragmentDoor {
   public function parse(HostInterface $host, string $key, string $css): array {
     $split = RelativeSelector::splitKey($key);
     if ($split === NULL || !preg_match(self::ROOT_RE, $split[0], $m) || !DialectParser::isUuid($m['uuid'])) {
-      return self::refused(new BlueprintError('key', 'BAD_KEY', sprintf('"%s" is not a style key.', $key), ['key' => $key], 'A style key is container:<uuid> or block:<uuid>, with "::" and a relative selector in its canonical spelling for a rule (container:<uuid>::> pb-text).'));
+      return self::refused(new BlueprintError('key', 'BAD_KEY', sprintf('"%s" is not a style key.', $key), ['key' => $key], 'A style key is container:<uuid> or block:<uuid>, with "::" and a relative selector in its canonical spelling for a rule (container:<uuid>::> d-text).'));
     }
     [, $selector] = $split;
     $uuid = $m['uuid'];

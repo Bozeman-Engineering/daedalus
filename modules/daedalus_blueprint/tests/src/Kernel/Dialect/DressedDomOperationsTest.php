@@ -24,7 +24,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * Every DOM op batch and every document runs DRESSED
  * (DomOperationHandler::runTranslated()), so the styling layer's birth
- * subscriber stamps nothing under it: an attribute-less <pb-container>
+ * subscriber stamps nothing under it: an attribute-less <d-container>
  * inserted by page_edit wears no variants, one written with width="site"
  * wears exactly container_site (no house default beneath it), and a block
  * the fragment authors wears none even when its type declares defaults.
@@ -97,18 +97,12 @@ class DressedDomOperationsTest extends BlueprintKernelTestBase {
     $this->installEntitySchema('block_content');
     $this->installConfig(['block_content']);
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all four storages on
+    // The materials roster's daedalus_stylish provider reads all three storages on
     // every build, and every compile and validation builds it.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -187,22 +181,22 @@ class DressedDomOperationsTest extends BlueprintKernelTestBase {
     $result = $this->operations->batchOperations($this->host($this->entity), [
       [
         'op' => 'insert',
-        'html' => '<pb-container id="bare"><pb-block id="quote" type="testimonial" /></pb-container><pb-container id="band" width="site"></pb-container>',
+        'html' => '<d-container id="bare"><d-block id="quote" type="testimonial" /></d-container><d-container id="section" width="site"></d-container>',
         'at' => ['ref' => 'root', 'position' => 'beforeend'],
       ],
     ], $this->options);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $aliases = $result->getAliases();
-    $this->assertSame(['bare', 'quote', 'band'], array_keys($aliases));
+    $this->assertSame(['bare', 'quote', 'section'], array_keys($aliases));
 
     // The attribute-less container wears nothing (no onecol_default,
     // onecol_wide or onecol_row stamped), its block wears nothing (no
-    // testimonial_default), and the band wears exactly container_site.
+    // testimonial_default), and the section wears exactly container_site.
     $map = $this->styleMap();
     $this->assertArrayNotHasKey("container:{$aliases['bare']}", $map);
     $this->assertArrayNotHasKey("block:{$aliases['quote']}", $map);
-    $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $map["container:{$aliases['band']}"] ?? NULL);
-    $this->assertSame(["container:{$aliases['band']}"], array_keys($map), 'The fragment wrote exactly one map entry: the stated width.');
+    $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $map["container:{$aliases['section']}"] ?? NULL);
+    $this->assertSame(["container:{$aliases['section']}"], array_keys($map), 'The fragment wrote exactly one map entry: the stated width.');
 
     // The op door control: the same adds undressed are born wearing the
     // declared defaults, so the fixtures would have stamped.
@@ -246,14 +240,14 @@ class DressedDomOperationsTest extends BlueprintKernelTestBase {
     ]);
     $entity->save();
 
-    $result = $this->dom->applyDocument($this->host($entity), '<pb-container id="bare"><pb-block id="quote" type="testimonial" /></pb-container><pb-container id="band" width="site"></pb-container>', $this->options);
+    $result = $this->dom->applyDocument($this->host($entity), '<d-container id="bare"><d-block id="quote" type="testimonial" /></d-container><d-container id="section" width="site"></d-container>', $this->options);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $aliases = $result->getAliases();
-    $this->assertSame(['bare', 'quote', 'band'], array_keys($aliases));
+    $this->assertSame(['bare', 'quote', 'section'], array_keys($aliases));
 
     $map = $this->styleMap($entity);
-    $this->assertSame(["container:{$aliases['band']}"], array_keys($map), 'The document wrote exactly one map entry: the stated width.');
-    $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $map["container:{$aliases['band']}"]);
+    $this->assertSame(["container:{$aliases['section']}"], array_keys($map), 'The document wrote exactly one map entry: the stated width.');
+    $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $map["container:{$aliases['section']}"]);
   }
 
 }

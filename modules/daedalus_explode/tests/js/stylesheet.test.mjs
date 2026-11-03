@@ -1,8 +1,9 @@
 /**
  * Byte-exact tests for the stylesheet printer (stylesheet.js): the stage
  * rules with the settings as variables, the neutralizer, the per-plane
- * lift, outline, surface, shadow and label (the chip opening with the
- * `all: initial` reset), the static-position anchor,
+ * lift, outline, shadow and label (the chip opening with the
+ * `all: initial` reset), the static-position anchor, the translucent
+ * surface printed for bare planes only,
  * an unlifted plane's flat treatment, string escaping in the attribute
  * value and the `content` text, the selection and hover rules sized by
  * the emphasis factor the stage prints, part planes through a stub
@@ -84,11 +85,19 @@ ${STAGE} :has([data-selectable]) {
 const TRANSITION =
   '  transition: transform var(--daedalus-explode-duration, 600ms) ease !important;\n';
 
-const SURFACE = `  outline: 1px solid var(--daedalus-selection-muted, rgba(0, 113, 227, 0.55)) !important;
+/**
+ * A lifted plane's outline and shadow; the surface sits between them on
+ * a bare plane only.
+ */
+const OUTLINE = `  outline: 1px solid var(--daedalus-selection-muted, rgba(0, 113, 227, 0.55)) !important;
   outline-offset: -1px !important;
-  background-color: var(--daedalus-explode-surface, rgb(255 255 255 / 0.72)) !important;
-  box-shadow: var(--daedalus-explode-shadow, 0 12px 32px rgb(0 0 0 / 0.18)) !important;
 `;
+const BACKGROUND =
+  '  background-color: var(--daedalus-explode-surface, rgb(255 255 255 / 0.72)) !important;\n';
+const SHADOW =
+  '  box-shadow: var(--daedalus-explode-shadow, 0 12px 32px rgb(0 0 0 / 0.18)) !important;\n';
+const SURFACE = OUTLINE + SHADOW;
+const BARE_SURFACE = OUTLINE + BACKGROUND + SHADOW;
 
 /**
  * The label chip for a `content` string token (already quoted and
@@ -118,12 +127,12 @@ const label = (content) => `  &::before {
 `;
 
 /**
- * A lifted, labeled element plane's whole rule.
+ * A lifted, labeled element plane's whole rule, surfaced when bare.
  */
-const planeRule = (key, lift, content) =>
+const planeRule = (key, lift, content, bare = false) =>
   `${STAGE} [data-selectable="${key}"] {
   transform: translateZ(calc(${lift} * var(--daedalus-explode-gap))) !important;
-${TRANSITION}${SURFACE}${label(content)}}
+${TRANSITION}${bare ? BARE_SURFACE : SURFACE}${label(content)}}
 `;
 
 /**
@@ -174,13 +183,37 @@ test('the settings print as the parent variables the stage rules read', () => {
   );
 });
 
-test('element planes print the lift, transition, outline, surface, shadow and label', () => {
+test('element planes print the lift, transition, outline, shadow and label', () => {
   assert.equal(
     print([root(), section(), text()], SETTINGS),
     STAGE_CSS +
       planeRule(ROOT, 0, '"Page"') +
       planeRule(SECTION, 1, '"Section"') +
       planeRule(TEXT, 1, '"Hello world"'),
+  );
+});
+
+test('a bare plane gets the translucent surface; a plane with its own background keeps it', () => {
+  // The host reports the planes whose elements paint no background; the
+  // surface prints between the outline and the shadow on those alone,
+  // so a colored section or a filled button stays recognizable.
+  const css = print([root(), section(), text()], SETTINGS, {}, { bare: [ROOT, TEXT] });
+  assert.equal(
+    css,
+    STAGE_CSS +
+      planeRule(ROOT, 0, '"Page"', true) +
+      planeRule(SECTION, 1, '"Section"') +
+      planeRule(TEXT, 1, '"Hello world"', true),
+  );
+  assert.equal((css.match(/background-color:/g) ?? []).length, 2);
+  // An unlifted plane is flat whatever the read says.
+  assert.ok(
+    !print(
+      [plane({ address: TEXT, depth: 2, lift: 0, label: 'Hello world', lifted: false, labeled: false })],
+      SETTINGS,
+      {},
+      { bare: [TEXT] },
+    ).includes('background-color'),
   );
 });
 
@@ -197,15 +230,15 @@ test('the chip opens with the reset, before any own line, and restores border-bo
   assert.equal((css.match(/all: initial;/g) ?? []).length, 1, 'the reset is the chip\'s alone');
 });
 
-test('an anchored plane gets position: relative before its surface', () => {
-  const css = print([section()], SETTINGS, {}, { anchored: [SECTION] });
+test('an anchored plane gets position: relative before its outline', () => {
+  const css = print([section()], SETTINGS, {}, { anchored: [SECTION], bare: [SECTION] });
   assert.equal(
     css,
     STAGE_CSS +
       `${STAGE} [data-selectable="${SECTION}"] {
   transform: translateZ(calc(1 * var(--daedalus-explode-gap))) !important;
 ${TRANSITION}  position: relative !important;
-${SURFACE}${label('"Section"')}}
+${BARE_SURFACE}${label('"Section"')}}
 `,
   );
 });
@@ -332,7 +365,7 @@ test('part planes print through selectorFor with the plane declarations nested',
     owner: TEXT,
     selector: '.text-block-link',
   });
-  const css = print([text(), link], SETTINGS, {}, { selectorFor, anchored: [LINK] });
+  const css = print([text(), link], SETTINGS, {}, { selectorFor, anchored: [LINK], bare: [LINK] });
   const declarations = `transform: translateZ(calc(1 * var(--daedalus-explode-gap))) !important;
     transition: transform var(--daedalus-explode-duration, 600ms) ease !important;
     position: relative !important;

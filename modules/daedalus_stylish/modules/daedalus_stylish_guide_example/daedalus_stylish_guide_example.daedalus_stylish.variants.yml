@@ -10,10 +10,10 @@
 # daedalus_stylish_guide_example`, hash-synced and revertable.
 #
 # The file is organized by scope and axis:
-#   kind:container   surface (root)   guide_band_*       the band's paint
-#   kind:container   rhythm (root)    guide_rhythm_*     the band's air
+#   kind:container   surface (root)   guide_section_*       the section's paint
+#   kind:container   rhythm (root)    guide_rhythm_*     the section's air
 #   kind:container   style            guide_card / panel / tile / cluster
-#   kind:container   animation/hover  guide_slide_in_band, guide_raise_band
+#   kind:container   animation/hover  guide_slide_in_section, guide_raise_section
 #   kind:block       style / animation / hover
 #   block_type:text  style            text looks (eyebrow, lead, hero...)
 #   block_type:text  button           the site's buttons
@@ -30,32 +30,32 @@
 # "Fade in" or "Lift".
 
 # ---------------------------------------------------------------------
-# Page bands: surface axis (root-only). A band always wears one; the
+# Sections: surface axis (root-only). A section always wears one; the
 # layout's default is plain. Each sets background AND text color so the
-# inverse and accent bands carry their own legible text.
-guide_band_plain:
+# inverse and accent sections carry their own legible text.
+guide_section_plain:
   label: 'Plain'
   scope: 'kind:container'
   axis: 'surface'
   weight: 10
-  description: 'The page background: paper in light, ink in dark. The default band surface; alternate it with Tint to give a page its rhythm.'
+  description: 'The page background: paper in light, ink in dark. The default section surface; alternate it with Tint to give a page its rhythm.'
   styles:
     '':
       default:
         background-color: 'var(--color-bg)'
         color: 'var(--color-text)'
-guide_band_tint:
+guide_section_tint:
   label: 'Tint'
   scope: 'kind:container'
   axis: 'surface'
   weight: 20
-  description: 'The faintly darker surface. Reach for it on every other band so consecutive sections read as distinct without a rule between them.'
+  description: 'The faintly darker surface. Reach for it on every other section so consecutive sections read as distinct without a rule between them.'
   styles:
     '':
       default:
         background-color: 'var(--color-surface)'
         color: 'var(--color-text)'
-guide_band_elevated:
+guide_section_elevated:
   label: 'Elevated'
   scope: 'kind:container'
   axis: 'surface'
@@ -66,66 +66,66 @@ guide_band_elevated:
       default:
         background-color: 'var(--color-elevated)'
         color: 'var(--color-text)'
-guide_band_inverse:
+guide_section_inverse:
   label: 'Inverse'
   scope: 'kind:container'
   axis: 'surface'
   weight: 40
-  description: 'An ink band with paper text on a light page (and the reverse in dark mode). Reach for it once per page at most, for a closing statement or a feature spotlight.'
+  description: 'An ink section with paper text on a light page (and the reverse in dark mode). Reach for it once per page at most, for a closing statement or a feature spotlight.'
   styles:
     '':
       default:
         background-color: 'var(--color-inverse-bg)'
         color: 'var(--color-inverse-text)'
-guide_band_accent:
+guide_section_accent:
   label: 'Accent'
   scope: 'kind:container'
   axis: 'surface'
   weight: 50
-  description: 'A solid amber band with contrast text. Loud; reach for it only for a single call-to-action band, never for content. Its title and copy inherit the contrast color, so it carries no Eyebrow, Lead or Muted (their colors belong to the light page), and its one button wears On accent.'
+  description: 'A solid amber section with contrast text. Loud; reach for it only for a single call-to-action section, never for content. Its title and copy inherit the contrast color, so it carries no Eyebrow, Lead or Muted (their colors belong to the light page), and its one button wears On accent.'
   styles:
     '':
       default:
         background-color: 'var(--color-accent)'
         color: 'var(--color-accent-contrast)'
 
-# Page bands: rhythm axis (root-only). Vertical padding on the banded
-# space tokens, so bands tighten on narrow screens by data.
+# Sections: rhythm axis (root-only). Vertical padding on the banded
+# space tokens, so sections tighten on narrow screens by data.
 guide_rhythm_compact:
   label: 'Compact'
   scope: 'kind:container'
   axis: 'rhythm'
   weight: 10
-  description: 'Tight vertical padding (3rem, 2rem when narrow). Reach for it on utility bands, breadcrumb-like strips, and bands that directly continue the one above.'
+  description: 'Tight vertical padding (3rem, 2rem when narrow). Reach for it on utility sections, breadcrumb-like strips, and sections that directly continue the one above.'
   styles:
     '':
       default:
-        padding-top: 'var(--space-band-compact)'
-        padding-bottom: 'var(--space-band-compact)'
+        padding-top: 'var(--space-section-compact)'
+        padding-bottom: 'var(--space-section-compact)'
 guide_rhythm_standard:
   label: 'Standard'
   scope: 'kind:container'
   axis: 'rhythm'
   weight: 20
-  description: 'The everyday band padding (5rem, stepping down to 3rem when narrow). The default every new band is born with.'
+  description: 'The everyday section padding (5rem, stepping down to 3rem when narrow). The default every new section is born with.'
   styles:
     '':
       default:
-        padding-top: 'var(--space-band)'
-        padding-bottom: 'var(--space-band)'
+        padding-top: 'var(--space-section)'
+        padding-bottom: 'var(--space-section)'
 guide_rhythm_spacious:
   label: 'Spacious'
   scope: 'kind:container'
   axis: 'rhythm'
   weight: 30
-  description: 'Generous padding (8rem, down to 4rem when narrow). Reach for it on the hero and on a single statement band that should breathe.'
+  description: 'Generous padding (8rem, down to 4rem when narrow). Reach for it on the hero and on a single statement section that should breathe.'
   styles:
     '':
       default:
-        padding-top: 'var(--space-band-spacious)'
-        padding-bottom: 'var(--space-band-spacious)'
+        padding-top: 'var(--space-section-spacious)'
+        padding-bottom: 'var(--space-section-spacious)'
 
-# Nested groupings: style axis. These are for containers INSIDE a band
+# Nested groupings: style axis. These are for containers INSIDE a section
 # (a column in a row, a grouping), where the spacing grant is whole.
 # Their children stack with the skin's container gap (kind:container in
 # daedalus_stylish_guide_example.daedalus_stylish.skins.yml), so none of them writes a
@@ -138,7 +138,7 @@ guide_card:
   scope: 'kind:container'
   axis: 'style'
   weight: 10
-  description: 'A paper card: page-background fill and text color, padding on four sides, the large radius, the small shadow, its children stacked with the site gap. Reach for it on each column of a Columns container inside an Elevated or Tint band (one card per column, never a Card in a Card) or on one featured grouping; the Card blueprint wears it, and Raise on hover makes a linked card pressable.'
+  description: 'A paper card: page-background fill and text color, padding on four sides, the large radius, the small shadow, its children stacked with the site gap. Reach for it on each column of a Columns container inside an Elevated or Tint section (one card per column, never a Card in a Card) or on one featured grouping; the Card blueprint wears it, and Raise on hover makes a linked card pressable.'
   styles:
     '':
       default:
@@ -154,7 +154,7 @@ guide_panel:
   scope: 'kind:container'
   axis: 'style'
   weight: 20
-  description: 'A large rounded panel: elevated fill, generous padding, the large radius, no shadow. Reach for it to frame one featured grouping inside a band.'
+  description: 'A large rounded panel: elevated fill, generous padding, the large radius, no shadow. Reach for it to frame one featured grouping inside a section.'
   styles:
     '':
       default:
@@ -197,11 +197,11 @@ guide_cluster:
         gap: 'var(--space-3)'
 
 # Container motion, on the guide's timing scales.
-guide_slide_in_band:
+guide_slide_in_section:
   label: 'Slide in'
   scope: 'kind:container'
   axis: 'animation'
-  description: 'Fade the band in while it slides 1rem in from the left over the entrance duration when it scrolls into view. Reach for it on a band whose content reads left to right (a heading and its columns); off under a reduced-motion preference.'
+  description: 'Fade the section in while it slides 1rem in from the left over the entrance duration when it scrolls into view. Reach for it on a section whose content reads left to right (a heading and its columns); off under a reduced-motion preference.'
   styles:
     '':
       default:
@@ -213,7 +213,7 @@ guide_slide_in_band:
         animation-trigger: '--in-view play-once'
       reduced-motion:
         animation: 'none'
-guide_raise_band:
+guide_raise_section:
   label: 'Raise'
   scope: 'kind:container'
   axis: 'hover'
@@ -306,7 +306,7 @@ guide_eyebrow:
   scope: 'block_type:text'
   axis: 'style'
   weight: 10
-  description: 'A small uppercase accent label with wide tracking, one gap above the heading it introduces. Reach for it as the kicker above a band''s title ("Overview", "New this season"), at most one per band.'
+  description: 'A small uppercase accent label with wide tracking, one gap above the heading it introduces. Reach for it as the kicker above a section''s title ("Overview", "New this season"), at most one per section.'
   styles:
     '':
       default:
@@ -335,7 +335,7 @@ guide_lead:
   scope: 'block_type:text'
   axis: 'style'
   weight: 30
-  description: 'A larger, muted paragraph with relaxed leading. Reach for it on the one-sentence summary under a hero title or a band title, at most one per band.'
+  description: 'A larger, muted paragraph with relaxed leading. Reach for it on the one-sentence summary under a hero title or a section title, at most one per section.'
   styles:
     '':
       default:
@@ -377,7 +377,7 @@ guide_button_primary:
   scope: 'block_type:text'
   axis: 'button'
   weight: 10
-  description: 'The solid accent pill with contrast text: the one primary action in a band. Reach for it on the main call to action; never place two primaries side by side.'
+  description: 'The solid accent pill with contrast text: the one primary action in a section. Reach for it on the main call to action; never place two primaries side by side.'
   styles:
     '::.text-block-link':
       default:
@@ -435,7 +435,7 @@ guide_button_on_accent:
   scope: 'block_type:text'
   axis: 'button'
   weight: 25
-  description: 'The contrast pill with accent text: the one button on an Accent band, where Primary and Secondary both vanish into the amber. Reach for it only inside an Accent band, never on a light or Inverse band.'
+  description: 'The contrast pill with accent text: the one button on an Accent section, where Primary and Secondary both vanish into the amber. Reach for it only inside an Accent section, never on a light or Inverse section.'
   styles:
     '::.text-block-link':
       default:

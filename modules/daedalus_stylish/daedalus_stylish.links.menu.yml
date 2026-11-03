@@ -16,3 +16,24 @@ entity.daedalus_skin.collection:
   description: 'Manage the site''s skins: its design tokens as data, with one skin active.'
   route_name: entity.daedalus_skin.collection
   parent: system.themes_page
+
+# The styling settings form's one door: the Styling sub-category of the
+# Daedalus config category (Configuration » Daedalus » Styling), the root
+# module's door. SETTINGS.md at the daedalus repo root rosters it.
+daedalus_stylish.settings:
+  title: 'Styling'
+  description: 'Whether the AI may mint materials, the page-level query container, the image style media in styles resolves through, and the container breakpoints.'
+  parent: daedalus.admin_config_styling
+  route_name: daedalus_stylish.settings
+  weight: -10
+
+# The skin library's second door: the Styling sub-category of the Daedalus
+# config category (Configuration » Daedalus » Styling). The first door is
+# entity.daedalus_skin.collection above, under Appearance
+# (system.themes_page); nothing about the page moves. See SETTINGS.md.
+entity.daedalus_skin.collection.daedalus:
+  title: 'Skins'
+  description: 'Manage the site''s skins: its design tokens as data, with one skin active.'
+  route_name: entity.daedalus_skin.collection
+  parent: daedalus.admin_config_styling
+  weight: 0

@@ -43,6 +43,10 @@ class BlueprintStylingTest extends BlueprintKernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
+    // disable() saves daedalus_stylish.settings, a law change that
+    // recompiles the variants file over these storages.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->fieldManager = $this->container->get('daedalus_stylish.field_manager');
   }
 

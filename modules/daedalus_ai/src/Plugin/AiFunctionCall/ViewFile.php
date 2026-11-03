@@ -15,7 +15,7 @@ use Drupal\Core\StringTranslation\ByteSizeMarkup;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\daedalus_ai\Attachments;
 use Drupal\daedalus_ai\FileKind;
-use Drupal\daedalus_ai\Render\ToolImagesResult;
+use Drupal\daedalus_ai\ToolImagesResult;
 use Drupal\daedalus_blueprint_ai\ConversationContext;
 use Drupal\file\FileInterface;
 use Drupal\media\MediaInterface;
@@ -25,7 +25,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * Re-opens a file the conversation holds, or a media item's source file.
  *
  * Bytes reach the model once, in the leg they arrive (the ATTACHMENTS
- * block, a render_page shot), and the memory runner strips them after
+ * block, a shot a tool kept), and the memory runner strips them after
  * every leg; what survives is the name. This tool is the road back from a
  * name to the bytes, by the one kind split every file surface shares
  * (FileKind): a raster image comes back through the ai_agents image
@@ -44,14 +44,14 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
   id: 'daedalus_ai:view_file',
   function_name: 'view_file',
   name: 'View File',
-  description: 'Re-opens a file by name: one the user attached (named in the ATTACHMENTS block) or one render_page kept (named in its result). A raster image arrives as an image on your next turn; a textual file (SVG, CSS, CSV, HTML, JSON, text) is returned as text. PDFs cannot be re-opened; ask the user to attach one again. Pass media:<uuid> to open the source file of a media item (e.g. a generated image) instead.',
+  description: 'Re-opens a file by name: one the user attached (named in the ATTACHMENTS block) or one a tool kept (named in its result). A raster image arrives as an image on your next turn; a textual file (SVG, CSS, CSV, HTML, JSON, text) is returned as text. PDFs cannot be re-opened; ask the user to attach one again. Pass media:<uuid> to open the source file of a media item (e.g. a generated image) instead.',
   group: 'information_tools',
   context_definitions: [
     'name' => new ContextDefinition(
       data_type: 'string',
       label: new TranslatableMarkup('Name'),
       required: TRUE,
-      description: new TranslatableMarkup("The file's name exactly as the ATTACHMENTS block or render_page gave it (e.g. hero.svg), or media:<uuid> for a media item's source file."),
+      description: new TranslatableMarkup("The file's name exactly as the ATTACHMENTS block or a tool result gave it (e.g. hero.svg), or media:<uuid> for a media item's source file."),
     ),
   ],
 )]
@@ -105,7 +105,7 @@ final class ViewFile extends FunctionCallBase implements ExecutableFunctionCallI
   public function execute() {
     $name = trim((string) $this->getContextValue('name'));
     if ($name === '') {
-      $this->setOutput('Name the file to open: a name from the ATTACHMENTS block or a render_page result, or media:<uuid>.');
+      $this->setOutput('Name the file to open: a name from the ATTACHMENTS block or a tool result, or media:<uuid>.');
       return;
     }
 
@@ -124,7 +124,7 @@ final class ViewFile extends FunctionCallBase implements ExecutableFunctionCallI
       }
       $file = $this->attachments->resolve($thread, $name);
       if ($file === NULL) {
-        $this->setOutput("No file named \"$name\" in this conversation. Use the exact name from the ATTACHMENTS block or the render_page result; if the user meant a file they have not attached, ask them to attach it.");
+        $this->setOutput("No file named \"$name\" in this conversation. Use the exact name from the ATTACHMENTS block or the tool result; if the user meant a file they have not attached, ask them to attach it.");
         return;
       }
     }
@@ -187,7 +187,7 @@ final class ViewFile extends FunctionCallBase implements ExecutableFunctionCallI
   /**
    * Half of ai_agents' duck-typed tool image contract.
    *
-   * @see \Drupal\daedalus_ai\Render\ToolImagesResult
+   * @see \Drupal\daedalus_ai\ToolImagesResult
    */
   public function getPluginInstance(): static {
     return $this;
@@ -196,7 +196,7 @@ final class ViewFile extends FunctionCallBase implements ExecutableFunctionCallI
   /**
    * The other half: the result whose _images reach the model.
    *
-   * @see \Drupal\daedalus_ai\Render\ToolImagesResult
+   * @see \Drupal\daedalus_ai\ToolImagesResult
    */
   public function getResult(): ?ToolImagesResult {
     return $this->result;

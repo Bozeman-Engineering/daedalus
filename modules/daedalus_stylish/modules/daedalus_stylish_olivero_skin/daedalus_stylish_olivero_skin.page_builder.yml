@@ -1,0 +1,35 @@
+# The Olivero law: the one declaration the olivero design system makes.
+#
+# Olivero is the recipe's open reference: no guide fragment, no bindings
+# of its own, no stops. The suite's declarations (daedalus_stylish's
+# page_builder.yml) are its whole law, and this package ships the DATA
+# half (daedalus_stylish_olivero_skin.daedalus_stylish.skins.yml) with
+# one addition here: the token contract, the names a member skin of
+# olivero must mint to be wearable. daedalus_ui layers a package's
+# declarations only while its system is active, so the contract is in
+# force under olivero and under no other system.
+#
+# Why a contract for an open system: the shipped skin's element defaults
+# and the recipe's pages read these names (the container default's gap
+# is var(--space-gutter), the Welcome page's panels wear
+# var(--color-surface) and var(--radius-md)), and a member skin is born
+# with the default skin's defaults (DaedalusStylishSkin::preSave()). A
+# skin that minted every offered name and not the unoffered gutter was
+# choosable and rendered every section flush to the viewport's edge, with
+# the AI spending its turn diagnosing a fault it could not fix. The
+# contract is what SkinConformance judges (a skin lacking a name is not
+# choosable), what the skins skill tells the AI to mint, and what the
+# skin card explains. Declared, never derived, as every package's is:
+# the whole shipped vocabulary, every name the skin mints, offered or
+# not, so the skin's own file is the one place to widen it.
+site:
+  token_contract:
+    color: ['bg', 'surface', 'text', 'border', 'accent', 'accent-hover']
+    font: ['sans-serif', 'serif', 'mono']
+    text: ['caption', 'body', 'lead', 'title', 'headline', 'display']
+    weight: ['thin', 'regular', 'bold']
+    leading: ['tight', 'normal', 'relaxed']
+    space: ['sm', 'md', 'lg', 'xl', 'gutter']
+    radius: ['sm', 'md', 'lg', 'full']
+    transition: ['fast', 'normal']
+    layout: ['max-width']

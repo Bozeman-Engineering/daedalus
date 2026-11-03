@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityRepositoryInterface;
-use Drupal\daedalus_stylish\Plugin\Field\FieldType\FontFacesItem;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinFontsItem;
 use Drupal\daedalus_ui\File\FileLane;
 use Drupal\file\FileInterface;
 use Drupal\file\FileUsage\FileUsageInterface;
@@ -13,21 +14,24 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Mime\MimeTypeGuesserInterface;
 
 /**
- * The font store: how font bytes become files, and how fonts hold them.
+ * The font store: how font bytes become files, and how skins hold them.
  *
  * The one door for font files, an adapter over daedalus_ui's file lane
  * narrowed to the font kinds (FileLane::FONT_EXTENSIONS, woff2 and woff),
  * saving PERMANENT files under the fonts directory: a face's file is site
  * vocabulary from the moment it exists, not a temporary attachment. Two
- * entries, the lane's own: a request's upload (the tab's upload route) and
- * bytes (the disk lane's assets, a test). The declared type is what core
- * derives from the name, so the lane's type check never disagrees with
- * its own guess.
+ * entries, the lane's own: a request's upload (the skin tab's upload route)
+ * and bytes (the disk lane's assets, a test). The declared type is what
+ * core derives from the name, so the lane's type check never disagrees
+ * with its own guess.
  *
- * A font HOLDS its files through core's file usage: the entity hooks sync
- * the usage rows to the faces on every save (hold()) and drop them on
- * delete (release()), so a file a face references is never garbage and a
- * file no face references any more is released to core's own rules.
+ * A SKIN holds its fonts' files through core's file usage: the skin's
+ * entity hook adds a usage row for every file a face of either layer
+ * names (hold()) and the skin's deletion drops them all (release()). A
+ * hold is never released by a save: a skin's revisions are its
+ * lifecycle, a restore may bring back a face the current revision
+ * dropped, so every file a revision ever referenced stays held while the
+ * skin lives, and the file is never garbage under a restorable face.
  */
 final class FontFiles {
 
@@ -37,16 +41,17 @@ final class FontFiles {
   public const DIRECTORY = 'public://daedalus_stylish/fonts';
 
   /**
-   * The file usage module and type under which a font holds a file.
+   * The file usage module and type under which a skin holds a file.
    */
   public const USAGE_MODULE = 'daedalus_stylish';
-  public const USAGE_TYPE = 'daedalus_font';
+  public const USAGE_TYPE = 'daedalus_skin';
 
   public function __construct(
     private readonly FileLane $lane,
     private readonly MimeTypeGuesserInterface $mimeTypeGuesser,
     private readonly EntityRepositoryInterface $entityRepository,
     private readonly FileUsageInterface $fileUsage,
+    private readonly EntityTypeManagerInterface $entityTypeManager,
   ) {}
 
   /**
@@ -98,7 +103,7 @@ final class FontFiles {
    *
    * The disk lane's identity for a face's file: a site holds a face's file
    * by uuid and a module by basename, and neither name survives the trip,
-   * so the shipped payload (DaedalusStylishFont::shippedData(), the
+   * so the shipped payload (DaedalusStylishSkin::shippedData(), the
    * importer's read of a module's assets) names each file by what it
    * contains. Same bytes, same face, whatever either side calls the file.
    */
@@ -112,24 +117,47 @@ final class FontFiles {
   }
 
   /**
-   * Faces with each file named by its content hash: the shipped shape.
+   * A fonts map with each face's file named by its content hash.
+   *
+   * The shipped shape of the skin's fonts tier: every record as stored,
+   * its faces' source maps replaced by {hash: sha256}, NULL for a file the
+   * site no longer holds (a face that cannot print and can never match a
+   * shipped file). A record whose faces are not a list passes through
+   * verbatim (the validator refuses it).
+   *
+   * @param array $fonts
+   *   A fonts layer, {name: {family, faces, description, offered}}.
+   *
+   * @return array
+   *   The same map, faces content-addressed.
+   */
+  public function contentAddressed(array $fonts): array {
+    foreach ($fonts as $name => $record) {
+      if (!is_array($record) || !is_array($record['faces'] ?? NULL) || !array_is_list($record['faces'])) {
+        continue;
+      }
+      $fonts[$name]['faces'] = $this->contentAddressedFaces($record['faces']);
+    }
+    return $fonts;
+  }
+
+  /**
+   * Faces with each file named by its content hash.
    *
    * @param array $faces
    *   Canonical faces, each source {file: uuid}.
    *
-   * @return array<int, array{weight: string, style: string, source: array{hash: string|null}}>
-   *   The same faces with the source map replaced by {hash: sha256}, NULL
-   *   for a file the site no longer holds (a face that cannot print and
-   *   can never match a shipped file).
+   * @return array<int, array{weight: mixed, style: mixed, source: array{hash: string|null}}>
+   *   The faces with {hash: sha256} in the source slot.
    */
-  public function contentAddressed(array $faces): array {
+  public function contentAddressedFaces(array $faces): array {
     $addressed = [];
     foreach ($faces as $face) {
-      $uuid = is_array($face) ? ($face['source'][FontFacesItem::SOURCE_FILE] ?? NULL) : NULL;
+      $uuid = is_array($face) ? ($face['source'][SkinFontsItem::SOURCE_FILE] ?? NULL) : NULL;
       $file = is_string($uuid) ? $this->load($uuid) : NULL;
       $addressed[] = [
-        'weight' => $face['weight'] ?? NULL,
-        'style' => $face['style'] ?? NULL,
+        'weight' => is_array($face) ? ($face['weight'] ?? NULL) : NULL,
+        'style' => is_array($face) ? ($face['style'] ?? NULL) : NULL,
         'source' => ['hash' => $file === NULL ? NULL : self::contentHash($file)],
       ];
     }
@@ -137,43 +165,62 @@ final class FontFiles {
   }
 
   /**
-   * Syncs a font's file usage to its faces.
+   * Holds every file a skin's fonts name, in either layer.
    *
-   * Adds a usage row for every file the faces reference now and the
-   * previous revision did not, and drops the rows of files the faces no
-   * longer reference. Keyed by uuid set, so a save that leaves the files
-   * alone touches nothing and no file is ever counted twice.
-   *
-   * @param \Drupal\daedalus_stylish\DaedalusStylishFontInterface $font
-   *   The saved font.
-   * @param \Drupal\daedalus_stylish\DaedalusStylishFontInterface|null $previous
-   *   The font as it was before the save, or NULL on insert.
+   * Adds a usage row for each file a stated face references that the skin
+   * does not hold yet; a file already held is left at one row (a save that
+   * leaves the files alone touches nothing, and no file is ever counted
+   * twice). Nothing is released here: see the class docblock.
    */
-  public function hold(DaedalusStylishFontInterface $font, ?DaedalusStylishFontInterface $previous = NULL): void {
-    $now = $font->fileUuids();
-    $before = $previous?->fileUuids() ?? [];
-    foreach (array_diff($now, $before) as $uuid) {
+  public function hold(DaedalusStylishSkinInterface $skin): void {
+    $id = (string) $skin->id();
+    $uuids = array_unique([
+      ...SkinFontsItem::fileUuids($skin->packageFonts()),
+      ...SkinFontsItem::fileUuids($skin->siteFonts()),
+    ]);
+    foreach ($uuids as $uuid) {
       $file = $this->load($uuid);
-      if ($file !== NULL) {
-        $this->fileUsage->add($file, self::USAGE_MODULE, self::USAGE_TYPE, (string) $font->id());
+      if ($file === NULL) {
+        continue;
       }
-    }
-    foreach (array_diff($before, $now) as $uuid) {
-      $file = $this->load($uuid);
-      if ($file !== NULL) {
-        $this->fileUsage->delete($file, self::USAGE_MODULE, self::USAGE_TYPE, (string) $font->id());
+      $usage = $this->fileUsage->listUsage($file);
+      if (!isset($usage[self::USAGE_MODULE][self::USAGE_TYPE][$id])) {
+        $this->fileUsage->add($file, self::USAGE_MODULE, self::USAGE_TYPE, $id);
       }
     }
   }
 
   /**
-   * Drops every usage row a deleted font held.
+   * Drops every usage row a deleted skin held, whichever revision named it.
+   *
+   * The files a skin may hold are exactly the files its revisions' faces
+   * name (hold() runs on every save), so the release walks the skin's
+   * revisions for their uuids and drops the skin's row from each file
+   * that still carries one. A skin whose revisions never named a file
+   * touches file usage not at all.
    */
-  public function release(DaedalusStylishFontInterface $font): void {
-    foreach ($font->fileUuids() as $uuid) {
+  public function release(DaedalusStylishSkinInterface $skin): void {
+    $id = (string) $skin->id();
+    $uuids = [
+      ...SkinFontsItem::fileUuids($skin->packageFonts()),
+      ...SkinFontsItem::fileUuids($skin->siteFonts()),
+    ];
+    $storage = $this->entityTypeManager->getStorage('daedalus_skin');
+    $revision_ids = $storage->getQuery()
+      ->accessCheck(FALSE)
+      ->allRevisions()
+      ->condition('id', $id)
+      ->execute();
+    foreach (array_keys($revision_ids) as $revision_id) {
+      $revision = $storage->loadRevision($revision_id);
+      if ($revision instanceof DaedalusStylishSkinInterface) {
+        array_push($uuids, ...SkinFontsItem::fileUuids($revision->packageFonts()), ...SkinFontsItem::fileUuids($revision->siteFonts()));
+      }
+    }
+    foreach (array_unique($uuids) as $uuid) {
       $file = $this->load($uuid);
-      if ($file !== NULL) {
-        $this->fileUsage->delete($file, self::USAGE_MODULE, self::USAGE_TYPE, (string) $font->id());
+      if ($file !== NULL && isset($this->fileUsage->listUsage($file)[self::USAGE_MODULE][self::USAGE_TYPE][$id])) {
+        $this->fileUsage->delete($file, self::USAGE_MODULE, self::USAGE_TYPE, $id, 0);
       }
     }
   }

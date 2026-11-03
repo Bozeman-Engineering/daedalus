@@ -72,7 +72,7 @@ use Drupal\layout_builder\SectionComponent;
  * the stamp cannot leak into a saved blueprint (a blueprint is not a
  * placement).
  *
- * Where a placement may land is the materials roster's band rule (a
+ * Where a placement may land is the materials roster's section rule (a
  * block-scope blueprint whose root wears a root-only variant lands at the
  * top level only), judged by the page language before the op and by the
  * root's own apply_variant inside the expansion. Whether a blueprint fits
@@ -99,8 +99,8 @@ class BlueprintOperationHandler implements PageOnlyOperationsInterface, PageLang
   /**
    * The operations.
    *
-   * Placing is the page language's business (its <pb-blueprint> and
-   * <pb-linked> elements supersede the op there: page-only); detaching has
+   * Placing is the page language's business (its <d-blueprint> and
+   * <d-linked> elements supersede the op there: page-only); detaching has
    * no element spelling, so the page language admits the op itself, its
    * `element` a ref the page print spells (a uuid or a live alias).
    */
@@ -192,7 +192,7 @@ class BlueprintOperationHandler implements PageOnlyOperationsInterface, PageLang
    * {@inheritdoc}
    *
    * Placement targets the layout tree, and the page language stamps a
-   * blueprint as <pb-blueprint> (or links one as <pb-linked>) inside an
+   * blueprint as <d-blueprint> (or links one as <d-linked>) inside an
    * insert fragment, so on a page-language site the JSON spelling leaves
    * eb_edit's roll-call.
    */
@@ -215,8 +215,8 @@ class BlueprintOperationHandler implements PageOnlyOperationsInterface, PageLang
    */
   public function getGuidance(): array {
     return [
-      self::PLACE => 'with "blueprint" ID from the schema\'s materials.blueprints, "location" anchor object, optional root "uuid", optional "mode" (detached, the default: a fresh independent copy, the page language\'s <pb-blueprint> element; linked: one node showing the saved blueprint live and following its later edits, the page language\'s <pb-linked> element)',
-      self::DETACH => 'with "element" the ref of a <pb-linked> node: replaces it, in place, with an independent copy of the blueprint it shows (the page owns the copy from then on; the blueprint\'s later edits no longer reach it; save_material and update_material work on the copy); or with "slot" the id of a slot block around this page (the template\'s, the site frame\'s) that shows a default blueprint: claims the slot, landing an independent copy of that default as this page\'s own <pb-slot> section, so only this page shows the copy. Release a claimed slot with remove_element on its <pb-slot> section',
+      self::PLACE => 'with "blueprint" ID from the schema\'s materials.blueprints, "location" anchor object, optional root "uuid", optional "mode" (detached, the default: a fresh independent copy, the page language\'s <d-blueprint> element; linked: one node showing the saved blueprint live and following its later edits, the page language\'s <d-linked> element)',
+      self::DETACH => 'with "element" the ref of a <d-linked> node: replaces it, in place, with an independent copy of the blueprint it shows (the page owns the copy from then on; the blueprint\'s later edits no longer reach it; save_material and update_material work on the copy); or with "slot" the id of a slot block around this page (the template\'s, the site frame\'s) that shows a default blueprint: claims the slot, landing an independent copy of that default as this page\'s own <d-slot> section, so only this page shows the copy. Release a claimed slot with remove_element on its <d-slot> section',
     ];
   }
 
@@ -381,7 +381,7 @@ class BlueprintOperationHandler implements PageOnlyOperationsInterface, PageLang
       : NULL;
     if ($name === NULL) {
       return BlueprintResult::semanticFailure([
-        new BlueprintError('element', 'BLUEPRINT_NOT_LINKED', sprintf('"%s" is not a linked blueprint placement: only a node showing a blueprint by reference detaches.', $element), [], 'Name a linked node (the page print\'s <pb-linked>); a detached placement already is its own copy.'),
+        new BlueprintError('element', 'BLUEPRINT_NOT_LINKED', sprintf('"%s" is not a linked blueprint placement: only a node showing a blueprint by reference detaches.', $element), [], 'Name a linked node (the page print\'s <d-linked>); a detached placement already is its own copy.'),
       ]);
     }
 

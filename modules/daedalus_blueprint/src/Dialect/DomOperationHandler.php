@@ -45,7 +45,7 @@ use Drupal\daedalus_blueprint\Result\BlueprintResult;
  * DialectCatalog), the per-call contract; the tool layer threads the
  * generated catalog.
  *
- * A file declaration (the `file` op, a document's <pb-file>) is saved
+ * A file declaration (the `file` op, a document's <d-file>) is saved
  * through the FileDeclarationHandlerInterface seam (collected by service
  * tag; daedalus_ai implements it over the file lane and the attachment
  * store) and recorded under its name in the alias layer's files namespace
@@ -216,7 +216,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
   /**
    * Declares one file through the seam, on the batch's overlay.
    *
-   * The two authoring forms (the file op, a document's <pb-file>) share
+   * The two authoring forms (the file op, a document's <d-file>) share
    * this one call and one error shape: a wiring gap (no seam on this
    * site), a write without a conversation (nothing could hold the file),
    * and the seam's refusal (the lane's reasons) each name the declaration
@@ -270,7 +270,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     $at = $this->requireAt($operation, $host, $index, $aliases, $errors);
     $html = $operation['html'] ?? NULL;
     if (!is_string($html) || trim($html) === '') {
-      $errors[] = new BlueprintError('html', 'MISSING_PARAMETER', 'insert needs "html": a dialect fragment.', [], 'Write the elements to insert in the dialect (<pb-container>, <pb-text ...>, ...).');
+      $errors[] = new BlueprintError('html', 'MISSING_PARAMETER', 'insert needs "html": a dialect fragment.', [], 'Write the elements to insert in the dialect (<d-container>, <d-text ...>, ...).');
     }
     if ($errors) {
       return BlueprintResult::structuralFailure($errors);
@@ -296,7 +296,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       foreach ($parse->tree as $node) {
         if (!in_array($node['kind'] ?? '', ['container', 'blueprint'], TRUE)) {
           return BlueprintResult::structuralFailure([
-            new BlueprintError('html', 'ILLEGAL_CONTAINMENT', 'The top level of a page holds <pb-container> elements; wrap the fragment in one.', [], 'Blocks live inside containers; insert into a container, or wrap the blocks in <pb-container>.'),
+            new BlueprintError('html', 'ILLEGAL_CONTAINMENT', 'The top level of a page holds <d-container> elements; wrap the fragment in one.', [], 'Blocks live inside containers; insert into a container, or wrap the blocks in <d-container>.'),
           ]);
         }
       }
@@ -440,9 +440,9 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     $block_type = $info['block_type'];
     $spec = $is_container ? NULL : ($block_type !== NULL ? $catalog->blockType($block_type) : NULL);
     // The tag the correctives name is the one the print uses: an undeclared
-    // type and a plugin block are the generic <pb-block> form, a slot
-    // section its <pb-slot> form, a linked placement <pb-linked>.
-    $tag = $is_container ? ($is_slot ? DialectWalk::SLOT_TAG : 'pb-container') : ($is_linked ? DialectWalk::LINKED_TAG : ($spec !== NULL ? DialectCatalog::tagForBlockType($block_type) : 'pb-block'));
+    // type and a plugin block are the generic <d-block> form, a slot
+    // section its <d-slot> form, a linked placement <d-linked>.
+    $tag = $is_container ? ($is_slot ? DialectWalk::SLOT_TAG : DialectWalk::CONTAINER_TAG) : ($is_linked ? DialectWalk::LINKED_TAG : ($spec !== NULL ? DialectCatalog::tagForBlockType($block_type) : DialectWalk::BLOCK_TAG));
     $key_prefix = $is_container ? 'container:' : 'block:';
     $css = new DialectCssParser($catalog);
     $own = $info['node']['styles'][''] ?? [];
@@ -462,15 +462,15 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       if ($name === 'blueprint') {
         $errors[] = $is_linked
           ? new BlueprintError('attrs.blueprint', 'READONLY_ATTR', sprintf('blueprint on <%s> is the blueprint the element shows, fixed when the element is created; set cannot patch it.', DialectWalk::LINKED_TAG), [], sprintf('Link another blueprint with its own <%s blueprint="..."/> inserted beside this one, and remove this one.', DialectWalk::LINKED_TAG))
-          : new BlueprintError('attrs.blueprint', 'READONLY_ATTR', 'blueprint is placement provenance, fixed when the element is created; set cannot patch it.', [], 'Provenance rides the element in an insert/replace fragment (blueprint="id" as printed); a fresh copy is <pb-blueprint name="id" />.');
+          : new BlueprintError('attrs.blueprint', 'READONLY_ATTR', 'blueprint is placement provenance, fixed when the element is created; set cannot patch it.', [], 'Provenance rides the element in an insert/replace fragment (blueprint="id" as printed); a fresh copy is <d-blueprint name="id" />.');
         continue;
       }
-      if ($tag === 'pb-image' && $name === 'src') {
-        $errors[] = new BlueprintError('attrs.src', 'ILLEGAL_SRC', 'src is not writable on <pb-image>.', [], 'Reference existing media with media="id or label" or mint one with generate="prompt" + alt.');
+      if ($tag === DialectCatalog::tagForBlockType('image') && $name === 'src') {
+        $errors[] = new BlueprintError('attrs.src', 'ILLEGAL_SRC', 'src is not writable on <d-image>.', [], 'Reference existing media with media="id or label" or mint one with generate="prompt" + alt.');
         continue;
       }
       if ($is_slot && $name === DialectWalk::NAME_ATTR) {
-        $errors[] = new BlueprintError('attrs.name', 'READONLY_ATTR', sprintf('name on <%s> is the slot the section fills, fixed when the section is created; set cannot patch it.', DialectWalk::SLOT_TAG), [], 'A slot section fills one slot for life: fill another slot with its own <pb-slot name="..."> inserted at the root, and remove this one.');
+        $errors[] = new BlueprintError('attrs.name', 'READONLY_ATTR', sprintf('name on <%s> is the slot the section fills, fixed when the section is created; set cannot patch it.', DialectWalk::SLOT_TAG), [], 'A slot section fills one slot for life: fill another slot with its own <d-slot name="..."> inserted at the root, and remove this one.');
         continue;
       }
       if ($is_container && $name === DialectWalk::NAME_ATTR) {
@@ -673,7 +673,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     }
     elseif ($css_text !== NULL && !is_string($css_text)) {
       return BlueprintResult::structuralFailure([
-        new BlueprintError('css', 'BAD_OP', 'css is CSS text under the <style>-block grammar.', [], 'Selectors: #id, then a relative selector under it (#id .declared-part, #id p, #id > *, #id > pb-text, #id > pb-text .link) with states on the addressed element (#id:hover, #id > pb-text:hover) and its generated box last (#id::after, #id > pb-text:hover::before); conditions via the published wrappers, nesting accepted as sugar.'),
+        new BlueprintError('css', 'BAD_OP', 'css is CSS text under the <style>-block grammar.', [], 'Selectors: #id, then a relative selector under it (#id .declared-part, #id p, #id > *, #id > d-text, #id > d-text .link) with states on the addressed element (#id:hover, #id > d-text:hover) and its pseudo-element last (#id::after, #id > d-text:hover::before, #id li::marker); conditions via the published wrappers, nesting accepted as sugar.'),
       ]);
     }
 
@@ -694,6 +694,8 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       if ($target === NULL) {
         continue;
       }
+      // One selector, one local (a list folds in the digester); the
+      // landing decides what is wear.
       $landing = $css->ruleLanding($target['local'], $known_ids[$target['id']] ?? NULL);
       $properties = [];
       $wear = [];
@@ -762,7 +764,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
         return $not_found($id);
       }
       if ($local === '') {
-        $errors[] = new BlueprintError($path, 'BAD_OP', sprintf('#%s wears its variants on its own tag; the remove list trims a rule\'s wear ("class" or an axis name on #%s > pb-text), never the element\'s.', $id, $id), ['properties' => $names], 'Take a variant off the element with set {ref, attrs: {class: "..."}} (restating the classes it keeps) or {axis: null}; detach materializes it instead.');
+        $errors[] = new BlueprintError($path, 'BAD_OP', sprintf('#%s wears its variants on its own tag; the remove list trims a rule\'s wear ("class" or an axis name on #%s > d-text), never the element\'s.', $id, $id), ['properties' => $names], 'Take a variant off the element with set {ref, attrs: {class: "..."}} (restating the classes it keeps) or {axis: null}; detach materializes it instead.');
         continue;
       }
       if ($states !== []) {
@@ -846,7 +848,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
     }
     if ($ops === []) {
       return BlueprintResult::structuralFailure($parse_errors ?: [
-        new BlueprintError('layout', 'MISSING_PARAMETER', 'The document holds no elements.', [], 'A page document is one or more <pb-container> elements, with an optional <style> block and <pb-file> declarations.'),
+        new BlueprintError('layout', 'MISSING_PARAMETER', 'The document holds no elements.', [], 'A page document is one or more <d-container> elements, with an optional <style> block and <d-file> declarations.'),
       ]);
     }
 
@@ -874,7 +876,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
    * catalog's container layout, and the style ops trail the structural
    * ones. What is the dialect's stays here: an author-chosen id mints its
    * uuid ahead of the expansion (the alias layer records the pairing) and
-   * a <pb-blueprint> reference takes no styles (place it, then style the
+   * a <d-blueprint> reference takes no styles (place it, then style the
    * placed elements once they print with ids).
    *
    * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
@@ -906,7 +908,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
           unset($node['id']);
         }
         if (($node['kind'] ?? '') === 'blueprint' && ($node['styles'] ?? []) !== []) {
-          $errors[] = new BlueprintError('html', 'ILLEGAL_ATTR', 'style/class on a <pb-blueprint> reference is not supported.', [], 'Place the blueprint, then style the placed elements (they come back with ids).');
+          $errors[] = new BlueprintError('html', 'ILLEGAL_ATTR', 'style/class on a <d-blueprint> reference is not supported.', [], 'Place the blueprint, then style the placed elements (they come back with ids).');
           unset($node['styles']);
         }
         if (isset($node['children']) && is_array($node['children'])) {

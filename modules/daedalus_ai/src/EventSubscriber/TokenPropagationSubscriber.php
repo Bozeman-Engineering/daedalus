@@ -7,7 +7,6 @@ namespace Drupal\daedalus_ai\EventSubscriber;
 use Drupal\ai_agents\Event\BuildSystemPromptEvent;
 use Drupal\ai_assistant_api\Event\AiAssistantPassContextToAgentEvent;
 use Drupal\daedalus_ai\RouteEntityResolver;
-use Drupal\daedalus_blueprint\CurrentEntityContext;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -37,7 +36,6 @@ class TokenPropagationSubscriber implements EventSubscriberInterface {
 
   public function __construct(
     protected RouteEntityResolver $routeEntityResolver,
-    protected CurrentEntityContext $currentEntityContext,
   ) {}
 
   /**
@@ -64,19 +62,6 @@ class TokenPropagationSubscriber implements EventSubscriberInterface {
       $host = $this->routeEntityResolver->resolve($context['current_route']);
       if ($host) {
         $this->entityContext = $this->routeEntityResolver->describe($host);
-
-        // Hand the current document's kind to daedalus_blueprint so AI tools
-        // and skills can resolve guidance for the page the user is on (a
-        // template's guidance is its target bundle's; the site frame has no
-        // kind and no guidance of a bundle's). Tools execute with no
-        // access to these tokens (see CurrentEntityContext), so this shared
-        // service is how that context reaches them.
-        if ($this->entityContext['kind'] !== NULL) {
-          $this->currentEntityContext->set(
-            $this->entityContext['kind']['entity_type'],
-            $this->entityContext['kind']['bundle'],
-          );
-        }
       }
     }
   }

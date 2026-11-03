@@ -43,6 +43,7 @@ class StyleGuideTest extends KernelTestBase {
   protected static $modules = [
     'system',
     'daedalus_blueprint',
+    'filter',
     'user',
     'field',
     'layout_discovery',
@@ -69,24 +70,18 @@ class StyleGuideTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     // Activating a design system (the enforcement door) recompiles the
-    // delivery files, which read the four material storages.
+    // delivery files, which read the three material storages.
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
     // definitions (ShippedSync::onDesignSystemActivated()): the importers
-    // mirror motion-* and --swatch-* references into the usage tables and
+    // mirror motion-* and var() references into the usage tables and
     // switch to an administrative account, so the fixture carries both.
     $this->installEntitySchema('user');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->setUpCurrentUser([], [], TRUE);
     $this->container->get('theme_installer')->install([self::THEME]);
@@ -180,7 +175,7 @@ class StyleGuideTest extends KernelTestBase {
 
     // Sub-element declarations merge across layers: the theme relabeled the
     // part, the module's constraints survive.
-    $container = $layout['elements']['.band-content'];
+    $container = $layout['elements']['.section-content'];
     $this->assertSame('Content container', $container['label']);
     $this->assertSame('80rem', $container['property_groups']['sizing']['constraints']['max-width']['max']);
 
@@ -455,11 +450,11 @@ class StyleGuideTest extends KernelTestBase {
     $failures = [
       [
         ['container' => ['pseudo' => ['before']]],
-        'The pseudo declaration of kind "container" must be a map keyed by pseudo-element (before, after)',
+        'The pseudo declaration of kind "container" must be a map keyed by pseudo-element (before, after, marker, placeholder, selection, first-letter, first-line, or any other the browser knows)',
       ],
       [
-        ['container' => ['pseudo' => ['marker' => ['property_groups' => []]]]],
-        'The pseudo declaration of kind "container" keys by "marker", which is not a pseudo-element the relative selector admits; the generated boxes are before and after.',
+        ['container' => ['pseudo' => ['markr' => ['property_groups' => []]]]],
+        'The pseudo declaration of kind "container" keys by "markr", which is not a pseudo-element the browser knows (the generated boxes before and after, and marker, placeholder, selection, first-letter, first-line, among the wide selector tier\'s).',
       ],
       [
         ['container' => ['pseudo' => ['before' => 'background']]],
@@ -512,14 +507,14 @@ class StyleGuideTest extends KernelTestBase {
 
     // A base tag's section and a block plugin's are checked too.
     $state->set('daedalus_stylish_guide_test_extra.kinds', []);
-    $state->set('daedalus_stylish_guide_test_extra.site', ['base' => ['p' => ['pseudo' => ['first-line' => []]]]]);
+    $state->set('daedalus_stylish_guide_test_extra.site', ['base' => ['p' => ['pseudo' => ['first-linee' => []]]]]);
     $this->styleGuide->resetCache();
     try {
       $this->styleGuide->getBase('p', self::THEME);
       $this->fail('A base tag\'s pseudo section is checked.');
     }
     catch (StyleGuideException $exception) {
-      $this->assertStringContainsString('The pseudo declaration of base element "p" keys by "first-line"', $exception->getMessage());
+      $this->assertStringContainsString('The pseudo declaration of base element "p" keys by "first-linee"', $exception->getMessage());
     }
     $state->delete('daedalus_stylish_guide_test_extra.site');
     $this->styleGuide->resetCache();
@@ -568,7 +563,7 @@ class StyleGuideTest extends KernelTestBase {
     $this->assertSame(['sets', 'constraints', 'properties'], array_keys($refs), 'the allowlist rides beside the sets and deltas alone: no depth projection');
 
     // The strict kind scope refuses the shorthand: the one answer the
-    // map-key path gives a page band and a nested container alike
+    // map-key path gives a section and a nested container alike
     // (StyleMapValidatorTest::testGrantIsTheSameAtEveryDepth).
     $this->enforce('strict');
     $validator = $this->container->get('daedalus_stylish.style_map_validator');

@@ -95,7 +95,7 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
         'region' => 'content',
         'configuration' => $this->createInlineBlockConfiguration('text_section', $inner, 'Inner'),
       ],
-    ], ['label' => 'Nested band']);
+    ], ['label' => 'Nested section']);
     $nested->setThirdPartySetting('daedalus_layout', 'uuid', $nested_uuid);
 
     $block = $this->entityTypeManager->getStorage('block_content')->create([
@@ -179,7 +179,7 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
             'kind' => 'container',
             'layout_id' => 'eb_test_container',
             'uuid' => $nested_uuid,
-            'label' => 'Nested band',
+            'label' => 'Nested section',
             'children' => [
               [
                 'kind' => 'block',
@@ -232,7 +232,7 @@ class BlueprintMirrorPayloadTest extends BlueprintKernelTestBase {
     $delivery = $this->container->get('daedalus_blueprint.materials_delivery');
     $this->assertSame($delivery->payload($host)['records'], $materials['records'], 'The attached roster is the payload for this canvas.');
     $ids = array_column($materials['records'], 'id');
-    $this->assertContains('lime_green', $ids);
+    $this->assertContains('color/lime-green', $ids);
     $this->assertNotContains('hero', $ids, 'A rootless blueprint is not offered on the canvas, so it does not ride.');
     $this->assertContains('hero', array_column($delivery->payload()['records'], 'id'), 'Without a canvas the roster is unfiltered.');
     $this->assertSame(

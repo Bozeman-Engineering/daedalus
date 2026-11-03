@@ -11,9 +11,10 @@
 function daedalus_ai_library_info_alter(array &$libraries, string $extension): void {
   if ($extension === 'ai_chatbot' && isset($libraries['deepchat'])) {
     $module_path = \Drupal::service('extension.list.module')->getPath('daedalus_ai');
-    // The attachment request helpers before the context manager whose
-    // interceptor consumes them.
+    // The attachment request helpers and the interceptor installer before
+    // the context manager and the command processor, which consume them.
     $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-attachment-request.js"] = [];
+    $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-interceptors.js"] = [];
     $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-context-manager.js"] = [];
     $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-command-processor.js"] = [];
     $libraries['deepchat']['js']["/$module_path/js/daedalus-ai-step-message-sanitizer.js"] = [];

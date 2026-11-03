@@ -862,12 +862,12 @@ test('a container section\'s children list mounts into the regions slot with no 
 
 // ---- The root's section list mounts through slots. --------------------------
 
-// A two-band page with one root field: the entity kind's sketch is
+// A two-section page with one root field: the entity kind's sketch is
 // daedalus_layout's layout root claiming the section list, the shape the shipped
 // declaration authors (`.daedalus-layout-layout: {label: Layout, tag: div,
 // contains: sections}`).
 const SECTION_2 = 'eeeeeeee-1111-2222-3333-444444444444';
-const bandedBlueprint = {
+const sectionedBlueprint = {
   bundle: 'page',
   fields: { body: 'Copy' },
   _element: page,
@@ -888,7 +888,7 @@ const layoutRootAnatomy = {
 const rowNames = (nodes) => nodes.map((node) => node.type === 'shell' ? node.selector : `${node.kind}:${node.label}`);
 
 test('an entity shell claiming sections holds the section rows with shells on', () => {
-  const tree = compose(bandedBlueprint, layoutRootAnatomy, { root, targets: true });
+  const tree = compose(sectionedBlueprint, layoutRootAnatomy, { root, targets: true });
   // The Layout shell first (authored order), then the unclaimed field at
   // the root; no section row sits beside them.
   assert.deepEqual(rowNames(tree.children), ['.daedalus-layout-layout', 'field:Body']);
@@ -907,7 +907,7 @@ test('an entity shell claiming sections holds the section rows with shells on', 
 });
 
 test('shells off, the sections are root children after the fields, in order', () => {
-  const tree = compose(bandedBlueprint, layoutRootAnatomy, { root });
+  const tree = compose(sectionedBlueprint, layoutRootAnatomy, { root });
   // The data tree ignores the claim: no shell row, fields first, then the
   // sections in blueprint order (the plain projection's tree).
   assert.deepEqual(rowNames(tree.children), ['field:Body', 'container:Section', 'container:Section']);
@@ -924,7 +924,7 @@ test('no sections claim: the sections mount at the root after the shells', () =>
       entity: { elements: { '.node__content': { label: 'Content', contains: 'fields' } } },
     },
   };
-  const tree = compose(bandedBlueprint, fieldsOnlyAnatomy, { root, targets: true });
+  const tree = compose(sectionedBlueprint, fieldsOnlyAnatomy, { root, targets: true });
   assert.deepEqual(rowNames(tree.children), ['.node__content', 'container:Section', 'container:Section']);
   assert.deepEqual(rowNames(tree.children[0].children), ['field:Body']);
   assert.deepEqual(tree.children.slice(1).map((node) => node.key), [`container:${SECTION}`, `container:${SECTION_2}`]);
@@ -949,7 +949,7 @@ test('compose stamps claims on claiming shells only; toViewTree carries them', (
       },
     },
   };
-  const tree = compose(bandedBlueprint, claimingAnatomy, { root, targets: true });
+  const tree = compose(sectionedBlueprint, claimingAnatomy, { root, targets: true });
   const [layout, content] = tree.children;
   assert.deepEqual(layout.claims, ['section']);
   assert.equal(Object.hasOwn(layout.children[0], 'claims'), false, 'a slot-less part carries no claims key');

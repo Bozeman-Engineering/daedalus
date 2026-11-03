@@ -7,6 +7,7 @@ namespace Drupal\daedalus_blueprint\Dialect;
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
+use Drupal\daedalus_blueprint\Materials\ConditionClause;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
@@ -22,7 +23,7 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  * attributes and bodies, which condition names map to which CSS wrappers,
  * which parts and tags a relative selector's compounds may land on under
  * each owner, which instance namespaces are declared, and the site's
- * MATERIALS roster (tokens, swatches, variants, blueprints, animations). The
+ * MATERIALS roster (tokens, variants, blueprints, animations, fonts). The
  * printer and
  * parser are grammar; this is the site's vocabulary, and it is passed in
  * rather than read from config here so the spine stays styling-agnostic
@@ -68,25 +69,24 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  *       (optional; default scalar),
  *     'values' => allowed values list (optional; default any),
  *   ].
- * - $conditions: condition name => CSS wrapper, in canonical (axis
- *   declaration) order. A wrapper starting with ':' is a selector
- *   pseudo-class (a state, or a structural fact when $facts names it);
- *   one starting with '@' is an at-rule prelude. Compound condition names
- *   order their parts by this list's order.
- * - $facts: the condition names that are structural FACTS (":first-child",
- *   ":nth-child(odd)"): pseudo-classes that hold by the element's place in
- *   the markup, spelled like states on the addressed element but taught
- *   and corrected apart (stateConditions() / factConditions()).
+ * - $conditions: condition name => ['wrapper' => CSS wrapper, 'axis' =>
+ *   the condition's axis], in canonical (axis declaration) order. A
+ *   wrapper starting with ':' is a selector pseudo-class (a posable
+ *   state; where an element sits among its siblings is a position
+ *   qualifier of the relative selector grammar, never a condition); one
+ *   starting with '@' is an at-rule prelude. Compound condition names
+ *   order their parts by this list's order, one part per axis; the table
+ *   is the digester's roster (SelectorDigest::digest()) as it stands.
  * - $selectors: selector rosters per OWNER, the dialect tag of the
- *   element a compound resolves against ("pb-container", "pb-text",
- *   "pb-block" for any plugin block or undeclared type): owner =>
+ *   element a compound resolves against (`d-container`, `d-text`,
+ *   `d-block` for any plugin block or undeclared type): owner =>
  *   ['parts' => [selector => label], 'tags' => [tag, ...]]. The parts are
  *   the owner's declared part classes (with the dot, as the style map
  *   spells them); the tags are the base tags a tag compound may name
  *   there, the styling layer's one declaration of a prose tag's
  *   styleability (never the instance namespaces' identity tags). Which
  *   TYPES may follow an owner is the spine's own fact (typesOf(): every
- *   block type's tag plus pb-container and pb-block under a container,
+ *   block type's tag plus d-container and d-block under a container,
  *   nothing under a block), so it is derived here, never contributed.
  * - $instances: instance-namespace declarations from the spine's
  *   `instances:` lane, keyed by pattern selector ('.s-*'): each carries
@@ -105,9 +105,20 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  *   declaration alone (placement curates offers and birth, never
  *   legality). How a property outside a roster is judged is the
  *   validator's, not the catalog's: the parser judges grammar only.
- * - $prose: the prose generator that renders the rosters for the model
- *   (VocabularyProseInterface), from the layer that built them, so the
- *   cached prompt teaches the rosters in the words their law uses.
+ * - $prose: the prose generator that renders the rosters, bindings and
+ *   deviations for the model (VocabularyProseInterface), from the layer
+ *   that built them, so the cached prompt teaches them in the words
+ *   their law uses.
+ * - $bindings: property => its site-wide value space ({scale, stops,
+ *   allowed, min, max, units} as the styling layer's law carries it), in
+ *   the layer's order (bindings()): the rosters' value spaces, the same
+ *   law the validator judges a value by. Empty on a site that binds
+ *   nothing site-wide.
+ * - $deviations: address print ("kind:container",
+ *   "block_type:text::.text-block-link") => [property => value space],
+ *   only the places whose own space narrows below the bindings
+ *   (deviations()); empty when none does. The catalog carries the
+ *   addresses; a surface labels them in its own words.
  * - $roster: the materials roster (MaterialsRosterBuilder::build() on a
  *   live site; a hand-built MaterialsRoster in tests). NULL is the empty
  *   roster: no material spells anywhere, so every var(), class, axis
@@ -130,6 +141,17 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  *   and contributed on the build event by the layer that parses it
  *   (daedalus_layout's SiteGroups); UNGROUPED is the reserved bucket for
  *   the things in no group and is never a declared id.
+ * - $cards: owner => the element's RENDER CARD (cards(), cardFor()): what
+ *   the element renders as, derived from the layered markup declarations
+ *   by the layer that reads them and contributed on the build event
+ *   (DialectCatalogBuildEvent::addCard() holds the shape and validates
+ *   it): 'renders', dialect writes paired with the HTML each renders as
+ *   (input => html, plainest first), and 'shells', the kind shells an
+ *   undeclared type renders through (rendersThrough() spells them). The
+ *   owner is the element's dialect tag (d-container, d-{block type}) or a
+ *   generically printed bundle's spelling (ownerForGenericBlockType()).
+ *   The AI's one read of the markup model: the cached prompt and the
+ *   schema print the pairs, the print stays a data print.
  */
 final class DialectCatalog {
 
@@ -143,8 +165,8 @@ final class DialectCatalog {
    * spec; bump it when tags, attributes, value grammar, or the op
    * envelope change meaning. 0.6: placement provenance (blueprint="") and
    * variant axes as attributes on every element's tag. 0.7: the slot
-   * section (<pb-slot name="id">, a top-level container filling a slot of
-   * the document around it). 0.8: the linked placement (<pb-linked
+   * section (<d-slot name="id">, a top-level container filling a slot of
+   * the document around it). 0.8: the linked placement (<d-linked
    * blueprint="id"/>, a blueprint shown by reference as one block).
    */
   public const DIALECT_VERSION = '0.8';
@@ -183,30 +205,19 @@ final class DialectCatalog {
   public const GROUP_ID_PATTERN = '/^[a-z0-9_]+$/';
 
   /**
-   * Normalized wrapper prelude => condition name.
-   */
-  private array $wrapperIndex = [];
-
-  /**
-   * Condition name => position in canonical order.
-   */
-  private array $conditionOrder = [];
-
-  /**
-   * Pseudo-class wrapper (":hover", ":nth-child(odd)") => condition name.
+   * The shape of a card owner: a dialect tag or d-block[type=ID].
    *
-   * The parser's door for a pseudo-class on the addressed element: the
-   * dialect spells a state or a fact as the wrapper the printer emits, so
-   * the wrapper text, not the condition name, is what a selector carries.
+   * A bundle the contract cannot spell prints generically as <d-block
+   * type="ID">, so its card (the fallback) is owned by the attribute
+   * reading a reader of the print already knows how to spell;
+   * ownerForGenericBlockType() is its one minting place.
    */
-  private array $pseudoIndex = [];
+  public const CARD_OWNER_PATTERN = '/^' . RelativeSelector::TYPE_PREFIX . '[a-z][a-z0-9-]*(\[type=[A-Za-z0-9_:.-]+\])?$/';
 
   /**
-   * Condition names that are structural facts, as a set.
-   *
-   * @var array<string, true>
+   * The keys a card carries, sorted (the build event validates the shape).
    */
-  private array $factSet = [];
+  public const CARD_KEYS = ['renders', 'shells'];
 
   /**
    * The materials roster (the empty roster when none was given).
@@ -252,8 +263,10 @@ final class DialectCatalog {
     private readonly array $birthDefaults = [],
     private readonly array $dressedTags = [],
     private readonly ?string $skin = NULL,
-    private readonly array $facts = [],
     private readonly array $groups = [],
+    private readonly array $cards = [],
+    private readonly array $bindings = [],
+    private readonly array $deviations = [],
   ) {
     foreach ($stylable as $kind => $vocabulary) {
       if (!$vocabulary instanceof VocabularyRosterInterface) {
@@ -262,19 +275,9 @@ final class DialectCatalog {
     }
     $this->roster = $roster ?? new MaterialsRoster([], new CacheableMetadata());
     $this->grammar = new ValueGrammar();
-    $position = 0;
-    foreach ($conditions as $name => $wrapper) {
-      $this->conditionOrder[$name] = $position++;
-      if (str_starts_with($wrapper, '@')) {
-        $this->wrapperIndex[self::normalizeWrapper($wrapper)] = $name;
-      }
-      elseif (str_starts_with($wrapper, ':')) {
-        $this->pseudoIndex[self::normalizeWrapper($wrapper)] ??= $name;
-      }
-    }
-    foreach ($facts as $name) {
-      if (isset($this->conditions[$name]) && str_starts_with($this->conditions[$name], ':')) {
-        $this->factSet[$name] = TRUE;
+    foreach ($conditions as $name => $definition) {
+      if (!is_array($definition) || !is_string($definition['wrapper'] ?? NULL) || !is_string($definition['axis'] ?? NULL)) {
+        throw new \InvalidArgumentException(sprintf('The condition "%s" must be declared as [wrapper, axis].', $name));
       }
     }
     $this->indexVariants($axes);
@@ -388,9 +391,9 @@ final class DialectCatalog {
    * answers for the materials their authors share with the AI, while the
    * catalog itself, built over the full roster, stays what the parser and
    * the validators judge against. The same declarations (axes, block
-   * types, conditions, parts, instances, stylable rosters, birth defaults,
-   * dressed tags, skin) over the narrower roster; this very catalog when
-   * nothing is opted out.
+   * types, conditions, parts, instances, stylable rosters with their
+   * bindings and deviations, birth defaults, dressed tags, skin) over the
+   * narrower roster; this very catalog when nothing is opted out.
    */
   public function offered(): DialectCatalog {
     if ($this->offered === NULL) {
@@ -408,8 +411,10 @@ final class DialectCatalog {
         birthDefaults: $this->birthDefaults,
         dressedTags: $this->dressedTags,
         skin: $this->skin,
-        facts: $this->facts,
         groups: $this->groups,
+        cards: $this->cards,
+        bindings: $this->bindings,
+        deviations: $this->deviations,
       );
     }
     return $this->offered;
@@ -463,11 +468,11 @@ final class DialectCatalog {
    * scope's slot (MaterialRecord::attrSlot(scope, attr)), never site-wide.
    *
    * @param bool $is_container
-   *   TRUE for <pb-container>.
+   *   TRUE for <d-container>.
    * @param string|null $block_type
    *   The block type machine name (declared or not) for inline blocks.
    * @param string|null $plugin_id
-   *   The plugin id for <pb-block plugin>; the scope is by base plugin id.
+   *   The plugin id for <d-block plugin>; the scope is by base plugin id.
    *
    * @return array
    *   attr => ['scope' => variant scope, 'values' => [attr value =>
@@ -485,9 +490,9 @@ final class DialectCatalog {
   /**
    * The variant scopes that place variants on one element, kind first.
    *
-   * The container kind and the container layout for <pb-container>; the
+   * The container kind and the container layout for <d-container>; the
    * block kind and the block type for a declared or generic block, the
-   * block kind and the base plugin id for <pb-block plugin>. The one
+   * block kind and the base plugin id for <d-block plugin>. The one
    * answer behind the axis view and the class roster.
    *
    * @return string[]
@@ -575,6 +580,63 @@ final class DialectCatalog {
   }
 
   /**
+   * The render cards: owner => the card, in contribution order.
+   *
+   * @return array<string, array{renders: array<string, string>, shells: string[]}>
+   *   The cards (see the class docblock); [] when no layer contributed any.
+   */
+  public function cards(): array {
+    return $this->cards;
+  }
+
+  /**
+   * One owner's render card, or NULL when no layer declared one.
+   *
+   * @param string $owner
+   *   The element's dialect tag (d-container, d-text) or a generically
+   *   printed bundle's owner spelling (ownerForGenericBlockType()).
+   *
+   * @return array{renders: array<string, string>, shells: string[]}|null
+   *   The card, or NULL.
+   */
+  public function cardFor(string $owner): ?array {
+    return $this->cards[$owner] ?? NULL;
+  }
+
+  /**
+   * The card owner spelling of a bundle the dialect prints generically.
+   *
+   * A bundle whose fields the contract cannot spell prints as <d-block
+   * type="ID"> with <d-field> children, so its card (the fallback: the
+   * theme's block template, each field in its shell) is owned by that
+   * attribute reading, never by a d-ID tag the dialect does not speak.
+   */
+  public static function ownerForGenericBlockType(string $bundle): string {
+    return sprintf('%s[type=%s]', RelativeSelector::TYPE_BLOCK, $bundle);
+  }
+
+  /**
+   * The kind shells of a card as words: what an undeclared type renders through.
+   *
+   * The one spelling for both registers (the cached prompt's line and the
+   * schema's entry live in different modules, so the words live here, on
+   * the structure they describe).
+   *
+   * @param string[] $shells
+   *   The card's shells.
+   *
+   * @return string
+   *   "the theme's block template, each field in its field shell".
+   */
+  public static function rendersThrough(array $shells): string {
+    return implode(', ', array_map(static fn (string $shell): string => match ($shell) {
+      'block' => 'the theme\'s block template',
+      'field' => 'each field in its field shell',
+      default => sprintf('the %s shell', $shell),
+    }, $shells));
+  }
+
+  /**
    * The [axis attr, attr value] a variant prints as, or NULL when none.
    */
   public function axisForVariant(string $variant): ?array {
@@ -602,20 +664,20 @@ final class DialectCatalog {
   }
 
   /**
-   * The dialect tag for a block type: pb- + machine name, '_' as '-'.
+   * The dialect tag for a block type: the prefix + machine name, '_' as '-'.
    */
   public static function tagForBlockType(string $type): string {
-    return 'pb-' . str_replace('_', '-', $type);
+    return RelativeSelector::TYPE_PREFIX . str_replace('_', '-', $type);
   }
 
   /**
-   * The block type machine name a pb- tag names, or NULL for non-pb tags.
+   * The block type machine name a d- tag names, or NULL for non-pb tags.
    */
   public static function blockTypeForTag(string $tag): ?string {
-    if (!str_starts_with($tag, 'pb-')) {
+    if (!str_starts_with($tag, RelativeSelector::TYPE_PREFIX)) {
       return NULL;
     }
-    return str_replace('-', '_', substr($tag, 3));
+    return str_replace('-', '_', substr($tag, strlen(RelativeSelector::TYPE_PREFIX)));
   }
 
   /**
@@ -629,11 +691,11 @@ final class DialectCatalog {
    * the roster is what the element's teaching line and correctives name.
    *
    * @param bool $is_container
-   *   TRUE for <pb-container>.
+   *   TRUE for <d-container>.
    * @param string|null $block_type
    *   The block type machine name (declared or not) for inline blocks.
    * @param string|null $plugin_id
-   *   The plugin id for <pb-block plugin>; the roster is by base plugin id.
+   *   The plugin id for <d-block plugin>; the roster is by base plugin id.
    *
    * @return array
    *   class => variant id, in roster order.
@@ -661,65 +723,29 @@ final class DialectCatalog {
   }
 
   /**
-   * The ordered condition vocabulary: name => wrapper.
+   * The ordered condition vocabulary: name => ['wrapper', 'axis'].
+   *
+   * The condition table the two grammars read: the digester
+   * (SelectorDigest::digest() peels a posable state and reads an at-rule
+   * prelude against it) and the condition clause grammar
+   * (ConditionClause, which spells a compound canonically over it).
    */
   public function conditions(): array {
     return $this->conditions;
   }
 
   /**
-   * Whether a condition is a posable STATE: a pseudo-class that is no fact.
+   * The condition wrappers: name => wrapper, in canonical order.
    */
-  public function isStateCondition(string $name): bool {
-    return isset($this->conditions[$name]) && str_starts_with($this->conditions[$name], ':') && !isset($this->factSet[$name]);
+  public function wrappers(): array {
+    return array_map(static fn (array $definition): string => $definition['wrapper'], $this->conditions);
   }
 
   /**
-   * Whether a condition is a structural FACT (a pseudo-class flagged so).
-   */
-  public function isFactCondition(string $name): bool {
-    return isset($this->factSet[$name]);
-  }
-
-  /**
-   * The published state condition names: pseudo-class wrappers, facts apart.
+   * The published state condition names: the pseudo-class wrappers.
    */
   public function stateConditions(): array {
-    return array_keys(array_filter(
-      $this->conditions,
-      fn (string $wrapper, string $name): bool => str_starts_with($wrapper, ':') && !isset($this->factSet[$name]),
-      ARRAY_FILTER_USE_BOTH,
-    ));
-  }
-
-  /**
-   * The published structural fact names, in catalog order.
-   */
-  public function factConditions(): array {
-    return array_keys(array_intersect_key($this->conditions, $this->factSet));
-  }
-
-  /**
-   * The condition a pseudo-class on the addressed element spells.
-   *
-   * The dialect writes a state or a fact as its printed wrapper
-   * (":hover", ":first-child", ":nth-child(odd)"), so the parser resolves
-   * the wrapper text back to the condition name here, whitespace and case
-   * folded like at-rule preludes. NULL when no published state or fact
-   * prints that way.
-   */
-  public function pseudoClassCondition(string $pseudo): ?string {
-    return $this->pseudoIndex[self::normalizeWrapper($pseudo)] ?? NULL;
-  }
-
-  /**
-   * The published at-rule wrappers: prelude => condition name.
-   */
-  public function atRuleWrappers(): array {
-    return array_filter(
-      $this->conditions,
-      static fn (string $wrapper): bool => str_starts_with($wrapper, '@'),
-    );
+    return array_keys($this->wrappersOfForm(ConditionClause::PSEUDO));
   }
 
   /**
@@ -728,24 +754,35 @@ final class DialectCatalog {
    * A width band is a container-query wrapper (the page-level query root
    * measures it), in the catalog's order: narrow, then medium on the
    * shipped vocabulary. The base look (no wrapper, "default") is the wide
-   * one; each band adapts it downward. This is THE responsive grammar a
-   * page can write: math functions (clamp(), calc()) are not values here.
+   * one; each band adapts it downward. These are the responsive
+   * REFERENCES a page can write by name; a literal query is the other
+   * spelling, and math functions (clamp(), calc()) are not values here.
    */
   public function widthBands(): array {
-    return array_filter(
-      $this->conditions,
-      static fn (string $wrapper): bool => str_starts_with($wrapper, '@container'),
-    );
+    return $this->wrappersOfForm(ConditionClause::CONTAINER);
   }
 
   /**
    * The published preference wrappers: condition name => @media wrapper.
    *
-   * Visitor preferences (color scheme, reduced motion): every at-rule
-   * wrapper that is not a width band.
+   * Visitor preferences (color scheme, reduced motion): the media-query
+   * wrappers.
    */
   public function preferenceWrappers(): array {
-    return array_diff_key($this->atRuleWrappers(), $this->widthBands());
+    return $this->wrappersOfForm(ConditionClause::MEDIA);
+  }
+
+  /**
+   * The published wrappers of one form (ConditionClause::form()).
+   *
+   * @return array<string, string>
+   *   Condition name => wrapper, in canonical order.
+   */
+  private function wrappersOfForm(string $form): array {
+    return array_filter(
+      $this->wrappers(),
+      static fn (string $wrapper): bool => ConditionClause::form($wrapper) === $form,
+    );
   }
 
   /**
@@ -775,35 +812,23 @@ final class DialectCatalog {
   }
 
   /**
-   * The condition a wrapper prelude names, matched modulo whitespace/case.
-   */
-  public function conditionForWrapper(string $prelude): ?string {
-    return $this->wrapperIndex[self::normalizeWrapper($prelude)] ?? NULL;
-  }
-
-  /**
-   * The canonical compound spelling for a set of condition parts.
+   * The canonical compound spelling for a set of condition clauses.
    *
-   * Compound parts identify a condition regardless of order; the canonical
-   * spelling orders parts by the condition table (daedalus_stylish's rule), so the
-   * parser always reconstructs the one spelling the validator accepts.
+   * Clauses identify a condition regardless of order; the canonical
+   * spelling is the condition grammar's (ConditionClause::canonical():
+   * published axes by first appearance in the table, then literal axes,
+   * references and literals alike), so the parser always reconstructs
+   * the one spelling the validator accepts.
    *
    * @param string[] $parts
-   *   Condition names; empty means the default condition.
+   *   Clause texts (a reference's name, a literal's canonical CSS); empty
+   *   means the default condition.
    */
   public function canonicalCompound(array $parts): string {
     if ($parts === []) {
       return 'default';
     }
-    usort($parts, fn (string $a, string $b): int => ($this->conditionOrder[$a] ?? PHP_INT_MAX) <=> ($this->conditionOrder[$b] ?? PHP_INT_MAX));
-    return implode('+', $parts);
-  }
-
-  /**
-   * Splits a stored condition key into its compound parts.
-   */
-  public static function compoundParts(string $condition): array {
-    return $condition === '' ? [] : explode('+', $condition);
+    return ConditionClause::canonical(implode(ConditionClause::DELIMITER, $parts), $this->conditions);
   }
 
   /**
@@ -822,11 +847,11 @@ final class DialectCatalog {
    * The parts and tags the styling layer contributed for the owner (an
    * owner no layer named has none), and the types the spine derives: a
    * container's children are the page's elements, so every declared
-   * block type's tag plus pb-container and pb-block may follow it; a
+   * block type's tag plus d-container and d-block may follow it; a
    * block has no child elements of the page, so nothing may.
    *
    * @param string $owner
-   *   The owner's dialect tag ("pb-container", "pb-text", "pb-block").
+   *   The owner's dialect tag (`d-container`, `d-text`, `d-block`).
    *
    * @return array{parts: array<string, string>, tags: string[], types: string[]}
    *   The owner's parts (selector => label), tags and types.
@@ -911,8 +936,8 @@ final class DialectCatalog {
   /**
    * Every type a type compound may spell: the block types and the kinds.
    *
-   * Spelled as the page language spells the element (pb-{block type},
-   * pb-container for any container, pb-block for any other block), the
+   * Spelled as the page language spells the element (d-{block type},
+   * d-container for any container, d-block for any other block), the
    * spine's own list: the declared block types in their order, then the
    * two kinds.
    *
@@ -1043,10 +1068,32 @@ final class DialectCatalog {
   }
 
   /**
-   * Normalizes an at-rule prelude for byte-for-byte-modulo-whitespace match.
+   * The site-wide bindings: property => its value space.
+   *
+   * The rosters' value spaces at the site level, the law a bindings line
+   * states (rendered through vocabularyProse()->bindingLines()); empty on
+   * a site whose styling layer binds nothing site-wide.
+   *
+   * @return array<string, array>
+   *   Property => value space, in the styling layer's order.
    */
-  private static function normalizeWrapper(string $prelude): string {
-    return strtolower(trim(preg_replace('/\s+/', ' ', $prelude)));
+  public function bindings(): array {
+    return $this->bindings;
+  }
+
+  /**
+   * The deviations: address print => [property => its value space].
+   *
+   * Only the places whose own value space narrows below the bindings
+   * (rendered through vocabularyProse()->deviationLines()); empty when
+   * none does. Keyed by address print; the surface that prints them
+   * speaks its own words for the place.
+   *
+   * @return array<string, array<string, array>>
+   *   Address print => property => value space, in the layer's order.
+   */
+  public function deviations(): array {
+    return $this->deviations;
   }
 
 }

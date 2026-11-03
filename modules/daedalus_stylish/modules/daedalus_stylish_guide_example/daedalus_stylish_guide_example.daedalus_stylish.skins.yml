@@ -30,10 +30,10 @@ guide_example:
   tokens:
     # An ink-and-amber palette, dark scheme included. Roles, not hues:
     # a rebrand edits these values and every reference follows. The
-    # inverse trio is what a band wears to flip its scheme on purpose
+    # inverse trio is what a section wears to flip its scheme on purpose
     # (near-black on a light page, paper on a dark one); the dark:
     # values follow the visitor's OS preference and never give a light
-    # page a dark band.
+    # page a dark section.
     color:
       bg:
         default: '#faf8f5'
@@ -72,6 +72,33 @@ guide_example:
       inverse-muted:
         default: '#a39c8d'
         dark: '#6e6656'
+      # Beyond the roles: a translucent amber tint for a single highlight
+      # tile or notice (var(--color-amber-wash) on the unbound
+      # background-color), never for a section surface.
+      amber-wash:
+        value:
+          default: 'rgb(180 85 45 / 0.08)'
+          dark: 'rgb(224 138 93 / 0.14)'
+        description: 'A translucent amber tint for the fill of a single highlight tile or notice that should read as marked without a border or a shadow, never for a section surface.'
+        offered: true
+    # The gradient half of the palette, on the suite's gradient scale:
+    # two backgrounds beyond the role tokens. background-image is
+    # unbound, so the hero or an Inverse section wears one by name
+    # (var(--gradient-*)); each description says which, and the AI
+    # reads it in the design system brief.
+    gradient:
+      amber-glow:
+        value:
+          default: 'radial-gradient(120% 80% at 50% 0%, rgb(180 85 45 / 0.14), transparent 60%)'
+          dark: 'radial-gradient(120% 80% at 50% 0%, rgb(224 138 93 / 0.22), transparent 60%)'
+        description: 'A faint radial amber glow rising from the top edge into the page background, for the background-image of the hero section (on a Plain surface) and nowhere else.'
+        offered: true
+      ink-fade:
+        value:
+          default: 'linear-gradient(180deg, #26221b 0%, #14120f 100%)'
+          dark: 'linear-gradient(180deg, #3a342a 0%, #14120f 100%)'
+        description: 'Ink falling to black, top to bottom, for the background-image of an Inverse section that should read as a gradient rather than a flat ink (the section keeps its paper text).'
+        offered: true
     # Three stacks, system faces only: no font files ship and no loader
     # is attached. font-family is BOUND to this scale by the suite, so
     # these are the only families.
@@ -84,7 +111,7 @@ guide_example:
     # caption is fine print. The big end is width-banded (the banded
     # width-conditioned grammar; no clamp(), fluidity stays data):
     # display and title-1 step down through the medium and narrow
-    # bands, the small sizes are one value at every width.
+    # sections, the small sizes are one value at every width.
     text:
       display:
         default: '3.25rem'
@@ -115,13 +142,13 @@ guide_example:
       normal: '0'
       wide: '0.08em'
     # A geometric step ladder on a 0.25rem unit, plus the gutter and the
-    # three banded band-rhythm tokens. A token is a record {value,
+    # three banded section-rhythm tokens. A token is a record {value,
     # description, offered}, a bare value the record with the defaults;
     # `offered: false` keeps a token legal and referenceable while the
     # basic rows bound to the scale (padding, gap, margin) lead with the
     # everyday six alone: the quarter step and the three-quarter step are
     # too fine for a chip row (a block type file curates 3 where it
-    # belongs), 24 is a band-scale distance, and the gutter and band
+    # belongs), 24 is a section-scale distance, and the gutter and section
     # tokens are worn by variants and defaults, never picked by hand.
     space:
       '1':
@@ -140,7 +167,7 @@ guide_example:
       '16': '4rem'
       '24':
         value: '6rem'
-        description: 'A band-scale distance, beyond the everyday ladder.'
+        description: 'A section-scale distance, beyond the everyday ladder.'
         offered: false
       # The site gutter: the width variants' inset floor and the
       # container defaults' gap (--space-gutter, one gutter fact for
@@ -151,28 +178,28 @@ guide_example:
           narrow: '1rem'
         description: 'The site gutter: the width variants'' inset floor and the container gap, not a padding step.'
         offered: false
-      # Band rhythm: the vertical padding a page band wears, worn
+      # Section rhythm: the vertical padding a section wears, worn
       # through the container rhythm axis (guide_rhythm_compact /
-      # standard / spacious), banded so bands tighten on narrow screens.
-      band-compact:
+      # standard / spacious), banded so sections tighten on narrow screens.
+      section-compact:
         value:
           default: '3rem'
           narrow: '2rem'
-        description: 'Compact band rhythm, worn through the rhythm axis.'
+        description: 'Compact section rhythm, worn through the rhythm axis.'
         offered: false
-      band:
+      section:
         value:
           default: '5rem'
           medium: '4rem'
           narrow: '3rem'
-        description: 'Standard band rhythm, worn through the rhythm axis.'
+        description: 'Standard section rhythm, worn through the rhythm axis.'
         offered: false
-      band-spacious:
+      section-spacious:
         value:
           default: '8rem'
           medium: '6rem'
           narrow: '4rem'
-        description: 'Spacious band rhythm, worn through the rhythm axis.'
+        description: 'Spacious section rhythm, worn through the rhythm axis.'
         offered: false
     radius:
       sm: '0.25rem'
@@ -218,13 +245,52 @@ guide_example:
     transition:
       fast: 'var(--duration-fast) var(--easing-out)'
       normal: 'var(--duration-normal) var(--easing-standard)'
-    # The site column every band shares, a narrower column for prose
-    # bands, and a reading measure for body copy. max-width is bound to
+    # The site column every section shares, a narrower column for prose
+    # sections, and a reading measure for body copy. max-width is bound to
     # this scale.
     layout:
       max-width: '75rem'
       narrow: '60rem'
       measure: '40rem'
+  # The Guide Example motion material: keyframes as data on the skin,
+  # delivered as @keyframes motion-{name}. Each is paired with an
+  # animation-axis variant in daedalus_stylish_guide_example.daedalus_stylish.variants.yml
+  # so basic mode can wear it; the timing (duration, easing) lives on the
+  # wearer, on the guide's scales, never in the steps: steps validate
+  # against the site's constraint defaults too, and a literal easing in a
+  # step is refused once animation-timing-function is bound to the easing
+  # scale.
+  animations:
+    guide_slide_in:
+      description: 'Fade in while sliding 1rem in from the left, easing out. Reach for it on sections and stacked items whose content reads left to right.'
+      steps:
+        from:
+          opacity: '0'
+          transform: 'translateX(-1rem)'
+        to:
+          opacity: '1'
+          transform: 'none'
+    guide_pop:
+      description: 'Fade in while springing from 90% through a 2% overshoot to full size. Reach for it on one badge, stat, or button per section that should catch the eye; pair it with the spring easing.'
+      steps:
+        '0%':
+          opacity: '0'
+          transform: 'scale(0.9)'
+        '70%':
+          opacity: '1'
+          transform: 'scale(1.02)'
+        '100%':
+          opacity: '1'
+          transform: 'none'
+    guide_float:
+      description: 'Drift up 4px and back, slowly, forever: a resting breath. Reach for it with an infinite iteration count and the in-out easing on a single decorative image or icon; never on text.'
+      steps:
+        '0%':
+          transform: 'translateY(0)'
+        '50%':
+          transform: 'translateY(-4px)'
+        '100%':
+          transform: 'translateY(0)'
   # Site element defaults: what an UNSTYLED element looks like, the
   # first of the role-token doctrine's three mechanisms. Headings walk
   # down the ramp; nothing here names an element-scoped token.
@@ -352,7 +418,7 @@ guide_example:
           height: 'auto'
     # The tags the guide opens beyond daedalus_stylish's own. Small print sits on
     # the caption step in muted; the rule is a hairline in the border
-    # tone with band air around it; figures carry no inset of their own
+    # tone with section air around it; figures carry no inset of their own
     # (the image inside wears the radius).
     'base:strong':
       '':
@@ -391,7 +457,7 @@ guide_example:
     # display) whose children sit the gutter apart, so a stacked
     # container never writes a display or a gap of its own, and Columns
     # (the row variant) and Cluster only swap the display for flex. The
-    # site width reaches page bands through the root-only Site width
+    # site width reaches sections through the root-only Site width
     # variant, so nested containers get no inset here.
     'kind:container':
       '':

@@ -7,6 +7,7 @@ namespace Drupal\daedalus_blueprint\Plugin\Block;
 use Drupal\Component\Plugin\Exception\ContextException;
 use Drupal\Core\Block\Attribute\Block;
 use Drupal\Core\Block\BlockBase;
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\Plugin\Context\ContextDefinition;
@@ -18,6 +19,7 @@ use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_blueprint\Host\InnerRender;
 use Drupal\daedalus_blueprint\LayoutBuilder\FrameHost;
 use Drupal\daedalus_blueprint\Plugin\Derivative\SlotDeriver;
+use Drupal\daedalus_blueprint\Slot\SlotRoster;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -33,11 +35,17 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * section tagged with the slot id, under the page as the subject, so a
  * field block in the slot shows the page's own field; when nothing fills
  * the slot, the default, a published blueprint named by machine name,
- * rendered the same way (the first shape of a linked placement); when
- * there is no default either, nothing, which on the editing canvas wears
- * the block stand-in daedalus_ui gives any block that built nothing,
- * labelled with the slot's label, and for a visitor is dropped like any
- * empty block.
+ * rendered the same way (InnerRender::renderBlueprint(), the first shape
+ * of a linked placement); when there is no default either, nothing,
+ * which on the editing canvas wears the block stand-in daedalus_ui gives
+ * any block that built nothing, labelled with the slot's label, and for
+ * a visitor is dropped like any empty block. The render carries what the
+ * door read whether or not anything showed: every host the lookup walked
+ * beneath the door (the page, its template; SlotLookup), the fill's
+ * host, the default blueprint (empty or not), or the blueprint type's
+ * list tag when the default names no published blueprint; a frame door
+ * carries the slot roster too (SlotRoster::cacheability()), the config
+ * its route slot is read from.
  *
  * The outer host, whose document holds the slot block, is the host the
  * fillers are read beneath. In a template render it is the render host
@@ -132,6 +140,7 @@ final class SlotBlock extends BlockBase implements ContainerFactoryPluginInterfa
     mixed $plugin_definition,
     protected InnerRender $innerRender,
     protected HostResolver $hostResolver,
+    protected SlotRoster $slotRoster,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
   }
@@ -146,6 +155,7 @@ final class SlotBlock extends BlockBase implements ContainerFactoryPluginInterfa
       $plugin_definition,
       $container->get('daedalus_blueprint.inner_render'),
       $container->get('daedalus_blueprint.host_resolver'),
+      $container->get('daedalus_blueprint.slot_roster'),
     );
   }
 
@@ -214,7 +224,7 @@ final class SlotBlock extends BlockBase implements ContainerFactoryPluginInterfa
       // the render that slot is main, which refuses to build without one.
       $route_slot = $output instanceof RouteOutput ? $this->innerRender->routeSlot($outer, $output->host) : FrameHost::MAIN_SLOT;
       if ($this->slotId() === $route_slot) {
-        return $this->mainContent($output);
+        return $this->declaringRoster($this->mainContent($output));
       }
       if ($this->slotId() === FrameHost::MAIN_SLOT) {
         // Another slot hosts the route (a blueprint's canvas in its door):
@@ -222,7 +232,7 @@ final class SlotBlock extends BlockBase implements ContainerFactoryPluginInterfa
         // route output carries, with no landmark of its own since the
         // door prints the page's one main landmark.
         assert($output instanceof RouteOutput);
-        return $output->standIn;
+        return $this->declaringRoster($output->standIn);
       }
     }
     else {
@@ -235,11 +245,42 @@ final class SlotBlock extends BlockBase implements ContainerFactoryPluginInterfa
       $outer = $this->hostResolver->renderHost($this->hostResolver->fromEntity($subject));
     }
 
-    $fill = $this->innerRender->slotFiller($this->slotId(), $outer, $subject);
-    if ($fill !== NULL) {
-      return $this->innerRender->render($fill->host, [$fill->section], $contexts, $this->inPreview);
-    }
-    return $this->defaultDocument($contexts);
+    $lookup = $this->innerRender->slotFiller($this->slotId(), $outer, $subject);
+    $fill = $lookup->fill;
+    $build = $fill !== NULL
+      ? $this->innerRender->render($fill->host, [$fill->section], $contexts, $this->inPreview)
+      : $this->defaultDocument($contexts);
+    // The door declares every document the lookup walked, on whatever it
+    // shows (the fill, the default, nothing): a page or template that
+    // gains its first fill flips the door, so the door depends on them.
+    CacheableMetadata::createFromRenderArray($build)
+      ->merge($lookup->cacheability)
+      ->applyTo($build);
+    return $frame instanceof FrameInterface ? $this->declaringRoster($build) : $build;
+  }
+
+  /**
+   * A frame door's build, declaring the roster the frame branch asked.
+   *
+   * The frame branch reads the roster for its route slot (the tier of
+   * every frame door, through InnerRender::routeSlot()), so whatever a
+   * frame door shows (the route's output, the stand-in, a fill, its
+   * default, nothing) depends on the roster and names it; a template door
+   * never asks the roster and carries nothing of it. Merged onto what the
+   * build already carries, never applied bare: applyTo() overwrites the
+   * cache keys, which would drop the fill's or the stub's own tags.
+   *
+   * @param array $build
+   *   The frame door's build.
+   *
+   * @return array
+   *   The build, carrying the roster's config.
+   */
+  protected function declaringRoster(array $build): array {
+    CacheableMetadata::createFromRenderArray($build)
+      ->merge($this->slotRoster->cacheability())
+      ->applyTo($build);
+    return $build;
   }
 
   /**
@@ -274,22 +315,17 @@ final class SlotBlock extends BlockBase implements ContainerFactoryPluginInterfa
    *   The render's contexts.
    *
    * @return array
-   *   The default blueprint's document under the outer's contexts, a
-   *   cache-only stub when the default names no published blueprint, or
-   *   nothing.
+   *   The default blueprint's document under the outer's contexts, as
+   *   InnerRender::renderBlueprint() answers it (a cache-only stub when
+   *   the blueprint is empty or the name has no published entity), or
+   *   nothing when the slot names no default.
    */
   protected function defaultDocument(array $contexts): array {
     $default = $this->configuration[self::DEFAULT_KEY] ?? NULL;
     if (!is_string($default) || $default === '') {
       return [];
     }
-    $blueprint = $this->innerRender->blueprintHost($default);
-    if ($blueprint === NULL) {
-      // The default names no published blueprint entity: nothing shows,
-      // until one is published under the name.
-      return ['#cache' => ['tags' => ['blueprint_list']]];
-    }
-    return $this->innerRender->render($blueprint, $blueprint->ownSections(), $contexts, $this->inPreview);
+    return $this->innerRender->renderBlueprint($default, $contexts, $this->inPreview);
   }
 
 }

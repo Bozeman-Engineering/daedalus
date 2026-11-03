@@ -1,0 +1,39 @@
+# The one front door to every Daedalus setting: a config category of the
+# shape /admin/config/system, rendered by core's own controllers. Settings
+# keep their natural homes (bundle forms, drupal/ai's menu, Appearance); the
+# category lists each a second time, and SETTINGS.md rosters every door.
+daedalus.admin_config:
+  path: '/admin/config/daedalus'
+  defaults:
+    _controller: '\Drupal\system\Controller\SystemController::overview'
+    _title: 'Daedalus'
+    link_id: daedalus.admin_config
+  requirements:
+    _permission: 'access administration pages'
+
+# The sub-categories. Each page lists the menu links whose parent names it;
+# core hides a link the actor cannot reach, so every listed form keeps its
+# own gate.
+daedalus.admin_config_ai:
+  path: '/admin/config/daedalus/ai'
+  defaults:
+    _controller: '\Drupal\system\Controller\SystemController::systemAdminMenuBlockPage'
+    _title: 'AI'
+  requirements:
+    _permission: 'access administration pages'
+
+daedalus.admin_config_ui:
+  path: '/admin/config/daedalus/ui'
+  defaults:
+    _controller: '\Drupal\system\Controller\SystemController::systemAdminMenuBlockPage'
+    _title: 'UI'
+  requirements:
+    _permission: 'access administration pages'
+
+daedalus.admin_config_styling:
+  path: '/admin/config/daedalus/styling'
+  defaults:
+    _controller: '\Drupal\system\Controller\SystemController::systemAdminMenuBlockPage'
+    _title: 'Styling'
+  requirements:
+    _permission: 'access administration pages'

@@ -7,7 +7,7 @@ container:
   presentation: open
   elements:
     # depth takes root or nested.
-    '.band':
+    '.section':
       present:
         depth: sideways
 field:

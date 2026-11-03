@@ -1,0 +1,41 @@
+/**
+ * The usage meter's two surfaces outside the menu: the kebab's dot and
+ * the notice under the chat. The rows inside the menu are the primitive's
+ * meter rows (daedalus_ui menu.css).
+ */
+
+/* The dot on the kebab: warning while a window is under a tenth, danger
+   while one is reached. The button is the kit icon-button; the dot sits
+   in its corner, ringed with the panel's ground so it reads on the glyph. */
+.daedalus-ai-chat-menu-button {
+  position: relative;
+}
+
+.daedalus-ai-chat-menu-button[data-usage]::after {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  width: 7px;
+  height: 7px;
+  content: "";
+  border-radius: 50%;
+  background: var(--daedalus-warning);
+  box-shadow: 0 0 0 2px var(--daedalus-background);
+}
+
+.daedalus-ai-chat-menu-button[data-usage="out"]::after {
+  background: var(--daedalus-danger);
+}
+
+/* The one line under the chat while a window is reached: the composer's
+   fact, worded as the gate's refusal is. */
+.daedalus-ai-chat-usage-notice {
+  flex: 0 0 auto;
+  margin: 0 0.5rem 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--daedalus-danger);
+  border-radius: var(--daedalus-border-radius);
+  background: var(--daedalus-danger-background);
+  font-size: var(--daedalus-font-size-caption);
+  line-height: 1.3;
+}

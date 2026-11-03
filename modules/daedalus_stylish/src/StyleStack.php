@@ -31,31 +31,39 @@ use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
  *   block, read at the key's relative position;
  * - the active skin's base:{tag} block (skin:base:{tag}), keyed by the
  *   READ SUBJECT's tag (subjectTag(): the one element the key reads,
- *   from the blueprint tree's annotation, `_element.markup.tag` for an
+ *   from the document's annotation, `_element.markup.tag` for an
  *   element key, the declared part's tag for a part key; a tag tier, a
- *   chain or a generated box has no subject, so no base layer; without a tree none
- *   either, and baseTags beside the layers names the tags the skin
- *   carries, so a reader states that tier honestly);
+ *   chain or a generated box has no subject, so no base layer; without
+ *   a document none either, and baseTags beside the layers names the
+ *   tags the skin carries, so a reader states that tier honestly);
  * - the skin tier (skin:{scope}): the active PUBLISHED skin's defaults,
  *   kind block then refinement block, the same ranks the defaults
- *   stylesheet prints (DefaultsStylesheet::orderedDefaults());
- * - the ancestor tier, present only when the caller passes the blueprint
- *   tree: one GROUP of layers per ancestor rule position that REACHES
- *   the key (SelectorMatcher::reaches(): an ancestor's selector entry
- *   whose targets are this element's root, or, for a tag or part key,
- *   the tag inside it or that part), farthest ancestor first and, per
- *   ancestor, positions in partSuffixes() order. A group is the
+ *   stylesheet prints (SkinStylesheet::orderedDefaults());
+ * - the ancestor tier, present only when the caller passes the document
+ *   tree (NodeTreeBuilder::document(): the host entity above its
+ *   sections, as the canvas root wrapper stands above them in the DOM,
+ *   never the serializer's layout): one GROUP of layers per ancestor
+ *   rule position that REACHES the key (SelectorMatcher::reaches(): an
+ *   ancestor's selector entry whose targets are this element's root,
+ *   or, for a tag or part key, the tag inside it or that part), farthest
+ *   ancestor first and, per ancestor, positions in partSuffixes()
+ *   order. The entity is the farthest ancestor of every element on the
+ *   page, so a rule written on it (`entity:X::p`) is the first group of
+ *   every stack it reaches; a field key's tier (`block:X:body::.s-abc`,
+ *   an open render's prose row) carries its block's own rules as its
+ *   nearest ancestor beneath the block's ancestors' (the field is inside
+ *   the block). A group is the
  *   position's map layers with their identities kept: the variants
  *   delivered there (the rule's own wear and its owner's worn fragments,
  *   delivery order), one layer each as
  *   ancestor:{owner}::{position}|{variant} carrying the variant's
  *   identity and its `carrier` (the address whose reference supplies it:
  *   the rule, or the owner's root), then the rule's own entry as
- *   ancestor:{owner}::{position}. Each layer folds the structural facts
- *   the element satisfies into the posable remainder of its compounds on
- *   its own (a satisfied `first-child` block delivers at rest; an
- *   unsatisfied one never applies and drops), so own beats worn by order
- *   inside the group as it does at the rule's own key. A worn layer
+ *   ancestor:{owner}::{position}. A rule's reach is structural: a
+ *   position-qualified rule (`> *:not(:last-child)`) reaches the element
+ *   or not by the matcher's judgement of its place, so its layer is in
+ *   the group whole or absent, and own beats worn by order inside the
+ *   group as it does at the rule's own key. A worn layer
  *   joins the group only where it delivers (a reference is a fact of its
  *   carrier, listed empty or stale at the rule's own key; a member's
  *   tier carries what reaches the member); a group exists when any of
@@ -133,7 +141,6 @@ class StyleStack {
     protected StyleGuide $styleGuide,
     protected SkinManager $skinManager,
     protected PageBuilderDeclarations $declarations,
-    protected ConditionTypePluginManager $conditionTypes,
   ) {}
 
   /**
@@ -150,11 +157,11 @@ class StyleStack {
    * @param string|null $theme
    *   The theme whose declarations order delivery and answer the declared
    *   tier; NULL = the site's default theme, resolved once for both.
-   * @param array|null $tree
-   *   The blueprint's lean node tree (the delivered `layout`, or
-   *   NodeTreeBuilder::build()), when the caller holds
-   *   it: keys the ancestor tier and the skin's base:{tag} layer (the
-   *   read subject's tag, subjectTag()). NULL leaves both out.
+   * @param array|null $document
+   *   The document tree (NodeTreeBuilder::document() over the annotated
+   *   blueprint: the host entity above its sections), when the caller
+   *   holds it: keys the ancestor tier and the skin's base:{tag} layer
+   *   (the read subject's tag, subjectTag()). NULL leaves both out.
    *
    * @return array
    *   ['key' => the key, 'rootKey' => its root key, 'relative' => the
@@ -176,7 +183,7 @@ class StyleStack {
    *   facts (an own ancestor layer's label is its owner's minted name or
    *   NULL; NULL otherwise), 'owner' => an ancestor layer's (own and
    *   worn) owner name, the owner node's `_element.name` minted by
-   *   daedalus_ui's annotator (NULL when the tree names none; absent on
+   *   daedalus_ui's annotator (NULL when the document names none; absent on
    *   every other layer), 'resolved' => bool (FALSE = stale reference,
    *   delivers nothing), 'editable' => TRUE for the own layer only,
    *   'carrier' => the address ['key' => root key, 'selector' => the
@@ -190,16 +197,18 @@ class StyleStack {
    * @throws \InvalidArgumentException
    *   When the key is not a style map key.
    */
-  public function stack(array $map, string $key, array $context = [], ?string $theme = NULL, ?array $tree = NULL): array {
+  public function stack(array $map, string $key, array $context = [], ?string $theme = NULL, ?array $document = NULL): array {
     $theme ??= $this->declarations->siteTheme();
     $root = $this->validator->keyAddress($key, $context)?->root()
       ?? throw new \InvalidArgumentException(sprintf('"%s" is not a style map key.', $key));
     $pos = strpos($key, '::');
     $root_key = $pos === FALSE ? $key : substr($key, 0, $pos);
     $relative = substr($key, strlen($root_key));
-    // The tree, indexed once for both tiers it keys: the subject's tag
-    // for the base layer and the ancestor walk.
-    $matcher = $tree === NULL ? NULL : SelectorMatcher::fromTree($tree);
+    // The document, indexed once for both tiers it keys: the subject's
+    // tag for the base layer and the ancestor walk; the map rides along
+    // so an ancestor's rule qualified by a worn variant's class
+    // (`> d-text.daedalus-stylish-variant--featured`) reaches by wear.
+    $matcher = $document === NULL ? NULL : SelectorMatcher::fromTree($document, $map);
     $tag = $matcher === NULL ? NULL : $this->subjectTag($matcher, $root_key, $relative);
 
     // The floor's block addresses: the family kind's block beneath the
@@ -404,18 +413,19 @@ class StyleStack {
    * root tag, the annotation's `_element.markup.tag`), its declared part
    * for a part key (`::.cls`: the part's declared tag, NULL for a part
    * declaring none), and nothing for a tag tier or a chain (`::p`,
-   * `::> *`, `::> pb-text .link`: a rule's matches are many, so no one
+   * `::> *`, `::> d-text .link`: a rule's matches are many, so no one
    * tag stands for them) nor for a pseudo-element (`::&::before`,
    * `::.cls::after`: a generated box is no element and renders as no
    * tag, so no base:{tag} block styles it; it is floorless there like a
    * chain). The tag keys the skin's base:{tag} layer; it is a fact of
-   * the tree, never of a rendered document, so every reader of the
+   * the document, never of a rendered page, so every reader of the
    * stack answers alike (style-stack.js subjectTag mirror). NULL for a
-   * key the tree does not carry (an entity or field key, a bare key
-   * outside it) and for every subjectless key.
+   * key the document does not carry (a host field key, a bare key
+   * outside it; the entity root answers its kind's markup tag, usually
+   * none) and for every subjectless key.
    *
    * @param \Drupal\daedalus_stylish\Selector\SelectorMatcher $matcher
-   *   The matcher over the blueprint tree.
+   *   The matcher over the document.
    * @param string $root_key
    *   The key's root.
    * @param string $relative
@@ -462,8 +472,8 @@ class StyleStack {
    * root's worn fragments' suffixes, then the map's); each reaching
    * position contributes its map layers (mapLayers() at the ancestor's
    * position: the rule's own wear and the owner's wear at the position,
-   * then the rule's entry) with their identities kept, each folded on
-   * its own (foldFacts()), the worn ones as worn ancestor layers naming
+   * then the rule's entry) with their identities kept, the worn ones as
+   * worn ancestor layers naming
    * the variant and its carrier where they deliver, the entry as the own
    * ancestor layer. A group exists when any of its layers delivers at
    * the key, and the own layer rides its group empty or not; a position
@@ -471,7 +481,7 @@ class StyleStack {
    * ancestorLayers() mirror.
    *
    * @param \Drupal\daedalus_stylish\Selector\SelectorMatcher $matcher
-   *   The matcher over the blueprint tree.
+   *   The matcher over the document.
    *
    * @return array[]
    *   The ancestor layers.
@@ -517,7 +527,7 @@ class StyleStack {
         $group = [];
         $delivers = FALSE;
         foreach ($this->mapLayers($map, $ancestor, $suffix, $theme, $roster) as $layer) {
-          $styles = $this->foldFacts($layer['styles'], $matcher, $root_key);
+          $styles = $layer['styles'];
           $delivers = $delivers || $styles !== [];
           if ($layer['tier'] === self::TIER_ELEMENT) {
             // The position's own layer: the rule's entry, read from the
@@ -613,56 +623,6 @@ class StyleStack {
   }
 
   /**
-   * Folds a rule's structural facts into what it delivers to one element.
-   *
-   * A condition compound carrying facts (`first-child`, `hover+odd`)
-   * applies to the element only when every fact holds for it
-   * (SelectorMatcher::satisfies() by the fact's printed wrapper): a
-   * compound with an unsatisfied fact drops, a satisfied one delivers
-   * under its posable remainder (`default`, `hover`), where its values
-   * beat a remainder that carried fewer facts (each fact is one
-   * pseudo-class of specificity) and, at equal facts, a later block
-   * beats an earlier one (document order). The element's own keys keep
-   * their fact conditions raw (the code view lights them); only another
-   * element's rule is read from this element's place.
-   *
-   * The client's foldFacts() mirror.
-   */
-  protected function foldFacts(array $entry, SelectorMatcher $matcher, string $key): array {
-    $table = $this->conditionTypes->getConditions();
-    $folded = [];
-    $weights = [];
-    foreach ($entry as $condition => $properties) {
-      $keep = [];
-      $facts = 0;
-      $holds = TRUE;
-      foreach (explode('+', (string) $condition) as $part) {
-        if (!$this->conditionTypes->isFact($part)) {
-          $keep[] = $part;
-          continue;
-        }
-        $facts++;
-        if (!$matcher->satisfies($key, (string) ($table[$part]['wrapper'] ?? ''))) {
-          $holds = FALSE;
-          break;
-        }
-      }
-      if (!$holds) {
-        continue;
-      }
-      $target = $keep === [] ? 'default' : implode('+', $keep);
-      foreach ($properties as $property => $value) {
-        if (isset($weights[$target][$property]) && $weights[$target][$property] > $facts) {
-          continue;
-        }
-        $folded[$target][$property] = $value;
-        $weights[$target][$property] = $facts;
-      }
-    }
-    return $folded;
-  }
-
-  /**
    * The stack's lines at one exact condition, winners marked by index.
    *
    * The cascade's own reading, at a stored condition (no cascade across
@@ -711,12 +671,12 @@ class StyleStack {
    * The key's own suffix space: selector entries the map carries beside
    * the key, plus the selector styles each worn reference's fragment
    * delivers (selectors ride their element), plus the selectors a rule's
-   * wear continues under it (a rule "::> pb-text" wearing a variant with
-   * a '::.link' entry delivers at "::> pb-text .link", the same
+   * wear continues under it (a rule "::> d-text" wearing a variant with
+   * a '::.link' entry delivers at "::> d-text .link", the same
    * continuation the printer rebases by). A generated box is one more
    * suffix of the root: `::&::before` and `::.quote::after` list as
    * siblings of `::.quote`, never under it, and a rule's worn `::&::before`
-   * entry continues under the rule as `::> pb-text::before` (the anchor
+   * entry continues under the rule as `::> d-text::before` (the anchor
    * binds to the rule's landing, RelativeSelector::under()). Delivery
    * order: the rules' continued suffixes first (rule wear prints before
    * the element lanes, rules in map order), then the root's

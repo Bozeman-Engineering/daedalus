@@ -1,23 +1,40 @@
-import { verbsFor, onChange as onVerbsChange } from '../verbs/verbs';
+import { verbsFor } from '../verbs/verbs';
 import { verbMenuItems } from '../verbs/verb-menu-items';
+import {
+  onChange as onHistoryChange,
+  getState as historyState,
+} from '../history/history';
+import { topBarMenuItems } from './top-bar-menu-items';
 
 /**
- * The Edit Mode top bar's save, discard, and refresh buttons.
+ * The Edit Mode top bar's client half: Save and the Daedalus menu.
  *
  * Part of the app bundle; behaviors only, so initTopBar() has no ordering
  * needs beyond running before the next attachBehaviors pass.
  *
- * Save is a split control (ButtonBuilderTrait::buildSplitButton()): the
- * button commits the tempstore, and the caret beside it opens the DOCUMENT
- * menu, the top bar's face of the verb registry. The menu lists the root
- * entity's verbs flagged `document` (verbs.js register), adapted through
- * the one verbs-to-items wire (verb-menu-items.js) into the shared menu
- * primitive, so a whole-page gesture a module registers as a root verb
- * (daedalus_layout's "Save page as blueprint…") shows up here with its
- * capability gate and its keyboard contract intact, and the bar itself
- * names no gesture. The caret renders hidden and reveals only while the
- * root offers at least one document verb: honest chrome, never a caret
- * that opens nothing.
+ * Save (#daedalus-ui-save, Edit::buildTopBar()) is the one unsaved-changes
+ * indicator: data-daedalus-ui-saved and the label span say whether this
+ * user's history timeline holds something to undo. The server stamps the
+ * state on render (history_manager->metadata($host)['can_undo']); the
+ * client follows the same fact through the history mirror
+ * (history/history.js, fed by every mutation response's `history`
+ * payload), so an undo back to the start reads Saved again and Save
+ * agrees with the History panel by construction. A blueprint change the
+ * mirror has not heard about yet (a response without history metadata,
+ * the first change before any response) still flips to unsaved: a
+ * change is a change. Nothing polls.
+ *
+ * The menu (#daedalus-ui-menu, the Daedalus trigger) is the bar's one
+ * menu, riding the shared primitive (Drupal.Daedalus.menu) over the pure
+ * item composer (top-bar-menu-items.js). Everything is read at open time:
+ * the panels from drupalSettings.daedalusUi.topBar and their open state
+ * from the sidebar manager, the hotkey hints from
+ * drupalSettings.daedalusUi.hotKeys, the document verbs from the registry
+ * over the root (verb-menu-items.js, the one verbs-to-items wire, filtered
+ * to the `document` flag), the density from the html stamp. Every row runs
+ * through a door that already exists: the sidebar manager, the preview
+ * window opener, the density writer, the modal opener, the mode
+ * behaviors. The bar itself names no gesture.
  */
 
 /**
@@ -51,92 +68,202 @@ const documentVerbKeys = () => {
   return key && verbsFor(key).some((verb) => verb.document) ? [key] : [];
 };
 
+/**
+ * The edit plugin's main entity, or null off editable pages.
+ *
+ * @todo Save and Discard use the Daedalus Edit tempstore controllers,
+ * a dependency on Daedalus Edit when the tempstore for Daedalus Edit
+ * and Daedalus Layout should bubble up to some parent module.
+ */
+const mainEntityInfo = () =>
+  Drupal.Daedalus.ModeManager.getPlugin('edit').getMainEntityInfo();
+
+/**
+ * Commits the staged changes: navigates to the save route once every
+ * write on the wire has landed.
+ */
+const save = async () => {
+  // Every write (a spine op, a form commit) rides the op queue; a commit
+  // still on the wire must land in tempstore before the page navigates
+  // to the save route.
+  await Drupal.Daedalus.Blueprint.drained();
+  const info = mainEntityInfo();
+  if (!info) {
+    return;
+  }
+  if (Drupal.Daedalus.Edit?.hasInvalidFormItem?.() === true) {
+    // @todo warnAboutInvalidFormItem should detect that there is already
+    // a message on screen for this so you don't get double messages (the
+    // form submit validation and the "hey fix this before you continue").
+    Drupal.Daedalus.Edit.warnAboutInvalidFormItem();
+    return;
+  }
+  window.location = Drupal.Daedalus.ModePluginBase.url(
+    `/daedalus-edit/tempstore/save/${info.entityType}/${
+      info.id
+    }?destination=${saveDestination()}`,
+  );
+};
+
+/**
+ * Opens the discard confirm form, the one confirm, in the daedalus popup
+ * through the one opener; the mode rides the query as on every edit-mode
+ * route.
+ */
+const discard = () => {
+  const info = mainEntityInfo();
+  if (!info) {
+    return;
+  }
+  const ajax = Drupal.Daedalus.openModal(
+    Drupal.Daedalus.ModePluginBase.url(
+      `/daedalus-edit/tempstore/delete-confirm/${info.entityType}/${
+        info.id
+      }?destination=${saveDestination()}`,
+    ),
+    {
+      title: Drupal.t('Discard changes?'),
+      width: 'auto',
+      dialogClass: 'discard-changes-dialog',
+    },
+  );
+  // Drupal.Ajax calls the instance's error() when the response completes,
+  // so the handler lands on the executed instance.
+  ajax.error = (error) => {
+    console.error(
+      'Unable to discard changes: ',
+      error.responseText || error,
+    );
+    Drupal.Daedalus.ModeManager.getPlugin('edit').handleError(
+      error,
+      'Unable to discard changes.',
+    );
+  };
+};
+
+/**
+ * Opens or closes a panel through the sidebar manager, the road the
+ * hotkeys take for a panel without a toggle button.
+ */
+const togglePanel = (id, open) => {
+  const manager = Drupal.Daedalus.SidebarManager;
+  (open ? manager.openSidebar(id) : manager.closeSidebar(id)).catch(
+    (error) => {
+      // A refused close (an invalid daedalus_edit form) is expected and
+      // already shown to the user; anything else is a bug.
+      if (error !== Drupal.Daedalus.SidebarPluginBase.CLOSE_BLOCKED) {
+        console.error('Cannot toggle sidebar:', error);
+      }
+    },
+  );
+};
+
+/**
+ * Opens the Settings panel on its Hotkeys section: the one keyboard
+ * shortcuts reference, the remap list itself.
+ */
+const keyboardShortcuts = async () => {
+  await Drupal.Daedalus.SidebarManager.openSidebar('edit_mode_settings');
+  const details = document.getElementById('daedalus-ui-hotkeys');
+  if (!details) {
+    throw new Error(
+      'The Settings panel has no #daedalus-ui-hotkeys details ' +
+        '(HotkeySettings).',
+    );
+  }
+  details.open = true;
+  Drupal.Daedalus.scrollReveal(details, { behavior: 'smooth' });
+};
+
+/**
+ * Leaves Edit Mode the way Done does.
+ */
+const exit = () => {
+  Drupal.behaviors.DaedalusUiModes.DisableMode(
+    Drupal.Daedalus.ModeManager.getPlugin('edit'),
+  );
+};
+
+const actions = {
+  togglePanel,
+  openPreview: () => Drupal.Daedalus.openPreviewWindow(),
+  refresh: () => window.location.reload(),
+  discard,
+  setDensity: (value) => Drupal.Daedalus.setChromeDensity(value),
+  keyboardShortcuts,
+  openSettings: (url) => window.location.assign(url),
+  exit,
+};
+
+/**
+ * The facts the menu is built from, read at open time.
+ */
+const facts = () => {
+  const topBar = drupalSettings.daedalusUi?.topBar;
+  if (!topBar) {
+    throw new Error(
+      'drupalSettings.daedalusUi.topBar is missing; Edit::buildTopBar() ' +
+        'attaches it with the bar.',
+    );
+  }
+  return {
+    panels: topBar.panels,
+    openPanelIds: Drupal.Daedalus.SidebarManager.getOpenPanels().map(
+      (panel) => panel.id,
+    ),
+    hotKeys: drupalSettings.daedalusUi.hotKeys ?? {},
+    previewAvailable: Boolean(
+      drupalSettings.daedalusUi.responsivePreview?.url,
+    ),
+    documentItems: verbMenuItems(documentVerbKeys(), (verb) => verb.document),
+    settingsUrl: topBar.settingsUrl,
+    density:
+      document.documentElement.getAttribute(
+        'data-daedalus-ui-chrome-density',
+      ) ?? 'full',
+  };
+};
+
 export const initTopBar = () => {
   /**
-   * Refresh button.
-   */
-  Drupal.behaviors.DaedalusUiRefresh = {
-    attach: (context, settings) => {
-      once(
-        'DaedalusUiRefresh',
-        '#daedalus-ui-refresh',
-        context,
-      ).forEach((refreshButton) => {
-        refreshButton.onclick = (e) => {
-          window.location.reload();
-        };
-      });
-    },
-  };
-
-  /**
-   * Save button
+   * Save: the commit, and the unsaved indicator.
    */
   Drupal.behaviors.DaedalusUiSave = {
     attach: (context, settings) => {
       once('DaedalusUiSave', '#daedalus-ui-save', context).forEach(
         (saveButton) => {
-          saveButton.onclick = async (e) => {
-            // Every write (a spine op, a form commit) rides the op queue;
-            // a commit still on the wire must land in tempstore before the
-            // page navigates to the save route.
-            await Drupal.Daedalus.Blueprint.drained();
-            // @todo Temporarily use the Daedalus Edit save controller.
-            // @todo This creates a dependency on Daedalus Edit when in reality the
-            // @todo tempstore for Daedalus Edit and Daedalus Layout should bubble up to some parent
-            // @todo module.
-            const info =
-              Drupal.Daedalus.ModeManager.getPlugin(
-                'edit',
-              ).getMainEntityInfo();
-            if (!info) {
-              return;
-            }
-
-            if (Drupal.Daedalus.Edit?.hasInvalidFormItem?.() === true) {
-              // @todo warnAboutInvalidFormItem should detect that there is already a message on screen for this so you don't get
-              // double messages (the form submit validation and the "hey fix this before you continue")
-              Drupal.Daedalus.Edit.warnAboutInvalidFormItem();
-              return;
-            }
-
-            window.location = Drupal.Daedalus.ModePluginBase.url(
-              `/daedalus-edit/tempstore/save/${info.entityType}/${
-                info.id
-              }?destination=${saveDestination()}`,
+          const label = saveButton.querySelector('.daedalus-ui-save__label');
+          const setSaved = (saved) => {
+            saveButton.setAttribute(
+              'data-daedalus-ui-saved',
+              saved ? 'true' : 'false',
             );
+            label.textContent = saved
+              ? Drupal.t('Saved')
+              : Drupal.t('Save changes');
           };
-        },
-      );
-    },
-  };
+          saveButton.addEventListener('click', save);
 
-  /**
-   * The Save caret: the document menu over the root's `document` verbs.
-   *
-   * The caret follows the registry and the mirror: a verb registering
-   * later, or the root arriving with the mirror's boot, reveals it; a
-   * root the gate refuses every document verb on hides it. The items are
-   * read at open time, like every other face of the registry.
-   */
-  Drupal.behaviors.DaedalusUiSaveMenu = {
-    attach: (context, settings) => {
-      once('DaedalusUiSaveMenu', '#daedalus-ui-save-menu', context).forEach(
-        (caret) => {
-          const sync = () => {
-            caret.hidden = documentVerbKeys().length === 0;
-          };
-          sync();
-          onVerbsChange(sync);
-          Drupal.Daedalus.Blueprint.onBlueprintChange(sync);
-          caret.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            Drupal.Daedalus.menu.open({
-              anchor: caret,
-              align: 'end',
-              items: verbMenuItems(documentVerbKeys(), (verb) => verb.document),
-            });
+          // The history mirror is the server's own rule: something to
+          // undo means unsaved, nothing means saved (an undo to the start
+          // reads Saved again).
+          onHistoryChange((state) => {
+            if (state.loaded) {
+              setSaved(!state.canUndo);
+            }
+          });
+          // A mirror replacement is a change, unless the history mirror
+          // has already said otherwise (the response that replaced the
+          // mirror carried its timeline first). The mirror's boot (null
+          // to the first blueprint) is not a change.
+          let booted = Drupal.Daedalus.Blueprint.getBlueprint() !== null;
+          Drupal.Daedalus.Blueprint.onBlueprintChange(() => {
+            if (!booted) {
+              booted = true;
+              return;
+            }
+            const history = historyState();
+            setSaved(history.loaded ? !history.canUndo : false);
           });
         },
       );
@@ -144,51 +271,40 @@ export const initTopBar = () => {
   };
 
   /**
-   * Discard changes button
+   * The Daedalus menu trigger.
    */
-  Drupal.behaviors.DaedalusUiDiscardChanges = {
+  Drupal.behaviors.DaedalusUiMenu = {
     attach: (context, settings) => {
-      once(
-        'DaedalusUiDiscardChanges',
-        '#daedalus-ui-discard-changes',
-        context,
-      ).forEach((discardChangesButton) => {
-        discardChangesButton.onclick = (e) => {
-          // @todo Temporarily use the Daedalus Edit delete controller.
-          // @todo This creates a dependency on Daedalus Edit when in reality the
-          // @todo tempstore for Daedalus Edit and Daedalus Layout should bubble up to some parent
-          // @todo module.
-          const info =
-            Drupal.Daedalus.ModeManager.getPlugin(
-              'edit',
-            ).getMainEntityInfo();
-          if (!info) {
-            return;
-          }
-          Drupal.Daedalus.ModePluginBase.ajax({
-            url: `/daedalus-edit/tempstore/delete-confirm/${info.entityType}/${
-              info.id
-            }?destination=${saveDestination()}`,
-            dialogType: 'modal',
-            dialog: {
-              title: Drupal.t('Discard changes?'),
-              width: 'auto',
-              height: 'auto',
-              dialogClass: 'discard-changes-dialog',
-            },
-            error: (error) => {
-              console.error(
-                'Unable to discard changes: ',
-                error.responseText || error,
-              );
-              Drupal.Daedalus.ModeManager.getPlugin('edit').handleError(
-                error,
-                'Unable to discard changes.',
-              );
-            },
-          }).execute();
-        };
-      });
+      once('DaedalusUiMenu', '#daedalus-ui-menu', context).forEach(
+        (button) => {
+          // Whether OUR menu is the open one (aria-expanded); the
+          // primitive's onClose clears it however the menu closes.
+          let expanded = false;
+          const setExpanded = (open) => {
+            expanded = open;
+            button.setAttribute('aria-expanded', open ? 'true' : 'false');
+          };
+
+          // The trigger toggles: the anchor counts as inside the menu's
+          // dismissal boundary, so a click on it while open closes rather
+          // than reopens.
+          button.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (expanded) {
+              Drupal.Daedalus.menu.close();
+              return;
+            }
+            setExpanded(
+              Drupal.Daedalus.menu.open({
+                anchor: button,
+                align: 'start',
+                items: topBarMenuItems(facts(), actions),
+                onClose: () => setExpanded(false),
+              }),
+            );
+          });
+        },
+      );
     },
   };
 };

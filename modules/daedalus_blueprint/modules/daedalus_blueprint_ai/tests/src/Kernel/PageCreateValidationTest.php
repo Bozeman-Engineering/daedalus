@@ -78,16 +78,10 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     // The catalog build reads the materials roster, whose daedalus_stylish provider
     // reads all three material tables.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -153,7 +147,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'fields' => ['name' => 'Broken page'],
       // text-decoration is typography; the guide declares only spacing on
       // containers, so strict enforcement refuses it.
-      'layout' => '<pb-container id="hero" style="text-decoration: none"></pb-container>',
+      'layout' => '<d-container id="hero" style="text-decoration: none"></d-container>',
     ]);
 
     $this->assertStringContainsString('STYLE_PROPERTY_NOT_DECLARED', $output);
@@ -173,7 +167,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
   /**
    * A field block lands by the field it names; a field the page lacks refuses.
    *
-   * The document spells <pb-block field="name"/>: no per-bundle plugin id
+   * The document spells <d-block field="name"/>: no per-bundle plugin id
    * anywhere, the bundle being created supplies its own derivative, and
    * the read prints the field back. A field this bundle cannot place is
    * refused FIELD_NOT_ON_HOST in the same round as any other grammar
@@ -184,11 +178,11 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Fielded page'],
-      'layout' => '<pb-container id="band"><pb-block id="title" field="name" /></pb-container>',
+      'layout' => '<d-container id="section"><d-block id="title" field="name" /></d-container>',
     ]);
     $this->assertStringNotContainsString('Error', $output);
     $this->assertStringContainsString('persisted: database', $output);
-    $this->assertMatchesRegularExpression('/<pb-block id="[0-9a-f-]{36}" data-alias="title" field="name" \/>/', $output, 'The created page reads the field back by name.');
+    $this->assertMatchesRegularExpression('/<d-block id="[0-9a-f-]{36}" data-alias="title" field="name" \/>/', $output, 'The created page reads the field back by name.');
     $this->assertStringNotContainsString('field_block:', $output, 'No derivative is ever printed.');
 
     $pages = $this->loadPages();
@@ -202,7 +196,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Fieldless page'],
-      'layout' => '<pb-container id="band"><pb-block id="nope" field="field_nope" /></pb-container>',
+      'layout' => '<d-container id="section"><d-block id="nope" field="field_nope" /></d-container>',
     ]);
     $this->assertStringContainsString('FIELD_NOT_ON_HOST', $output);
     $this->assertStringContainsString('has no placeable field "field_nope"', $output);
@@ -231,7 +225,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'fields' => ['name' => 'Broken page'],
       // margin-inline is outside the guide's spacing grant; calc() is
       // refused by the value grammar. Two declarations, two facts.
-      'layout' => "<pb-container id=\"hero\" style=\"margin-inline: auto; padding: calc(1rem + 2px)\">\n<pb-basic id=\"intro\" heading=\"Hi\" style=\"font-size: 2rem\"></pb-basic></pb-container>",
+      'layout' => "<d-container id=\"hero\" style=\"margin-inline: auto; padding: calc(1rem + 2px)\">\n<d-basic id=\"intro\" heading=\"Hi\" style=\"font-size: 2rem\"></d-basic></d-container>",
     ]);
 
     $this->assertStringContainsString('STYLE_PROPERTY_NOT_DECLARED', $output);
@@ -270,7 +264,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Launch page'],
-      'layout' => '<pb-container id="hero" style="margin: 3rem"><pb-basic id="intro" heading="Hello"></pb-basic></pb-container>',
+      'layout' => '<d-container id="hero" style="margin: 3rem"><d-basic id="intro" heading="Hello"></d-basic></d-container>',
     ]);
 
     $this->assertStringNotContainsString('Nothing was created', $output);
@@ -318,7 +312,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * A refused <pb-file> body creates nothing and names the declaration.
+   * A refused <d-file> body creates nothing and names the declaration.
    *
    * The declaration's refusal is a fact of the same round as the grammar
    * (the document is judged whole), addressed by line, and the total
@@ -330,7 +324,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Broken page'],
-      'layout' => "<pb-container id=\"hero\"></pb-container>\n<pb-file name=\"bad.svg\" type=\"image/svg+xml\"><svg>" . TestFileDeclarationHandler::REFUSE . "</svg></pb-file>",
+      'layout' => "<d-container id=\"hero\"></d-container>\n<d-file name=\"bad.svg\" type=\"image/svg+xml\"><svg>" . TestFileDeclarationHandler::REFUSE . "</svg></d-file>",
     ]);
 
     $this->assertStringContainsString('FILE_REJECTED', $output);
@@ -341,7 +335,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * A <pb-file> declaration lands with the page and its name settles.
+   * A <d-file> declaration lands with the page and its name settles.
    */
   public function testDeclaredFileLandsWithThePage(): void {
     $this->container->get('daedalus_blueprint_ai.conversation_context')->set('thread-create');
@@ -349,7 +343,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Iconed page'],
-      'layout' => "<pb-file name=\"logo.svg\" type=\"image/svg+xml\"><svg xmlns=\"http://www.w3.org/2000/svg\"/></pb-file>\n<pb-container id=\"hero\"><pb-basic id=\"intro\" heading=\"Hello\"></pb-basic></pb-container>",
+      'layout' => "<d-file name=\"logo.svg\" type=\"image/svg+xml\"><svg xmlns=\"http://www.w3.org/2000/svg\"/></d-file>\n<d-container id=\"hero\"><d-basic id=\"intro\" heading=\"Hello\"></d-basic></d-container>",
     ]);
 
     $this->assertStringContainsString('Created page:', $output);
@@ -380,7 +374,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Alias page'],
-      'layout' => '<pb-container id="hero"><pb-basic id="intro" heading="Hello"></pb-basic></pb-container>',
+      'layout' => '<d-container id="hero"><d-basic id="intro" heading="Hello"></d-basic></d-container>',
     ]);
     $this->assertStringContainsString('Created page:', $output);
     $pages = $this->loadPages();
@@ -402,7 +396,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString('persisted: database', $edit);
     // A style write lands in the page's style store, which is the
     // document's, not a field of the page: the echo is the document alone.
-    $this->assertStringContainsString("\n\nUpdated page:\n<pb-container", $edit);
+    $this->assertStringContainsString("\n\nUpdated page:\n<d-container", $edit);
     $this->assertStringNotContainsString('fields:', $edit);
 
     // The style landed on the container the alias names.
@@ -430,7 +424,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Authored page'],
-      'layout' => '<pb-container id="hero"><pb-basic id="intro" heading="Hello"></pb-basic></pb-container>',
+      'layout' => '<d-container id="hero"><d-basic id="intro" heading="Hello"></d-basic></d-container>',
     ]);
     $this->assertStringNotContainsString('Nothing was created', $output);
     $this->assertStringContainsString('persisted: database', $output);
@@ -493,7 +487,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Torn page'],
       'start' => 'template',
-      'layout' => '<pb-container id="hero"><pb-basic id="intro" heading="Hello"></pb-basic></pb-container>',
+      'layout' => '<d-container id="hero"><d-basic id="intro" heading="Hello"></d-basic></d-container>',
     ]);
     $this->assertSame('Error: pass exactly one of start or layout, not both: a page\'s first document has one source. Start it from template (the bundle\'s template), blank (an empty page) or a page blueprint offered for this bundle (start: its id, listed under starts in the bundle\'s schema read), or author the whole page as ONE page-language document in layout.', $output);
     $this->assertSame([], $this->loadPages());
@@ -581,7 +575,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
         'subject_type' => 'entity_test',
         'subject_bundle' => 'entity_test',
       ],
-      'layout' => '<pb-container id="hero" style="margin: 3rem"><pb-basic id="intro" heading="Hello"></pb-basic></pb-container><pb-container id="band"><pb-block id="title" field="name" /></pb-container>',
+      'layout' => '<d-container id="hero" style="margin: 3rem"><d-basic id="intro" heading="Hello"></d-basic></d-container><d-container id="section"><d-block id="title" field="name" /></d-container>',
     ]);
     $this->assertStringNotContainsString('Error', $output);
     $this->assertStringContainsString('persisted: database', $output);
@@ -608,7 +602,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     $this->assertStringNotContainsString('Nothing was created', $output);
     $this->assertStringContainsString('persisted: database', $output);
     $this->assertStringContainsString('Created page:', $output);
-    $this->assertMatchesRegularExpression('/<pb-block id="[0-9a-f-]{36}" field="name" \/>/', $output, 'The echo prints the started page\'s own document.');
+    $this->assertMatchesRegularExpression('/<d-block id="[0-9a-f-]{36}" field="name" \/>/', $output, 'The echo prints the started page\'s own document.');
     $this->assertStringContainsString('heading="Hello"', $output);
     $this->assertStringNotContainsString('system_powered_by_block', $output, 'The template never seeded under the start.');
 
@@ -661,13 +655,13 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'entity_type' => 'blueprint',
       'bundle' => 'section',
       'fields' => [
-        'label' => 'Band',
-        'description' => 'One band.',
+        'label' => 'Section',
+        'description' => 'One section.',
         'scope' => 'block',
         'subject_type' => 'entity_test',
         'subject_bundle' => 'entity_test',
       ],
-      'layout' => '<pb-container id="band"><pb-basic id="intro" heading="Hello"></pb-basic></pb-container>',
+      'layout' => '<d-container id="section"><d-basic id="intro" heading="Hello"></d-basic></d-container>',
     ]);
     $this->assertStringNotContainsString('Error', $output);
 
@@ -687,8 +681,8 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     $output = $this->runTool('page_create', [
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
-      'fields' => ['name' => 'Banded page'],
-      'start' => 'band',
+      'fields' => ['name' => 'Sectioned page'],
+      'start' => 'section',
     ]);
     $this->assertStringContainsString('BLUEPRINT_WRONG_SCOPE', $output);
     $this->assertStringContainsString('place_blueprint', $output);
@@ -707,7 +701,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
    * alone and nothing filled (no marker: a locked page's field is its
    * fills or nothing), the echo's notice names the slot the page may
    * fill, a page blueprint of slot fills (authored through page_create as
-   * a blueprint whose document is <pb-slot> sections) lands its fill as
+   * a blueprint whose document is <d-slot> sections) lands its fill as
    * the page's own section under the lock, printed writable after the
    * read-only template, a whole page document is refused toward the
    * slots, and a start the bundle is not offered is refused by the verb.
@@ -758,8 +752,8 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       ]);
       $this->assertStringNotContainsString('Error', $output, "start $start lands.");
       $this->assertStringContainsString("\n\nCreated page:\n$notice\n", $output, 'The notice names the slot the page fills.');
-      $this->assertStringContainsString('<pb-block id="aaaaaaaa-1111-4444-8888-000000000002" data-can="insert" plugin="daedalus_slot:hero" />', $output, 'The slot block is the door: insert is the page\'s own.');
-      $this->assertStringNotContainsString('<pb-slot', $output, 'Nothing filled.');
+      $this->assertStringContainsString('<d-block id="aaaaaaaa-1111-4444-8888-000000000002" data-can="insert" plugin="daedalus_slot:hero" />', $output, 'The slot block is the door: insert is the page\'s own.');
+      $this->assertStringNotContainsString('<d-slot', $output, 'Nothing filled.');
     }
     $pages = $this->loadPages();
     $this->assertCount(2, $pages);
@@ -778,10 +772,10 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
         'subject_type' => 'entity_test',
         'subject_bundle' => 'entity_test',
       ],
-      'layout' => '<pb-slot name="hero"><pb-basic id="intro" heading="Hello"></pb-basic></pb-slot>',
+      'layout' => '<d-slot name="hero"><d-basic id="intro" heading="Hello"></d-basic></d-slot>',
     ]);
     $this->assertStringNotContainsString('Error', $output);
-    $this->assertStringContainsString('<pb-slot id="', $output, 'The blueprint\'s document is one slot section.');
+    $this->assertStringContainsString('<d-slot id="', $output, 'The blueprint\'s document is one slot section.');
     $schema = $this->runTool('eb_read_schema', ['entity_type' => 'entity_test', 'bundle' => 'entity_test']);
     $this->assertStringContainsString('hero_fill', $schema, 'The locked bundle\'s schema read lists the fill under starts.');
 
@@ -794,8 +788,8 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     $this->assertStringNotContainsString('Error', $output);
     $this->assertStringContainsString('persisted: database', $output);
     $this->assertStringContainsString("\n\nCreated page:\n$notice\n", $output);
-    $this->assertStringContainsString('<pb-container id="aaaaaaaa-1111-4444-8888-000000000000" data-can="">', $output, 'The template prints read-only.');
-    $this->assertMatchesRegularExpression('/\n<pb-slot id="[0-9a-f-]{36}" name="hero">\n  <pb-basic id="[0-9a-f-]{36}" heading="Hello" \/>\n<\/pb-slot>\n/', $output, 'The fill prints after the template as the page\'s own slot section, writable, with fresh identity.');
+    $this->assertStringContainsString('<d-container id="aaaaaaaa-1111-4444-8888-000000000000" data-can="">', $output, 'The template prints read-only.');
+    $this->assertMatchesRegularExpression('/\n<d-slot id="[0-9a-f-]{36}" name="hero">\n  <d-basic id="[0-9a-f-]{36}" heading="Hello" \/>\n<\/d-slot>\n/', $output, 'The fill prints after the template as the page\'s own slot section, writable, with fresh identity.');
     $pages = $this->loadPages();
     $this->assertCount(3, $pages);
     $filled = end($pages);
@@ -821,14 +815,14 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Refused'],
-      'layout' => '<pb-container id="hero"></pb-container>',
+      'layout' => '<d-container id="hero"></d-container>',
     ]));
     $this->assertSame($omit, $this->runTool('page_create', [
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Refused'],
       'start' => 'template',
-      'layout' => '<pb-container id="hero"></pb-container>',
+      'layout' => '<d-container id="hero"></d-container>',
     ]));
     $this->assertCount(3, $this->loadPages(), 'No refusal created a page.');
   }
@@ -913,8 +907,8 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     $this->assertStringNotContainsString('Error', $output);
     $this->assertStringContainsString('persisted: database', $output);
     $this->assertStringContainsString("\n\nCreated page:\nThe layout of this entity_test belongs to the template entity_view_display entity_test.entity_test.default, which it renders but does not own. Edit this entity_test's own fields here; edit its layout on the template: run the operation against entity_view_display entity_test.entity_test.default.\n", $output, 'The create answers as page_read would: the notice names where the layout is edited.');
-    $this->assertStringContainsString('<pb-container id="aaaaaaaa-1111-4444-8888-000000000000" data-can="">', $output, 'The print is the template\'s, its elements marked as not this page\'s to edit.');
-    $this->assertStringContainsString('<pb-block id="aaaaaaaa-1111-4444-8888-000000000001" data-can="" plugin="system_powered_by_block" />', $output);
+    $this->assertStringContainsString('<d-container id="aaaaaaaa-1111-4444-8888-000000000000" data-can="">', $output, 'The print is the template\'s, its elements marked as not this page\'s to edit.');
+    $this->assertStringContainsString('<d-block id="aaaaaaaa-1111-4444-8888-000000000001" data-can="" plugin="system_powered_by_block" />', $output);
 
     $pages = $this->loadPages();
     $this->assertCount(1, $pages);
@@ -956,7 +950,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',
       'fields' => ['name' => 'Plain page'],
-      'layout' => '<pb-container id="hero"><pb-basic id="intro" heading="Hello"></pb-basic></pb-container>',
+      'layout' => '<d-container id="hero"><d-basic id="intro" heading="Hello"></d-basic></d-container>',
     ]);
     $this->assertSame('Error: omit layout: this bundle\'s pages render the template and own only the slots it places. Pass fields, and start to fill the slots at birth (template, the default, fills none; a page blueprint of slot fills is listed under starts in the bundle\'s schema read); fill a slot on the new page with page_edit by inserting inside its slot block. The layout is the template\'s: edit it with page_edit against entity_view_display entity_test.entity_test.default.', $output);
     $this->assertSame([], $this->loadPages());
@@ -970,20 +964,42 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
    *
    * With or without a document, a bundle whose display has no Layout
    * Builder (entity_test_rev) is refused toward eb_create_entity before
-   * anything is built; the spine's late NO_LAYOUT is never reached.
+   * anything is built; the spine's late NO_LAYOUT is never reached. The
+   * refusal ends with the page bundles this site has, in the spelling the
+   * cached PAGES line uses, so a mis-named bundle is corrected toward the
+   * right door rather than away from the tool.
    */
   public function testNonPageBundleIsRefusedTowardJsonCreate(): void {
-    foreach ([[], ['layout' => '<pb-container id="hero"></pb-container>']] as $layout) {
+    foreach ([[], ['layout' => '<d-container id="hero"></d-container>']] as $layout) {
       $output = $this->runTool('page_create', [
         'entity_type' => 'entity_test_rev',
         'bundle' => 'entity_test_rev',
         'fields' => ['name' => 'Not a page'],
       ] + $layout);
-      $this->assertSame('Error: entity_test_rev/entity_test_rev is not a page bundle (no page document renders its entities), so page_create is not its door: create it with eb_create_entity.', $output);
+      $this->assertSame('Error: entity_test_rev/entity_test_rev is not a page bundle (no page document renders its entities), so page_create is not its door: create it with eb_create_entity. The page bundles are entity_test/entity_test "Entity Test Bundle".', $output);
     }
     $storage = $this->entityTypeManager->getStorage('entity_test_rev');
     $storage->resetCache();
     $this->assertSame([], $storage->loadMultiple());
+  }
+
+  /**
+   * An unknown bundle is refused by name, with the page bundles beside it.
+   *
+   * The shared visibility guard passes a bundle the catalog never lists
+   * (nothing hides what does not exist), so page_create judges it
+   * itself, in the guard's wording, and names the page bundles: a cold
+   * create that guessed a bundle reads the one to use. Nothing is built.
+   */
+  public function testUnknownBundleIsRefusedTowardThePageBundles(): void {
+    $output = $this->runTool('page_create', [
+      'entity_type' => 'entity_test',
+      'bundle' => 'landing',
+      'fields' => ['name' => 'Guessed'],
+      'start' => 'blank',
+    ]);
+    $this->assertSame('Unknown or hidden bundle: entity_test/landing. The page bundles are entity_test/entity_test "Entity Test Bundle".', $output);
+    $this->assertSame([], $this->loadPages());
   }
 
   /**
@@ -1012,13 +1028,13 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
         'subject_type' => 'entity_test',
         'subject_bundle' => 'entity_test',
       ],
-      'layout' => '<pb-container id="band"><pb-block id="title" field="name" /><pb-basic id="intro" heading="Hello"></pb-basic></pb-container>',
+      'layout' => '<d-container id="section"><d-block id="title" field="name" /><d-basic id="intro" heading="Hello"></d-basic></d-container>',
     ]);
     $this->assertStringNotContainsString('Error', $output);
     $this->assertStringNotContainsString('Nothing was created', $output);
     $this->assertStringContainsString('persisted: database', $output);
     $this->assertStringContainsString('status: published', $output);
-    $this->assertMatchesRegularExpression('/<pb-block id="[0-9a-f-]{36}" data-alias="title" field="name" \/>/', $output, 'The field block reads back by the subject\'s field name.');
+    $this->assertMatchesRegularExpression('/<d-block id="[0-9a-f-]{36}" data-alias="title" field="name" \/>/', $output, 'The field block reads back by the subject\'s field name.');
 
     $storage = $this->entityTypeManager->getStorage('blueprint');
     $storage->resetCache();
@@ -1047,15 +1063,15 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     $this->assertStringStartsWith('The block blueprint "teaser" holds one root container; it already has one.', $read, 'The root verdict heads the read, as on any page.');
     $this->assertStringContainsString("\nfields:\n  label: Teaser\n", $read);
     $this->assertStringContainsString("\n  scope: block\n", $read);
-    $this->assertMatchesRegularExpression('/<pb-block id="[0-9a-f-]{36}"( data-alias="title")? field="name" \/>/', $read, 'The body prints with ids (the conversation\'s alias still echoes).');
+    $this->assertMatchesRegularExpression('/<d-block id="[0-9a-f-]{36}"( data-alias="title")? field="name" \/>/', $read, 'The body prints with ids (the conversation\'s alias still echoes).');
 
     // A block-scope blueprint holds one root: the policy refuses the
     // second in the create's one round, and nothing lands.
     $output = $this->runTool('page_create', [
       'entity_type' => 'blueprint',
       'bundle' => 'section',
-      'fields' => ['label' => 'Two roots', 'description' => 'Two bands in one block blueprint.', 'scope' => 'block', 'subject_type' => 'entity_test', 'subject_bundle' => 'entity_test'],
-      'layout' => '<pb-container id="one"></pb-container><pb-container id="two"></pb-container>',
+      'fields' => ['label' => 'Two roots', 'description' => 'Two sections in one block blueprint.', 'scope' => 'block', 'subject_type' => 'entity_test', 'subject_bundle' => 'entity_test'],
+      'layout' => '<d-container id="one"></d-container><d-container id="two"></d-container>',
     ]);
     $this->assertStringContainsString('BLUEPRINT_ONE_ROOT', $output);
     $this->assertStringContainsString('Nothing was created', $output);

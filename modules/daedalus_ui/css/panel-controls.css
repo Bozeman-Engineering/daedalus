@@ -367,7 +367,7 @@
 }
 
 /* A provider's facts (the row-facts seam, row-facts-registry.js): a dot
-   is the shared .daedalus-ui-dot swatch in the provider's hue (inline,
+   is the shared .daedalus-ui-dot in the provider's hue (inline,
    as every dot's color arrives); a text fact speaks in the caption voice
    like a count, muted unless the provider names a hue, and upright on an
    italic anatomy row. */
@@ -636,7 +636,7 @@ button.daedalus-ui-chip:focus-visible {
 
 /* ——— The dot ——— */
 
-/* The round color swatch: WHO supplies a value (a layer's stable hue), a
+/* The round color dot: WHO supplies a value (a layer's stable hue), a
    status accent. The color arrives from the consumer (inline style or a
    local rule); the size knob covers the chrome's few deliberate
    densities. flex: none — a dot never squishes in a tight row. */

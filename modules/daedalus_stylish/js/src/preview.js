@@ -67,9 +67,9 @@ import { isPlainObject } from './style-guide.js';
  * nothing until the op settles.
  *
  * The token scope lane is the same two tiers for a MATERIAL's custom
- * property (a token's or a swatch's, the values the compiled skin and
- * swatch files deliver on the token scope element, DefaultsStylesheet's
- * SCOPE_CLASS): stageScoped(property, value) prints the property's shape
+ * property (a token's, the values the compiled skin file delivers on the
+ * token scope element, DefaultsStylesheet's SCOPE_CLASS):
+ * stageScoped(property, value) prints the property's shape
  * into the same preview tag as an @scope block on the token scope element,
  * every condition of a condition-keyed value under its own wrapper exactly
  * as the compiled file prints it (printEntry, the same printer), each
@@ -91,7 +91,7 @@ import { isPlainObject } from './style-guide.js';
  * Push, push-bar.js) restyles every element of its scope at once while
  * the compiled <link> in the head still serves the old file, and the
  * preview tag's staged shapes keep winning by document order. The
- * server prints it (skins-api.js fetchDefaults) because the bare
+ * server prints it (skin-api.js fetchDefaults) because the bare
  * defaults lane (CssPrinter::printBareEntry, the address selectors) has
  * no client twin, and the delivered text is exactly what a reload would
  * load.
@@ -100,8 +100,8 @@ import { isPlainObject } from './style-guide.js';
 const SLOT_PREFIX = '--daedalus-stylish-live-';
 
 /**
- * The token scope element's class: the one element the compiled skin and
- * swatch files deliver custom properties on (DefaultsStylesheet::SCOPE_CLASS
+ * The token scope element's class: the one element the compiled skin
+ * file delivers custom properties on (DefaultsStylesheet::SCOPE_CLASS
  * mirror; the texts must stay byte-identical).
  */
 export const TOKEN_SCOPE_CLASS = 'daedalus-stylish-token-scope';
@@ -115,7 +115,7 @@ export const TOKEN_SCOPE_CLASS = 'daedalus-stylish-token-scope';
  * answers {} and stages nothing.
  *
  * @param {*} value
- *   A token or swatch value: a string or a condition-keyed map.
+ *   A token value: a string or a condition-keyed map.
  *
  * @return {Object<string, string>}
  *   condition -> the literal, trimmed.
@@ -433,8 +433,8 @@ export const createPreview = ({
     // so a pick can extend it and re-stage.
     const merged = resolveMapMedia(mergedMap(), getMediaUrls?.() ?? {});
     let css = printMap(merged, guide?.conditions);
-    // The token scope lane's block, as the compiled skin and swatch files
-    // print theirs (the same printer over the same selector).
+    // The token scope lane's block, as the compiled skin file prints its
+    // own (the same printer over the same selector).
     const entry = scopedEntry();
     if (Object.keys(entry).length) {
       const block = printEntry(
@@ -576,9 +576,9 @@ export const createPreview = ({
      * entry releases the property.
      *
      * @param {string} property
-     *   The custom property ('--color-accent', '--swatch-brand_red').
+     *   The custom property ('--color-accent', '--gradient-hero-fade').
      * @param {*} value
-     *   The token or swatch value.
+     *   The token value.
      */
     stageScoped: (property, value) => {
       const entries = scopedEntries(value);
@@ -644,7 +644,7 @@ export const createPreview = ({
      * current file, never an accumulation; '' empties the tag.
      *
      * @param {string} css
-     *   The defaults stylesheet's CSS text (skins-api.js fetchDefaults).
+     *   The defaults stylesheet's CSS text (skin-api.js fetchDefaults).
      */
     deliverDefaults: (css) => {
       ensureDefaultsTag().textContent = css === '' ? '' : `\n${css}\n`;
@@ -652,7 +652,7 @@ export const createPreview = ({
 
     /**
      * The committed fonts' hand-off: the fonts stylesheet's current
-     * @font-face text (fonts-api.js fetchFontStylesheet), stamped whole
+     * @font-face text (skin-api.js fetchFontStylesheet), stamped whole
      * after a font joined, left or changed (leader-source.js), so a
      * minted family loads before any reload. '' empties the tag.
      *
@@ -667,7 +667,7 @@ export const createPreview = ({
 /**
  * The committed materials' delivery over the token scope lane.
  *
- * The compiled skin and swatch files this page loaded print the values
+ * The compiled skin file this page loaded prints the values
  * the roster held at boot; every value the store learns afterwards (a
  * mint, an edit, a rename, the paired window's or the AI's) is stamped
  * through the preview's scope lane so the canvas restyles before any
@@ -696,8 +696,8 @@ export const createMaterialDelivery = (preview, roster) => {
   const keyOf = (record) => `${record.kind}:${record.id}`;
   const spelled = (value) => JSON.stringify(value ?? null);
   const delivered = (roster) =>
-    ['token', 'swatch']
-      .flatMap((kind) => roster.ofKind(kind))
+    roster
+      .ofKind('token')
       .filter((record) => customProperty(record) !== null);
   const boot = new Map(
     delivered(roster).map((record) => [keyOf(record), spelled(record.value)]),

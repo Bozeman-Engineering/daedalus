@@ -42,7 +42,7 @@ const LIBRARY = [
     },
   }),
   variantRecord('retired_axis', { group: 'width', value: { '': {} } }),
-  // The shipped width posture: the band's inset spelled on the logical
+  // The shipped width posture: the section's inset spelled on the logical
   // inline pair (daedalus_stylish_layouts container_site).
   variantRecord('site', { label: 'Site width', group: 'width', value: { '': { default: { 'padding-inline': 'max(var(--space-gutter), calc((100% - var(--layout-max-width)) / 2))' } } } }),
 ];
@@ -213,7 +213,7 @@ test('resetOverrideOps: nothing shadowing, unworn, or unresolvable is empty', ()
   assert.deepEqual(resetOverrideOps({ 'block:b1': { variants: [{ variant: 'gone', fragment: '' }], default: { color: 'blue' } } }, 'block:b1', 'gone', LIBRARY), []);
 });
 
-// A band wearing Site width with its own padding: the map before and
+// A section wearing Site width with its own padding: the map before and
 // after the reset patch lands (the mirror applies update_style unsets by
 // deleting the properties).
 const wornSite = (own) => ({ 'container:c1': { variants: [{ variant: 'site', fragment: '' }], default: own } });
@@ -283,12 +283,12 @@ test('overriddenWearing: the lost declarations, the own properties hiding them, 
 const menuTypes = (items) => items.map((item) => (item.separator ? '|' : item.type));
 
 test('overriddenWearing at a rule: the rule\'s own values and its continuations by descent shadow the wearing', () => {
-  const RULE = 'container:root::> pb-text';
+  const RULE = 'container:root::> d-text';
   const map = {
     [RULE]: { variants: [{ variant: 'hero', fragment: '' }], default: { padding: '1rem' } },
     [`${RULE} .inner`]: { default: { gap: '2rem' } },
     // A sibling rule and an unrelated part: not the wearing's slice.
-    'container:root::> pb-image': { default: { padding: '3rem' } },
+    'container:root::> d-image': { default: { padding: '3rem' } },
     'container:root::.inner': { default: { gap: '3rem' } },
   };
   const overridden = overriddenWearing(map, RULE, 'hero', LIBRARY);

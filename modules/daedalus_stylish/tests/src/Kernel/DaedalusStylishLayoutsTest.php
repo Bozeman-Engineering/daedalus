@@ -41,6 +41,7 @@ class DaedalusStylishLayoutsTest extends KernelTestBase {
     'user',
     'field',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',

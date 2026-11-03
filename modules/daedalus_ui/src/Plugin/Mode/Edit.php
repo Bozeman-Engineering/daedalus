@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_ui\Plugin\Mode;
 
-use Drupal\Core\Render\Element;
+use Drupal\Core\Access\AccessManagerInterface;
+use Drupal\Core\Template\Attribute;
 use Drupal\Core\Url;
+use Drupal\daedalus_blueprint\Host\BlueprintHost;
+use Drupal\daedalus_blueprint\LayoutBuilder\DisplayHost;
+use Drupal\daedalus_blueprint\LayoutBuilder\FrameHost;
+use Drupal\daedalus_tempstore\History\HistoryManager;
 use Drupal\daedalus_ui\EditSessionScope;
 use Drupal\daedalus_ui\ModeInterface;
 use Drupal\daedalus_ui\ModePluginBase;
@@ -28,9 +33,9 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  * Edit Mode has one pointer and one keyboard grammar over the one
  * selection (daedalus_ui's selection grammar); editing is a state of the
  * selection, opened by gesture. There are no tools: the mode's chrome is
- * the top bar (panel toggles, document actions, the exit control) and the
- * mode-bound sidebar panels, whose build() arrays carry every module's
- * Edit Mode assets.
+ * the top bar (the Daedalus menu, panel toggles, the document sentence
+ * with Save, the exit control) and the mode-bound sidebar panels, whose
+ * build() arrays carry every module's Edit Mode assets.
  */
 #[Mode(
   id: 'edit',
@@ -54,6 +59,8 @@ final class Edit extends ModePluginBase {
     protected EventDispatcherInterface $eventDispatcher,
     protected EditSessionScope $editSessionScope,
     protected EntityTypeManagerInterface $entityTypeManager,
+    protected AccessManagerInterface $accessManager,
+    protected HistoryManager $historyManager,
   ) {
     parent::__construct($container, $configuration, $plugin_id, $plugin_definition, $this->extensionList, $ui);
   }
@@ -74,6 +81,8 @@ final class Edit extends ModePluginBase {
       $container->get('event_dispatcher'),
       $container->get('daedalus_ui.edit_session_scope'),
       $container->get('entity_type.manager'),
+      $container->get('access_manager'),
+      $container->get('daedalus_tempstore.history_manager'),
     );
   }
 
@@ -95,6 +104,11 @@ final class Edit extends ModePluginBase {
     // top bar) may carry data-daedalus-ui-conceal, so the reveal engine and its
     // shared CSS ride the mode, not each registrant.
     $attachments['library'][] = 'daedalus_ui/reveal';
+    // The responsive preview window's one opener
+    // (Drupal.Daedalus.openPreviewWindow): the top bar menu's "Open preview
+    // window" row and daedalus_stylish's chip row both call it, so the door
+    // rides the mode; a surface without the mode declares it itself.
+    $attachments['library'][] = 'daedalus_ui/preview_window';
   }
 
   /**
@@ -150,7 +164,17 @@ final class Edit extends ModePluginBase {
   }
 
   /**
-   * Build top bar.
+   * Builds the top bar: the quiet bar's three zones.
+   *
+   * Left: the Daedalus menu trigger, then the left-docked panels' toggles.
+   * Middle: the document sentence (the host's label, and its kind when the
+   * document is not a page) and Save, the one unsaved-changes indicator.
+   * Right: the right-docked panels' toggles, then the exit control. The
+   * bar names no gesture of its own: everything it does not show (Refresh,
+   * Discard, the root's `document` verbs, the preview window, the settings
+   * door, the panels without a slot) is a row of the menu the trigger
+   * opens (tool_manager/top-bar.js, riding the shared menu primitive over
+   * drupalSettings.daedalusUi.topBar).
    *
    * @param array $page_top
    *   The page top render array.
@@ -161,44 +185,25 @@ final class Edit extends ModePluginBase {
    */
   public function buildTopBar(array &$page_top, ModeInterface $mode): void {
     $top_bar = [];
+    $host = $this->ui->deriveHostFromRoute();
 
-    // Three zones: panel toggles pinned to the edges (a toggle lives on the
-    // side its panel opens), the document actions spaced evenly in the
-    // middle.
-    $top_bar['left_toggles'] = [];
-    $right_toggles = [];
-
-    // The document actions, in the middle of the bar.
-    $top_bar['global'] = [
-      'refresh' => $this->buildTopBarButton(
-        'daedalus-ui-refresh',
-        $this->t('Refresh'),
-        $this->t('Refresh the editing UI'),
+    // The menu trigger conceals at clean density like a panel toggle: at
+    // clean the bar shows only orientation (which document, saved?) and the
+    // way out. The document sentence, Save and the exit never conceal.
+    $left_toggles = [
+      'menu' => $this->buildMenuTrigger(
+        'daedalus-ui-menu',
+        $this->t('Daedalus'),
+        $this->t('Open the Daedalus menu'),
         'daedalus_ui',
-        'refresh'
-      ),
-      // Save is a split control: the button commits as it always has, and
-      // the caret beside it opens the document menu, the top bar's face of
-      // the verb registry (the root's verbs flagged `document`, see
-      // tool_manager/top-bar.js). The bar names no gesture of its own:
-      // whole-page gestures register as root verbs and show up here.
-      'save' => $this->buildSplitButton(
-        'daedalus-ui-save',
-        $this->t('Save'),
-        $this->t('Commit the tempstore changes'),
-        'daedalus_ui',
-        'save',
-        'daedalus-ui-save-menu',
-        $this->t('More save actions'),
-      ),
-      'discard-changes' => $this->buildTopBarButton(
-        'daedalus-ui-discard-changes',
-        $this->t('Discard changes'),
-        $this->t('Discard the tempstore changes'),
-        'daedalus_ui',
-        'discard-changes'
+        'daedalus',
+        ['data-daedalus-ui-conceal' => 'clean'],
       ),
     ];
+    $right_toggles = [];
+    // Every panel of this mode for the menu's Panels rows, toggle or not: a
+    // panel that takes no bar slot (daedalus_explode) is still a panel.
+    $panels = [];
 
     // The edit session's identity, delivered once: editSession.scope is
     // the BroadcastChannel scope (EditSessionScope: entity uuid + langcode
@@ -211,11 +216,11 @@ final class Edit extends ModePluginBase {
     // daedalus_stylish inspector's chip row, driving the CanvasVector
     // facade; this attach only delivers the store, the media emulation,
     // the drag handles, the ruler, and the ?canvas* boot parsing. The
-    // responsivePreview url feeds the "Open preview window" opener in the
-    // chip row's width menu (the edited page's path is appended by the
-    // opener at click time: the same page can be reached at several URLs;
-    // the click knows the real one).
-    $host = $this->ui->deriveHostFromRoute();
+    // responsivePreview url feeds the one preview window opener
+    // (Drupal.Daedalus.openPreviewWindow, js/responsive_preview/open-window.js;
+    // the chip row's width menu and the top bar menu call it), which
+    // appends the edited page's path at click time: the same page can be
+    // reached at several URLs; the click knows the real one.
     $scope = $host !== NULL ? $this->editSessionScope->derive($host->entity()) : NULL;
     if ($scope !== NULL) {
       $page_top['#attached']['library'][] = 'daedalus_ui/canvas_vector';
@@ -238,6 +243,12 @@ final class Edit extends ModePluginBase {
       if (!in_array($sidebar_mode, [$this->getPluginId(), NULL], TRUE)) {
         continue;
       }
+      $side = $definition['side'] ?? 'right';
+      $panels[] = [
+        'id' => $id,
+        'label' => (string) $definition['label'],
+        'side' => $side,
+      ];
       $button = $sidebar->buildToggleButton();
       if (!empty($button)) {
         // At clean density an inactive panel toggle conceals until the
@@ -248,12 +259,12 @@ final class Edit extends ModePluginBase {
         // that edit mode is on.
         $button['wrapper']['#attributes']['data-daedalus-ui-conceal'] = 'clean';
         $slot = $definition['slot'] ?? 'top';
-        $button['#cache']['contexts'] = ['user.permissions', "cookies:{$definition['side']}_{$slot}_sidebar"];
-        if ($this->ui->isSidebarVisible($id, $definition['side'], $slot, $sidebar_mode, $definition['default_open'] ?? FALSE)) {
+        $button['#cache']['contexts'] = ['user.permissions', "cookies:{$side}_{$slot}_sidebar"];
+        if ($this->ui->isSidebarVisible($id, $side, $slot, $sidebar_mode, $definition['default_open'] ?? FALSE)) {
           $button['wrapper']['#attributes']['class'][] = 'active';
         }
-        if (($definition['side'] ?? 'right') === 'left') {
-          $top_bar['left_toggles'][$id] = $button;
+        if ($side === 'left') {
+          $left_toggles[$id] = $button;
         }
         else {
           $right_toggles[$id] = $button;
@@ -261,46 +272,92 @@ final class Edit extends ModePluginBase {
       }
     }
 
+    // The menu's boot data: the panels it lists (checked rows that open and
+    // close through the sidebar manager; the hotkey hints come from
+    // daedalusUi.hotKeys) and the settings door, delivered only to a user
+    // who may walk through it, so the menu never offers a row that lands on
+    // a 403. The route owns its gate (`access administration pages`), so
+    // the route's access check is the one asked here; forbidden when the
+    // route is absent (a kernel test without the daedalus module).
+    $page_top['#attached']['drupalSettings']['daedalusUi']['topBar'] = [
+      'panels' => $panels,
+      'settingsUrl' => $this->accessManager->checkNamedRoute('daedalus.admin_config')
+        ? Url::fromRoute('daedalus.admin_config')->toString()
+        : NULL,
+    ];
+
     $top_bar['left_toggles'] = [
       '#type' => 'container',
       '#attributes' => [
         'id' => 'edit-mode-left-toggles',
         'class' => ['top-bar__content', 'top-bar__left-toggles'],
       ],
-    ] + $top_bar['left_toggles'];
+    ] + $left_toggles;
 
-    // The exit control: the mode toggle relocated from the navigation sidebar
-    // footer we no longer render in. Clicking the active mode's button
-    // disables it (daedalus-ui.js binds .daedalus-ui-mode-button).
-    $right_toggles['exit_mode'] = $mode->buildModeButton();
-
-    // Group the global buttons so they can spread evenly in the middle as a
-    // unit, between the edge-pinned toggle groups. Each button conceals
-    // individually (same treatment as the panel toggles): the container
-    // stretches across the bar's whole middle, so concealing the cluster
-    // would reveal it from anywhere along the bar rather than near the
-    // buttons themselves.
+    // The document sentence and Save: both need a host (the sentence names
+    // its document, Save reads its staged state). Without one there is no
+    // document to speak of and nothing to commit.
+    $global = [];
+    if ($host !== NULL) {
+      // A page is almost always the kind, so a page says nothing; a
+      // template, a blueprint or the site frame names itself, in the one
+      // word every surface uses for it (DaedalusUi::hostKind()).
+      $kind = ($host instanceof DisplayHost || $host instanceof BlueprintHost || $host instanceof FrameHost)
+        ? $this->ui->hostKind($host)
+        : NULL;
+      $global['document'] = [
+        '#type' => 'inline_template',
+        '#template' => "<div id='daedalus-ui-document' class='daedalus-ui-document'><span class='daedalus-ui-document__title'>{{ title }}</span>{% if kind %}<span class='daedalus-ui-kind'>{{ kind }}</span>{% endif %}</div>",
+        '#context' => [
+          'title' => $host->label(),
+          'kind' => $kind,
+        ],
+      ];
+      // Save is the unsaved-changes indicator: one control, one fact. Its
+      // state has two sources and one attribute: the server reads it here
+      // (staged changes outlive a reload, and only the server knows them
+      // on arrival), and the client flips the attribute to unsaved on the
+      // first blueprint change after the mirror boots
+      // (tool_manager/top-bar.js). The server's fact is the current user's
+      // history timeline, not the tempstore's has(): the canvas render
+      // itself stages a layout document on first sight (core's
+      // PrepareLayout seed, daedalus_layout's tree-index re-save), so a
+      // tempstore copy exists for every layout document in mode, committed
+      // or not. The history recorder suppresses exactly those bookkeeping
+      // writes, records every user mutation through both strategies, and
+      // ends the timeline on save and discard: can_undo is true while this
+      // user has an applied, uncommitted change, and Save then agrees with
+      // the History panel by construction. The timeline is per user, so
+      // the bar's #cache below carries the user context.
+      $saved = !$this->historyManager->metadata($host)['can_undo'];
+      $global['save'] = [
+        '#type' => 'inline_template',
+        '#template' => "<button{{ attributes }}><span class='daedalus-ui-save__label'>{{ label }}</span></button>",
+        '#context' => [
+          'attributes' => new Attribute([
+            'type' => 'button',
+            'id' => 'daedalus-ui-save',
+            'class' => ['toolbar-button', 'daedalus-ui-save'],
+            // The label is the state; the tooltip names the gesture.
+            'data-daedalus-ui-tooltip' => $this->t('Commit the staged changes'),
+            'data-daedalus-ui-saved' => $saved ? 'true' : 'false',
+          ]),
+          'label' => $saved ? $this->t('Saved') : $this->t('Save changes'),
+        ],
+      ];
+    }
     $top_bar['global'] = [
       '#type' => 'container',
       '#attributes' => [
         'id' => 'edit-mode-global-top-bar',
         'class' => ['top-bar__content', 'top-bar__global'],
       ],
-    ] + $top_bar['global'];
-    foreach (Element::children($top_bar['global']) as $key) {
-      if (isset($top_bar['global'][$key]['wrapper'])) {
-        $attributes = &$top_bar['global'][$key]['wrapper']['#attributes'];
-      }
-      else {
-        $attributes = &$top_bar['global'][$key]['#attributes'];
-      }
-      $attributes['data-daedalus-ui-conceal'] = 'clean';
-      $attributes['data-daedalus-ui-reveal-near'] = '120';
-      unset($attributes);
-    }
+    ] + $global;
 
-    // Right-docked panels' toggles, pinned to the far right (mirroring
-    // left_toggles).
+    // The exit control, "Done": its own render beside the entry core's bar
+    // keeps (ModeEntry), the same .daedalus-ui-mode-button[data-mode] pair
+    // daedalus-ui.js binds and keeps in sync. It never conceals.
+    $right_toggles['exit_mode'] = $mode->buildModeExitButton();
     $top_bar['right_toggles'] = [
       '#type' => 'container',
       '#attributes' => [
@@ -311,7 +368,9 @@ final class Edit extends ModePluginBase {
 
     // Add the top bar. Visibility is CSS-driven off the html element's
     // data-daedalus-ui-mode attribute, so the client-side mode toggle and
-    // the cookie-rendered initial state share one mechanism.
+    // the cookie-rendered initial state share one mechanism. The user
+    // context: Save's staged state and the settings door are the current
+    // user's; the route: the document sentence is the route host's.
     $page_top['daedalus_ui_top_bar'] = [
       '#type' => 'container',
       '#attributes' => [
@@ -323,7 +382,7 @@ final class Edit extends ModePluginBase {
         // zero-boxes THIS bar so displace.js measures it as nothing.
         'data-offset-top' => 'true',
       ],
-      '#cache' => ['contexts' => ['user.permissions', 'daedalus_ui_mode']],
+      '#cache' => ['contexts' => ['user', 'user.permissions', 'daedalus_ui_mode', 'route']],
       'tools' => $top_bar,
     ];
   }

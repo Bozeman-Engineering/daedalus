@@ -1,6 +1,13 @@
 services:
   daedalus_blueprint_materials_test.provider:
     class: Drupal\daedalus_blueprint_materials_test\TestMaterialsProvider
+    arguments:
+      # Closures: the budget collects the weight sources, which read the
+      # roster this provider feeds, and the roster builder collects this
+      # provider (circular otherwise, as for the real providers).
+      - !service_closure '@daedalus_blueprint.materials_budget'
+      - !service_closure '@daedalus_blueprint.materials_roster_builder'
+      - '@cache_tags.invalidator'
     tags:
       - { name: daedalus_blueprint.materials_provider }
   daedalus_blueprint_materials_test.groups:

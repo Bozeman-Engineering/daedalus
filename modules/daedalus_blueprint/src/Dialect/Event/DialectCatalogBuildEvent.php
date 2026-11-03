@@ -17,23 +17,28 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
  * The catalog builder derives everything the spine itself owns (block
  * types with their field attribute contracts, the container layout id)
  * and reads the site's MATERIALS from the materials roster (tokens,
- * swatches, variants, blueprints, animations: MaterialsRosterBuilder over
+ * variants, blueprints, animations, fonts: MaterialsRosterBuilder over
  * the tagged
  * providers), then dispatches this event so the styling layer (daedalus_stylish,
  * or whatever declares conditions and axes on a site) can contribute the
  * declarations no material record carries: each variant scope's axis
  * attribute order with each axis's description and the properties it
- * owns, the condition vocabulary with its CSS wrappers (the structural
- * facts among them named), the selector rosters per owner (the declared
+ * owns, the condition vocabulary with its CSS wrappers, the selector
+ * rosters per owner (the declared
  * part classes and the addressable base tags a relative selector's
  * compounds may land on under a container, a block type or any other
  * block), the instance namespaces, the vocabulary rosters per element
- * kind with the prose that teaches them, the birth defaults each
+ * kind with their value spaces (the site-wide bindings and the per-address
+ * deviations) and the prose that teaches them, the birth defaults each
  * placement scope stamps and the base tags the active skin dresses.
  * The site's group vocabulary (the filter categories blueprints and
  * block types are filed under on the surfaces that offer them) rides
  * the same event: its declaration lives in a family the spine cannot
- * read, so the UI layer that parses it contributes the groups here.
+ * read, so the UI layer that parses it contributes the groups here. The
+ * render cards (what each element renders as: dialect writes paired with
+ * the HTML they render as, or the kind shells an undeclared type renders
+ * through) ride it too, derived from the markup declarations by the
+ * layer that reads them.
  * Nothing here names a material by spelling: a
  * material reaches the catalog through the roster or not at all (a birth
  * default names a variant by id, which the roster resolves), so the
@@ -81,16 +86,16 @@ final class DialectCatalogBuildEvent extends Event {
   private array $groups = [];
 
   /**
+   * The render cards per owner: dialect tag => the validated card.
+   *
+   * @var array<string, array{renders: array<string, string>, shells: string[]}>
+   */
+  private array $cards = [];
+
+  /**
    * Condition name => CSS wrapper, in canonical order.
    */
   private array $conditions = [];
-
-  /**
-   * Condition names declared as structural facts.
-   *
-   * @var string[]
-   */
-  private array $facts = [];
 
   /**
    * Selector rosters per owner: dialect tag => {parts, tags}.
@@ -117,16 +122,35 @@ final class DialectCatalogBuildEvent extends Event {
   private ?VocabularyProseInterface $prose = NULL;
 
   /**
+   * The site-wide bindings: property => its value space.
+   *
+   * @var array<string, array>
+   */
+  private array $bindings = [];
+
+  /**
+   * The deviations: address print => [property => its value space].
+   *
+   * @var array<string, array<string, array>>
+   */
+  private array $deviations = [];
+
+  /**
    * Constructs the build event.
    *
    * @param array $blockTypes
    *   The spine-derived block type contracts (read-only for subscribers).
    * @param string $containerLayoutId
    *   The one container layout's id ('' when the site declares none).
+   * @param string[] $placeableBundles
+   *   The inline block bundles the placement spine allows site-wide, the
+   *   builder's one placement read (read-only for subscribers; [] for a
+   *   site without block types, and for a hand-built event).
    */
   public function __construct(
     private readonly array $blockTypes,
     private readonly string $containerLayoutId = '',
+    private readonly array $placeableBundles = [],
   ) {}
 
   /**
@@ -141,6 +165,21 @@ final class DialectCatalogBuildEvent extends Event {
    */
   public function getBlockTypes(): array {
     return $this->blockTypes;
+  }
+
+  /**
+   * The placeable inline block bundles, the builder's one placement answer.
+   *
+   * A superset of the block types' keys: the bundles whose fields the
+   * contract cannot spell are placeable too, and print generically. A
+   * subscriber that names the placeable set reads it here and never asks
+   * the placement spine itself, so a bare site (no block types) reaches
+   * no block plugin discovery through the catalog build.
+   *
+   * @return string[]
+   */
+  public function getPlaceableBundles(): array {
+    return $this->placeableBundles;
   }
 
   /**
@@ -338,7 +377,78 @@ final class DialectCatalogBuildEvent extends Event {
   }
 
   /**
-   * Contributes condition declarations (name => CSS wrapper).
+   * Contributes one owner's render card: what its element renders as.
+   *
+   * A card is the AI's one read of the markup model, in the form a reader
+   * learns a function from: input/output pairs. Each pair maps a dialect
+   * write (`<d-text url="…">…</d-text>`) to the HTML the resolver renders
+   * it as (`<p><a class="text-block-link" href="…">…</a></p>`), derived from
+   * the layered markup declarations by the layer that reads them
+   * (daedalus_ui) and printed by every AI surface from the catalog; the
+   * dialect print itself stays a data print. The shape:
+   * - 'renders': the pairs, input => html, in teaching order (the plainest
+   *   write first); both non-empty strings. [] only for a type nothing
+   *   resolves (the fallback card).
+   * - 'shells': the kind shells a declaration-less type renders through
+   *   ('block', 'field'); [] for a declared element.
+   * A card carries at least one of the two. Anything else is refused
+   * loudly, as is a second card for one owner.
+   *
+   * @param string $owner
+   *   The owner's dialect tag (d-container, d-{block type}) or a
+   *   generically printed bundle's owner spelling
+   *   (DialectCatalog::ownerForGenericBlockType()).
+   * @param array{renders: array<string, string>, shells: string[]} $card
+   *   The card, in the shape above.
+   */
+  public function addCard(string $owner, array $card): void {
+    if (!preg_match(DialectCatalog::CARD_OWNER_PATTERN, $owner)) {
+      throw new \InvalidArgumentException(sprintf('Cards are declared per owner, a dialect tag (%s, %s{block type}) or a generically printed bundle spelled %s[type=ID]; "%s" is not one.', RelativeSelector::TYPE_CONTAINER, RelativeSelector::TYPE_PREFIX, RelativeSelector::TYPE_BLOCK, $owner));
+    }
+    if (isset($this->cards[$owner])) {
+      throw new \LogicException(sprintf('Two catalog contributors declared the card of %s.', $owner));
+    }
+    $this->cards[$owner] = self::validCard($owner, $card);
+  }
+
+  /**
+   * The contributed render cards: owner => the card.
+   *
+   * @return array<string, array{renders: array<string, string>, shells: string[]}>
+   *   The cards in contribution order, each in the shape addCard() takes.
+   */
+  public function getCards(): array {
+    return $this->cards;
+  }
+
+  /**
+   * Validates a card loudly.
+   */
+  private static function validCard(string $owner, array $card): array {
+    $keys = array_keys($card);
+    sort($keys);
+    if ($keys !== DialectCatalog::CARD_KEYS) {
+      throw new \InvalidArgumentException(sprintf('The card of %s carries exactly %s; got %s.', $owner, implode(', ', DialectCatalog::CARD_KEYS), implode(', ', array_keys($card)) ?: 'nothing'));
+    }
+    if (!is_array($card['renders'])) {
+      throw new \InvalidArgumentException(sprintf('The renders of %s map each dialect write to the HTML it renders as.', $owner));
+    }
+    foreach ($card['renders'] as $input => $html) {
+      if (!is_string($input) || trim($input) === '' || !is_string($html) || trim($html) === '') {
+        throw new \InvalidArgumentException(sprintf('A render of %s is a dialect write mapped to the HTML it renders as, both non-empty strings; got %s => %s.', $owner, json_encode($input), json_encode($html)));
+      }
+    }
+    if (!is_array($card['shells']) || !array_is_list($card['shells']) || array_filter($card['shells'], static fn ($shell): bool => !is_string($shell) || $shell === '') !== []) {
+      throw new \InvalidArgumentException(sprintf('The shells of %s are a list of kind names.', $owner));
+    }
+    if ($card['renders'] === [] && $card['shells'] === []) {
+      throw new \InvalidArgumentException(sprintf('The card of %s says nothing: no renders and no shells.', $owner));
+    }
+    return ['renders' => $card['renders'], 'shells' => array_values($card['shells'])];
+  }
+
+  /**
+   * Contributes condition declarations (name => ['wrapper', 'axis']).
    *
    * Later layers never override a name an earlier layer declared.
    */
@@ -347,42 +457,16 @@ final class DialectCatalogBuildEvent extends Event {
   }
 
   /**
-   * The declared conditions, name => CSS wrapper, in canonical order.
+   * The declared conditions, name => ['wrapper', 'axis'], in canonical order.
    */
   public function getConditions(): array {
     return $this->conditions;
   }
 
   /**
-   * Contributes the condition names that are structural FACTS.
-   *
-   * A fact is a pseudo-class condition that holds by the element's place
-   * in the markup (":first-child") rather than by interaction (":hover"):
-   * the dialect spells both as pseudo-classes on the addressed element
-   * but teaches and corrects them apart. Names accumulate across layers;
-   * a name no layer declared as a condition is ignored by the catalog.
-   *
-   * @param string[] $names
-   *   Condition names.
-   */
-  public function addFacts(array $names): void {
-    $this->facts = array_values(array_unique(array_merge($this->facts, array_values($names))));
-  }
-
-  /**
-   * The condition names declared as structural facts.
-   *
-   * @return string[]
-   *   Condition names.
-   */
-  public function getFacts(): array {
-    return $this->facts;
-  }
-
-  /**
    * Contributes one owner's selector roster: its parts and its tags.
    *
-   * The owner is a dialect tag ("pb-container", "pb-text", "pb-block" for
+   * The owner is a dialect tag (`d-container`, `d-text`, `d-block` for
    * any plugin block or undeclared type): what the compounds of a
    * relative selector under "#id" may land on when that element, or a
    * type compound naming it, is the owner. 'parts' are the declared part
@@ -402,7 +486,7 @@ final class DialectCatalogBuildEvent extends Event {
    */
   public function addSelectors(string $owner, array $roster): void {
     if (!preg_match(RelativeSelector::TYPE_PATTERN, $owner)) {
-      throw new \InvalidArgumentException(sprintf('Selector rosters are declared per owner, a dialect tag ("pb-container", "pb-text", "pb-block"); "%s" is not one.', $owner));
+      throw new \InvalidArgumentException(sprintf('Selector rosters are declared per owner, a dialect tag (%s, %s{block type}, %s); "%s" is not one.', RelativeSelector::TYPE_CONTAINER, RelativeSelector::TYPE_PREFIX, RelativeSelector::TYPE_BLOCK, $owner));
     }
     if (array_diff_key($roster, ['parts' => TRUE, 'tags' => TRUE]) !== []) {
       throw new \InvalidArgumentException(sprintf('The selector roster of %s carries parts and tags only (types are the spine\'s).', $owner));
@@ -460,31 +544,86 @@ final class DialectCatalogBuildEvent extends Event {
   }
 
   /**
-   * Contributes vocabulary rosters, keyed by element kind, and their prose.
+   * Contributes the vocabulary rosters, their value spaces and their prose.
    *
    * The styling layer hands over, per element kind ('container', 'block',
    * 'field'), the vocabulary roster that says which CSS properties the
    * site names there (granted(), in its declaration order) and corrects a
-   * miss (corrective()), plus the one prose generator that renders those
-   * rosters for the model (VocabularyProseInterface): the roster is
-   * taught in every posture, and only the sentence saying how a property
-   * outside it is judged varies, so that sentence comes from the layer
-   * that holds the law. One roster per kind at every placement depth: a
-   * declaration's grant never forks on where the element sits.
+   * miss (corrective()); the rosters' value spaces, the same law: the
+   * BINDINGS (per property, the site-wide value space: "font-size takes
+   * the text scale") and the DEVIATIONS (per address, the value spaces a
+   * place narrows below the bindings: a part capping font-size, a block
+   * type curating a scale to a few stops), both as data, as the layer's
+   * law carries them ({scale, stops, allowed, min, max, units}); plus the
+   * one prose generator that renders rosters, bindings and deviations
+   * for the model (VocabularyProseInterface): the roster is taught in
+   * every posture, and only the sentence saying how a property outside it
+   * is judged varies, so that sentence comes from the layer that holds
+   * the law, and the brief and the JSON door's style_guide print the
+   * value spaces from one derivation in one text. One roster per kind at
+   * every placement depth: a declaration's grant never forks on where
+   * the element sits.
    *
    * @param array<string, \Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface> $kind_to_rosters
    *   Map of kind => the kind's vocabulary roster.
    * @param \Drupal\daedalus_blueprint\Materials\VocabularyProseInterface $prose
-   *   The prose generator for the contributed rosters.
+   *   The prose generator for the contributed rosters and value spaces.
+   * @param array<string, array> $bindings
+   *   Property => its site-wide value space, in the layer's order; [] on
+   *   a site that binds nothing site-wide.
+   * @param array<string, array<string, array>> $deviations
+   *   Address print ("kind:container", "block_type:text::.text-block-link")
+   *   => [property => its value space], only the places that narrow below
+   *   the bindings; [] when none does.
    */
-  public function addStylable(array $kind_to_rosters, VocabularyProseInterface $prose): void {
+  public function addStylable(array $kind_to_rosters, VocabularyProseInterface $prose, array $bindings, array $deviations): void {
     foreach ($kind_to_rosters as $kind => $roster) {
       if (!$roster instanceof VocabularyRosterInterface) {
         throw new \InvalidArgumentException(sprintf('The stylable roster for kind "%s" must be a vocabulary roster (VocabularyRosterInterface).', $kind));
       }
     }
+    foreach ($bindings as $property => $space) {
+      if (!is_string($property) || $property === '' || !is_array($space)) {
+        throw new \InvalidArgumentException('Bindings map a CSS property name to its value space (an array).');
+      }
+    }
+    foreach ($deviations as $address => $spaces) {
+      if (!is_string($address) || Address::parse($address) === NULL) {
+        throw new \InvalidArgumentException(sprintf('Deviations are declared per address ("kind:container", "block_type:text::.text-block-link"); "%s" is not one.', $address));
+      }
+      if (!is_array($spaces) || $spaces === []) {
+        throw new \InvalidArgumentException(sprintf('The deviations of %s map CSS property names to value spaces; an address that deviates nowhere is absent.', $address));
+      }
+      foreach ($spaces as $property => $space) {
+        if (!is_string($property) || $property === '' || !is_array($space)) {
+          throw new \InvalidArgumentException(sprintf('The deviations of %s map CSS property names to value spaces (arrays).', $address));
+        }
+      }
+    }
     $this->stylable += $kind_to_rosters;
+    $this->bindings += $bindings;
+    $this->deviations += $deviations;
     $this->prose = $prose;
+  }
+
+  /**
+   * The contributed bindings: property => its value space.
+   *
+   * @return array<string, array>
+   *   In contribution order; [] when no layer binds anything.
+   */
+  public function getBindings(): array {
+    return $this->bindings;
+  }
+
+  /**
+   * The contributed deviations: address print => [property => value space].
+   *
+   * @return array<string, array<string, array>>
+   *   In contribution order; [] when no place narrows below the bindings.
+   */
+  public function getDeviations(): array {
+    return $this->deviations;
   }
 
   /**

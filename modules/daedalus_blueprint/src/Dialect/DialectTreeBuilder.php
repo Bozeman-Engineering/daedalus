@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Dialect;
 
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Masterminds\HTML5\Elements;
 use Masterminds\HTML5\Parser\EventHandler;
 use Masterminds\HTML5\Parser\Scanner;
@@ -20,15 +21,15 @@ use Masterminds\HTML5\Parser\Scanner;
  *
  * Deliberate deltas from the HTML5 tree-construction algorithm, per spec
  * v0.2 section 2:
- * - The childless kinds (pb-image, pb-blueprint) are void: they never open,
+ * - The childless kinds (d-image, d-blueprint) are void: they never open,
  *   so the ignored-self-closing-slash quirk cannot make them adopt their
  *   siblings (the spec's self-closing normalization, implemented at the
  *   builder where the slash is still visible).
  * - A self-closing slash closes ANY dialect element: authors who write
- *   <pb-teaser ... /> mean a closed element, and nothing in the dialect
+ *   <d-teaser ... /> mean a closed element, and nothing in the dialect
  *   needs the browser's contrary reading.
- * - Rich-text and field bodies (pb-formatted-text, pb-field), file
- *   declarations (pb-file) and <style> are RAWTEXT: their content is
+ * - Rich-text and field bodies (d-formatted-text, d-field), file
+ *   declarations (d-file) and <style> are RAWTEXT: their content is
  *   captured verbatim (opaque to the dialect; rich text is governed by the
  *   text format filter downstream, a declared file's bytes by the file
  *   lane).
@@ -41,12 +42,12 @@ final class DialectTreeBuilder implements EventHandler {
   /**
    * Tags whose bodies are captured verbatim (RAWTEXT).
    */
-  private const RAW_TEXT_TAGS = ['pb-formatted-text', 'pb-field', 'pb-file', 'style'];
+  private const RAW_TEXT_TAGS = [RelativeSelector::TYPE_PREFIX . 'formatted-text', DialectWalk::FIELD_TAG, DialectParser::FILE_TAG, 'style'];
 
   /**
    * Dialect tags that never take content and parse as void.
    */
-  private const VOID_DIALECT_TAGS = ['pb-image', 'pb-blueprint'];
+  private const VOID_DIALECT_TAGS = [RelativeSelector::TYPE_PREFIX . 'image', DialectWalk::BLUEPRINT_TAG];
 
   /**
    * The synthetic root element the parsed tree hangs from.

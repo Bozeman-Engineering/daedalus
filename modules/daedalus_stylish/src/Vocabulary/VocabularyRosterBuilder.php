@@ -49,13 +49,13 @@ use Drupal\daedalus_stylish\StyleGuide;
  * instance namespaces) against the declaration the previous compound
  * landed on (the owner when first, a type's declaration after a type); a
  * tag by the tag tier (the base section's declaration of that tag); a
- * type by that type's own root declaration (pb-{bundle} the bundle's,
- * pb-container the container kind's, pb-block the block kind's); `*`
+ * type by that type's own root declaration (d-{bundle} the bundle's,
+ * d-container the container kind's, d-block the block kind's); `*`
  * (only after `>`) by the current landing's `children` section. A
  * compound the declarations do not carry ends the walk: the roster is
  * built with declared() FALSE, no grant, and undeclared() naming the
  * compound, so the validator can shape its corrective. A terminal
- * pseudo-element (`&::before`, `.quote::after`, `> pb-text::before`)
+ * pseudo-element (`&::before`, `.quote::after`, `> d-text::before`)
  * lands last, on the generated box of the chain's landing (the owner's
  * root for the anchor): every element has both boxes, so existence is
  * never a declaration question, and what may be styled there is
@@ -84,6 +84,8 @@ class VocabularyRosterBuilder {
     protected PageBuilderDeclarations $declarations,
     protected ThemeManagerInterface $themeManager,
     protected MaterialsRosterBuilder $materials,
+    protected WideSelectors $wideSelectors,
+    protected PseudoVocabularies $pseudoVocabularies,
   ) {}
 
   /**
@@ -127,7 +129,7 @@ class VocabularyRosterBuilder {
    */
   protected function resolve(Address $address, string $theme, string $enforcement): VocabularyRoster {
     $root = $this->resolveRoot($address->root(), $theme);
-    ['node' => $node, 'undeclared' => $undeclared, 'owner' => $owner] = $this->walk($root, $address->selector, $theme);
+    ['node' => $node, 'undeclared' => $undeclared, 'owner' => $owner] = $this->walk($root, $address->selector, $theme, $enforcement === StyleGuide::ENFORCEMENT_STRICT);
     $declared = $undeclared === NULL;
     $node ??= [];
     ['grants' => $grants, 'valueSpaces' => $spaces] = $this->vocabulary($node, $theme);
@@ -258,10 +260,14 @@ class VocabularyRosterBuilder {
    *   instance namespaces;
    * - a tag ("p") by the tag tier: the site's base declaration of that
    *   tag, the one declaration of a prose tag's styleability, whatever
-   *   the owner;
-   * - a type ("pb-text") by that type's own root declaration (the bundle
-   *   declaration over the block kind; pb-container the container kind;
-   *   pb-block the block kind), which also becomes the owner a following
+   *   the owner; a tag the base section does not declare is undeclared
+   *   (admission by mode is the validator's: strict refuses, open and
+   *   guarded admit it grant-less), and one the wide selector tier does
+   *   not know ("navv") is reported with `known` FALSE and the tier's
+   *   nearest names, a typo in every mode;
+   * - a type ("d-text") by that type's own root declaration (the bundle
+   *   declaration over the block kind; d-container the container kind;
+   *   d-block the block kind), which also becomes the owner a following
    *   class part resolves against. A bundle no declaration covers
    *   (StyleGuide::getBlockTypes()) is an undeclared type, whatever the
    *   kind fallback would answer: a type compound names ONE spelling of
@@ -271,26 +277,49 @@ class VocabularyRosterBuilder {
    *   property_groups).
    * A compound reached by a sibling combinator (`+`, `~`) resolves where
    * its predecessor did (its siblings are under the same parent): `> p +
-   * *` lands on the owner's children, `> pb-text .link ~ .link` on the
-   * same part. A compound's qualifiers are vocabulary to judge and never
-   * move the landing: a `:has()` argument is walked from the qualified
-   * compound's landing (a type's declaration owning the argument's
-   * parts; a sibling lead in the argument resolves in the compound's own
-   * context), and a `:not()` compound is judged in the qualified
-   * compound's context (an implied subject, `:not(:has(a))`, judges only
-   * its qualifiers from the qualified compound's landing). The first
-   * compound the declarations do not carry, anywhere, ends the walk; the
-   * landing is the last top-level compound's.
+   * *` lands on the owner's children, `> d-text .link ~ .link` on the
+   * same part. The qualified anchor (`&:first-child`, `&:not(:last-child)
+   * > *`) is the owner standing first: it lands on the root itself, and
+   * the chain behind it walks on from there. A compound's qualifiers are
+   * vocabulary to judge and never move the landing: a `:has()` argument
+   * is walked from the qualified compound's landing (a type's declaration
+   * owning the argument's parts; a sibling lead in the argument resolves
+   * in the compound's own context), a `:not()` compound is judged in the
+   * qualified compound's context (an implied subject, `:not(:has(a))`,
+   * judges only its qualifiers from the qualified compound's landing),
+   * and a position pseudo-class is structure with no vocabulary to judge.
+   * The other qualifier kinds are admitted by enforcement mode, the one
+   * rule for every vocabulary (judgeQualifiers()): a class qualifier
+   * (`li.active`, `&.open`) is a declared part where one of the
+   * compound's owner matches, else a markup class; an attribute
+   * qualifier is a predicate on the markup; a pseudo-class qualifier is
+   * a published condition where one is spelled by it (`li:hover > ul`,
+   * in every mode), else a state the browser knows. On a strict site
+   * (the walk's `$closed`) the undeclared ones end the walk reported by
+   * their kind (VocabularyRoster::KIND_CLASS, KIND_ATTRIBUTE,
+   * KIND_PSEUDO_CLASS), so the validator can refuse them with the
+   * corrective; on an open or guarded site they are admitted and the
+   * walk goes on, the landing's grant being the qualified compound's
+   * own. A pseudo-class the wide selector tier does not know (`a:hovre`)
+   * ends the walk in every mode, reported with `known` FALSE and the
+   * tier's nearest names, as an unknown tag is. The first compound the
+   * declarations do not carry, anywhere, ends the walk; the landing is
+   * the last top-level compound's.
    *
-   * A terminal pseudo-element lands after the chain, on the generated box
-   * of the chain's landing (the root itself for the anchor, `&::before`):
-   * the host's `pseudo` section names it (declared), else the box derives
-   * its host's property_groups and is reported undeclared as a pseudo
-   * "compound" (kind VocabularyRoster::KIND_PSEUDO, its name the
-   * pseudo's, positioned after the chain) while still carrying the
-   * derived node, so an open site grants it and a strict one refuses it.
-   * The pseudo-only groups are granted on the box either way
-   * (pseudoNode()). An undeclared compound in the chain ends the walk
+   * A terminal pseudo-element lands after the chain, on the box of the
+   * chain's landing (the root itself for the anchor, `&::before`): the
+   * host's `pseudo` section names it (declared), else the box takes its
+   * vocabulary from the spec table (PseudoVocabularies: `::marker`,
+   * `::placeholder`, `::selection`, `::first-letter`, `::first-line`) or
+   * derives its host's property_groups, and is reported undeclared as a
+   * pseudo "compound" (kind VocabularyRoster::KIND_PSEUDO, its name the
+   * pseudo's, positioned after the chain) while still carrying the node,
+   * so an open site grants it and a strict one refuses it. The
+   * pseudo-only groups (content, the existence switch) are granted on the
+   * two generated boxes alone (pseudoNode()). A pseudo-element the wide
+   * selector tier does not know (`::markr`) lands nowhere in every mode,
+   * reported with `known` FALSE and the tier's nearest names, as an
+   * unknown tag is. An undeclared compound in the chain ends the walk
    * before the box is reached: the host is corrected first.
    *
    * @param array $root
@@ -299,6 +328,9 @@ class VocabularyRosterBuilder {
    *   The selector, or NULL for the root itself.
    * @param string $theme
    *   The theme.
+   * @param bool $closed
+   *   Whether the site is strict (the closed world: an undeclared
+   *   qualifier ends the walk; open and guarded admit it).
    *
    * @return array{node: ?array, undeclared: ?array, owner: ?array}
    *   The landing node (NULL when undeclared, except a derived
@@ -308,22 +340,33 @@ class VocabularyRosterBuilder {
    *   against where the walk ended (the owner or the last type's
    *   declaration: what a corrective enumerates declared parts of).
    */
-  protected function walk(array $root, ?RelativeSelector $selector, string $theme): array {
+  protected function walk(array $root, ?RelativeSelector $selector, string $theme, bool $closed): array {
     $compounds = $selector?->compounds ?? [];
-    $walked = $this->walkChain($compounds, $root, $root, $root, $theme);
+    $walked = $this->walkChain($compounds, $root, $root, $root, $theme, $closed);
     $pseudo = $selector?->pseudo;
     if ($pseudo === NULL || $walked['node'] === NULL) {
       return $walked;
     }
+    $undeclared = [
+      'combinator' => NULL,
+      'kind' => VocabularyRoster::KIND_PSEUDO,
+      'name' => $pseudo,
+      'qualifiers' => [],
+      'position' => count($compounds),
+    ];
+    if (!$this->wideSelectors->knowsPseudoElement($pseudo)) {
+      return [
+        'node' => NULL,
+        'undeclared' => $undeclared + [
+          'known' => FALSE,
+          'similar' => NearMisses::rank($pseudo, $this->wideSelectors->pseudoElements()),
+        ],
+        'owner' => $walked['owner'],
+      ];
+    }
     return [
       'node' => $this->pseudoNode($walked['node'], $pseudo),
-      'undeclared' => $this->declaredPseudo($walked['node'], $pseudo) !== NULL ? NULL : [
-        'combinator' => NULL,
-        'kind' => VocabularyRoster::KIND_PSEUDO,
-        'name' => $pseudo,
-        'qualifiers' => [],
-        'position' => count($compounds),
-      ],
+      'undeclared' => $this->declaredPseudo($walked['node'], $pseudo) !== NULL ? NULL : $undeclared,
       'owner' => $walked['owner'],
     ];
   }
@@ -332,34 +375,75 @@ class VocabularyRosterBuilder {
    * The declaration node a pseudo-element lands on.
    *
    * The host's `pseudo: {before: {property_groups: …}}` section when it
-   * declares the box (declaredPseudo()); else the derivation: a node
-   * granting exactly the host's property_groups (allowlists and
-   * constraints included). The pseudo-only groups (the manager's
-   * getPseudoGroups()) are granted last on both, unless the declaration
-   * already lists one, whose position and constraints then stand: the box
-   * must be switchable on, so no declaration has to say so. Public for
-   * the one place an address cannot reach, like vocabulary(): a PATTERN
-   * node's declared box (an owner pattern part or an instance namespace
-   * carrying a pseudo section) is served by the client payload through
-   * this derivation, so its answers equal the roster of any box it
-   * covers.
+   * declares the box (declaredPseudo()); else the spec table's node for a
+   * pseudo-element whose vocabulary is its own (specNode(): `::marker`,
+   * `::placeholder`, `::selection`, `::first-letter`, `::first-line`);
+   * else the derivation: a node granting exactly the host's
+   * property_groups (allowlists and constraints included), the vocabulary
+   * of `::before`, `::after` and every pseudo-element the table does not
+   * carry (`::backdrop`). The pseudo-only groups (the manager's
+   * getPseudoGroups(): content, the existence switch) are granted last on
+   * the two generated boxes alone, unless the declaration already lists
+   * one, whose position and constraints then stand: a generated box must
+   * be switchable on, so no declaration has to say so, and no other
+   * pseudo-element has an existence switch. Public for the one place an
+   * address cannot reach, like vocabulary(): a PATTERN node's declared
+   * box (an owner pattern part or an instance namespace carrying a pseudo
+   * section) is served by the client payload through this derivation, so
+   * its answers equal the roster of any box it covers. The client twin is
+   * style-guide.js pseudoNode().
    *
    * @param array $host
    *   The declaration the chain landed on.
    * @param string $pseudo
-   *   The pseudo-element's name (RelativeSelector::PSEUDOS).
+   *   The pseudo-element's name (`before`, `marker`, …).
    *
    * @return array
    *   The box's declaration node.
    */
   public function pseudoNode(array $host, string $pseudo): array {
-    $node = $this->declaredPseudo($host, $pseudo) ?? ['property_groups' => $host['property_groups'] ?? []];
+    $node = $this->declaredPseudo($host, $pseudo) ?? $this->specNode($pseudo) ?? ['property_groups' => $host['property_groups'] ?? []];
     $groups = is_array($node['property_groups'] ?? NULL) ? $node['property_groups'] : [];
-    foreach ($this->propertyGroups->getPseudoGroups() as $group_id) {
-      $groups[$group_id] ??= [];
+    if (in_array($pseudo, RelativeSelector::GENERATED_BOXES, TRUE)) {
+      foreach ($this->propertyGroups->getPseudoGroups() as $group_id) {
+        $groups[$group_id] ??= [];
+      }
     }
     $node['property_groups'] = $groups;
     return $node;
+  }
+
+  /**
+   * The spec table's declaration node for a pseudo-element, or NULL.
+   *
+   * The table's allowlist (PseudoVocabularies::properties()) grouped by
+   * the CURATED group that owns each property, in the allowlist's order
+   * of first appearance, as `{group: {properties: […]}}`: the same shape
+   * a declared pseudo section writes, so vocabulary() resolves it like
+   * any node's. Curated groups only, because the roster's grants are the
+   * panel's offers and the client serves the curated groups alone (the
+   * wide tier is server-side vocabulary); a wide-tier property the spec
+   * allows (`font`, `white-space`, `vertical-align`) is still admitted at
+   * the write by mode, as everywhere, and the validator's every-mode
+   * allowlist refusal reads the whole table, not this node.
+   *
+   * @return array{property_groups: array<string, array{properties: string[]}>}|null
+   *   The node, or NULL for a pseudo-element the table does not carry.
+   */
+  protected function specNode(string $pseudo): ?array {
+    $allowed = $this->pseudoVocabularies->properties($pseudo);
+    if ($allowed === NULL) {
+      return NULL;
+    }
+    $curated = $this->propertyGroups->getCuratedGroups();
+    $groups = [];
+    foreach ($allowed as $property) {
+      $group_id = $this->propertyGroups->getGroupIdForProperty($property);
+      if ($group_id !== NULL && isset($curated[$group_id])) {
+        $groups[$group_id]['properties'][] = $property;
+      }
+    }
+    return ['property_groups' => $groups];
   }
 
   /**
@@ -385,20 +469,22 @@ class VocabularyRosterBuilder {
    *   where the grammar admits no sibling lead).
    * @param string $theme
    *   The theme.
+   * @param bool $closed
+   *   Whether the site is strict (walk()).
    *
    * @return array{node: ?array, undeclared: ?array, owner: ?array}
    *   As walk() answers.
    */
-  protected function walkChain(array $compounds, array $node, array $owner, array $previous, string $theme): array {
+  protected function walkChain(array $compounds, array $node, array $owner, array $previous, string $theme, bool $closed): array {
     foreach ($compounds as $position => $compound) {
       if (in_array($compound['combinator'], [RelativeSelector::NEXT, RelativeSelector::SUBSEQUENT], TRUE)) {
         $node = $previous;
       }
       $landing = $this->land($compound, $node, $owner, $theme);
       if ($landing === NULL) {
-        return ['node' => NULL, 'undeclared' => $compound + ['position' => $position], 'owner' => $owner];
+        return ['node' => NULL, 'undeclared' => $this->undeclaredCompound($compound, $position), 'owner' => $owner];
       }
-      $undeclared = $this->judgeQualifiers($compound['qualifiers'], $landing, $compound['kind'] === RelativeSelector::TYPE ? $landing : $owner, $node, $owner, $theme);
+      $undeclared = $this->judgeQualifiers($compound['qualifiers'], $landing, $compound['kind'] === RelativeSelector::TYPE ? $landing : $owner, $node, $owner, $theme, $closed, $position);
       if ($undeclared !== NULL) {
         return ['node' => NULL, 'undeclared' => $undeclared['undeclared'], 'owner' => $undeclared['owner']];
       }
@@ -422,6 +508,9 @@ class VocabularyRosterBuilder {
       RelativeSelector::TAG => $this->styleGuide->baseTagElement($compound['name'], $theme),
       RelativeSelector::TYPE => $this->resolveType($compound['name'], $theme),
       RelativeSelector::UNIVERSAL => is_array($node['children'] ?? NULL) ? $node['children'] : NULL,
+      // The qualified anchor is the owner itself: it lands where the
+      // chain started (the owner's root; the anchor stands only first).
+      RelativeSelector::ANCHOR_KIND => $node,
     };
   }
 
@@ -434,49 +523,196 @@ class VocabularyRosterBuilder {
    * `:not()` compound is judged where the qualified compound stands: its
    * subject lands in the same context, and its own qualifiers are judged
    * from that landing; an implied subject judges its qualifiers from the
-   * qualified compound's landing and argument owner.
+   * qualified compound's landing and argument owner. An `:is()`
+   * qualifier's every member is judged as the `:not()` compound is
+   * (judgeMember()): the words of every alternative must be in the
+   * vocabulary, whichever one matches. A position
+   * pseudo-class (`:first-child`, `:nth-child(2n+1)`) is structure the
+   * markup decides, no vocabulary to judge: it is skipped. The other
+   * kinds are vocabulary admitted by mode: a class qualifier is a
+   * declared part of the argument owner where one matches, else a markup
+   * class (judgeClass()); an attribute qualifier a markup predicate; a
+   * pseudo-class a published condition where one is spelled by it, else
+   * a state the browser knows (judgePseudoClass()). Strict ends the walk
+   * on the undeclared ones, open and guarded admit them; a pseudo-class
+   * outside the wide selector tier ends the walk in every mode.
    *
    * @param array[] $qualifiers
    *   The qualifiers.
    * @param array $landing
    *   The declaration the qualified subject landed on.
    * @param array $argument_owner
-   *   The declaration a class part in a `:has()` argument resolves
-   *   against.
+   *   The declaration a class part in a `:has()` argument, or a class
+   *   qualifier, resolves against.
    * @param array $node
    *   The declaration the qualified compound resolved in (its context).
    * @param array $owner
    *   The declaration a class part resolved against in that context.
    * @param string $theme
    *   The theme.
+   * @param bool $closed
+   *   Whether the site is strict (walk()).
+   * @param int $position
+   *   The qualified compound's position in its chain (what a refused
+   *   qualifier is reported at).
    *
    * @return array{undeclared: array, owner: array}|null
    *   The first undeclared compound in the arguments (its position in its
-   *   own chain) and the owner it resolved against, or NULL when every
-   *   argument compound landed.
+   *   own chain) or refused qualifier (at the compound's position), and
+   *   the owner it resolved against; NULL when every argument compound
+   *   landed and every qualifier is admitted.
    */
-  protected function judgeQualifiers(array $qualifiers, array $landing, array $argument_owner, array $node, array $owner, string $theme): ?array {
+  protected function judgeQualifiers(array $qualifiers, array $landing, array $argument_owner, array $node, array $owner, string $theme, bool $closed, int $position): ?array {
     foreach ($qualifiers as $qualifier) {
-      if ($qualifier['name'] === RelativeSelector::HAS) {
-        $walked = $this->walkChain($qualifier['argument'], $landing, $argument_owner, $node, $theme);
-        $undeclared = $walked['undeclared'] === NULL ? NULL : ['undeclared' => $walked['undeclared'], 'owner' => $walked['owner']];
+      $name = $qualifier['name'];
+      if ($name === RelativeSelector::HAS) {
+        $walked = $this->walkChain($qualifier['argument'], $landing, $argument_owner, $node, $theme, $closed);
+        $undeclared = $walked['undeclared'] === NULL ? NULL : [
+          'undeclared' => $walked['undeclared'],
+          'owner' => $walked['owner'],
+        ];
       }
-      elseif ($qualifier['argument']['kind'] === NULL) {
-        $undeclared = $this->judgeQualifiers($qualifier['argument']['qualifiers'], $landing, $argument_owner, $node, $owner, $theme);
+      elseif ($name === RelativeSelector::NOT) {
+        $undeclared = $this->judgeMember($qualifier['argument'], $landing, $argument_owner, $node, $owner, $theme, $closed, $position);
+      }
+      elseif ($name === RelativeSelector::IS) {
+        $undeclared = NULL;
+        foreach ($qualifier['argument'] as $member) {
+          $undeclared = $this->judgeMember($member, $landing, $argument_owner, $node, $owner, $theme, $closed, $position);
+          if ($undeclared !== NULL) {
+            break;
+          }
+        }
+      }
+      elseif ($name === RelativeSelector::CLASS_QUALIFIER) {
+        $undeclared = $this->judgeClass($qualifier['argument'], $argument_owner, $theme, $closed, $position);
+      }
+      elseif ($name === RelativeSelector::ATTRIBUTE) {
+        $undeclared = $closed ? $this->refused(VocabularyRoster::KIND_ATTRIBUTE, $qualifier['argument']['attribute'], $position, $owner) : NULL;
+      }
+      elseif (in_array($name, RelativeSelector::POSITIONS, TRUE) || in_array($name, RelativeSelector::NTH_POSITIONS, TRUE)) {
+        continue;
       }
       else {
-        $negated = $qualifier['argument'];
-        $negated_landing = $this->land($negated, $node, $owner, $theme);
-        if ($negated_landing === NULL) {
-          return ['undeclared' => $negated + ['position' => 0], 'owner' => $owner];
-        }
-        $undeclared = $this->judgeQualifiers($negated['qualifiers'], $negated_landing, $negated['kind'] === RelativeSelector::TYPE ? $negated_landing : $owner, $node, $owner, $theme);
+        $undeclared = $this->judgePseudoClass($name, $owner, $closed, $position);
       }
       if ($undeclared !== NULL) {
         return $undeclared;
       }
     }
     return NULL;
+  }
+
+  /**
+   * Judges a predicate compound (a `:not()` argument or an `:is()` member).
+   *
+   * An implied subject judges its qualifiers from the qualified
+   * compound's landing and argument owner; a subject lands in the
+   * qualified compound's own context (the alternative subject at the
+   * same position, never the landing's part) and judges its qualifiers
+   * from there, owning them when it is a type.
+   *
+   * @return array{undeclared: array, owner: array}|null
+   *   The refusal, or NULL when the member landed and is admitted.
+   */
+  protected function judgeMember(array $member, array $landing, array $argument_owner, array $node, array $owner, string $theme, bool $closed, int $position): ?array {
+    if ($member['kind'] === NULL) {
+      return $this->judgeQualifiers($member['qualifiers'], $landing, $argument_owner, $node, $owner, $theme, $closed, $position);
+    }
+    $member_landing = $this->land($member, $node, $owner, $theme);
+    if ($member_landing === NULL) {
+      return ['undeclared' => $this->undeclaredCompound($member, 0), 'owner' => $owner];
+    }
+    return $this->judgeQualifiers($member['qualifiers'], $member_landing, $member['kind'] === RelativeSelector::TYPE ? $member_landing : $owner, $node, $owner, $theme, $closed, $position);
+  }
+
+  /**
+   * Judges a class qualifier: a declared part where one matches, else by mode.
+   *
+   * `li.active`, `&.open`, `> d-text.featured`: the class is a declared
+   * part of the argument owner (the one part rule, land()) or a markup
+   * class the page's JavaScript or a worn variant sets. A declared part
+   * is admitted in every mode; a markup class on a strict site is
+   * refused as VocabularyRoster::KIND_CLASS, named with its dot like a
+   * part, and admitted on an open or guarded one.
+   *
+   * @return array{undeclared: array, owner: array}|null
+   *   The refusal, or NULL when admitted.
+   */
+  protected function judgeClass(string $class, array $argument_owner, string $theme, bool $closed, int $position): ?array {
+    $name = '.' . $class;
+    if (!$closed || $this->land(['kind' => RelativeSelector::CLASS_PART, 'name' => $name], $argument_owner, $argument_owner, $theme) !== NULL) {
+      return NULL;
+    }
+    // The corrective enumerates the parts the class was resolved against.
+    return $this->refused(VocabularyRoster::KIND_CLASS, $name, $position, $argument_owner);
+  }
+
+  /**
+   * Judges a pseudo-class qualifier that is no position: a state.
+   *
+   * A published condition spelled by the pseudo-class
+   * (ConditionTypePluginManager::conditionForPseudoClass(): `:hover` on
+   * any compound) is admitted in every mode, the pose dual depending on
+   * it. Any other pseudo-class the wide selector tier knows (`a:visited`,
+   * `input:checked` where no `checked` is published) is a state the
+   * browser knows: refused on a strict site as VocabularyRoster::
+   * KIND_PSEUDO_CLASS, admitted on an open or guarded one. A name the
+   * tier does not know (`a:hovre`) is a typo in every mode: the same
+   * record with `known` FALSE and the tier's nearest names in `similar`.
+   *
+   * @return array{undeclared: array, owner: array}|null
+   *   The refusal, or NULL when admitted.
+   */
+  protected function judgePseudoClass(string $name, array $owner, bool $closed, int $position): ?array {
+    if ($this->conditionTypes->conditionForPseudoClass($name) !== NULL) {
+      return NULL;
+    }
+    if (!$this->wideSelectors->knowsPseudoClass($name)) {
+      $refused = $this->refused(VocabularyRoster::KIND_PSEUDO_CLASS, $name, $position, $owner);
+      $refused['undeclared'] += [
+        'known' => FALSE,
+        'similar' => NearMisses::rank($name, $this->wideSelectors->pseudoClasses()),
+      ];
+      return $refused;
+    }
+    return $closed ? $this->refused(VocabularyRoster::KIND_PSEUDO_CLASS, $name, $position, $owner) : NULL;
+  }
+
+  /**
+   * The undeclared record of a compound whose subject landed nowhere.
+   *
+   * The compound itself plus its position in its chain; a tag the wide
+   * selector tier does not know ("navv") carries `known` FALSE and the
+   * tier's nearest names in `similar`, so the validator refuses it in
+   * every mode where a known undeclared tag ("nav", "em") is admitted
+   * by mode.
+   */
+  protected function undeclaredCompound(array $compound, int $position): array {
+    $undeclared = $compound + ['position' => $position];
+    if ($compound['kind'] === RelativeSelector::TAG && !$this->wideSelectors->knowsTag($compound['name'])) {
+      $undeclared += [
+        'known' => FALSE,
+        'similar' => NearMisses::rank($compound['name'], $this->wideSelectors->tags()),
+      ];
+    }
+    return $undeclared;
+  }
+
+  /**
+   * The refusal record of a qualifier, in the undeclared compound's shape.
+   */
+  protected function refused(string $kind, string $name, int $position, array $owner): array {
+    return [
+      'undeclared' => [
+        'combinator' => NULL,
+        'kind' => $kind,
+        'name' => $name,
+        'qualifiers' => [],
+        'position' => $position,
+      ],
+      'owner' => $owner,
+    ];
   }
 
   /**

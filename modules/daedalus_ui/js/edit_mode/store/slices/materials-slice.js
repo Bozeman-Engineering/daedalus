@@ -13,7 +13,7 @@ import {
  * The materials store: the client copy of the site's materials roster.
  *
  * One record set (delivery shape, MaterialRecord::toArray(): tokens,
- * swatches, variants, blueprints, animations) every widget reads through
+ * variants, blueprints, animations, fonts) every widget reads through
  * the facade:
  * pickers and wells offer its stops, the wear bar and palette list its
  * variants and blueprints, code completions and lint know its spellings,

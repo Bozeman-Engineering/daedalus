@@ -31,6 +31,8 @@ import { isFormOnlyStub } from '../blueprint/form-only-stub';
 import { componentForUuid } from '../blueprint/component-for-uuid';
 import { markupForKey, partPresence, partTag } from '../blueprint/markup-index';
 import { resolveElement } from '../blueprint/element-resolver';
+import { effectiveBlueprint } from '../blueprint/effective-blueprint';
+import { markupDrafted } from '../store/slices/blueprint-slice';
 import { warnMissingEntityUi } from '../utilities/warn';
 import { portalLeaveUrl } from '../components/portal/portal-model';
 import { selectRoster } from '../store/slices/materials-slice';
@@ -76,7 +78,7 @@ const relativeSelector = (selector) => {
   const canonical = canonicalSelector(selector);
   if (canonical === null) {
     throw new TypeError(
-      `"${selector}" is not a relative selector (a part as '.cls', the children as '> *', a type as '> pb-text', a tag as 'p').`,
+      `"${selector}" is not a relative selector (a part as '.cls', the children as '> *', a type as '> d-text', a tag as 'p').`,
     );
   }
   return canonical;
@@ -164,7 +166,7 @@ export const initSelectionFacade = () => {
      * the selected element itself: {key, selector} with key ALWAYS
      * getSelected(), naming something on the selected element (a
      * declared part '.cls', a minted instance '.s-abc', a tag tier 'p', a
-     * chain seated from code mode '> pb-text .quote'). Where a write
+     * chain seated from code mode '> d-text .quote'). Where a write
      * lands is the ADDRESS (getAddress()), a separate fact. The facet
      * never outlives the selection: every selection write clears it.
      */
@@ -255,7 +257,7 @@ export const initSelectionFacade = () => {
      * Sets the styling SUBJECT facet on the current single selection:
      * `key` MUST be the selected element (a part as '.cls', a minted
      * instance as '.s-abc', a tag tier as 'p', a chain as
-     * '> pb-text .quote'); an ancestor's rule is not a subject but a
+     * '> d-text .quote'); an ancestor's rule is not a subject but a
      * write address (address()). The selector is canonicalized through
      * the grammar; text outside it, a key other than the selection, or no
      * single selection to seat under, throws rather than seating a facet
@@ -285,7 +287,7 @@ export const initSelectionFacade = () => {
      * Sets the styling WRITE ADDRESS on the current single selection:
      * `key` is the selected element or one of its ancestors per the
      * projection index's ancestry, `selector` the rule the write rebases
-     * to (a rule on an ancestor as 'li' or '> pb-text', the inspector's
+     * to (a rule on an ancestor as 'li' or '> d-text', the inspector's
      * chip menu). address(null) drops it, so writes land at the subject's own
      * key again. The selector is canonicalized through the grammar; text
      * outside it, a key that is neither the selection nor an ancestor, or
@@ -565,11 +567,40 @@ export const initSelectionFacade = () => {
     reportFailure: reportMutationFailure,
 
     /**
-     * The blueprint mirror: the full blueprint of the route's main entity,
-     * or null before it boots. Read-only — it is replaced by the blueprint
-     * half of every mutation response; consumers project, never write.
+     * The effective blueprint: the full blueprint of the route's main
+     * entity, or null before it boots, with the open gesture's drafted
+     * markup laid over the one node being edited
+     * (blueprint/effective-blueprint.js). Read-only — the mirror beneath
+     * it is replaced by the blueprint half of every mutation response,
+     * which also clears the draft; consumers project, never write. The
+     * same reference comes back until the mirror or the draft changes, so
+     * reference equality is change detection for consumers memoizing on
+     * it (daedalus_stylish's document tree).
      */
-    getBlueprint: () => store.getState().blueprint.blueprint,
+    getBlueprint: () => effectiveBlueprint(store.getState()),
+
+    /**
+     * Drafts an open gesture's resolved markup for one selectable key:
+     * the tree the element resolver's client twin computed for the
+     * previewed property bag, the same object the canvas was morphed to.
+     * Every reader of the blueprint (getBlueprint, onBlueprintChange,
+     * markupForKey, partPresence, partTag, the page-elements panel) then
+     * answers from the mirror with this markup merged over the key's
+     * `_element.markup` until the next preview overwrites it or the next
+     * mutation response replaces the mirror. The one caller is the
+     * composed-edit preview (daedalus_edit's element-preview.js); editors
+     * never dispatch it themselves.
+     *
+     * @param {string} key
+     *   The edited element's selectable key ('entity:{uuid}',
+     *   'block:{uuid}' or 'container:{uuid}').
+     * @param {Object} markup
+     *   The resolved markup tree ({tag, attributes, classes, hoisted,
+     *   parts, slots}), the annotation's shape.
+     */
+    draftMarkup: (key, markup) => {
+      store.dispatch(markupDrafted({ key, markup }));
+    },
 
     /**
      * Whether a mirror field value is a form-only stub, identity without
@@ -680,18 +711,22 @@ export const initSelectionFacade = () => {
     typeForKey,
 
     /**
-     * Subscribes to mirror replacements.
+     * Subscribes to changes of the EFFECTIVE blueprint: a mirror
+     * replacement (a mutation response landed) or a draft change (a
+     * composed-edit preview reached the model through draftMarkup).
+     * Subscribers re-deriving from getBlueprint() therefore follow an open
+     * gesture live, the same way they follow a commit.
      *
      * @param {Function} callback
-     *   Called with the new blueprint whenever the mirror is replaced.
+     *   Called with the new effective blueprint whenever it changes.
      *
      * @return {Function}
      *   Unsubscribe.
      */
     onBlueprintChange: (callback) => {
-      let previous = store.getState().blueprint.blueprint;
+      let previous = effectiveBlueprint(store.getState());
       return store.subscribe(() => {
-        const current = store.getState().blueprint.blueprint;
+        const current = effectiveBlueprint(store.getState());
         if (current !== previous) {
           previous = current;
           callback(current);
@@ -817,7 +852,7 @@ export const initSelectionFacade = () => {
      * The ONE applicability predicate ("may this element wear this
      * material", "may this blueprint land here"), shared with the server
      * (MaterialsRoster::applicable()), bound to the store's roster: a
-     * blueprint's band fact resolves against the variant records it holds.
+     * blueprint's section fact resolves against the variant records it holds.
      */
     applicable: (record, elementScope, topLevel = true, withinBlueprint = null) =>
       roster().applicable(record, elementScope, topLevel, withinBlueprint),

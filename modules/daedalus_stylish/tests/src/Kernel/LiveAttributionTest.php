@@ -47,6 +47,7 @@ class LiveAttributionTest extends KernelTestBase {
     'layout_builder',
     'entity_test',
     'daedalus_blueprint',
+    'filter',
     'navigation',
     'twig_events',
     'daedalus_tempstore',
@@ -63,11 +64,8 @@ class LiveAttributionTest extends KernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     // Edit-mode variant CSS reads the materials roster, whose daedalus_stylish
-    // provider reads all four storages on every build.
+    // provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('user');
     $this->installEntitySchema('entity_test');

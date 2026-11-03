@@ -78,6 +78,7 @@ const Position = ({
   onCommit,
   onPickCondition = null,
   onOpenDocument = null,
+  law = {},
 }) => {
   const { values, invalid, pick } = useGesture(
     model.home.key,
@@ -87,8 +88,8 @@ const Position = ({
   );
   const parent = layout?.parent ?? null;
   const axes = positionAxes(parent);
-  const nodeTree = source?.getTree?.() ?? null;
-  const matcher = Array.isArray(nodeTree) ? createMatcher(nodeTree) : null;
+  const document = source?.getDocument?.() ?? null;
+  const matcher = Array.isArray(document) ? createMatcher(document) : null;
 
   const enabled = (axis) => axis.write === 'local';
 
@@ -178,6 +179,7 @@ const Position = ({
         onPick={onPick}
         onPickCondition={onPickCondition}
         onOpenDocument={onOpenDocument}
+        law={law}
         onPreview={onPreview}
         onRelease={onRelease}
         onCommit={onCommit}

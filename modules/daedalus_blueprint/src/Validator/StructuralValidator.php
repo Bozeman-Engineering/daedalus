@@ -72,7 +72,7 @@ class StructuralValidator {
       return $errors;
     }
 
-    $bundle = $data['bundle'] ?? NULL;
+    $bundle = $this->impliedBundle($entity_type, $data['bundle'] ?? NULL);
     $errors = $this->validateBundle($entity_type, $bundle);
     if (!empty($errors)) {
       return $errors;
@@ -184,6 +184,29 @@ class StructuralValidator {
     }
 
     return [];
+  }
+
+  /**
+   * The bundle a blueprint addresses.
+   *
+   * An entity type with no bundle key has exactly one bundle, named after
+   * the type (core's rule), so a blueprint for one may leave "bundle" out:
+   * the type is the bundle. Every other type needs the bundle named, and
+   * a bundle the blueprint names is taken as written, right or wrong.
+   *
+   * @param string $entity_type
+   *   The entity type ID.
+   * @param mixed $bundle
+   *   The bundle from the blueprint, if any.
+   *
+   * @return mixed
+   *   The bundle to validate and build with.
+   */
+  public function impliedBundle(string $entity_type, mixed $bundle): mixed {
+    if (($bundle === NULL || $bundle === '') && $this->entityTypeManager->hasDefinition($entity_type) && !$this->entityTypeManager->getDefinition($entity_type)->hasKey('bundle')) {
+      return $entity_type;
+    }
+    return $bundle;
   }
 
   /**

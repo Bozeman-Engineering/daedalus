@@ -5,7 +5,7 @@ import {
   parseSelector,
 } from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 import { ELEMENT_LAYER, documentLayerId } from './layers.js';
-import { stagesLines } from '../pending.js';
+import { movedStyles, stagesLines } from '../pending.js';
 
 /**
  * The variant-document model (pure; the editing session renders it).
@@ -65,10 +65,15 @@ export const wearingOf = (entry, reference) =>
  * selector entries grouped by their first part class in first-seen order
  * (a part's own entry directly before the selectors under it), the
  * part-less selectors (the children, a tag, a type) first. A key lists when the variant stores a non-empty
- * entry at it or the open session stages lines into it (a staged new slot
+ * entry at it, the open session stages lines into it (a staged new slot
  * renders with its pending marks; an entry whose only content is a nested
- * "variants" list still lists — references are content), plus the root's
- * own key unconditionally. Slot paths parse against the document's root
+ * "variants" list still lists — references are content), or the view
+ * drafts it (`drafted`: a selector row minted by typing and not yet
+ * written, the host body's draft rule one document over), plus the
+ * root's own key unconditionally. The stored keys are read through the
+ * session's staged moves (pending.js movedStyles): a moved rule and its
+ * continuations list at their new keys in place of the old, where the
+ * islands print the moved entry. Slot paths parse against the document's root
  * kind (slot-key.js rootKindForScope over the variant's scope); keys the
  * grammar cannot parse keep stored order after every parsed slot with
  * kind null — rendered, never hidden (the server is the validator, the
@@ -81,6 +86,9 @@ export const wearingOf = (entry, reference) =>
  * @param {?string} rootKind
  *   The document's root kind, one of slot-key.js ROOT_KINDS, or null
  *   (unresolvable scope: only path-less keys parse).
+ * @param {string[]} drafted
+ *   Document keys the view drafts (minted rows with nothing stored or
+ *   staged yet).
  *
  * @return {Array<{slot: string, depth: number, kind: ?string,
  *   detail: ?string, keys: Array<{key: string, selector: ?string}>}>}
@@ -88,11 +96,16 @@ export const wearingOf = (entry, reference) =>
  *   ('container' | 'block' | 'field') for a path slot, null for an
  *   unparsed one; detail carries the block type or field name.
  */
-export const documentTree = (styles, session = null, rootKind = null) => {
+export const documentTree = (
+  styles,
+  session = null,
+  rootKind = null,
+  drafted = [],
+) => {
   const safeRoot =
     rootKind !== null && ROOT_KINDS.includes(rootKind) ? rootKind : null;
   const keys = new Set(['']);
-  Object.entries(styles ?? {}).forEach(([key, entry]) => {
+  Object.entries(movedStyles(session, styles)).forEach(([key, entry]) => {
     if (isEntryObject(entry) && Object.keys(entry).length) {
       keys.add(key);
     }
@@ -100,6 +113,11 @@ export const documentTree = (styles, session = null, rootKind = null) => {
   (stagesLines(session) ? session.lines : []).forEach((line) => {
     if (typeof line.relative === 'string') {
       keys.add(line.relative);
+    }
+  });
+  drafted.forEach((key) => {
+    if (typeof key === 'string') {
+      keys.add(key);
     }
   });
   const slots = new Map();
@@ -191,7 +209,7 @@ export const documentTree = (styles, session = null, rootKind = null) => {
  *
  * Which keys on THIS page wear each of the document's fragments: the
  * root fragment's carriers are its root wearers, elements and rules
- * alike (a rule `container:X::> pb-text` wearing the document delivers
+ * alike (a rule `container:X::> d-text` wearing the document delivers
  * its root fragment at every match), a composition child slot's
  * carriers are the elements its distributed fragment landed on. A
  * reference is the document's record id (the paintCoverage matching
@@ -400,7 +418,9 @@ export const documentLineWinner = (winners, reference, property) =>
  * a slot says. The pending table is the chrome input: every staged line
  * at the slot — sets AND unsets (an unset's property is absent from the
  * entry, but its row still needs the pending-removal mark and the dismiss
- * gesture) — keyed condition → property → {id, unset}.
+ * gesture) — keyed condition → property → {id, unset}. The stored sheet
+ * is read through the session's staged moves (pending.js movedStyles),
+ * so a slot a move landed at projects the entry that moved there.
  *
  * @param {?object} variantStyles
  *   The variant's element-relative styles.
@@ -415,10 +435,11 @@ export const documentLineWinner = (winners, reference, property) =>
  *   pending: condition → property → {id: string, unset: boolean}.
  */
 export const documentSlotEntry = (variantStyles, slot, session) => {
+  const moved = movedStyles(session, variantStyles);
   const conditions = new Set(
-    Object.keys(
-      isEntryObject(variantStyles?.[slot]) ? variantStyles[slot] : {},
-    ).filter((name) => name !== 'variants'),
+    Object.keys(isEntryObject(moved[slot]) ? moved[slot] : {}).filter(
+      (name) => name !== 'variants',
+    ),
   );
   const staged = (stagesLines(session) ? session.lines : []).filter(
     (line) => line.relative === slot,
@@ -428,7 +449,7 @@ export const documentSlotEntry = (variantStyles, slot, session) => {
   const pending = {};
   conditions.forEach((condition) => {
     const lines = overlaySessionLines(
-      documentBaselineLines(variantStyles, slot, condition),
+      documentBaselineLines(moved, slot, condition),
       session,
       slot,
       condition,

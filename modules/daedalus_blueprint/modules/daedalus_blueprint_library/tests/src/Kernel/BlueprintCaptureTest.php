@@ -43,17 +43,11 @@ class BlueprintCaptureTest extends BlueprintKernelTestBase {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
     // Variant references resolve through the materials roster, whose
-    // daedalus_stylish provider reads all four storages on every build.
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
+    // daedalus_stylish provider reads all three storages on every build.
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     $this->createReferenceFields();
@@ -226,15 +220,15 @@ class BlueprintCaptureTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Tests capturing a top-level band by its section uuid.
+   * Tests capturing a top-level section by its section uuid.
    */
-  public function testTopLevelBandCapture(): void {
+  public function testTopLevelSectionCapture(): void {
     ['entity' => $entity, 'root_section' => $root_section] = $this->buildReferenceSection();
 
-    $result = $this->manager()->saveAsBlueprint($this->host($entity), $root_section, 'Band', 'An empty band.');
+    $result = $this->manager()->saveAsBlueprint($this->host($entity), $root_section, 'Section', 'An empty section.');
 
-    // The band is the host's original empty onecol row; the CTA section was
-    // added as a SIBLING band, so this one captures empty: the point is
+    // The section is the host's original empty onecol row; the CTA section was
+    // added as a SIBLING section, so this one captures empty: the point is
     // that a top-level row captures by its section uuid at all.
     $root = $this->definitionOf($result->blueprint)[0];
     $this->assertSame('container', $root['kind']);

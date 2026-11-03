@@ -10,12 +10,15 @@ import { strict as assert } from 'node:assert';
 import {
   ancestorIslands, bracedSelector, composeUnder, conditionRemovalOps, draftRoster, elementIslands,
   islandConditions, nestUnder, nestedSpelling, occupiedRoster, ownIslandLines, partRemovalOps, posedRoster,
-  restoredLines, ruleIslandLines, selectorGestureOptions, settleOps, shouldRestoreTinted,
+  previewReach, renameDrafts, restoredLines, ruleIslandLines, ruleMovePlan, selectorGestureOptions, settleOps,
+  shouldRestoreTinted,
 } from '../../js/src/code/element-model.js';
-import { TREE } from './selector-matcher-fixture.mjs';
+import { REFUSED_CONTINUATION, REFUSED_TARGET_EXISTS } from '../../js/src/rule-move.js';
+import { DOCUMENT } from './selector-matcher-fixture.mjs';
 import { analyzeIsland, islandOps, printIsland, stackLines } from '../../js/src/code/island.js';
 import { ELEMENT_LAYER, variantLayerId } from '../../js/src/code/layers.js';
 import { buildStack } from '../../js/src/style-stack.js';
+import { widePseudoElements } from '../../js/src/wide-selectors.js';
 
 // The island's lines: the key's stack at one condition, the map's layers
 // alone (the roster and cadence reads never print the floor).
@@ -198,18 +201,18 @@ test('a rule\'s worn continuation makes a part row of the owner, and an occupied
   // the conditions the delivered entry holds, and the sparse read keeps
   // it occupied while the owner's empty root island prunes.
   const owner = 'container:33333333-3333-3333-3333-333333333333';
-  const rule = `${owner}::> pb-text`;
+  const rule = `${owner}::> d-text`;
   const map = { [rule]: { variants: [{ variant: 'aqua', fragment: '' }] } };
   const model = elementIslands(map, owner, guide, VARIANTS);
   assert.deepEqual(model.parts, [
-    { selector: '> pb-text .quote', key: `${rule} .quote`, conditions: ['default'], ancestors: [] },
-    { selector: '> pb-text', key: rule, conditions: ['default', 'hover'], ancestors: [] },
+    { selector: '> d-text .quote', key: `${rule} .quote`, conditions: ['default'], ancestors: [] },
+    { selector: '> d-text', key: rule, conditions: ['default', 'hover'], ancestors: [] },
   ]);
   const pruned = occupiedRoster(model, map, owner, VARIANTS);
   assert.deepEqual(pruned.conditions, []);
   assert.deepEqual(pruned.parts.map((part) => [part.selector, part.conditions]), [
-    ['> pb-text .quote', ['default']],
-    ['> pb-text', ['default', 'hover']],
+    ['> d-text .quote', ['default']],
+    ['> d-text', ['default', 'hover']],
   ]);
   assert.deepEqual(
     linesOf(map, `${rule} .quote`, 'default', VARIANTS).map((line) => [line.property, line.value, line.variant]),
@@ -223,7 +226,7 @@ test('a rule\'s worn continuation makes a part row of the owner, and an occupied
 // parseKey, which the matcher fixture's short keys never do): section A
 // (Hero) holds section B, which holds the text block T3 (a paragraph
 // root); section E (Links) holds section F holding T8, whose link part
-// renders an anchor. Section B wears Band, whose `::> *` fragment
+// renders an anchor. Section B wears the Section look, whose `::> *` fragment
 // reaches T3 through B's `> *` rule.
 const A_UUID = 'aaaaaaaa-0000-4000-8000-00000000000a';
 const B_UUID = 'bbbbbbbb-0000-4000-8000-00000000000b';
@@ -236,95 +239,103 @@ const SEC_B = `container:${B_UUID}`;
 const SEC_E = `container:${E_UUID}`;
 const T3 = `block:${T3_UUID}`;
 const T8 = `block:${T8_UUID}`;
+const HOME_UUID = '99999999-0000-4000-8000-000000000009';
 const section = (uuid, label, children) => ({
   kind: 'container', uuid, layout_id: 'daedalus_stylish_container', label, _element: { markup: { tag: 'section' } }, children,
 });
-const PAGE = [
-  section(A_UUID, 'Hero', [
-    section(B_UUID, null, [
-      { kind: 'block', uuid: T3_UUID, block_type: 'text', _element: { markup: { tag: 'p', tags: ['em'] } } },
+// The document (source.getDocument()): the page, the host entity, above
+// its two sections.
+const PAGE = [{
+  kind: 'entity',
+  uuid: HOME_UUID,
+  _element: { name: 'Home', type: 'Page', markup: {} },
+  children: [
+    section(A_UUID, 'Hero', [
+      section(B_UUID, null, [
+        { kind: 'block', uuid: T3_UUID, block_type: 'text', _element: { markup: { tag: 'p', tags: ['em'] } } },
+      ]),
     ]),
-  ]),
-  section(E_UUID, 'Links', [
-    section(F_UUID, null, [
-      { kind: 'block', uuid: T8_UUID, block_type: 'text', _element: { markup: { tag: 'p', tags: ['strong'], parts: { '.text-block-link': { tag: 'a' } } } } },
+    section(E_UUID, 'Links', [
+      section(F_UUID, null, [
+        { kind: 'block', uuid: T8_UUID, block_type: 'text', _element: { markup: { tag: 'p', tags: ['strong'], parts: { '.text-block-link': { tag: 'a' } } } } },
+      ]),
     ]),
-  ]),
-];
-const A_RULE = `${SEC_A}::> pb-container > *`;
+  ],
+}];
+const A_RULE = `${SEC_A}::> d-container > *`;
 const B_RULE = `${SEC_B}::> *`;
 const BLOCK_TYPES = { [T3_UUID]: 'text', [T8_UUID]: 'text' };
 const ANCESTOR_GUIDE = {
   ...guide,
   declaredDefaults: { 'block_type:text': { '': { default: { color: 'black', padding: '0' } } } },
 };
-const BAND = {
-  id: 'band',
-  label: 'Band',
+const SECTION = {
+  id: 'section',
+  label: 'Section',
   value: { '': { default: { display: 'flex' } }, '::> *': { default: { 'flex-grow': '1', color: 'green' } } },
 };
 const ANCESTOR_MAP = {
   [A_RULE]: { default: { gap: '1rem' }, hover: { color: 'red' } },
-  [SEC_B]: { variants: [{ variant: 'band', fragment: '' }] },
+  [SEC_B]: { variants: [{ variant: 'section', fragment: '' }] },
   [B_RULE]: { default: { color: 'teal', padding: '1rem' } },
   [T3]: { default: { color: 'purple' } },
 };
 const roster = (map, key, address = null, facet = null) =>
-  elementIslands(map, key, ANCESTOR_GUIDE, [BAND], null, BLOCK_TYPES, {}, PAGE, address, facet);
+  elementIslands(map, key, ANCESTOR_GUIDE, [SECTION], null, BLOCK_TYPES, {}, PAGE, address, facet);
 const reachingT3 = (map) =>
-  stackLines(buildStack({ guide: ANCESTOR_GUIDE, map, key: T3, variants: [BAND], blockTypes: BLOCK_TYPES, tree: PAGE }), 'default');
+  stackLines(buildStack({ guide: ANCESTOR_GUIDE, map, key: T3, variants: [SECTION], blockTypes: BLOCK_TYPES, document: PAGE }), 'default');
 
-test('the roster lists the ancestor rules reaching the root nearest ancestor first, as islands of the rules\' own keys; no tree, no rules', () => {
+test('the roster lists the ancestor rules reaching the root nearest ancestor first, as islands of the rules\' own keys; no document, no rules', () => {
   const model = roster(ANCESTOR_MAP, T3);
   assert.deepEqual(model.ancestors, [
     { owner: SEC_B, selector: '> *', key: B_RULE, conditions: ['default'], existing: true },
-    { owner: SEC_A, selector: '> pb-container > *', key: A_RULE, conditions: ['default', 'hover'], existing: true },
+    { owner: SEC_A, selector: '> d-container > *', key: A_RULE, conditions: ['default', 'hover'], existing: true },
   ]);
   assert.deepEqual(model.parts, []);
-  // The tree scopes' sparse rows pass no tree: DevTools' rule, inherited
+  // The document scopes' sparse rows pass no document: DevTools' rule, inherited
   // rules for the element you are inspecting alone.
-  assert.deepEqual(elementIslands(ANCESTOR_MAP, T3, ANCESTOR_GUIDE, [BAND], null, BLOCK_TYPES, {}).ancestors, []);
+  assert.deepEqual(elementIslands(ANCESTOR_MAP, T3, ANCESTOR_GUIDE, [SECTION], null, BLOCK_TYPES, {}).ancestors, []);
 });
 
 test('a seated rule the map lacks lists as a virtual island at its delivery place; a rule that only wears lists as existing', () => {
-  const map = { ...ANCESTOR_MAP, [B_RULE]: { variants: [{ variant: 'band', fragment: '' }] } };
-  const model = roster(map, T3, { key: SEC_B, selector: '> pb-text' });
+  const map = { ...ANCESTOR_MAP, [B_RULE]: { variants: [{ variant: 'section', fragment: '' }] } };
+  const model = roster(map, T3, { key: SEC_B, selector: '> d-text' });
   assert.deepEqual(model.ancestors.map((rule) => [rule.selector, rule.existing, rule.conditions]), [
     ['> *', true, ['default']],
-    ['> pb-text', false, ['default']],
-    ['> pb-container > *', true, ['default', 'hover']],
+    ['> d-text', false, ['default']],
+    ['> d-container > *', true, ['default', 'hover']],
   ]);
   // The address names the root's facet alone: no part row carries it.
   assert.deepEqual(
-    ancestorIslands({ guide: ANCESTOR_GUIDE, map, key: `${T3}::em`, variants: [BAND], blockTypes: BLOCK_TYPES, tree: PAGE }),
+    ancestorIslands({ guide: ANCESTOR_GUIDE, map, key: `${T3}::em`, variants: [SECTION], blockTypes: BLOCK_TYPES, document: PAGE }),
     [],
   );
 });
 
 test('a rule reaching a part rows under the part, never the root', () => {
   const link = `${T8}::.text-block-link`;
-  const rule = `${SEC_E}::pb-text .text-block-link`;
+  const rule = `${SEC_E}::d-text .text-block-link`;
   const map = { [link]: { default: { color: 'blue' } }, [rule]: { hover: { color: 'red' } } };
   const model = roster(map, T8);
   assert.deepEqual(model.ancestors, []);
   assert.deepEqual(
     model.parts.map((part) => [part.selector, part.ancestors.map((entry) => [entry.owner, entry.selector, entry.key, entry.conditions, entry.existing])]),
-    [['.text-block-link', [[SEC_E, 'pb-text .text-block-link', rule, ['default', 'hover'], true]]]],
+    [['.text-block-link', [[SEC_E, 'd-text .text-block-link', rule, ['default', 'hover'], true]]]],
   );
   // A write address under the PART facet (the spine's two facts: the
   // caller says which facet the address stands under, nothing derives
   // it from the rule) places its mintable rule under the part's row,
   // never the root's.
-  const seated = roster({ [link]: { default: { color: 'blue' } } }, T8, { key: SEC_E, selector: '> pb-text .text-block-link' }, '.text-block-link');
+  const seated = roster({ [link]: { default: { color: 'blue' } } }, T8, { key: SEC_E, selector: '> d-text .text-block-link' }, '.text-block-link');
   assert.deepEqual(seated.ancestors, []);
   assert.deepEqual(
     seated.parts.map((part) => [part.selector, part.ancestors.map((entry) => [entry.selector, entry.existing])]),
-    [['.text-block-link', [['> pb-text .text-block-link', false]]]],
+    [['.text-block-link', [['> d-text .text-block-link', false]]]],
   );
   // The same address handed as the root's (no facet) rows under the
   // root: the facet is the caller's fact, not the matcher's inverse.
-  const atRoot = roster({ [link]: { default: { color: 'blue' } } }, T8, { key: SEC_E, selector: '> pb-text .text-block-link' });
-  assert.deepEqual(atRoot.ancestors.map((entry) => [entry.selector, entry.existing]), [['> pb-text .text-block-link', false]]);
+  const atRoot = roster({ [link]: { default: { color: 'blue' } } }, T8, { key: SEC_E, selector: '> d-text .text-block-link' });
+  assert.deepEqual(atRoot.ancestors.map((entry) => [entry.selector, entry.existing]), [['> d-text .text-block-link', false]]);
 });
 
 test('an own-key address places no rule row: the part row is the island, under the facet and at the root alike', () => {
@@ -351,25 +362,25 @@ test('an own-key address places no rule row: the part row is the island, under t
   // ancestor rules reaching the root list as before, the own tier not
   // among them.
   const atRoot = roster(ANCESTOR_MAP, T3, { key: T3, selector: 'p' });
-  assert.deepEqual(atRoot.ancestors.map((entry) => [entry.owner, entry.selector]), [[SEC_B, '> *'], [SEC_A, '> pb-container > *']]);
+  assert.deepEqual(atRoot.ancestors.map((entry) => [entry.owner, entry.selector]), [[SEC_B, '> *'], [SEC_A, '> d-container > *']]);
   assert.deepEqual(atRoot.parts, []);
 });
 
 test('an ancestor address under the same facet still places its rule row, existing false while the map lacks it', () => {
   const link = `${T8}::.text-block-link`;
   const held = { [link]: { default: { color: 'blue' } } };
-  const seated = roster(held, T8, { key: SEC_E, selector: '> pb-text .text-block-link' }, '.text-block-link');
+  const seated = roster(held, T8, { key: SEC_E, selector: '> d-text .text-block-link' }, '.text-block-link');
   assert.deepEqual(seated.ancestors, []);
   assert.deepEqual(
     seated.parts.map((part) => [part.selector, part.ancestors.map((entry) => [entry.owner, entry.selector, entry.key, entry.existing])]),
-    [['.text-block-link', [[SEC_E, '> pb-text .text-block-link', `${SEC_E}::> pb-text .text-block-link`, false]]]],
+    [['.text-block-link', [[SEC_E, '> d-text .text-block-link', `${SEC_E}::> d-text .text-block-link`, false]]]],
   );
   // Written, the same row reads existing: the placement rule is the
   // address's owner, not the map's holding.
-  const written = roster({ ...held, [`${SEC_E}::> pb-text .text-block-link`]: { hover: { color: 'red' } } }, T8, { key: SEC_E, selector: '> pb-text .text-block-link' }, '.text-block-link');
+  const written = roster({ ...held, [`${SEC_E}::> d-text .text-block-link`]: { hover: { color: 'red' } } }, T8, { key: SEC_E, selector: '> d-text .text-block-link' }, '.text-block-link');
   assert.deepEqual(
     written.parts.map((part) => [part.selector, part.ancestors.map((entry) => [entry.selector, entry.existing, entry.conditions])]),
-    [['.text-block-link', [['> pb-text .text-block-link', true, ['default', 'hover']]]]],
+    [['.text-block-link', [['> d-text .text-block-link', true, ['default', 'hover']]]]],
   );
 });
 
@@ -382,7 +393,7 @@ test('draftRoster merges a drafted condition into a rule row by the rule\'s key'
 test('ownIslandLines drops the ancestor tier\'s lines and keeps the tier as a winner on the floor', () => {
   const lines = reachingT3(ANCESTOR_MAP);
   assert.ok(lines.some((line) => line.layer === `ancestor:${B_RULE}`));
-  assert.ok(lines.some((line) => line.layer === `ancestor:${B_RULE}|band`));
+  assert.ok(lines.some((line) => line.layer === `ancestor:${B_RULE}|section`));
   assert.deepEqual(
     ownIslandLines(lines).map((line) => [line.layer, line.property, line.value, line.lost, line.winner?.layer ?? null]),
     [
@@ -395,13 +406,13 @@ test('ownIslandLines drops the ancestor tier\'s lines and keeps the tier as a wi
 
 test('ruleIslandLines prints the rule\'s own document, struck where the element beats it, the diff blind to the strike', () => {
   const rule = { owner: SEC_B, selector: '> *', key: B_RULE };
-  const ruleStack = buildStack({ guide: ANCESTOR_GUIDE, map: ANCESTOR_MAP, key: B_RULE, variants: [BAND], floor: false });
+  const ruleStack = buildStack({ guide: ANCESTOR_GUIDE, map: ANCESTOR_MAP, key: B_RULE, variants: [SECTION], floor: false });
   const lines = ruleIslandLines(stackLines(ruleStack, 'default'), rule, reachingT3(ANCESTOR_MAP));
   assert.deepEqual(
     lines.map((line) => [line.layer, line.property, line.value, line.lost, line.winner?.layer ?? null, line.beaten?.layer ?? null]),
     [
-      [variantLayerId('band'), 'flex-grow', '1', false, null, null],
-      [variantLayerId('band'), 'color', 'green', true, ELEMENT_LAYER, null],
+      [variantLayerId('section'), 'flex-grow', '1', false, null, null],
+      [variantLayerId('section'), 'color', 'green', true, ELEMENT_LAYER, null],
       [ELEMENT_LAYER, 'color', 'teal', false, null, ELEMENT_LAYER],
       [ELEMENT_LAYER, 'padding', '1rem', false, null, null],
     ],
@@ -646,24 +657,24 @@ test('a resting pose or an already-real row mints nothing', () => {
 // a plugin block.
 const OWNER = 'container:sec-a';
 const TAGS = { p: 'Paragraph', h2: 'Heading 2', a: 'a', em: 'em', strong: 'strong', div: 'div' };
-const TYPES = { 'pb-text': 'Text', 'pb-formatted-text': 'Formatted text', 'pb-image': 'Image', 'pb-container': 'Container', 'pb-block': 'Block' };
+const TYPES = { 'd-text': 'Text', 'd-formatted-text': 'Formatted text', 'd-image': 'Image', 'd-container': 'Container', 'd-block': 'Block' };
 const selectorsOf = (offer) => offer.options.map((option) => option.selector);
 const gesture = (typed, extra = {}) =>
-  selectorGestureOptions(typed, { key: OWNER, tree: TREE, tags: TAGS, types: TYPES, ...extra });
+  selectorGestureOptions(typed, { key: OWNER, document: DOCUMENT, tags: TAGS, types: TYPES, ...extra });
 
 test('after `>` the offer is the universal child, then the children\'s types, then their root tags', () => {
   // Types in document order (the plugin block is the block kind, the
   // nested section the container kind); tags in vocabulary order, only
   // the declared ones (div is declared here, section is not).
   const offer = gesture('>');
-  assert.deepEqual(selectorsOf(offer), ['> *', '> pb-text', '> pb-formatted-text', '> pb-container', '> pb-block', '> p', '> h2', '> div']);
+  assert.deepEqual(selectorsOf(offer), ['> *', '> d-text', '> d-formatted-text', '> d-container', '> d-block', '> p', '> h2', '> div']);
   assert.deepEqual(offer.options[0], { selector: '> *', kind: 'universal', name: '*', label: null });
-  assert.deepEqual(offer.options[1], { selector: '> pb-text', kind: 'type', name: 'pb-text', label: 'Text' });
+  assert.deepEqual(offer.options[1], { selector: '> d-text', kind: 'type', name: 'd-text', label: 'Text' });
   assert.deepEqual(offer.options[5], { selector: '> p', kind: 'tag', name: 'p', label: 'Paragraph' });
   assert.equal(offer.create, null);
   // The same set whatever partial token follows the combinator (the
   // editor filters), spaced or not.
-  assert.deepEqual(selectorsOf(gesture('> pb-')), selectorsOf(offer));
+  assert.deepEqual(selectorsOf(gesture('> d-')), selectorsOf(offer));
   assert.deepEqual(selectorsOf(gesture('>p')), selectorsOf(offer));
 });
 
@@ -673,8 +684,23 @@ test('a bare word at the owner offers the subtree\'s types and the tags it rende
   // formatted text block's paragraphs offer `p` on a container whose
   // direct children may all be headings.
   const offer = gesture('p');
-  assert.deepEqual(selectorsOf(offer), ['pb-text', 'pb-formatted-text', 'pb-container', 'pb-image', 'pb-block', 'p', 'h2', 'a', 'em', 'strong', 'div']);
-  assert.deepEqual(selectorsOf(gesture('pb-')), selectorsOf(offer));
+  assert.deepEqual(selectorsOf(offer), ['d-text', 'd-formatted-text', 'd-container', 'd-image', 'd-block', 'p', 'h2', 'a', 'em', 'strong', 'div']);
+  assert.deepEqual(selectorsOf(gesture('d-')), selectorsOf(offer));
+});
+
+test('on the page itself (the entity root) the offer reads the whole page: after `>` the sections, a bare word everything on it', () => {
+  // The document's root is an owner like any other: its children are the
+  // sections (containers all; of their root tags only the declared one,
+  // div, offers), its descendants every block and section on the page,
+  // their tags the page's. Nothing degrades to the declared universe,
+  // and the root itself is never among its own descendants.
+  const page = (typed) =>
+    selectorsOf(selectorGestureOptions(typed, { key: 'entity:page', document: DOCUMENT, tags: TAGS, types: TYPES, present: [] }));
+  assert.deepEqual(page('>'), ['> *', '> d-container', '> div']);
+  // Types in document order: the first section comes before anything in
+  // it, so the container kind leads from the root (from a section, its
+  // blocks lead and the nested section follows them).
+  assert.deepEqual(page('d-'), ['d-container', 'd-text', 'd-formatted-text', 'd-image', 'd-block', 'p', 'h2', 'a', 'em', 'strong', 'div']);
 });
 
 test('a bare word offers the tag a child\'s part renders, though no prose carries it', () => {
@@ -687,14 +713,14 @@ test('a bare word offers the tag a child\'s part renders, though no prose carrie
   // nothing degrades to the whole vocabulary); after `>` only the roots
   // offer.
   const links = (typed) =>
-    selectorsOf(selectorGestureOptions(typed, { key: 'container:sec-e', tree: TREE, tags: TAGS, types: TYPES, present: [] }));
-  assert.deepEqual(links('a'), ['pb-text', 'pb-container', 'p', 'a', 'strong', 'div']);
-  assert.deepEqual(links('>'), ['> *', '> pb-text', '> pb-container', '> div']);
+    selectorsOf(selectorGestureOptions(typed, { key: 'container:sec-e', document: DOCUMENT, tags: TAGS, types: TYPES, present: [] }));
+  assert.deepEqual(links('a'), ['d-text', 'd-container', 'p', 'a', 'strong', 'div']);
+  assert.deepEqual(links('>'), ['> *', '> d-text', '> d-container', '> div']);
 });
 
 test('the owner\'s own prose tags join the descendant offer; an empty fact hides them', () => {
   const block = (present) =>
-    selectorsOf(selectorGestureOptions('a', { key: 'block:t1', tree: TREE, tags: TAGS, types: TYPES, present }));
+    selectorsOf(selectorGestureOptions('a', { key: 'block:t1', document: DOCUMENT, tags: TAGS, types: TYPES, present }));
   // t1 has no child nodes: only its own prose (a, strong) offers.
   assert.deepEqual(block(['a', 'strong']), ['a', 'strong']);
   assert.deepEqual(block([]), []);
@@ -702,15 +728,15 @@ test('the owner\'s own prose tags join the descendant offer; an empty fact hides
   assert.deepEqual(block(null), ['p', 'h2', 'a', 'em', 'strong', 'div']);
 });
 
-test('chains complete from the matched set: `> pb-container >` lists the nested section\'s children', () => {
-  const offer = gesture('> pb-container > ');
-  assert.deepEqual(selectorsOf(offer), ['> pb-container > *', '> pb-container > pb-text', '> pb-container > pb-image', '> pb-container > pb-container', '> pb-container > p', '> pb-container > div']);
+test('chains complete from the matched set: `> d-container >` lists the nested section\'s children', () => {
+  const offer = gesture('> d-container > ');
+  assert.deepEqual(selectorsOf(offer), ['> d-container > *', '> d-container > d-text', '> d-container > d-image', '> d-container > d-container', '> d-container > p', '> d-container > div']);
   // A descendant position after a type: the type\'s subtree plus its
   // declared parts.
-  const partsFor = (type) => (type === 'pb-text' ? [{ id: '.text-block-link', label: 'Link' }] : []);
-  const chained = gesture('> pb-text ', { partsFor });
-  assert.deepEqual(selectorsOf(chained), ['> pb-text .text-block-link']);
-  assert.deepEqual(chained.options[0], { selector: '> pb-text .text-block-link', kind: 'class', name: '.text-block-link', label: 'Link' });
+  const partsFor = (type) => (type === 'd-text' ? [{ id: '.text-block-link', label: 'Link' }] : []);
+  const chained = gesture('> d-text ', { partsFor });
+  assert.deepEqual(selectorsOf(chained), ['> d-text .text-block-link']);
+  assert.deepEqual(chained.options[0], { selector: '> d-text .text-block-link', kind: 'class', name: '.text-block-link', label: 'Link' });
 });
 
 test('a `.` token offers the owner\'s declared parts, presence-gated, plus the open-site create', () => {
@@ -733,17 +759,20 @@ test('a `.` token offers the owner\'s declared parts, presence-gated, plus the o
 });
 
 test('a `.` after a type offers that type\'s parts (no presence gate); after a tag, nothing', () => {
-  const partsFor = (type) => (type === 'pb-text' ? [{ id: '.text-block-link', label: 'Link' }] : []);
-  const typed = gesture('> pb-text .', { partsFor, parts: [{ id: '.band', label: 'Band' }], presence: { '.band': false } });
-  assert.deepEqual(selectorsOf(typed), ['> pb-text .text-block-link']);
-  assert.equal(gesture('> pb-text .x', { partsFor }).create, '> pb-text .x');
-  // The grammar admits a part only after the owner or a type.
+  const partsFor = (type) => (type === 'd-text' ? [{ id: '.text-block-link', label: 'Link' }] : []);
+  const typed = gesture('> d-text .', { partsFor, parts: [{ id: '.section', label: 'Section' }], presence: { '.section': false } });
+  assert.deepEqual(selectorsOf(typed), ['> d-text .text-block-link']);
+  assert.equal(gesture('> d-text .x', { partsFor }).create, '> d-text .x');
+  // A tag declares no parts, so `.` after one offers nothing and mints
+  // nothing: the roster's doing (parts are declared at the owner or a
+  // type), not the grammar's, which admits a class after a tag as a
+  // compound of its own (compose('p', '.x') below).
   assert.deepEqual(gesture('p .', { partsFor }), { options: [], create: null });
 });
 
-test('no tree in reach offers every declared type and base tag (unknown never hides)', () => {
-  const offer = selectorGestureOptions('> ', { key: OWNER, tree: null, tags: TAGS, types: TYPES });
-  assert.deepEqual(selectorsOf(offer), ['> *', '> pb-text', '> pb-formatted-text', '> pb-image', '> pb-container', '> pb-block', '> p', '> h2', '> a', '> em', '> strong', '> div']);
+test('no document in reach offers every declared type and base tag (unknown never hides)', () => {
+  const offer = selectorGestureOptions('> ', { key: OWNER, document: null, tags: TAGS, types: TYPES });
+  assert.deepEqual(selectorsOf(offer), ['> *', '> d-text', '> d-formatted-text', '> d-image', '> d-container', '> d-block', '> p', '> h2', '> a', '> em', '> strong', '> div']);
 });
 
 test('text outside the grammar offers nothing: a declaration, a dangling combinator, an empty line', () => {
@@ -755,139 +784,367 @@ test('text outside the grammar offers nothing: a declaration, a dangling combina
   assert.equal(gesture('p {'), null);
 });
 
+// The brace and the composition read through the digester with the
+// fixture guide's condition table (hover a posable state, narrow a
+// wrapper); `row` is the answer's shape.
+const digestOptions = { conditions: guide.conditions };
+const brace = (before, after = '', rule = null) => bracedSelector(before, after, rule, digestOptions);
+const compose = (rule, text) => composeUnder(rule, text, digestOptions);
+const row = (selector, condition = null, folded = false) => ({ selector, condition, folded });
+
 test('a typed brace mints the whole selector before it, and only that', () => {
-  assert.equal(bracedSelector('> pb-text ', ''), '> pb-text');
-  assert.equal(bracedSelector('  p', ''), 'p');
-  assert.equal(bracedSelector('.quote', ''), '.quote');
-  assert.equal(bracedSelector('>pb-container>p', ''), '> pb-container > p');
-  // A partial token, a dangling combinator, a declaration, trailing text
-  // after the cursor, an empty line: the brace stays text.
-  assert.equal(bracedSelector('> pb-', ''), null);
-  assert.equal(bracedSelector('>', ''), null);
-  assert.equal(bracedSelector('color: red', ''), null);
-  assert.equal(bracedSelector('p', ' x'), null);
-  assert.equal(bracedSelector('', ''), null);
-  assert.equal(bracedSelector('&hover', ''), null);
-  // A relation mints through the grammar, canonical; a colon opens a
-  // qualifier only, so a state or a declaration stays text.
-  assert.equal(bracedSelector('> pb-text:has(a) ', ''), '> pb-text:has(a)');
-  assert.equal(bracedSelector('>p+p', ''), '> p + p');
-  assert.equal(bracedSelector('> p ~ p', ''), '> p ~ p');
-  assert.equal(bracedSelector('> *:not(pb-image)', ''), '> *:not(pb-image)');
-  assert.equal(bracedSelector('> pb-text:not( .featured ):has( a )', ''), '> pb-text:has(a):not(.featured)');
-  assert.equal(bracedSelector('> pb-text:hover', ''), null);
-  assert.equal(bracedSelector('+ p', ''), null);
-  assert.equal(bracedSelector('> pb-text:has(', ''), null);
+  assert.deepEqual(brace('> d-text '), row('> d-text'));
+  assert.deepEqual(brace('  p'), row('p'));
+  assert.deepEqual(brace('.quote'), row('.quote'));
+  assert.deepEqual(brace('>d-container>p'), row('> d-container > p'));
+  // A partial token, a dangling combinator, a declaration, text after
+  // the cursor, an empty line and the sigil's shape are not selectors.
+  assert.equal(brace('> d-'), null);
+  assert.equal(brace('>'), null);
+  assert.equal(brace('color: red'), null);
+  assert.equal(brace('p', ' x'), null);
+  assert.equal(brace(''), null);
+  assert.equal(brace('&hover'), null);
+  // Relations are typed whole and judged by the grammar.
+  assert.deepEqual(brace('> d-text:has(a) '), row('> d-text:has(a)'));
+  assert.deepEqual(brace('>p+p'), row('> p + p'));
+  assert.deepEqual(brace('> p ~ p'), row('> p ~ p'));
+  assert.deepEqual(brace('> *:not(d-image)'), row('> *:not(d-image)'));
+  assert.deepEqual(brace('> d-text:not( .featured ):has( a )'), row('> d-text:has(a):not(.featured)'));
+  assert.equal(brace('+ p'), null);
+  assert.equal(brace('> d-text:has('), null);
+});
+
+test('a typed brace reads the WHERE through the digester: a state peels on the last compound and qualifies before it, classes and attributes ride, a list folds into one `:is()` rule, case is lenient', () => {
+  // A state on the last compound is the row's condition (`a:hover {` is
+  // the `a` row's hover island); on the owner it is the owner's own
+  // condition row, the `&hover` pick's twin.
+  assert.deepEqual(brace('a:hover'), row('a', 'hover'));
+  assert.deepEqual(brace('> d-text:hover'), row('> d-text', 'hover'));
+  assert.deepEqual(brace('&:hover'), row('', 'hover'));
+  assert.deepEqual(brace(':hover'), row('', 'hover'));
+  assert.deepEqual(brace('&:hover::before'), row('&::before', 'hover'));
+  assert.deepEqual(brace('> d-text:hover:has(a)'), row('> d-text:has(a)', 'hover'), 'by name, not by the token\'s place');
+  // A state on a compound before the last qualifies that compound: the
+  // reveal patterns.
+  assert.deepEqual(brace('li:hover > ul'), row('li:hover > ul'));
+  assert.deepEqual(brace('&:hover > ul'), row('&:hover > ul'));
+  assert.deepEqual(brace('> d-text:hover a'), row('> d-text:hover a'));
+  // A class on any compound, an attribute, a position and an unpublished
+  // pseudo-class are selector text (admission is the validator's).
+  assert.deepEqual(brace('li.active > ul'), row('li.active > ul'));
+  assert.deepEqual(brace('&.open > ul'), row('&.open > ul'));
+  assert.deepEqual(brace('[aria-expanded="true"] > ul'), row('*[aria-expanded="true"] > ul'));
+  assert.deepEqual(brace('> d-text:first-child'), row('> d-text:first-child'));
+  assert.deepEqual(brace('> *:not(:last-child)'), row('> *:not(:last-child)'));
+  assert.deepEqual(brace('a:visited'), row('a:visited'));
+  assert.deepEqual(brace('Li:HOVER > UL'), row('li:hover > ul'));
+  // A list is one rule: the digester folds it into ONE `:is()` row under
+  // the one condition its members share and reports the fold (the host
+  // says so once); members peeling different conditions and a list
+  // sharing no shape refuse; a typed `:is()` is the grammar's own, no
+  // fold; one member after collapsing is no list.
+  assert.deepEqual(brace('h1, h2, h3'), row('*:is(h1, h2, h3)', null, true));
+  assert.deepEqual(brace('a:hover, button:hover'), row('*:is(a, button)', 'hover', true));
+  assert.deepEqual(brace('> d-text:hover a, > d-text:focus-within a'), row('> d-text:is(:focus-within, :hover) a', null, true));
+  assert.equal(brace('a:hover, a:focus'), null);
+  assert.equal(brace('h1, .x > a'), null);
+  assert.deepEqual(brace(':is(h1, h2)'), row('&:is(h1, h2)'));
+  assert.deepEqual(brace('a, a'), row('a'));
+  // The anchor is nesting sugar: `& > p` is `> p`; `&` alone is the
+  // island itself, nothing to mint; a published wrapper alone is the
+  // island under that reference, any other query the condition grammar
+  // reads the island under that LITERAL clause, canonical (the WHEN
+  // landing: a typed `@…` line mints a condition row; its admission is
+  // the validator's by mode), and text the grammar cannot read nothing.
+  assert.deepEqual(brace('& > p'), row('> p'));
+  assert.equal(brace('&'), null);
+  assert.deepEqual(brace('@container (max-width: 767px)'), row('', 'narrow'));
+  assert.deepEqual(brace('@CONTAINER (max-width:767px)'), row('', 'narrow'), 'a literal equal to a published wrapper is its reference');
+  assert.deepEqual(brace('@supports (display: grid)'), row('', '@supports (display: grid)'));
+  assert.deepEqual(brace('@container (min-width: 500px)'), row('', '@container (min-width: 500px)'));
+  assert.deepEqual(brace('@media  ( Hover: hover )'), row('', '@media (hover: hover)'), 'a literal lands canonical');
+  assert.equal(brace('@media screen'), null, 'a query with no feature test is nothing to mint');
+  assert.equal(brace('@keyframes spin'), null);
+  // An unpublished posable pseudo-class on the last compound peels as a
+  // pseudo-class literal; a state no stamp stands in for stays a qualifier.
+  assert.deepEqual(brace('input:checked'), row('input', ':checked'));
+  assert.deepEqual(brace('&:checked'), row('', ':checked'));
+  // Without the table a posable state still peels, as a literal.
+  assert.deepEqual(bracedSelector('a:hover', ''), row('a', ':hover'));
+  assert.deepEqual(bracedSelector('a:visited', ''), row('a:visited'));
+});
+
+const preview = (typed, rule = null) => previewReach(typed, { rule, ...digestOptions });
+
+test('the mint line previews its reach as each token settles: the digested line\'s structural reach, null while the text does not digest', () => {
+  // The line keystroke by keystroke: a settled token previews, an open
+  // one clears, and the brace's reading is the preview's (one grammar).
+  assert.equal(preview('>'), null, 'a dangling combinator');
+  assert.equal(preview('> d'), '> d', 'a tag word settles as it is typed');
+  assert.equal(preview('> d-'), null, 'an open type token');
+  assert.equal(preview('> d-text'), '> d-text');
+  assert.equal(preview('> d-text:'), null, 'an open pseudo-class');
+  assert.equal(preview('> d-text:has('), null, 'an unclosed qualifier');
+  assert.equal(preview('> d-text:has(a)'), '> d-text:has(a)');
+  assert.equal(preview('> d-text:has(a) '), '> d-text:has(a)', 'a trailing space is the same line');
+  assert.equal(preview('> d-text:has(a) a'), '> d-text:has(a) a', 'the reach moves to the link');
+  assert.equal(preview('> d-text::before'), '> d-text::before');
+  assert.equal(preview('p'), 'p');
+  assert.equal(preview('Li:HOVER > UL'), 'li > ul', 'canonical, as the facet wants it');
+  // Clearing: a declaration, the sigil's shape, a brace or semicolon
+  // on the line, an empty line, the owner itself (the selected element
+  // already shows), a wrapper alone (a condition, no selector), a reach
+  // with nothing addressable left. A list previews the reach of the one
+  // `:is()` rule it folds into.
+  assert.equal(preview('color: red'), null);
+  assert.equal(preview('color: red;'), null);
+  assert.equal(preview('&hover'), null);
+  assert.equal(preview('> d-text {'), null);
+  assert.equal(preview(''), null);
+  assert.equal(preview('   '), null);
+  assert.equal(preview('&'), null);
+  assert.equal(preview('&:hover'), null, 'the owner under hover is the owner');
+  assert.equal(preview('h1, h2'), '*:is(h1, h2)', 'a list previews its fold');
+  assert.equal(preview('> d-text:hover a, > d-text:focus-within a'), '> d-text:focus-within a', 'the posable state inside :is() strips per member (the fixture publishes hover alone, so focus-within rides as a qualifier) and the one member left merges');
+  assert.equal(preview('h1, .x > a'), null, 'a list sharing no shape is refused');
+  assert.equal(preview('@container (max-width: 767px)'), null);
+  assert.equal(preview('*:hover > ul'), null, 'the peel leaves no address');
+  assert.equal(preview(42), null);
+});
+
+test('the reach preview strips the posable states and keeps what the browser evaluates live', () => {
+  // A state on any compound matches nothing in the DOM until it holds,
+  // so the paint shows the structural reach; a peeled state (the row's
+  // condition) is no reach either.
+  assert.equal(preview('li:hover > ul'), 'li > ul');
+  assert.equal(preview('> d-text:hover a'), '> d-text a');
+  assert.equal(preview('a:hover'), 'a');
+  assert.equal(preview('&:hover > ul'), '> ul');
+  assert.equal(preview('li:has(*:hover)'), 'li');
+  // Position, class and attribute qualifiers stay (the browser judges
+  // them live), and so does a negated state (never stripped inside
+  // `:not()`).
+  assert.equal(preview('li:first-child > a'), 'li:first-child > a');
+  assert.equal(preview('li.active > ul'), 'li.active > ul');
+  assert.equal(preview('[aria-expanded="true"] > ul'), '*[aria-expanded="true"] > ul');
+  assert.equal(preview('> d-text:not(:hover)'), '> d-text:not(:hover)');
+  // Without the table nothing is a state: `:hover` stays as typed.
+  assert.equal(previewReach('li:hover > ul'), 'li:hover > ul');
+});
+
+test('inside a rule island the mint line previews under the rule', () => {
+  assert.equal(preview('&::before', 'p'), 'p::before');
+  assert.equal(preview('> a', 'p'), 'p > a');
+  assert.equal(preview('a', 'p'), 'p a');
+  assert.equal(preview(':first-child', '> d-text'), '> d-text:first-child');
+  assert.equal(preview('&:hover a', 'p'), 'p a');
+  // The island's own row previews the rule's reach, its hover row the
+  // same reach (the state is the row's condition).
+  assert.equal(preview('&', 'p'), 'p');
+  assert.equal(preview('&:hover', 'p'), 'p');
+  assert.equal(preview('&hover', 'p'), null);
 });
 
 test('a typed brace mints a generated box: the owner\'s through the anchor, a subject\'s glued', () => {
-  assert.equal(bracedSelector('&::before', ''), '&::before');
-  assert.equal(bracedSelector('  &::after ', ''), '&::after');
-  assert.equal(bracedSelector('> pb-text::after ', ''), '> pb-text::after');
-  assert.equal(bracedSelector('.quote::before', ''), '.quote::before');
-  assert.equal(bracedSelector('p::after', ''), 'p::after');
-  assert.equal(bracedSelector('>pb-container>p::before', ''), '> pb-container > p::before');
-  assert.equal(bracedSelector('> p + p::after', ''), '> p + p::after');
-  assert.equal(bracedSelector('> pb-text:has( a )::before', ''), '> pb-text:has(a)::before');
-  // The grammar's refusals stay text for the lint: the bare anchor, a
-  // partial tail, another pseudo-element, a box continued or doubled, a
-  // space before the `::`, the anchor inside a chain.
-  assert.equal(bracedSelector('&', ''), null);
-  assert.equal(bracedSelector('&::', ''), null);
-  assert.equal(bracedSelector('&::bef', ''), null);
-  assert.equal(bracedSelector('&::marker', ''), null);
-  assert.equal(bracedSelector('> pb-text::first-line', ''), null);
-  assert.equal(bracedSelector('&::before .x', ''), null);
-  assert.equal(bracedSelector('> pb-text::before::after', ''), null);
-  assert.equal(bracedSelector('> pb-text ::before', ''), null);
-  assert.equal(bracedSelector('& ::before', ''), null);
-  assert.equal(bracedSelector('& > p', ''), null);
-  assert.equal(bracedSelector('> pb-text &::before', ''), null);
-  assert.equal(bracedSelector('&::before', ' x'), null);
+  assert.deepEqual(brace('&::before'), row('&::before'));
+  assert.deepEqual(brace('  &::after '), row('&::after'));
+  assert.deepEqual(brace('> d-text::after '), row('> d-text::after'));
+  assert.deepEqual(brace('.quote::before'), row('.quote::before'));
+  assert.deepEqual(brace('p::after'), row('p::after'));
+  assert.deepEqual(brace('>d-container>p::before'), row('> d-container > p::before'));
+  assert.deepEqual(brace('> p + p::after'), row('> p + p::after'));
+  assert.deepEqual(brace('> d-text:has( a )::before'), row('> d-text:has(a)::before'));
+  assert.deepEqual(brace('::before'), row('&::before'), 'a leading `::` is the owner\'s own box');
+  // Any pseudo-element the browser spells mints (the grammar is CSS's;
+  // whether this site knows `&::bef` is the validator's verdict at the
+  // write, as for a typed tag), the owner's through the anchor, a
+  // subject's glued.
+  assert.deepEqual(brace('&::marker'), row('&::marker'));
+  assert.deepEqual(brace('> d-text::first-line'), row('> d-text::first-line'));
+  assert.deepEqual(brace('li:hover::marker'), row('li::marker', 'hover'), 'a state before another pseudo-element peels as before a box');
+  assert.deepEqual(brace('&::bef'), row('&::bef'));
+  // A bare `::`, a functional pseudo-element, anything after a box, a box
+  // on a box, a `::` behind a space and an anchor anywhere but first are
+  // the digester's refusals.
+  assert.equal(brace('&::'), null);
+  assert.equal(brace('&::part(x)'), null);
+  assert.equal(brace('&::before .x'), null);
+  assert.equal(brace('> d-text::before::after'), null);
+  assert.equal(brace('> d-text ::before'), null);
+  assert.equal(brace('& ::before'), null);
+  assert.equal(brace('> d-text &::before'), null);
+  assert.equal(brace('&::before', ' x'), null);
+});
+
+test('the `:` lane: glued to a compound (or bare at the owner) it offers the published states, the positions and the open qualifiers to finish; nothing inside an open paren or bracket', () => {
+  const lane = gesture('> d-text:ho', { conditions: guide.conditions });
+  assert.deepEqual(lane.options.slice(0, 2), [
+    { selector: '> d-text:hover', kind: 'state', name: 'hover', label: 'Hover' },
+    { selector: '> d-text:first-child', kind: 'position', name: 'first-child', label: null },
+  ]);
+  assert.deepEqual(
+    lane.options.filter((option) => option.kind === 'position').map((option) => option.name),
+    ['first-child', 'last-child', 'only-child', 'empty', 'first-of-type', 'last-of-type', 'only-of-type'],
+  );
+  assert.deepEqual(
+    lane.options.filter((option) => option.kind === 'qualifier'),
+    ['nth-child', 'nth-last-child', 'nth-of-type', 'nth-last-of-type', 'not', 'has', 'is'].map((name) => ({
+      insert: `> d-text:${name}(`,
+      kind: 'qualifier',
+      name,
+      label: null,
+    })),
+  );
+  assert.equal(lane.create, null);
+  // A wrapper is no pseudo-class, so `narrow` is never a state option;
+  // without a table only the positions and qualifiers offer.
+  assert.deepEqual(lane.options.filter((option) => option.name === 'narrow'), []);
+  assert.deepEqual(gesture('a:').options.filter((option) => option.kind === 'state'), []);
+  // At the owner the lane is the anchor's: a bare `:` or `&:`.
+  assert.equal(gesture(':ho', { conditions: guide.conditions }).options[0].selector, '&:hover');
+  assert.equal(gesture('&:fi', { conditions: guide.conditions }).options.find((option) => option.kind === 'position').selector, '&:first-child');
+  // After a closed qualifier the lane goes on; inside an open one, or an
+  // open attribute, nothing; a space before the colon is no lane.
+  assert.deepEqual(gesture('> d-text:has(a):ho', { conditions: guide.conditions }).options[0], {
+    selector: '> d-text:has(a):hover', kind: 'state', name: 'hover', label: 'Hover',
+  });
+  assert.equal(gesture('> d-text:has(a'), null);
+  assert.equal(gesture('> d-text:has('), null);
+  // The lane goes on after a closed `:is()` too, a state inside it on
+  // the compound before: the children of the revealed items.
+  assert.deepEqual(gesture('.menu-item:is(:focus-within, :hover) > ul:ho', { conditions: guide.conditions }).options[0], {
+    selector: '.menu-item:is(:focus-within, :hover) > ul:hover', kind: 'state', name: 'hover', label: 'Hover',
+  });
+  assert.equal(gesture('.menu-item:is(:focus-within, '), null);
+  assert.equal(gesture('li[aria-current'), null);
+  assert.deepEqual(gesture('> d-text :ho').options.filter((option) => option.kind === 'state'), []);
+  // A settled state before a chain reads through the grammar: the
+  // children of the hovered items.
+  assert.deepEqual(selectorsOf(gesture('li:hover > ')).slice(0, 1), ['li:hover > *']);
+});
+
+test('a `.` glued to a tag offers the classes the completion can know: the declared parts of the owner the tag stands under; never a create', () => {
+  const parts = [{ id: '.quote', label: 'Quote' }];
+  const partsFor = (type) => (type === 'd-text' ? [{ id: '.text-block-link', label: 'Link' }] : []);
+  assert.deepEqual(gesture('p.qu', { parts }).options, [{ selector: 'p.quote', kind: 'class', name: '.quote', label: 'Quote' }]);
+  assert.deepEqual(selectorsOf(gesture('> d-text a.', { parts, partsFor })), ['> d-text a.text-block-link']);
+  assert.equal(gesture('p.qu', { parts }).create, null);
+  // Glued to a type there are no classes to know (a worn variant's class
+  // is the matcher's fact, not the completion's).
+  assert.deepEqual(gesture('> d-text.', { partsFor }).options.filter((option) => option.kind === 'class'), []);
 });
 
 // --- Composition under a rule island (CSS nesting's relative rule) ----------
 
-test('composeUnder on the owner\'s island leaves the text as typed: no rule, the anchor the owner\'s own box', () => {
-  assert.equal(composeUnder(null, 'p'), 'p');
-  assert.equal(composeUnder('', '> pb-text'), '> pb-text');
-  assert.equal(composeUnder(null, '&::before'), '&::before');
-  assert.equal(composeUnder(null, '  .quote::after '), '.quote::after');
-  // The grammar still judges: the bare anchor and a chain on it refuse.
-  assert.equal(composeUnder(null, '&'), null);
-  assert.equal(composeUnder('', '& > p'), null);
+test('composeUnder on the owner\'s island leaves the text as typed: no rule, the anchor the owner itself', () => {
+  assert.deepEqual(compose(null, 'p'), row('p'));
+  assert.deepEqual(compose('', '> d-text'), row('> d-text'));
+  assert.deepEqual(compose(null, '&::before'), row('&::before'));
+  assert.deepEqual(compose(null, '  .quote::after '), row('.quote::after'));
+  // The bare anchor is the island itself, nothing to mint; a chain on it
+  // is nesting sugar; a state on it is the owner's own condition row.
+  assert.equal(compose(null, '&'), null);
+  assert.deepEqual(compose('', '& > p'), row('> p'));
+  assert.deepEqual(compose(null, '&:hover'), row('', 'hover'));
 });
 
-test('composeUnder under a tag rule: `&` is the rule, a bare line is relative to it, the grammar judges the result', () => {
-  assert.equal(composeUnder('p', '&::before'), 'p::before');
-  assert.equal(composeUnder('p', '&::after'), 'p::after');
-  assert.equal(composeUnder('p', '> a'), 'p > a');
-  assert.equal(composeUnder('p', 'a'), 'p a');
-  // A part class composes relative to the rule too, and the grammar
-  // judges the composed text as it judges an authored key: a part is
-  // admitted after the owner or a type, never after a tag.
-  assert.equal(composeUnder('p', '.x'), null);
-  assert.equal(composeUnder('> pb-text', '.x'), '> pb-text .x');
-  assert.equal(composeUnder('p', '& > a'), 'p > a');
-  assert.equal(composeUnder('p', '>a'), 'p > a');
-  assert.equal(composeUnder('p', '  > a '), 'p > a');
+test('composeUnder under a tag rule: `&` is the rule, a bare line is relative to it, the digester judges the result', () => {
+  assert.deepEqual(compose('p', '&::before'), row('p::before'));
+  assert.deepEqual(compose('p', '&::after'), row('p::after'));
+  assert.deepEqual(compose('p', '> a'), row('p > a'));
+  assert.deepEqual(compose('p', 'a'), row('p a'));
+  // A part class composes relative to the rule too (a class after a tag
+  // by descent is a compound of its own).
+  assert.deepEqual(compose('p', '.x'), row('p .x'));
+  assert.deepEqual(compose('> d-text', '.x'), row('> d-text .x'));
+  assert.deepEqual(compose('p', '& > a'), row('p > a'));
+  assert.deepEqual(compose('p', '>a'), row('p > a'));
+  assert.deepEqual(compose('p', '  > a '), row('p > a'));
   // `&` alone composes to the rule itself, the row the island already
-  // is: refused, as the owner's island refuses `&`.
-  assert.equal(composeUnder('p', '&'), null);
-  assert.equal(composeUnder('p', ' & '), null);
-  // The grammar's refusals on the composed text: a partial tail, a
-  // dangling combinator, another pseudo, a state.
-  assert.equal(composeUnder('p', '&::'), null);
-  assert.equal(composeUnder('p', '&::bef'), null);
-  assert.equal(composeUnder('p', '>'), null);
-  assert.equal(composeUnder('p', '&::marker'), null);
-  assert.equal(composeUnder('p', '&:hover'), null);
+  // is: nothing to mint.
+  assert.equal(compose('p', '&'), null);
+  assert.equal(compose('p', ' & '), null);
+  // Another pseudo-element composes like a box; the digester's refusals
+  // on the composed text: a bare `::`, a dangling combinator, a
+  // functional pseudo-element.
+  assert.deepEqual(compose('p', '&::marker'), row('p::marker'));
+  assert.deepEqual(compose('p', '&::first-letter'), row('p::first-letter'));
+  assert.equal(compose('p', '&::'), null);
+  assert.equal(compose('p', '>'), null);
+  assert.equal(compose('p', '&::part(x)'), null);
+  // A state on the rule's own compound is the island's condition row
+  // (`&:hover {` in the `p` island, the `&hover` pick's twin), a leading
+  // `:` the same sugar, a published wrapper alone too; with a chain below
+  // it qualifies the rule's compound, and a class on it is selector text.
+  assert.deepEqual(compose('p', '&:hover'), row('p', 'hover'));
+  assert.deepEqual(compose('p', ':hover'), row('p', 'hover'));
+  assert.deepEqual(compose('p', '@container (max-width: 767px)'), row('p', 'narrow'));
+  assert.deepEqual(compose('li', '&:hover > ul'), row('li:hover > ul'));
+  assert.deepEqual(compose('li', '&.open > ul'), row('li.open > ul'));
   // The condition sigil's shape (the anchor glued to a word) never
-  // composes: substituting the rule would spell a tag (`phover`).
-  assert.equal(composeUnder('p', '&hover'), null);
-  assert.equal(composeUnder('p', '&first-child'), null);
+  // composes: substituting the rule would spell a tag (`phover`). A
+  // position is typed as `:first-child` through the `:` lane and
+  // refines the rule into a row of its own (the fact-condition fixtures'
+  // new spelling).
+  assert.equal(compose('p', '&hover'), null);
+  assert.equal(compose('p', '&first-child'), null);
+  assert.deepEqual(compose('> d-text', '&:first-child'), row('> d-text:first-child'));
+  assert.deepEqual(compose('> *', '&:not(:last-child)'), row('> *:not(:last-child)'));
   assert.equal(nestUnder('p', '&hover'), null);
   assert.equal(nestUnder(null, '&hover'), null);
 });
 
 test('composeUnder under a chain rule continues the chain, and a box rule takes no continuation', () => {
-  assert.equal(composeUnder('> pb-text .link', '&::after'), '> pb-text .link::after');
-  assert.equal(composeUnder('> pb-text .link', '> a'), '> pb-text .link > a');
-  assert.equal(composeUnder('> pb-text', '&::before'), '> pb-text::before');
-  assert.equal(composeUnder('> pb-text', '.link'), '> pb-text .link');
-  assert.equal(composeUnder('> pb-text:has(a)', '&::before'), '> pb-text:has(a)::before');
+  assert.deepEqual(compose('> d-text .link', '&::after'), row('> d-text .link::after'));
+  assert.deepEqual(compose('> d-text .link', '> a'), row('> d-text .link > a'));
+  assert.deepEqual(compose('> d-text', '&::before'), row('> d-text::before'));
+  assert.deepEqual(compose('> d-text', '.link'), row('> d-text .link'));
+  assert.deepEqual(compose('> d-text:has(a)', '&::before'), row('> d-text:has(a)::before'));
   // A rule that is itself a box (`p::before`) is a terminal: a box on a
   // box and a descendant of a box are outside the grammar.
-  assert.equal(composeUnder('p::before', '&::after'), null);
-  assert.equal(composeUnder('p::before', '> a'), null);
-  assert.equal(composeUnder('p::before', '.x'), null);
+  assert.equal(compose('p::before', '&::after'), null);
+  assert.equal(compose('p::before', '> a'), null);
+  assert.equal(compose('p::before', '.x'), null);
 });
 
 test('nestUnder is the raw substitution the completion feeds: a partial line composes without judgement', () => {
   assert.equal(nestUnder('p', '&::'), 'p::');
   assert.equal(nestUnder('p', '&::bef'), 'p::bef');
   assert.equal(nestUnder('p', '> '), 'p > ');
-  assert.equal(nestUnder('p', '> pb-'), 'p > pb-');
+  assert.equal(nestUnder('p', '> d-'), 'p > d-');
   assert.equal(nestUnder('p', '.'), 'p .');
-  assert.equal(nestUnder('> pb-text', 'a'), '> pb-text a');
+  assert.equal(nestUnder('> d-text', 'a'), '> d-text a');
   assert.equal(nestUnder(null, '&::'), '&::');
-  assert.equal(nestUnder('', '> pb-'), '> pb-');
+  assert.equal(nestUnder('', '> d-'), '> d-');
   assert.equal(nestUnder('p', 42), null);
 });
 
 test('the completion fed the nested line offers the rule\'s position: its boxes behind `&::`, its children behind `>`', () => {
   // The owner's `p` island on section A: `&::` is the paragraph's boxes,
   // minting the composed selectors.
+  // The two generated boxes first, then the five with a vocabulary of
+  // their own, then every other pseudo-element the browser knows (the
+  // wide tier), each once; the completion filters by the typed tail.
   const boxes = gesture(nestUnder('p', '&::'));
-  assert.deepEqual(boxes.options, [
+  assert.deepEqual(boxes.options.slice(0, 7), [
     { selector: 'p::before', kind: 'pseudo', name: 'before', label: null },
     { selector: 'p::after', kind: 'pseudo', name: 'after', label: null },
+    { selector: 'p::marker', kind: 'pseudo', name: 'marker', label: null },
+    { selector: 'p::placeholder', kind: 'pseudo', name: 'placeholder', label: null },
+    { selector: 'p::selection', kind: 'pseudo', name: 'selection', label: null },
+    { selector: 'p::first-letter', kind: 'pseudo', name: 'first-letter', label: null },
+    { selector: 'p::first-line', kind: 'pseudo', name: 'first-line', label: null },
   ]);
-  // `>` inside the `> pb-container` island is the nested section's
-  // children, the same set the owner's chain `> pb-container >` reads.
+  assert.equal(boxes.options.length, widePseudoElements().length);
+  assert.equal(new Set(boxes.options.map((option) => option.name)).size, boxes.options.length);
+  assert.ok(boxes.options.some((option) => option.selector === 'p::backdrop'));
+  assert.equal(boxes.create, null);
+  // `>` inside the `> d-container` island is the nested section's
+  // children, the same set the owner's chain `> d-container >` reads.
   assert.deepEqual(
-    selectorsOf(gesture(nestUnder('> pb-container', '> '))),
-    selectorsOf(gesture('> pb-container > ')),
+    selectorsOf(gesture(nestUnder('> d-container', '> '))),
+    selectorsOf(gesture('> d-container > ')),
   );
   // A bare word inside a tag island is a descendant of the tag's
   // matches: nothing under section A's paragraphs, so no offer.
@@ -903,31 +1160,38 @@ test('nestedSpelling reads a composed option back in the typed line\'s nesting: 
   assert.equal(nestedSpelling('p', '&::bef', 'p::after'), '&::after');
   assert.equal(nestedSpelling('p', '& > ', 'p > a'), '& > a');
   assert.equal(nestedSpelling('p', '> ', 'p > *'), '> *');
-  assert.equal(nestedSpelling('p', '>pb-', 'p > pb-text'), '> pb-text');
+  assert.equal(nestedSpelling('p', '>d-', 'p > d-text'), '> d-text');
   assert.equal(nestedSpelling('p', '.', 'p .x'), '.x');
-  assert.equal(nestedSpelling('> pb-container', '> ', '> pb-container > pb-text'), '> pb-text');
-  assert.equal(nestedSpelling('> pb-text .link', '&::', '> pb-text .link::after'), '&::after');
+  assert.equal(nestedSpelling('> d-container', '> ', '> d-container > d-text'), '> d-text');
+  assert.equal(nestedSpelling('> d-text .link', '&::', '> d-text .link::after'), '&::after');
   // On the owner's island the selector is its own spelling.
   assert.equal(nestedSpelling(null, '&::', '&::before'), '&::before');
-  assert.equal(nestedSpelling('', '> ', '> pb-text'), '> pb-text');
+  assert.equal(nestedSpelling('', '> ', '> d-text'), '> d-text');
 });
 
 test('a typed brace inside a rule island mints the composed selector', () => {
-  assert.equal(bracedSelector('&::before', '', 'p'), 'p::before');
-  assert.equal(bracedSelector('  &::after ', '', 'p'), 'p::after');
-  assert.equal(bracedSelector('> a', '', 'p'), 'p > a');
-  assert.equal(bracedSelector('.x', '', '> pb-text'), '> pb-text .x');
-  assert.equal(bracedSelector('&::after', '', '> pb-text .link'), '> pb-text .link::after');
-  assert.equal(bracedSelector('&::before', '', '> pb-text'), '> pb-text::before');
+  assert.deepEqual(brace('&::before', '', 'p'), row('p::before'));
+  assert.deepEqual(brace('  &::after ', '', 'p'), row('p::after'));
+  assert.deepEqual(brace('> a', '', 'p'), row('p > a'));
+  assert.deepEqual(brace('.x', '', '> d-text'), row('> d-text .x'));
+  assert.deepEqual(brace('&::after', '', '> d-text .link'), row('> d-text .link::after'));
+  assert.deepEqual(brace('&::before', '', '> d-text'), row('> d-text::before'));
+  // The island's own condition row (`&:hover {`, `:hover {`), a state on
+  // the rule's compound with a chain below, a position refining the rule.
+  assert.deepEqual(brace('&:hover', '', 'p'), row('p', 'hover'));
+  assert.deepEqual(brace(':hover', '', '> d-text'), row('> d-text', 'hover'));
+  assert.deepEqual(brace('&:hover > ul', '', 'li'), row('li:hover > ul'));
+  assert.deepEqual(brace('&:first-child', '', '> d-text'), row('> d-text:first-child'));
   // The same refusals as the owner's: a partial tail, text after the
-  // cursor, a declaration, a box on a box.
-  assert.equal(bracedSelector('&::', '', 'p'), null);
-  assert.equal(bracedSelector('&::before', ' x', 'p'), null);
-  assert.equal(bracedSelector('color: red', '', 'p'), null);
-  assert.equal(bracedSelector('&::after', '', 'p::before'), null);
+  // cursor, a declaration, a box on a box, the rule itself.
+  assert.equal(brace('&::', '', 'p'), null);
+  assert.equal(brace('&::before', ' x', 'p'), null);
+  assert.equal(brace('color: red', '', 'p'), null);
+  assert.equal(brace('&::after', '', 'p::before'), null);
+  assert.equal(brace('&', '', 'p'), null);
   // No rule: the owner's behaviour, unchanged.
-  assert.equal(bracedSelector('&::before', '', null), '&::before');
-  assert.equal(bracedSelector('&::before', '', ''), '&::before');
+  assert.deepEqual(brace('&::before', '', null), row('&::before'));
+  assert.deepEqual(brace('&::before', '', ''), row('&::before'));
 });
 
 test('a block typed or pasted inside an island is a door chunk, never an error: the door materializes or names it', () => {
@@ -940,71 +1204,84 @@ test('a block typed or pasted inside an island is a door chunk, never an error: 
   });
 });
 
-test('a relation line offers nothing: a relation is typed whole', () => {
+test('a relation is typed whole: nothing after a sibling combinator or inside an open qualifier; a settled relation continues through the grammar', () => {
   assert.equal(gesture('> p + '), null);
   assert.equal(gesture('> p + p'), null);
   assert.equal(gesture('> p ~ '), null);
-  assert.equal(gesture('> pb-text:has('), null);
-  assert.equal(gesture('> pb-text:has(a) '), null);
-  assert.equal(gesture('> *:not(pb-image) .'), null);
-  // A box on a relation is typed whole too (the brace mints it).
-  assert.equal(gesture('> p + p::'), null);
-  assert.equal(gesture('> pb-text:has(a)::b'), null);
+  assert.equal(gesture('> d-text:has('), null);
+  // A closed qualifier is a settled compound: the offer is its matches'
+  // descendants (the linked text blocks' anchors), parts and boxes.
+  const settled = gesture('> d-text:has(a) ');
+  assert.notEqual(settled, null);
+  assert.ok(selectorsOf(settled).every((selector) => selector.startsWith('> d-text:has(a) ')));
+  assert.deepEqual(gesture('> *:not(d-image) .'), { options: [], create: null });
+  assert.deepEqual(selectorsOf(gesture('> p + p::')).slice(0, 2), ['> p + p::before', '> p + p::after']);
+  assert.equal(selectorsOf(gesture('> p + p::')).length, widePseudoElements().length);
+  assert.deepEqual(selectorsOf(gesture('> d-text:has(a)::b')).slice(0, 2), ['> d-text:has(a)::before', '> d-text:has(a)::after']);
 });
 
-test('the owner\'s anchor offers its two generated boxes, before then after, whatever tail is typed', () => {
+test('the owner\'s anchor offers its pseudo-elements, the two generated boxes first, whatever tail is typed', () => {
   const boxes = [
     { selector: '&::before', kind: 'pseudo', name: 'before', label: null },
     { selector: '&::after', kind: 'pseudo', name: 'after', label: null },
   ];
   ['&', '&::', '&::a', '&::before', '  &::bef'].forEach((typed) => {
-    assert.deepEqual(gesture(typed), { options: boxes, create: null }, typed);
+    const offer = gesture(typed);
+    assert.deepEqual(offer.options.slice(0, 2), boxes, typed);
+    assert.equal(offer.options.length, widePseudoElements().length, typed);
+    assert.equal(offer.create, null, typed);
   });
-  // The offer is universal: no tree, no parts, no tags needed.
-  assert.deepEqual(selectorGestureOptions('&::', { key: OWNER, tree: null }), { options: boxes, create: null });
-  // The anchor is the whole head of its box and nothing else.
+  // The offer is universal: no document, no parts, no tags needed.
+  assert.deepEqual(selectorGestureOptions('&::', { key: OWNER, document: null }).options.slice(0, 2), boxes);
+  // A box behind a space, anything after a box, an anchor anywhere but
+  // first and a box on a box are the digester's refusals; `& > p` is
+  // nesting sugar for `> p` (the owner's children).
   assert.equal(gesture('& ::before'), null);
   assert.equal(gesture('&::before .x'), null);
-  assert.equal(gesture('& > p'), null);
-  assert.equal(gesture('> pb-text &::before'), null);
+  assert.deepEqual(selectorsOf(gesture('& > p')), selectorsOf(gesture('> p')));
+  assert.equal(gesture('> d-text &::before'), null);
   assert.equal(gesture('&::before::'), null);
-  // A lone colon is a state, never the start of a box.
-  assert.equal(gesture('&:'), null);
-  assert.equal(gesture('&:hover'), null);
+  // A lone colon is the `:` lane on the owner, never the start of a box.
+  assert.ok(gesture('&:').options.every((option) => option.kind !== 'pseudo'));
+  assert.ok(gesture('&:').options.some((option) => option.kind === 'position'));
+  assert.equal(gesture('&:hover').options.filter((option) => option.kind === 'pseudo').length, 0);
 });
 
-test('a `::` tail offers the subject\'s two boxes as continuations of the whole selector before it', () => {
-  const expect = (typed, host) =>
-    assert.deepEqual(gesture(typed), {
-      options: [
-        { selector: `${host}::before`, kind: 'pseudo', name: 'before', label: null },
-        { selector: `${host}::after`, kind: 'pseudo', name: 'after', label: null },
-      ],
-      create: null,
-    }, typed);
-  expect('> pb-text::', '> pb-text');
-  expect('> pb-text::b', '> pb-text');
-  expect('> pb-text::after', '> pb-text');
-  expect('>pb-text::', '> pb-text');
+test('a `::` tail offers the subject\'s pseudo-elements, the two boxes first, as continuations of the whole selector before it', () => {
+  const expect = (typed, host) => {
+    const offer = gesture(typed);
+    assert.deepEqual(offer.options.slice(0, 2), [
+      { selector: `${host}::before`, kind: 'pseudo', name: 'before', label: null },
+      { selector: `${host}::after`, kind: 'pseudo', name: 'after', label: null },
+    ], typed);
+    assert.equal(offer.options.length, widePseudoElements().length, `${typed}: every pseudo-element the browser knows, once`);
+    assert.ok(offer.options.every((option) => option.selector === `${host}::${option.name}` && option.kind === 'pseudo'), typed);
+    assert.equal(offer.create, null, typed);
+  };
+  expect('> d-text::', '> d-text');
+  expect('> d-text::b', '> d-text');
+  expect('> d-text::after', '> d-text');
+  expect('>d-text::', '> d-text');
   expect('.quote::a', '.quote');
   expect('p::', 'p');
   expect('> *::', '> *');
-  expect('> pb-container > p::', '> pb-container > p');
-  expect('> pb-text .text-block-link::', '> pb-text .text-block-link');
+  expect('> d-container > p::', '> d-container > p');
+  expect('> d-text .text-block-link::', '> d-text .text-block-link');
   // Glued to a whole selector only: a space before it is every
-  // descendant's box in CSS, a bare `::` has no host, a partial or
-  // dangling head is no subject, and a box takes no box.
-  assert.equal(gesture('> pb-text ::'), null);
-  assert.equal(gesture('::'), null);
-  assert.equal(gesture('::before'), null);
+  // descendant's box in CSS, a partial or dangling head is no subject,
+  // and a box takes no box; a bare `::` is the owner's own box (the
+  // digester's leading-colon sugar, `&::`).
+  assert.equal(gesture('> d-text ::'), null);
+  expect('::', '&');
+  expect('::before', '&');
   assert.equal(gesture('> ::'), null);
-  assert.equal(gesture('> pb-text::before::'), null);
-  assert.equal(gesture('> pb-text::before '), null);
-  assert.equal(gesture('> pb-text::before > '), null);
-  // The tail is the box gesture's token: a colon anywhere else stays a
-  // declaration or a state, never a selector being typed.
-  assert.equal(gesture('> pb-text:hover'), null);
-  assert.equal(gesture('> pb-text:'), null);
+  assert.equal(gesture('> d-text::before::'), null);
+  assert.equal(gesture('> d-text::before '), null);
+  assert.equal(gesture('> d-text::before > '), null);
+  // A single colon glued to a compound is the `:` lane, not a box tail;
+  // a declaration's colon (followed by a space) is no selector at all.
+  assert.ok(gesture('> d-text:hover').options.every((option) => option.kind !== 'pseudo'));
+  assert.ok(gesture('> d-text:').options.every((option) => option.kind !== 'pseudo'));
   assert.equal(gesture('content: ""'), null);
 });
 
@@ -1039,6 +1316,97 @@ test('restoredLines reports what survives removal: every variant line, lost incl
     { property: 'color', value: '#1a1a2e', layer: variantLayerId('aqua'), variant: 'aqua', lost: false, winner: null },
   ]);
   assert.deepEqual(restoredLines({ [KEY]: { default: { gap: '1rem' } } }, KEY, 'default', VARIANTS), []);
+});
+
+// --- The rule move gesture: one op for a stored rule, view state for a draft --
+
+test('a stored rule moves with its family as ONE move_style op, and the drafts on it rename', () => {
+  const rule = `${KEY}::> d-text`;
+  const link = `${KEY}::> d-text .link`;
+  const map = {
+    [rule]: { default: { color: 'red' } },
+    [link]: { default: { gap: '1rem' } },
+    [`${KEY}::> d-textual`]: { default: { gap: '2rem' } },
+  };
+  const drafts = { for: KEY, conditions: { [rule]: ['hover'], [link]: ['narrow'] }, parts: [], focus: `${rule}|hover` };
+  const plan = ruleMovePlan(map, drafts, KEY, '> d-text', '> d-text:has(a)');
+  assert.equal(plan.refusal, null);
+  // The rule's own key first, then the continuation; `> d-textual` is no
+  // continuation (the server's definition, rule-move.js).
+  assert.deepEqual(plan.moves, { '> d-text': '> d-text:has(a)', '> d-text .link': '> d-text:has(a) .link' });
+  assert.deepEqual(plan.operations, [{ op: 'move_style', key: rule, to: '> d-text:has(a)' }]);
+  assert.deepEqual(renameDrafts(drafts, KEY, plan.moves), {
+    for: KEY,
+    conditions: { [`${KEY}::> d-text:has(a)`]: ['hover'], [`${KEY}::> d-text:has(a) .link`]: ['narrow'] },
+    parts: [],
+    focus: `${KEY}::> d-text:has(a)|hover`,
+  });
+});
+
+test('a continuation alone is something stored: the op goes even when the rule itself has no entry', () => {
+  const map = { [`${KEY}::> d-text::before`]: { default: { color: 'red' } } };
+  const plan = ruleMovePlan(map, { for: KEY, conditions: {}, parts: [], focus: null }, KEY, '> d-text', '> d-image');
+  assert.deepEqual(plan.moves, { '> d-text': '> d-image', '> d-text::before': '> d-image::before' });
+  assert.deepEqual(plan.operations, [{ op: 'move_style', key: `${KEY}::> d-text`, to: '> d-image' }]);
+  // A worn variant and nothing else is an entry too: the op moves the
+  // entry whole, its variants list included.
+  const worn = { [`${KEY}::p`]: { variants: [{ variant: 'aqua', fragment: '' }] } };
+  assert.deepEqual(
+    ruleMovePlan(worn, { for: KEY, conditions: {}, parts: [], focus: null }, KEY, 'p', 'h3').operations,
+    [{ op: 'move_style', key: `${KEY}::p`, to: 'h3' }],
+  );
+});
+
+test('a draft row with nothing stored sends nothing: its rename is the view\'s', () => {
+  const drafts = { for: KEY, conditions: { [`${KEY}::.quote`]: ['hover'] }, parts: ['.quote', 'p'], focus: `${KEY}::.quote|default` };
+  const plan = ruleMovePlan({ [KEY]: { default: { gap: '1rem' } } }, drafts, KEY, '.quote', '.note');
+  assert.equal(plan.refusal, null);
+  assert.deepEqual(plan.moves, { '.quote': '.note' });
+  assert.deepEqual(plan.operations, []);
+  assert.deepEqual(renameDrafts(drafts, KEY, plan.moves), {
+    for: KEY,
+    conditions: { [`${KEY}::.note`]: ['hover'] },
+    parts: ['.note', 'p'],
+    focus: `${KEY}::.note|default`,
+  });
+});
+
+test('a landing on a stored key or on a drafted row refuses, naming it; a box takes no continuation', () => {
+  const stored = { [`${KEY}::p`]: { default: { color: 'red' } }, [`${KEY}::h3`]: { default: { color: 'blue' } } };
+  const none = { for: KEY, conditions: {}, parts: [], focus: null };
+  assert.deepEqual(ruleMovePlan(stored, none, KEY, 'p', 'h3'), {
+    refusal: { reason: REFUSED_TARGET_EXISTS, key: 'h3' },
+    moves: null,
+    operations: [],
+  });
+  const drafted = { for: KEY, conditions: {}, parts: ['.quote', '.note'], focus: null };
+  assert.deepEqual(ruleMovePlan({}, drafted, KEY, '.quote', '.note').refusal, { reason: REFUSED_TARGET_EXISTS, key: '.note' });
+  // A drafted condition row's key is a visible row too.
+  const conditioned = { for: KEY, conditions: { [`${KEY}::h3`]: ['hover'] }, parts: [], focus: null };
+  assert.deepEqual(ruleMovePlan(stored, conditioned, KEY, 'p', 'h3').refusal, { reason: REFUSED_TARGET_EXISTS, key: 'h3' });
+  const boxed = { [`${KEY}::> d-text`]: { default: { color: 'red' } }, [`${KEY}::> d-text .link`]: { default: { gap: '1rem' } } };
+  assert.deepEqual(ruleMovePlan(boxed, none, KEY, '> d-text', '> d-text::before').refusal, {
+    reason: REFUSED_CONTINUATION,
+    key: '> d-text .link',
+  });
+});
+
+test('renameDrafts leaves other owners\' rows and unmoved selectors alone', () => {
+  const other = 'container:22222222-2222-2222-2222-222222222222';
+  const drafts = {
+    for: KEY,
+    conditions: { [`${other}::> d-text`]: ['hover'], [`${KEY}::p`]: ['narrow'] },
+    parts: ['p', '.quote'],
+    focus: `${KEY}|default`,
+  };
+  // The ancestor's rule moved: this element's drafts under it rename,
+  // its own part rows do not (the parts are the drafts' element's).
+  assert.deepEqual(renameDrafts(drafts, other, { '> d-text': '> d-text:has(a)' }), {
+    ...drafts,
+    conditions: { [`${other}::> d-text:has(a)`]: ['hover'], [`${KEY}::p`]: ['narrow'] },
+  });
+  // A move on this element touching neither draft changes nothing.
+  assert.deepEqual(renameDrafts(drafts, KEY, { h3: 'h4' }), drafts);
 });
 
 process.stdout.write('# all element-model tests passed\n');

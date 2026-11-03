@@ -265,7 +265,7 @@ class PageBuilderDeclarationsTest extends KernelTestBase {
     // inside it, its owner does.
     $this->assertSame([
       'heroes' => ['label' => 'Heroes', 'description' => 'Full-width openers.'],
-      'bands' => ['label' => 'Bands'],
+      'sections' => ['label' => 'Sections'],
     ], $site['groups']);
 
     // The site bucket rides the full definition set beside the others.
@@ -387,7 +387,7 @@ class PageBuilderDeclarationsTest extends KernelTestBase {
       $this->assertStringContainsString('The present condition of part ".value-part" in block type "broken" uses "hovered", which is not a condition', $message);
       $this->assertStringContainsString('The present condition of part ".outer" in layout "broken_layout" conditions on depth, but depth is a root-form condition', $message);
       $this->assertStringContainsString('The present condition of part ".deep" in layout "broken_layout" composes 2 conditions, but conditions compose (AND) only on root forms', $message);
-      $this->assertStringContainsString('The present condition of part ".band" in kind "container" conditions on depth \'sideways\'; the depths are root and nested', $message);
+      $this->assertStringContainsString('The present condition of part ".section" in kind "container" conditions on depth \'sideways\'; the depths are root and nested', $message);
       $this->assertStringContainsString('The present condition of part ".flourish" in kind "field" conditions on "empty", which is impossible in a field tree (a field has nothing to vary on, so its parts are unconditional)', $message);
       // The instances lane: pattern-shaped keys, a required tags
       // vocabulary with lowercase tag names and non-empty labels, no
@@ -955,7 +955,7 @@ class PageBuilderDeclarationsTest extends KernelTestBase {
     $reflection->invokeArgs($this->declarations, [
       [
         'kinds' => [
-          'container' => ['elements' => ['.band' => ['label' => 'Band', 'contains' => 'sections']]],
+          'container' => ['elements' => ['.section' => ['label' => 'Section', 'contains' => 'sections']]],
           'field' => ['elements' => ['.wrap' => ['label' => 'Wrap', 'contains' => 'sections']]],
         ],
         'block_types' => [
@@ -966,7 +966,7 @@ class PageBuilderDeclarationsTest extends KernelTestBase {
     ]);
     $this->assertCount(3, $errors);
     $message = implode("\n", $errors);
-    $this->assertStringContainsString('The contains slot of part ".band" in kind "container" uses "sections", which is impossible in a container tree (a container may contain: regions, region:NAME).', $message);
+    $this->assertStringContainsString('The contains slot of part ".section" in kind "container" uses "sections", which is impossible in a container tree (a container may contain: regions, region:NAME).', $message);
     $this->assertStringContainsString('The contains slot of part ".wrap" in kind "field" uses "sections", which is impossible in a field tree (a field may contain: value).', $message);
     $this->assertStringContainsString('The contains slot of part ".shell" in block type "broken" uses "sections", which is impossible in a block tree (a block may contain: fields, field:NAME).', $message);
 

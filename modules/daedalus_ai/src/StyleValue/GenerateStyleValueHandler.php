@@ -38,9 +38,9 @@ use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
  * happens with the placeholder file as the final image, no job is queued,
  * and the minter's disabled warning surfaces on the write's result.
  *
- * Soft wiring: the service is tagged daedalus_stylish.style_value_handler; without
- * daedalus_stylish the tag is never collected and this class never loads, so daedalus_ai
- * takes no hard dependency on daedalus_stylish.
+ * Soft wiring: DaedalusAiServiceProvider registers the service, tagged
+ * daedalus_stylish.style_value_handler, only when daedalus_stylish is
+ * enabled, so daedalus_ai takes no hard dependency on daedalus_stylish.
  */
 class GenerateStyleValueHandler implements StyleValueHandlerInterface {
 

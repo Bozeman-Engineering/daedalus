@@ -11,6 +11,19 @@ daedalus_ai.settings:
     image_generation_enabled:
       type: boolean
       label: 'Enable AI image generation'
-    webdriver_url:
-      type: string
-      label: 'WebDriver endpoint for the AI render tool'
+    model_choices:
+      type: sequence
+      label: 'Models users may choose'
+      sequence:
+        type: mapping
+        label: 'Model choice'
+        mapping:
+          provider:
+            type: string
+            label: 'Provider plugin id'
+          model:
+            type: string
+            label: 'Model id'
+          label:
+            type: label
+            label: 'Label shown in the chat menu'

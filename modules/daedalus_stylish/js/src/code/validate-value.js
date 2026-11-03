@@ -39,11 +39,7 @@
  *   world curates only site animations.
  */
 
-import {
-  animationReference,
-  swatchReference,
-  tokenReference,
-} from '../style-guide.js';
+import { animationReference, tokenReference } from '../style-guide.js';
 import { animationOptions, scaleTokens, styleReference } from '../materials.js';
 import { keyframesNamesInValue } from '../keyframes-names.js';
 import {
@@ -394,11 +390,9 @@ const validateText = (property, value) => {
  * The client half of "warn permissive / error strict"
  * (StyleMapValidator::checkTokenReferences() is the server half): a var()
  * reference resolving to a declared scale's namespace must name a minted
- * token, and one inside the reserved swatch namespace must name a
- * published swatch (StyleMapValidator::checkSwatchReference()'s twin — all
- * published swatches are live, so the served list IS the legal universe).
- * Out-of-namespace variables pass everywhere — the palette spine owns
- * exactly its declared prefixes plus the reserved swatch prefix.
+ * token (the roster IS the legal universe: every token the active skin
+ * mints is live). Out-of-namespace variables pass everywhere — the
+ * palette spine owns exactly its declared prefixes.
  *
  * @param {string} property
  *   The CSS property name (for messages).
@@ -428,20 +422,6 @@ const checkTokenReferences = (property, value, tokens) => {
       SLOT.STYLE,
       tokens.materials,
     );
-    const swatch = swatchReference(variable);
-    if (swatch !== null) {
-      if (resolved.kind !== KIND.SWATCH) {
-        violations.push({
-          code: 'STYLE_SWATCH_NOT_PUBLISHED',
-          message: `"${variable}" is in the swatch namespace, but no published "${swatch}" swatch exists.`,
-          hint: tokens.closed
-            ? 'Mint the swatch first, or reference a published one; this site enforces its style guide.'
-            : 'It will not resolve until the swatch is published; the reference is inert, not unsafe.',
-          severity: tokens.closed ? 'error' : 'warning',
-        });
-      }
-      continue;
-    }
     const reference = tokenReference(variable, tokens.guide?.tokenScales);
     if (reference === null) {
       continue;
@@ -465,7 +445,7 @@ const checkTokenReferences = (property, value, tokens) => {
  *
  * The client half of StyleMapValidator::checkAnimationReferences() (the
  * server half runs strict-only; the client adds the permissive warning,
- * the token and swatch checks' posture): every keyframes name the value
+ * the token check's posture): every keyframes name the value
  * wears (keyframesNamesInValue: animation-name's components, the
  * shorthand's name layers) must resolve in the roster's animation slot.
  * A motion-{name} ident that does not (the animation is unpublished or

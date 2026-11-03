@@ -67,9 +67,13 @@ abstract class ConfigureDialogFormAlterBase {
   public const SUBMIT_ATTRIBUTE = 'data-daedalus-edit-configure-dialog-submit';
 
   /**
-   * The dialog the Configure verb opens (ModePluginBase.dialog's target).
+   * The dialog the Configure verb opens: the daedalus popup, core's modal.
+   *
+   * Drupal.Daedalus.openModal (daedalus_ui/modal) lands every
+   * server-rendered surface on core's #drupal-modal; the success close
+   * targets it.
    */
-  public const DIALOG_SELECTOR = '#layout-builder-modal';
+  public const DIALOG_SELECTOR = '#drupal-modal';
 
   public function __construct(
     protected FormCommit $formCommit,

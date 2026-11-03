@@ -39,11 +39,7 @@ function daedalus_blueprint_ai_ai_tools_property_alter(mixed $property, mixed $d
  * OperationHandlerInterface::getGuidance()): it names the op's parameters
  * and routes to the owning module's on-demand skill for doctrine, so the
  * always-on surface stays lean and the op names are never listed twice on
- * the same tool. Also tells the mutating tools' descriptions about the
- * write echo when a markup projector is installed, so the model verifies
- * from the result instead of opening a read-back loop; with no projector
- * the sentence is absent, and the surface never advertises an echo the
- * results do not carry.
+ * the same tool.
  *
  * Also composes eb_edit's operations description for the site's shape: on
  * a page-language site (the dialect catalog declares a container layout)
@@ -53,19 +49,6 @@ function daedalus_blueprint_ai_ai_tools_property_alter(mixed $property, mixed $d
  * registered ops remain.
  */
 function daedalus_blueprint_ai_ai_function_call_info_alter(array &$definitions): void {
-  if (\Drupal::service('daedalus_blueprint.markup_projection')->hasProjector()) {
-    $mutating_tools = [
-      'daedalus_blueprint:edit',
-      'daedalus_blueprint:create_entity',
-    ];
-    foreach ($mutating_tools as $id) {
-      if (isset($definitions[$id])) {
-        $definitions[$id]['description'] = ((string) $definitions[$id]['description'])
-          . ' The result echoes the affected elements as key-annotated markup: verify your change against it instead of re-reading the page.';
-      }
-    }
-  }
-
   if (!isset($definitions['daedalus_blueprint:edit'])) {
     return;
   }

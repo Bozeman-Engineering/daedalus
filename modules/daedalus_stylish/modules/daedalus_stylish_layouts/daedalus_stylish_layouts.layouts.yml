@@ -10,7 +10,7 @@
 # (daedalus_stylish_layouts.page_builder.yml) says `composed: true`, so the
 # declaration is generative — ComposedLayout builds the composed_container
 # element and the resolved root form IS the section markup, one element at
-# every depth (a <section> page band at root, a plain <div> nested).
+# every depth (a <section> at root, a plain <div> nested).
 #
 # Its single region is a storage vestige (core's SectionComponent requires
 # a region name) and renders no wrapper: children mount directly at the

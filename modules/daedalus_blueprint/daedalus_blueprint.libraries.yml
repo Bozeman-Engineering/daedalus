@@ -1,0 +1,11 @@
+# The AI context usage bar (theme daedalus_blueprint_ai_context): the
+# stacked bar, its legend and the per-kind hues. Attached by the dialog
+# route's build, so it rides the modal the stylish cards and the chat
+# kebab open and the page at MaterialsBudget::DIALOG_PATH alike. The
+# hues are the bar's own tokens with daedalus_ui's chrome tokens as the
+# surfaces and text, each with a fallback: the page renders outside edit
+# mode too, where variables.css is not attached.
+ai_context:
+  css:
+    component:
+      css/ai-context.css: {}

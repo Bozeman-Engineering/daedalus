@@ -5,5 +5,13 @@ package: Daedalus
 core_version_requirement: '>=11.3 <11.5'
 dependencies:
   - daedalus:daedalus
+  # The context spine: the block vocabulary and the provider capabilities
+  # the transcript and its renderer speak.
+  - daedalus:daedalus_ai
+  # The segment policy asks the skills resolver which skill reframes.
+  - daedalus:daedalus_blueprint
+  # The segment window measures a segment by the ledger's last prompt
+  # size (what the provider billed), never by an estimate.
+  - daedalus:daedalus_ai_ledger
   - ai_agents:ai_agents
   - ai:ai_assistant_api

@@ -38,6 +38,7 @@ class DaedalusStylishFieldManagerTest extends KernelTestBase {
     'layout_discovery',
     'layout_builder',
     'daedalus_blueprint',
+    'filter',
     // daedalus_ui (and its dependency chain) provides the config schema
     // for the per-bundle `enabled` third-party setting the default-on gate
     // reads.
@@ -65,6 +66,10 @@ class DaedalusStylishFieldManagerTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installSchema('node', ['node_access']);
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
+    // enable()/disable() save daedalus_stylish.settings, a law change that
+    // recompiles the variants file over these storages.
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['field']);
     NodeType::create(['type' => 'page', 'name' => 'Page'])->save();
     NodeType::create(['type' => 'article', 'name' => 'Article'])->save();

@@ -187,9 +187,9 @@ class ContextResolverTest extends KernelTestBase {
       ['key' => "block:$block_uuid::.hero-image", 'label' => 'X', 'number' => 5],
       // The chips' wire for the same address: the owner key plus a
       // selector field, canonicalized through the grammar.
-      ['key' => "container:$container_uuid", 'selector' => '>   pb-text', 'number' => 11],
+      ['key' => "container:$container_uuid", 'selector' => '>   d-text', 'number' => 11],
       // A selector outside the grammar is dropped: the owner alone.
-      ['key' => "container:$container_uuid", 'selector' => '[href]', 'number' => 12],
+      ['key' => "container:$container_uuid", 'selector' => '* p', 'number' => 12],
       // The two styling facts: a minted list item (the subject facet on
       // the block) styled at its container's `li` rule (the write
       // address). The element stays the block; the address is its own
@@ -207,7 +207,7 @@ class ContextResolverTest extends KernelTestBase {
       // element described alone.
       [
         'key' => "block:$block_uuid",
-        'address' => ['key' => "container:$container_uuid", 'selector' => '[href]'],
+        'address' => ['key' => "container:$container_uuid", 'selector' => '* p'],
         'number' => 15,
       ],
       ['key' => "block:$block_uuid", 'address' => ['key' => 'bogus', 'selector' => 'li'], 'number' => 16],
@@ -246,7 +246,7 @@ class ContextResolverTest extends KernelTestBase {
     $this->assertSame('the rule ".hero-image" under it (style-map key block:' . $block_uuid . '::.hero-image): styling acts on every element the rule matches, not on this element alone', $resolved[5]['target']);
     $this->assertArrayNotHasKey('address', $resolved[5], 'A subject alone carries no address.');
     $this->assertStringContainsString('Container (UUID: ' . $container_uuid . ')', $resolved[11]['description']);
-    $this->assertSame('the rule "> pb-text" under it (style-map key container:' . $container_uuid . '::> pb-text): styling acts on every element the rule matches, not on this element alone', $resolved[11]['target']);
+    $this->assertSame('the rule "> d-text" under it (style-map key container:' . $container_uuid . '::> d-text): styling acts on every element the rule matches, not on this element alone', $resolved[11]['target']);
     $this->assertArrayNotHasKey('target', $resolved[12], 'A selector outside the grammar is dropped.');
     $this->assertArrayNotHasKey('target', $resolved[8], 'A bare key carries no target.');
 
@@ -410,7 +410,7 @@ class ContextResolverTest extends KernelTestBase {
   /**
    * ElementSelectionResolver: a rule's wear reaches a member, never dresses it.
    *
-   * A container's `> pb-text` rule wears "button": the rule's matches
+   * A container's `> d-text` rule wears "button": the rule's matches
    * render the look, and the style stack lists it in a member's ancestor
    * tier with the variant's identity (so the inspector can name it) but
    * never in its variant tier. ElementMaterials::worn() reads the variant
@@ -437,7 +437,7 @@ class ContextResolverTest extends KernelTestBase {
       ->create([
         'name' => 'Styled Root',
         'daedalus_stylish_styles' => json_encode([
-          "container:$container_uuid::> pb-text" => ['variants' => [['variant' => 'button', 'fragment' => '']]],
+          "container:$container_uuid::> d-text" => ['variants' => [['variant' => 'button', 'fragment' => '']]],
           "block:$member_uuid" => ['default' => ['padding' => '1rem']],
         ]),
       ]);
@@ -452,7 +452,7 @@ class ContextResolverTest extends KernelTestBase {
     );
     $resolved = $resolver->resolve([
       ['key' => "block:$member_uuid", 'number' => 1],
-      ['key' => "container:$container_uuid", 'selector' => '> pb-text', 'number' => 2],
+      ['key' => "container:$container_uuid", 'selector' => '> d-text', 'number' => 2],
     ], $this->hostOf($root));
     $this->assertArrayNotHasKey('materials', $resolved[1], 'A member under a wearing rule wears nothing of its own.');
     $this->assertSame('button "Button" (class="button")', $resolved[2]['materials'], 'The rule, as a target, wears the look.');
@@ -484,7 +484,7 @@ class ContextResolverTest extends KernelTestBase {
         ];
         return [
           'layers' => [
-            $layer('ancestor:container:x::> pb-text|button', 'ancestor', 'button'),
+            $layer('ancestor:container:x::> d-text|button', 'ancestor', 'button'),
             $layer('variant:row', 'variant', 'row'),
             $layer('element', 'element', NULL),
           ],
@@ -508,17 +508,12 @@ class ContextResolverTest extends KernelTestBase {
   protected function installStylishStyles(): void {
     $this->enableModules(['daedalus_stylish']);
     $this->installEntitySchema('daedalus_variant');
-    $this->installEntitySchema('daedalus_swatch');
-    $this->installEntitySchema('daedalus_animation');
-    $this->installEntitySchema('daedalus_font');
     $this->installEntitySchema('daedalus_skin');
-    // Saving a styled entity records variant, swatch and animation usage.
+    // Saving a styled entity records variant and skin material (token and
+    // animation) usage.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
-      'daedalus_swatch_usage',
-      'daedalus_animation_usage',
-      'daedalus_token_usage',
-      'daedalus_font_usage',
+      'daedalus_skin_material_usage',
     ]);
     $this->installConfig(['daedalus_stylish']);
     // The product way: the field manager owns the style map field, and a

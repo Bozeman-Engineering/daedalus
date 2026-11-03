@@ -1,0 +1,170 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for Daedalus AI Ledger.
+ */
+
+use Drupal\daedalus_ai_ledger\Entity\AiUsage;
+
+/**
+ * Add the prefix_drift and prefix_loss columns to ai_usage.
+ *
+ * The ledger row is the one store of what became of the cached prompt
+ * prefix on a leg (the runner's drift tag, and the tokens the previous
+ * leg of the same segment had cached that this leg re-sent); a site whose
+ * table predates the columns gets the entity's own definitions installed.
+ */
+function daedalus_ai_ledger_update_11101(): void {
+  $manager = \Drupal::entityDefinitionUpdateManager();
+  foreach (AiUsage::prefixFieldDefinitions() as $name => $definition) {
+    if ($manager->getFieldStorageDefinition($name, 'ai_usage') === NULL) {
+      $manager->installFieldStorageDefinition($name, 'ai_usage', 'daedalus_ai_ledger', $definition);
+    }
+  }
+}
+
+/**
+ * Add the rebuilt column to ai_usage.
+ *
+ * The agent runner tags the first leg of a conversation rebuilt from the
+ * visible chat (the record had expired or could not be read), and the
+ * status report counts those conversations; a site whose table predates
+ * the column gets the entity's own definition installed.
+ */
+function daedalus_ai_ledger_update_11102(): void {
+  $manager = \Drupal::entityDefinitionUpdateManager();
+  if ($manager->getFieldStorageDefinition('rebuilt', 'ai_usage') === NULL) {
+    $manager->installFieldStorageDefinition('rebuilt', 'ai_usage', 'daedalus_ai_ledger', AiUsage::rebuiltFieldDefinition());
+  }
+}
+
+/**
+ * Add the Gemini image model's row to the price table.
+ *
+ * Image generation through gemini_provider reports its usage in Gemini's
+ * own shape, which the usage reader now counts; without a price row those
+ * legs stayed free against the caps. The row is the shipped one (Google's
+ * Gemini API pricing page, Standard tier, read 2026-10-19: $2.00 per
+ * million input tokens, $120.00 per million image output tokens, a cached
+ * read at the input rate since caching is not listed for the model),
+ * appended only when no row names the model, so an edited table keeps its
+ * figures.
+ */
+function daedalus_ai_ledger_update_11103(): void {
+  $config = \Drupal::configFactory()->getEditable('daedalus_ai_ledger.settings');
+  $prices = $config->get('prices') ?? [];
+  foreach ($prices as $row) {
+    if (is_array($row) && ($row['model'] ?? NULL) === 'models/gemini-3-pro-image') {
+      return;
+    }
+  }
+  $prices[] = [
+    'model' => 'models/gemini-3-pro-image',
+    'input' => 2.0,
+    'output' => 120.0,
+    'cache_read' => 2.0,
+    'cache_write' => 0.0,
+  ];
+  $config->set('prices', $prices)->save(TRUE);
+}
+
+/**
+ * Add the per-call bucket to every price row and the fallback row.
+ *
+ * A model with no row of its own left its legs unpriced and uncounted by
+ * the caps, and a provider that reports no tokens weighed nothing even
+ * with a row; the table now carries a `*` row that prices any model
+ * without one and a `per_call` figure added once per leg on top of the
+ * tokens. Every existing row gains `per_call: 0.0` (the call itself is
+ * free; the tokens are priced as before), and the `*` row is appended as
+ * the shipped one (the Fable 5.1 prices, the dearest row, so an unknown
+ * model is overcounted rather than undercounted, and 0.25 USD per call)
+ * only when no row names `*`, so an edited table keeps its figures.
+ */
+function daedalus_ai_ledger_update_11104(): void {
+  $config = \Drupal::configFactory()->getEditable('daedalus_ai_ledger.settings');
+  $prices = $config->get('prices') ?? [];
+  $has_fallback = FALSE;
+  foreach ($prices as &$row) {
+    if (!is_array($row)) {
+      continue;
+    }
+    if (!isset($row['per_call'])) {
+      $row['per_call'] = 0.0;
+    }
+    if (($row['model'] ?? NULL) === '*') {
+      $has_fallback = TRUE;
+    }
+  }
+  unset($row);
+  if (!$has_fallback) {
+    $prices[] = [
+      'model' => '*',
+      'input' => 10.0,
+      'output' => 50.0,
+      'cache_read' => 0.25,
+      'cache_write' => 12.5,
+      'per_call' => 0.25,
+    ];
+  }
+  $config->set('prices', $prices)->save(TRUE);
+}
+
+/**
+ * Convert the caps from {seconds, usd} to {scope, period, usd, anchor}.
+ *
+ * A cap now carries whose legs it sums (`site` or `user`), its period as
+ * an ISO 8601 duration and an optional anchor date it resets on; every
+ * existing cap was a rolling per-user window of so many seconds, so it
+ * becomes {scope: user, period: PT<seconds>S, usd, anchor: ''}, the same
+ * window as before. A row already in the new shape is left as it is.
+ */
+function daedalus_ai_ledger_update_11105(): void {
+  $config = \Drupal::configFactory()->getEditable('daedalus_ai_ledger.settings');
+  $caps = [];
+  foreach ($config->get('caps') ?? [] as $cap) {
+    if (!is_array($cap)) {
+      continue;
+    }
+    if (isset($cap['period'])) {
+      $caps[] = $cap;
+      continue;
+    }
+    $caps[] = [
+      'scope' => 'user',
+      'period' => 'PT' . (int) ($cap['seconds'] ?? 0) . 'S',
+      'usd' => (float) ($cap['usd'] ?? 0),
+      'anchor' => '',
+    ];
+  }
+  $config->set('caps', $caps)->save(TRUE);
+}
+
+/**
+ * Add the retention setting: a year of rows by default.
+ *
+ * Rows older than `retention_days` are deleted on cron (never under the
+ * longest configured window); a site installed before the setting
+ * existed kept every row, and gets the shipped default. A site that
+ * already set the key keeps its value.
+ */
+function daedalus_ai_ledger_update_11106(): void {
+  $config = \Drupal::configFactory()->getEditable('daedalus_ai_ledger.settings');
+  if ($config->get('retention_days') === NULL) {
+    $config->set('retention_days', 365)->save(TRUE);
+  }
+}
+
+/**
+ * Index ai_usage by created alone.
+ *
+ * The site windows, the status report and the retention purge read the
+ * rows by created with no user or conversation, which the two composite
+ * indexes do not serve; the storage schema declares the index and the
+ * entity type update re-creates the table's indexes from it.
+ */
+function daedalus_ai_ledger_update_11107(): void {
+  $manager = \Drupal::entityDefinitionUpdateManager();
+  $manager->updateEntityType($manager->getEntityType('ai_usage'));
+}

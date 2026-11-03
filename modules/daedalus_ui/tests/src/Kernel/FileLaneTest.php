@@ -4,26 +4,32 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_ui\Kernel;
 
+use Drupal\Core\File\FileExists;
 use Drupal\daedalus_ui\File\FileLane;
 use Drupal\daedalus_ui\File\FileLaneException;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\file\Entity\File;
+use Drupal\file\Upload\FileUploadHandler;
+use Drupal\file\Upload\UploadedFileInterface;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * The file lane: one road from supplied bytes to a managed file.
  *
  * The bytes entry is driven end to end (spool, validators, the SVG
  * sanitizer on the FileValidationEvent chain, the move, the entity save,
- * permanence). The request entry shares every step after the wrap, but
- * core's FormUploadedFile moves through PHP's move_uploaded_file(), which
- * refuses anything that is not a real PHP upload, so it cannot run inside a
- * Kernel test: daedalus_layout's MediaFileDragBehaviorTest (FJS) is its
- * proof through the upload controller.
+ * permanence, the canonical name). The request entry shares every step
+ * after the wrap, but core's FormUploadedFile moves through PHP's
+ * move_uploaded_file(), which refuses anything that is not a real PHP
+ * upload, so inside Kernel it runs over a handler whose one override is that
+ * OS move (requestLane()); daedalus_ai's AttachRouteTest (Functional) and
+ * daedalus_layout's MediaFileDragBehaviorTest (FJS) are its proofs through a
+ * real multipart upload.
  */
 #[CoversClass(FileLane::class)]
 #[Group('daedalus_ui')]
@@ -49,6 +55,7 @@ final class FileLaneTest extends KernelTestBase {
     'twig_events',
     'daedalus_tempstore',
     'daedalus_blueprint',
+    'filter',
     'daedalus_blueprint_api',
     'daedalus_ui',
   ];
@@ -230,6 +237,98 @@ final class FileLaneTest extends KernelTestBase {
     $this->expectException(FileLaneException::class);
     $this->expectExceptionMessageMatches('/(exceed|larger|size)/i');
     $this->lane->fromBytes('big.txt', 'text/plain', str_repeat('x', FileLane::SIZE_LIMIT + 1), self::DIRECTORY);
+  }
+
+  /**
+   * Every file is saved under the lane's canonical name, on both roads.
+   *
+   * The macOS screenshot name carries a NARROW NO-BREAK SPACE (U+202F)
+   * before "PM", the character the live site's model normalised to a plain
+   * space so its handle stopped resolving; the lane turns every whitespace
+   * into a dash. Transliteration, the empty-stem fallback, core's security
+   * munge still running after the lane, and the collision rename on the
+   * clean name are each pinned, then the request road through a real
+   * Symfony UploadedFile proves the decorator cleans too.
+   */
+  public function testFilenamesAreCanonical(): void {
+    $png = file_get_contents($this->root . '/core/misc/druplicon.png');
+    $screenshot = "Screenshot 2026-10-27 at 4.17.44\u{202F}PM.png";
+
+    // The spine itself, before any save.
+    $this->assertSame('Screenshot-2026-10-27-at-4.17.44-PM.png', $this->lane->canonicalName($screenshot));
+    $this->assertSame('resume-final.pdf', $this->lane->canonicalName("résumé  final.PDF"));
+    $this->assertSame('file.png', $this->lane->canonicalName('???.png'));
+    $this->assertSame('a-b.txt', $this->lane->canonicalName("a\u{00A0}b.txt"));
+
+    $file = $this->lane->fromBytes($screenshot, 'image/png', $png, self::DIRECTORY);
+    $this->assertSame('Screenshot-2026-10-27-at-4.17.44-PM.png', $file->getFilename());
+    $this->assertSame(self::DIRECTORY . '/Screenshot-2026-10-27-at-4.17.44-PM.png', $file->getFileUri());
+    $this->assertSame('image/png', $file->getMimeType());
+
+    $this->assertSame('resume-final.pdf', $this->lane->fromBytes("résumé  final.PDF", 'application/pdf', '%PDF-1.4', self::DIRECTORY)->getFilename());
+    $this->assertSame('file.png', $this->lane->fromBytes('???.png', 'image/png', $png, self::DIRECTORY)->getFilename());
+
+    // Core's security subscriber still runs on the clean name.
+    $this->assertSame('shell.php_.txt', $this->lane->fromBytes('shell.php.txt', 'text/plain', 'hello', self::DIRECTORY)->getFilename());
+
+    // A second screenshot collides after cleaning and is renamed as always.
+    $second = $this->lane->fromBytes($screenshot, 'image/png', $png, self::DIRECTORY);
+    $this->assertSame('Screenshot-2026-10-27-at-4.17.44-PM_0.png', $second->getFilename());
+    $this->assertNotSame($file->getFileUri(), $second->getFileUri());
+
+    // The request road: a real Symfony UploadedFile, whose client name the
+    // lane's wrapper answers in canonical form.
+    $source = $this->tempDirectory . '/upload.png';
+    file_put_contents($source, $png);
+    $upload = new UploadedFile($source, "Screenshot 2026-10-28 at 9.03.10\u{202F}AM.png", 'image/png', NULL, TRUE);
+    $saved = $this->requestLane()->fromRequest($upload, self::DIRECTORY);
+    $this->assertSame('Screenshot-2026-10-28-at-9.03.10-AM.png', $saved->getFilename());
+    $this->assertSame(self::DIRECTORY . '/Screenshot-2026-10-28-at-9.03.10-AM.png', $saved->getFileUri());
+    $this->assertSame('image/png', $saved->getMimeType());
+    $this->assertFileDoesNotExist($source);
+    $this->assertFileExists($saved->getFileUri());
+    $this->assertNotNull(File::load($saved->id()));
+  }
+
+  /**
+   * The lane service over core's handler with only the OS move swapped.
+   *
+   * PHP's move_uploaded_file() refuses any file PHP did not receive as an
+   * upload, so a request's upload cannot land inside Kernel through the real
+   * handler; this handler moves with FileSystem::move() instead and every
+   * other step (the wrap, validation, the sanitize-name event, the collision
+   * rename, the entity save) is core's. The handler is set beneath
+   * file.upload_handler and the lane re-created from its own service
+   * definition, so the wiring under test is daedalus_ui.services.yml's.
+   */
+  private function requestLane(): FileLane {
+    $handler = new class(
+      $this->container->get('file_system'),
+      $this->container->get('entity_type.manager'),
+      $this->container->get('stream_wrapper_manager'),
+      $this->container->get('event_dispatcher'),
+      $this->container->get('file.mime_type.guesser'),
+      $this->container->get('current_user'),
+      $this->container->get('request_stack'),
+      $this->container->get('file.repository'),
+      $this->container->get('file.validator'),
+      $this->container->get('lock'),
+      $this->container->get('validation.basic_recursive_validator_factory'),
+    ) extends FileUploadHandler {
+
+      /**
+       * {@inheritdoc}
+       */
+      protected function moveUploadedFile(UploadedFileInterface $uploadedFile, string $uri): bool {
+        return (bool) $this->fileSystem->move($uploadedFile->getRealPath(), $uri, FileExists::Error);
+      }
+
+    };
+    $this->container->set('file.upload_handler', $handler);
+    // Drop the cached lane so the next get() builds it over the swapped
+    // handler from the service definition.
+    $this->container->set('daedalus_ui.file_lane', NULL);
+    return $this->container->get('daedalus_ui.file_lane');
   }
 
 }

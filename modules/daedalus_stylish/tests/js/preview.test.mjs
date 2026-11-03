@@ -23,7 +23,7 @@ import {
   createPreview,
   scopedEntries,
 } from '../../js/src/preview.js';
-import { roster, swatchRecord, tokenRecord } from './materials-fixture.mjs';
+import { roster, tokenRecord } from './materials-fixture.mjs';
 
 const UUID = 'aaaaaaaa-1111-2222-3333-444444444444';
 const KEY = `block:${UUID}`;
@@ -379,7 +379,7 @@ test('releaseScoped drops the slots, the inline properties and the block; a blan
 test('the scope lane and the style-key overlay share one sheet and one slot sequence', () => {
   const { preview, scope, root } = setup();
   preview.stage(KEY, 'default', 'font-size', '24px');
-  preview.stageScoped('--swatch-brand_red', '#b91c1c');
+  preview.stageScoped('--color-brand-red', '#b91c1c');
   assert.ok(sheet().includes(`@scope ([data-selectable="${KEY}"])`));
   assert.ok(sheet().includes(`@scope (.${TOKEN_SCOPE_CLASS})`));
   assert.deepEqual(root().props, { '--daedalus-stylish-live-1': '24px' });
@@ -387,8 +387,8 @@ test('the scope lane and the style-key overlay share one sheet and one slot sequ
   // Releasing the style key keeps the scope block, and vice versa.
   preview.release(KEY, 'default', { 'font-size': '24px' });
   assert.ok(!sheet().includes('font-size'));
-  assert.ok(sheet().includes('--swatch-brand_red: var(--daedalus-stylish-live-2);'));
-  preview.releaseScoped('--swatch-brand_red');
+  assert.ok(sheet().includes('--color-brand-red: var(--daedalus-stylish-live-2);'));
+  preview.releaseScoped('--color-brand-red');
   assert.equal(sheet(), '');
 });
 
@@ -415,7 +415,7 @@ test('without a token scope element the shape still prints and nothing throws', 
 const BOOT = roster(
   tokenRecord('color', 'accent', '#1475ad'),
   tokenRecord('color', 'bg', { default: '#ffffff', dark: '#0b0d0f' }),
-  swatchRecord('brand_red', 'color', '#b91c1c'),
+  tokenRecord('color', 'brand-red', '#b91c1c', 'color', { origin: 'user' }),
 );
 
 test('delivery stages what differs from boot, releases what returns to it, never touches the unchanged', () => {
@@ -429,12 +429,12 @@ test('delivery stages what differs from boot, releases what returns to it, never
   delivery.apply(roster(
     tokenRecord('color', 'accent', '#1475ad'),
     tokenRecord('color', 'bg', { default: '#fdfdf6', dark: '#0b0d0f' }),
-    swatchRecord('brand_red', 'color', '#b91c1c'),
+    tokenRecord('color', 'brand-red', '#b91c1c', 'color', { origin: 'user' }),
   ));
   assert.ok(sheet().includes('--color-bg: var(--daedalus-stylish-live-1);'));
   assert.ok(sheet().includes('@media (prefers-color-scheme: dark)'));
   assert.ok(!sheet().includes('--color-accent'));
-  assert.ok(!sheet().includes('--swatch-brand_red'));
+  assert.ok(!sheet().includes('--color-brand-red'));
   assert.deepEqual(scope().props, {
     '--daedalus-stylish-live-1': '#fdfdf6',
     '--daedalus-stylish-live-2': '#0b0d0f',
@@ -452,11 +452,11 @@ test('delivery stages a minted material and releases a deleted one', () => {
     tokenRecord('color', 'accent', '#1475ad'),
     tokenRecord('color', 'bg', { default: '#ffffff', dark: '#0b0d0f' }),
     tokenRecord('space', 'hero', '3rem'),
-    swatchRecord('brand_red', 'color', '#b91c1c'),
-    swatchRecord('dusk', 'color', '#334455'),
+    tokenRecord('color', 'brand-red', '#b91c1c', 'color', { origin: 'user' }),
+    tokenRecord('color', 'dusk', '#334455', 'color', { origin: 'user' }),
   ));
   assert.ok(sheet().includes('--space-hero: var(--daedalus-stylish-live-1);'));
-  assert.ok(sheet().includes('--swatch-dusk: var(--daedalus-stylish-live-2);'));
+  assert.ok(sheet().includes('--color-dusk: var(--daedalus-stylish-live-2);'));
   assert.deepEqual(scope().props, {
     '--daedalus-stylish-live-1': '3rem',
     '--daedalus-stylish-live-2': '#334455',
@@ -480,7 +480,7 @@ test('delivery.restore re-delivers one record after a draft: the store value, or
   assert.deepEqual(scope().props, {});
   // A draft over a delivered (edited) record restores the committed value.
   const edited = tokenRecord('color', 'accent', '#116392');
-  delivery.apply(roster(edited, tokenRecord('color', 'bg', { default: '#ffffff', dark: '#0b0d0f' }), swatchRecord('brand_red', 'color', '#b91c1c')));
+  delivery.apply(roster(edited, tokenRecord('color', 'bg', { default: '#ffffff', dark: '#0b0d0f' }), tokenRecord('color', 'brand-red', '#b91c1c', 'color', { origin: 'user' })));
   preview.stageScoped('--color-accent', '#ff0000');
   delivery.restore(edited);
   assert.ok(sheet().includes('--color-accent: var(--daedalus-stylish-live-'));

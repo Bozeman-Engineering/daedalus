@@ -6,15 +6,25 @@ namespace Drupal\Tests\daedalus_ai\Kernel;
 
 use Drupal\ai_assistant_api\AiAssistantApiRunner;
 use Drupal\ai_assistant_api\Entity\AiAssistant;
+use Drupal\daedalus_ai\ModelChoice;
 use Drupal\daedalus_ai\Plugin\Sidebar\ChatSidebar;
+use Drupal\daedalus_ai_ledger\CostResolver;
+use Drupal\daedalus_ai_ledger\UsageGate;
+use Drupal\daedalus_ai_ledger\Window;
+use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
 use Drupal\Component\Serialization\Json;
+use Drupal\Core\DependencyInjection\ContainerBuilder;
+use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\daedalus_ui\EditorSettings;
 use Drupal\daedalus_ui\File\FileLane;
 use Drupal\daedalus_ui\ModePluginManager;
+use Drupal\Tests\daedalus_ai_ledger\Traits\DaedalusAiServicesTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
@@ -59,19 +69,45 @@ use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
  * not a JS behavioral contract, so they are exercised (the real toolbar.yml is
  * parsed) but not asserted in detail.
  *
+ * The kebab's groups ride drupalSettings.daedalus_ai too: modelChoices
+ * (the curated models for a user who may choose, the current one marked),
+ * usageUrl (the ledger's status route for a user a configured window
+ * applies to: a site window applies to everyone, the administrator's
+ * bypass included, a user window to those without the bypass), and the
+ * AI context usage display's URL, contextDialogUrl (daedalus_blueprint's
+ * dialog route, by route name, for a user holding "view ai context
+ * usage" and no one else, the popup opener daedalus_ui/modal attached
+ * with it).
+ * The first two are off until an administrator configures them, so the
+ * render contract above holds on a plain site up to the dialog URL the
+ * administrator's permissions bring; with models curated and a
+ * site cap set they appear for the administrator and for a permitted
+ * user alike and the usage library attaches, and a user cap alone leaves
+ * the administrator without the meter. The ledger module is REAL here
+ * (daedalus_ai's usage reader registered as its own Kernel tests do), the
+ * model choice
+ * resolver real over a mocked editor-preference lane (daedalus_ui is not
+ * enabled, so its field does not exist) with the stub as the managed
+ * provider (the site's default chat provider, since the seeded assistant
+ * names none; every curated row must name it), and the permitted user a mocked
+ * account on the current-user proxy, since the permissions it needs are
+ * declared by modules this test does not enable.
+ *
  * @group daedalus_ai
  */
 #[Group('daedalus_ai')]
 #[RunTestsInSeparateProcesses]
 class ChatSidebarTest extends KernelTestBase {
 
+  use DaedalusAiServicesTrait;
   use UserCreationTrait;
 
   /**
    * {@inheritdoc}
    *
    * The ai_chatbot module provides the deep-chat style file and pulls
-   * ai_assistant_api (the ai_assistant entity type) + ai as dependencies. No
+   * ai_assistant_api (the ai_assistant entity type) + ai as dependencies.
+   * The ledger brings the usage gate the sidebar reads the caps through. No
    * config is applied, so the shipped defaults are not schema-audited here.
    */
   // phpcs:ignore DrupalPractice.Objects.StrictSchemaDisabled.StrictConfigSchema
@@ -90,6 +126,13 @@ class ChatSidebarTest extends KernelTestBase {
     // ceiling from is built on core's upload handler.
     'field',
     'file',
+    'daedalus_ai_ledger',
+    // The AI context usage's two routes the sidebar hands the kebab for a
+    // user holding MaterialsBudget::PERMISSION are daedalus_blueprint's
+    // (the materials budget's spine); filter is its one service
+    // dependency this container must carry.
+    'filter',
+    'daedalus_blueprint',
   ];
 
   /**
@@ -102,10 +145,20 @@ class ChatSidebarTest extends KernelTestBase {
   /**
    * {@inheritdoc}
    */
+  public function register(ContainerBuilder $container): void {
+    parent::register($container);
+    $this->registerDaedalusAiServices($container);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
 
     $this->installEntitySchema('user');
+    $this->installEntitySchema('ai_usage');
+    $this->installConfig(['daedalus_ai_ledger']);
 
     // A real assistant the sidebar loads by id (matches daedalus_ai.settings). Any
     // non-'none' allow_history keeps the history path active. AiAssistant
@@ -130,6 +183,13 @@ class ChatSidebarTest extends KernelTestBase {
     // its default config is seeded directly (as the gate/handler tests do).
     $this->config('daedalus_ai.settings')
       ->set('assistant_id', 'chatbot')
+      ->save();
+
+    // The managed provider, the one every curated row must name: the
+    // assistant above names none, so it is the site's default chat
+    // provider, the stub here.
+    $this->config('ai.settings')
+      ->set('default_providers.chat', ['provider_id' => 'daedalus_ai_test_stub', 'model_id' => 'stub'])
       ->save();
   }
 
@@ -158,6 +218,25 @@ class ChatSidebarTest extends KernelTestBase {
       ['role' => 'user', 'message' => 'stale', 'timestamp' => $old],
       ['role' => 'assistant', 'message' => '**hi**', 'timestamp' => $recent],
     ]);
+    // The pair the assistant resolves to (the site default): what the
+    // model group marks when the user stored no choice.
+    $runner->method('getProviderAndModel')->willReturn(['provider_id' => 'daedalus_ai_test_stub', 'model_id' => 'stub']);
+
+    // The editor-preference lane, mocked: daedalus_ui is not enabled, so
+    // the user entity has no settings field to read. $stored is what the
+    // lane answers for the model key.
+    $stored = NULL;
+    $editor_settings = $this->createMock(EditorSettings::class);
+    $editor_settings->method('getFor')->willReturnCallback(static function () use (&$stored) {
+      return $stored;
+    });
+    $model_choice = new ModelChoice(
+      $this->container->get('config.factory'),
+      $editor_settings,
+      new NullLogger(),
+      $this->container->get('entity_type.manager'),
+      $this->container->get('ai.provider'),
+    );
 
     $sidebar = new ChatSidebar(
       [],
@@ -174,7 +253,7 @@ class ChatSidebarTest extends KernelTestBase {
       // A REAL mode plugin manager (the class is final — not mockable) built
       // against this test's module set: daedalus_ui is not enabled, so it
       // discovers no modes and the sidebar attaches only the plain chat
-      // library — the non-editable-page posture of getLibraries().
+      // library — the non-editable-page case of getLibraries().
       new ModePluginManager(
         $this->container->get('container.namespaces'),
         $this->container->get('cache.discovery'),
@@ -187,7 +266,11 @@ class ChatSidebarTest extends KernelTestBase {
         $this->container->get('file.upload_handler'),
         $this->container->get('file_system'),
         $this->container->get('entity_type.manager'),
+        $this->container->get('transliteration'),
+        $this->container->get('language_manager'),
       ),
+      $model_choice,
+      $this->container->get('daedalus_ai_ledger.usage_gate'),
     );
 
     // The gate is the 'use ai assistant' permission and nothing else.
@@ -271,12 +354,121 @@ class ChatSidebarTest extends KernelTestBase {
     $this->assertSame($expected_formats, $attachments['accepted_formats']);
     $this->assertSame(FileLane::SIZE_LIMIT, $attachments['size_limit']);
 
+    // The shadow-DOM CSS keeps the input on the textarea text model: WebKit
+    // swallows a Space typed at the wrap point of deep-chat's padded
+    // contenteditable flex item under its white-space: normal (the W44
+    // safari-deep-chat probe shows it; chromedriver never does, so this
+    // string is the suite's whole guard that the rule ships).
+    $this->assertMatchesRegularExpression('/#text-input\s*\{[^}]*\bwhite-space:\s*pre-wrap\b/', $attributes['auxiliarystyle'], 'The shadow-DOM CSS sets white-space: pre-wrap on #text-input (the Safari wrap-point Space cure).');
+
     // History filter: the >1-day message is dropped; the fresh one survives and
     // its markdown is rendered to HTML.
     $messages = $settings['messages'];
     $this->assertCount(1, $messages, 'Only history newer than one day is replayed.');
     $this->assertSame('assistant', $messages[0]['role']);
     $this->assertStringContainsString('hi', $messages[0]['html']);
+
+    // The kebab's configured groups are off until configured: with no
+    // model curated and no cap set, the module's settings carry the
+    // attachments and the AI context usage display's route (the
+    // administrator holds every permission, "view ai context usage"
+    // included; the URL is the permission's alone, by route name), and
+    // nothing else; the usage library is not attached, the popup opener
+    // (daedalus_ui/modal) is.
+    $this->assertSame(['attachments', 'contextDialogUrl'], array_keys($build['#attached']['drupalSettings']['daedalus_ai']), 'Neither modelChoices nor usageUrl rides a plain site; the dialog URL rides the permission.');
+    $this->assertSame(MaterialsBudget::DIALOG_PATH, $build['#attached']['drupalSettings']['daedalus_ai']['contextDialogUrl'], 'The "Design system size" row opens the spine\'s dialog route, the path the refusal hint names.');
+    $this->assertNotContains('daedalus_ai/usage', $build['#attached']['library']);
+    $this->assertContains('daedalus_ui/modal', $build['#attached']['library'], 'The "Design system size" row opens the display through the daedalus popup\'s one opener.');
+
+    // Two models curated and a site cap set. A site window applies to
+    // everyone, the administrator's bypass included (the gate refuses
+    // them on it), so the meter is theirs too; the model group appears,
+    // the site default marked since nothing is stored.
+    $this->config('daedalus_ai.settings')
+      ->set('model_choices', [
+        ['provider' => 'daedalus_ai_test_stub', 'model' => 'stub', 'label' => 'Fast'],
+        ['provider' => 'daedalus_ai_test_stub', 'model' => 'stub-alt', 'label' => ''],
+      ])
+      ->save();
+    $site_cap = ['scope' => Window::SCOPE_SITE, 'period' => 'P1M', 'usd' => 1.0, 'anchor' => ''];
+    $this->config(CostResolver::SETTINGS)->set(UsageGate::CAPS_KEY, [$site_cap])->save();
+    $this->assertTrue($this->container->get('current_user')->hasPermission(UsageGate::BYPASS_PERMISSION), 'The administrator holds the bypass.');
+    $build = $sidebar->build();
+    $daedalus_ai = $build['#attached']['drupalSettings']['daedalus_ai'];
+    $this->assertSame(['attachments', 'modelChoices', 'usageUrl', 'contextDialogUrl'], array_keys($daedalus_ai), 'A site window applies to the administrator: the meter is theirs.');
+    $this->assertSame('/daedalus-ai/usage', $daedalus_ai['usageUrl']);
+    $this->assertContains('daedalus_ai/usage', $build['#attached']['library']);
+    $this->assertSame([
+      ['key' => 'daedalus_ai_test_stub__stub', 'model' => 'stub', 'label' => 'Fast', 'current' => TRUE],
+      ['key' => 'daedalus_ai_test_stub__stub-alt', 'model' => 'stub-alt', 'label' => NULL, 'current' => FALSE],
+    ], $daedalus_ai['modelChoices'], 'The curated list in config order, the site default marked, an empty label absent.');
+
+    // A user window alone is what the bypass skips: no meter for the
+    // administrator then, and nothing else changes.
+    $this->config(CostResolver::SETTINGS)
+      ->set(UsageGate::CAPS_KEY, [
+        ['scope' => Window::SCOPE_USER, 'period' => 'PT5H', 'usd' => 1.0, 'anchor' => ''],
+      ])
+      ->save();
+    $build = $sidebar->build();
+    $this->assertSame(['attachments', 'modelChoices', 'contextDialogUrl'], array_keys($build['#attached']['drupalSettings']['daedalus_ai']), 'The bypass skips the user windows: no meter for the administrator over a user cap alone.');
+    $this->assertNotContains('daedalus_ai/usage', $build['#attached']['library']);
+    $this->config(CostResolver::SETTINGS)->set(UsageGate::CAPS_KEY, [$site_cap])->save();
+
+    // A permitted user the caps apply to, with a stored choice: both
+    // configured groups, the stored key marked, the usage library
+    // attached; without "view ai context usage" the dialog URL and the
+    // popup opener are absent, whatever the site shares.
+    $permitted = $this->createMock(AccountInterface::class);
+    $permitted->method('id')->willReturn(7);
+    $permitted->method('isAuthenticated')->willReturn(TRUE);
+    $granted = ['use ai assistant', ModelChoice::PERMISSION, 'use daedalus ui edit mode'];
+    $permitted->method('hasPermission')->willReturnCallback(static fn (string $permission): bool => in_array($permission, $granted, TRUE));
+    $this->container->get('current_user')->setAccount($permitted);
+    $stored = 'daedalus_ai_test_stub__stub-alt';
+    $build = $sidebar->build();
+    $daedalus_ai = $build['#attached']['drupalSettings']['daedalus_ai'];
+    $this->assertSame(['attachments', 'modelChoices', 'usageUrl'], array_keys($daedalus_ai));
+    $this->assertSame([FALSE, TRUE], array_column($daedalus_ai['modelChoices'], 'current'), 'The stored choice is the current one.');
+    $this->assertSame('/daedalus-ai/usage', $daedalus_ai['usageUrl'], 'The meter reads the ledger\'s status route.');
+    $this->assertContains('daedalus_ai/usage', $build['#attached']['library']);
+    $this->assertNotContains('daedalus_ui/modal', $build['#attached']['library'], 'Without the permission the popup opener is not attached.');
+
+    // The permission alone brings the dialog URL and the popup opener; no
+    // configured group is needed for it.
+    $reader = $this->createMock(AccountInterface::class);
+    $reader->method('id')->willReturn(9);
+    $reader->method('isAuthenticated')->willReturn(TRUE);
+    $reader_held = ['use ai assistant', MaterialsBudget::PERMISSION];
+    $reader->method('hasPermission')->willReturnCallback(static fn (string $permission): bool => in_array($permission, $reader_held, TRUE));
+    $this->container->get('current_user')->setAccount($reader);
+    $build = $sidebar->build();
+    $this->assertSame(['attachments', 'usageUrl', 'contextDialogUrl'], array_keys($build['#attached']['drupalSettings']['daedalus_ai']), 'The dialog URL is the permission\'s alone.');
+    $this->assertContains('daedalus_ui/modal', $build['#attached']['library']);
+    $this->container->get('current_user')->setAccount($permitted);
+
+    // Without the choice permission the model group is absent whatever is
+    // stored; the meter stays. The same without the lane's save permission
+    // (the generic save route is gated on Edit Mode): a group whose pick
+    // could never be saved is not shown.
+    foreach (['use ai assistant', ModelChoice::PERMISSION] as $alone) {
+      $unpermitted = $this->createMock(AccountInterface::class);
+      $unpermitted->method('id')->willReturn(8);
+      $unpermitted->method('isAuthenticated')->willReturn(TRUE);
+      $held = ['use ai assistant', $alone];
+      $unpermitted->method('hasPermission')->willReturnCallback(static fn (string $permission): bool => in_array($permission, $held, TRUE));
+      $this->container->get('current_user')->setAccount($unpermitted);
+      $daedalus_ai = $sidebar->build()['#attached']['drupalSettings']['daedalus_ai'];
+      $this->assertSame(['attachments', 'usageUrl'], array_keys($daedalus_ai), "With only '$alone' beside the chat permission there is no model group.");
+    }
+    $this->container->get('current_user')->setAccount($permitted);
+
+    // With the caps cleared again the meter goes for the permitted user
+    // too, and their model group stays.
+    $this->config(CostResolver::SETTINGS)->set(UsageGate::CAPS_KEY, [])->save();
+    $build = $sidebar->build();
+    $this->assertSame(['attachments', 'modelChoices'], array_keys($build['#attached']['drupalSettings']['daedalus_ai']));
+    $this->assertNotContains('daedalus_ai/usage', $build['#attached']['library']);
   }
 
 }

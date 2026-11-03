@@ -14,7 +14,7 @@ import { usePopover } from './popover.js';
  * Extracted from inspector.js when the gradient builder became the second
  * consumer, then grown into the module every palette offer renders
  * through: PaletteGrid is the shared VISUAL surface (face chips over the
- * paint-carrying stop shape, the swatch well's popover content, the
+ * paint-carrying stop shape, the token well's popover content, the
  * advanced media row's `{}` popover, the gradient builder's stop offer).
  * The offer itself is never derived here: every consumer hands the grid
  * its property's stops (widget-values.js propertyStops / gradientStops),
@@ -27,8 +27,8 @@ import { usePopover } from './popover.js';
  * A stop's hover label: its label, scheme pair spelled out when one rides.
  *
  * Shared by the grid's chips (where it rides the chrome tooltip spine,
- * daedalus_ui's data-daedalus-ui-tooltip, so swatches that paint alike still
- * tell apart instantly) and the swatch well's face (the well wears the
+ * daedalus_ui's data-daedalus-ui-tooltip, so tokens that paint alike still
+ * tell apart instantly) and the token well's face (the well wears the
  * selected stop, so it tells the same story).
  */
 export const stopTitle = (stop) =>
@@ -43,13 +43,13 @@ export const stopTitle = (stop) =>
 /**
  * The shared visual offer surface: the palette rendered as face chips.
  *
- * Sections per palette group (groupedStops: scales in declaration order,
- * then swatch kinds; a curated `allowed:` list renders headerless), each
+ * Sections per palette group (groupedStops: scales in declaration order;
+ * a curated `allowed:` list renders headerless), each
  * stop a face chip painting from payload data, never a var() resolution.
  * Pick semantics are the Segments contract unchanged: clicking the lit
  * stop calls onPick(null) (unset, never a normalize), any other stop
  * calls onPick(stop). A consumer with no lit-stop concept passes no
- * `selected` and never receives null. Placement chrome (the swatch
+ * `selected` and never receives null. Placement chrome (the token
  * well's floating popover, a media row's panel) is the consumer's; the
  * grid is only the offer.
  *
@@ -188,7 +188,7 @@ export const PaletteGrid = ({
  * onto the roving chip on open (the grid's autoFocus) and back onto the
  * trigger on a pick. The palette's own anatomy beyond the grid lives
  * here: the self-labelled lane row (`lanes`) and whatever flows under
- * it (`below`, the mint row). The swatch well is one consumer; an
+ * it (`below`, the mint row). The token well is one consumer; an
  * insert-style chip (a media row, the color editor's link gesture) is
  * another: it passes no `selected` and treats its picks as inserts.
  *
@@ -233,7 +233,7 @@ export const usePalettePopover = ({
   const popover = !open
     ? null
     : portal(
-        <div className="daedalus-stylish-swatch-popover">
+        <div className="daedalus-stylish-token-popover">
           <PaletteGrid
             stops={stops}
             selected={selected}

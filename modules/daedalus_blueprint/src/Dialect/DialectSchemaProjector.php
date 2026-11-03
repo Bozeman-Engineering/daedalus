@@ -6,7 +6,7 @@ namespace Drupal\daedalus_blueprint\Dialect;
 
 use Drupal\daedalus_blueprint\Hook\MaterialsSchemaHooks;
 use Drupal\daedalus_blueprint\Materials\Address;
-use Drupal\daedalus_blueprint\Materials\MaterialKind;
+use Drupal\daedalus_blueprint\Materials\MaterialsSchema;
 use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
 
 /**
@@ -32,34 +32,34 @@ use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
  *   block is FOR, from the site's context declarations), the attributes
  *   whose grammar the catalog line does not spell (links, references,
  *   generation and aspect ratio in the image field handler's own words,
- *   body), the tags the active skin dresses on a tag attribute, and the
+ *   body), the tags the active skin dresses on a tag attribute, the
  *   variants the palette's placements of the element are born wearing
- *   (the catalog's birth defaults; a document states them itself);
- * - `materials`: the roster's schema fragment (every kind, full text;
- *   the favorite block blueprints the bundle's host is offered, with the
- *   group index of the rest, or one group in full when the read named
- *   one), the schema's own top-level key, carried through unchanged,
- *   plus the style guide's remaining prose (bindings, deviations,
- *   guidance);
+ *   (the catalog's birth defaults; a document states them itself), and
+ *   `renders`: what the element renders as, from its render card (the
+ *   catalog's one read of the markup model): dialect writes paired with
+ *   the HTML each renders as, plainest first, or, for a type no layer
+ *   declares (the generic <d-block type> entry among them), the kind
+ *   shells it renders through, as one sentence;
+ * - `materials`: the roster's schema fragment narrowed to what the
+ *   cached design system brief does not carry (MaterialsSchema::
+ *   dialect(): the group index, the block blueprints the bundle's
+ *   host is offered in full, or one group alone when the read named
+ *   one, the animations' steps and the fonts' faces, under
+ *   the dialect guidance paragraph; the tokens and variants
+ *   are the brief's, whole, with the bindings and deviations);
  * - `starts`: a page bundle's page blueprints (what a page of it may
  *   start as, the ids page_create's `start` takes), carried through as
  *   Hook\MaterialsSchemaHooks landed it, the structure line naming it;
  *
- * And drops what contradicts or duplicates the catalog: the layout node
- * grammar, the style-map guidance and key grammar, `stylable` sets,
- * `conditions`, `current_values`, and every anatomy tree. One grammar
- * per door; the schema builder stays the JSON door's spec.
+ * And drops what contradicts or duplicates the catalog and the brief:
+ * the layout node grammar, the whole style-map field (its key grammar,
+ * `stylable` sets, `conditions`, `current_values`, the anatomy trees
+ * and the style guide's bindings, deviations and guidance, which the
+ * brief prints per scale and per element), and every material the brief
+ * states. One grammar per door; the schema builder stays the JSON door's
+ * spec.
  */
 final class DialectSchemaProjector {
-
-  /**
-   * Style-guide keys the cached catalog already teaches, dropped here.
-   *
-   * Rich_text is the fragment's spelling of the instance vocabulary in
-   * the JSON door's key grammar; on the dialect door the cached Page
-   * language section teaches the same vocabulary as selectors.
-   */
-  private const CATALOG_TAUGHT = ['stylable', 'conditions', 'current_values', 'anatomy', 'rich_text'];
 
   /**
    * The schema's materials key, rendered by core from the roster.
@@ -68,17 +68,30 @@ final class DialectSchemaProjector {
 
   /**
    * The note beside an element's axis attributes.
+   *
+   * Each axis is described on the design system brief under the
+   * element's own heading (the axis's whole description over one line
+   * per value); the schema's attribute entry carries the values alone.
    */
-  private const AXES_NOTE = 'Each axis attribute value names the saved variant the element wears on that axis (described under materials.variants).';
+  private const AXES_NOTE = 'Each axis attribute value names the saved variant the element wears on that axis (each axis and value is described under the element\'s heading on the design system brief in your instructions).';
 
   /**
    * The guidance beside the container's name attribute.
    */
-  private const SLOT_GUIDANCE = 'A slot section: a top-level container that fills a slot of the document around this one (a locked bundle\'s template, the site frame) instead of standing in the page\'s own flow. Its children are the page\'s own content, shown where the slot sits; everything a <pb-container> takes, it takes, with name being the slot id.';
+  private const SLOT_GUIDANCE = 'A slot section: a top-level container that fills a slot of the document around this one (a locked bundle\'s template, the site frame) instead of standing in the page\'s own flow. Its children are the page\'s own content, shown where the slot sits; everything a <d-container> takes, it takes, with name being the slot id.';
 
-  private const LINKED_GUIDANCE = 'A linked placement: a saved block blueprint shown by reference as one block, its document rendered live where the element sits under this page\'s own fields (a field block inside it shows this page\'s field). Editing the blueprint changes every page linking it; the element takes no children and no content of its own (edit the blueprint through page_read and page_edit with entity_type blueprint), only its own box styles and axes. A copy to adapt is <pb-blueprint name="id"/> instead.';
+  private const LINKED_GUIDANCE = 'A linked placement: a saved block blueprint shown by reference as one block, its document rendered live where the element sits under this page\'s own fields (a field block inside it shows this page\'s field). Editing the blueprint changes every page linking it; the element takes no children and no content of its own (edit the blueprint through page_read and page_edit with entity_type blueprint), only its own box styles and axes. A copy to adapt is <d-blueprint name="id"/> instead.';
 
   private const NAME_GUIDANCE = 'The container\'s name: what the editor\'s page tree, canvas chips and panels call it ("Hero", "Pricing"). Prints on a named container, set {name} renames it (null clears); an unnamed container reads by its kind (Section at the top level, Container nested).';
+
+  /**
+   * The guidance beside a declared element's class roster.
+   */
+  private const CLASS_GUIDANCE = 'Saved looks worn via class (each described under the element\'s heading on the design system brief in your instructions).';
+
+  public function __construct(
+    protected MaterialsSchema $materialsSchema,
+  ) {}
 
   /**
    * Whether a built schema has a page-language view.
@@ -108,11 +121,16 @@ final class DialectSchemaProjector {
         $out[$key] = $schema[$key];
       }
     }
-    $out['_structure'] = sprintf('This bundle carries a page-builder layout, authored in the page language: page_create takes the entity field values below in "fields" and the whole layout as ONE page-language document in "layout"; page_edit takes ops on the current page. The Page language section of your instructions carries the element vocabulary, the per-kind stylable rosters, the conditions, and the design system brief (every material by its first sentence); this schema carries what it does not: the entity fields, what each element is for, and the materials in full (%s, each with its whole description).', implode(', ', array_map(static fn (MaterialKind $kind): string => $kind->plural(), MaterialKind::cases())));
+    // The materials narrow to what the brief does not carry; the
+    // structure line names the kinds the narrowed shape actually holds
+    // (grows-by-data, from the same key list the shape is built by).
+    $materials = isset($schema[self::MATERIALS]) ? $this->materialsSchema->dialect($schema[self::MATERIALS]) : NULL;
+    $kinds = MaterialsSchema::dialectKinds(array_keys($materials ?? []));
+    $out['_structure'] = sprintf('This bundle carries a page-builder layout, authored in the page language: page_create takes the entity field values below in "fields" and the whole layout as ONE page-language document in "layout"; page_edit takes ops on the current page. The Page language section of your instructions carries the element vocabulary, the per-kind stylable rosters, the conditions, and the design system brief (every token, variant, animation and font with its whole description and value, the bindings and deviations, the blueprints as a menu); this schema carries what it does not: the entity fields, what each element is for, and %s.', $kinds === [] ? 'no materials beyond the brief\'s' : 'the materials composing reads on demand (' . implode(', ', $kinds) . ': the blueprints in full, the animations\' steps, the fonts\' faces)');
 
     // The style map is never authored on this door: styles ride the
-    // document. Its style guide's remaining prose is hoisted.
-    $style_guide = $schema['styles'][MaterialsSchemaHooks::STYLE_GUIDE] ?? NULL;
+    // document, and its style guide's law (the bindings, the deviations,
+    // the guidance) is the brief's.
     $out['fields'] = $schema['fields'] ?? [];
     if (isset($schema['guidance'])) {
       $out['guidance'] = $schema['guidance'];
@@ -121,8 +139,8 @@ final class DialectSchemaProjector {
     $layout = $schema['layout'] ?? [];
     $out['elements'] = $this->elements($layout, $catalog);
 
-    if (isset($schema[self::MATERIALS])) {
-      $out[self::MATERIALS] = $schema[self::MATERIALS];
+    if ($materials !== NULL) {
+      $out[self::MATERIALS] = $materials;
     }
     // A page bundle's starts (the page blueprints page_create's `start`
     // takes) carry through as the hook landed them, and the structure
@@ -130,12 +148,6 @@ final class DialectSchemaProjector {
     if (isset($schema[MaterialsSchemaHooks::STARTS])) {
       $out[MaterialsSchemaHooks::STARTS] = $schema[MaterialsSchemaHooks::STARTS];
       $out['_structure'] .= ' "starts" lists the page blueprints a page of this bundle may start as (label, description, a saved one\'s entity_id for page_read): page_create\'s start takes one of their ids, blank or template, instead of a layout.';
-    }
-    if (is_array($style_guide)) {
-      $rest = array_diff_key($style_guide, array_flip(self::CATALOG_TAUGHT));
-      if ($rest !== []) {
-        $out['style_guide'] = $rest;
-      }
     }
     return $out;
   }
@@ -158,7 +170,11 @@ final class DialectSchemaProjector {
     if ($born !== NULL) {
       $container['born_wearing'] = $born;
     }
-    $elements['pb-container'] = $container;
+    $renders = $this->renders($catalog->cardFor(DialectWalk::CONTAINER_TAG));
+    if ($renders !== NULL) {
+      $container['renders'] = $renders;
+    }
+    $elements[DialectWalk::CONTAINER_TAG] = $container;
     // The slot form: the same container, filling a slot the document
     // around this one placed. Top level only; name is the slot id.
     $elements[DialectWalk::SLOT_TAG] = [
@@ -181,15 +197,19 @@ final class DialectSchemaProjector {
       }
       else {
         // Undeclared on the dialect: the generic form carries the field
-        // values as <pb-field> children, so the field schemas stay.
-        $entry = ['form' => sprintf('<pb-block type="%s"><pb-field name="field_x">value</pb-field></pb-block>', $type)];
+        // values as <d-field> children, so the field schemas stay.
+        $entry = ['form' => sprintf('<%1$s type="%3$s"><%2$s name="field_x">value</%2$s></%1$s>', DialectWalk::BLOCK_TAG, DialectWalk::FIELD_TAG, $type)];
         if (isset($type_schema['guidance'])) {
           $entry['guidance'] = $type_schema['guidance'];
         }
         if (isset($type_schema['block_fields'])) {
           $entry['fields'] = $type_schema['block_fields'];
         }
-        $elements['pb-block type="' . $type . '"'] = $entry;
+        $renders = $this->renders($catalog->cardFor(DialectCatalog::ownerForGenericBlockType($type)));
+        if ($renders !== NULL) {
+          $entry['renders'] = $renders;
+        }
+        $elements[DialectWalk::BLOCK_TAG . ' type="' . $type . '"'] = $entry;
       }
     }
     // Declared types the schema did not list (placement-restricted away in
@@ -206,7 +226,7 @@ final class DialectSchemaProjector {
         return (string) $entry['guidance'];
       }
     }
-    return 'The one grouping element: an ordered flow of children, nestable; a top-level container is a page band.';
+    return 'The one grouping element: an ordered flow of children, nestable; a top-level container is a section.';
   }
 
   /**
@@ -258,10 +278,37 @@ final class DialectSchemaProjector {
     if ($class_variants !== []) {
       $entry['class'] = [
         'values' => array_values($class_variants),
-        'guidance' => 'Saved looks worn via class (described under materials.variants).',
+        'guidance' => self::CLASS_GUIDANCE,
       ];
     }
+    $renders = $this->renders($catalog->cardFor(DialectCatalog::tagForBlockType($type)));
+    if ($renders !== NULL) {
+      $entry['renders'] = $renders;
+    }
     return $entry;
+  }
+
+  /**
+   * An element's render card as the schema entry's `renders` key.
+   *
+   * The card's pairs as the catalog carries them (dialect write => the
+   * HTML it renders as, plainest first), or, for a type that renders
+   * through kind shells (the fallback card), the one sentence naming
+   * them (DialectCatalog::rendersThrough(), the same words the cached
+   * prompt prints). NULL for an owner no layer carded, so the entry
+   * prints nothing it cannot stand behind.
+   *
+   * @return array<string, string>|string|null
+   *   The pairs, the shells sentence, or NULL.
+   */
+  private function renders(?array $card): array|string|null {
+    if ($card === NULL) {
+      return NULL;
+    }
+    if ($card['renders'] !== []) {
+      return $card['renders'];
+    }
+    return 'through ' . DialectCatalog::rendersThrough($card['shells']);
   }
 
   /**
