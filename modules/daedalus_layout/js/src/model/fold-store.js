@@ -36,10 +36,12 @@ export const STORAGE_KEY = 'daedalusLayoutAddPanel';
  * throws.
  *
  * @return {?Storage}
+ *   window.localStorage, or null where there is no window or the
+ *   browser refuses it.
  */
 export const windowStorage = () => {
   try {
-    return typeof window === 'undefined' ? null : window.localStorage ?? null;
+    return typeof window === 'undefined' ? null : (window.localStorage ?? null);
   } catch (e) {
     return null;
   }
@@ -84,6 +86,8 @@ export const normalizeFolds = (raw) => {
  *   A Storage-shaped backend; null for none.
  *
  * @return {?object}
+ *   The postures, set id to boolean, or null when nothing readable was
+ *   stored.
  */
 export const readFolds = (storage = windowStorage()) => {
   try {

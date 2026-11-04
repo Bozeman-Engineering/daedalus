@@ -63,6 +63,7 @@ let inFlight = null;
  * The form-cache identity ("{type}::{id}") of the form commit in flight.
  *
  * @return {?string}
+ *   The form identity, or null when no form commit is in flight.
  */
 export const formCommitInFlight = () => inFlight;
 

@@ -126,13 +126,12 @@ class DialectCatalogPromptMaterialsTest extends KernelTestBase {
   /**
    * A catalog over the live roster with hand-built styling contributions.
    *
-   * What daedalus_stylish would contribute on a real site: the container's width
-   * axis with a description and the properties it owns, the block kind's
-   * bare width axis, a text block type (so the fixture's button look is
-   * placed on <d-text>), the dark condition, the strict prose, the
-   * container layout's birth default, the dressed tags and the skin;
-   * the bindings and deviations a case hands it (none by default, as a
-   * site that binds nothing).
+   * What daedalus_stylish would contribute on a real site: the container's
+   * width axis with a description and the properties it owns, the block kind's
+   * bare width axis, a text block type (so the fixture's button look is placed
+   * on <d-text>), the dark condition, the strict prose, the container layout's
+   * birth default, the dressed tags and the skin; the bindings and deviations a
+   * case hands it (none by default, as a site that binds nothing).
    */
   protected function catalog(bool $styled = TRUE, array $groups = [], array $bindings = [], array $deviations = [], ?array $axes = NULL): DialectCatalog {
     $builder = $this->container->get('daedalus_blueprint.materials_roster_builder');
@@ -162,7 +161,9 @@ class DialectCatalogPromptMaterialsTest extends KernelTestBase {
   }
 
   /**
-   * The fixture system's doctrine line: membership, preference, procedure, stack.
+   * The fixture system's doctrine line.
+   *
+   * Membership, preference, procedure, stack.
    */
   protected function doctrineLine(): string {
     return 'The materials below are Aurora\'s members plus the global ones (members of no system, offered under every system); a save_material mint joins Aurora unless it passes "global": true. ' . MaterialsProse::preferenceSentence() . ' ' . MaterialsProse::standingProcedureSentence() . ' ' . (new VocabularyProse('strict'))->stackSentence();
@@ -231,7 +232,9 @@ class DialectCatalogPromptMaterialsTest extends KernelTestBase {
   }
 
   /**
-   * A blueprint's line carries top-level only and its page id; block scope only.
+   * A blueprint's line carries top-level only and its page id.
+   *
+   * Block scope only.
    *
    * The section qualifier comes from the record; a saved blueprint's line
    * names the entity_id the page tools address it by, a shipped one's (no
@@ -336,7 +339,13 @@ class DialectCatalogPromptMaterialsTest extends KernelTestBase {
       offered: FALSE,
       favorite: $record->favorite,
     );
-    foreach (['token:color/lime-green', 'variant:block_full', 'variant:hero_glow', 'variant:link_quiet', 'animation:fade_in'] as $key) {
+    foreach ([
+      'token:color/lime-green',
+      'variant:block_full',
+      'variant:hero_glow',
+      'variant:link_quiet',
+      'animation:fade_in',
+    ] as $key) {
       $reference[$key] = $opt_out($reference[$key]);
     }
     TestMaterialsProvider::$records = [
@@ -416,7 +425,7 @@ class DialectCatalogPromptMaterialsTest extends KernelTestBase {
    * (the fixture's hero, the opener) or not (the wide section, the
    * stray): sharing is the one lever and the favorite flag is the Add
    * panel's listing. Each carries its owned looks as before. The index
-   * that follows is in the neighbours' shape: one line per declared group
+   * that follows is in the neighbors' shape: one line per declared group
    * that holds a shared block blueprint, in declaration order, with its
    * count and its description's first sentence (a group holding nothing
    * prints no line), then the reserved bucket counting the ones in no
@@ -794,7 +803,9 @@ class DialectCatalogPromptMaterialsTest extends KernelTestBase {
   }
 
   /**
-   * Every line of the brief is attributed: a record's, a kind's shared, or the system's.
+   * Every line of the brief is attributed.
+   *
+   * A record's, a kind's shared, or the system's.
    *
    * The same brief testBrief pins, read line by line for its kind and
    * its record: a material's own line, an axis value line and a class
@@ -932,7 +943,12 @@ class DialectCatalogPromptMaterialsTest extends KernelTestBase {
     // the opener's line is the figure now, and the heading and the index
     // stay (one blueprint in no group, as before).
     TestMaterialsProvider::$records = [
-      ...array_map(static fn (MaterialRecord $record): MaterialRecord => $record->id === 'hero' ? new MaterialRecord(...[...get_object_vars($record), 'offered' => FALSE]) : $record, TestMaterialsProvider::referenceRecords()),
+      ...array_map(
+        static fn (MaterialRecord $record): MaterialRecord => $record->id === 'hero'
+          ? new MaterialRecord(...[...get_object_vars($record), 'offered' => FALSE])
+          : $record,
+        TestMaterialsProvider::referenceRecords(),
+      ),
       new MaterialRecord(
         kind: MaterialKind::Blueprint,
         id: 'opener',

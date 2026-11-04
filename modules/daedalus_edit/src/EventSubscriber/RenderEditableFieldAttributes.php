@@ -60,8 +60,8 @@ class RenderEditableFieldAttributes implements EventSubscriberInterface {
         $view_mode = $element['#third_party_settings']['layout_builder']['view_mode'];
       }
       else {
-        // Layout Builder (and Daedalus Edit) only supports view modes, not dynamically
-        // defined "display options" (which
+        // Layout Builder (and Daedalus Edit) only supports view modes, not
+        // dynamically defined "display options" (which
         // \Drupal\Core\Field\FieldItemListInterface::view() always names the
         // "_custom" view mode).
         // @see \Drupal\Core\Field\FieldItemListInterface::view()

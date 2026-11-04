@@ -21,5 +21,6 @@ import { selectableIn } from '../../selection/capable-model.js';
  *   The row's key, or null for a keyless row.
  *
  * @return {boolean}
+ *   Whether the row offers no gesture.
  */
 export const rowInert = (index, key) => !key || !selectableIn(index, key);

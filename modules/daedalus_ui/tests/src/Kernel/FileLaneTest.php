@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_ui\Kernel;
 
+// cspell:ignore résumé
 use Drupal\Core\File\FileExists;
 use Drupal\daedalus_ui\File\FileLane;
 use Drupal\daedalus_ui\File\FileLaneException;
@@ -130,7 +131,13 @@ final class FileLaneTest extends KernelTestBase {
   public function testAcceptedExtensions(): void {
     $accepted = $this->lane->acceptedExtensions();
     sort($accepted);
-    $expected = array_merge(FileLane::TEXTUAL_EXTENSIONS, FileLane::FONT_EXTENSIONS, ['png', 'gif', 'jpg', 'jpeg', 'webp']);
+    $expected = array_merge(FileLane::TEXTUAL_EXTENSIONS, FileLane::FONT_EXTENSIONS, [
+      'png',
+      'gif',
+      'jpg',
+      'jpeg',
+      'webp',
+    ]);
     sort($expected);
     $this->assertSame($expected, $accepted);
 
@@ -243,7 +250,7 @@ final class FileLaneTest extends KernelTestBase {
    * Every file is saved under the lane's canonical name, on both roads.
    *
    * The macOS screenshot name carries a NARROW NO-BREAK SPACE (U+202F)
-   * before "PM", the character the live site's model normalised to a plain
+   * before "PM", the character the live site's model normalized to a plain
    * space so its handle stopped resolving; the lane turns every whitespace
    * into a dash. Transliteration, the empty-stem fallback, core's security
    * munge still running after the lane, and the collision rename on the

@@ -18,30 +18,28 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * A linked placement: a blueprint shown by reference inside a document.
  *
- * The blueprint is the one shared-composition entity, placed into a
- * document in one of two modes. Detached (place_blueprint's default) is a
- * copy: the instantiator stamps the blueprint's tree into the host with
- * fresh identity and a provenance stamp, and nothing propagates forward.
- * Linked is this block: one node in the host's document
- * (`daedalus_blueprint_linked:{machine_name}`, one derivative per
- * block-scope blueprint entity, published or not, LinkedBlueprintDeriver;
- * publication is the fit gate's and the primitive's question) that
- * renders the blueprint's own sections LIVE through the one render
- * primitive (InnerRender::renderBlueprint(): the blueprint's document
- * under the outer host's contexts, so a field block inside the blueprint
- * shows the outer page's own field), so editing the blueprint changes
- * every page that links it. The render carries what it read whether or
- * not anything showed: the blueprint when one is published under the
- * name, empty or not, else the blueprint type's list tag, so an
- * unpublished, deleted or republished blueprint reaches every linking
- * page. The subject is optional: the site frame places a linked
- * composition around every route, and a view page or a form has no
- * entity, so the blueprint then renders with no subject and a field block
- * in it renders nothing. The configuration is the context mapping and
- * nothing else (a template and the site frame carry it as config); the blueprint
- * is named by the plugin id, the lean tree spells the node as
- * `{kind: linked, blueprint: <machine_name>}` and the dialect as
- * `<d-linked blueprint="">` (LayoutSerializer, DialectPrinter).
+ * The blueprint is the one shared-composition entity, placed into a document in
+ * one of two modes. Detached (place_blueprint's default) is a copy: the
+ * instantiator stamps the blueprint's tree into the host with fresh identity
+ * and a provenance stamp, and nothing propagates forward. Linked is this block:
+ * one node in the host's document (`daedalus_blueprint_linked:{machine_name}`,
+ * one derivative per block-scope blueprint entity, published or not,
+ * LinkedBlueprintDeriver; publication is the fit gate's and the primitive's
+ * question) that renders the blueprint's own sections LIVE through the one
+ * render primitive (InnerRender::renderBlueprint(): the blueprint's document
+ * under the outer host's contexts, so a field block inside the blueprint shows
+ * the outer page's own field), so editing the blueprint changes every page that
+ * links it. The render carries what it read whether or not anything showed: the
+ * blueprint when one is published under the name, empty or not, else the
+ * blueprint type's list tag, so an unpublished, deleted or republished
+ * blueprint reaches every linking page. The subject is optional: the site frame
+ * places a linked composition around every route, and a view page or a form has
+ * no entity, so the blueprint then renders with no subject and a field block in
+ * it renders nothing. The configuration is the context mapping and nothing else
+ * (a template and the site frame carry it as config); the blueprint is named by
+ * the plugin id, the lean tree spells the node as `{kind: linked, blueprint:
+ * <machine_name>}` and the dialect as `<d-linked blueprint="">`
+ * (LayoutSerializer, DialectPrinter).
  *
  * The node is foreign on the page that links it: its content is the
  * blueprint's document, judged by the blueprint host, so the ownership

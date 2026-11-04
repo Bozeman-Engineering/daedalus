@@ -96,12 +96,12 @@ class ActiveDesignSystem {
   /**
    * The membership a file-shipped member of a module carries.
    *
-   * The ONE disk-lane rule, shared by every lane that reads a member off
-   * a module's files (daedalus_stylish's four importers, blueprint discovery, skill
-   * discovery): the definition's own `design_system` key wins; `~` (NULL)
-   * opts out, a global member offered under every system; an ABSENT key
-   * is the module default, the system the module packages
-   * (packagedSystemOf()), or global when it packages none.
+   * The ONE disk-lane rule, shared by every lane that reads a member off a
+   * module's files (daedalus_stylish's four importers, blueprint discovery,
+   * skill discovery): the definition's own `design_system` key wins; `~` (NULL)
+   * opts out, a global member offered under every system; an ABSENT key is the
+   * module default, the system the module packages (packagedSystemOf()), or
+   * global when it packages none.
    *
    * Both branches resolve against the systems that are landed OR shipped
    * (nameableIds()), never the landed set alone: a member is read off
@@ -217,13 +217,13 @@ class ActiveDesignSystem {
   /**
    * The design system a module packages, landed or still on disk, or NULL.
    *
-   * Reads packageOf() with the shipped set (shippedPackages()) behind it:
-   * the answer to "is this installed module a design-system package, and
-   * of which system" in the window between a recipe installing the module
-   * and importing its system's config, when the entity has not landed yet.
-   * The module default shippedMembership() gives an absent key, and what
-   * a lane that must NOT act on a package's members before its system is
-   * active (daedalus_stylish's importers defer them) asks before reading a file.
+   * Reads packageOf() with the shipped set (shippedPackages()) behind it: the
+   * answer to "is this installed module a design-system package, and of which
+   * system" in the window between a recipe installing the module and importing
+   * its system's config, when the entity has not landed yet. The module default
+   * shippedMembership() gives an absent key, and what a lane that must NOT act
+   * on a package's members before its system is active (daedalus_stylish's
+   * importers defer them) asks before reading a file.
    *
    * @throws \LogicException
    *   When two landed design systems name the module as their package

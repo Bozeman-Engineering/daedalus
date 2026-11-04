@@ -79,9 +79,9 @@ class StyleGuideControlsTest extends KernelTestBase {
   /**
    * Layers a declaration over the media block type and rebuilds the guide.
    *
-   * The daedalus_stylish_control_test alter hook merges state-injected declarations
-   * as the highest layer, so failure cases never live in YAML that would
-   * break every other guide build.
+   * The daedalus_stylish_control_test alter hook merges state-injected
+   * declarations as the highest layer, so failure cases never live in YAML that
+   * would break every other guide build.
    */
   protected function layerOverMedia(array $declaration): void {
     $this->container->get('state')->set('daedalus_stylish_control_test.block_types', ['media' => $declaration]);
@@ -303,7 +303,7 @@ class StyleGuideControlsTest extends KernelTestBase {
   }
 
   /**
-   * The normalizer: omitted is the root, a string is one candidate, a list rides.
+   * The normalizer: omitted is the root, a string one candidate, a list rides.
    *
    * The one grammar every consumer reads through (the validator per
    * candidate, the client payload as served), so the shorthands are pinned
@@ -358,7 +358,7 @@ class StyleGuideControlsTest extends KernelTestBase {
   }
 
   /**
-   * A candidate list binds a part first and the root second, and rides as authored.
+   * A candidate list binds a part then the root, and rides as authored.
    *
    * Both candidates cover the widget (.media__frame declares layout, the
    * block root gains it here), so the guide builds and the effective
@@ -403,7 +403,7 @@ class StyleGuideControlsTest extends KernelTestBase {
   }
 
   /**
-   * Every candidate's groups must cover the widget; the error names the candidate.
+   * Every candidate's groups must cover the widget; the error names which.
    *
    * .media__frame covers the layout widget, .media__caption declares only
    * typography: the second candidate fails coverage on its own, named by
@@ -426,7 +426,7 @@ class StyleGuideControlsTest extends KernelTestBase {
   }
 
   /**
-   * An element key that is not a string, a list of distinct strings, or absent fails.
+   * An element key fails unless a string, a distinct-string list, or absent.
    *
    * @param mixed $element
    *   The malformed element key.
@@ -444,7 +444,7 @@ class StyleGuideControlsTest extends KernelTestBase {
   }
 
   /**
-   * Malformed element keys: an empty list, a non-string entry, a map, a duplicate.
+   * Malformed element keys: empty list, non-string entry, map, duplicate.
    */
   public static function malformedElementProvider(): array {
     return [
@@ -552,11 +552,11 @@ class StyleGuideControlsTest extends KernelTestBase {
    *
    * The entity kind's layout root: daedalus_stylish's own layer declares
    * `.daedalus-layout-layout` on the entity kind with the spacing and layout
-   * groups (over the anatomy daedalus_layout ships), so the shipped `gap` widget
-   * (gap, row-gap, column-gap: the spacing group) binds there and the
-   * guide builds with the element key riding through as authored. This
-   * is the binding daedalus_edit ships; the client renders it only while the
-   * part is present.
+   * groups (over the anatomy daedalus_layout ships), so the shipped `gap`
+   * widget (gap, row-gap, column-gap: the spacing group) binds there and the
+   * guide builds with the element key riding through as authored. This is the
+   * binding daedalus_edit ships; the client renders it only while the part is
+   * present.
    */
   public function testKindControlBindsDeclaredElement(): void {
     $this->layerOverKind('entity', [
@@ -577,7 +577,7 @@ class StyleGuideControlsTest extends KernelTestBase {
   /**
    * A nested part of the kind's elements tree is bindable too.
    *
-   * findElement() walks the nested tree, the same rule block types get, so
+   * `findElement()` walks the nested tree, the same rule block types get, so
    * a kind declaring `.outer > .inner` anatomy binds `.inner` directly.
    */
   public function testKindControlBindsNestedElement(): void {
@@ -639,7 +639,7 @@ class StyleGuideControlsTest extends KernelTestBase {
   }
 
   /**
-   * A kind control may list a part and the '' root; the root is the kind's groups.
+   * A kind control may list a part and the '' root, which is the kind's groups.
    *
    * The region root declares layout and the nested part declares it too,
    * so both candidates cover the widget and the list rides as authored.

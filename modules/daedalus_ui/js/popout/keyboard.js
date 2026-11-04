@@ -54,11 +54,12 @@ if (scope) {
   const claims = createClaims();
   // The keys of the 'down' strokes forwarded and not yet released.
   const pressed = new Set();
-  const hello = () => channel.post('hello', { id });
 
   const channel = openChannel('daedalus_ui', scope, {
     claims: (set) => claims.update(set),
-    'leader-ready': hello,
+    // The same hello this document posts on load, for a leader that
+    // arrived (or reloaded) after it.
+    'leader-ready': () => channel.post('hello', { id }),
     'leader-gone': () => {
       // No leader, nothing claimed: every key keeps its native meaning
       // until a leader-ready brings a fresh set.
@@ -91,6 +92,6 @@ if (scope) {
     },
   });
 
-  hello();
+  channel.post('hello', { id });
   window.addEventListener('pagehide', () => channel.post('bye', { id }));
 }

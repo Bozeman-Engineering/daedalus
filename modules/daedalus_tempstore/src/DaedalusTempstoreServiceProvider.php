@@ -21,9 +21,9 @@ class DaedalusTempstoreServiceProvider extends ServiceProviderBase {
   /**
    * {@inheritdoc}
    *
-   * Note: This module's weight is set to 1 (see daedalus_tempstore_install()) to
-   * ensure this alter() method runs after workspaces module's service provider.
-   * This allows us to detect and extend workspaces' modifications to
+   * Note: This module's weight is set to 1 (see daedalus_tempstore_install())
+   * to ensure this alter() method runs after workspaces module's service
+   * provider. This allows us to detect and extend workspaces' modifications to
    * layout_builder.tempstore_repository when both modules are enabled.
    */
   public function alter(ContainerBuilder $container) {

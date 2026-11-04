@@ -138,7 +138,12 @@ class SkinLifecycleTest extends KernelTestBase {
     ]);
     $skin->setPackageTokens(['space' => ['gutter' => '1rem', 'tight' => '0.5rem']]);
     $skin->setPackageDefaults(['base:h2' => ['' => ['default' => ['font-size' => '2rem']]]]);
-    $skin->setShippedSource(self::PROVIDER, ['tokens' => $skin->packageTokens(), 'animations' => [], 'fonts' => [], 'defaults' => $skin->packageDefaults()]);
+    $skin->setShippedSource(self::PROVIDER, [
+      'tokens' => $skin->packageTokens(),
+      'animations' => [],
+      'fonts' => [],
+      'defaults' => $skin->packageDefaults(),
+    ]);
     $skin->setSiteTokens(['space' => ['gutter' => ['value' => '2rem'], 'wide' => ['value' => '4rem']]]);
     $skin->setSiteDefaults(['base:h2' => ['' => ['default' => ['color' => 'red']]]]);
     $skin->save();
@@ -235,9 +240,6 @@ class SkinLifecycleTest extends KernelTestBase {
   }
 
   /**
-   * Copy as my skin: the merge folded into a skin the active system owns.
-   */
-  /**
    * A member skin is born with its system's default skin's worn defaults.
    *
    * The site's own skin that brings none inherits the merge of the
@@ -273,7 +275,12 @@ class SkinLifecycleTest extends KernelTestBase {
     $this->assertSame([], $this->load('frost')->packageDefaults());
     $shipped = DaedalusStylishSkin::create(['label' => 'Bare', 'machine_name' => 'bare', 'design_system' => 'aurora']);
     $shipped->setPackageTokens(['space' => ['gutter' => '1rem']]);
-    $shipped->setShippedSource(self::PROVIDER, ['tokens' => $shipped->packageTokens(), 'animations' => [], 'fonts' => [], 'defaults' => []]);
+    $shipped->setShippedSource(self::PROVIDER, [
+      'tokens' => $shipped->packageTokens(),
+      'animations' => [],
+      'fonts' => [],
+      'defaults' => [],
+    ]);
     $shipped->save();
     $this->assertSame([], $this->load('bare')->packageDefaults());
     DesignSystem::create(['id' => 'blank', 'label' => 'Blank', 'default_skin' => 'first'])->save();
@@ -287,6 +294,9 @@ class SkinLifecycleTest extends KernelTestBase {
     $this->assertSame(['base:p' => ['' => ['default' => ['margin' => '0']]]], $copy->packageDefaults());
   }
 
+  /**
+   * Copy as my skin: the merge folded into a skin the active system owns.
+   */
   public function testCopyAsMySkin(): void {
     $manager = $this->manager();
     $source = $this->createShipped();

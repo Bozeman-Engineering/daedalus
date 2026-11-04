@@ -20,6 +20,7 @@ use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\VariantImporter;
+use Drupal\layout_builder\SectionListInterface;
 use Symfony\Component\HttpFoundation\Request;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -50,7 +51,11 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static array $permissions = ['create section blueprint', 'edit any section blueprint', 'delete any section blueprint'];
+  protected static array $permissions = [
+    'create section blueprint',
+    'edit any section blueprint',
+    'delete any section blueprint',
+  ];
 
   /**
    * {@inheritdoc}
@@ -632,7 +637,9 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     ]);
     $this->assertBatchSuccess($result);
     $this->assertSame([['uuid' => $root_section, 'field_name' => TargetType::RESTRUCTURED]], $result->getTargets());
-    $this->assertSame('section', $entity->get('layout_builder__layout')->getSection(0)->getThirdPartySetting(BlueprintOperationHandler::PROVENANCE_KEY, 'blueprint'));
+    $layout = $entity->get('layout_builder__layout');
+    assert($layout instanceof SectionListInterface);
+    $this->assertSame('section', $layout->getSection(0)->getThirdPartySetting(BlueprintOperationHandler::PROVENANCE_KEY, 'blueprint'));
     $this->assertSame('section', $stamp_of($root_section));
     // The blueprint's own document is a definition, never a placement: the
     // stamp lives on the page alone.
@@ -653,7 +660,7 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     ]);
     $this->assertBatchSuccess($result);
     $this->assertSame([['uuid' => $nested, 'field_name' => TargetType::RESTRUCTURED]], $result->getTargets());
-    $wrapper = $entity->get('layout_builder__layout')->getSection(0)->getComponent($nested);
+    $wrapper = $layout->getSection(0)->getComponent($nested);
     $this->assertSame('inner_section', SectionBlock::embeddedSection($wrapper)->getThirdPartySetting(LayoutSerializer::BLUEPRINT_PROVENANCE_KEY, 'blueprint'));
     $this->assertSame('inner_section', $stamp_of($nested));
     $this->assertSame('section', $stamp_of($root_section));
@@ -950,7 +957,9 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     $this->assertBatchSuccess($result);
 
     // The placed root carries its provenance stamp, born with the section.
-    $this->assertSame('owner_section', $entity->get('layout_builder__layout')->getSection(1)->getThirdPartySetting(BlueprintOperationHandler::PROVENANCE_KEY, 'blueprint'));
+    $layout = $entity->get('layout_builder__layout');
+    assert($layout instanceof SectionListInterface);
+    $this->assertSame('owner_section', $layout->getSection(1)->getThirdPartySetting(BlueprintOperationHandler::PROVENANCE_KEY, 'blueprint'));
 
     // The blueprint's own owned look landed through the real apply lane.
     $map = json_decode((string) $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->value, TRUE);
@@ -1191,7 +1200,11 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     $this->assertSame(VariantImporter::FAILED, $report->outcome('daedalus_blueprint_library_owned_variant_test', 'shipped_owned_look'));
     $this->assertSame('SHIPPED_VARIANT_OWNER_MISSING', $report->errors('daedalus_blueprint_library_owned_variant_test', 'shipped_owned_look')[0]->getCode());
 
-    $blueprint = $this->createBlueprint(['label' => 'CTA card', 'machine_name' => 'cta_card', 'description' => 'The owner.']);
+    $blueprint = $this->createBlueprint([
+      'label' => 'CTA card',
+      'machine_name' => 'cta_card',
+      'description' => 'The owner.',
+    ]);
 
     $results = $importer->sync(['daedalus_blueprint_library_owned_variant_test'])->outcomes();
     $this->assertSame(VariantImporter::CREATED, $results['daedalus_blueprint_library_owned_variant_test']['shipped_owned_look']);

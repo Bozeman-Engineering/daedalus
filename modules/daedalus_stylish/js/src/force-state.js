@@ -54,6 +54,14 @@ const ATTRIBUTE = 'data-force-state';
 /**
  * The relative selectors the style map styles under a key ('.quote' from
  * 'block:{uuid}::.quote', '> d-text' from 'container:{uuid}::> d-text').
+ *
+ * @param {?object} styleMap
+ *   The style map.
+ * @param {string} key
+ *   The owner key.
+ *
+ * @return {Set<string>}
+ *   The relative selectors.
  */
 const styledSelectors = (styleMap, key) => {
   const prefixLength = `${key}::`.length;
@@ -81,6 +89,7 @@ const styledSelectors = (styleMap, key) => {
  *   guide.conditions.
  *
  * @return {Element[]}
+ *   The elements to stamp, each once.
  */
 export const stampTargets = (key, selector, state, conditions) => {
   const elements = resolveTargets(key, selector, conditions);
@@ -88,11 +97,13 @@ export const stampTargets = (key, selector, state, conditions) => {
     if (name !== state) {
       return;
     }
-    resolveTargets(key, prefix(selector, index), conditions).forEach((element) => {
-      if (!elements.includes(element)) {
-        elements.push(element);
-      }
-    });
+    resolveTargets(key, prefix(selector, index), conditions).forEach(
+      (element) => {
+        if (!elements.includes(element)) {
+          elements.push(element);
+        }
+      },
+    );
   });
   return elements;
 };
@@ -103,6 +114,13 @@ export const stampTargets = (key, selector, state, conditions) => {
  * The source owns the state (selection-scoped: any selection move clears
  * it); this owns the DOM consequence. The guide's condition table says
  * which pseudo-class qualifiers are the posed state's.
+ *
+ * @param {object} options
+ *   The wiring.
+ * @param {object} options.source
+ *   The leader state source (its force state).
+ * @param {object} [options.guide]
+ *   The style guide payload (its condition table).
  */
 export const createForceState = ({ source, guide = {} }) => {
   const conditions = guide?.conditions ?? {};
@@ -123,12 +141,14 @@ export const createForceState = ({ source, guide = {} }) => {
     }
     const next = new Set(resolveTargets(key, null));
     styledSelectors(source.getStyleMap(), key).forEach((selector) => {
-      stampTargets(key, selector, state, conditions).forEach((element) => next.add(element));
+      stampTargets(key, selector, state, conditions).forEach((element) =>
+        next.add(element),
+      );
     });
     [source.getTarget(), source.getAddress()].forEach((fact) => {
       if (fact) {
-        stampTargets(fact.key, fact.selector, state, conditions).forEach((element) =>
-          next.add(element),
+        stampTargets(fact.key, fact.selector, state, conditions).forEach(
+          (element) => next.add(element),
         );
       }
     });

@@ -35,8 +35,10 @@ const HOVER = ['selection/setHover', 'selection/setHoverSelector'];
  * Whether an action is one the gate judges.
  *
  * @param {{type: string}} action
+ *   The dispatched action.
  *
  * @return {boolean}
+ *   Whether the gate judges it.
  */
 export const gatedAction = (action) =>
   SET_ONE.includes(action.type) ||
@@ -45,9 +47,17 @@ export const gatedAction = (action) =>
 
 /**
  * The key a hover payload names: a bare key or {key, selector}.
+ *
+ * @param {?(string|{key: ?string})} payload
+ *   The hover action's payload.
+ *
+ * @return {?string}
+ *   The key, or null.
  */
 const hoverKey = (payload) =>
-  payload && typeof payload === 'object' ? (payload.key ?? null) : (payload ?? null);
+  payload && typeof payload === 'object'
+    ? (payload.key ?? null)
+    : (payload ?? null);
 
 /**
  * The action to pass on for a dispatched action, or null to drop it.
@@ -67,6 +77,7 @@ const hoverKey = (payload) =>
  *   The predicate (capable.js selectable, or any stand-in in a suite).
  *
  * @return {?object}
+ *   The action to pass on, or null to drop it.
  */
 export const gateSelectionAction = (action, selectable) => {
   if (SET_ONE.includes(action.type)) {
@@ -76,12 +87,18 @@ export const gateSelectionAction = (action, selectable) => {
   if (action.type === SET_MANY) {
     const { keys = [], primary = null } = action.payload ?? {};
     const kept = keys.filter((key) => selectable(key));
-    if (kept.length === keys.length && (primary === null || selectable(primary))) {
+    if (
+      kept.length === keys.length &&
+      (primary === null || selectable(primary))
+    ) {
       return action;
     }
     return {
       ...action,
-      payload: { keys: kept, primary: primary !== null && selectable(primary) ? primary : null },
+      payload: {
+        keys: kept,
+        primary: primary !== null && selectable(primary) ? primary : null,
+      },
     };
   }
   if (HOVER.includes(action.type)) {
@@ -103,14 +120,15 @@ export const gateSelectionAction = (action, selectable) => {
  * @return {Function}
  *   A Redux middleware.
  */
-export const selectionGate = (index, selectableIn) => () => (next) => (action) => {
-  if (!gatedAction(action)) {
-    return next(action);
-  }
-  const live = index();
-  if (!live) {
-    return next(action);
-  }
-  const gated = gateSelectionAction(action, (key) => selectableIn(live, key));
-  return gated === null ? undefined : next(gated);
-};
+export const selectionGate =
+  (index, selectableIn) => () => (next) => (action) => {
+    if (!gatedAction(action)) {
+      return next(action);
+    }
+    const live = index();
+    if (!live) {
+      return next(action);
+    }
+    const gated = gateSelectionAction(action, (key) => selectableIn(live, key));
+    return gated === null ? undefined : next(gated);
+  };

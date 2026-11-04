@@ -20,14 +20,14 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the skin shipper (the skins lane's site-to-disk direction).
  *
- * A ship writes MODULE.daedalus_stylish.skins.FILE_ID.yml into the target module and
- * adopts the shipped skins in place (same entity, provider stamped, source
- * hash over the keyed {tokens, defaults} payload, published), so the
- * importer's sync right after reports UNCHANGED: the round trip is the
- * lock. The target module is created under the test's own site directory
- * (sites/simpletest/ID, a root extension discovery scans), never a real
- * module directory, and removed on teardown; see VariantShipperTest for
- * the two conditions that make discovery see it.
+ * A ship writes MODULE.daedalus_stylish.skins.FILE_ID.yml into the target
+ * module and adopts the shipped skins in place (same entity, provider stamped,
+ * source hash over the keyed {tokens, defaults} payload, published), so the
+ * importer's sync right after reports UNCHANGED: the round trip is the lock.
+ * The target module is created under the test's own site directory
+ * (sites/simpletest/ID, a root extension discovery scans), never a real module
+ * directory, and removed on teardown; see VariantShipperTest for the two
+ * conditions that make discovery see it.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -244,8 +244,18 @@ class SkinShipperTest extends KernelTestBase {
     $this->assertSame(self::TARGET, $adopted->getProvider());
     $this->assertTrue($adopted->isShipped());
     $this->assertFalse($adopted->isModified());
-    $this->assertFalse($adopted->hasNewDefaults(['tokens' => self::DUSK_TOKENS, 'animations' => [], 'fonts' => [], 'defaults' => self::DUSK_DEFAULTS]));
-    $this->assertSame(DaedalusStylishSkin::hashData(['tokens' => self::DUSK_TOKENS, 'animations' => [], 'fonts' => [], 'defaults' => self::DUSK_DEFAULTS]), $adopted->getSourceHash());
+    $this->assertFalse($adopted->hasNewDefaults([
+      'tokens' => self::DUSK_TOKENS,
+      'animations' => [],
+      'fonts' => [],
+      'defaults' => self::DUSK_DEFAULTS,
+    ]));
+    $this->assertSame(DaedalusStylishSkin::hashData([
+      'tokens' => self::DUSK_TOKENS,
+      'animations' => [],
+      'fonts' => [],
+      'defaults' => self::DUSK_DEFAULTS,
+    ]), $adopted->getSourceHash());
     $this->assertTrue($adopted->isPublished());
     $this->assertSame(self::DUSK_TOKENS, $adopted->packageTokens());
     $this->assertSame(self::DUSK_DEFAULTS, $adopted->packageDefaults());
@@ -328,10 +338,10 @@ class SkinShipperTest extends KernelTestBase {
   /**
    * A name shipped elsewhere is planned as such and refused by ship().
    *
-   * Two shippers count as elsewhere: another module (daedalus_stylish_skins_test
-   * ships aurora) and another file of the target module itself (its
-   * hand-authored single file), since discovery would refuse the duplicate
-   * anyway. Nothing is written when any name conflicts.
+   * Two shippers count as elsewhere: another module
+   * (daedalus_stylish_skins_test ships aurora) and another file of the target
+   * module itself (its hand-authored single file), since discovery would refuse
+   * the duplicate anyway. Nothing is written when any name conflicts.
    */
   public function testShippedElsewhereRefused(): void {
     \Drupal::service('module_installer')->install(['daedalus_stylish_skins_test']);
@@ -406,7 +416,14 @@ class SkinShipperTest extends KernelTestBase {
   public function testBareSkinRoundTrips(): void {
     $bare = $this->createSkin('bare', [], []);
     $definition = $this->shipper()->definition($bare);
-    $this->assertSame(['label' => 'Bare', 'design_system' => NULL, 'tokens' => [], 'animations' => [], 'fonts' => [], 'defaults' => []], $definition);
+    $this->assertSame([
+      'label' => 'Bare',
+      'design_system' => NULL,
+      'tokens' => [],
+      'animations' => [],
+      'fonts' => [],
+      'defaults' => [],
+    ], $definition);
     $this->assertSame(['bare' => SkinShipper::CREATED], $this->shipper()->ship(self::TARGET, 'dusk', ['bare' => $definition]));
     $this->assertFalse($this->loadSkin('bare')->isModified());
     $this->assertSame([self::TARGET => ['bare' => SkinImporter::UNCHANGED]], $this->importer()->sync([self::TARGET])->outcomes());

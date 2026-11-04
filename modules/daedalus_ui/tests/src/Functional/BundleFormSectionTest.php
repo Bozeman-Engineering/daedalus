@@ -6,6 +6,7 @@ namespace Drupal\Tests\daedalus_ui\Functional;
 
 use Drupal\block_content\Entity\BlockContentType;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
@@ -41,15 +42,24 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class BundleFormSectionTest extends BrowserTestBase {
 
-  use DaedalusFixtureTrait {
-    setUp as daedalusSetUp;
-  }
+  use DaedalusFixtureTrait;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = '';
 
   /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
-    $this->daedalusSetUp();
+    parent::setUp();
+    $this->installFixture();
     // A third bundle entity type (vocabularies) and the manage-display
     // routes the layout fact links to; neither is part of the recipe.
     \Drupal::service('module_installer')->install(['taxonomy', 'field_ui']);
@@ -66,7 +76,9 @@ class BundleFormSectionTest extends BrowserTestBase {
     $this->assertTrue($field_manager->isEnabled('node', 'page'), 'The recipe opens styling on the Page bundle.');
     foreach (['Styled one', 'Styled two'] as $title) {
       $node = Node::create(['type' => 'page', 'title' => $title]);
-      $node->get(DaedalusStylishFieldManager::FIELD_NAME)->appendItem()->setStyleMap([
+      $item = $node->get(DaedalusStylishFieldManager::FIELD_NAME)->appendItem();
+      assert($item instanceof StyleMapItem);
+      $item->setStyleMap([
         'block:a1b2c3' => ['default' => ['padding' => '2rem']],
       ]);
       $node->save();

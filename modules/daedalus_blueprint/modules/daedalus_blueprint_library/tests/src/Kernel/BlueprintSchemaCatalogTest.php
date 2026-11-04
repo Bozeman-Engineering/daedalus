@@ -33,7 +33,7 @@ class BlueprintSchemaCatalogTest extends BlueprintKernelTestBase {
   /**
    * {@inheritdoc}
    *
-   * daedalus_blueprint_test declares the container layout the page
+   * The daedalus_blueprint_test module declares the container layout the page
    * language prints a container with.
    */
   protected static $modules = ['daedalus_blueprint_library_test', 'daedalus_blueprint_test'];
@@ -126,7 +126,7 @@ class BlueprintSchemaCatalogTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * A page bundle's schema lists its page blueprints under starts, nowhere else.
+   * A page bundle's schema lists page blueprints under starts, nowhere else.
    *
    * Scopes do not mix on an offering surface: a page blueprint is what a
    * page of the bundle may start as (page_create's `start`), never a

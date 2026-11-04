@@ -54,6 +54,7 @@ import { materialRoute } from './skin-model.js';
  * @return {Promise<{id: string, name: string, usages: number,
  *   layer: string, locked: boolean, provider: ?string,
  *   shipped_state: ?string}>}
+ *   The material's management facts.
  */
 export const fetchMaterialUsage = (kind, reference) =>
   get(`${materialRoute(kind, reference)}/usage`);
@@ -71,8 +72,17 @@ export const fetchMaterialUsage = (kind, reference) =>
  * its roster id alone (stacks name the FAMILY), so its rename is always
  * immediate. A shipped material refuses on a consuming site.
  *
+ * @param {string} kind
+ *   'token', 'animation' or 'font'.
+ * @param {string} reference
+ *   The roster id.
+ * @param {string} label
+ *   The new name.
+ *
  * @return {Promise<{renamed: boolean, id: string, references: number,
  *   batch_url?: string, materials: object}>}
+ *   Whether the record moved now, its id, the reference count and, for
+ *   a staged rename, the batch URL to drive; the materials delta.
  */
 export const renameMaterial = (kind, reference, label) =>
   post(`${materialRoute(kind, reference)}/rename`, { label });
@@ -85,7 +95,13 @@ export const renameMaterial = (kind, reference, label) =>
  * through: the unset gesture); under the developer gate it rewrites the
  * package record from the file too.
  *
+ * @param {string} kind
+ *   'token', 'animation' or 'font'.
+ * @param {string} reference
+ *   The roster id.
+ *
  * @return {Promise<{materials: object}>}
+ *   The materials delta.
  */
 export const revertMaterial = (kind, reference) =>
   post(`${materialRoute(kind, reference)}/revert`, {});
@@ -102,8 +118,15 @@ export const revertMaterial = (kind, reference) =>
  * way (for the batched path, the removal the staged batch is committed
  * to, applied by the caller AFTER driving the batch).
  *
+ * @param {string} kind
+ *   'token', 'animation' or 'font'.
+ * @param {string} reference
+ *   The roster id.
+ *
  * @return {Promise<{deleted: boolean, references: number,
  *   batch_url?: string, materials: object}>}
+ *   Whether the record went now, the reference count and, for a staged
+ *   delete, the batch URL to drive; the materials delta.
  */
 export const deleteMaterial = (kind, reference) =>
   send('DELETE', materialRoute(kind, reference));
@@ -133,6 +156,7 @@ export const uploadFontFile = (file) => {
  * after a write.
  *
  * @return {Promise<{css: string}>}
+ *   The @font-face print as CSS text.
  */
 export const fetchFontStylesheet = () =>
   get('daedalus_stylish/skin/fonts/stylesheet');
@@ -172,8 +196,12 @@ export const fetchSkins = () => get('daedalus_stylish/skins');
  * No body; the delta carries the material swap (the skin worn before to
  * removes, the skin worn now to upserts).
  *
+ * @param {string} reference
+ *   The skin's machine name.
+ *
  * @return {Promise<{chosen: string, design_system: string,
  *   materials: object}>}
+ *   The chosen skin, the system wearing it and the materials delta.
  */
 export const chooseSkin = (reference) =>
   post(`daedalus_stylish/skins/${encodeURIComponent(reference)}/choose`, {});
@@ -187,8 +215,15 @@ export const chooseSkin = (reference) =>
  * otherwise nothing is worn by copying (an empty delta) and choosing is
  * the next gesture. 422 with no active system.
  *
+ * @param {string} reference
+ *   The source skin's machine name.
+ * @param {?string} label
+ *   The copy's label, or null for the server's default.
+ *
  * @return {Promise<{copied: string, label: string, worn: boolean,
  *   materials: object}>}
+ *   The copy's machine name and label, whether it is worn at once, and
+ *   the materials delta.
  */
 export const copySkin = (reference, label = null) =>
   post(
@@ -198,6 +233,9 @@ export const copySkin = (reference, label = null) =>
 
 /**
  * Fetches a skin's revision history (the restore menu).
+ *
+ * @param {string} reference
+ *   The skin's machine name.
  *
  * @return {Promise<{machine_name: string, label: string, locked: boolean,
  *   revisions: Array<{revision_id: number, label: string, created: number,
@@ -212,7 +250,13 @@ export const fetchSkinRevisions = (reference) =>
  * Restores an old revision: a NEW default revision carrying its content,
  * never a rollback, so a restore is itself one restore away from undo.
  *
+ * @param {string} reference
+ *   The skin's machine name.
+ * @param {number} revisionId
+ *   The revision to restore.
+ *
  * @return {Promise<{restored: number, materials: object}>}
+ *   The restored revision's id and the materials delta.
  */
 export const restoreSkinRevision = (reference, revisionId) =>
   post(
@@ -225,7 +269,11 @@ export const restoreSkinRevision = (reference, revisionId) =>
  * whole. No body. `reverted` is false when the site layer was already
  * empty (nothing saved).
  *
+ * @param {string} reference
+ *   The skin's machine name.
+ *
  * @return {Promise<{reverted: boolean, materials: object}>}
+ *   Whether anything was reverted, and the materials delta.
  */
 export const revertSkin = (reference) =>
   post(`daedalus_stylish/skins/${encodeURIComponent(reference)}/revert`, {});

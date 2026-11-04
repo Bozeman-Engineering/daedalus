@@ -43,8 +43,8 @@ function daedalus_stylish_layouts_plugin_filter_layout__layout_builder_alter(arr
 /**
  * Implements hook_plugin_filter_TYPE__CONSUMER_alter() for layout, daedalus_layout.
  *
- * The daedalus_layout's default-section configuration form uses its own consumer id; it
- * gets the same restriction as the layout picker.
+ * The daedalus_layout's default-section configuration form uses its own
+ * consumer id; it gets the same restriction as the layout picker.
  */
 function daedalus_stylish_layouts_plugin_filter_layout__daedalus_layout_alter(array &$definitions, array $extra): void {
   _daedalus_stylish_layouts_restrict_to_daedalus_stylish($definitions);

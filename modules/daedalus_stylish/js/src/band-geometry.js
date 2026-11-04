@@ -181,6 +181,7 @@ export const borderBandRects = (rect, border) => {
  * overlap share a row (a flex row, a grid row, one wrapped line).
  *
  * @param {Array<{left: number, top: number, width: number, height: number}>} rects
+ *   The container's flow-child rects (flowChildRects).
  *
  * @return {Array<{top: number, bottom: number, left: number, right: number,
  *   members: Array}>}
@@ -228,6 +229,7 @@ export const rowClusters = (rects) => {
  *   Computed gap px (gapPx).
  *
  * @return {Array<{left: number, top: number, width: number, height: number}>}
+ *   The strips to tint: the row strips, then the column strips.
  */
 export const gapStripRects = (childRects, gaps) => {
   const strips = [];

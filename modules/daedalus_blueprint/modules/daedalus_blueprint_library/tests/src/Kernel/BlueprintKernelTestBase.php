@@ -96,7 +96,15 @@ abstract class BlueprintKernelTestBase extends KernelTestBase {
     // MaterialsBudget reads on every gesture that shares (a capture, an
     // update turning offered on); without the config the
     // reading throws the run-the-updates LogicException.
-    $this->installConfig(['filter', 'block_content', 'image', 'file', 'media', 'daedalus_blueprint', 'daedalus_blueprint_library']);
+    $this->installConfig([
+      'filter',
+      'block_content',
+      'image',
+      'file',
+      'media',
+      'daedalus_blueprint',
+      'daedalus_blueprint_library',
+    ]);
     $this->setUpCurrentUser([], static::$permissions, TRUE);
 
     $this->createBlockContentType('basic');
@@ -427,7 +435,10 @@ abstract class BlueprintKernelTestBase extends KernelTestBase {
       'status' => 1,
     ]);
     $host = $this->host($blueprint);
-    $result = \Drupal::service('daedalus_blueprint.document_instantiator')->instantiate($host, $nodes, ['anchor' => $host->uuid(), 'placement' => 'inside'], [
+    $result = \Drupal::service('daedalus_blueprint.document_instantiator')->instantiate($host, $nodes, [
+      'anchor' => $host->uuid(),
+      'placement' => 'inside',
+    ], [
       'indexed' => TRUE,
       'batch' => ['system' => TRUE, 'admitted' => TRUE],
     ]);

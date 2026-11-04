@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint_ai\Kernel;
 
+use Drupal\ai\Service\FunctionCalling\ExecutableFunctionCallInterface;
 use Drupal\Component\Uuid\Php as PhpUuid;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
 use Drupal\daedalus_blueprint\Plugin\Block\SlotBlock;
@@ -164,6 +165,7 @@ class PageToolsLockedPageTest extends BlueprintKernelTestBase {
     $tool = $this->container->get('plugin.manager.ai.function_calls')
       ->getFunctionCallFromFunctionName($function_name);
     $this->assertNotNull($tool, "The $function_name tool is available.");
+    assert($tool instanceof ExecutableFunctionCallInterface);
     foreach ($contexts as $name => $value) {
       $tool->setContextValue($name, $value);
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_layout\Kernel;
 
 use Drupal\block_content\Entity\BlockContentType;
+use Drupal\Core\Config\Schema\Mapping;
 use Drupal\Core\Config\Schema\Sequence;
 use Drupal\Core\Routing\RouteObjectInterface;
 use Drupal\Core\TypedData\Plugin\DataType\BooleanData;
@@ -68,7 +69,9 @@ class AddPanelIconTest extends NestedStorageKernelTestBase {
   }
 
   /**
-   * Block icons reach the panel's settings; blueprints reach it only through the roster.
+   * Block icons reach the panel's settings.
+   *
+   * Blueprints reach it only through the roster.
    */
   public function testAddPanelIcons(): void {
     // The B lane: a block's icon lives on the block TYPE's settings, here
@@ -181,6 +184,7 @@ class AddPanelIconTest extends NestedStorageKernelTestBase {
     $this->assertSame(['heroes', 'sections'], $block_type->getThirdPartySetting('daedalus_layout', 'groups'));
 
     $typed = $this->container->get('config.typed')->get('block_content.type.basic');
+    assert($typed instanceof Mapping);
     $this->assertInstanceOf(BooleanData::class, $typed->get('third_party_settings.daedalus_layout.favorite'));
     $this->assertInstanceOf(Sequence::class, $typed->get('third_party_settings.daedalus_layout.groups'));
     $this->assertInstanceOf(StringData::class, $typed->get('third_party_settings.daedalus_layout.groups.0'));

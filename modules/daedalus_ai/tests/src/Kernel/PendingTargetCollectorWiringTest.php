@@ -64,8 +64,8 @@ class PendingTargetCollectorWiringTest extends KernelTestBase {
     'file',
     'key',
     'ai',
-    // daedalus_ui's own dependency chain must be listed explicitly for
-    // the container to compile (see DaedalusAiKernelTestBase for the rationale).
+    // daedalus_ui's own dependency chain must be listed explicitly for the
+    // container to compile (see DaedalusAiKernelTestBase for the rationale).
     'layout_discovery',
     'layout_builder',
     'navigation',

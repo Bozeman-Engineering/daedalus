@@ -1,6 +1,9 @@
 import { parse as parseCss } from 'css-tree';
 import { WRAPPER, preludeParts } from './prelude.js';
-import { UNKNOWN_WRAPPER, digest } from '../../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
+import {
+  UNKNOWN_WRAPPER,
+  digest,
+} from '../../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
 
 /**
  * The paste door's pure half: text with structure, read through the spine.
@@ -44,6 +47,14 @@ const ID_PRELUDE = /^#[^\s{:>.+~]+/;
  * the text ends first. Strings and comments are not modeled: the door's
  * parser blanks comments itself, and a brace inside a string value is
  * not a shape a pasted style block carries.
+ *
+ * @param {string} text
+ *   The text holding the block.
+ * @param {number} open
+ *   The offset of the opening `{`.
+ *
+ * @return {number}
+ *   The closing brace's offset, or -1.
  */
 const closingBrace = (text, open) => {
   let depth = 0;
@@ -70,6 +81,12 @@ const closingBrace = (text, open) => {
  * selector it answers is the door's to land. The digester judges the
  * shape alone here (no condition table): the door is the authority on
  * what the block means.
+ *
+ * @param {string} prelude
+ *   The text before a block's `{`, untrimmed.
+ *
+ * @return {boolean}
+ *   True when the door can read a block under it.
  */
 const blockPrelude = (prelude) => {
   const text = prelude.trim();
@@ -86,6 +103,17 @@ const blockPrelude = (prelude) => {
 /**
  * One chunk from a csstree node, or null when the block is not closed
  * (mid-typing: the brace is still to come, nothing goes to the door yet).
+ *
+ * @param {string} text
+ *   The parsed text.
+ * @param {object} node
+ *   The csstree Rule or Atrule node, with positions.
+ * @param {string} kind
+ *   'rule' or 'atrule', the chunk's kind.
+ *
+ * @return {?{from: number, to: number, text: string, kind: string,
+ *   prelude: string, root: boolean}}
+ *   The chunk, or null for an unclosed block.
  */
 const nodeChunk = (text, node, kind) => {
   const from = node.loc.start.offset;
@@ -96,12 +124,30 @@ const nodeChunk = (text, node, kind) => {
   }
   const brace = slice.indexOf('{');
   const prelude = brace === -1 ? '' : slice.slice(0, brace).trim();
-  return { from, to, text: slice, kind, prelude, root: ID_PRELUDE.test(prelude) };
+  return {
+    from,
+    to,
+    text: slice,
+    kind,
+    prelude,
+    root: ID_PRELUDE.test(prelude),
+  };
 };
 
 /**
  * Splits a Raw node's slice at its first readable block: the chunk and
  * the offset the tail resumes at, or null when the slice holds none.
+ *
+ * @param {string} text
+ *   The parsed text.
+ * @param {number} from
+ *   The Raw node's start offset in `text`.
+ * @param {number} to
+ *   The Raw node's end offset in `text`.
+ *
+ * @return {?{from: number, to: number, text: string, kind: string,
+ *   prelude: string, root: boolean}}
+ *   The 'block' chunk (offsets in `text`), or null.
  */
 const rawChunk = (text, from, to) => {
   const slice = text.slice(from, to);
@@ -135,6 +181,55 @@ const rawChunk = (text, from, to) => {
 };
 
 /**
+ * structuralChunks over a slice of the buffer starting at `base`.
+ *
+ * @param {string} text
+ *   The slice to parse.
+ * @param {number} base
+ *   The slice's offset in the buffer, added to every chunk's range.
+ *
+ * @return {Array<object>}
+ *   structuralChunks' chunks, ranges in buffer offsets.
+ */
+const chunksFrom = (text, base) => {
+  let ast;
+  try {
+    ast = parseCss(text, { context: 'declarationList', positions: true });
+  } catch {
+    return [];
+  }
+  const chunks = [];
+  ast.children.toArray().forEach((node) => {
+    if (node.type === 'Rule' || node.type === 'Atrule') {
+      const chunk = nodeChunk(
+        text,
+        node,
+        node.type === 'Rule' ? 'rule' : 'atrule',
+      );
+      if (chunk) {
+        chunks.push({ ...chunk, from: chunk.from + base, to: chunk.to + base });
+      }
+    } else if (
+      node.type === 'Raw' ||
+      (node.type === 'Declaration' &&
+        text.slice(node.loc.start.offset, node.loc.end.offset).includes('{'))
+    ) {
+      const chunk = rawChunk(text, node.loc.start.offset, node.loc.end.offset);
+      if (chunk) {
+        chunks.push({ ...chunk, from: chunk.from + base, to: chunk.to + base });
+        // The tail after the block is read again from a fresh parse: the
+        // Raw swallowed it, and it may hold declarations or more blocks.
+        const tail = text.slice(chunk.to, node.loc.end.offset);
+        chunksFrom(tail, base + chunk.to).forEach((later) =>
+          chunks.push(later),
+        );
+      }
+    }
+  });
+  return chunks;
+};
+
+/**
  * The structural chunks in an island's text: every closed block the door
  * can read, in source order.
  *
@@ -151,45 +246,19 @@ const rawChunk = (text, from, to) => {
 export const structuralChunks = (text) => chunksFrom(text, 0);
 
 /**
- * structuralChunks over a slice of the buffer starting at `base`.
- */
-const chunksFrom = (text, base) => {
-  let ast;
-  try {
-    ast = parseCss(text, { context: 'declarationList', positions: true });
-  } catch {
-    return [];
-  }
-  const chunks = [];
-  ast.children.toArray().forEach((node) => {
-    if (node.type === 'Rule' || node.type === 'Atrule') {
-      const chunk = nodeChunk(text, node, node.type === 'Rule' ? 'rule' : 'atrule');
-      if (chunk) {
-        chunks.push({ ...chunk, from: chunk.from + base, to: chunk.to + base });
-      }
-    } else if (
-      node.type === 'Raw' ||
-      (node.type === 'Declaration' && text.slice(node.loc.start.offset, node.loc.end.offset).includes('{'))
-    ) {
-      const chunk = rawChunk(text, node.loc.start.offset, node.loc.end.offset);
-      if (chunk) {
-        chunks.push({ ...chunk, from: chunk.from + base, to: chunk.to + base });
-        // The tail after the block is read again from a fresh parse: the
-        // Raw swallowed it, and it may hold declarations or more blocks.
-        const tail = text.slice(chunk.to, node.loc.end.offset);
-        chunksFrom(tail, base + chunk.to).forEach((later) => chunks.push(later));
-      }
-    }
-  });
-  return chunks;
-};
-
-/**
  * The text with its chunks blanked to spaces, newlines kept.
  *
  * Same length as the original, so every offset a parse of the blanked
  * text reports is an offset in the original: the island lint reads the
  * declarations around a pending chunk as declarations.
+ *
+ * @param {string} text
+ *   The island's buffer text.
+ * @param {Array<{from: number, to: number}>} chunks
+ *   The ranges to blank (structuralChunks' shape).
+ *
+ * @return {string}
+ *   The blanked text, same length.
  */
 export const blankChunks = (text, chunks) => {
   let blanked = text;
@@ -215,13 +284,16 @@ export const blankChunks = (text, chunks) => {
  *   The style guide payload (conditions: name => {wrapper}).
  *
  * @return {string}
+ *   The wrapped fragment, one line added at each side at most.
  */
 export const conditionWrap = (text, condition, guide) => {
   if (!condition || condition === 'default') {
     return text;
   }
   const parts = preludeParts(null, condition, guide);
-  const wrappers = parts.filter((part) => part.kind === WRAPPER).map((part) => part.text);
+  const wrappers = parts
+    .filter((part) => part.kind === WRAPPER)
+    .map((part) => part.text);
   const anchor = parts
     .filter((part) => part.kind !== WRAPPER)
     .map((part) => part.text)
@@ -253,13 +325,26 @@ export const conditionWrap = (text, condition, guide) => {
  * @param {Array<object>} chunks
  *   structuralChunks(text).
  * @param {object} island
- *   {mapKey, rootKey, condition, guide, document}: the island's full key,
- *   its element's key, its condition, the guide payload and whether it
- *   is a variant document island.
+ *   The island the text was pasted into.
+ * @param {string} island.mapKey
+ *   The island's full key (its element or rule key).
+ * @param {string} island.rootKey
+ *   The island's element's key.
+ * @param {string} island.condition
+ *   The island's condition.
+ * @param {?object} island.guide
+ *   The style guide payload.
+ * @param {boolean} island.document
+ *   Whether it is a variant document island.
  *
  * @return {{key: string, css: string}}
+ *   The key to send to and the css to send.
  */
-export const doorRequest = (text, chunks, { mapKey, rootKey, condition, guide, document = false }) => {
+export const doorRequest = (
+  text,
+  chunks,
+  { mapKey, rootKey, condition, guide, document = false },
+) => {
   if (!document && chunks.some((chunk) => chunk.root)) {
     return { key: rootKey, css: text };
   }
@@ -280,6 +365,7 @@ export const doorRequest = (text, chunks, { mapKey, rootKey, condition, guide, d
  *   The door's wear tuples.
  *
  * @return {{operations: Array<object>, count: number}}
+ *   The batch and the declarations it sets.
  */
 export const entriesToOps = (entries = [], wear = []) => {
   const operations = [];
@@ -320,6 +406,7 @@ export const entriesToOps = (entries = [], wear = []) => {
  *   part under a path).
  *
  * @return {?string}
+ *   The slot to stage at, or null for a key outside the island.
  */
 export const documentSlot = (entryKey, mapKey, slot) => {
   if (entryKey === mapKey) {
@@ -378,5 +465,11 @@ export const errorLines = (errors, segments) => {
 
 /**
  * The line count of a text (a text without newlines is one line).
+ *
+ * @param {string} text
+ *   The text.
+ *
+ * @return {number}
+ *   Its line count.
  */
 export const lineCount = (text) => text.split('\n').length;

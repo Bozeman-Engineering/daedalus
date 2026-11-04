@@ -40,6 +40,7 @@ trait DesignSystemActivationTrait {
     $id = $design_system ?? $name;
     $storage = \Drupal::entityTypeManager()->getStorage(DesignSystem::ENTITY_TYPE_ID);
     $system = $storage->load($id) ?? $storage->create(['id' => $id, 'label' => $id]);
+    assert($system instanceof DesignSystem);
     $system->set('default_skin', $name)->save();
     \Drupal::service(ActiveDesignSystem::SERVICE_ID)->activate($id);
     return $id;
@@ -79,6 +80,7 @@ trait DesignSystemActivationTrait {
     if ($system === NULL) {
       $storage = \Drupal::entityTypeManager()->getStorage(DesignSystem::ENTITY_TYPE_ID);
       $system = $storage->load('site') ?? $storage->create(['id' => 'site', 'label' => 'Site']);
+      assert($system instanceof DesignSystem);
       $system->save();
       $active->activate('site');
     }

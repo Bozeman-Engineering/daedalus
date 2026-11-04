@@ -171,10 +171,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   arithmetic.
  * - A rule's worn variant on the Page lens (seam: ONE apply_variant at
  *   the section's `d-text` rule through the op spine, the rule-wear lane
- *   delivering the variant's link fragment by descent inside the section's
- *   @scope, and the code view's roster reading the stack's enumeration,
- *   elementIslands over selectorSuffixes, so a position no map entry
- *   holds rows because a variant delivers there): guide_example's
+ *   delivering the variant's link fragment by descent inside the
+ *   section's @scope, and the code view's roster reading the stack's
+ *   enumeration, elementIslands over selectorSuffixes, so a position no
+ *   map entry holds rows because a variant delivers there): guide_example's
  *   Primary (block_type:text, its only fragment `::.text-block-link`)
  *   worn at `container::d-text` colors the linked paragraph's anchor;
  *   with nothing selected the Page lens lists the section's row with the
@@ -307,16 +307,15 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   a worn reference is styling) not; selecting a bare block mounts its
  *   real islands (printed, still no editor until a wake).
  * - The reveal (seam: the one reveal rule, daedalus_ui's
- *   Drupal.Daedalus.scrollReveal, through the browser's scrollports and
- *   the canvas's scroll-margin, a fact only a browser computes): with
- *   the window shortened so the code view overflows and both panels
- *   scrolled to their top, selecting the LAST styled element (the section)
- *   leaves its row's rect fully inside the code view's scroller (it sat
- *   below the fold before) and the page elements panel's row fully
- *   inside its scroller; the window scrolled to its top again, a click on the code
- *   view's row leaves the section's canvas element in view with its top
- *   edge below the fixed top bar (the code view never revealed the
- *   canvas before the rule).
+ *   Drupal.Daedalus.scrollReveal, through the browser's scrollports and the
+ *   canvas's scroll-margin, a fact only a browser computes): with the window
+ *   shortened so the code view overflows and both panels scrolled to their top,
+ *   selecting the LAST styled element (the section) leaves its row's rect fully
+ *   inside the code view's scroller (it sat below the fold before) and the page
+ *   elements panel's row fully inside its scroller; the window scrolled to its
+ *   top again, a click on the code view's row leaves the section's canvas
+ *   element in view with its top edge below the fixed top bar (the code view
+ *   never revealed the canvas before the rule).
  * - The pop-out keyboard wire (seam: a keydown in the pop-out document
  *   through the keyboard sensor the pop-out runs, its synchronous swallow
  *   from the claim set the leader published on hello, the stroke over the
@@ -542,8 +541,8 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     );
 
     // A real Layout Builder page: the recipe enables styling for the page
-    // bundle, so its daedalus_stylish_styles field hosts the style map the islands
-    // print from.
+    // bundle, so its daedalus_stylish_styles field hosts the style map the
+    // islands print from.
     $node = Node::create([
       'type' => 'page',
       'title' => 'Code mode behavior page',
@@ -1254,22 +1253,20 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The shared history holds two entries for the one refusal: the leader\'s report and the satellite\'s, by design.',
     );
 
-    // ——— The code scope projection. ———
-    // Seam: the scope preference store (code-scope.js, localStorage-backed
-    // and storage-synced exactly like the UI mode) through page-model.js
-    // scopeNodes() to the rendered rows. The section placed above is the
-    // anchor: a container wearing its stamped variants, holding the
-    // two styled blocks. With it selected, Page prints the entity root
-    // above it (the whole page, every element a row), Subtree prints the container's
-    // row and its two blocks' rows and nothing above, and Element prints
-    // the container's row alone. The satellite and the in-page panel are
-    // alternatives, not layers (the leader closed its sidebar when the
-    // satellite paired), so the satellite leaves first: removing its
-    // iframe fires its pagehide, which posts bye, and the leader reopens
-    // the panel it displaced. The shared UI mode is Basic here (the
-    // satellite flipped it above), so the returned panel's code segment
-    // takes a real click; the store still reads Page from the entry
-    // click.
+    // ——— The code scope projection. ——— Seam: the scope preference store
+    // (code-scope.js, localStorage-backed and storage-synced exactly like the
+    // UI mode) through page-model.js scopeNodes() to the rendered rows. The
+    // section placed above is the anchor: a container wearing its stamped
+    // variants, holding the two styled blocks. With it selected, Page prints
+    // the entity root above it (the whole page, every element a row), Subtree
+    // prints the container's row and its two blocks' rows and nothing above,
+    // and Element prints the container's row alone. The satellite and the
+    // in-page panel are alternatives, not layers (the leader closed its sidebar
+    // when the satellite paired), so the satellite leaves first: removing its
+    // iframe fires its pagehide, which posts bye, and the leader reopens the
+    // panel it displaced. The shared UI mode is Basic here (the satellite
+    // flipped it above), so the returned panel's code segment takes a real
+    // click; the store still reads Page from the entry click.
     $container_key = "container:$section_uuid";
     $entity_key = 'entity:' . $node->uuid();
     $session->executeScript("document.querySelector('iframe[name=\"daedalus_stylish_satellite\"]').remove();");
@@ -1814,13 +1811,13 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     $this->assertSame($accent, $session->evaluateScript("window.__sel.color(\"{$text_selector($text_2)}\")"), 'A text block\'s paragraph root keeps the `> d-text` color: the type rule outweighs the tag tier.');
 
     // A position qualifier typed inside the `> d-text` row: position is
-    // selector grammar, never a condition, so `&:first-child {` typed in
-    // the row's island composes under the rule (CSS nesting's `&` is the
-    // rule) and the digester reads `> d-text:first-child`, a refinement
-    // minted as its own rule row at the qualified key, printed inside its
-    // own :where() (`:scope > [data-element="block_type:text"]:where(:first-child)`,
-    // no force-state dual, no weight added), so the browser's own
-    // :first-child picks the first text block alone.
+    // selector grammar, never a condition, so `&:first-child {` typed in the
+    // row's island composes under the rule (CSS nesting's `&` is the rule) and
+    // the digester reads `> d-text:first-child`, a refinement minted as its own
+    // rule row at the qualified key, printed inside its own :where() (`:scope >
+    // [data-element="block_type:text"]:where(:first-child)`, no force-state
+    // dual, no weight added), so the browser's own :first-child picks the first
+    // text block alone.
     $session->executeScript(<<<'JS'
       (() => {
         const island = Array.from(document.querySelectorAll('.daedalus-stylish-page-tree .daedalus-stylish-islands__part-body .daedalus-stylish-island__editor'))
@@ -1859,13 +1856,13 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The position row uppercases the first text block alone: the browser\'s :first-child inside the printed :where().',
     );
 
-    // ——— Selector relations: siblings, :has(), :not(), a negated fact. ———
-    // A second section, its own top-level container: three text blocks rooted p, p
-    // and h3 (the second carrying a URL, so its link part renders an
-    // anchor) and an image block last, placed through the op spine so
-    // each relation below has exactly one true answer among four ordered
-    // children. The image block carries no media: its composed root's
-    // empty form is a plain div, stamped like any block.
+    // ——— Selector relations: siblings, :has(), :not(), a negated fact. ——— A
+    // second section, its own top-level container: three text blocks rooted p,
+    // p and h3 (the second carrying a URL, so its link part renders an anchor)
+    // and an image block last, placed through the op spine so each relation
+    // below has exactly one true answer among four ordered children. The image
+    // block carries no media: its composed root's empty form is a plain div,
+    // stamped like any block.
     $second_section_uuid = $uuid_service->generate();
     $second_section_key = "container:$second_section_uuid";
     $second_section_p1 = $uuid_service->generate();
@@ -2865,7 +2862,9 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       JS);
     $this->assertJsCondition(
       "window.__wearError !== undefined"
-      . ' || JSON.stringify((' . $map . ')[' . json_encode($worn_rule_key) . "]?.variants ?? []) === " . json_encode(json_encode([['variant' => 'guide_button_primary', 'fragment' => '']])),
+      . ' || JSON.stringify((' . $map . ')[' . json_encode($worn_rule_key) . "]?.variants ?? []) === " . json_encode(json_encode([
+        ['variant' => 'guide_button_primary', 'fragment' => ''],
+      ])),
       20000,
       'The apply_variant at the section\'s d-text rule resolved: the map carries Primary\'s reference on the RULE\'s entry.',
     );
@@ -2876,8 +2875,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'The linked paragraph\'s anchor computes Primary\'s accent background: the rule delivers the variant\'s link fragment by descent inside the section\'s @scope.',
     );
-    $this->assertSame(
-      NULL,
+    $this->assertNull(
       json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode("$second_section_key::$worn_position") . '] ?? null)'), TRUE),
       'The map holds NO entry at the continued position: the row below exists because the variant delivers there, not because the map does.',
     );
@@ -2910,7 +2908,11 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'Every line under the continued position prints as a delivered line carrying Primary\'s hue (the same djb2 hue an own wearing of it gets), titled by the variant: the position\'s stack lists the rule-carried reference as the variant tier.',
     );
     $this->assertSame(
-      ['background-color: var(--color-accent);', 'color: var(--color-accent-contrast);', 'background-color: var(--color-accent-hover);'],
+      [
+        'background-color: var(--color-accent);',
+        'color: var(--color-accent-contrast);',
+        'background-color: var(--color-accent-hover);',
+      ],
       json_decode((string) $session->evaluateScript(
         "JSON.stringify(($worn_lines_js).map((line) => line.textContent.trim()).filter((text) => text.startsWith('background-color:') || text.startsWith('color:')).map((text) => text.slice(0, text.indexOf(';') + 1)))"
       ), TRUE),
@@ -2958,8 +2960,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       $session->evaluateScript($a_part_header_js),
       'Before the seat no row prints for the paragraph under block A: an unstyled instance part has no island by delivery, and nothing drafted one.',
     );
-    $this->assertSame(
-      NULL,
+    $this->assertNull(
       json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($a_part_key) . '] ?? null)'), TRUE),
       'The map holds no entry at the paragraph\'s part key (the leg\'s control).',
     );
@@ -3011,8 +3012,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'The seat minted the paragraph\'s island under block A: a lit part header worded "Paragraph" over one printed island whose every line is delivered (the skin\'s base:p tier under its run, no own line, no placeholder), no editor live in it and the focus untouched.',
     );
-    $this->assertSame(
-      NULL,
+    $this->assertNull(
       json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($a_part_key) . '] ?? null)'), TRUE),
       'The minted island is a draft: the map still holds no entry at the part key.',
     );
@@ -3127,8 +3127,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'The seated rule mounted as a lit rule row under the paragraph (the section\'s key and `> d-text` on the header, --active and aria-pressed, worded "Text blocks directly in Section" with the one `>` chip) with its empty island live and focused, the one editor on the tree.',
     );
-    $this->assertSame(
-      NULL,
+    $this->assertNull(
       json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($seated_rule_key) . '] ?? null)'), TRUE),
       'The map holds no entry at the seated rule yet: the island is the placement\'s virtual layer, minted by its first write.',
     );
@@ -3150,8 +3149,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'The declaration committed at the ancestor key (container::> d-text), minting the rule\'s entry.',
     );
-    $this->assertSame(
-      NULL,
+    $this->assertNull(
       json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($p2_key) . '] ?? null)'), TRUE),
       'The paragraph\'s own entry is untouched by the write at the rule.',
     );
@@ -3219,8 +3217,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       10000,
       'The minted rule drafted nothing under the paragraph (no row of the paragraph\'s own carries the selector: the seat is the whole gesture) and the typed anchor left the `> d-text` island with the brace.',
     );
-    $this->assertSame(
-      NULL,
+    $this->assertNull(
       json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($nested_rule_key) . '] ?? null)'), TRUE),
       'The mint wrote nothing: the map holds no entry at the composed rule key until the first declaration.',
     );
@@ -3297,8 +3294,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'Typing `&::before {` on the root island minted the box row (the brace swallowed with the anchor): labelled "Before", its code face the anchor spelling with no combinator chip, its empty island live and focused as the one editor.',
     );
-    $this->assertSame(
-      NULL,
+    $this->assertNull(
       json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($box_key) . '] ?? null)'), TRUE),
       'The mint wrote nothing: the map holds no entry at the box key until the first declaration.',
     );
@@ -3403,8 +3399,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'The mint seated the box as the subject facet: the target is the container\'s `p::before`, no address stands, the chip reads the box at container::p::before, and the `p::before` row is the lit one (the `p` row dark).',
     );
-    $this->assertSame(
-      NULL,
+    $this->assertNull(
       json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($nested_box_key) . '] ?? null)'), TRUE),
       'The mint wrote nothing: the map holds no entry at the composed box key until the first declaration.',
     );
@@ -3511,8 +3506,7 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'Selecting the section dropped the empty minted island with its facet: the target is null and no `p::after` row exists anywhere on the tree.',
     );
-    $this->assertSame(
-      NULL,
+    $this->assertNull(
       json_decode((string) $session->evaluateScript('JSON.stringify((' . $map . ')[' . json_encode($nested_after_key) . '] ?? null)'), TRUE),
       'The map is untouched: no entry at container::p::after was ever written.',
     );
@@ -3684,24 +3678,23 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       );
     }
 
-    // ----- Copy CSS: the route's print reaches the clipboard in the gesture. -----
-    // Seam: the header's Copy CSS -> the source's readCss GET of the read
-    // route at mode=css for the write target -> a promise-backed
-    // ClipboardItem handed to navigator.clipboard.write inside the click
-    // -> the "CSS copied" flash on the button's own tooltip. Webdriver
-    // grants no clipboard permission, so the write is stubbed by
-    // injected script; the fetch and the print are real. The stub mounts
-    // the clipboard the http origin lacks (the leg above pinned its
-    // absence there; a secure origin has one, and the stub shadows it) with both roads: writeText, the fallback the gesture
-    // takes without ClipboardItem (the road this run drives), and write,
-    // resolving the item's text as the platform would (the secure-origin
-    // road, a hand pass). The cluster re-probes the door on every render
-    // and nothing re-renders it for a stub mounted by script, so the
-    // selection bounces through the linked paragraph and back to the
-    // section: the next render sees the clipboard and the two buttons come
-    // back enabled. The section is the selected element with no target, so
-    // the write key is its own and the print carries its own entry
-    // beside its rules.
+    // ----- Copy CSS: the route's print reaches the clipboard in the gesture.
+    // ----- Seam: the header's Copy CSS -> the source's readCss GET of the read
+    // route at mode=css for the write target -> a promise-backed ClipboardItem
+    // handed to navigator.clipboard.write inside the click -> the "CSS copied"
+    // flash on the button's own tooltip. Webdriver grants no clipboard
+    // permission, so the write is stubbed by injected script; the fetch and the
+    // print are real. The stub mounts the clipboard the http origin lacks (the
+    // leg above pinned its absence there; a secure origin has one, and the stub
+    // shadows it) with both roads: writeText, the fallback the gesture takes
+    // without ClipboardItem (the road this run drives), and write, resolving
+    // the item's text as the platform would (the secure-origin road, a hand
+    // pass). The cluster re-probes the door on every render and nothing
+    // re-renders it for a stub mounted by script, so the selection bounces
+    // through the linked paragraph and back to the section: the next render
+    // sees the clipboard and the two buttons come back enabled. The section is
+    // the selected element with no target, so the write key is its own and the
+    // print carries its own entry beside its rules.
     $session->executeScript(<<<'JS'
       (() => {
         window.__copied = null;
@@ -4008,7 +4001,13 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
     // (guide_example's image block type default), and a worn reference IS
     // styling (isStyledElement's entryRefs half), so its row is not bare
     // and mounts its island, the section's row likewise.
-    $second_section_children = json_encode([$second_section_key, "block:$second_section_p1", $p2_key, "block:$second_section_h3", "block:$second_section_img"]);
+    $second_section_children = json_encode([
+      $second_section_key,
+      "block:$second_section_p1",
+      $p2_key,
+      "block:$second_section_h3",
+      "block:$second_section_img",
+    ]);
     $session->executeScript(<<<'JS'
       window.__st.rowFaces = () => Array.from(document.querySelectorAll('.daedalus-stylish-page-tree [data-daedalus-stylish-page-key]'))
         .map((header) => {
@@ -4359,7 +4358,9 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       'The bound collapse-all key (5) pressed on the satellite\'s focused scope button was swallowed: the rebind reached the pop-out\'s claim set over the wire.',
     );
     $this->assertJsCondition(
-      "JSON.stringify(window.__co.faces().map((face) => [face.key, face.collapsed, face.chevron])) === " . json_encode(json_encode([[$entity_key, TRUE, 'false']]))
+      "JSON.stringify(window.__co.faces().map((face) => [face.key, face.collapsed, face.chevron])) === " . json_encode(json_encode([
+        [$entity_key, TRUE, 'false'],
+      ]))
       . " && JSON.stringify(window.__co.pair()) === '{\"collapse\":true,\"expand\":false}'",
       20000,
       'The leader resolved the press and routed the gesture back: the satellite\'s outline collapsed to the Page row alone (its chevron closed, every descendant row unmounted), collapse all disabled and expand all enabled. State: ' . $session->evaluateScript('window.__co.state()'),

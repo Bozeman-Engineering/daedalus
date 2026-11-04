@@ -27,6 +27,7 @@
  *   dispatched there (never typing).
  *
  * @return {boolean}
+ *   Whether a keystroke there is typing.
  */
 export const isTypingTarget = (target) => {
   if (!target || typeof target.closest !== 'function') {

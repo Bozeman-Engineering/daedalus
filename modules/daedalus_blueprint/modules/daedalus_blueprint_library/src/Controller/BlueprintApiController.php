@@ -154,22 +154,21 @@ final class BlueprintApiController extends ControllerBase {
   /**
    * POST /daedalus-blueprint/blueprint/{reference}/details: the details face.
    *
-   * Body: {label, description, icon?, offered?, subject?, bundles?,
-   * groups?, favorite?}, handed to the provider's update() verbatim: label and
-   * description required
-   * (the palette entry's face, the admin edit form's grammar); icon
-   * ("media:<uuid>") PRESENT writes (NULL or '' clears back to the palette
-   * default), ABSENT leaves the stored icon standing, so a client speaking
-   * only the two-field face never wipes an icon it did not offer to edit;
-   * offered (a boolean) flips the AI opt-out the same way, ABSENT leaving
-   * it; subject ("entity_type:bundle") and bundles (a list of them, [] for
-   * any host) rewrite what the blueprint is material for, ABSENT leaving
-   * them; groups (a list of the site's blueprint group ids, [] for none)
-   * refiles it under the filters an offering surface shows, ABSENT
-   * leaving them; favorite (a boolean) marks or unmarks it as a site
-   * favorite the same way. The machine name and the scope are identity (placement
-   * provenance stamps reference the name; what a blueprint stands in for
-   * does not change with its details) and never change.
+   * Body: {label, description, icon?, offered?, subject?, bundles?, groups?,
+   * favorite?}, handed to the provider's update() verbatim: label and
+   * description required (the palette entry's face, the admin edit form's
+   * grammar); icon ("media:<uuid>") PRESENT writes (NULL or '' clears back to
+   * the palette default), ABSENT leaves the stored icon standing, so a client
+   * speaking only the two-field face never wipes an icon it did not offer to
+   * edit; offered (a boolean) flips the AI opt-out the same way, ABSENT leaving
+   * it; subject ("entity_type:bundle") and bundles (a list of them, [] for any
+   * host) rewrite what the blueprint is material for, ABSENT leaving them;
+   * groups (a list of the site's blueprint group ids, [] for none) refiles it
+   * under the filters an offering surface shows, ABSENT leaving them; favorite
+   * (a boolean) marks or unmarks it as a site favorite the same way. The
+   * machine name and the scope are identity (placement provenance stamps
+   * reference the name; what a blueprint stands in for does not change with its
+   * details) and never change.
    *
    * The query names the canvas (canvas()): a subject or allow-list change
    * that ends the fit answers the blueprint under the delta's remove.

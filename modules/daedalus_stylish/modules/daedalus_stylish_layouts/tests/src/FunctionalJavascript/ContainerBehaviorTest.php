@@ -103,19 +103,18 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   and selecting it re-renders the wear bar with no worn row (it wears
  *   nothing) and a variant picker WITHOUT a Width group (the root-only
  *   axis filtered by the client's nested-depth read).
- * - The Layout section obeys both halves of the pose doctrine: the Width
- *   chip poses the canvas at Narrow (the vector stamp, the container
- *   query re-evaluating on the stage), the segment keeps reading Columns
- *   (a wear surface, unconditioned) with the sub-line "Columns stacks at
- *   Narrow" and no proportion strip, the Gap row reads the layer stack
- *   at the pose (the worn variant's gutter, lit, its mark naming the
- *   delivering condition), and a typed gap lands under `narrow` ALONE (no
- *   companion: the worn row variant's narrow block is literally the
- *   stack, so the widget has no display to write), changing the canvas
- *   at narrow only, a flex column with the typed gap; un-posed, the flex
- *   row, its gutter gap (the scenario skin's 32px), the strip and the
- *   variant's lit value are back. The pose → vector → widget read/write seam only
- *   exists in a browser.
+ * - The Layout section obeys both halves of the pose doctrine: the Width chip
+ *   poses the canvas at Narrow (the vector stamp, the container query
+ *   re-evaluating on the stage), the segment keeps reading Columns (a wear
+ *   surface, unconditioned) with the sub-line "Columns stacks at Narrow" and no
+ *   proportion strip, the Gap row reads the layer stack at the pose (the worn
+ *   variant's gutter, lit, its mark naming the delivering condition), and a
+ *   typed gap lands under `narrow` ALONE (no companion: the worn row variant's
+ *   narrow block is literally the stack, so the widget has no display to
+ *   write), changing the canvas at narrow only, a flex column with the typed
+ *   gap; un-posed, the flex row, its gutter gap (the scenario skin's 32px), the
+ *   strip and the variant's lit value are back. The pose → vector → widget
+ *   read/write seam only exists in a browser.
  * - A stacked child's Bottom is a browser-resolved auto margin: a tall
  *   section (a typed `min-height: 60vh` on the section, the op door standing in
  *   for the advanced row's update_style) holding two text blocks, the
@@ -225,6 +224,8 @@ class ContainerBehaviorTest extends WebDriverTestBase {
   }
 
   /**
+   * The one-box container scenario.
+   *
    * The palette section, arrangement, width delivery, the nested div, and a
    * child pinned to a tall section's bottom.
    */
@@ -526,17 +527,17 @@ class ContainerBehaviorTest extends WebDriverTestBase {
       'The Layout section rendered for the selected container.',
     );
 
-    // A section is BORN stacked: no arrangement reference is stamped at
-    // the add_section door, so the palette section computes the declared
-    // column before any gesture, and the widget's Stack segment is the
-    // selected one. Stacked is a FLEX COLUMN: the composed container kind
-    // declares its root `display: flex; flex-direction: column`
-    // (daedalus_stylish_layouts.page_builder.yml, the declared tier
-    // compiled into the defaults file and selecting the section root by
-    // its stamped data-element address), so the skin's gap (kind:container `gap:
-    // var(--space-gutter)`, the look) lays the two blocks out 32px apart.
-    // Read on the root and as the blocks' geometry: the Kernel tier pins
-    // the compiled block, only the browser proves it arranges.
+    // A section is BORN stacked: no arrangement reference is stamped at the
+    // add_section door, so the palette section computes the declared column
+    // before any gesture, and the widget's Stack segment is the selected one.
+    // Stacked is a FLEX COLUMN: the composed container kind declares its root
+    // `display: flex; flex-direction: column`
+    // (daedalus_stylish_layouts.page_builder.yml, the declared tier compiled
+    // into the defaults file and selecting the section root by its stamped
+    // data-element address), so the skin's gap (kind:container `gap:
+    // var(--space-gutter)`, the look) lays the two blocks out 32px apart. Read
+    // on the root and as the blocks' geometry: the Kernel tier pins the
+    // compiled block, only the browser proves it arranges.
     $stacked = json_decode((string) $session->evaluateScript(<<<JS
       (() => {
         const root = document.querySelector("$root");
@@ -1621,7 +1622,7 @@ class ContainerBehaviorTest extends WebDriverTestBase {
     // rule carries the edit stage's id (`#daedalus-ui-stage
     // [data-container-empty-hint]::before`, 1-1-1) and opens with
     // `all: initial`, so the hint's text, a transparent background and
-    // the full width stand over the page's content, colour and width
+    // the full width stand over the page's content, color and width
     // for exactly as long as the section is empty. Only a real cascade
     // orders the two stylesheets; the kernel tier prints each alone.
     // The box is minted through the op spine (the advanced row's

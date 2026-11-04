@@ -208,7 +208,7 @@
         }
       }
 
-      inputs(EditableElement) {
+      inputs() {
         // Nothing on the leaf takes typed input (the img is a void element);
         // the chip's widgets are hotkey/click surfaces with their own
         // internal keyboard handling.
@@ -249,8 +249,10 @@
           // Editor attribution without the URL means preprocess could not
           // resolve the host entity — a wiring bug worth hearing about, not
           // a silently dead button.
-          console.warn(
-            'Daedalus Edit image block: the editor settings carry no media_library_url; the media library cannot open.',
+          Drupal.throwError(
+            new Error(
+              'Daedalus Edit image block: the editor settings carry no media_library_url; the media library cannot open.',
+            ),
           );
           return;
         }

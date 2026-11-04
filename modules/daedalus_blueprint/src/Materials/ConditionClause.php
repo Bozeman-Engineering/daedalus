@@ -34,15 +34,16 @@ namespace Drupal\daedalus_blueprint\Materials;
  * reference: "@container (max-width: 767px)" reads as "narrow", so one
  * condition has one spelling in every map.
  *
- * The structured twins the canvas poses are DERIVED from a clause's CSS,
- * for references and literals alike, never declared: `band` {min?, max?}
- * is the inclusive px edges of a @container width query (a @media width
- * query answers to the browser viewport, which the canvas cannot pose, so
- * it derives none; a non-px edge derives none), `preference` {feature,
- * value} the user preference a single-feature @media "prefers-*" query
- * tests. The client twin (daedalus_ui/js/edit_mode/materials/condition-clause.js) derives the same
+ * The structured twins the canvas poses are DERIVED from a clause's CSS, for
+ * references and literals alike, never declared: `band` {min?, max?} is the
+ * inclusive px edges of a @container width query (a @media width query answers
+ * to the browser viewport, which the canvas cannot pose, so it derives none; a
+ * non-px edge derives none), `preference` {feature, value} the user preference
+ * a single-feature @media "prefers-*" query tests. The client twin
+ * (daedalus_ui/js/edit_mode/materials/condition-clause.js) derives the same
  * facts from the guide payload's wrapper strings; the shared battery
- * daedalus_ui/tests/js/condition-clause-cases.mjs locks both sides to one record.
+ * daedalus_ui/tests/js/condition-clause-cases.mjs locks both sides to one
+ * record.
  *
  * Canonical order: published axes by their first appearance in the table
  * (the (weight, id)-ordered condition types), then literal axes the table

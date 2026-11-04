@@ -15,8 +15,8 @@ use Psr\Http\Message\ResponseInterface;
 /**
  * Tests the edit-history HTTP API: capture on mutate, timeline, restore.
  *
- * Runs with daedalus_tempstore installed so mutations stage in tempstore and the
- * strategy write tee captures them: each POST to the mutate endpoint is one
+ * Runs with daedalus_tempstore installed so mutations stage in tempstore and
+ * the strategy write tee captures them: each POST to the mutate endpoint is one
  * request and therefore one history entry.
  */
 #[RunTestsInSeparateProcesses]

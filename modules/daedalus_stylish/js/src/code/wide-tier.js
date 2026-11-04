@@ -55,6 +55,7 @@ const hasOwn = (object, key) =>
  *   The CSS property name.
  *
  * @return {boolean}
+ *   True for an unprefixed name csstree's lexer tables carry.
  */
 export const isWideProperty = (property) =>
   !property.startsWith('-') && hasOwn(lexer.properties, property);
@@ -65,6 +66,7 @@ let cachedNames = null;
  * Every wide-tier property name, sorted, for property-name completion.
  *
  * @return {string[]}
+ *   The lexer's unprefixed property names, sorted; computed once.
  */
 export const widePropertyNames = () => {
   if (cachedNames === null) {
@@ -77,6 +79,17 @@ export const widePropertyNames = () => {
 
 /**
  * Collects keyword terminals from one grammar node into `out`.
+ *
+ * @param {?object} node
+ *   A csstree grammar node (a Group, Multiplier, Keyword, Type or
+ *   Property reference); null and undefined collect nothing.
+ * @param {Set<string>} out
+ *   The keywords collected so far, lowercased, added to in place.
+ * @param {Set<string>} seen
+ *   The type and property references on the current expansion path
+ *   (`t:name`, `p:name`), the cycle guard.
+ * @param {number} depth
+ *   The current reference-expansion depth; the walk stops past DEPTH_CAP.
  */
 const collectKeywords = (node, out, seen, depth) => {
   if (!node || depth > DEPTH_CAP) {

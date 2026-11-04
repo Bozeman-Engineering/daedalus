@@ -12,6 +12,7 @@ use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -332,7 +333,9 @@ class DaedalusStylishFieldManagerTest extends KernelTestBase {
     $this->fieldManager->enable('node', 'page');
     foreach (['one', 'two'] as $title) {
       $node = Node::create(['type' => 'page', 'title' => $title]);
-      $node->get(DaedalusStylishFieldManager::FIELD_NAME)->appendItem()->setStyleMap([
+      $item = $node->get(DaedalusStylishFieldManager::FIELD_NAME)->appendItem();
+      assert($item instanceof StyleMapItem);
+      $item->setStyleMap([
         'block:d4e5f6' => ['default' => ['padding' => '2rem']],
       ]);
       $node->save();
@@ -365,15 +368,18 @@ class DaedalusStylishFieldManagerTest extends KernelTestBase {
     ];
 
     $node = Node::create(['type' => 'page', 'title' => 'Styled page']);
-    $node->get(DaedalusStylishFieldManager::FIELD_NAME)->first() ?? $node->get(DaedalusStylishFieldManager::FIELD_NAME)->appendItem();
-    $node->get(DaedalusStylishFieldManager::FIELD_NAME)->first()->setStyleMap($map);
+    $item = $node->get(DaedalusStylishFieldManager::FIELD_NAME)->first() ?? $node->get(DaedalusStylishFieldManager::FIELD_NAME)->appendItem();
+    assert($item instanceof StyleMapItem);
+    $item->setStyleMap($map);
     $node->save();
 
     $reloaded = Node::load($node->id());
-    $this->assertSame($map, $reloaded->get(DaedalusStylishFieldManager::FIELD_NAME)->first()->getStyleMap());
+    $reloaded_item = $reloaded->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
+    assert($reloaded_item instanceof StyleMapItem);
+    $this->assertSame($map, $reloaded_item->getStyleMap());
 
     // An empty map empties the field: "no styles" === "no value".
-    $reloaded->get(DaedalusStylishFieldManager::FIELD_NAME)->first()->setStyleMap([]);
+    $reloaded_item->setStyleMap([]);
     $reloaded->save();
     $again = Node::load($node->id());
     $this->assertTrue($again->get(DaedalusStylishFieldManager::FIELD_NAME)->isEmpty());

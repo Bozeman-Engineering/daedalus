@@ -23,12 +23,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * block_content types and fields). What no kernel test can prove is that the
  * services still work against the content model a real site actually runs: the
  * daedalus page node type, its Layout Builder default display with
- * allow_custom = TRUE, daedalus_layout section UUIDs, and the recipe's real inline
- * block types. This test pays the recipe-apply cost once to get exactly that,
- * then drives the real services in-process. If the recipe's content model ever
- * drifts so daedalus_blueprint can no longer serialize or operate on a page, this
- * single test fails -- that is the "our use case does not break on the real
- * assembled stack" proof.
+ * allow_custom = TRUE, daedalus_layout section UUIDs, and the recipe's real
+ * inline block types. This test pays the recipe-apply cost once to get exactly
+ * that, then drives the real services in-process. If the recipe's content model
+ * ever drifts so daedalus_blueprint can no longer serialize or operate on a
+ * page, this single test fails -- that is the "our use case does not break on
+ * the real assembled stack" proof.
  *
  * Why a plain Functional BrowserTestBase rather than a WebDriver/JS test: there
  * is no honest end-to-end AI-driven UI observation available in CI. The recipe
@@ -91,12 +91,12 @@ class AssembledStackBlueprintRoundTripTest extends BrowserTestBase {
   protected function setUp(): void {
     parent::setUp();
 
-    // drupal/daedalus_recipe is a require-dev dependency, so Composer installs it
-    // as a sibling of the Drupal root. Applying it gives the real daedalus
+    // drupal/daedalus_recipe is a require-dev dependency, so Composer installs
+    // it as a sibling of the Drupal root. Applying it gives the real daedalus
     // page content model (Layout Builder default display, allow_custom,
-    // daedalus_layout section UUIDs, the recipe's inline block types). A successful
-    // apply is itself the first assertion: the whole multi-package stack
-    // installs cleanly on a fresh standard site.
+    // daedalus_layout section UUIDs, the recipe's inline block types). A
+    // successful apply is itself the first assertion: the whole multi-package
+    // stack installs cleanly on a fresh standard site.
     // The scenario is the TAKEOVER of a pre-existing page bundle: the suite's
     // page recipe finds core's Basic page and its display already there and
     // enables Layout Builder on that display, which is where core seeds the
@@ -127,9 +127,9 @@ class AssembledStackBlueprintRoundTripTest extends BrowserTestBase {
    *   tool would be inert.
    * - Serialize (eb_read_entity): the backend serializes the saved page
    *   and the blueprint round-trips -- entity_type=node, bundle=page, the
-   *   _root_entity pointer back to the saved node, and a layout
-   *   key reflecting the Layout Builder section the recipe's default display
-   *   seeds (daedalus_layout stamps it with a section UUID). That layout key is the
+   *   _root_entity pointer back to the saved node, and a layout key reflecting
+   *   the Layout Builder section the recipe's default display seeds
+   *   (daedalus_layout stamps it with a section UUID). That layout key is the
    *   load-bearing proof the LB serialization survives on the real display, not
    *   just on a hand-rolled entity_test fixture.
    * - Read schema (eb_read_schema): the backend builds the bundle schema and it
@@ -154,11 +154,11 @@ class AssembledStackBlueprintRoundTripTest extends BrowserTestBase {
    *   proving the AI-style operation reached durable storage on the real model.
    *
    * What it deliberately does NOT do: there is no LLM, no agent loop, no chat
-   * UI, and no assertion about model output. The stub provider cannot emit
-   * tool calls and its capture is in-process only, so a faithful AI-tool-driven JS test
-   * is not achievable in CI; this proves everything up to (and the application
-   * of) the JSON operation a real tool call would carry, which is the whole of
-   * daedalus_blueprint's contract.
+   * UI, and no assertion about model output. The stub provider cannot emit tool
+   * calls and its capture is in-process only, so a faithful AI-tool-driven JS
+   * test is not achievable in CI; this proves everything up to (and the
+   * application of) the JSON operation a real tool call would carry, which is
+   * the whole of daedalus_blueprint's contract.
    */
   public function testPageBlueprintRoundTrip(): void {
     // Run as an all-permissions account: daedalus_blueprint enforces access as
@@ -199,8 +199,9 @@ class AssembledStackBlueprintRoundTripTest extends BrowserTestBase {
     );
 
     // The Layout Builder layout round-trips: the recipe's default display seeds
-    // a section, so the serialized layout has at least one section, and daedalus_layout
-    // stamps it with a section UUID the AI can target in later operations.
+    // a section, so the serialized layout has at least one section, and
+    // daedalus_layout stamps it with a section UUID the AI can target in later
+    // operations.
     $this->assertArrayHasKey(
       'layout',
       $blueprint,

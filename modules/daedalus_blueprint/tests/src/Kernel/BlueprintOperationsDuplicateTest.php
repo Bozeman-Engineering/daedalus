@@ -247,9 +247,9 @@ class BlueprintOperationsDuplicateTest extends BlueprintKernelTestBase {
   /**
    * Sets up an daedalus_layout entity holding a nested-section container.
    *
-   * Structure: root section (daedalus_layout UUID) > container component (uuid ==
-   * embedded section uuid) > embedded section (daedalus_layout UUID) > basic inline
-   * block, so the duplicated subtree has every identity kind: section
+   * Structure: root section (daedalus_layout UUID) > container component (uuid
+   * == embedded section uuid) > embedded section (daedalus_layout UUID) > basic
+   * inline block, so the duplicated subtree has every identity kind: section
    * UUIDs, a component UUID, and a block_content UUID.
    *
    * @return array{entity: object, root: string, nested: string, child: string, block: object}

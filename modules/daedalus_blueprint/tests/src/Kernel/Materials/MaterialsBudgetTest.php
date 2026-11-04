@@ -56,7 +56,9 @@ class MaterialsBudgetTest extends KernelTestBase {
   }
 
   /**
-   * A stub source: fixed weights (records, shared, system) and its own cache tag.
+   * A stub source.
+   *
+   * Fixed weights (records, shared, system) and its own cache tag.
    */
   protected function stubSource(array $records, array $shared, int $system): MaterialsWeightSourceInterface {
     return new class($records, $shared, $system) implements MaterialsWeightSourceInterface {
@@ -92,7 +94,10 @@ class MaterialsBudgetTest extends KernelTestBase {
   public function testReadingSumsSources(): void {
     $budget = $this->container->get('daedalus_blueprint.materials_budget');
     $budget->addSource($this->stubSource(
-      [MaterialKind::Token->value => ['color/accent' => 60, 'stub_token' => 40], MaterialKind::Blueprint->value => ['hero' => 45]],
+      [
+        MaterialKind::Token->value => ['color/accent' => 60, 'stub_token' => 40],
+        MaterialKind::Blueprint->value => ['hero' => 45],
+      ],
       [MaterialKind::Blueprint->value => 5],
       10,
     ));

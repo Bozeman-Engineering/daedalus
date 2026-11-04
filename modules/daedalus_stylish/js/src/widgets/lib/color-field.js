@@ -54,6 +54,7 @@ import { useMintRow } from '../../mint-row.js';
  * handlers, so it renders in the satellite unchanged.
  *
  * @param {object} options
+ *   The field's options (the advanced row's or the palette editor's).
  * @param {?object} options.space
  *   The property's value space (valueSpaceFor), or null to mount nothing
  *   (a row of another shape; the hooks still run, unconditionally).
@@ -62,7 +63,7 @@ import { useMintRow } from '../../mint-row.js';
  *   layer delivers it, the palette editor's own value, a draft-layered
  *   value); the field layers its own typing over it until it changes
  *   and faces it like any other (colorFace: a variant's or the skin's
- *   colour paints the well exactly as an own one does; the row's mark
+ *   color paints the well exactly as an own one does; the row's mark
  *   carries the origin). Nothing rests beneath an empty field.
  * @param {?object} options.guide
  *   The style guide payload.
@@ -82,6 +83,11 @@ import { useMintRow } from '../../mint-row.js';
  * @param {?object} [options.source]
  *   The state source (the mint commits through its batch commit; required
  *   with canMint).
+ * @param {boolean} [options.disabled]
+ *   Whether the field renders inert (the panel's write address withholds
+ *   the property); the shown value still renders honestly.
+ * @param {?string} [options.disabledTitle]
+ *   The reason shown as the title while disabled, or null for none.
  * @param {Function} options.onPreview
  *   Called with the raw text per input event ('' while emptied).
  * @param {Function} options.onSettle
@@ -89,6 +95,9 @@ import { useMintRow } from '../../mint-row.js';
  *   captured reference, the literal as typed, or '' for unset.
  *
  * @return {{open: boolean, face: object, field: ?object, popover: ?object}}
+ *   Whether the popover is open, the current face, the inline cluster
+ *   element and the floating popover element (both null on an unmounted
+ *   field).
  */
 export const useColorField = ({
   space = null,

@@ -3,19 +3,19 @@
  * Per-module debug logging for the Daedalus client.
  *
  * A module grabs a tagged logger in one line and logs through it:
- * @code
- *   const logger = Drupal.Daedalus.logger('daedalus_stylish');
- *   logger.log('apply', 'Applying variant', payload);
- * @endcode
+ *
+ * @example
+ * const logger = Drupal.Daedalus.logger('daedalus_stylish');
+ * logger.log('apply', 'Applying variant', payload);
  *
  * Nothing prints until that module is switched on from the browser console:
- * @code
- *   Drupal.Daedalus.logging.enable('daedalus_stylish');  // One module.
- *   Drupal.Daedalus.logging.enable();           // Everything ('*').
- *   Drupal.Daedalus.logging.disable('daedalus_stylish'); // That module again.
- *   Drupal.Daedalus.logging.disable();          // Everything off.
- *   Drupal.Daedalus.logging.status();
- * @endcode
+ *
+ * @example
+ * Drupal.Daedalus.logging.enable('daedalus_stylish');  // One module.
+ * Drupal.Daedalus.logging.enable();           // Everything ('*').
+ * Drupal.Daedalus.logging.disable('daedalus_stylish'); // That module again.
+ * Drupal.Daedalus.logging.disable();          // Everything off.
+ * Drupal.Daedalus.logging.status();
  *
  * The enabled list persists in one localStorage key so it survives reloads:
  * client-only developer toggles never belong in EditorSettings, which is for

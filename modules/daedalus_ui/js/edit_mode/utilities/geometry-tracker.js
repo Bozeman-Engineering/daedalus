@@ -54,7 +54,8 @@ export const documentPosition = (rect) => ({
 /**
  * Creates a geometry tracker.
  *
- * @param {Object} options
+ * @param {object} options
+ *   The tracker's collaborators.
  * @param {function(string): ?Element} options.resolve
  *   Resolves a key to its live element, called whenever the cache misses.
  * @param {function(Element, string): boolean} [options.validate]
@@ -72,6 +73,8 @@ export const documentPosition = (rect) => ({
  *   start: function(function): void,
  *   stop: function(): void,
  * }}
+ *   The tracker: measure a key's element, prune cached keys, start and
+ *   stop the frame loop.
  */
 export const createGeometryTracker = ({
   resolve,

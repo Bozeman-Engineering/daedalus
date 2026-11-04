@@ -132,9 +132,9 @@ interface BlueprintOperationsInterface {
    *
    * Without an explicit layout the section mints as a container: the
    * default-layout ladder prefers a container layout from the allowed set
-   * (falling back to the configured daedalus_layout default_section, then the first
-   * allowed layout). An explicit layout names a genuinely named-slot layout
-   * (or pins layout settings) at birth; there is no layout-change
+   * (falling back to the configured daedalus_layout default_section, then the
+   * first allowed layout). An explicit layout names a genuinely named-slot
+   * layout (or pins layout settings) at birth; there is no layout-change
    * operation, a section IS its layout for life.
    *
    * @param \Drupal\daedalus_blueprint\Host\HostInterface $host

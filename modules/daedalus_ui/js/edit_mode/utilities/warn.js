@@ -5,8 +5,10 @@
  * id) silently no-op when the attributes never reached the page, e.g. an
  * entity template that does not print {{ attributes }} on its outermost
  * element, or markup replaced by something that dropped them. Silent no-ops
- * are how integrations break invisibly, so the miss is reported. Edit mode
- * only: outside it the attributes are legitimately absent.
+ * are how integrations break invisibly, so the miss is reported through
+ * Drupal.throwError (rethrown outside the call stack: the caller's fallback
+ * still runs, the error still surfaces). Edit mode only: outside it the
+ * attributes are legitimately absent.
  *
  * @param {string} consumer
  *   The lookup site, e.g. 'rootContext'.
@@ -15,13 +17,14 @@
  */
 export const warnMissingEntityUi = (consumer, missing) => {
   if (
-    document.documentElement.getAttribute('data-daedalus-ui-mode') !==
-    'edit'
+    document.documentElement.getAttribute('data-daedalus-ui-mode') !== 'edit'
   ) {
     return;
   }
-  console.warn(
-    `Daedalus UI ${consumer}: ${missing} not found on the page. The entity UI attributes ride the entity template's root element; ensure the template prints {{ attributes }} on its outermost element.`,
+  Drupal.throwError(
+    new Error(
+      `Daedalus UI ${consumer}: ${missing} not found on the page. The entity UI attributes ride the entity template's root element; ensure the template prints {{ attributes }} on its outermost element.`,
+    ),
   );
 };
 
@@ -35,14 +38,17 @@ export const warnMissingEntityUi = (consumer, missing) => {
  * foreign mutation, and the resumed gesture re-previewed) cannot be
  * overlaid, so the readers fall back to the committed mirror. Silent
  * fallback would hide a gesture whose preview reaches the canvas and not
- * the model, so the miss is reported; the effective tree memoizes on the
- * (mirror, draft) pair, so it is reported once per draft, not per read.
+ * the model, so the miss is reported through Drupal.throwError (the
+ * fallback still runs); the effective tree memoizes on the (mirror, draft)
+ * pair, so it is reported once per draft, not per read.
  *
  * @param {string} key
  *   The drafted selectable key.
  */
 export const warnDraftKeyUnknown = (key) => {
-  console.warn(
-    `Daedalus UI effectiveBlueprint: the draft names ${key}, which the blueprint mirror does not hold; readers see the committed tree until the next preview or mirror replacement.`,
+  Drupal.throwError(
+    new Error(
+      `Daedalus UI effectiveBlueprint: the draft names ${key}, which the blueprint mirror does not hold; readers see the committed tree until the next preview or mirror replacement.`,
+    ),
   );
 };

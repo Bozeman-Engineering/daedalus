@@ -9,10 +9,12 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * The editor chrome colors (daedalus_ui.settings colors).
  *
- * The form is one module's page under the Daedalus config category's UI
- * sub-category, so its three colors sit at the top level with no details
- * wrapper. The form id is a contract: bz_render alters it by id to add its
- * own details beneath the colors.
+ * One module's page under the Daedalus config category's UI sub-category,
+ * so the three colors sit at the top level of the form with no details
+ * wrapper around them. The form id is a contract: a module from outside the
+ * package alters the form by that id and adds a details element of its own
+ * beneath the colors, which is why the colors stay at the top and the id
+ * stays as it is.
  */
 class SettingsForm extends ConfigFormBase {
 

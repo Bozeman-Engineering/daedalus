@@ -258,8 +258,9 @@ lanes into one flat id namespace (a collision is `BLUEPRINT_CONFLICT`):
   way the shipper writes them), `groups`, when given, is a non-empty list
   of distinct machine names, `favorite`, when given, is `true` (absence
   is the default's one spelling, as `ai: false` is the opt-out's), and the
-  ID is neither reserved start (`blank`, `template`). The envelope carries no `bundles`, so a shipped
-  blueprint fits any host that has what its layout needs.
+  ID is neither reserved start (`blank`, `template`). The envelope carries
+  no `bundles`, so a shipped blueprint fits any host that has what its
+  layout needs.
 - Published `blueprint` entities: each entry's `layout` and `styles` are
   `NodeTreeBuilder::build()` and the node-less styles over the saved
   host, built once per rebuild and cached under the tag

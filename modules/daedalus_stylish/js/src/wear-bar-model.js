@@ -48,6 +48,8 @@ const isEntryObject = (value) =>
  *   The wearing, or null.
  *
  * @return {?Object<string, object>}
+ *   Condition → declarations of the wearing's root entry ({} when the
+ *   slice has none), or null when the records cannot resolve it.
  */
 export const wornRootStyles = (variants, ref) => {
   const worn = ref ? findVariant(variants ?? [], ref.variant) : null;
@@ -92,6 +94,7 @@ export const wornRootStyles = (variants, ref) => {
  * @return {{rows: Array<{axis: string, ref: {variant: string,
  *   fragment: string, via: ?string}}>, stale: Array<{variant: string,
  *   fragment: string, via: ?string}>}}
+ *   The resolved rows in axis order, and the references nothing resolves.
  */
 export const wornRows = (entry, variants, vocabulary, claimedAxes = []) => {
   const refs = entryRefs(entry);
@@ -139,6 +142,8 @@ export const wornRows = (entry, variants, vocabulary, claimedAxes = []) => {
  *
  * @return {{withheld: boolean, refusals: Array<{path: string, code:
  *   string, message: string}>}}
+ *   Whether the guide withholds it, with the refusals it found ([] when
+ *   the reference is plainly gone).
  */
 export const staleReason = (guide, reference) => {
   const refusals = guide?.withheld?.[reference];
@@ -156,8 +161,10 @@ export const staleReason = (guide, reference) => {
  * menu read as the server's refusal would.
  *
  * @param {Array<{path: string, message: string}>} refusals
+ *   The verdict's refusals (staleReason).
  *
  * @return {string}
+ *   The joined line, '' for no refusals.
  */
 export const refusalText = (refusals) =>
   refusals
@@ -187,6 +194,7 @@ export const refusalText = (refusals) =>
  *   The store's variant records.
  *
  * @return {?{via: string, label: string}}
+ *   The origin's reference and display name, or null.
  */
 export const wearOrigin = (ref, variants) => {
   const via = typeof ref?.via === 'string' && ref.via !== '' ? ref.via : null;
@@ -194,6 +202,38 @@ export const wearOrigin = (ref, variants) => {
     return null;
   }
   return { via, label: findVariant(variants, via)?.label ?? via };
+};
+
+/**
+ * The properties a wearing writes on the worn element itself: the
+ * variant's root entry ('') across every condition, deduped, in
+ * declaration order. What a wear-bar row hands the canvas highlight on
+ * hover, so a width variant paints its inset the way a padding scrub
+ * does (painterless properties tint nothing; the painter registry
+ * decides). A fragment wearing reads its slice's root the same way.
+ *
+ * @param {?Array<object>} variants
+ *   The store's variant records.
+ * @param {?{variant: string, fragment: string}} ref
+ *   The wearing, or null.
+ *
+ * @return {string[]}
+ *   The properties in declaration order, [] when unresolved.
+ */
+export const wornProperties = (variants, ref) => {
+  const root = wornRootStyles(variants, ref);
+  if (!root) {
+    return [];
+  }
+  const properties = [];
+  for (const declarations of Object.values(root)) {
+    for (const property of Object.keys(declarations ?? {})) {
+      if (!properties.includes(property)) {
+        properties.push(property);
+      }
+    }
+  }
+  return properties;
 };
 
 /**
@@ -213,41 +253,29 @@ export const wearOrigin = (ref, variants) => {
  *   The wearing's fragment ('' for a root wearing).
  *
  * @return {boolean}
+ *   Whether any style key lies outside the slice.
  */
-/**
- * The properties a wearing writes on the worn element itself: the
- * variant's root entry ('') across every condition, deduped, in
- * declaration order. What a wear-bar row hands the canvas highlight on
- * hover, so a width variant paints its inset the way a padding scrub
- * does (painterless properties tint nothing; the painter registry
- * decides). A fragment wearing reads its slice's root the same way.
- *
- * @param {?Array<object>} variants
- *   The store's variant records.
- * @param {?{variant: string, fragment: string}} ref
- *   The wearing, or null.
- *
- * @return {string[]}
- */
-export const wornProperties = (variants, ref) => {
-  const root = wornRootStyles(variants, ref);
-  if (!root) {
-    return [];
-  }
-  const properties = [];
-  for (const declarations of Object.values(root)) {
-    for (const property of Object.keys(declarations ?? {})) {
-      if (!properties.includes(property)) {
-        properties.push(property);
-      }
-    }
-  }
-  return properties;
-};
-
 export const reachesBeyond = (styles, fragment = '') =>
   Object.keys(styles ?? {}).some(
     (key) => key !== fragment && !key.startsWith(`${fragment}::`),
+  );
+
+/**
+ * The worn declarations one own property masks, grain-aware
+ * (box-model.js sharesGrain), in the variant's declaration order.
+ *
+ * @param {object} worn
+ *   The worn condition layer (property → value).
+ * @param {string} property
+ *   The element's own property at the same condition.
+ *
+ * @return {string[]}
+ *   The masked worn declarations, [] when none shares the grain.
+ */
+const masksOf = (worn, property) =>
+  Object.keys(worn).filter(
+    (declaration) =>
+      worn[declaration] !== undefined && sharesGrain(property, declaration),
   );
 
 /**
@@ -317,11 +345,7 @@ const shadowingTuples = (map, key, reference, variants) => {
         return;
       }
       Object.keys(values).forEach((property) => {
-        const masks = Object.keys(worn).filter(
-          (declaration) =>
-            worn[declaration] !== undefined &&
-            sharesGrain(property, declaration),
-        );
+        const masks = masksOf(worn, property);
         if (masks.length) {
           tuples.push({ key: mapKey, condition, property, masks });
         }
@@ -336,6 +360,12 @@ const shadowingTuples = (map, key, reference, variants) => {
  * per (key, condition) in first-seen order, every shadowing own property
  * unset. Nothing detaches and cross-property overrides stay: only the
  * values the reference actually covers go.
+ *
+ * @param {Array<{key: string, condition: string, property: string}>} tuples
+ *   The shadowing tuples (shadowingTuples).
+ *
+ * @return {Array<object>}
+ *   update_style operations, one per (key, condition).
  */
 const unsetOps = (tuples) => {
   const ops = [];
@@ -439,6 +469,7 @@ export const overriddenWearing = (map, key, reference, variants) => {
  *   The state setter.
  *
  * @return {{reference: ?string, isOn: Function, toggle: Function}}
+ *   The held reference, the per-reference check and the toggle.
  */
 export const outlineGesture = (outlined, setOutlined) => ({
   reference: outlined,
@@ -472,6 +503,7 @@ export const outlineGesture = (outlined, setOutlined) => ({
  * @param {?object} worn
  *   The resolved variant record, or null.
  * @param {object} context
+ *   The labeling facts.
  * @param {?object} context.guide
  *   The style guide (axis labels).
  * @param {string[]} context.vocabulary
@@ -482,6 +514,7 @@ export const outlineGesture = (outlined, setOutlined) => ({
  *   The word for the one-axis case (the view's translated "Variant").
  *
  * @return {string}
+ *   The row's label.
  */
 export const wearRowLabel = (
   axis,
@@ -516,6 +549,7 @@ export const wearRowLabel = (
  *   The materials roster (the owners' blueprint records).
  *
  * @return {?string}
+ *   The headline, or null for a stale row.
  */
 export const wearRowHeader = (worn, guide, materials) => {
   if (!worn) {
@@ -564,7 +598,9 @@ export const wearRowHeader = (worn, guide, materials) => {
  * doorways and the settings card all wait behind that selection.
  *
  * @param {object} context
+ *   The row's facts and the doorways the view wired.
  * @param {boolean} context.stale
+ *   Whether the records cannot resolve the reference.
  * @param {?object} context.worn
  *   The resolved variant record (null for stale rows).
  * @param {{variant: string, fragment: string}} context.ref
@@ -587,6 +623,7 @@ export const wearRowHeader = (worn, guide, materials) => {
  *
  * @return {Array<{type: string, checked?: boolean} |
  *   {separator: true}>}
+ *   The menu items in order, separators between the groups.
  */
 export const wearRowMenu = ({
   stale,

@@ -67,12 +67,13 @@ export const splitLayers = (value) => {
   const layers = [];
   let depth = 0;
   let start = 0;
-  for (let i = 0; i < text.length; i++) {
+  for (let i = 0; i < text.length; i += 1) {
     const char = text[i];
     if (char === '(') {
-      depth++;
+      depth += 1;
     } else if (char === ')') {
-      if (--depth < 0) {
+      depth -= 1;
+      if (depth < 0) {
         return null;
       }
     } else if (char === ',' && depth === 0) {
@@ -100,6 +101,12 @@ export const splitLayers = (value) => {
  *
  * A var() layer is NOT a gradient here even when it references a gradient
  * token: the reference is opaque and the builder must not unfold it.
+ *
+ * @param {*} layer
+ *   One layer (splitLayers output).
+ *
+ * @return {boolean}
+ *   True for a gradient function layer.
  */
 export const isGradientLayer = (layer) => {
   if (typeof layer !== 'string') {
@@ -111,6 +118,12 @@ export const isGradientLayer = (layer) => {
 
 /**
  * The first gradient layer's index — the layer the builder edits — or -1.
+ *
+ * @param {string[]} layers
+ *   The value's layers (splitLayers output).
+ *
+ * @return {number}
+ *   The index, or -1 when no layer is a gradient.
  */
 export const gradientTargetIndex = (layers) =>
   layers.findIndex(isGradientLayer);
@@ -121,15 +134,22 @@ export const gradientTargetIndex = (layers) =>
  * The unit is a function consumed to its balanced close or a run of
  * non-whitespace; the remainder (the position, possibly two-part) keeps
  * its own internal spelling.
+ *
+ * @param {string} text
+ *   The stop argument, trimmed.
+ *
+ * @return {?{unit: string, rest: string}}
+ *   The unit and remainder, or null when the parentheses do not balance.
  */
 const firstUnit = (text) => {
   let depth = 0;
-  for (let i = 0; i < text.length; i++) {
+  for (let i = 0; i < text.length; i += 1) {
     const char = text[i];
     if (char === '(') {
-      depth++;
+      depth += 1;
     } else if (char === ')') {
-      if (--depth < 0) {
+      depth -= 1;
+      if (depth < 0) {
         return null;
       }
     } else if (/\s/.test(char) && depth === 0) {
@@ -146,6 +166,12 @@ const firstUnit = (text) => {
  * or a bare name; the position is whatever follows, raw. A leading number
  * or dimension is NOT a stop — that is an interpolation hint, a grammar
  * the model does not represent, so the layer degrades.
+ *
+ * @param {string} arg
+ *   One argument of the gradient function.
+ *
+ * @return {?{color: string, position: ?string}}
+ *   The stop, or null when the argument is not one.
  */
 const parseStop = (arg) => {
   const split = firstUnit(arg.trim());
@@ -218,6 +244,20 @@ export const parseGradient = (layer) => {
  * The exact inverse of parseGradient over everything it represents: the
  * prelude prints raw, stops print "color position". Only whitespace
  * spelling normalizes (single spaces, ', ' joins) — values never do.
+ *
+ * @param {object} model
+ *   The gradient model (parseGradient's shape).
+ * @param {boolean} model.repeating
+ *   Whether the function is the repeating- variant.
+ * @param {string} model.type
+ *   The gradient type (linear, radial, conic).
+ * @param {string} model.prelude
+ *   The raw prelude argument, '' for none.
+ * @param {Array<{color: string, position: ?string}>} model.stops
+ *   The color stops.
+ *
+ * @return {string}
+ *   The gradient layer text.
  */
 export const serializeGradient = ({ repeating, type, prelude, stops }) => {
   const parts = [];
@@ -246,6 +286,7 @@ export const serializeGradient = ({ repeating, type, prelude, stops }) => {
  *   The target layer's new text.
  *
  * @return {string}
+ *   The whole value, layers joined by ', '.
  */
 export const buildValue = (layers, index, text) =>
   index === -1
@@ -259,6 +300,12 @@ export const buildValue = (layers, index, text) =>
  * spelling maps onto the angle control — every other prelude ("to top
  * right", ".25turn", "135deg in oklch") stays a raw prelude the angle
  * control must not claim (editing it would silently normalize).
+ *
+ * @param {?string} prelude
+ *   The raw prelude.
+ *
+ * @return {?number}
+ *   The angle in degrees, or null for a prelude the control must not claim.
  */
 export const preludeAngle = (prelude) => {
   const text = typeof prelude === 'string' ? prelude.trim() : '';
@@ -279,6 +326,10 @@ export const preludeAngle = (prelude) => {
  *   from it instead of the free default.
  * @param {?string} to
  *   The second stop's color.
+ *
+ * @return {{repeating: boolean, type: string, prelude: string,
+ *   stops: Array<{color: string, position: ?string}>}}
+ *   The gradient model.
  */
 export const defaultGradient = (color = null, to = null) => ({
   repeating: false,

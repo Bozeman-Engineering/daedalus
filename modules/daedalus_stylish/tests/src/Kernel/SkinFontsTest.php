@@ -24,7 +24,6 @@ use Drupal\daedalus_stylish\SkinMaterialDeleteBatch;
 use Drupal\daedalus_stylish\SkinMaterialManager;
 use Drupal\daedalus_stylish\SkinMaterialUsage;
 use Drupal\daedalus_stylish\SkinStylesheet;
-use Drupal\daedalus_stylish\StyleGuide;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\file\FileInterface;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
@@ -44,8 +43,8 @@ use Symfony\Component\HttpFoundation\Request;
  * font and the /daedalus_stylish/skin/fonts routes), its files held by
  * the skin through core's file usage, tracked in the one skin material
  * usage table as its quoted family, removed from every stack before a
- * named one goes, served on the roster from the active skin, printed as
- * @font-face blocks at the head of the compiled skin file, and carried by
+ * named one goes, served on the roster from the active skin, printed
+ * as @font-face blocks at the head of the compiled skin file, and carried by
  * the skins disk lane with its faces' bytes under assets/fonts/.
  */
 #[CoversClass(SkinFontsItem::class)]
@@ -81,9 +80,13 @@ class SkinFontsTest extends KernelTestBase {
   ];
 
   /**
-   * A regular and a bold font file the faces may name.
+   * A regular font file the faces may name.
    */
   protected FileInterface $regular;
+
+  /**
+   * A bold font file the faces may name.
+   */
   protected FileInterface $bold;
 
   /**
@@ -153,7 +156,13 @@ class SkinFontsTest extends KernelTestBase {
   protected function activateOwnSkin(): DaedalusStylishSkinInterface {
     $skin = DaedalusStylishSkin::create(['label' => 'Mine', 'machine_name' => 'mine', 'status' => 1]);
     $skin->setPackageTokens(['font' => ['body' => '"Inter", sans-serif']]);
-    $skin->setPackageFonts(['inter' => ['family' => 'Inter', 'faces' => [$this->face($this->regular), $this->face($this->bold, ['weight' => 'bold'])], 'description' => 'The body face.']]);
+    $skin->setPackageFonts([
+      'inter' => [
+        'family' => 'Inter',
+        'faces' => [$this->face($this->regular), $this->face($this->bold, ['weight' => 'bold'])],
+        'description' => 'The body face.',
+      ],
+    ]);
     $skin->save();
     $this->activateSkin($skin);
     return $this->loadSkin('mine');
@@ -186,6 +195,7 @@ class SkinFontsTest extends KernelTestBase {
     if ($operations === [] && isset($set['queue'])) {
       $queue = _batch_queue($set);
       while ($item = $queue->claimItem()) {
+        assert(is_object($item));
         $operations[] = $item->data;
         $queue->deleteItem($item);
       }
@@ -222,36 +232,60 @@ class SkinFontsTest extends KernelTestBase {
   }
 
   /**
-   * The store canonicalizes records and faces; the layers merge; files are held.
+   * The store canonicalizes records and faces, merges layers and holds files.
    */
   public function testLayersCanonicalizationAndHold(): void {
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora', 'status' => 1]);
     $skin->setPackageFonts([
-      'inter' => ['family' => ' Inter ', 'faces' => [$this->face($this->bold, ['weight' => 'bold']), $this->face($this->regular)]],
-      'serif' => ['family' => 'Test Serif', 'faces' => [$this->face($this->regular)], 'description' => 'Quiet.', 'offered' => FALSE],
+      'inter' => [
+        'family' => ' Inter ',
+        'faces' => [$this->face($this->bold, ['weight' => 'bold']), $this->face($this->regular)],
+      ],
+      'serif' => [
+        'family' => 'Test Serif',
+        'faces' => [$this->face($this->regular)],
+        'description' => 'Quiet.',
+        'offered' => FALSE,
+      ],
     ]);
     $skin->setSiteFonts([
       'inter' => ['description' => 'Described by the site.'],
-      'mono' => ['family' => 'Test Mono', 'faces' => [$this->face($this->bold, ['weight' => '700', 'style' => 'Italic'])]],
+      'mono' => [
+        'family' => 'Test Mono',
+        'faces' => [$this->face($this->bold, ['weight' => '700', 'style' => 'Italic'])],
+      ],
     ]);
     $skin->save();
     $skin = $this->loadSkin('aurora');
 
     $package = $skin->packageFonts();
-    $this->assertSame(['family' => 'Inter', 'faces' => [
-      ['weight' => '400', 'style' => 'normal', 'source' => ['file' => $this->regular->uuid()]],
-      ['weight' => '700', 'style' => 'normal', 'source' => ['file' => $this->bold->uuid()]],
-    ], 'description' => '', 'offered' => TRUE], $package['inter'], 'A record fills its facts; faces canonicalize and sort by weight.');
+    $this->assertSame([
+      'family' => 'Inter',
+      'faces' => [
+        ['weight' => '400', 'style' => 'normal', 'source' => ['file' => $this->regular->uuid()]],
+        ['weight' => '700', 'style' => 'normal', 'source' => ['file' => $this->bold->uuid()]],
+      ],
+      'description' => '',
+      'offered' => TRUE,
+    ], $package['inter'], 'A record fills its facts; faces canonicalize and sort by weight.');
     $this->assertFalse($package['serif']['offered']);
     $site = $skin->siteFonts();
     $this->assertSame(['description' => 'Described by the site.'], $site['inter'], 'A site record keeps exactly the facts it states.');
-    $this->assertSame(['family' => 'Test Mono', 'faces' => [['weight' => '700', 'style' => 'italic', 'source' => ['file' => $this->bold->uuid()]]]], $site['mono']);
+    $this->assertSame([
+      'family' => 'Test Mono',
+      'faces' => [['weight' => '700', 'style' => 'italic', 'source' => ['file' => $this->bold->uuid()]]],
+    ], $site['mono']);
 
     $worn = $skin->fonts();
     $this->assertSame(['inter', 'serif', 'mono'], array_keys($worn), 'Package order, the site\'s additions after.');
     $this->assertSame('Described by the site.', $worn['inter']['description'], 'A site fact replaces, the rest show through.');
     $this->assertSame($package['inter']['faces'], $worn['inter']['faces']);
-    $this->assertSame(['family' => 'Test Mono', 'faces' => $site['mono']['faces'], 'description' => '', 'offered' => TRUE], $worn['mono'], 'A site-minted font fills its defaults.');
+    $this->assertSame([
+      'family' => 'Test Mono',
+      'faces' => $site['mono']['faces'],
+      'description' => '',
+      'offered' => TRUE,
+    ], $worn['mono'], 'A site-minted font fills its defaults.');
     $this->assertSame([$this->regular->uuid(), $this->bold->uuid()], SkinFontsItem::fileUuids($worn));
 
     // The skin holds every file a face of either layer names, once.
@@ -289,7 +323,7 @@ class SkinFontsTest extends KernelTestBase {
   }
 
   /**
-   * The gestures on the site's own skin: mint, update, rename, delete, delivery.
+   * The gestures on the site's own skin: mint, update, rename, delete, deliver.
    */
   public function testGesturesOnTheOwnSkin(): void {
     $skin = $this->activateOwnSkin();
@@ -298,7 +332,14 @@ class SkinFontsTest extends KernelTestBase {
     // The roster and the compiled skin file read the skin's fonts.
     $roster = $this->container->get('daedalus_blueprint.materials_roster_builder')->build();
     $record = $roster->fonts()['inter'];
-    $this->assertSame(['inter', 'inter', 'The body face.', MaterialRecord::ORIGIN_USER, TRUE, $skin->getDesignSystem()], [$record->id, $record->label, $record->description, $record->origin, $record->updatable, $record->designSystem]);
+    $this->assertSame(['inter', 'inter', 'The body face.', MaterialRecord::ORIGIN_USER, TRUE, $skin->getDesignSystem()], [
+      $record->id,
+      $record->label,
+      $record->description,
+      $record->origin,
+      $record->updatable,
+      $record->designSystem,
+    ]);
     $this->assertSame(['family' => 'Inter', 'faces' => $skin->fonts()['inter']['faces']], $record->value);
     $this->assertSame(['font' => '"Inter"'], $record->spellings);
     $css = $this->skinCss();
@@ -312,7 +353,12 @@ class SkinFontsTest extends KernelTestBase {
     // Mint: the record lands canonical in the one layer.
     $manager->mintFont($skin, 'mono', 'Test Mono', [$this->face($this->regular, ['weight' => 500])], ' Code. ', FALSE);
     $skin = $this->loadSkin('mine');
-    $this->assertSame(['family' => 'Test Mono', 'faces' => [['weight' => '500', 'style' => 'normal', 'source' => ['file' => $this->regular->uuid()]]], 'description' => 'Code.', 'offered' => FALSE], $skin->packageFonts()['mono']);
+    $this->assertSame([
+      'family' => 'Test Mono',
+      'faces' => [['weight' => '500', 'style' => 'normal', 'source' => ['file' => $this->regular->uuid()]]],
+      'description' => 'Code.',
+      'offered' => FALSE,
+    ], $skin->packageFonts()['mono']);
     $this->assertSame('package', $manager->fontLayer($skin, 'mono'));
     $this->assertNull($manager->fontShippedState($skin, 'mono'));
     $this->assertStringContainsString('font-family: "Test Mono";', $this->skinCss());
@@ -327,7 +373,12 @@ class SkinFontsTest extends KernelTestBase {
     // Update: faces, family and facts, each a revisioned save.
     $manager->updateFont($skin, 'mono', 'Test Mono Two', [$this->face($this->bold, ['weight' => 'bold'])], NULL, TRUE);
     $skin = $this->loadSkin('mine');
-    $this->assertSame(['family' => 'Test Mono Two', 'faces' => [['weight' => '700', 'style' => 'normal', 'source' => ['file' => $this->bold->uuid()]]], 'description' => 'Code.', 'offered' => TRUE], $skin->fonts()['mono']);
+    $this->assertSame([
+      'family' => 'Test Mono Two',
+      'faces' => [['weight' => '700', 'style' => 'normal', 'source' => ['file' => $this->bold->uuid()]]],
+      'description' => 'Code.',
+      'offered' => TRUE,
+    ], $skin->fonts()['mono']);
     $this->assertStringContainsString('font-family: "Test Mono Two";', $this->skinCss());
 
     // Rename: the record moves in this request; no reference names a font
@@ -361,7 +412,10 @@ class SkinFontsTest extends KernelTestBase {
     $this->createWearer('Inter, sans-serif');
     $this->assertSame(3, $manager->fontUsages($skin, 'inter'), 'Two hosts quote the family (either quote); an unquoted Inter is a theme\'s own.');
     $variant = DaedalusStylishVariant::create(['label' => 'Body', 'machine_name' => 'body', 'scope' => 'kind:container']);
-    $variant->setStyles(['' => ['default' => ['font-family' => 'var(--font-body)', 'color' => 'red']], '::h2' => ['default' => ['font-family' => '"Inter"']]]);
+    $variant->setStyles([
+      '' => ['default' => ['font-family' => 'var(--font-body)', 'color' => 'red']],
+      '::h2' => ['default' => ['font-family' => '"Inter"']],
+    ]);
     $variant->save();
     $this->assertSame(4, $manager->fontUsages($skin, 'inter'));
     $this->assertSame(1, $usage->countReferencesTo('--font-body'), 'The var() reference is tracked beside the family.');
@@ -386,10 +440,24 @@ class SkinFontsTest extends KernelTestBase {
     $controller = SkinMaterialApiController::create($this->container);
     $this->assertSame(404, $controller->usage('fonts', 'ghost')->getStatusCode());
     $read = json_decode((string) $controller->usage('fonts', 'inter')->getContent(), TRUE);
-    $this->assertSame(['inter', 'inter', 'Inter', '"Inter"', 4, 'package', FALSE, NULL, NULL], [$read['id'], $read['name'], $read['family'], $read['spelling'], $read['usages'], $read['layer'], $read['locked'], $read['provider'], $read['shipped_state']]);
+    $this->assertSame(['inter', 'inter', 'Inter', '"Inter"', 4, 'package', FALSE, NULL, NULL], [
+      $read['id'],
+      $read['name'],
+      $read['family'],
+      $read['spelling'],
+      $read['usages'],
+      $read['layer'],
+      $read['locked'],
+      $read['provider'],
+      $read['shipped_state'],
+    ]);
     $response = $controller->rename('fonts', 'inter', Request::create('/', 'POST', [], [], [], [], json_encode(['label' => 'body_face'])));
     $this->assertSame(200, $response->getStatusCode(), 'A font\'s rename is always immediate.');
-    $this->assertSame([TRUE, 'body_face', 0], array_values(array_intersect_key(json_decode((string) $response->getContent(), TRUE), ['renamed' => 1, 'id' => 1, 'references' => 1])));
+    $this->assertSame([TRUE, 'body_face', 0], array_values(array_intersect_key(json_decode((string) $response->getContent(), TRUE), [
+      'renamed' => 1,
+      'id' => 1,
+      'references' => 1,
+    ])));
     $this->assertSame(4, $manager->fontUsages($this->loadSkin('mine'), 'body_face'), 'The references name the family, not the name.');
 
     $response = $controller->delete('fonts', 'body_face');
@@ -413,7 +481,7 @@ class SkinFontsTest extends KernelTestBase {
   }
 
   /**
-   * The gestures on a shipped skin: files landed, the site layer, the lock, revert.
+   * The gestures on a shipped skin: files landed, site layer, lock, revert.
    */
   public function testShippedSkinCarriesFonts(): void {
     \Drupal::service('module_installer')->install(['daedalus_stylish_fonts_test']);
@@ -427,8 +495,16 @@ class SkinFontsTest extends KernelTestBase {
     // holding the asset's bytes, held by the skin.
     $fonts = $typeset->packageFonts();
     $this->assertSame(['test_sans', 'test_serif'], array_keys($fonts));
-    $this->assertSame(['Test Sans', 'The body face of the fonts test.', TRUE], [$fonts['test_sans']['family'], $fonts['test_sans']['description'], $fonts['test_sans']['offered']]);
-    $this->assertSame(['Test Serif', '', FALSE], [$fonts['test_serif']['family'], $fonts['test_serif']['description'], $fonts['test_serif']['offered']]);
+    $this->assertSame(['Test Sans', 'The body face of the fonts test.', TRUE], [
+      $fonts['test_sans']['family'],
+      $fonts['test_sans']['description'],
+      $fonts['test_sans']['offered'],
+    ]);
+    $this->assertSame(['Test Serif', '', FALSE], [
+      $fonts['test_serif']['family'],
+      $fonts['test_serif']['description'],
+      $fonts['test_serif']['offered'],
+    ]);
     $this->assertSame(['400 normal woff2', '700 normal woff'], array_map(fn (array $face): string => $face['weight'] . ' ' . $face['style'] . ' ' . FontFiles::format($files->load($face['source']['file'])), $fonts['test_sans']['faces']));
     foreach ($fonts as $record) {
       foreach ($record['faces'] as $face) {
@@ -465,14 +541,20 @@ class SkinFontsTest extends KernelTestBase {
     $this->assertSame('test-serif-regular.woff2', $definition['fonts']['test_serif']['faces'][0]['source']['file']);
     $importer->checkDefinitionShape('x', 'typeset', $definition);
     try {
-      $importer->checkDefinitionShape('x', 'typeset', ['label' => 'T', 'fonts' => ['sans' => ['family' => 'Sans', 'faces' => [['source' => ['file' => '../etc/passwd.woff']]]]]]);
+      $importer->checkDefinitionShape('x', 'typeset', [
+        'label' => 'T',
+        'fonts' => ['sans' => ['family' => 'Sans', 'faces' => [['source' => ['file' => '../etc/passwd.woff']]]]],
+      ]);
       $this->fail('A face outside assets/fonts/ passed.');
     }
     catch (ShippedSkinException $exception) {
       $this->assertSame('INVALID_SHIPPED_SKIN', $exception->getErrors()[0]->getCode());
     }
     try {
-      $importer->shippedPayload('daedalus_stylish_fonts_test', 'typeset', ['label' => 'T', 'fonts' => ['sans' => ['family' => 'Sans', 'faces' => [['source' => ['file' => 'missing.woff2']]]]]]);
+      $importer->shippedPayload('daedalus_stylish_fonts_test', 'typeset', [
+        'label' => 'T',
+        'fonts' => ['sans' => ['family' => 'Sans', 'faces' => [['source' => ['file' => 'missing.woff2']]]]],
+      ]);
       $this->fail('A missing asset passed.');
     }
     catch (ShippedSkinException $exception) {
@@ -499,19 +581,44 @@ class SkinFontsTest extends KernelTestBase {
     // A site mint lands in the site layer; the provider's gestures ride
     // the same manager with kind font.
     $provider = $this->container->get('daedalus_stylish.materials_provider');
-    $provider->capture(MaterialKind::Font, ['label' => 'inter', 'family' => 'Inter', 'faces' => [$this->face($this->regular)], 'description' => 'Mine.'], NULL, [MaterialGestureOperationHandler::ORIGIN_OPTION => MaterialRecord::ORIGIN_AI]);
+    $provider->capture(MaterialKind::Font, [
+      'label' => 'inter',
+      'family' => 'Inter',
+      'faces' => [$this->face($this->regular)],
+      'description' => 'Mine.',
+    ], NULL, [MaterialGestureOperationHandler::ORIGIN_OPTION => MaterialRecord::ORIGIN_AI]);
     $typeset = $this->loadSkin('typeset');
-    $this->assertSame(['family' => 'Inter', 'faces' => [['weight' => '400', 'style' => 'normal', 'source' => ['file' => $this->regular->uuid()]]], 'description' => 'Mine.', 'offered' => TRUE], $typeset->siteFonts()['inter']);
+    $this->assertSame([
+      'family' => 'Inter',
+      'faces' => [['weight' => '400', 'style' => 'normal', 'source' => ['file' => $this->regular->uuid()]]],
+      'description' => 'Mine.',
+      'offered' => TRUE,
+    ], $typeset->siteFonts()['inter']);
     $this->assertSame('site', $manager->fontLayer($typeset, 'inter'));
     $this->assertFalse($typeset->isModified());
     $this->assertSame(MaterialRecord::ORIGIN_USER, $this->container->get('daedalus_blueprint.materials_roster_builder')->build()->fonts()['inter']->origin);
     $this->assertSame([FontFiles::USAGE_MODULE => [FontFiles::USAGE_TYPE => [$typeset->id() => '1']]], $this->container->get('file.usage')->listUsage($this->regular), 'A site-minted font\'s file is held by the skin too.');
     $this->assertSame(['id' => 'SHIPPED_DEFAULTS_MISSING'], $this->refusal(fn () => $manager->revertFont($typeset, 'inter')));
-    $this->assertSame(['global' => 'INVALID_PARAMETER'], $this->refusal(fn () => $provider->capture(MaterialKind::Font, ['label' => 'x', 'family' => 'X', 'faces' => [$this->face($this->regular)], 'global' => TRUE], NULL, [])));
-    $this->assertSame(['label' => 'MISSING_PARAMETER'], $this->refusal(fn () => $provider->capture(MaterialKind::Font, ['family' => 'X', 'faces' => [$this->face($this->regular)]], NULL, [])));
-    $this->assertSame(['family' => 'MISSING_PARAMETER'], $this->refusal(fn () => $provider->capture(MaterialKind::Font, ['label' => 'x', 'faces' => [$this->face($this->regular)]], NULL, [])));
+    $this->assertSame(['global' => 'INVALID_PARAMETER'], $this->refusal(fn () => $provider->capture(MaterialKind::Font, [
+      'label' => 'x',
+      'family' => 'X',
+      'faces' => [$this->face($this->regular)],
+      'global' => TRUE,
+    ], NULL, [])));
+    $this->assertSame(['label' => 'MISSING_PARAMETER'], $this->refusal(fn () => $provider->capture(MaterialKind::Font, [
+      'family' => 'X',
+      'faces' => [$this->face($this->regular)],
+    ], NULL, [])));
+    $this->assertSame(['family' => 'MISSING_PARAMETER'], $this->refusal(fn () => $provider->capture(MaterialKind::Font, [
+      'label' => 'x',
+      'faces' => [$this->face($this->regular)],
+    ], NULL, [])));
     $this->config('daedalus_stylish.settings')->set('ai_minting', FALSE)->save();
-    $this->assertSame(['faces' => 'STYLE_FONT_AI_MINTING_DISABLED'], $this->refusal(fn () => $provider->capture(MaterialKind::Font, ['label' => 'y', 'family' => 'Y', 'faces' => [$this->face($this->bold)]], NULL, [MaterialGestureOperationHandler::ORIGIN_OPTION => MaterialRecord::ORIGIN_AI])));
+    $this->assertSame(['faces' => 'STYLE_FONT_AI_MINTING_DISABLED'], $this->refusal(fn () => $provider->capture(MaterialKind::Font, [
+      'label' => 'y',
+      'family' => 'Y',
+      'faces' => [$this->face($this->bold)],
+    ], NULL, [MaterialGestureOperationHandler::ORIGIN_OPTION => MaterialRecord::ORIGIN_AI])));
     $provider->update(MaterialKind::Font, 'inter', ['offered' => FALSE], NULL, []);
     $this->assertFalse($this->loadSkin('typeset')->fonts()['inter']['offered']);
     $this->assertSame(['id' => 'STYLE_FONT_NOT_FOUND'], $this->refusal(fn () => $provider->update(MaterialKind::Font, 'nope', ['description' => 'x'], NULL, [])));

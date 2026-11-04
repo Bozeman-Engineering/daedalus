@@ -27,9 +27,9 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   attribute stamps edit-only, exactly when the empty form matched;
  * - a layout whose effective declaration is not composed fails loud.
  *
- * The declaration comes from daedalus_ui_resolver_test (the mirrored
- * shipped one-box container shape); daedalus_layout is not involved — the nested
- * marker and the attribute bag are stamped by hand at the seam they ride.
+ * The declaration comes from daedalus_ui_resolver_test (the mirrored shipped
+ * one-box container shape); daedalus_layout is not involved — the nested marker
+ * and the attribute bag are stamped by hand at the seam they ride.
  *
  * @group daedalus_ui
  */
@@ -39,7 +39,7 @@ class ComposedLayoutRenderTest extends KernelTestBase {
   use UserCreationTrait;
 
   /**
-   * The section attribute bag stamped for the render, as daedalus_layout stamps it.
+   * The section attribute bag stamped for the render, as daedalus_layout does.
    */
   private const SECTION_ATTRIBUTES = [
     'data-selectable' => 'container:11111111-2222-3333-4444-555555555555',

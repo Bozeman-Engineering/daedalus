@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel;
 
+// cspell:ignore actualizado extraído página
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\daedalus_blueprint\BlueprintOperations;
 use Drupal\daedalus_blueprint\Event\FieldAppliedEvent;

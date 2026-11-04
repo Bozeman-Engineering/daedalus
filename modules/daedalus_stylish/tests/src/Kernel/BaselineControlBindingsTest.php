@@ -109,11 +109,11 @@ class BaselineControlBindingsTest extends KernelTestBase {
       $this->assertArrayHasKey('background', $declaration['property_groups'], "$kind declares the background group its color widgets need");
     }
 
-    // The entity kind's layout root (daedalus_layout's anatomy, daedalus_stylish's groups)
-    // declares the spacing group that owns the gap family, so the
-    // baseline's page-level Gap (the element-bound kind control the guide
-    // accepts) binds the `gap` widget there and is covered at the part:
-    // the clean build above validated it, and the binding rides through
+    // The entity kind's layout root (daedalus_layout's anatomy,
+    // daedalus_stylish's groups) declares the spacing group that owns the gap
+    // family, so the baseline's page-level Gap (the element-bound kind control
+    // the guide accepts) binds the `gap` widget there and is covered at the
+    // part: the clean build above validated it, and the binding rides through
     // as authored.
     $entity = $style_guide->getKind('entity', self::THEME);
     $this->assertSame('Layout', $entity['elements']['.daedalus-layout-layout']['label']);

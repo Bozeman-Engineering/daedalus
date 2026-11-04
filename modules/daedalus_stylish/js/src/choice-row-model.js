@@ -31,6 +31,7 @@ import { stackAt } from './style-stack.js';
  *   The property definition.
  *
  * @return {boolean}
+ *   Whether the definition is a length or a bare number.
  */
 export const dimensionShaped = (definition) =>
   definition?.type === 'dimension' || definition?.type === 'number';
@@ -45,6 +46,7 @@ export const dimensionShaped = (definition) =>
  *   The property definition.
  *
  * @return {boolean}
+ *   Whether the space's stops paint.
  */
 export const paintedSpace = (definition) =>
   definition?.type === 'color' || definition?.media === true;
@@ -67,6 +69,7 @@ export const paintedSpace = (definition) =>
  *   The property definition, defaulting to the space's own.
  *
  * @return {boolean}
+ *   Whether the row hides.
  */
 export const rowHidden = (space, value, definition = space.definition) =>
   normalizeValue(value) === null &&
@@ -104,6 +107,7 @@ export const rowHidden = (space, value, definition = space.definition) =>
  *   label: string, text: string, display: string, paint: ?string,
  *   paintDark: ?string, group: ?string, media: boolean,
  *   thumbnail: ?string, number: ?number, unit: ?string}>}
+ *   The offer, in stop order.
  */
 export const choiceStops = (space, stops) =>
   space.stops.map((stop) => {
@@ -130,6 +134,16 @@ export const choiceStops = (space, stops) =>
  * or the one whose collision set holds it (two tokens sharing one
  * display value collapse into one space stop; a committed twin still
  * lights the shared face).
+ *
+ * @param {{stops: Array<{ref: string, tokens: Array<{ref: string}>}>}} space
+ *   The property's value space.
+ * @param {Array<{id: string}>} offer
+ *   The row's offer (choiceStops).
+ * @param {string} id
+ *   The lit widget stop id.
+ *
+ * @return {?object}
+ *   The offer entry, or null when none carries the id.
  */
 const litEntry = (space, offer, id) => {
   const direct = offer.find((entry) => entry.id === id);
@@ -168,6 +182,7 @@ const litEntry = (space, offer, id) => {
  *   A caller-supplied mapping, or null for segmentState.
  *
  * @return {{selected: ?string, custom: boolean, value: ?string}}
+ *   The lit entry's id, whether the value is custom, and the value.
  */
 export const choiceState = (space, offer, stops, value, state = null) => {
   const mapped = state ?? segmentState(value, stops);
@@ -201,6 +216,7 @@ export const choiceState = (space, offer, stops, value, state = null) => {
  *   surfaceFor's answer.
  *
  * @return {boolean}
+ *   Whether the row's slot scrubs.
  */
 export const scrubbable = (space, surface) =>
   surface !== 'field' &&
@@ -226,11 +242,15 @@ export const scrubbable = (space, surface) =>
  * here.
  *
  * @param {object} input
+ *   The row's facts.
  * @param {?object} input.guide
+ *   The style guide payload.
  * @param {?object} input.materials
+ *   The materials roster, for the display faces.
  * @param {string} input.condition
  *   The editing compound (the pose).
  * @param {string} input.property
+ *   The row's property.
  * @param {object} input.stack
  *   The bound target's stack (buildStack).
  * @param {?{winner: ?object, beneath: Array<object>, own: ?object}} [input.read]

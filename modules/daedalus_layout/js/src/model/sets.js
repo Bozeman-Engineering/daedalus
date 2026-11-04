@@ -35,7 +35,12 @@
  * Pure: no DOM, no Preact.
  */
 
-import { CONTAINER_ID, KIND_BASIC, KIND_BLUEPRINT, isFavorite } from './faces.js';
+import {
+  CONTAINER_ID,
+  KIND_BASIC,
+  KIND_BLUEPRINT,
+  isFavorite,
+} from './faces.js';
 import { byLabel, compareLabels } from './order.js';
 
 /**
@@ -60,11 +65,23 @@ export const DEFAULT_WORDS = Object.freeze({
 
 /**
  * A group's set id.
+ *
+ * @param {string} groupId
+ *   The group's id (AddPanelAnswer's `groups`).
+ *
+ * @return {string}
+ *   The set id, `group:` and the group's id.
  */
 export const groupSetId = (groupId) => `group:${groupId}`;
 
 /**
  * A kind's set id under All.
+ *
+ * @param {string} kind
+ *   A face's kind: KIND_BASIC, KIND_BLUEPRINT or a block category.
+ *
+ * @return {string}
+ *   The set id, `kind:` and the kind.
  */
 export const kindSetId = (kind) => `kind:${kind}`;
 
@@ -79,6 +96,7 @@ export const kindSetId = (kind) => `kind:${kind}`;
  *   The fixed headings' words.
  *
  * @return {{id: string, label: string}}
+ *   The kind's set id and heading label.
  */
 export const kindOf = (face, words = DEFAULT_WORDS) => {
   if (face.kind === KIND_BASIC) {
@@ -100,6 +118,14 @@ const set = (id, label, items, extra = {}) => ({
 
 /**
  * All's children: Basics, Blueprints, then the categories by label.
+ *
+ * @param {Array<object>} faces
+ *   Every face, already in the order its set draws it.
+ * @param {object} words
+ *   The fixed headings' words.
+ *
+ * @return {Array<object>}
+ *   One set per kind that has a face, Basics and Blueprints leading.
  */
 const kindsOf = (faces, words) => {
   const buckets = new Map();
@@ -114,8 +140,10 @@ const kindsOf = (faces, words) => {
   const categories = [...buckets.values()]
     .filter((kind) => !fixed.includes(kind.id))
     .sort((a, b) => compareLabels(a.label, b.label));
-  return [...fixed.map((id) => buckets.get(id)).filter(Boolean), ...categories]
-    .map((kind) => set(kind.id, kind.label, byLabel(kind.items)));
+  return [
+    ...fixed.map((id) => buckets.get(id)).filter(Boolean),
+    ...categories,
+  ].map((kind) => set(kind.id, kind.label, byLabel(kind.items)));
 };
 
 /**
@@ -132,12 +160,17 @@ const kindsOf = (faces, words) => {
  *   The fixed headings' words.
  *
  * @return {Array<object>}
+ *   Favorites, All (its kinds as `children`), then one set per group
+ *   that has a face; every set's rows in label order.
  */
 export const buildSets = (faces, groups, marks, words = DEFAULT_WORDS) => {
   const favorites = set(
     FAVORITES_ID,
     words.favorites,
-    byLabel(faces.filter((face) => isFavorite(face, marks)), CONTAINER_ID),
+    byLabel(
+      faces.filter((face) => isFavorite(face, marks)),
+      CONTAINER_ID,
+    ),
   );
   const groupSets = (groups ?? [])
     .map((group) =>

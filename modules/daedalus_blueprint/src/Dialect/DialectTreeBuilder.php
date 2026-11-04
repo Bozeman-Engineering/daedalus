@@ -42,7 +42,12 @@ final class DialectTreeBuilder implements EventHandler {
   /**
    * Tags whose bodies are captured verbatim (RAWTEXT).
    */
-  private const RAW_TEXT_TAGS = [RelativeSelector::TYPE_PREFIX . 'formatted-text', DialectWalk::FIELD_TAG, DialectParser::FILE_TAG, 'style'];
+  private const RAW_TEXT_TAGS = [
+    RelativeSelector::TYPE_PREFIX . 'formatted-text',
+    DialectWalk::FIELD_TAG,
+    DialectParser::FILE_TAG,
+    'style',
+  ];
 
   /**
    * Dialect tags that never take content and parse as void.

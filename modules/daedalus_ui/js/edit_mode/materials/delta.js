@@ -36,6 +36,12 @@ export const emptyRecords = () =>
  * Loud on an unknown kind: a payload built from the roster can never
  * carry one, so a miss here is a real drift between the delivery contract
  * and this twin.
+ *
+ * @param {?{records: object[]}} payload
+ *   The page-load payload, or null for none.
+ *
+ * @return {Object<string, object[]>}
+ *   The per-kind record set (emptyRecords() shape).
  */
 export const recordsFromPayload = (payload) => {
   const records = emptyRecords();
@@ -52,6 +58,14 @@ export const recordsFromPayload = (payload) => {
 
 /**
  * The roster's order key within a kind: weight, then label.
+ *
+ * @param {object} a
+ *   A record in the delivery shape.
+ * @param {object} b
+ *   Another record of the same kind.
+ *
+ * @return {number}
+ *   Negative when a sorts first, positive when b does, zero for a tie.
  */
 const compare = (a, b) =>
   (a.weight ?? 0) - (b.weight ?? 0) ||
@@ -99,6 +113,12 @@ export const applyDelta = (records, delta) => {
 /**
  * Every record of a per-kind set as one flat list, roster order (kind
  * order, then the seat order within the kind).
+ *
+ * @param {Object<string, object[]>} records
+ *   The per-kind record set (emptyRecords() shape).
+ *
+ * @return {object[]}
+ *   The records.
  */
 export const flattenRecords = (records) =>
   MATERIAL_KINDS.flatMap((kind) => records[kind]);
@@ -107,6 +127,12 @@ export const flattenRecords = (records) =>
  * Whether a delta carries nothing: applied nowhere, relayed nowhere, so
  * the (empty) delta every mutation response carries never re-renders a
  * widget.
+ *
+ * @param {?{upsert: object[], remove: object[]}} delta
+ *   The delta, or null.
+ *
+ * @return {boolean}
+ *   Whether the delta carries nothing.
  */
 export const isEmptyDelta = (delta) =>
   !delta ||
@@ -116,6 +142,9 @@ export const isEmptyDelta = (delta) =>
  * Refuses a delta of the wrong shape or an unknown kind, loudly: a payload
  * built from the roster can never carry either, so a miss here is a real
  * drift between the server's delivery contract and this twin.
+ *
+ * @param {*} delta
+ *   The delta to check.
  */
 export const assertDelta = (delta) => {
   if (

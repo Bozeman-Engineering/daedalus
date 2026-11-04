@@ -31,13 +31,20 @@
  * what the ruler is about.
  */
 
-import { WIDTH_AXIS, clauseBand } from '../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
+import {
+  WIDTH_AXIS,
+  clauseBand,
+} from '../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
 
 /**
  * A band's edges as the short range text the chip hints and the ruler
  * labels print: `400-480px`, `≤ 767px`, `≥ 1920px`.
  *
  * @param {{min?: number, max?: number}} band
+ *   A ruler band.
+ *
+ * @return {string}
+ *   The range text.
  */
 export const bandRangeText = (band) => {
   if (band.min !== undefined && band.max !== undefined) {
@@ -84,7 +91,10 @@ export const literalStops = (clauses) =>
 export const stopsFromConditions = (conditions) => {
   const stops = [];
   for (const [name, definition] of Object.entries(conditions ?? {})) {
-    if (definition?.axis !== WIDTH_AXIS || typeof definition.wrapper !== 'string') {
+    if (
+      definition?.axis !== WIDTH_AXIS ||
+      typeof definition.wrapper !== 'string'
+    ) {
       continue;
     }
     const band = clauseBand(definition.wrapper);
@@ -116,6 +126,12 @@ export const stopsFromConditions = (conditions) => {
  * unambiguously, and round-trips (widthConditionFor(stopPosePx(stop))
  * is the stop's own condition). A band with no ceiling has no midpoint;
  * its floor is the least surprising pose.
+ *
+ * @param {{min?: number, max?: number}} stop
+ *   A ruler band.
+ *
+ * @return {number}
+ *   The width to pose, px.
  */
 export const stopPosePx = (stop) =>
   stop.max === undefined

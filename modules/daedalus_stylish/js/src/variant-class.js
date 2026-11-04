@@ -23,6 +23,9 @@ const CLASS_NAME = /^[A-Za-z0-9_-]+$/;
 /**
  * The class stamped on an element referencing a variant, or null when
  * the reference cannot be a class name.
+ *
+ * @param {string} reference
+ *   The variant's machine name, as the entry stores it.
  */
 export const variantClass = (reference) =>
   typeof reference === 'string' && CLASS_NAME.test(reference)
@@ -32,6 +35,11 @@ export const variantClass = (reference) =>
 /**
  * The class stamped for one {variant, fragment} reference, or null when
  * the pair cannot be a class name.
+ *
+ * @param {string} reference
+ *   The variant's machine name.
+ * @param {string} fragment
+ *   The distributed fragment's slot key, '' for the root.
  */
 export const fragmentClass = (reference, fragment) => {
   const base = variantClass(reference);
@@ -48,6 +56,9 @@ export const fragmentClass = (reference, fragment) => {
 /**
  * Whether a class name is in the variant-class namespace: a class the
  * tree can judge by wear, as opposed to a markup class it cannot see.
+ *
+ * @param {string} name
+ *   The class name.
  */
 export const isVariantClass = (name) =>
   typeof name === 'string' && name.startsWith(VARIANT_CLASS_PREFIX);

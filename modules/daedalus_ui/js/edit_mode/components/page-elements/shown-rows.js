@@ -51,6 +51,12 @@ export const SHOWN_TYPE = 'Blueprint, by reference';
 
 /**
  * A door's showing when it shows a default, else null.
+ *
+ * @param {Object} component
+ *   A lean block node, its `_element` annotation riding it.
+ *
+ * @return {?Object}
+ *   The `showing` of a door showing a default document.
  */
 const shownDefault = (component) => {
   const showing = component?._element?.showing;
@@ -93,6 +99,7 @@ export const shownRows = (component) => {
  *   A shown row.
  *
  * @return {string}
+ *   The door's component uuid.
  */
 export const shownDoorUuid = (row) => row.parentKey.slice('block:'.length);
 
@@ -114,6 +121,7 @@ export const shownDoorUuid = (row) => row.parentKey.slice('block:'.length);
  *   The door's component uuid (shownDoorUuid).
  *
  * @return {Array<{label: string, icon?: ?string, run: function}>}
+ *   Edit (when offered), then the registered doorways.
  */
 export const shownDoorways = (showing, uuid = null) => {
   const url = showing?.portal?.url;

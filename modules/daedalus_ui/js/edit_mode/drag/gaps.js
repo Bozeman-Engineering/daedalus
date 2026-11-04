@@ -46,6 +46,12 @@ import { resolveRowTarget } from './tree-gaps';
 
 /**
  * Parses a selectable key into segments, or null.
+ *
+ * @param {?Element} element
+ *   An element, or null.
+ *
+ * @return {?string[]}
+ *   The key's colon-separated segments, or null for no element or no key.
  */
 const segments = (element) =>
   element?.getAttribute('data-selectable')?.split(':') ?? null;
@@ -54,6 +60,12 @@ const segments = (element) =>
  * True when an element's selectable key is a block PLACEMENT
  * (block:{uuid}), as opposed to a field of an inline block
  * (block:{uuid}:{name}).
+ *
+ * @param {?Element} element
+ *   An element, or null.
+ *
+ * @return {boolean}
+ *   Whether the element is a block placement.
  */
 const isPlacement = (element) => {
   const parts = segments(element);
@@ -73,10 +85,15 @@ const isPlacement = (element) => {
  * found above it answers null, the root flow, exactly as if the frame were
  * not there. (A pointer outside the main entity never reaches these
  * resolvers: resolveDropTarget answers null for it.)
+ *
+ * @param {?Element} element
+ *   The element to start from, or null.
+ *
+ * @return {?Element}
+ *   The container, or null at the root flow.
  */
 const containerAt = (element) => {
-  const container =
-    element?.closest('[data-selectable^="container:"]') ?? null;
+  const container = element?.closest('[data-selectable^="container:"]') ?? null;
   return container && container.closest('[data-main-entity]')
     ? container
     : null;
@@ -87,6 +104,12 @@ const containerAt = (element) => {
  *
  * Containers all the way down: a nested container is an ordinary child of
  * its parent container, which owns the nested flow.
+ *
+ * @param {?Element} element
+ *   The element whose container is wanted, or null.
+ *
+ * @return {?Element}
+ *   The container, or null at the root flow.
  */
 const enclosingContainer = (element) =>
   containerAt(element?.parentElement ?? null);
@@ -102,6 +125,9 @@ const enclosingContainer = (element) =>
  * @param {Element} scope
  *   The element to search under (the container, or the main entity for
  *   the root flow).
+ *
+ * @return {Element[]}
+ *   The flow's items in document order.
  */
 const flowItems = (container, scope = container) =>
   Array.from(scope.querySelectorAll('[data-selectable]')).filter(
@@ -118,6 +144,12 @@ const flowItems = (container, scope = container) =>
  * container's part hoists onto the root, no slot claim survives, and a
  * container the model does not speak for degrades to its root). The
  * annotation names the part; the DOM query only locates its element.
+ *
+ * @param {Element} container
+ *   An empty container.
+ *
+ * @return {Element}
+ *   The surface the drop lands in.
  */
 const dropSurface = (container) => {
   const claimant = markupForKey(container.getAttribute('data-selectable'))
@@ -136,6 +168,14 @@ const dropSurface = (container) => {
  * empty for gap purposes either way: gaps are computed FROM items, so an
  * annotation/DOM desync (a mid-mutation moment) degrades to the
  * whole-container 'inside' target instead of a broken caret.
+ *
+ * @param {Element} container
+ *   The container.
+ * @param {Element[]} items
+ *   Its flow's items (flowItems).
+ *
+ * @return {boolean}
+ *   Whether the flow is empty.
  */
 const flowIsEmpty = (container, items) =>
   items.length === 0 ||
@@ -161,6 +201,12 @@ export const SLOT_DOOR_ATTRIBUTE = 'data-daedalus-slot';
  * controller's question (insert of the block key, through the one
  * client gate: the spine stamps insert on a door exactly when this
  * document may fill it).
+ *
+ * @param {Element} element
+ *   The element under the cursor.
+ *
+ * @return {?Element}
+ *   The empty door, or null.
  */
 const emptySlotDoor = (element) => {
   const door = element.closest(`[${SLOT_DOOR_ATTRIBUTE}]`);
@@ -175,6 +221,12 @@ const emptySlotDoor = (element) => {
 
 /**
  * The inside target of an empty slot door.
+ *
+ * @param {Element} door
+ *   The empty door (emptySlotDoor).
+ *
+ * @return {Object}
+ *   The gap target (see resolveDropTarget).
  */
 const slotDoorTarget = (door) => ({
   location: { anchor: segments(door)[1], placement: 'inside' },
@@ -190,9 +242,15 @@ const slotDoorTarget = (door) => ({
  * The flow's actual children can sit a level above the attributed items —
  * every inline block renders inside daedalus_ui's entity-wrapper div.
  * Sibling insertion against the item's own element can never reposition
- * it there;
- * position changes must move and anchor on the unit. A pure wrapper holds
- * exactly this one item and carries no selectable identity of its own.
+ * it there; position changes must move and anchor on the unit. A pure
+ * wrapper holds exactly this one item and carries no selectable identity
+ * of its own.
+ *
+ * @param {Element} item
+ *   A flow item.
+ *
+ * @return {Element}
+ *   The item's outermost pure wrapper, or the item itself.
  */
 export const unitOf = (item) => {
   let unit = item;
@@ -212,13 +270,23 @@ export const unitOf = (item) => {
  * spanning a single item (the entity-wrapper div), so using it as the
  * gap container would clamp the caret's end-of-flow line — and draw the
  * container highlight — around ONE item instead of the whole flow.
+ *
+ * @param {Element[]} items
+ *   A flow's items, at least one.
+ *
+ * @return {Element}
+ *   The flow's container.
  */
 const flowContainer = (items) => unitOf(items[0]).parentElement;
 
 /**
  * Infers the flow orientation of a list of rects.
  *
+ * @param {DOMRect[]} rects
+ *   The items' rects in document order.
+ *
  * @return {'vertical'|'horizontal'}
+ *   The dominant axis; vertical for fewer than two rects.
  */
 const orientationOf = (rects) => {
   if (rects.length < 2) {
@@ -239,6 +307,18 @@ const orientationOf = (rects) => {
  * Standard list-drop rule: the cursor falls before the first item whose
  * midpoint it precedes. Works for wrapped flows too, because midpoints are
  * compared in document order along the dominant axis.
+ *
+ * @param {DOMRect[]} rects
+ *   The items' rects in document order.
+ * @param {'vertical'|'horizontal'} orientation
+ *   The flow's axis.
+ * @param {number} x
+ *   The cursor's viewport x coordinate.
+ * @param {number} y
+ *   The cursor's viewport y coordinate.
+ *
+ * @return {number}
+ *   The index the cursor inserts at, 0 through rects.length.
  */
 const insertionIndex = (rects, orientation, x, y) => {
   for (let i = 0; i < rects.length; i++) {
@@ -258,12 +338,20 @@ const insertionIndex = (rects, orientation, x, y) => {
 };
 
 /**
- * The caret line rect for an insertion index, inset to the container's
- * content box.
- */
-/**
  * The caret coordinate between two edges: their midpoint, pulled 2px inside
  * the container at the first and last gap so the caret stays visible.
+ *
+ * @param {number} index
+ *   The gap index.
+ * @param {number} count
+ *   The item count (the last gap's index).
+ * @param {number} low
+ *   The leading edge: the item above (or before), else the container.
+ * @param {number} high
+ *   The trailing edge: the item below (or after), else the container.
+ *
+ * @return {number}
+ *   The caret coordinate along the flow axis.
  */
 const edgeBiasedMidpoint = (index, count, low, high) => {
   if (index === 0) {
@@ -275,6 +363,22 @@ const edgeBiasedMidpoint = (index, count, low, high) => {
   return (low + high) / 2;
 };
 
+/**
+ * The caret line rect for an insertion index, inset to the container's
+ * content box.
+ *
+ * @param {Element} container
+ *   The flow's container.
+ * @param {DOMRect[]} rects
+ *   The items' rects in document order.
+ * @param {'vertical'|'horizontal'} orientation
+ *   The flow's axis.
+ * @param {number} index
+ *   The gap index.
+ *
+ * @return {{left: number, top: number, width: number, height: number, orientation: string}}
+ *   The line rect in viewport coordinates.
+ */
 const caretRect = (container, rects, orientation, index) => {
   const containerRect = container.getBoundingClientRect();
   const inset = 6;
@@ -311,6 +415,19 @@ const caretRect = (container, rects, orientation, index) => {
 /**
  * Builds a drop-target result for a specific gap index in a container.
  *
+ * @param {Element} container
+ *   The flow's container.
+ * @param {Element[]} items
+ *   The flow's items, at least one.
+ * @param {DOMRect[]} rects
+ *   The items' rects in document order.
+ * @param {'vertical'|'horizontal'} orientation
+ *   The flow's axis.
+ * @param {number} index
+ *   The gap index, 0 through items.length.
+ * @param {function(Element, string): Object} describe
+ *   Describes the gap from its anchor item and placement (describeFlowGap).
+ *
  * @return {Object}
  *   The gap target (see resolveDropTarget).
  */
@@ -331,8 +448,19 @@ const gapAt = (container, items, rects, orientation, index, describe) => {
 /**
  * Builds a drop-target result from a container and a cursor position.
  *
- * @return {?Object}
- *   The resolved target (see resolveDropTarget), or null.
+ * @param {Element} container
+ *   The flow's container.
+ * @param {Element[]} items
+ *   The flow's items, at least one.
+ * @param {number} x
+ *   The cursor's viewport x coordinate.
+ * @param {number} y
+ *   The cursor's viewport y coordinate.
+ * @param {function(Element, string): Object} describe
+ *   Describes the gap from its anchor item and placement (describeFlowGap).
+ *
+ * @return {Object}
+ *   The resolved target (see resolveDropTarget).
  */
 const gapTarget = (container, items, x, y, describe) => {
   const rects = items.map((item) => item.getBoundingClientRect());
@@ -344,6 +472,14 @@ const gapTarget = (container, items, x, y, describe) => {
 /**
  * Describes a flow gap in the server grammar: the anchor is the adjacent
  * item's uuid, whatever its kind (the grammar is kind-blind).
+ *
+ * @param {Element} anchorItem
+ *   The item the gap is adjacent to.
+ * @param {string} placement
+ *   'before' or 'after'.
+ *
+ * @return {{location: {anchor: string, placement: string}}}
+ *   The location.
  */
 const describeFlowGap = (anchorItem, placement) => ({
   location: { anchor: segments(anchorItem)[1], placement },
@@ -356,6 +492,14 @@ const describeFlowGap = (anchorItem, placement) => ({
  * the SECTION gap; ops-builders compose the [add_section, place-inside]
  * batch). Container flows hold anything; every other gap passes through
  * untouched.
+ *
+ * @param {Object} target
+ *   A resolved gap target.
+ * @param {string} targets
+ *   'block' or 'section', what the drag source places.
+ *
+ * @return {Object}
+ *   The target, with newSection set when a block lands in the root flow.
  */
 export const legalize = (target, targets) =>
   targets === 'block' && target.rootFlow
@@ -380,6 +524,15 @@ export const legalize = (target, targets) =>
  * FLOW's axis (a horizontal flow tests left/right edges), sized
  * min(28px, 25% of the section's flow-axis extent) so short sections keep
  * an interior.
+ *
+ * @param {Element} element
+ *   The element under the cursor.
+ * @param {Element} main
+ *   The main entity element, the root flow's scope.
+ * @param {number} x
+ *   The cursor's viewport x coordinate.
+ * @param {number} y
+ *   The cursor's viewport y coordinate.
  *
  * @return {?Object}
  *   A flow gap target (see resolveDropTarget), or null when the cursor is
@@ -469,6 +622,12 @@ export const rootEntityKey = () =>
  * sections (data-tree-owner / data-tree-claims, stamped by the tree on a
  * claiming pseudo row): the root flow's drop surface when the owner is
  * the root entity.
+ *
+ * @param {string} ownerKey
+ *   The owner's selectable key.
+ *
+ * @return {string}
+ *   The selector.
  */
 const sectionsRowSelector = (ownerKey) =>
   `[data-tree-owner="${CSS.escape(ownerKey)}"][data-tree-claims~="section"]`;
@@ -480,7 +639,11 @@ const sectionsRowSelector = (ownerKey) =>
  * sections-claiming shell row for the root inside location) and the
  * drop-reveal key the drag controller publishes to the store.
  *
+ * @param {?Object} location
+ *   A placement location {anchor, placement}, or null.
+ *
  * @return {string[]}
+ *   The candidate keys in preference order; empty for no location.
  */
 export const treeRowKeyCandidates = (location) => {
   if (!location) {
@@ -501,7 +664,12 @@ export const treeRowKeyCandidates = (location) => {
  * already addresses the container; before/after address a sibling, whose
  * projection parent is the container's nearest presented key.
  *
+ * @param {?Object} location
+ *   A placement location {anchor, placement}, or null.
+ *
  * @return {?string}
+ *   The container's projection key, or null when the projection cannot
+ *   name it.
  */
 export const containerKeyForLocation = (location) => {
   const index = projectionIndex();
@@ -532,7 +700,11 @@ export const containerKeyForLocation = (location) => {
  * bare {location}) answers exactly as a resolved gap does. Before the
  * mirror boots nothing is known, and unknown is not the root flow.
  *
+ * @param {?Object} location
+ *   A placement location {anchor, placement}, or null.
+ *
  * @return {boolean}
+ *   Whether the location lands in the root flow.
  */
 export const isRootFlowLocation = (location) => {
   const key = containerKeyForLocation(location);
@@ -546,13 +718,17 @@ export const isRootFlowLocation = (location) => {
  *
  * The inverse of the tree resolver's row → location mapping (tree-gaps.js),
  * and the seam that lets every drop location render a panel face: the
- * location is the
- * one carrier, the row is derived. The root inside location has two faces
- * in the markup view: the shell row claiming the root's sections holds
- * the section rows, so when it is rendered the caret sits under it (the
- * row the sections append to), and under the root row otherwise.
+ * location is the one carrier, the row is derived. The root inside
+ * location has two faces in the markup view: the shell row claiming the
+ * root's sections holds the section rows, so when it is rendered the
+ * caret sits under it (the row the sections append to), and under the
+ * root row otherwise.
+ *
+ * @param {?Object} location
+ *   A placement location {anchor, placement}, or null.
  *
  * @return {?{row: Element, placement: string}}
+ *   The row and the placement the caret draws at, or null.
  */
 export const treeRowForLocation = (location) => {
   const tree = location && document.querySelector('.daedalus-ui-tree');
@@ -590,6 +766,7 @@ export const treeRowForLocation = (location) => {
  *   A tree row (the treeitem).
  *
  * @return {number}
+ *   The viewport x where the row's content starts.
  */
 export const treeRowContentEdge = (row) =>
   row.getBoundingClientRect().left +
@@ -599,6 +776,12 @@ export const treeRowContentEdge = (row) =>
  * One outline step in pixels, read off a row: --daedalus-outline-step
  * (variables.css) is declared in rem, so a rem value scales by the root
  * font size; a px override passes through.
+ *
+ * @param {Element} row
+ *   A tree row (the treeitem).
+ *
+ * @return {number}
+ *   The step in pixels.
  */
 const outlineStepPx = (row) => {
   const value = getComputedStyle(row)
@@ -620,7 +803,11 @@ const outlineStepPx = (row) => {
  * so the line's indent says which depth the drop lands at: the depth the
  * tree resolver picked by x, or the depth a canvas gap's location means.
  *
- * @return {?{left, top, width, height, orientation}}
+ * @param {?Object} location
+ *   A placement location {anchor, placement}, or null.
+ *
+ * @return {?{left: number, top: number, width: number, height: number, orientation: string}}
+ *   The line rect in viewport coordinates, or null.
  */
 export const treeCaretForLocation = (location) => {
   const resolved = treeRowForLocation(location);
@@ -650,8 +837,9 @@ export const treeCaretForLocation = (location) => {
  * @param {Element} target
  *   The drag event's target (what the cursor is over).
  * @param {number} x
+ *   The cursor's viewport x coordinate.
  * @param {number} y
- *   Viewport cursor coordinates.
+ *   The cursor's viewport y coordinate.
  * @param {string} targets
  *   'block' or 'section' — what the drag source places.
  *
@@ -715,6 +903,21 @@ export const resolveDropTarget = (target, x, y, targets) => {
  * the container under the cursor (an empty container is one 'inside'
  * target), then the root flow (a blank page is one 'inside' target on the
  * root entity). Kind shows only through legalize()'s root-flow rule.
+ *
+ * @param {Element} element
+ *   The element under the cursor, inside the main entity.
+ * @param {Element} main
+ *   The main entity element, the root flow's scope.
+ * @param {number} x
+ *   The cursor's viewport x coordinate.
+ * @param {number} y
+ *   The cursor's viewport y coordinate.
+ * @param {string} targets
+ *   'block' or 'section', what the drag source places.
+ *
+ * @return {?Object}
+ *   The gap target before its kind and gapId are stamped, or null for a
+ *   blank page whose main entity has no key.
  */
 const resolveCanvasTarget = (element, main, x, y, targets) => {
   const edgeTarget = resolveEdgeZoneTarget(element, main, x, y);
@@ -778,6 +981,12 @@ const resolveCanvasTarget = (element, main, x, y, targets) => {
 /**
  * Stamps the drag-layer gapId onto a gap target (hysteresis + keyboard
  * stepping identity — same format resolveDropTarget produces).
+ *
+ * @param {Object} target
+ *   A gap target.
+ *
+ * @return {Object}
+ *   The same target, with kind and gapId set.
  */
 const withGapId = (target) => {
   target.kind = 'gap';

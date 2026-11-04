@@ -395,6 +395,8 @@ class BlueprintManager {
    *   The gesture value: a list of group ids
    *   (BlueprintInterface::GROUP_ID_PATTERN); [] (or NULL) clears the
    *   list, which files the blueprint under no group.
+   * @param string $path
+   *   The error path.
    *
    * @return string[]
    *   The ids, de-duplicated, in order.

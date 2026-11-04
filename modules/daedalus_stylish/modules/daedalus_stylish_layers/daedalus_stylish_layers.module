@@ -12,19 +12,19 @@ use Drupal\Core\Cache\Cache;
 /**
  * Implements hook_page_attachments().
  *
- * (hook_css_alter() lives in \Drupal\daedalus_stylish_layers\Hook\CssHooks: it needs
- * the OOP #[Hook] attribute's order, Order::Last, which has no procedural
+ * (hook_css_alter() lives in \Drupal\daedalus_stylish_layers\Hook\CssHooks: it
+ * needs the OOP #[Hook] attribute's order, Order::Last, which has no procedural
  * equivalent that is not deprecated.)
  *
  * Emits the cascade layer-order statement as the first stylesheet content in
- * the document: `@layer daedalus_stylish_force, <wrapper>;`. The FIRST occurrence of a
- * layer name establishes layer order, so this must precede every pipeline
- * stylesheet (which the decorators wrap in the wrapper layer). html_head
- * elements render into head-placeholder, which core, Olivero and Claro
- * html.html.twig all place BEFORE css-placeholder — verified against the
+ * the document: `@layer daedalus_stylish_force, <wrapper>;`. The FIRST
+ * occurrence of a layer name establishes layer order, so this must precede
+ * every pipeline stylesheet (which the decorators wrap in the wrapper layer).
+ * html_head elements render into head-placeholder, which core, Olivero and
+ * Claro html.html.twig all place BEFORE css-placeholder — verified against the
  * templates and live render. Weight -999 keeps it directly after the charset
- * meta (-1000, which must stay first for security) and ahead of everything
- * else in html_head.
+ * meta (-1000, which must stay first for security) and ahead of everything else
+ * in html_head.
  */
 function daedalus_stylish_layers_page_attachments(array &$attachments): void {
   /** @var \Drupal\daedalus_stylish_layers\Layers $layers */

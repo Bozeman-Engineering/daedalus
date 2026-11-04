@@ -282,7 +282,11 @@ class BlueprintCaptureTest extends BlueprintKernelTestBase {
         'op' => 'add_element',
         'location' => ['anchor' => $section, 'placement' => 'inside', 'region' => 'second'],
         'plugin_id' => 'field_block:entity_test:entity_test:name',
-        'properties' => ['label' => 'The name', 'label_display' => 'visible', 'formatter' => ['type' => 'string', 'label' => 'inline']],
+        'properties' => [
+          'label' => 'The name',
+          'label_display' => 'visible',
+          'formatter' => ['type' => 'string', 'label' => 'inline'],
+        ],
       ],
     ]);
     $this->assertBatchSuccess($result);
@@ -310,7 +314,9 @@ class BlueprintCaptureTest extends BlueprintKernelTestBase {
     $entity->set('daedalus_stylish_styles', json_encode([
       "container:$section" => ['variants' => [['variant' => 'card', 'fragment' => '']]],
       "block:$text" => ['variants' => [['variant' => 'glow', 'fragment' => '', 'via' => 'card']]],
-      "container:$inner" => ['variants' => [['variant' => 'panel', 'fragment' => ''], ['variant' => 'card', 'fragment' => '']]],
+      "container:$inner" => [
+        'variants' => [['variant' => 'panel', 'fragment' => ''], ['variant' => 'card', 'fragment' => '']],
+      ],
     ]));
     $this->assertSame(['card', 'panel'], $this->manager()->capturedVariants($this->host($entity), $section), 'Authored wearings, unique, first seen first; derived wears never list.');
     $this->assertSame(['panel', 'card'], $this->manager()->capturedVariants($this->host($entity), $inner), 'A nested capture lists its own subtree.');

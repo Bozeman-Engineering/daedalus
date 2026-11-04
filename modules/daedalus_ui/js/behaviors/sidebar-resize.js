@@ -37,7 +37,10 @@
         // geometry; deferring to rAF lagged content and outline behind the
         // panel edge by a frame.
         const applyWidth = (width) => {
-          wrapper.style.setProperty('--daedalus-ui-sidebar-width', `${width}px`);
+          wrapper.style.setProperty(
+            '--daedalus-ui-sidebar-width',
+            `${width}px`,
+          );
           Drupal.displace();
         };
 

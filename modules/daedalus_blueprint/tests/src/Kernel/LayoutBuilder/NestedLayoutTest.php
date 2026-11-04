@@ -18,13 +18,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests native nested-section serialization and the nested tree write.
  *
  * Sections nest natively: a nested section is a container component
- * (daedalus_layout_section) whose configuration embeds one Section::toArray() value,
- * and it serializes as a section node with the exact same shape as a
- * top-level section, recursively (storage shape == sugar shape). The
- * container component is invisible plumbing: component uuid == embedded
- * section uuid, and no block facade ever appears. On the write side a
- * nested container is a container node in a created entity's layout
- * tree, at any depth, and a read's tree creates an equal entity.
+ * (daedalus_layout_section) whose configuration embeds one Section::toArray()
+ * value, and it serializes as a section node with the exact same shape as a
+ * top-level section, recursively (storage shape == sugar shape). The container
+ * component is invisible plumbing: component uuid == embedded section uuid, and
+ * no block facade ever appears. On the write side a nested container is a
+ * container node in a created entity's layout tree, at any depth, and a read's
+ * tree creates an equal entity.
  */
 #[CoversClass(BlueprintDeserializer::class)]
 #[CoversClass(LayoutSerializer::class)]

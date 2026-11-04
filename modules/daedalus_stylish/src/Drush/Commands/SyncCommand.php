@@ -21,28 +21,26 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 /**
  * The CLI adapter of the shipped-definitions activation lane.
  *
- * Every enabled module's shipped skins (with their tokens, animations and fonts) and
- * variants already activate on a cache rebuild and on install (see ShippedSync);
- * this command runs the same orchestrated sync by hand, so an operator can
- * activate one module's package and read every outcome on the terminal
- * instead of in the log. One line per definition in sync order
- * (`MODULE: KIND NAME outcome`), one line per variant this run created
- * or updated that the roster's verdict withholds (a sync fails a
- * definition on structure alone, so a variant the site's current law
- * refuses lands and VariantConformance withholds it: the line names the
- * enforcement and the law's refusals, the way a site author would read
- * them at the save gate), one line per deferred package (a module
- * packaging a design system that is not the active one: its definitions
- * land at the activation, under the system's own law), one line per
- * module whose skins wait for the default theme (system.theme names a
- * theme that is not installed, the installer's window: a skin's defaults
- * validate against the default theme's guide, so they land when the
- * theme does), then every
- * failure with its path, code, message, and hint, and a non-zero exit
- * when anything failed; everything that could land already did. The
- * log stays silent about a withheld landing (a converged state, like
- * the deferred package); the terminal is where an operator reads why a
- * variant that just landed is not on offer.
+ * Every enabled module's shipped skins (with their tokens, animations and
+ * fonts) and variants already activate on a cache rebuild and on install (see
+ * ShippedSync); this command runs the same orchestrated sync by hand, so an
+ * operator can activate one module's package and read every outcome on the
+ * terminal instead of in the log. One line per definition in sync order
+ * (`MODULE: KIND NAME outcome`), one line per variant this run created or
+ * updated that the roster's verdict withholds (a sync fails a definition on
+ * structure alone, so a variant the site's current law refuses lands and
+ * VariantConformance withholds it: the line names the enforcement and the law's
+ * refusals, the way a site author would read them at the save gate), one line
+ * per deferred package (a module packaging a design system that is not the
+ * active one: its definitions land at the activation, under the system's own
+ * law), one line per module whose skins wait for the default theme
+ * (system.theme names a theme that is not installed, the installer's window: a
+ * skin's defaults validate against the default theme's guide, so they land when
+ * the theme does), then every failure with its path, code, message, and hint,
+ * and a non-zero exit when anything failed; everything that could land already
+ * did. The log stays silent about a withheld landing (a converged state, like
+ * the deferred package); the terminal is where an operator reads why a variant
+ * that just landed is not on offer.
  */
 #[AsCommand(
   name: 'daedalus_stylish:sync',

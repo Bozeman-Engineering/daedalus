@@ -68,8 +68,9 @@ class FormattedTextBlockComposedRenderTest extends KernelTestBase {
     'daedalus_ui',
     'field_sample_value',
     'daedalus_edit',
-    // The shipped block type carries an daedalus_layout third-party palette icon,
-    // so installing the module's config needs daedalus_layout's TPS schema.
+    // The shipped block type carries an daedalus_layout third-party palette
+    // icon, so installing the module's config needs daedalus_layout's TPS
+    // schema.
     'daedalus_layout',
     'daedalus_edit_formatted_text_block',
   ];
@@ -193,7 +194,7 @@ class FormattedTextBlockComposedRenderTest extends KernelTestBase {
         'value' => '<p>Unformatted</p>',
       ],
     ]);
-    $this->assertNull($unformatted->get('field_formatted_text_text')->first()->format, 'The item stores no format.');
+    $this->assertNull($unformatted->get('field_formatted_text_text')->format, 'The item stores no format.');
     $html = trim($this->renderComposed($unformatted, $this->editBag()));
     $this->assertSame(1, preg_match('/data-daedalus-edit-editor-settings="([^"]+)"/', $html, $matches));
     $settings = Json::decode(html_entity_decode($matches[1], ENT_QUOTES));

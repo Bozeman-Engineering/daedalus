@@ -53,7 +53,11 @@ class BlueprintDoorsTest extends BlueprintKernelTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static array $permissions = ['create section blueprint', 'edit any section blueprint', 'delete any section blueprint'];
+  protected static array $permissions = [
+    'create section blueprint',
+    'edit any section blueprint',
+    'delete any section blueprint',
+  ];
 
   /**
    * A linked placement's showing carries the canvas url for an updater.
@@ -250,7 +254,9 @@ class BlueprintDoorsTest extends BlueprintKernelTestBase {
     // Another blueprint's canvas is another first visit.
     $request = $this->visitCanvas($other);
     $this->assertSame('edit', $request->cookies->get('navigationMode'));
-    $this->assertSame($other->toUrl()->toString(), $mode_state->takeQueuedModeCookie()?->getPath());
+    $queued = $mode_state->takeQueuedModeCookie();
+    $this->assertNotNull($queued);
+    $this->assertSame($other->toUrl()->toString(), $queued->getPath());
 
     // A route that is not the canvas, and a sub-request, enter nothing.
     $request = $this->visitCanvas($blueprint, route: 'entity.blueprint.edit_form');

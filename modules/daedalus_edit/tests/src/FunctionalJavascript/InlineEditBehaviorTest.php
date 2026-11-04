@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_edit\FunctionalJavascript;
 
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\daedalus_blueprint\Entity\Frame;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
 use Drupal\layout_builder\SectionComponent;
@@ -17,7 +18,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Drives daedalus_edit's entity-form path on a real page: one spine, two transports.
+ * Drives the entity-form path on a real page: one spine, two transports.
  *
  * The defining capability of daedalus_edit is "stage, don't save": clicking a
  * field on the rendered page edits it in place, and the change is written
@@ -47,14 +48,14 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * round), the panel refresh from a foreign response's targets, and the
  * open edit's life as a DRAFT across a foreign mutation's re-render.
  *
- * The fixture is DaedalusFixtureTrait: the site the daedalus recipe
- * installs, daedalus_edit_test_fixture's 'plain' bundle (a node whose fields are
- * configured for inline editing, no Layout Builder) installed on top, and
- * the scenario run as daedalus_editor. daedalus_edit pulls the recipe in
- * through its require-dev, which is the point of the per-module test
- * harness: a contributor's merge request exercises the real recipe site
- * with the machinery-derived fixture bundles. daedalus_edit is a page-builder
- * module, so it requires the base daedalus, not the AI superset.
+ * The fixture is DaedalusFixtureTrait: the site the daedalus recipe installs,
+ * daedalus_edit_test_fixture's 'plain' bundle (a node whose fields are
+ * configured for inline editing, no Layout Builder) installed on top, and the
+ * scenario run as daedalus_editor. daedalus_edit pulls the recipe in through
+ * its require-dev, which is the point of the per-module test harness: a
+ * contributor's merge request exercises the real recipe site with the
+ * machinery-derived fixture bundles. daedalus_edit is a page-builder module, so
+ * it requires the base daedalus, not the AI superset.
  *
  * One fixture, one scenario. A full site install from the recipe is by far
  * the most expensive part of a run (the framework installs and tears down
@@ -83,14 +84,14 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
   protected function setUp(): void {
     $this->daedalusSetUp();
 
-    // Enable styling for the plain node bundle so Daedalus Stylish's inspector panel
-    // (the right rail's TOP slot, default-open) renders on the test node. The
-    // recipe only enables styling for page, but this test asserts the
-    // slot contract that motivated moving daedalus_edit form panels to the BOTTOM
+    // Enable styling for the plain node bundle so Daedalus Stylish's inspector
+    // panel (the right rail's TOP slot, default-open) renders on the test node.
+    // The recipe only enables styling for page, but this test asserts the slot
+    // contract that motivated moving daedalus_edit form panels to the BOTTOM
     // slot: the inspector must stay open through form-swap edits instead of
     // being evicted by them, so the inspector has to exist on the page under
-    // test. enable() creates the daedalus_stylish_styles field for the bundle, which is
-    // the enablement state InspectorSidebar::applies() reads.
+    // test. enable() creates the daedalus_stylish_styles field for the bundle,
+    // which is the enablement state InspectorSidebar::applies() reads.
     \Drupal::service('daedalus_stylish.field_manager')->enable('node', 'plain');
     // The inspector mounts by capability: style must be allowed somewhere,
     // and the style policy asks the bundle's permission, which exists only
@@ -242,12 +243,12 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
    * - Commit and stay: Cmd+Enter and a real press into chrome that keeps
    *   nothing commit the open edit with the selection kept.
    * - On a page-built page: the icon presents the root through the door and
-   *   opens the Page form; a dissolved advanced pane's alias commits through the
-   *   form transport (the wrapper identity follows the grouped widget); a
+   *   opens the Page form; a dissolved advanced pane's alias commits through
+   *   the form transport (the wrapper identity follows the grouped widget); a
    *   blueprint-block edit leaves the panel untouched; the form-edited block
-   *   (block AS subject) commits its reference and its label, a canceled
-   *   dirty edit refetches the block form and keeps the block as subject, and
-   *   a block-key style scrub resumes the open panel-widget edit over the
+   *   (block AS subject) commits its reference and its label, a canceled dirty
+   *   edit refetches the block form and keeps the block as subject, and a
+   *   block-key style scrub resumes the open panel-widget edit over the
    *   swapped-in block with the typed value intact, which blur commits.
    */
   public function testInlineEditStagesToTempstore(): void {
@@ -505,7 +506,8 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The title edit is staged in tempstore, not committed to the node.',
     );
 
-    // ----- The root row's Edit verb: presents the root, opens the Page form. -----
+    // ----- The root row's Edit verb: presents the root, opens the Page
+    // form. -----
     // The root's editor is the entity-form panel, never a canvas leaf: the
     // label may have no canvas render at all (daedalus_theme places no
     // page title block; the H1 above is this fixture's own placement). The
@@ -570,7 +572,8 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'Escape cancelled the panel widget edit the root door opened and kept the selection on its field.',
     );
 
-    // ----- Field state has one judge: hidden iff a leaf, sample iff empty. -----
+    // ----- Field state has one judge: hidden iff a leaf, sample iff
+    // empty. -----
     // The server ships every field wrapper hidden (FormDefaultFieldAttributes)
     // and decides nothing else. One behavior (panel-widget-visibility.js)
     // judges every wrapper from the mirror value and the canvas: the placed
@@ -648,9 +651,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition('window.__applied >= 3', 20000);
     $tempstore = \Drupal::service('daedalus_tempstore.entity_tempstore_repository');
     $storage->resetCache([$nid]);
+    $staged = $tempstore->get($storage->load($nid));
+    assert($staged instanceof FieldableEntityInterface);
     $this->assertSame(
       'A panel-staged orphan value',
-      $tempstore->get($storage->load($nid))->get('field_empty')->value,
+      $staged->get('field_empty')->value,
       'The revealed widget committed the orphan field to tempstore through the form transport.',
     );
     $this->assertTrue(
@@ -687,8 +692,10 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition('window.__applied >= 4', 20000);
     $this->assertJsCondition($empty_revealed, 20000, 'Emptying the field removed its canvas leaf and revealed its panel widget again, with the sample button.');
     $storage->resetCache([$nid]);
+    $staged = $tempstore->get($storage->load($nid));
+    assert($staged instanceof FieldableEntityInterface);
     $this->assertTrue(
-      $tempstore->get($storage->load($nid))->get('field_empty')->isEmpty(),
+      $staged->get('field_empty')->isEmpty(),
       'The orphan field is staged empty again.',
     );
 
@@ -743,9 +750,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     JS);
     $this->assertJsCondition('window.__applied >= 5', 20000);
     $storage->resetCache([$nid]);
+    $staged = $tempstore->get($storage->load($nid));
+    assert($staged instanceof FieldableEntityInterface);
     $this->assertSame(
       'Committed by the Update button',
-      $tempstore->get($storage->load($nid))->get('field_empty')->value,
+      $staged->get('field_empty')->value,
       'The Update button committed the panel widget through the form transport.',
     );
     $this->assertJsCondition(
@@ -798,9 +807,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $this->pressHotkey('Enter', ['ctrlKey' => TRUE]);
     $this->assertJsCondition('window.__applied >= 7', 20000);
     $storage->resetCache([$nid]);
+    $staged = $tempstore->get($storage->load($nid));
+    assert($staged instanceof FieldableEntityInterface);
     $this->assertSame(
       'Committed by Cmd+Enter',
-      $tempstore->get($storage->load($nid))->get('field_empty')->value,
+      $staged->get('field_empty')->value,
       'Cmd+Enter committed the panel widget through the form transport.',
     );
     $this->assertJsCondition(
@@ -921,6 +932,7 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition('window.__applied >= 9', 20000);
     $this->assertJsCondition($empty_revealed, 20000, 'field_empty is emptied and revealed ahead of the refusal step.');
     $empty_field_config = FieldConfig::loadByName('node', 'plain', 'field_empty');
+    assert($empty_field_config instanceof FieldConfig);
     $empty_field_config->setRequired(TRUE)->save();
     $session->executeScript(<<<JS
       (() => {
@@ -1018,9 +1030,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     );
     $this->assertJsCondition('window.__applied >= 10 && ' . $empty_hidden, 20000, 'The door\'s commit materialized the leaf and hid the widget.');
     $storage->resetCache([$nid]);
+    $staged = $tempstore->get($storage->load($nid));
+    assert($staged instanceof FieldableEntityInterface);
     $this->assertSame(
       $door_value,
-      $tempstore->get($storage->load($nid))->get('field_empty')->value,
+      $staged->get('field_empty')->value,
       'The landed leave committed the valid widget to tempstore through the form transport.',
     );
     // field_empty is the fixture's optional field again.
@@ -1156,8 +1170,10 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $this->assertNotSame('', trim($sample_leaf->getText()), 'The materialized field carries a generated sample value.');
     $this->assertJsCondition($empty_hidden, 20000, 'The filled field hid its widget and withdrew the sample button and verb.');
     $storage->resetCache([$nid]);
+    $staged = $tempstore->get($storage->load($nid));
+    assert($staged instanceof FieldableEntityInterface);
     $this->assertFalse(
-      $tempstore->get($storage->load($nid))->get('field_empty')->isEmpty(),
+      $staged->get('field_empty')->isEmpty(),
       'The sample value is staged in tempstore.',
     );
     $this->assertTrue(
@@ -1217,8 +1233,10 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The emptied media field left the canvas, its edit ended, and the widget stays revealed.',
     );
     $storage->resetCache([$nid]);
+    $staged = $tempstore->get($storage->load($nid));
+    assert($staged instanceof FieldableEntityInterface);
     $this->assertTrue(
-      $tempstore->get($storage->load($nid))->get('field_media')->isEmpty(),
+      $staged->get('field_media')->isEmpty(),
       'The removal is staged in tempstore.',
     );
 
@@ -1618,7 +1636,8 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The subtitle re-rendered with the resumed draft.',
     );
 
-    // ——— The panel refresh from targets: a foreign write to a revealed field. ———
+    // ——— The panel refresh from targets: a foreign write to a revealed
+    // field. ———
     // field_empty is committed empty, so its widget is revealed. A foreign
     // update_element on it (an AI turn's shape) names the field in its
     // targets: the panel refetches the subject form (the client-side
@@ -1833,11 +1852,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'Escape cancelled the presented widget edit with the panel still open.',
     );
 
-    // The pinned header names the subject: the panel's daedalus-ui-panel__header
-    // title is chrome the client subject model writes from the subject
-    // form's data-daedalus-edit-form-title (a node form ships its bundle
-    // label). This anchors the retarget assertions in the form-block leg
-    // below: the flip only means something because the header verifiably
+    // The pinned header names the subject: the panel's
+    // daedalus-ui-panel__header title is chrome the client subject model writes
+    // from the subject form's data-daedalus-edit-form-title (a node form ships
+    // its bundle label). This anchors the retarget assertions in the form-block
+    // leg below: the flip only means something because the header verifiably
     // started on the top-level label.
     $this->assertJsCondition(
       "document.getElementById('daedalus-edit-form-panel-title')?.textContent === 'Page'",
@@ -1883,9 +1902,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     $this->assertJsCondition('window.__pageApplied >= 1', 20000);
     $storage->resetCache([$pid]);
     $page_fresh = $storage->load($pid);
+    $staged = $tempstore->get($page_fresh);
+    assert($staged instanceof FieldableEntityInterface);
     $this->assertSame(
       '/accordion-staged-alias',
-      $tempstore->get($page_fresh)->get('path')->alias,
+      $staged->get('path')->alias,
       'The pane widget committed the alias through the form transport.',
     );
     $this->assertNull(
@@ -2216,7 +2237,8 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
       'The block re-rendered from tempstore with the reference the resumed edit committed.',
     );
 
-    // ——— The Configure dialog on the transport: core's form, the spine's answer. ———
+    // ——— The Configure dialog on the transport: core's form, the spine's
+    // answer. ———
     // daedalus_layout's Configure verb opens core's UpdateBlockForm in the
     // edit-mode dialog. daedalus_edit's alter puts that form on the form
     // transport (LayoutBuilderBlockFormAlter: core's whole-storage submit

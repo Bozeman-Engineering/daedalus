@@ -21,20 +21,18 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the starter package as the blank canvas a site builds off.
  *
- * daedalus_stylish_starter_skin packages the starter design system: the unit as
- * install config (open, its own skin, the module as package), no guide
- * fragment (the suite's bindings are the whole offer), and one skin
- * minting a neutral placeholder token on every scale the suite declares
- * with base-tag defaults that reference tokens only. The class proves
- * the package the way a site meets it: installed and activated, the
- * system ships open and the guide builds clean with the suite's own
- * bindings served unchanged; every property the suite binds resolves
- * to a scale the skin mints with at least one token (the bindings
- * define the minimum skin, with no fallback), and the suite's globals
- * land under the starter with nothing failed (row's gutter reference
- * resolves); and the skin's own defaults validate empty under strict,
- * so a site that builds a law posture off the starter starts from a
- * conforming skin.
+ * `daedalus_stylish_starter_skin` packages the starter design system: the unit
+ * as install config (open, its own skin, the module as package), no guide
+ * fragment (the suite's bindings are the whole offer), and one skin minting a
+ * neutral placeholder token on every scale the suite declares with base-tag
+ * defaults that reference tokens only. The class proves the package the way a
+ * site meets it: installed and activated, the system ships open and the guide
+ * builds clean with the suite's own bindings served unchanged; every property
+ * the suite binds resolves to a scale the skin mints with at least one token
+ * (the bindings define the minimum skin, with no fallback), and the suite's
+ * globals land under the starter with nothing failed (row's gutter reference
+ * resolves); and the skin's own defaults validate empty under strict, so a site
+ * that builds a law posture off the starter starts from a conforming skin.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -61,7 +59,15 @@ class StarterSkinTest extends KernelTestBase {
   /**
    * The properties the suite binds (daedalus_stylish.page_builder.yml).
    */
-  protected const SUITE_BOUND = ['font-family', 'font-size', 'font-weight', 'line-height', 'padding', 'gap', 'border-radius'];
+  protected const SUITE_BOUND = [
+    'font-family',
+    'font-size',
+    'font-weight',
+    'line-height',
+    'padding',
+    'gap',
+    'border-radius',
+  ];
 
   /**
    * {@inheritdoc}
@@ -86,8 +92,14 @@ class StarterSkinTest extends KernelTestBase {
     'daedalus_stylish_layouts',
   ];
 
+  /**
+   * The style guide.
+   */
   protected StyleGuide $styleGuide;
 
+  /**
+   * The style map validator.
+   */
   protected StyleMapValidator $validator;
 
   /**
@@ -152,7 +164,19 @@ class StarterSkinTest extends KernelTestBase {
     catch (StyleGuideException $e) {
       $this->fail('the layered guide builds clean with the starter active: ' . $e->getMessage());
     }
-    $this->assertSame(['color', 'gradient', 'font', 'text', 'weight', 'leading', 'tracking', 'space', 'radius', 'transition', 'layout'], array_keys($definitions['site']['token_scales']), 'the starter declares no scale of its own: the suite\'s eleven are the guide\'s');
+    $this->assertSame([
+      'color',
+      'gradient',
+      'font',
+      'text',
+      'weight',
+      'leading',
+      'tracking',
+      'space',
+      'radius',
+      'transition',
+      'layout',
+    ], array_keys($definitions['site']['token_scales']), 'the starter declares no scale of its own: the suite\'s eleven are the guide\'s');
 
     $served = $this->styleGuide->getConstraintDefaults(self::THEME);
     $this->assertSame(['scale' => 'space', 'allowed' => ['0']], $served['padding'], 'the served padding block is the suite\'s, uncurated');
@@ -224,7 +248,19 @@ class StarterSkinTest extends KernelTestBase {
     $this->assertNotNull($skin);
     $tokens = $skin->tokens();
     $defaults = $skin->defaults();
-    foreach (['base:h1', 'base:h2', 'base:h3', 'base:h4', 'base:h5', 'base:h6', 'base:p', 'base:li', 'base:a', 'base:blockquote', 'base:code'] as $scope) {
+    foreach ([
+      'base:h1',
+      'base:h2',
+      'base:h3',
+      'base:h4',
+      'base:h5',
+      'base:h6',
+      'base:p',
+      'base:li',
+      'base:a',
+      'base:blockquote',
+      'base:code',
+    ] as $scope) {
       $this->assertArrayHasKey($scope, $defaults, "the starter carries a $scope default");
     }
 
@@ -267,7 +303,16 @@ class StarterSkinTest extends KernelTestBase {
     $this->assertSame(['fade_in', 'rise', 'scale_in', 'pulse', 'spin'], array_keys($skin->animations()));
     $roster = $this->container->get('daedalus_blueprint.materials_roster_builder')->build();
     $this->assertSame(['fade_in', 'rise', 'scale_in', 'pulse', 'spin'], array_keys($roster->animations()));
-    foreach (['starter_fade_in', 'starter_rise', 'starter_scale_in', 'starter_lift', 'starter_fade_in_section', 'starter_rise_section', 'starter_scale_in_section', 'starter_lift_section'] as $name) {
+    foreach ([
+      'starter_fade_in',
+      'starter_rise',
+      'starter_scale_in',
+      'starter_lift',
+      'starter_fade_in_section',
+      'starter_rise_section',
+      'starter_scale_in_section',
+      'starter_lift_section',
+    ] as $name) {
       $this->assertTrue($roster->has(MaterialKind::Variant, $name), "the starter ships the $name look");
       $this->assertSame(self::SYSTEM, $roster->get(MaterialKind::Variant, $name)->designSystem);
     }

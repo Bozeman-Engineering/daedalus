@@ -410,6 +410,15 @@ class PageVariantTest extends KernelTestBase {
   }
 
   /**
+   * The first element an XPath query matches.
+   */
+  protected function element(\DOMXPath $xpath, string $query, ?\DOMNode $context = NULL): \DOMElement {
+    $element = $xpath->query($query, $context)->item(0);
+    assert($element instanceof \DOMElement);
+    return $element;
+  }
+
+  /**
    * The frame variant is selected for a framed theme on a front-end route only.
    */
   public function testSelection(): void {
@@ -436,7 +445,9 @@ class PageVariantTest extends KernelTestBase {
   }
 
   /**
-   * The frame renders around an entity route: main, title, messages, header, slot.
+   * The frame renders around an entity route.
+   *
+   * The parts: main, title, messages, header, slot.
    */
   public function testFrameRendersAroundAnEntityRoute(): void {
     $this->createFrame();
@@ -457,12 +468,15 @@ class PageVariantTest extends KernelTestBase {
     $roots = $xpath->query('//div[contains(concat(" ", normalize-space(@class), " "), " daedalus-layout-layout ")]');
     $this->assertSame(1, $roots->length, "The frame's sections render inside one layout root: $html");
     $root = $roots->item(0);
+    assert($root instanceof \DOMElement);
     $this->assertSame('entity:' . $host->uuid(), $root->getAttribute('data-selectable'), "The layout root is the frame document's root.");
     $section = $xpath->query('.//*[@data-selectable="container:' . self::FRAME_SECTION . '"]', $root);
     $this->assertSame(1, $section->length, "The frame's section keeps its identity: $html");
-    $this->assertSame('frame', $section->item(0)->getAttribute('data-layout-builder-section-storage-type'), 'As a root section of the frame storage.');
-    $this->assertSame(self::THEME, $section->item(0)->getAttribute('data-layout-builder-section-storage-id'));
-    $this->assertSame('0', $section->item(0)->getAttribute('data-layout-builder-section-delta'));
+    $section = $section->item(0);
+    assert($section instanceof \DOMElement);
+    $this->assertSame('frame', $section->getAttribute('data-layout-builder-section-storage-type'), 'As a root section of the frame storage.');
+    $this->assertSame(self::THEME, $section->getAttribute('data-layout-builder-section-storage-id'));
+    $this->assertSame('0', $section->getAttribute('data-layout-builder-section-delta'));
 
     $main = $xpath->query('.//main[@role="main"]', $root);
     $this->assertSame(1, $main->length, "The main slot is the page's main landmark: $html");
@@ -682,18 +696,18 @@ class PageVariantTest extends KernelTestBase {
     $xpath = $this->domXpath($html);
     $frame_url = $frame->entity()->toUrl()->toString();
     $this->assertSame('/site-frame/' . self::THEME, $frame_url);
-    $chrome = $xpath->query('//*[@data-layout-builder-block-uuid="' . self::CHROME_BLOCK . '"]')->item(0);
+    $chrome = $this->element($xpath, '//*[@data-layout-builder-block-uuid="' . self::CHROME_BLOCK . '"]');
     $this->assertSame($frame_url, $chrome->getAttribute('data-daedalus-ui-portal-url'), "The frame's block is a portal to the frame canvas: $html");
     $this->assertSame('Stark', $chrome->getAttribute('data-daedalus-ui-portal-label'), 'Labelled by the theme.');
     $this->assertSame('Site frame', $chrome->getAttribute('data-daedalus-ui-portal-type'), 'Typed by what the frame is, the word the chip reads.');
-    $this->assertSame($frame_url, $xpath->query('//*[@data-layout-builder-block-uuid="' . self::TITLE_BLOCK . '"]')->item(0)->getAttribute('data-daedalus-ui-portal-url'));
-    $linked_root = $xpath->query('//*[@data-layout-builder-block-uuid="' . self::LINKED_BLOCK . '"]')->item(0);
+    $this->assertSame($frame_url, $this->element($xpath, '//*[@data-layout-builder-block-uuid="' . self::TITLE_BLOCK . '"]')->getAttribute('data-daedalus-ui-portal-url'));
+    $linked_root = $this->element($xpath, '//*[@data-layout-builder-block-uuid="' . self::LINKED_BLOCK . '"]');
     $this->assertSame($this->blueprint->toUrl()->toString(), $linked_root->getAttribute('data-daedalus-ui-portal-url'), 'The linked header is a portal to the blueprint canvas.');
     $this->assertSame('Header', $linked_root->getAttribute('data-daedalus-ui-portal-label'));
     $this->assertSame('Blueprint', $linked_root->getAttribute('data-daedalus-ui-portal-type'));
     $this->assertSame(0, $xpath->query('//*[@data-layout-builder-block-uuid="' . self::BLUEPRINT_FIELD_BLOCK . '"][@data-daedalus-ui-portal-url]')->length, 'A node inside the linked blueprint wears none: the placement root is the portal.');
     $this->assertSame(0, $xpath->query('//*[@data-layout-builder-block-uuid="' . self::MAIN_SLOT . '"][@data-daedalus-ui-portal-url]')->length, 'The main slot holds the page itself: no portal.');
-    $hero = $xpath->query('//*[@data-layout-builder-block-uuid="' . self::HERO_SLOT . '"]')->item(0);
+    $hero = $this->element($xpath, '//*[@data-layout-builder-block-uuid="' . self::HERO_SLOT . '"]');
     $this->assertSame($frame_url, $hero->getAttribute('data-daedalus-ui-portal-url'), 'A frame slot is the frame\'s door; the page\'s fill inside it is the page\'s (the client sets the portal aside over it).');
     $this->assertSame(0, $xpath->query('//*[@data-layout-builder-block-uuid="' . self::PAGE_HERO_BLOCK . '"][@data-daedalus-ui-portal-url]')->length, 'The page\'s own block in the frame\'s slot wears none.');
 
@@ -717,12 +731,12 @@ class PageVariantTest extends KernelTestBase {
     // The DOM: the portal is the consequence of the content verdict alone.
     $template_url = $this->container->get('daedalus_ui.ui')->getEditingUrl($display)->toString();
     $this->assertStringEndsWith('/display/default/layout', $template_url, 'The template is edited on the manage-display layout route.');
-    $template_block = $xpath->query('//*[@data-layout-builder-block-uuid="' . self::TEMPLATE_BLOCK . '"]')->item(0);
+    $template_block = $this->element($xpath, '//*[@data-layout-builder-block-uuid="' . self::TEMPLATE_BLOCK . '"]');
     $this->assertSame($template_url, $template_block->getAttribute('data-daedalus-ui-portal-url'), "The template's own block is a portal to the template canvas: $html");
     $this->assertSame((string) $display->label(), $template_block->getAttribute('data-daedalus-ui-portal-label'));
     $this->assertSame('Template', $template_block->getAttribute('data-daedalus-ui-portal-type'));
     $field_block = $xpath->query('//*[@data-layout-builder-block-uuid="' . self::TEMPLATE_FIELD_BLOCK . '"]')->item(0);
-    $this->assertNotNull($field_block, "The template's field block renders on the page: $html");
+    $this->assertInstanceOf(\DOMElement::class, $field_block, "The template's field block renders on the page: $html");
     $this->assertFalse($field_block->hasAttribute('data-daedalus-ui-portal-url'), "The page's own field, presented by the template's block: its content is the page's to edit, so no portal: $html");
     $this->assertFalse($field_block->hasAttribute('data-daedalus-ui-portal-label'));
 
@@ -743,8 +757,8 @@ class PageVariantTest extends KernelTestBase {
     $this->assertNull($this->container->get('daedalus_ui.ui')->deriveHostFromRoute(), 'No route host.');
     [$html] = $this->renderVariant();
     $xpath = $this->domXpath($html);
-    $this->assertSame($frame_url, $xpath->query('//*[@data-layout-builder-block-uuid="' . self::CHROME_BLOCK . '"]')->item(0)->getAttribute('data-daedalus-ui-portal-url'), "The frame's door on a host-less route: $html");
-    $this->assertSame($this->blueprint->toUrl()->toString(), $xpath->query('//*[@data-layout-builder-block-uuid="' . self::LINKED_BLOCK . '"]')->item(0)->getAttribute('data-daedalus-ui-portal-url'));
+    $this->assertSame($frame_url, $this->element($xpath, '//*[@data-layout-builder-block-uuid="' . self::CHROME_BLOCK . '"]')->getAttribute('data-daedalus-ui-portal-url'), "The frame's door on a host-less route: $html");
+    $this->assertSame($this->blueprint->toUrl()->toString(), $this->element($xpath, '//*[@data-layout-builder-block-uuid="' . self::LINKED_BLOCK . '"]')->getAttribute('data-daedalus-ui-portal-url'));
   }
 
   /**
@@ -777,7 +791,7 @@ class PageVariantTest extends KernelTestBase {
     // The DOM, as the admin.
     $this->setCurrentRoute('entity.entity_test.canonical', ['entity_test' => $empty], 'edit');
     [$html] = $this->renderVariant(['entity' => EntityContext::fromEntity($empty)]);
-    $hero = $this->domXpath($html)->query('//*[@data-layout-builder-block-uuid="' . self::HERO_SLOT . '"]')->item(0);
+    $hero = $this->element($this->domXpath($html), '//*[@data-layout-builder-block-uuid="' . self::HERO_SLOT . '"]');
     $this->assertSame('header', $hero->getAttribute(SlotBlock::CLAIM_ATTRIBUTE), "The door is claimable: $html");
     $this->assertSame('hero', $hero->getAttribute(SlotBlock::DOOR_ATTRIBUTE));
     $this->assertSame($this->blueprint->toUrl()->toString(), $hero->getAttribute('data-daedalus-ui-portal-url'), 'The portal is the blueprint the door shows.');
@@ -785,7 +799,7 @@ class PageVariantTest extends KernelTestBase {
     $this->assertSame('Blueprint', $hero->getAttribute('data-daedalus-ui-portal-type'), 'The door shows a blueprint by reference: the chip reads "Header · blueprint".');
     $this->setCurrentRoute('entity.entity_test.canonical', ['entity_test' => $filled], 'edit');
     [$html] = $this->renderVariant(['entity' => EntityContext::fromEntity($filled)]);
-    $hero = $this->domXpath($html)->query('//*[@data-layout-builder-block-uuid="' . self::HERO_SLOT . '"]')->item(0);
+    $hero = $this->element($this->domXpath($html), '//*[@data-layout-builder-block-uuid="' . self::HERO_SLOT . '"]');
     $this->assertFalse($hero->hasAttribute(SlotBlock::CLAIM_ATTRIBUTE), "A filled slot offers no claim: $html");
     $this->assertSame($frame->entity()->toUrl()->toString(), $hero->getAttribute('data-daedalus-ui-portal-url'));
     $this->assertSame('Site frame', $hero->getAttribute('data-daedalus-ui-portal-type'), 'A filled door is the frame\'s node: the frame\'s kind.');
@@ -800,7 +814,7 @@ class PageVariantTest extends KernelTestBase {
     ]);
     $this->setCurrentRoute('entity.entity_test.canonical', ['entity_test' => $empty], 'edit');
     [$html] = $this->renderVariant(['entity' => EntityContext::fromEntity($empty)]);
-    $hero = $this->domXpath($html)->query('//*[@data-layout-builder-block-uuid="' . self::HERO_SLOT . '"]')->item(0);
+    $hero = $this->element($this->domXpath($html), '//*[@data-layout-builder-block-uuid="' . self::HERO_SLOT . '"]');
     $this->assertSame('header', $hero->getAttribute(SlotBlock::CLAIM_ATTRIBUTE), "The editor may claim: $html");
     $this->assertFalse($hero->hasAttribute('data-daedalus-ui-portal-url'), 'No door to the blueprint for them.');
     $this->assertFalse($hero->hasAttribute('data-daedalus-ui-portal-type'), 'The kind rides the portal alone.');
@@ -810,7 +824,7 @@ class PageVariantTest extends KernelTestBase {
     $this->setUpCurrentUser([], [], TRUE);
     $this->setCurrentRoute('view.frontpage.page_1', [], 'edit');
     [$html] = $this->renderVariant();
-    $hero = $this->domXpath($html)->query('//*[@data-layout-builder-block-uuid="' . self::HERO_SLOT . '"]')->item(0);
+    $hero = $this->element($this->domXpath($html), '//*[@data-layout-builder-block-uuid="' . self::HERO_SLOT . '"]');
     $this->assertFalse($hero->hasAttribute(SlotBlock::CLAIM_ATTRIBUTE), "No claim on a host-less route: $html");
     $this->assertSame($this->blueprint->toUrl()->toString(), $hero->getAttribute('data-daedalus-ui-portal-url'), 'The default still shows, with its portal.');
   }
@@ -885,10 +899,11 @@ class PageVariantTest extends KernelTestBase {
     $hero = $xpath->query('//*[@data-layout-builder-block-uuid="' . self::HERO_SLOT . '"]');
     $this->assertSame(1, $hero->length, "One hero door: $html");
     $hero = $hero->item(0);
+    assert($hero instanceof \DOMElement);
     $this->assertSame(1, $xpath->query('//main[@role="main"]')->length, "One main landmark on the page: $html");
     $this->assertSame(1, $xpath->query('.//main[@role="main"]', $hero)->length, 'The door prints it.');
     $this->assertSame(1, $xpath->query('.//*[@data-main-entity="true"]', $hero)->length, "The canvas root is inside the door: $html");
-    $this->assertSame($this->blueprint->uuid(), $xpath->query('.//*[@data-main-entity="true"]', $hero)->item(0)->getAttribute('data-entity-uuid'), 'The blueprint is the canvas.');
+    $this->assertSame($this->blueprint->uuid(), $this->element($xpath, './/*[@data-main-entity="true"]', $hero)->getAttribute('data-entity-uuid'), 'The blueprint is the canvas.');
     $this->assertSame(1, $xpath->query('//*[@data-selectable="container:' . self::BLUEPRINT_SECTION . '"]')->length, "The header's section renders once, as the canvas: $html");
     $this->assertSame(1, $xpath->query('.//*[@data-selectable="container:' . self::BLUEPRINT_SECTION . '"]', $hero)->length, 'Inside the door.');
     $main = $xpath->query('//*[@data-layout-builder-block-uuid="' . self::MAIN_SLOT . '"]')->item(0);
@@ -896,7 +911,7 @@ class PageVariantTest extends KernelTestBase {
     $this->assertSame(0, $xpath->query('.//main', $main)->length, 'With no landmark of its own.');
     $this->assertFalse($hero->hasAttribute('data-daedalus-ui-portal-url'), "The door hosting the canvas wears no portal: $html");
     $frame_url = $frame->entity()->toUrl()->toString();
-    $this->assertSame($frame_url, $xpath->query('//*[@data-layout-builder-block-uuid="' . self::CHROME_BLOCK . '"]')->item(0)->getAttribute('data-daedalus-ui-portal-url'), "The frame's own block is a portal to the frame canvas from the blueprint canvas: $html");
+    $this->assertSame($frame_url, $this->element($xpath, '//*[@data-layout-builder-block-uuid="' . self::CHROME_BLOCK . '"]')->getAttribute('data-daedalus-ui-portal-url'), "The frame's own block is a portal to the frame canvas from the blueprint canvas: $html");
     $this->assertStringContainsString('Chrome sentinel', $html);
   }
 
@@ -957,21 +972,26 @@ class PageVariantTest extends KernelTestBase {
       $wrappers = $xpath->query('//*[@data-main-entity="true"]');
       $this->assertSame(1, $wrappers->length, "The $road canvas has one main-entity root: $html");
       $wrapper = $wrappers->item(0);
+      assert($wrapper instanceof \DOMElement);
       $this->assertSame('daedalus_frame::' . self::THEME . '::daedalus_frame', $wrapper->getAttribute('data-daedalus-ui-entity-wrapper'));
       $this->assertSame('entity:' . $frame->uuid(), $wrapper->getAttribute('data-selectable'));
       $this->assertSame('default', $wrapper->getAttribute('data-daedalus-ui-view-mode'));
       $this->assertSame(1, $xpath->query('//*[@id="layout-builder"][ancestor::*[@data-main-entity]]')->length, "The $road canvas renders the layout root inside the root wrapper: $html");
       $section = $xpath->query('//*[@data-selectable="container:' . self::FRAME_SECTION . '"]');
       $this->assertSame(1, $section->length, "The frame's section renders on the $road canvas: $html");
-      $this->assertSame('frame', $section->item(0)->getAttribute('data-layout-builder-section-storage-type'));
-      $this->assertSame(self::THEME, $section->item(0)->getAttribute('data-layout-builder-section-storage-id'));
+      $section = $section->item(0);
+      assert($section instanceof \DOMElement);
+      $this->assertSame('frame', $section->getAttribute('data-layout-builder-section-storage-type'));
+      $this->assertSame(self::THEME, $section->getAttribute('data-layout-builder-section-storage-id'));
       $main = $xpath->query('//*[@data-layout-builder-block-uuid="' . self::MAIN_SLOT . '"]//main[@role="main"]');
       $this->assertSame(1, $main->length, "The main slot prints the main landmark on the $road canvas: $html");
       $this->assertStringContainsString("Each page's content shows here.", $main->item(0)->textContent, "With the stand-in for the route's output.");
       $this->assertStringContainsString('Chrome sentinel', $html);
       $linked = $xpath->query('//*[@data-layout-builder-block-uuid="' . self::LINKED_BLOCK . '"]');
       $this->assertSame(1, $linked->length, "The linked header renders on the $road canvas: $html");
-      $this->assertSame($this->blueprint->toUrl()->toString(), $linked->item(0)->getAttribute('data-daedalus-ui-portal-url'), 'The linked header is a portal to the blueprint canvas from the frame canvas too.');
+      $linked = $linked->item(0);
+      assert($linked instanceof \DOMElement);
+      $this->assertSame($this->blueprint->toUrl()->toString(), $linked->getAttribute('data-daedalus-ui-portal-url'), 'The linked header is a portal to the blueprint canvas from the frame canvas too.');
       $this->assertSame(0, $xpath->query('//*[@data-layout-builder-block-uuid="' . self::CHROME_BLOCK . '"][@data-daedalus-ui-portal-url]')->length, "The frame's own block is the canvas's own: no portal on the $road canvas.");
       $this->assertStringNotContainsString('Page sentinel', $html, "The frame renders with no subject on its canvas: a field block in the header shows nothing.");
       $envelope = json_decode($build['#attached']['drupalSettings']['daedalusUi']['blueprint'] ?? 'null', TRUE);

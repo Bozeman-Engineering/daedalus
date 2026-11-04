@@ -32,9 +32,9 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
  *   section into a top-level row and wrapping a row into a container both
  *   preserve the section's identity and content.
  *
- * Runs the real daedalus_layout stack: nested section lists only resolve through
- * NestedAwareSectionStorage, and sections are only addressable by UUID (an
- * daedalus_layout third-party setting) when daedalus_layout is installed.
+ * Runs the real daedalus_layout stack: nested section lists only resolve
+ * through NestedAwareSectionStorage, and sections are only addressable by UUID
+ * (an daedalus_layout third-party setting) when daedalus_layout is installed.
  */
 #[RunTestsInSeparateProcesses]
 #[CoversClass(BlueprintOperations::class)]
@@ -94,10 +94,10 @@ class BlueprintOperationsSectionConstraintsTest extends BlueprintKernelTestBase 
   /**
    * Creates the fixture: an entity holding a nested-section container.
    *
-   * Structure: root section (daedalus_layout UUID) > container component (uuid ==
-   * embedded section uuid) > embedded section (daedalus_layout UUID) > basic inline
-   * block, so the nested section is non-trivial and value moves can prove
-   * content rides along.
+   * Structure: root section (daedalus_layout UUID) > container component (uuid
+   * == embedded section uuid) > embedded section (daedalus_layout UUID) > basic
+   * inline block, so the nested section is non-trivial and value moves can
+   * prove content rides along.
    *
    * @return \Drupal\Core\Entity\FieldableEntityInterface
    *   The saved root entity.

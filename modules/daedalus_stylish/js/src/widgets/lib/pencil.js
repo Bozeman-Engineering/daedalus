@@ -9,6 +9,22 @@ import { h } from 'preact';
  * call: a DimensionField row hands it in as the field's `tools`, between
  * the scrub label and the value column, so the field's grip keeps the
  * row's leading slot.
+ *
+ * @param {object} props
+ *   The toggle's props.
+ * @param {boolean} props.open
+ *   Whether the reveal is open (the button's pressed state).
+ * @param {Function} props.onToggle
+ *   The click handler: flips the reveal.
+ * @param {string} props.label
+ *   The accessible name of the toggle (aria-label).
+ * @param {?string} [props.openTitle]
+ *   The title while open; null for the precise-editor wording.
+ * @param {?string} [props.closedTitle]
+ *   The title while closed; null for the precise-editor wording.
+ *
+ * @return {object}
+ *   The button element.
  */
 export const PencilToggle = ({
   open,

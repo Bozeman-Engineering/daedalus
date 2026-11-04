@@ -116,7 +116,7 @@ class StylePermissionTest extends KernelTestBase {
   }
 
   /**
-   * A style write is refused without the permission and lands with it or the umbrella.
+   * A style write refuses without the permission, lands with it or umbrella.
    */
   public function testStyleWriteAsksThePermission(): void {
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');

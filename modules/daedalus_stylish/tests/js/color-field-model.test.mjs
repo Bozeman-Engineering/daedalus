@@ -124,7 +124,7 @@ test('colorFace: the five kinds over an open space', () => {
   assert.equal(outside.spelling, 'var(--color-accent)');
 });
 
-test('the winner face: the field faces whatever value the row hands it, a variant\'s or the skin\'s colour painting the well exactly as an own one; only nothing is unset', () => {
+test('the winner face: the field faces whatever value the row hands it, a variant\'s or the skin\'s color painting the well exactly as an own one; only nothing is unset', () => {
   // The advanced row hands the field the stack's WINNER (style-stack.js
   // stackAt), whichever layer delivers it; the face has no inherited or
   // ghost kind, so a worn variant's literal paints the well and a skin's

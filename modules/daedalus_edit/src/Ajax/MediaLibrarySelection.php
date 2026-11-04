@@ -7,9 +7,9 @@ use Drupal\Core\Ajax\CommandInterface;
 /**
  * Delivers a media library selection to the current blueprint edit.
  *
- * The client-side handler routes the selected ids to the editor of the
- * current edit (Drupal.Daedalus.Edit.CurrentlyEditingElement), which commits the
- * new target_id through the blueprint mutation spine.
+ * The client-side handler routes the selected ids to the editor of the current
+ * edit (Drupal.Daedalus.Edit.CurrentlyEditingElement), which commits the new
+ * target_id through the blueprint mutation spine.
  *
  * @see \Drupal\daedalus_edit\DaedalusEditMediaLibraryOpener::getSelectionResponse()
  * @see js/daedalus_edit/media-library-selection.js

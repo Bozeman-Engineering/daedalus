@@ -70,11 +70,14 @@ export const seedGradient = (guide, materials, constraints = null) => {
  * resolution here).
  *
  * @param {Array<{color: string, position: ?string}>} stops
+ *   The gradient's stops, track order.
  * @param {string[]} paints
  *   Each stop's face paint, parallel to stops.
  * @param {number} percent
+ *   The new stop's track position, 0 to 100.
  *
  * @return {string}
+ *   The sampled color, in a neighbor's spelling or as a mixed hex.
  */
 export const sampleColor = (stops, paints, percent) => {
   const resolved = trackPositions(stops);
@@ -111,11 +114,14 @@ export const sampleColor = (stops, paints, percent) => {
  * color as the stop's shape).
  *
  * @param {Array<{color: string, position: ?string}>} stops
+ *   The gradient's stops, track order.
  * @param {string[]} paints
  *   Each stop's face paint, parallel to stops (sampleColor's input).
  * @param {number} percent
+ *   The click's track position, 0 to 100.
  *
  * @return {{stops: Array, selected: number}}
+ *   The stops with the new one inserted, and its index.
  */
 export const addStop = (stops, paints, percent) =>
   insertStop(
@@ -129,12 +135,15 @@ export const addStop = (stops, paints, percent) =>
  * needs two); otherwise the track model's selection survival.
  *
  * @param {Array} stops
+ *   The gradient's stops, track order.
  * @param {number} index
  *   The removed stop.
  * @param {number} selected
  *   The current selection.
  *
  * @return {?{stops: Array, selected: number}}
+ *   The remaining stops and the surviving selection, or null when the
+ *   removal would leave fewer than two.
  */
 export const removeStop = (stops, index, selected) =>
   removeTrackStop(stops, index, selected, 2);
@@ -145,9 +154,12 @@ export const removeStop = (stops, index, selected) =>
  * angles speak).
  *
  * @param {number} dx
+ *   The pointer's horizontal offset from the knob's center, in pixels.
  * @param {number} dy
+ *   The pointer's vertical offset, positive downward.
  *
  * @return {number}
+ *   The angle in degrees, 0 to 359.
  */
 export const knobAngle = (dx, dy) =>
   Math.round(((Math.atan2(dy, dx) * 180) / Math.PI + 450) % 360) % 360;
@@ -161,6 +173,8 @@ export const knobAngle = (dx, dy) =>
  *
  * @param {object} guide
  *   The style guide payload.
+ * @param {object} materials
+ *   The materials roster (the seed's stop colors come from it).
  * @param {?object} [constraints]
  *   The bound property's guide constraints.
  *

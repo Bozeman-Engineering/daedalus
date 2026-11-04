@@ -329,25 +329,24 @@ declare(strict_types=1);
  *
  * The other direction has one command for a whole design system, in
  * daedalus_blueprint: `drush daedalus-blueprint:design-system:ship SYSTEM
- * [MODULE]` creates the package module when absent, lands the unit as
- * install config, then runs every service tagged
- * `daedalus_blueprint.package_shipper` (PackageShipperInterface:
- * packageDependencies(), planPackage(), shipPackage() over one
- * ShipReport) in priority order. This module's lane is the `Ship`
- * service (`daedalus_stylish.ship`) at priority 0, after the blueprint
- * lane (daedalus_blueprint_library's BlueprintShipper at priority 10
- * writes the system's saved blueprints as blueprint files and their
- * owned variants through VariantShipper under the `blueprint:` owner key,
- * which VariantImporter::OWNER_KEY carries back onto the variant's
- * `blueprint` / `blueprint_file` fields without knowing its meaning): it
- * rebuilds every per-id file of the module from the site's
- * entities through each kind's ShippedDefinitionsShipper (SkinShipper,
- * VariantShipper) and adopts every member of the system nothing ships
- * yet, a skin's font files copied under assets/fonts/ before its file
- * is written (the shipper's change check widens to the bytes). An entry of the hand-authored single file
- * the site edited is reported `modified` and never written. A module
- * wanting a lane of its own for another kind registers a shipper with
- * the same tag; daedalus_stylish exposes no hook for it.
+ * [MODULE]` creates the package module when absent, lands the unit as install
+ * config, then runs every service tagged `daedalus_blueprint.package_shipper`
+ * (PackageShipperInterface: packageDependencies(), planPackage(), shipPackage()
+ * over one ShipReport) in priority order. This module's lane is the `Ship`
+ * service (`daedalus_stylish.ship`) at priority 0, after the blueprint lane
+ * (daedalus_blueprint_library's BlueprintShipper at priority 10 writes the
+ * system's saved blueprints as blueprint files and their owned variants through
+ * VariantShipper under the `blueprint:` owner key, which
+ * VariantImporter::OWNER_KEY carries back onto the variant's `blueprint` /
+ * `blueprint_file` fields without knowing its meaning): it rebuilds every
+ * per-id file of the module from the site's entities through each kind's
+ * ShippedDefinitionsShipper (SkinShipper, VariantShipper) and adopts every
+ * member of the system nothing ships yet, a skin's font files copied under
+ * assets/fonts/ before its file is written (the shipper's change check widens
+ * to the bytes). An entry of the hand-authored single file the site edited is
+ * reported `modified` and never written. A module wanting a lane of its own for
+ * another kind registers a shipper with the same tag; daedalus_stylish exposes
+ * no hook for it.
  */
 
 /**
@@ -409,10 +408,10 @@ declare(strict_types=1);
 /**
  * Axis qualifiers: an axis carries its meaning and the properties it owns.
  *
- * A variant_axes entry may qualify its axis with four keys,
- * {axis: {depth: root, label: Layout, description: ..., owns: [...]}}
- * (\Drupal\daedalus_stylish\StyleGuide documents the grammar and validates it at
- * guide build):
+ * A variant_axes entry may qualify its axis with four keys, {axis: {depth:
+ * root, label: Layout, description: ..., owns: [...]}}
+ * (\Drupal\daedalus_stylish\StyleGuide documents the grammar and validates it
+ * at guide build):
  * - description: the axis's meaning written for a designer, human or
  *   model: the sequence rules, the cardinalities and the "when" no single
  *   value can say ("Alternate tint and plain sections; Accent once, for the

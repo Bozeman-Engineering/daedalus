@@ -19,6 +19,7 @@ import { setPickerArmed } from '../store/slices/selection-slice';
  * Whether the picker is armed.
  *
  * @return {boolean}
+ *   The selection slice's pickerArmed flag.
  */
 export const isPickerArmed = () => store.getState().selection.pickerArmed;
 

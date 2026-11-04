@@ -72,7 +72,15 @@ import { addressKey, withheldAt } from './write-address.js';
  * the leader's one op queue.
  */
 
-/** The uuid mint for structural ops (add_section honors client uuids). */
+/**
+ * The uuid mint for structural ops (add_section honors client uuids).
+ *
+ * @param {object} source
+ *   The state source (leader or satellite).
+ *
+ * @return {() => string}
+ *   A mint: the source's generateUuid when it has one, else the platform's.
+ */
 const mintWith = (source) => () =>
   source.generateUuid ? source.generateUuid() : crypto.randomUUID();
 
@@ -82,6 +90,21 @@ const mintWith = (source) => () =>
  * pair's combined weight. Shared verbatim by the Layout and Column
  * sections (the Column section highlights the selected child's segment) —
  * one component, one write path.
+ *
+ * @param {object} props
+ *   The strip's props.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {object} props.styleMap
+ *   The style map.
+ * @param {string[]} props.childKeys
+ *   The container's children's keys, in order.
+ * @param {number} props.highlight
+ *   The index of the segment to highlight, -1 for none.
+ * @param {string} props.condition
+ *   The editing compound.
+ * @param {object} props.conditions
+ *   The condition table (guide.conditions).
  */
 const ProportionStrip = ({
   source,
@@ -206,6 +229,21 @@ const ProportionStrip = ({
 /**
  * The generated preset chips for the current count: each chip draws its
  * recipe as a mini strip, higher-count chips mint the missing columns.
+ *
+ * @param {object} props
+ *   The chips' props.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {object} props.styleMap
+ *   The style map.
+ * @param {string} props.containerUuid
+ *   The container's section uuid (where minted columns land).
+ * @param {string[]} props.childKeys
+ *   The container's children's keys, in order.
+ * @param {string} props.condition
+ *   The editing compound.
+ * @param {object} props.conditions
+ *   The condition table (guide.conditions).
  */
 const PresetChips = ({
   source,
@@ -285,6 +323,24 @@ const PresetChips = ({
  * withheldAt, the one the pipeline (controls.js `withheld`) and the
  * Advanced roster use, so a withheld row renders disabled with the same
  * reason as its title. Empty without an address.
+ *
+ * @param {object} source
+ *   The state source (leader or satellite).
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {object} styleMap
+ *   The style map.
+ * @param {string} selected
+ *   The container's selectable key.
+ * @param {Array<object>} variants
+ *   The store's variant records.
+ * @param {?object} writeAddress
+ *   The panel's write address, or null for the container root.
+ * @param {string[]} properties
+ *   The properties the rows write, for the address's grant judgement.
+ *
+ * @return {{blockTypes: object, sectionLayouts: object, stack: object, withheld: object}}
+ *   The type rosters, the root's layer stack and the withheld reasons.
  */
 const rootFacts = (
   source,
@@ -368,6 +424,37 @@ const rootFacts = (
  * address an axis the address's landing does not grant renders disabled
  * with the roster's reason (rootFacts' `withheld`), the vocabulary still
  * the container's.
+ *
+ * @param {object} props
+ *   The rows' props.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {string} props.selected
+ *   The container's selectable key (the stack the rows read).
+ * @param {string} props.target
+ *   The write target's key (the root, or the address's rule).
+ * @param {?object} props.writeAddress
+ *   The panel's write address, or null.
+ * @param {object} props.styleMap
+ *   The style map.
+ * @param {object} props.state
+ *   The arrangement state (arrangementState()).
+ * @param {Array<object>} props.variants
+ *   The store's variant records.
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials (tokens) the row's chips may name.
+ * @param {string} props.condition
+ *   The editing compound.
+ * @param {object} props.conditions
+ *   The condition table (guide.conditions).
+ * @param {?Function} props.onPickCondition
+ *   Moves the editing compound (the row menu's "edit at" entry).
+ * @param {?Function} props.onOpenDocument
+ *   Opens a variant's document at a condition (the row menu's doorway).
+ * @param {object} props.law
+ *   The law (what the guide grants and forbids), for the row's hints.
  */
 const AlignmentRows = ({
   source,
@@ -408,13 +495,7 @@ const AlignmentRows = ({
           sectionLayouts,
         );
         const commit = (value) => {
-          const operations = alignOps(
-            styleMap,
-            target,
-            axis,
-            value,
-            condition,
-          );
+          const operations = alignOps(styleMap, target, axis, value, condition);
           return operations.length
             ? source.commitBatch({
                 operations,
@@ -504,6 +585,35 @@ const AlignmentRows = ({
  * address whose landing does not grant gap the row renders disabled
  * with the roster's reason (rootFacts' `withheld`), the vocabulary
  * still the container's.
+ *
+ * @param {object} props
+ *   The row's props.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {string} props.selected
+ *   The container's selectable key (the stack the row reads).
+ * @param {string} props.target
+ *   The write target's key (the root, or the address's rule).
+ * @param {?object} props.writeAddress
+ *   The panel's write address, or null.
+ * @param {object} props.styleMap
+ *   The style map.
+ * @param {Array<object>} props.variants
+ *   The store's variant records.
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials (tokens) the row's chips may name.
+ * @param {string} props.condition
+ *   The editing compound.
+ * @param {object} props.conditions
+ *   The condition table (guide.conditions).
+ * @param {?Function} props.onPickCondition
+ *   Moves the editing compound (the row menu's "edit at" entry).
+ * @param {?Function} props.onOpenDocument
+ *   Opens a variant's document at a condition (the row menu's doorway).
+ * @param {object} props.law
+ *   The law (what the guide grants and forbids), for the row's hints.
  */
 const GapRow = ({
   source,
@@ -608,6 +718,11 @@ export const LAYOUT_SECTION_CLAIMS = [CONTAINER_LAYOUT_AXIS];
  * it to BasicControls as the Layout group's host) answers exactly as
  * the section itself does.
  *
+ * @param {object} source
+ *   The state source (leader or satellite).
+ * @param {string} selected
+ *   The selection's key.
+ *
  * @return {?{parsed: object, children: Array<object>}}
  *   The parsed container key and its child entries, or null when the
  *   section does not apply.
@@ -657,6 +772,33 @@ export const layoutSectionTarget = (source, selected) => {
  * under an address and judge the GRANT at the address (rootFacts'
  * `withheld`, the roster's reason): a row the address's landing does not
  * grant is disabled, never offered for the server to refuse.
+ *
+ * @param {object} props
+ *   The section's props.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials (tokens) the rows' chips may name.
+ * @param {string} props.selected
+ *   The selection's key (the container the structural gestures act on).
+ * @param {object} props.styleMap
+ *   The style map.
+ * @param {Array<object>} props.variants
+ *   The store's variant records.
+ * @param {string} props.condition
+ *   The editing compound ('default' when unposed).
+ * @param {?object} props.writeAddress
+ *   The panel's write address (an ancestor rule), or null for the root.
+ * @param {?Function} props.onOpenDocument
+ *   Opens a variant's document at a condition, or null when unavailable.
+ * @param {object} props.law
+ *   The law (what the guide grants and forbids), for the rows' hints.
+ * @param {?Function} props.onPickCondition
+ *   Moves the editing compound (the row menu's "edit at" entry).
+ * @param {?object} props.children
+ *   The Layout group's bound widgets, rendered after the structural rows.
  */
 export const LayoutSection = ({
   source,
@@ -931,6 +1073,21 @@ export const LayoutSection = ({
  * here either) and not in Custom. The strip is the parent's, this
  * child's segment highlighted, and drags commit the exact same writes
  * the parent's own strip fires, at the same compound.
+ *
+ * @param {object} props
+ *   The section's props.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {string} props.selected
+ *   The selection's key (a container or block).
+ * @param {object} props.styleMap
+ *   The style map.
+ * @param {Array<object>} props.variants
+ *   The store's variant records.
+ * @param {string} props.condition
+ *   The editing compound ('default' when unposed).
  */
 export const ColumnSection = ({
   source,

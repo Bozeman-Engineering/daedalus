@@ -19,6 +19,7 @@ use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -279,7 +280,11 @@ class DocumentInstantiatorTest extends BlueprintKernelTestBase {
     $this->assertSame(['nodes.children[0].view_mode' => 'view_mode is a view mode id.'], self::errorsByPath($expansion->errors));
 
     // The configuration is a map, and a key is named once.
-    $expansion = $this->instantiator->expand($host, $container(['block_type' => 'yaml_test_block', 'configuration' => ['a']]), $location);
+    $expansion = $this->instantiator->expand(
+      $host,
+      $container(['block_type' => 'yaml_test_block', 'configuration' => ['a']]),
+      $location,
+    );
     $this->assertSame([
       'nodes.children[0].configuration' => 'configuration is a map of the block type\'s managed keys to values.',
     ], self::errorsByPath($expansion->errors));
@@ -476,7 +481,7 @@ class DocumentInstantiatorTest extends BlueprintKernelTestBase {
     $copy_block = reset($copy_block)->get('configuration');
     $this->assertSame('ribbon', $copy_block['yaml_setting']);
     $this->assertSame('visible', $copy_block['label_display']);
-    $this->assertSame(array_values($source_host->styleMap()), array_values($copy_host->styleMap()), 'The styles travelled, re-keyed.');
+    $this->assertSame(array_values($source_host->styleMap()), array_values($copy_host->styleMap()), 'The styles traveled, re-keyed.');
     $this->assertNotSame(array_keys($source_host->styleMap()), array_keys($copy_host->styleMap()));
   }
 
@@ -526,7 +531,7 @@ class DocumentInstantiatorTest extends BlueprintKernelTestBase {
    * the destination's root exactly as it lands a keyed source's; a bare
    * key naming no field is a grammar error at its own coordinate.
    */
-  public function testDocumentCopyReadsAFilesBareRootKeys(): void {
+  public function testDocumentCopyReadsFileBareRootKeys(): void {
     $entity = $this->createTestEntity(['name' => 'A shipped start']);
     $page = $this->host($entity);
     $page->declineSeed();
@@ -649,7 +654,9 @@ class DocumentInstantiatorTest extends BlueprintKernelTestBase {
    *   The sections, the blank marker included (the host's reads hide it).
    */
   protected static function rawSections(FieldableEntityInterface $entity): array {
-    return $entity->get(OverridesSectionStorage::FIELD_NAME)->getSections();
+    $list = $entity->get(OverridesSectionStorage::FIELD_NAME);
+    assert($list instanceof SectionListInterface);
+    return $list->getSections();
   }
 
   /**
@@ -870,7 +877,14 @@ class DocumentInstantiatorTest extends BlueprintKernelTestBase {
             'field' => 'name',
             'label' => 'The name',
             'label_rendered' => TRUE,
-            'configuration' => ['formatter' => ['type' => 'string', 'label' => 'inline', 'settings' => ['link_to_entity' => FALSE], 'third_party_settings' => []]],
+            'configuration' => [
+              'formatter' => [
+                'type' => 'string',
+                'label' => 'inline',
+                'settings' => ['link_to_entity' => FALSE],
+                'third_party_settings' => [],
+              ],
+            ],
           ],
         ],
       ],
@@ -924,7 +938,11 @@ class DocumentInstantiatorTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString('field: "name"', $expansion->errors[0]->getHint());
 
     // One identity per node.
-    $expansion = $this->instantiator->expand($source_host, $container(['field' => 'name', 'plugin_id' => 'system_powered_by_block']), $location);
+    $expansion = $this->instantiator->expand(
+      $source_host,
+      $container(['field' => 'name', 'plugin_id' => 'system_powered_by_block']),
+      $location,
+    );
     $this->assertSame(['nodes.children[0]' => 'A block node names block_type (an inline block), plugin_id (a plugin block) or field (one of the page\'s fields), not plugin_id and field.'], self::errorsByPath($expansion->errors));
     $expansion = $this->instantiator->expand($source_host, $container(['field' => '']), $location);
     $this->assertSame(['nodes.children[0].field' => 'field is a field name of the page.'], self::errorsByPath($expansion->errors));

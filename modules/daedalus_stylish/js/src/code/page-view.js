@@ -196,6 +196,47 @@ const scopeWords = (name) => ({
  * Everything flows through the state source, so the satellite renders this
  * view with full parity: the node tree, uuid tables, and root uuid ride
  * the state broadcast, and edits/gestures post back as intents.
+ *
+ * @param {object} props
+ *   The view's props.
+ * @param {object} props.source
+ *   The state source (the node tree, uuid tables, document, selection
+ *   and hover seams, intents).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials roster (tokens, animations) the islands complete from.
+ * @param {?string} props.selected
+ *   The selected element's key, or null.
+ * @param {?string} props.targetSelector
+ *   The styling target's selector under the selected element, or null.
+ * @param {?object} props.address
+ *   The inspector's write address ({key, selector}), or null.
+ * @param {object} props.styleMap
+ *   The style map (mirror view).
+ * @param {Array<object>} props.variants
+ *   The variant library.
+ * @param {string} props.scope
+ *   The code scope: 'element', 'subtree' or 'page' (code-scope.js).
+ * @param {?Function} props.onScope
+ *   Writes a picked scope to the scope store; null while read-only.
+ * @param {?object} props.empty
+ *   The inspector's shared "select an element" empty state, rendered
+ *   in the body when an anchored scope has no selection.
+ * @param {string} props.posed
+ *   The posed compound ('default' unposed).
+ * @param {?Function} props.onPose
+ *   Poses a compound (the ghost island's gesture), or null.
+ * @param {?Function} props.onOpenDocument
+ *   Opens a variant's document in the Materials place, or null.
+ * @param {object} props.law
+ *   The law gate ({canView}): whether the Law tab may open from a line.
+ * @param {?Element} props.head
+ *   The inspector's pinned head slot the showing row portals into; null
+ *   before the inspector's mount effect lifts the node into state.
+ *
+ * @return {object}
+ *   The rendered tree with its showing row.
  */
 export const PageCodeView = ({
   source,
@@ -562,7 +603,10 @@ export const PageCodeView = ({
               ></span>
             </button>
           ) : (
-            <span className="daedalus-ui-outline__chevron" aria-hidden="true"></span>
+            <span
+              className="daedalus-ui-outline__chevron"
+              aria-hidden="true"
+            ></span>
           )}
           {/* Tree -> canvas: the row IS the element; clicking it selects on
               the canvas (via intent from the satellite), and the echo comes

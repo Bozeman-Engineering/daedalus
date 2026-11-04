@@ -30,8 +30,8 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * and ride the entity form default, as does everything rendered outside
  * Layout Builder.
  *
- * Registered by DaedalusEditServiceProvider only when daedalus_layout is installed,
- * alongside the endpoint's route (DaedalusLayoutRouteSubscriber).
+ * Registered by DaedalusEditServiceProvider only when daedalus_layout is
+ * installed, alongside the endpoint's route (DaedalusLayoutRouteSubscriber).
  */
 final class BlockFormEndpoint implements EventSubscriberInterface {
 

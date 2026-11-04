@@ -24,12 +24,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 
 /**
- * Tests the style ops: update_style, the variant ops, move_style, update_default.
+ * Tests the style ops: update_style, variant ops, move_style, update_default.
  *
  * The operations register with daedalus_blueprint's operation handler registry
  * and ride its batchOperations() grammar. The style guide in play comes from
- * daedalus_stylish_guide_test: section declares spacing with padding max 4rem, and
- * the testimonial block type declares typography with font-size max 2rem
+ * daedalus_stylish_guide_test: section declares spacing with padding max 4rem,
+ * and the testimonial block type declares typography with font-size max 2rem
  * plus the "emphasis" variant axis beside the built-in "style" axis.
  */
 #[Group('daedalus_stylish')]
@@ -1033,7 +1033,6 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     );
   }
 
-
   /**
    * The three variant ops at a rule key.
    *
@@ -1045,8 +1044,12 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
    * a part under a tag rule (a class qualifies any compound) continues
    * by descent too, `{rule} .part`, since it delivered.
    */
-  public function testVariantOpsAtARule(): void {
-    $variant = DaedalusStylishVariant::create(['label' => 'Quote card', 'machine_name' => 'quote_card', 'scope' => 'block_type:testimonial']);
+  public function testVariantOpsAtRule(): void {
+    $variant = DaedalusStylishVariant::create([
+      'label' => 'Quote card',
+      'machine_name' => 'quote_card',
+      'scope' => 'block_type:testimonial',
+    ]);
     $variant->setStyles([
       '' => ['default' => ['padding' => '2rem'], 'hover' => ['color' => 'purple']],
       '::.testimonial__quote' => ['default' => ['font-weight' => '700']],
@@ -1195,7 +1198,11 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // A variant fragment is not touched: the wear mints no box entry, a
     // reference at a box key is refused, and detach materializes the
     // fragment as authored (no content, so no box, exactly as delivered).
-    $variant = DaedalusStylishVariant::create(['label' => 'Section', 'machine_name' => 'section', 'scope' => 'kind:container']);
+    $variant = DaedalusStylishVariant::create([
+      'label' => 'Section',
+      'machine_name' => 'section',
+      'scope' => 'kind:container',
+    ]);
     $variant->setStyles([
       '' => ['default' => ['padding' => '3rem']],
       '::&::before' => ['default' => ['padding' => '4rem']],
@@ -1245,7 +1252,11 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $this->container->get('file_system')->copy($this->root . '/core/misc/druplicon.png', 'public://rosette.png');
     $file = File::create(['uri' => 'public://rosette.png', 'filename' => 'rosette.png']);
     $file->save();
-    $media = Media::create(['bundle' => $image_type->id(), 'name' => 'Rosette', $source_field => ['target_id' => $file->id()]]);
+    $media = Media::create([
+      'bundle' => $image_type->id(),
+      'name' => 'Rosette',
+      $source_field => ['target_id' => $file->id()],
+    ]);
     $media->save();
     $token = MediaToken::build($media->uuid());
 
@@ -1270,7 +1281,11 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     // path, and a refused first write mints no box.
     $missing = "$key::&::after";
     $result = $this->operations->batchOperations($this->host($entity), [
-      ['op' => 'update_style', 'key' => $missing, 'properties' => ['content' => MediaToken::build('123e4567-e89b-12d3-a456-426614174000')]],
+      [
+        'op' => 'update_style',
+        'key' => $missing,
+        'properties' => ['content' => MediaToken::build('123e4567-e89b-12d3-a456-426614174000')],
+      ],
     ]);
     $this->assertFalse($result->isSuccess());
     $this->assertSame(['MEDIA_NOT_FOUND'], $this->errorCodes($result)['properties.content']);
@@ -1289,7 +1304,12 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $skin->setPackageTokens(['space' => ['gutter' => '2rem']]);
     $skin->setPackageDefaults(self::PACKAGE_DEFAULTS);
     if ($shipped) {
-      $skin->setShippedSource('daedalus_stylish_guide_test', ['tokens' => $skin->packageTokens(), 'animations' => [], 'fonts' => [], 'defaults' => $skin->packageDefaults()]);
+      $skin->setShippedSource('daedalus_stylish_guide_test', [
+        'tokens' => $skin->packageTokens(),
+        'animations' => [],
+        'fonts' => [],
+        'defaults' => $skin->packageDefaults(),
+      ]);
     }
     $skin->save();
     $this->activateSkin($skin);
@@ -1471,7 +1491,11 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $result = $this->updateDefault(['scope' => 'kind:region', 'properties' => ['padding' => '1rem']]);
     $this->assertSame(['scope' => ['SKIN_DEFAULT_SCOPE_INVALID']], $this->errorCodes($result));
 
-    $result = $this->updateDefault(['scope' => 'kind:container', 'condition' => 'bogus-condition', 'properties' => ['padding' => '1rem']]);
+    $result = $this->updateDefault([
+      'scope' => 'kind:container',
+      'condition' => 'bogus-condition',
+      'properties' => ['padding' => '1rem'],
+    ]);
     $this->assertSame(['condition' => ['INVALID_STYLE_CONDITION']], $this->errorCodes($result));
 
     $this->assertSame($site, $this->loadSkin()->siteDefaults(), 'a refused patch lands nothing');
@@ -1485,10 +1509,18 @@ class DaedalusStylishOperationsTest extends KernelTestBase {
     $codes = $this->errorCodes($this->updateDefault(['properties' => ['padding' => '1rem']]));
     $this->assertSame(['scope' => ['MISSING_PARAMETER']], $codes);
 
-    $codes = $this->errorCodes($this->updateDefault(['scope' => 'kind:container', 'key' => 'container(1)', 'properties' => ['padding' => '1rem']]));
+    $codes = $this->errorCodes($this->updateDefault([
+      'scope' => 'kind:container',
+      'key' => 'container(1)',
+      'properties' => ['padding' => '1rem'],
+    ]));
     $this->assertSame(['key' => ['INVALID_STYLE_KEY']], $codes);
 
-    $codes = $this->errorCodes($this->updateDefault(['scope' => 'kind:container', 'condition' => '', 'properties' => ['padding' => '1rem']]));
+    $codes = $this->errorCodes($this->updateDefault([
+      'scope' => 'kind:container',
+      'condition' => '',
+      'properties' => ['padding' => '1rem'],
+    ]));
     $this->assertSame(['condition' => ['INVALID_STYLE_CONDITION']], $codes);
 
     $codes = $this->errorCodes($this->updateDefault(['scope' => 'kind:container', 'properties' => ['1rem']]));

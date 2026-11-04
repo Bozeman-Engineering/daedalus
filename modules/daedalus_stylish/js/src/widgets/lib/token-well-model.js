@@ -42,6 +42,8 @@
  *
  * @return {{kind: 'stop'|'media'|'literal'|'gradient'|'custom'|'unset',
  *   stop: ?object, literal?: string, gradient?: string}}
+ *   The face the well paints: the lit stop, the literal or gradient
+ *   spelling, a custom value no stop represents, or unset.
  */
 export const wellFace = (stops, state) => {
   if (state.custom) {

@@ -15,6 +15,7 @@ use Drupal\daedalus_blueprint\Host\BlueprintHost;
 use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Plugin\SectionStorage\BlueprintSectionStorage;
 use Drupal\daedalus_blueprint_library\Entity\Blueprint;
+use Drupal\daedalus_layout\Entity\LayoutBuilderEntityViewDisplay as DaedalusLayoutEntityViewDisplay;
 use Drupal\daedalus_layout\NestedSectionStorageInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
@@ -22,6 +23,7 @@ use Drupal\KernelTests\KernelTestBase;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Event\PrepareLayoutEvent;
 use Drupal\layout_builder\LayoutBuilderEvents;
+use Drupal\layout_builder\OverridesSectionStorageInterface;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use Drupal\node\Entity\NodeType;
 use Drupal\node\NodeInterface;
@@ -350,7 +352,10 @@ class BlueprintHostTest extends KernelTestBase {
   public function testPrepareLayoutCopiesNoTemplate(): void {
     $blueprint = $this->createBlueprint();
     $storage = $this->hostResolver->fromEntity($blueprint)->sectionStorage();
-    $this->assertNotEmpty($storage->getRootStorage()->getDefaultSectionStorage()->getSections(), 'The subject bundle\'s display carries a template.');
+    assert($storage instanceof NestedSectionStorageInterface);
+    $root = $storage->getRootStorage();
+    assert($root instanceof OverridesSectionStorageInterface);
+    $this->assertNotEmpty($root->getDefaultSectionStorage()->getSections(), 'The subject bundle\'s display carries a template.');
 
     $this->container->get('event_dispatcher')->dispatch(new PrepareLayoutEvent($storage), LayoutBuilderEvents::PREPARE_LAYOUT);
 
@@ -515,7 +520,7 @@ class BlueprintHostTest extends KernelTestBase {
     $tagline = $this->hostResolver->fromEntity($saved)->subject()->get('field_tagline')->value;
     $this->assertNotEmpty($tagline, 'The sample subject carries a tagline value.');
     $this->assertStringContainsString($tagline, $html, 'The field block shows the sample subject\'s value.');
-    $this->assertStringContainsString(\Drupal\daedalus_layout\Entity\LayoutBuilderEntityViewDisplay::LAYOUT_ROOT_CLASS, $html, 'The sections render inside the layout root.');
+    $this->assertStringContainsString(DaedalusLayoutEntityViewDisplay::LAYOUT_ROOT_CLASS, $html, 'The sections render inside the layout root.');
   }
 
   /**

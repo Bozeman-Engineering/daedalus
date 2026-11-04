@@ -1,10 +1,11 @@
-import { fetchBlockForm } from './entity-form.js';
-
 /**
  * @file
  * The entity-form panel as seen by the edit session's engine: the panel's
- * revealed widgets as keyed session items, the mirror value a widget's
- * key names, and the subject a selectable key names.
+ * revealed widgets as keyed session items and the mirror value a widget's
+ * key names (the engine itself presents the subject a selectable key
+ * names, edit-session-engine.js presentSubject, through the forms
+ * entity-form.js fetches; this module imports no form fetching so the two
+ * never cycle).
  *
  * The panel shows its SUBJECT's cached form (daedalus-edit-sidebar.js),
  * and panel-widget-visibility.js reveals exactly the wrappers whose field
@@ -53,6 +54,7 @@ export const WIDGET_CONTROL_SELECTOR = [
  *   A form-item wrapper.
  *
  * @return {Element[]}
+ *   The enabled controls, in document order.
  */
 export const widgetControls = (wrapper) =>
   Array.from(wrapper.querySelectorAll(WIDGET_CONTROL_SELECTOR)).filter(
@@ -63,6 +65,7 @@ export const widgetControls = (wrapper) =>
  * The form-cache mount, or null.
  *
  * @return {?Element}
+ *   The mount, or null before the panel is rendered.
  */
 export const formCacheMount = () => document.getElementById(MOUNT_ID);
 
@@ -70,6 +73,7 @@ export const formCacheMount = () => document.getElementById(MOUNT_ID);
  * Whether the panel is open (rendered and not hidden).
  *
  * @return {boolean}
+ *   True when the panel is rendered and not hidden.
  */
 const panelOpen = () => {
   const panel = document.getElementById(PANEL_ID);
@@ -109,6 +113,7 @@ const rootFor = (entityTypeId, entityId) => {
  *   The entity id.
  *
  * @return {?Element}
+ *   The placement wrapper, or null when the entity is not placed.
  */
 export const placementFor = (entityTypeId, entityId) =>
   document
@@ -156,6 +161,7 @@ export const panelItemKey = (wrapper) => {
  *   A session key.
  *
  * @return {*}
+ *   The mirror value for the field, or undefined.
  */
 export const mirrorValueForKey = (key) => {
   const parts = typeof key === 'string' ? key.split(':') : [];
@@ -217,6 +223,8 @@ export const hasCanvasLeaf = (wrapper) => {
  * would be a stop on nothing.
  *
  * @return {{item: Element, key: ?string}[]}
+ *   The revealed widget wrappers with their session keys, in form
+ *   order.
  */
 export const panelItems = () => {
   const mount = formCacheMount();
@@ -245,6 +253,7 @@ export const panelItems = () => {
  *   A cached form wrapper (.daedalus-edit-form).
  *
  * @return {string[]}
+ *   The session keys, in form order.
  */
 export const formFieldKeys = (form) =>
   Array.from(
@@ -262,88 +271,7 @@ export const formFieldKeys = (form) =>
  *   The element.
  *
  * @return {boolean}
+ *   True when the element carries a form-item wrapper id.
  */
 export const isPanelItem = (element) =>
   element.hasAttribute('data-daedalus-edit-form-item-wrapper-id');
-
-/**
- * Shows the subject a selectable key names in the panel.
- *
- * The root entity (its own key or one of its field keys) is the panel's
- * top-level subject; a block placement (`block:{uuid}` or one of its
- * field keys) is the placement's content entity, whose form is fetched
- * through the block-form endpoint when it is not cached yet; a field
- * block placement (stamped with the root field it presents,
- * data-presented-field) is the root's. The panel opens on the subject
- * through the sidebar plugin's form-path door (openOn), which is a no-op
- * when it already shows it.
- *
- * @param {string} key
- *   A selectable key.
- *
- * @return {Promise<boolean>}
- *   True when the panel shows the subject; false when the key names no
- *   subject the panel can show (a section, a region, a foreign key, a
- *   placement rendering no addressable entity), or when the panel's
- *   (side, slot) refused to free up.
- */
-export const presentSubject = async (key) => {
-  const { SidebarManager, SidebarPluginBase, Blueprint } = Drupal.Daedalus;
-  const plugin = SidebarManager.getPlugin('daedalus_edit_form');
-  const [kind, uuid] = key.split(':');
-  const root = Blueprint.getRoot();
-  // A root whose blueprint carries no `fields` (a template host: the
-  // display's canvas) has no entity form; its door is inert.
-  const rootHasForm = Blueprint.getBlueprint()?.fields !== undefined;
-  try {
-    if (root && (kind === 'entity' || kind === 'field') && uuid === root.uuid) {
-      if (!rootHasForm) {
-        return false;
-      }
-      await plugin.ensureTopLevelSubject();
-      await plugin.openOn(plugin.subjectForm());
-      return true;
-    }
-    if (kind !== 'block') {
-      return false;
-    }
-    const placement = document.querySelector(`[data-selectable="block:${uuid}"]`);
-    const presented = placement?.getAttribute('data-presented-field');
-    if (presented) {
-      // A field block presents a root field: the root is its subject.
-      return presentSubject(presented);
-    }
-    const wrapper = placement?.matches('[data-daedalus-ui-entity-wrapper]')
-      ? placement
-      : placement?.querySelector('[data-daedalus-ui-entity-wrapper]');
-    if (!wrapper) {
-      return false;
-    }
-    const [entityTypeId, entityId] =
-      wrapper.dataset.daedalusUiEntityWrapper.split('::');
-    const formId = `${entityTypeId}::${entityId}`;
-    let cached = formCacheMount()?.querySelector(
-      `:scope > [data-daedalus-edit-form-id="${formId}"]`,
-    );
-    if (!cached) {
-      await fetchBlockForm(placement, wrapper.dataset.daedalusUiViewMode);
-      cached = formCacheMount()?.querySelector(
-        `:scope > [data-daedalus-edit-form-id="${formId}"]`,
-      );
-      if (!cached) {
-        throw new Error(
-          'Daedalus Edit: the fetched block form did not arrive in the form cache.',
-        );
-      }
-    }
-    await plugin.openOn(cached);
-    return true;
-  } catch (error) {
-    if (error === SidebarPluginBase.CLOSE_BLOCKED) {
-      // The same-(side, slot) panel refused to close (an invalid form
-      // item); it stays open and surfaces its own feedback.
-      return false;
-    }
-    throw error;
-  }
-};

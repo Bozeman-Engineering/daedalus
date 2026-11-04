@@ -124,7 +124,7 @@ services:
       - '@file.upload_handler'
       - '@file_system'
       - '@entity_type.manager'
-      # The lane canonicalises every filename itself (core's full posture,
+      # The lane canonicalizes every filename itself (core's full posture,
       # independent of file.settings): the transliteration in the content
       # language is the one step that needs a service.
       - '@transliteration'

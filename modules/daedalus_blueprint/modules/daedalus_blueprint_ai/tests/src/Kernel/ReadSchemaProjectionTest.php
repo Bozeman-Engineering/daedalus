@@ -280,7 +280,9 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * A page bundle's starts ride the projection; a page blueprint is nowhere else.
+   * A page bundle's starts ride the projection.
+   *
+   * A page blueprint is nowhere else.
    *
    * The hook lands `starts` on the schema of a bundle whose host owns a
    * document (the offer asked for page scope: a root, fits), the
@@ -372,7 +374,7 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * The schema read lists every shared blueprint, and one group alone on demand.
+   * The schema read lists every shared blueprint, one group alone on demand.
    *
    * By default materials.blueprints holds every shared block blueprint in
    * full, favorite or not (the flag is the Add panel's listing), and
@@ -449,7 +451,11 @@ class ReadSchemaProjectionTest extends BlueprintKernelTestBase {
     $unknown = $read('cards');
     $this->assertSame('Error: unknown group "cards". The groups are heroes, sections (materials.groups in the schema read); ungrouped lists the blueprints in no group. Pass one of them, or omit group for every shared blueprint.', $unknown);
 
-    $none = $this->runTool('eb_read_schema', ['entity_type' => 'block_content', 'bundle' => 'basic', 'group' => 'sections']);
+    $none = $this->runTool('eb_read_schema', [
+      'entity_type' => 'block_content',
+      'bundle' => 'basic',
+      'group' => 'sections',
+    ]);
     $this->assertSame('Error: group narrows materials.blueprints, and the schema of block_content/basic carries no materials.', $none);
   }
 

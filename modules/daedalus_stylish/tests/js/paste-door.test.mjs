@@ -23,6 +23,8 @@ import {
   structuralChunks,
 } from '../../js/src/code/paste-door.js';
 
+// cspell:ignore hovr
+
 const guide = {
   conditions: {
     hover: { label: 'Hover', wrapper: ':hover', axis: 'state' },

@@ -22,7 +22,7 @@ final class EntityTypeAlter {
    * the page.
    */
   #[Hook('entity_type_alter', order: new OrderAfter(modules: ['layout_builder']))]
-  public function entityTypeAlter(array &$entity_types): void {
+  public function alter(array &$entity_types): void {
     $entity_types['entity_view_display']->setClass(LayoutBuilderEntityViewDisplay::class);
   }
 

@@ -54,6 +54,14 @@ import {
 /**
  * The step for an index address: the pair it commits and the drill it
  * seats.
+ *
+ * @param {Map<string, {parent: ?string}>} index
+ *   The projection index.
+ * @param {string} address
+ *   The index address to step to.
+ *
+ * @return {{address: string, key: string, selector: ?string, drill: ?string}}
+ *   The step.
  */
 const stepTo = (index, address) => {
   const pair = splitAddress(address);
@@ -75,6 +83,7 @@ const stepTo = (index, address) => {
  *   the bare element.
  *
  * @return {?{address: string, entry: object}}
+ *   The seat address and its index entry, or null.
  */
 export const seatOf = (index, reach, key, selector = null) => {
   const address = seatAddress(index, reach, key, selector);
@@ -87,7 +96,19 @@ export const seatOf = (index, reach, key, selector = null) => {
  * parent's reachable rows (both tiers), or null at the edge. The root is
  * its own only sibling.
  *
+ * @param {?Map<string, object>} index
+ *   The projection index, or null before the mirror boots.
+ * @param {function(string): boolean} reach
+ *   The reach predicate (reach.js reachPredicate()).
+ * @param {string} key
+ *   The selected element key (the owner, for a part selection).
+ * @param {?string} selector
+ *   The selector the selection seats on, or null for the bare element.
+ * @param {number} delta
+ *   The number of drawn rows to move, negative for the previous ones.
+ *
  * @return {?{address: string, key: string, selector: ?string, drill: ?string}}
+ *   The sibling's step, or null at the edge.
  */
 export const siblingOf = (index, reach, key, selector, delta) => {
   const current = seatOf(index, reach, key, selector);
@@ -107,7 +128,17 @@ export const siblingOf = (index, reach, key, selector, delta) => {
  * from a top-level part, or the element parent; an undrawn shell is
  * passed through), or null at the root.
  *
+ * @param {?Map<string, object>} index
+ *   The projection index, or null before the mirror boots.
+ * @param {function(string): boolean} reach
+ *   The reach predicate (reach.js reachPredicate()).
+ * @param {string} key
+ *   The selected element key (the owner, for a part selection).
+ * @param {?string} selector
+ *   The selector the selection seats on, or null for the bare element.
+ *
  * @return {?{address: string, key: string, selector: ?string, drill: ?string}}
+ *   The parent's step, or null at the root.
  */
 export const parentOf = (index, reach, key, selector = null) => {
   const current = seatOf(index, reach, key, selector);
@@ -119,7 +150,17 @@ export const parentOf = (index, reach, key, selector = null) => {
  * The first drawn row inside the selection (a shell part, a carrier, a
  * child element, or what an undrawn shell hoists), or null for a leaf.
  *
+ * @param {?Map<string, object>} index
+ *   The projection index, or null before the mirror boots.
+ * @param {function(string): boolean} reach
+ *   The reach predicate (reach.js reachPredicate()).
+ * @param {string} key
+ *   The selected element key (the owner, for a part selection).
+ * @param {?string} selector
+ *   The selector the selection seats on, or null for the bare element.
+ *
  * @return {?{address: string, key: string, selector: ?string, drill: ?string}}
+ *   The first row's step, or null for a leaf.
  */
 export const firstRowOf = (index, reach, key, selector = null) => {
   const current = seatOf(index, reach, key, selector);

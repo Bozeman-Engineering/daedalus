@@ -83,7 +83,11 @@ class BlueprintApiTest extends KernelTestBase {
     $this->installConfig(['image', 'file', 'media', 'daedalus_blueprint', 'daedalus_blueprint_library']);
     // setUpCurrentUser() seeds a throwaway uid 1 first, so this user's
     // section permissions are what entity access actually evaluates.
-    $this->setUpCurrentUser([], ['create section blueprint', 'edit any section blueprint', 'delete any section blueprint']);
+    $this->setUpCurrentUser([], [
+      'create section blueprint',
+      'edit any section blueprint',
+      'delete any section blueprint',
+    ]);
   }
 
   /**
@@ -91,6 +95,15 @@ class BlueprintApiTest extends KernelTestBase {
    */
   protected function controller(): BlueprintApiController {
     return BlueprintApiController::create($this->container);
+  }
+
+  /**
+   * The blueprint as stored, past the static cache.
+   */
+  protected function reload(Blueprint $blueprint): Blueprint {
+    $reloaded = \Drupal::entityTypeManager()->getStorage('blueprint')->loadUnchanged($blueprint->id());
+    assert($reloaded instanceof Blueprint);
+    return $reloaded;
   }
 
   /**
@@ -187,8 +200,14 @@ class BlueprintApiTest extends KernelTestBase {
     foreach ([
       'daedalus_blueprint_library.update_details' => ['/daedalus-blueprint/blueprint/{reference}/details', 'update'],
       'daedalus_blueprint_library.delete' => ['/daedalus-blueprint/blueprint/{reference}/delete', 'delete'],
-      'daedalus_blueprint_library.release_variant' => ['/daedalus-blueprint/blueprint-variant/{reference}/release', 'update'],
-      'daedalus_blueprint_library.transfer_variant' => ['/daedalus-blueprint/blueprint-variant/{reference}/transfer', 'update'],
+      'daedalus_blueprint_library.release_variant' => [
+        '/daedalus-blueprint/blueprint-variant/{reference}/release',
+        'update',
+      ],
+      'daedalus_blueprint_library.transfer_variant' => [
+        '/daedalus-blueprint/blueprint-variant/{reference}/transfer',
+        'update',
+      ],
     ] as $name => [$path, $operation]) {
       $route = $provider->getRouteByName($name);
       $this->assertSame($path, $route->getPath());
@@ -251,7 +270,7 @@ class BlueprintApiTest extends KernelTestBase {
 
     $storage = \Drupal::entityTypeManager()->getStorage('blueprint');
     assert($storage instanceof RevisionableStorageInterface);
-    $reloaded = $storage->loadUnchanged($blueprint->id());
+    $reloaded = $this->reload($blueprint);
     $this->assertSame('Banner', (string) $reloaded->label());
     $this->assertSame('A wide banner.', $reloaded->getDescription());
     $this->assertFalse($reloaded->isOffered());
@@ -283,7 +302,6 @@ class BlueprintApiTest extends KernelTestBase {
   public function testUpdateDetailsSubjectAndHosts(): void {
     $blueprint = $this->createBlueprint();
     $face = ['label' => 'Promo Card', 'description' => 'Two-column card: heading beside an image.'];
-    $storage = \Drupal::entityTypeManager()->getStorage('blueprint');
 
     // entity_test_rev is a fieldable bundle on this site; a page-builder
     // display is what OFFERS it in the dialog, not what the gesture needs.
@@ -295,7 +313,7 @@ class BlueprintApiTest extends KernelTestBase {
     $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
     $payload = $this->decode($response)['blueprint'];
     $this->assertSame('entity_test_rev:entity_test_rev', $payload['subject']);
-    $reloaded = $storage->loadUnchanged($blueprint->id());
+    $reloaded = $this->reload($blueprint);
     $this->assertSame('entity_test_rev', $reloaded->getSubjectType());
     $this->assertSame('entity_test_rev', $reloaded->getSubjectBundle());
     $this->assertSame(['entity_test_rev:entity_test_rev', 'node:page'], $reloaded->getBundles(), 'The allow-list is stored de-duplicated, in order.');
@@ -307,14 +325,14 @@ class BlueprintApiTest extends KernelTestBase {
       'description' => 'A wide banner.',
     ]));
     $this->assertSame(200, $response->getStatusCode());
-    $reloaded = $storage->loadUnchanged($blueprint->id());
+    $reloaded = $this->reload($blueprint);
     $this->assertSame('entity_test_rev', $reloaded->getSubjectType());
     $this->assertSame(['entity_test_rev:entity_test_rev', 'node:page'], $reloaded->getBundles());
 
     // An empty list clears the allow-list: any host it fits.
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + ['bundles' => []]));
     $this->assertSame(200, $response->getStatusCode());
-    $this->assertSame([], $storage->loadUnchanged($blueprint->id())->getBundles());
+    $this->assertSame([], $this->reload($blueprint)->getBundles());
 
     // Groups ride the same presence semantics: a list of ids is stored
     // de-duplicated in order and logged, an absent key leaves it, an empty
@@ -323,19 +341,19 @@ class BlueprintApiTest extends KernelTestBase {
       'groups' => ['heroes', 'heroes', 'sections'],
     ]));
     $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
-    $reloaded = $storage->loadUnchanged($blueprint->id());
+    $reloaded = $this->reload($blueprint);
     $this->assertSame(['heroes', 'sections'], $reloaded->getGroups());
     $this->assertStringContainsString('Groups: heroes, sections.', (string) $reloaded->getRevisionLogMessage());
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face));
     $this->assertSame(200, $response->getStatusCode());
-    $this->assertSame(['heroes', 'sections'], $storage->loadUnchanged($blueprint->id())->getGroups());
+    $this->assertSame(['heroes', 'sections'], $this->reload($blueprint)->getGroups());
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + ['groups' => ['Heroes!']]));
     $this->assertSame(422, $response->getStatusCode());
     $this->assertSame('groups', $this->decode($response)['errors'][0]['path']);
-    $this->assertSame(['heroes', 'sections'], $storage->loadUnchanged($blueprint->id())->getGroups(), 'Nothing stuck.');
+    $this->assertSame(['heroes', 'sections'], $this->reload($blueprint)->getGroups(), 'Nothing stuck.');
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + ['groups' => []]));
     $this->assertSame(200, $response->getStatusCode());
-    $reloaded = $storage->loadUnchanged($blueprint->id());
+    $reloaded = $this->reload($blueprint);
     $this->assertSame([], $reloaded->getGroups());
     $this->assertStringContainsString('Groups cleared.', (string) $reloaded->getRevisionLogMessage());
 
@@ -344,19 +362,19 @@ class BlueprintApiTest extends KernelTestBase {
     // the path.
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + ['favorite' => TRUE]));
     $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
-    $reloaded = $storage->loadUnchanged($blueprint->id());
+    $reloaded = $this->reload($blueprint);
     $this->assertTrue($reloaded->isFavorite());
     $this->assertStringContainsString('Marked a favorite.', (string) $reloaded->getRevisionLogMessage());
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face));
     $this->assertSame(200, $response->getStatusCode());
-    $this->assertTrue($storage->loadUnchanged($blueprint->id())->isFavorite(), 'An absent key leaves the favorite standing.');
+    $this->assertTrue($this->reload($blueprint)->isFavorite(), 'An absent key leaves the favorite standing.');
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + ['favorite' => 'yes']));
     $this->assertSame(422, $response->getStatusCode());
     $this->assertSame('favorite', $this->decode($response)['errors'][0]['path']);
-    $this->assertTrue($storage->loadUnchanged($blueprint->id())->isFavorite(), 'Nothing stuck.');
+    $this->assertTrue($this->reload($blueprint)->isFavorite(), 'Nothing stuck.');
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + ['favorite' => FALSE]));
     $this->assertSame(200, $response->getStatusCode());
-    $reloaded = $storage->loadUnchanged($blueprint->id());
+    $reloaded = $this->reload($blueprint);
     $this->assertFalse($reloaded->isFavorite());
     $this->assertStringContainsString('No longer a favorite.', (string) $reloaded->getRevisionLogMessage());
 
@@ -378,7 +396,7 @@ class BlueprintApiTest extends KernelTestBase {
     $this->assertSame('bundles', $this->decode($response)['errors'][0]['path']);
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + ['bundles' => 'node:page']));
     $this->assertSame(422, $response->getStatusCode());
-    $reloaded = $storage->loadUnchanged($blueprint->id());
+    $reloaded = $this->reload($blueprint);
     $this->assertSame('entity_test_rev', $reloaded->getSubjectType(), 'Nothing stuck.');
   }
 
@@ -462,8 +480,7 @@ class BlueprintApiTest extends KernelTestBase {
     ]));
     $this->assertSame(200, $response->getStatusCode());
     $this->assertSame($reference, $this->decode($response)['blueprint']['icon']);
-    $storage = \Drupal::entityTypeManager()->getStorage('blueprint');
-    $reloaded = $storage->loadUnchanged($blueprint->id());
+    $reloaded = $this->reload($blueprint);
     $this->assertSame($media->uuid(), $reloaded->getIcon()?->uuid());
 
     // Absent leaves the stored icon standing through a relabel.
@@ -473,7 +490,7 @@ class BlueprintApiTest extends KernelTestBase {
     ]));
     $this->assertSame(200, $response->getStatusCode());
     $this->assertSame($reference, $this->decode($response)['blueprint']['icon']);
-    $this->assertSame($media->uuid(), $storage->loadUnchanged($blueprint->id())->getIcon()?->uuid());
+    $this->assertSame($media->uuid(), $this->reload($blueprint)->getIcon()?->uuid());
 
     // NULL clears back to the palette default.
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest([
@@ -483,7 +500,7 @@ class BlueprintApiTest extends KernelTestBase {
     ]));
     $this->assertSame(200, $response->getStatusCode());
     $this->assertNull($this->decode($response)['blueprint']['icon']);
-    $this->assertNull($storage->loadUnchanged($blueprint->id())->getIcon());
+    $this->assertNull($this->reload($blueprint)->getIcon());
 
     // The empty string clears too (an emptied picker submits '').
     $this->controller()->updateDetails('promo_card', $this->detailsRequest([
@@ -498,7 +515,7 @@ class BlueprintApiTest extends KernelTestBase {
     ]));
     $this->assertSame(200, $response->getStatusCode());
     $this->assertNull($this->decode($response)['blueprint']['icon']);
-    $this->assertNull($storage->loadUnchanged($blueprint->id())->getIcon());
+    $this->assertNull($this->reload($blueprint)->getIcon());
   }
 
   /**
@@ -527,8 +544,7 @@ class BlueprintApiTest extends KernelTestBase {
     $this->assertSame('BLUEPRINT_ICON_UNKNOWN_MEDIA', $this->decode($response)['errors'][0]['code']);
 
     // Nothing stuck: the refusals happened before any save.
-    $storage = \Drupal::entityTypeManager()->getStorage('blueprint');
-    $reloaded = $storage->loadUnchanged($blueprint->id());
+    $reloaded = $this->reload($blueprint);
     $this->assertNull($reloaded->getIcon());
     $this->assertSame('Promo Card', (string) $reloaded->label());
   }
@@ -624,7 +640,6 @@ class BlueprintApiTest extends KernelTestBase {
     $blueprint = $this->createBlueprint();
     $canvas = $this->createCanvas();
     $face = ['label' => 'Promo Card', 'description' => 'Two-column card: heading beside an image.'];
-    $storage = \Drupal::entityTypeManager()->getStorage('blueprint');
 
     // The allow-list excludes the canvas: a remove on this canvas.
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + ['bundles' => ['node:page']], $canvas));
@@ -634,7 +649,7 @@ class BlueprintApiTest extends KernelTestBase {
       $this->decode($response)['materials'],
       'A touched blueprint the named canvas does not offer is a remove.',
     );
-    $this->assertSame(['node:page'], $storage->loadUnchanged($blueprint->id())->getBundles(), 'The write landed; only the delta is judged for the canvas.');
+    $this->assertSame(['node:page'], $this->reload($blueprint)->getBundles(), 'The write landed; only the delta is judged for the canvas.');
 
     // The same post naming no canvas: an unfiltered upsert.
     $response = $this->controller()->updateDetails('promo_card', $this->detailsRequest($face + ['bundles' => ['node:page']]));
@@ -663,7 +678,7 @@ class BlueprintApiTest extends KernelTestBase {
       $this->assertSame('INVALID_PARAMETER', $error['code']);
       $this->assertSame($path, $error['path']);
     }
-    $this->assertSame('Promo Card', (string) $storage->loadUnchanged($blueprint->id())->label(), 'Nothing stuck.');
+    $this->assertSame('Promo Card', (string) $this->reload($blueprint)->label(), 'Nothing stuck.');
 
     // Delete names its canvas too; a removal is a remove on any canvas.
     $response = $this->controller()->delete('promo_card', $this->deleteRequest($canvas));
@@ -695,8 +710,7 @@ class BlueprintApiTest extends KernelTestBase {
     $response = $this->controller()->delete('promo_card', $this->deleteRequest());
     $this->assertSame(403, $response->getStatusCode());
 
-    $storage = \Drupal::entityTypeManager()->getStorage('blueprint');
-    $reloaded = $storage->loadUnchanged($blueprint->id());
+    $reloaded = $this->reload($blueprint);
     $this->assertNotNull($reloaded);
     $this->assertSame('Promo Card', (string) $reloaded->label());
   }

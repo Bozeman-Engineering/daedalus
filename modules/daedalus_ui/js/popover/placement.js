@@ -16,9 +16,25 @@
  * never past the top-left margin (an oversized surface pins there).
  *
  * @param {object} spec
- *   {x, y, width, height, viewportWidth, viewportHeight, margin?}.
+ *   The point, the surface's size and the viewport it must fit.
+ * @param {number} spec.x
+ *   The preferred left edge, in viewport pixels.
+ * @param {number} spec.y
+ *   The preferred top edge, in viewport pixels.
+ * @param {number} spec.width
+ *   The measured width of the surface.
+ * @param {number} spec.height
+ *   The measured height of the surface.
+ * @param {number} spec.viewportWidth
+ *   The viewport's width.
+ * @param {number} spec.viewportHeight
+ *   The viewport's height.
+ * @param {number} [spec.margin]
+ *   The gutter the surface never crosses at any viewport edge; 4 by
+ *   default.
  *
  * @return {{left: number, top: number}}
+ *   The surface's clamped viewport top-left.
  */
 export const clampPosition = ({
   x,
@@ -53,10 +69,29 @@ export const clampPosition = ({
  * reads left-to-right, so start is the left edge.
  *
  * @param {object} spec
- *   {rect: {left, right, top, bottom}, width, height, viewportWidth,
- *   viewportHeight, side?, align?, gap?, margin?}.
+ *   The anchor, the surface's size, the viewport and the intents.
+ * @param {{left: number, right: number, top: number, bottom: number}} spec.rect
+ *   The anchor's viewport rect.
+ * @param {number} spec.width
+ *   The measured width of the surface.
+ * @param {number} spec.height
+ *   The measured height of the surface.
+ * @param {number} spec.viewportWidth
+ *   The viewport's width.
+ * @param {number} spec.viewportHeight
+ *   The viewport's height.
+ * @param {string} [spec.side]
+ *   The vertical intent, 'below' (the default) or 'above'.
+ * @param {string} [spec.align]
+ *   The horizontal intent, 'start' (the default) or 'end'.
+ * @param {number} [spec.gap]
+ *   The breathing room between the anchor and the surface; 2 by default.
+ * @param {number} [spec.margin]
+ *   The gutter the surface never crosses at any viewport edge; 4 by
+ *   default.
  *
  * @return {{left: number, top: number}}
+ *   The surface's viewport top-left, on the side it landed and clamped.
  */
 export const anchoredPosition = ({
   rect,
@@ -106,8 +141,24 @@ export const anchoredPosition = ({
  * to the left margin).
  *
  * @param {object} spec
- *   {rect: {left, right, top, bottom} (the row's), width, height,
- *   viewportWidth, viewportHeight, gap?, margin?, inset?}.
+ *   The row, the flyout's size, the viewport and the spacing.
+ * @param {{left: number, right: number, top: number, bottom: number}} spec.rect
+ *   The submenu row's viewport rect.
+ * @param {number} spec.width
+ *   The measured width of the flyout.
+ * @param {number} spec.height
+ *   The measured height of the flyout.
+ * @param {number} spec.viewportWidth
+ *   The viewport's width.
+ * @param {number} spec.viewportHeight
+ *   The viewport's height.
+ * @param {number} [spec.gap]
+ *   The breathing room between the row and the flyout; 0 by default.
+ * @param {number} [spec.margin]
+ *   The gutter the flyout never crosses at any viewport edge; 4 by
+ *   default.
+ * @param {number} [spec.inset]
+ *   The list padding the flyout wears above its first row; 4 by default.
  *
  * @return {{left: number, top: number, side: string}}
  *   The flyout's viewport top-left and which side of the row it took

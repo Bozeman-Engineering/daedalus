@@ -63,8 +63,8 @@ class VariantDistroLockTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);

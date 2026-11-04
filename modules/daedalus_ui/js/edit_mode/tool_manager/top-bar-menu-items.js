@@ -81,14 +81,19 @@ const hintFor = (key) => (key ? key.toUpperCase() : null);
  *   Called with the panel id and whether the row is opening (true) or
  *   closing (false) it.
  * @param {function(): void} actions.openPreview
+ *   Opens the preview window.
  * @param {function(): void} actions.refresh
+ *   Reloads the page.
  * @param {function(): void} actions.discard
+ *   Opens the discard confirm.
  * @param {function(string): void} actions.setDensity
  *   Called with the density value picked.
  * @param {function(): void} actions.keyboardShortcuts
+ *   Opens the keyboard shortcuts panel.
  * @param {function(string): void} actions.openSettings
  *   Called with the settings URL.
  * @param {function(): void} actions.exit
+ *   Leaves Edit Mode.
  *
  * @return {object[]}
  *   Items in the menu grammar.

@@ -7,6 +7,7 @@
  *   Whether the last commit was rejected (useGesture's invalid state).
  *
  * @return {string}
+ *   The space-joined class list.
  */
 export const widgetClasses = (name, invalid) =>
   [

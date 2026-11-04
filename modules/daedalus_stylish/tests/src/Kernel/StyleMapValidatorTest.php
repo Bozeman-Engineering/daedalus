@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
+// cspell:ignore buton dispaly divv
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\entity_test\Entity\EntityTest;
@@ -39,8 +40,8 @@ use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
  * undeclared properties). Owner declarations still win: the namespaces are
  * the fallback vocabulary, never an override.
  *
- * The fixture namespaces layer through daedalus_stylish_nested_test's state-driven
- * alter hook, the same lane its nested-grammar fixtures use.
+ * The fixture namespaces layer through daedalus_stylish_nested_test's
+ * state-driven alter hook, the same lane its nested-grammar fixtures use.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -262,9 +263,9 @@ class StyleMapValidatorTest extends KernelTestBase {
   /**
    * Constrains the shipped base section for the tag-tier cases.
    *
-   * Layers over daedalus_stylish's own base declaration (the kernel site discovers
-   * daedalus_stylish.page_builder.yml): p gains a font-size ceiling, and em (a
-   * legal BASE_TAGS tag the shipped section does not declare) stays
+   * Layers over daedalus_stylish's own base declaration (the kernel site
+   * discovers daedalus_stylish.page_builder.yml): p gains a font-size ceiling,
+   * and em (a legal BASE_TAGS tag the shipped section does not declare) stays
    * undeclared.
    */
   protected function layerBase(): void {
@@ -808,7 +809,14 @@ class StyleMapValidatorTest extends KernelTestBase {
       'container' => [
         'property_groups' => ['spacing' => []],
         'elements' => ['.section' => ['label' => 'Section', 'property_groups' => ['spacing' => []]]],
-        'children' => ['property_groups' => ['spacing' => ['properties' => ['margin-top', 'margin-bottom'], 'constraints' => ['margin-top' => ['max' => '2rem']]]]],
+        'children' => [
+          'property_groups' => [
+            'spacing' => [
+              'properties' => ['margin-top', 'margin-bottom'],
+              'constraints' => ['margin-top' => ['max' => '2rem']],
+            ],
+          ],
+        ],
       ],
     ]);
     $this->layer('block_types', [
@@ -933,7 +941,10 @@ class StyleMapValidatorTest extends KernelTestBase {
       "container:$uuid::&::after" => ['default' => ['content' => 'none', 'padding-top' => '1rem']],
       "container:$uuid::.section::after" => ['default' => ['content' => '""', 'padding' => '1rem']],
       "container:$uuid::> *::before" => ['default' => ['content' => '""', 'margin-top' => '1rem']],
-      "container:$uuid::> d-text::before" => ['default' => ['content' => '""', 'font-size' => '1rem'], 'hover' => ['font-size' => '1.25rem']],
+      "container:$uuid::> d-text::before" => [
+        'default' => ['content' => '""', 'font-size' => '1rem'],
+        'hover' => ['font-size' => '1.25rem'],
+      ],
       "container:$uuid::p::after" => ['default' => ['content' => '""', 'font-size' => '1rem']],
     ]));
     $codes = $this->codes($this->validator->validate([
@@ -965,13 +976,33 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->container->get('file_system')->copy($this->root . '/core/misc/druplicon.png', 'public://box.png');
     $file = File::create(['uri' => 'public://box.png', 'filename' => 'box.png']);
     $file->save();
-    $media = Media::create(['bundle' => $image_type->id(), 'name' => 'Box', $source_field => ['target_id' => $file->id()]]);
+    $media = Media::create([
+      'bundle' => $image_type->id(),
+      'name' => 'Box',
+      $source_field => ['target_id' => $file->id()],
+    ]);
     $media->save();
     $token = MediaToken::build($media->uuid());
     $this->assertSame([], $this->validator->validate(["container:$uuid::&::before" => ['default' => ['content' => $token]]]));
     $this->assertSame([], $this->validator->validate(["container:$uuid::> d-text::before" => ['default' => ['content' => " url(media:{$media->uuid()}) "]]]));
     $this->assertSame([], $this->validator->validate(["container:$uuid::&::before" => ['default' => ['content' => ' NONE ']]]));
-    foreach (['"hi"', 'attr(title)', 'counter(item)', 'open-quote', 'url(x.png)', 'url(x.svg)', 'linear-gradient(#000, #fff)', "$token, $token", "\"x\" $token", "none $token", "$token / \"alt\"", 'var(--x)', 'inherit', 'normal', "''"] as $value) {
+    foreach ([
+      '"hi"',
+      'attr(title)',
+      'counter(item)',
+      'open-quote',
+      'url(x.png)',
+      'url(x.svg)',
+      'linear-gradient(#000, #fff)',
+      "$token, $token",
+      "\"x\" $token",
+      "none $token",
+      "$token / \"alt\"",
+      'var(--x)',
+      'inherit',
+      'normal',
+      "''",
+    ] as $value) {
       $errors = $this->validator->validate(["container:$uuid::&::before" => ['default' => ['content' => $value]]]);
       $this->assertCount(1, $errors, $value);
       $this->assertSame('INVALID_STYLE_VALUE', $errors[0]->getCode(), $value);
@@ -993,7 +1024,10 @@ class StyleMapValidatorTest extends KernelTestBase {
     // a box; content is the generated boxes' alone; one the browser does
     // not know is a typo everywhere, the nearest names suggested.
     $this->assertSame([], $this->validator->validate([
-      "container:$uuid::&::marker" => ['default' => ['color' => 'gold', 'font-size' => '1rem'], 'hover' => ['color' => 'red']],
+      "container:$uuid::&::marker" => [
+        'default' => ['color' => 'gold', 'font-size' => '1rem'],
+        'hover' => ['color' => 'red'],
+      ],
       "container:$uuid::> d-text::first-letter" => ['default' => ['font-size' => '1rem', 'float' => 'left']],
       "container:$uuid::p::selection" => ['default' => ['background-color' => 'gold']],
       "container:$uuid::&::backdrop" => ['default' => ['padding-top' => '1rem']],
@@ -1021,13 +1055,18 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->assertSame('"content" applies to a generated box only, and ::marker is no generated box.', $errors[3]->getMessage());
     $this->assertSame(['STYLE_SELECTOR_UNKNOWN'], $codes["container:$uuid::&::markr"]);
     $this->assertSame('"::markr" is not a pseudo-element the browser knows.', $errors[4]->getMessage());
-    $this->assertSame(['word' => 'markr', 'kind' => 'pseudo-element', 'similar' => ['marker']], array_intersect_key($errors[4]->getContext(), ['word' => 1, 'kind' => 1]) + ['similar' => array_slice($errors[4]->getContext()['similar'], 0, 1)]);
+    $this->assertSame(['word' => 'markr', 'kind' => 'pseudo-element', 'similar' => ['marker']], array_intersect_key($errors[4]->getContext(), [
+      'word' => 1,
+      'kind' => 1,
+    ]) + ['similar' => array_slice($errors[4]->getContext()['similar'], 0, 1)]);
     $this->assertStringStartsWith('Did you mean ::marker?', $errors[4]->getHint());
     $this->assertSame(['INVALID_STYLE_KEY'], $codes["container:$uuid::&::part(x)"]);
 
-    // content on a real box is refused in every mode, before any grant.
+    // `content` on a real box is refused in every mode, before any grant.
     foreach (['', '::.section', '::> *', '::> d-text', '::p'] as $suffix) {
-      $errors = $this->validator->validate(["container:$uuid$suffix" => ['default' => ['content' => '""', 'padding-top' => '1rem']]]);
+      $errors = $this->validator->validate([
+        "container:$uuid$suffix" => ['default' => ['content' => '""', 'padding-top' => '1rem']],
+      ]);
       $this->assertCount(1, $errors, $suffix);
       $this->assertSame('STYLE_PROPERTY_PSEUDO_ONLY', $errors[0]->getCode(), $suffix);
       $this->assertSame("container:$uuid$suffix.default.content", $errors[0]->getPath(), $suffix);
@@ -1040,13 +1079,17 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->assertNull($this->validator->captureScope("container:$uuid::> d-text::before"));
     $this->assertNull($this->validator->captureScope("container:$uuid::p::after"));
     DaedalusStylishVariant::create(['label' => 'text_soft', 'machine_name' => 'text_soft', 'scope' => 'block_type:text'])->setStyles(['' => ['default' => ['padding' => '1rem']]])->save();
-    $errors = $this->validator->validate(["container:$uuid::> d-text::before" => ['variants' => [['variant' => 'text_soft', 'fragment' => '']]]]);
+    $errors = $this->validator->validate([
+      "container:$uuid::> d-text::before" => ['variants' => [['variant' => 'text_soft', 'fragment' => '']]],
+    ]);
     $this->assertCount(1, $errors);
     $this->assertSame('STYLE_VARIANT_SCOPE_MISMATCH', $errors[0]->getCode());
     $this->assertNull($errors[0]->getContext()['element_scope']);
     $this->assertStringContainsString('lands on no element scope', $errors[0]->getMessage());
     $this->assertStringContainsString('a generated box ("::&::before"', $errors[0]->getHint());
-    $errors = $this->validator->validateAt(['::> d-text::before' => ['variants' => [['variant' => 'text_soft', 'fragment' => '']]]], Address::fromString('kind:container'));
+    $errors = $this->validator->validateAt([
+      '::> d-text::before' => ['variants' => [['variant' => 'text_soft', 'fragment' => '']]],
+    ], Address::fromString('kind:container'));
     $this->assertSame('STYLE_VARIANT_SCOPE_MISMATCH', $errors[0]->getCode());
     $this->assertNull($errors[0]->getContext()['element_scope']);
 
@@ -1508,7 +1551,11 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->layer('kinds', ['container' => ['property_groups' => ['spacing' => []]]]);
     $tidy = DaedalusStylishVariant::create(['label' => 'Tidy', 'machine_name' => 'tidy', 'scope' => 'kind:container']);
     $tidy->setStyles(['' => ['default' => ['padding' => '1rem']]])->save();
-    $card = DaedalusStylishVariant::create(['label' => 'Card Left', 'machine_name' => 'card_left', 'scope' => 'kind:container']);
+    $card = DaedalusStylishVariant::create([
+      'label' => 'Card Left',
+      'machine_name' => 'card_left',
+      'scope' => 'kind:container',
+    ]);
     $card->setStyles(['container(1)' => ['variants' => [['variant' => 'tidy', 'fragment' => '']]]])->save();
     $key = 'container:' . self::UUID;
     $wearing = static fn (array $reference): array => [$key => ['variants' => [$reference]]];
@@ -1566,7 +1613,6 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->assertSame([], $this->validator->validateAt($nested(['variant' => 'tidy', 'fragment' => '']), Address::fromString('kind:container')));
   }
 
-
   /**
    * Wear at a rule pairs by the landing, and the two rule refusals stand.
    *
@@ -1578,7 +1624,7 @@ class StyleMapValidatorTest extends KernelTestBase {
    * refused at any rule by its keys. keyAddress() keeps answering the
    * full address (the stack's and the media resolver's read).
    */
-  public function testWearAtARule(): void {
+  public function testWearAtRule(): void {
     $this->layer('site', [
       'base' => [
         'p' => ['property_groups' => ['typography' => []]],
@@ -1612,7 +1658,9 @@ class StyleMapValidatorTest extends KernelTestBase {
       'block(text,1)::.link' => ['default' => ['color' => 'red']],
     ])->save();
     $uuid = self::UUID;
-    $wearing = static fn (string $key, string $reference): array => [$key => ['variants' => [['variant' => $reference, 'fragment' => '']]]];
+    $wearing = static fn (string $key, string $reference): array => [
+      $key => ['variants' => [['variant' => $reference, 'fragment' => '']]],
+    ];
 
     // The capture: an element its own root, a rule its landing, and
     // nothing where the targets are no element scope.
@@ -1685,7 +1733,9 @@ class StyleMapValidatorTest extends KernelTestBase {
     // and at a slot's rule, the link treatment at "::a", the container
     // variant is refused at the text rule with the text candidates, and
     // a rule landing on no element scope wears nothing.
-    $nested = static fn (string $relative, string $reference): array => [$relative => ['variants' => [['variant' => $reference, 'fragment' => '']]]];
+    $nested = static fn (string $relative, string $reference): array => [
+      $relative => ['variants' => [['variant' => $reference, 'fragment' => '']]],
+    ];
     $at = Address::fromString('kind:container');
     $this->assertSame([], $this->validator->validateAt($nested('::> d-text', 'text_soft'), $at));
     $this->assertSame([], $this->validator->validateAt($nested('container(1)::> d-text', 'text_soft'), $at));

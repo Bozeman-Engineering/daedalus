@@ -23,15 +23,15 @@ use Drupal\user\UserInterface;
  *   which carries content types, formats and roles no Daedalus site has).
  *   The recipe's own config passes the strict config schema checker, so the
  *   checker stays ON.
- * - Installs daedalus_edit_test_fixture (daedalus_edit/tests/modules) on top. The
- *   recipe ships product only; the entity-form editing path's fixtures are
+ * - Installs daedalus_edit_test_fixture (daedalus_edit/tests/modules) on top.
+ *   The recipe ships product only; the entity-form editing path's fixtures are
  *   test-only bundles derived from the machinery inventory: the 'plain'
- *   non-Layout-Builder node bundle, the 'target' reference bundle (which
- *   cannot self-reference), and the 'form_block' form-edited block_content
- *   type. Because the fixture's bundles are created AFTER the recipe's
- *   daedalus_editor_roles ran, the trait grants the plain bundle's
- *   permissions onto the editor role itself (the consumer contract:
- *   per-bundle permission strings do not exist until the bundle does).
+ *   non-Layout-Builder node bundle, the 'target' reference bundle (which cannot
+ *   self-reference), and the 'form_block' form-edited block_content type.
+ *   Because the fixture's bundles are created AFTER the recipe's
+ *   daedalus_editor_roles ran, the trait grants the plain bundle's permissions
+ *   onto the editor role itself (the consumer contract: per-bundle permission
+ *   strings do not exist until the bundle does).
  * - Logs in as the editor persona (loginAsEditor()): a user whose ONLY role
  *   is daedalus_editor, the permission contract the recipe ships. Under
  *   this fixture the site IS the recipe's product, so that role is its only
@@ -56,9 +56,20 @@ use Drupal\user\UserInterface;
  * system.theme action, and daedalus_theme is the one whose shipped
  * header/footer block placements exist (placements are per-theme).
  *
- * A class that needs its own setUp() aliases this one and calls it:
+ * A class that needs its own setUp() declares the two properties itself (a
+ * class may redeclare what a trait may not), calls parent::setUp() and then
+ * installFixture(), the order this setUp() keeps. phpstan's phpunit rule
+ * reads the class's setUp() for the literal parent call, so an alias of
+ * this one (setUp as daedalusSetUp) is refused there:
  * @code
- * use DaedalusFixtureTrait { setUp as daedalusSetUp; }
+ * protected $defaultTheme = 'daedalus_theme';
+ * protected $profile = '';
+ *
+ * protected function setUp(): void {
+ *   parent::setUp();
+ *   $this->installFixture();
+ *   // The class's own fixture.
+ * }
  * @endcode
  */
 trait DaedalusFixtureTrait {
@@ -70,8 +81,8 @@ trait DaedalusFixtureTrait {
    *
    * The recipe is a require-dev dependency of every module that uses this
    * fixture, so Composer installs it as a sibling of the Drupal root:
-   * <project>/recipes/daedalus_recipe. Its recipe.yml includes resolve from web/
-   * to that same recipes/ directory, so applying it here is the exact
+   * <project>/recipes/daedalus_recipe. Its recipe.yml includes resolve from
+   * web/ to that same recipes/ directory, so applying it here is the exact
    * composition a real site runs.
    */
   protected function daedalusRecipePath(): string {
@@ -97,8 +108,8 @@ trait DaedalusFixtureTrait {
     $parameters = parent::installParameters();
     // Core's FileSystem::saveData() stages every file write through
     // temporary://. The harness points file_temp_path at
-    // sites/simpletest/<id>/temp but nothing creates that directory before
-    // the in-process installer runs the recipe, and daedalus_stylish compiles its
+    // sites/simpletest/<id>/temp but nothing creates that directory before the
+    // in-process installer runs the recipe, and daedalus_stylish compiles its
     // variant stylesheet (a file save) during hook_modules_installed. Real
     // sites are unaffected (no file_temp_path setting; the OS temp dir is
     // used).

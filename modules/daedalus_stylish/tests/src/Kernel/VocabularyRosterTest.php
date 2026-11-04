@@ -26,12 +26,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests the vocabulary roster: what one address may style, resolved.
  *
  * The roster's answers per address over the guide-test declarations
- * (daedalus_stylish_guide_test layered under daedalus_stylish_guide_test_extra and the
- * sub theme): grants with allowlists resolved, value spaces resolved node
- * then site, axes with their depth stamps, conditions, parts, the
- * applicable materials, enforcement, cache metadata, the correctives,
- * and the builder's memo; and the lock of the client twin (style-guide.js
- * over the payload ClientStyleGuide serves) against the roster.
+ * (daedalus_stylish_guide_test layered under daedalus_stylish_guide_test_extra
+ * and the sub theme): grants with allowlists resolved, value spaces resolved
+ * node then site, axes with their depth stamps, conditions, parts, the
+ * applicable materials, enforcement, cache metadata, the correctives, and the
+ * builder's memo; and the lock of the client twin (style-guide.js over the
+ * payload ClientStyleGuide serves) against the roster.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -128,8 +128,8 @@ class VocabularyRosterTest extends KernelTestBase {
     $this->assertSame('kind:container', (string) $container);
     $this->assertTrue($container->address()->equals(Address::kind('container')));
 
-    // The block kind: daedalus_stylish's own motion, effects and shadow, then the
-    // fixture's spacing, in authoring order.
+    // The block kind: daedalus_stylish's own motion, effects and shadow, then
+    // the fixture's spacing, in authoring order.
     $block = $this->roster('kind:block');
     $this->assertSame(['motion', 'effects', 'shadow', 'spacing'], $block->groups());
 
@@ -332,8 +332,7 @@ class VocabularyRosterTest extends KernelTestBase {
   }
 
   /**
-   * A position qualifier is structure, no vocabulary; the anchor lands on
-   * the owner.
+   * A position qualifier is structure; the anchor lands on the owner.
    *
    * `:first-child`, `:not(:last-child)` and `:nth-child(2n+1)` narrow a
    * compound by what the markup decides, so the walk judges nothing for
@@ -496,7 +495,13 @@ class VocabularyRosterTest extends KernelTestBase {
     // existence switch, the host's constraints riding along.
     $before = $this->roster('block_type:testimonial::&::before');
     $this->assertFalse($before->declared());
-    $this->assertSame(['combinator' => NULL, 'kind' => VocabularyRoster::KIND_PSEUDO, 'name' => 'before', 'qualifiers' => [], 'position' => 0], $before->undeclared());
+    $this->assertSame([
+      'combinator' => NULL,
+      'kind' => VocabularyRoster::KIND_PSEUDO,
+      'name' => 'before',
+      'qualifiers' => [],
+      'position' => 0,
+    ], $before->undeclared());
     $this->assertSame(['motion', 'effects', 'shadow', 'spacing', 'typography', 'generated_content'], $before->groups());
     $this->assertSame(['content'], $before->grants()['generated_content']);
     $this->assertTrue($before->grantsProperty('content'));
@@ -582,9 +587,23 @@ class VocabularyRosterTest extends KernelTestBase {
     // open grants), the table locked to the manager's universe.
     $marker = $this->roster('block_type:testimonial::&::marker');
     $this->assertFalse($marker->declared());
-    $this->assertSame(['combinator' => NULL, 'kind' => VocabularyRoster::KIND_PSEUDO, 'name' => 'marker', 'qualifiers' => [], 'position' => 0], $marker->undeclared());
+    $this->assertSame([
+      'combinator' => NULL,
+      'kind' => VocabularyRoster::KIND_PSEUDO,
+      'name' => 'marker',
+      'qualifiers' => [],
+      'position' => 0,
+    ], $marker->undeclared());
     $this->assertSame(['typography', 'motion'], $marker->groups());
-    $this->assertSame(['font-family', 'font-size', 'font-weight', 'font-style', 'line-height', 'text-transform', 'color'], $marker->grants()['typography']);
+    $this->assertSame([
+      'font-family',
+      'font-size',
+      'font-weight',
+      'font-style',
+      'line-height',
+      'text-transform',
+      'color',
+    ], $marker->grants()['typography']);
     $this->assertContains('animation', $marker->grants()['motion']);
     $this->assertFalse($marker->grantsProperty('padding'), 'A marker has no box model: the host\'s spacing is not its vocabulary.');
     $this->assertFalse($marker->grantsProperty('content'), 'Only a generated box has an existence switch.');
@@ -636,7 +655,16 @@ class VocabularyRosterTest extends KernelTestBase {
     $this->assertSame([], $container->valueSpace('font-size'), 'An ungranted property has no value space.');
     // The suite's gap binding reaches the container through its layout
     // grant, the family expanded like the node's padding.
-    $this->assertSame(['padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'gap', 'row-gap', 'column-gap'], array_keys($container->valueSpaces()));
+    $this->assertSame([
+      'padding',
+      'padding-top',
+      'padding-right',
+      'padding-bottom',
+      'padding-left',
+      'gap',
+      'row-gap',
+      'column-gap',
+    ], array_keys($container->valueSpaces()));
 
     // The site's authored constraint default binds where the node is
     // silent (border-radius on the paragraph's border group) and only
@@ -1153,7 +1181,11 @@ class VocabularyRosterTest extends KernelTestBase {
       ['block_plugin:undeclared', "block:$uuid", 'plugin:undeclared'],
       ['layout:layout_twocol_section', "container:$uuid", 'layout_twocol_section'],
       ['layout:layout_twocol_section::.section-content', "container:$uuid::.section-content", 'layout_twocol_section'],
-      ['layout:layout_twocol_section::.section-content > *', "container:$uuid::.section-content > *", 'layout_twocol_section'],
+      [
+        'layout:layout_twocol_section::.section-content > *',
+        "container:$uuid::.section-content > *",
+        'layout_twocol_section',
+      ],
       ['layout:layout_onecol', "container:$uuid", 'layout_onecol'],
       ['kind:block::.nope', "block:$uuid::.nope", NULL],
       ['kind:block::.s-a3', "block:$uuid::.s-a3", NULL],
@@ -1172,7 +1204,11 @@ class VocabularyRosterTest extends KernelTestBase {
       ['layout:layout_twocol_section::&::before', "container:$uuid::&::before", 'layout_twocol_section'],
       ['block_type:testimonial::&::before', "block:$uuid::&::before", 'testimonial'],
       ['block_type:testimonial::.testimonial__quote::after', "block:$uuid::.testimonial__quote::after", 'testimonial'],
-      ['layout:layout_twocol_section::.section-content > *::before', "container:$uuid::.section-content > *::before", 'layout_twocol_section'],
+      [
+        'layout:layout_twocol_section::.section-content > *::before',
+        "container:$uuid::.section-content > *::before",
+        'layout_twocol_section',
+      ],
       ['kind:container::> d-testimonial::before', "container:$uuid::> d-testimonial::before", NULL],
       ['kind:block::p::after', "block:$uuid::p::after", NULL],
       ['kind:block::.s-a3::before', "block:$uuid::.s-a3::before", NULL],
@@ -1187,7 +1223,11 @@ class VocabularyRosterTest extends KernelTestBase {
       ['kind:container::> *:not(:last-child)', "container:$uuid::> *:not(:last-child)", NULL],
       ['kind:block::p:nth-child(2n+1)', "block:$uuid::p:nth-child(2n+1)", NULL],
       ['kind:container::&:first-child::before', "container:$uuid::&:first-child::before", NULL],
-      ['block_type:testimonial::&:first-child .testimonial__quote', "block:$uuid::&:first-child .testimonial__quote", 'testimonial'],
+      [
+        'block_type:testimonial::&:first-child .testimonial__quote',
+        "block:$uuid::&:first-child .testimonial__quote",
+        'testimonial',
+      ],
       ['kind:block::> *:first-child', "block:$uuid::> *:first-child", NULL],
       // Admission by mode under strict (the battery's mode): a published
       // state on any compound and a class that is a declared part land;
@@ -1230,7 +1270,11 @@ class VocabularyRosterTest extends KernelTestBase {
       // does not carry (the host's, no switch); one the browser does not
       // know (nowhere).
       ['block_type:testimonial::&::marker', "block:$uuid::&::marker", 'testimonial'],
-      ['block_type:testimonial::.testimonial__quote::first-letter', "block:$uuid::.testimonial__quote::first-letter", 'testimonial'],
+      [
+        'block_type:testimonial::.testimonial__quote::first-letter',
+        "block:$uuid::.testimonial__quote::first-letter",
+        'testimonial',
+      ],
       ['kind:block::p::selection', "block:$uuid::p::selection", NULL],
       ['kind:container::> d-testimonial::placeholder', "container:$uuid::> d-testimonial::placeholder", NULL],
       ['kind:container::&::first-line', "container:$uuid::&::first-line", NULL],
@@ -1348,19 +1392,20 @@ class VocabularyRosterTest extends KernelTestBase {
   }
 
   /**
-   * The entity's layout root: daedalus_layout's anatomy, daedalus_stylish's groups.
+   * The entity's layout root: daedalus_layout anatomy, daedalus_stylish groups.
    *
    * The part is the box that arranges the root sections, so it gets the
-   * vocabulary a list's box gets (.field__items' shape): spacing, for the
-   * gap between sections, and layout. The anatomy (label, tag) is daedalus_layout's
-   * and the grant daedalus_stylish's, merged over the one declaration file family,
-   * so the same address the AI writes (entity:{uuid}::.daedalus-layout-layout)
-   * grants gap. daedalus_layout is enabled inside the case so the class's other
-   * rosters stay as the module list declares them.
+   * vocabulary a list's box gets (.field__items' shape): spacing, for the gap
+   * between sections, and layout. The anatomy (label, tag) is daedalus_layout's
+   * and the grant daedalus_stylish's, merged over the one declaration file
+   * family, so the same address the AI writes
+   * (entity:{uuid}::.daedalus-layout-layout) grants gap. daedalus_layout is
+   * enabled inside the case so the class's other rosters stay as the module
+   * list declares them.
    */
   public function testEntityLayoutRoot(): void {
-    // daedalus_stylish's layer alone, no daedalus_layout: the grant is declared and the
-    // label degrades to the selector; no markup ever carries the part.
+    // daedalus_stylish's layer alone, no daedalus_layout: the grant is declared
+    // and the label degrades to the selector; no markup ever carries the part.
     $this->assertSame(['.daedalus-layout-layout' => '.daedalus-layout-layout'], $this->roster('kind:entity')->parts());
 
     $this->enableModules(['block', 'daedalus_layout']);

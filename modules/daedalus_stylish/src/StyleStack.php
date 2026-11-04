@@ -152,8 +152,9 @@ class StyleStack {
    *   A full style-map key (root, '::selector' relative, or block-field
    *   form).
    * @param array $context
-   *   The validate() context; "host" (a HostInterface) enables bundle and layout resolution
-   *   for the key's captured scope (the floor's block addresses).
+   *   The validate() context; "host" (a HostInterface) enables bundle and
+   *   layout resolution for the key's captured scope (the floor's block
+   *   addresses).
    * @param string|null $theme
    *   The theme whose declarations order delivery and answer the declared
    *   tier; NULL = the site's default theme, resolved once for both.
@@ -263,7 +264,7 @@ class StyleStack {
   }
 
   /**
-   * The map's layers at a key: its carriers' worn references, then the own entry.
+   * The map's layers at a key: carriers' worn references, then the own entry.
    *
    * The carriers in delivery order: the rules wearing at the key
    * (ruleCarriers(), a '::' key only), then the root; each reference
@@ -276,7 +277,10 @@ class StyleStack {
   protected function mapLayers(array $map, string $root_key, string $relative, ?string $theme, MaterialsRoster $roster): array {
     $layers = [];
     foreach ($this->ruleCarriers($map, $root_key, $relative) as [$rule_key, $at]) {
-      $carrier = ['key' => $root_key, 'selector' => substr($rule_key, strlen($root_key) + strlen(RelativeSelector::SUFFIX))];
+      $carrier = [
+        'key' => $root_key,
+        'selector' => substr($rule_key, strlen($root_key) + strlen(RelativeSelector::SUFFIX)),
+      ];
       foreach ($this->validator->orderedEntryRefs($map[$rule_key], $theme) as $ref) {
         $layers[] = $this->referenceLayer($ref, $at, $roster, $carrier);
       }
@@ -457,29 +461,37 @@ class StyleStack {
   }
 
   /**
-   * The ancestor tier: every ancestor rule position reaching the key as a
-   * group of layers, farthest ancestor first.
+   * The ancestor tier: every ancestor rule position reaching the key.
    *
-   * A key has ancestor layers at its root (the ancestor's rule targets
-   * this element), at a tag tier (`::p`: the rule's subject is that tag
-   * inside this element), at a part (`::.cls`: the rule qualifies a
-   * type compound this element matches) and at the generated box of any
-   * of those (`::&::before`, `::p::after`, `::.cls::before`: the rule
-   * ends in the same pseudo-element and reaches the host as it would the
-   * pseudo-free position, SelectorMatcher::reaches()); any other
-   * selector key is a rule of its own. Per ancestor, its selector suffixes come in the
-   * order partSuffixes() lists them (the rules' continued suffixes, the
-   * root's worn fragments' suffixes, then the map's); each reaching
-   * position contributes its map layers (mapLayers() at the ancestor's
-   * position: the rule's own wear and the owner's wear at the position,
-   * then the rule's entry) with their identities kept, the worn ones as
-   * worn ancestor layers naming
-   * the variant and its carrier where they deliver, the entry as the own
-   * ancestor layer. A group exists when any of its layers delivers at
-   * the key, and the own layer rides its group empty or not; a position
-   * delivering nothing contributes no layer. The client's
+   * Each position is a group of layers, farthest ancestor first. A key has
+   * ancestor layers at its root (the ancestor's rule targets this element), at
+   * a tag tier (`::p`: the rule's subject is that tag inside this element), at
+   * a part (`::.cls`: the rule qualifies a type compound this element matches)
+   * and at the generated box of any of those (`::&::before`, `::p::after`,
+   * `::.cls::before`: the rule ends in the same pseudo-element and reaches the
+   * host as it would the pseudo-free position, SelectorMatcher::reaches()); any
+   * other selector key is a rule of its own. Per ancestor, its selector
+   * suffixes come in the order partSuffixes() lists them (the rules' continued
+   * suffixes, the root's worn fragments' suffixes, then the map's); each
+   * reaching position contributes its map layers (mapLayers() at the ancestor's
+   * position: the rule's own wear and the owner's wear at the position, then
+   * the rule's entry) with their identities kept, the worn ones as worn
+   * ancestor layers naming the variant and its carrier where they deliver, the
+   * entry as the own ancestor layer. A group exists when any of its layers
+   * delivers at the key, and the own layer rides its group empty or not; a
+   * position delivering nothing contributes no layer. The client's
    * ancestorLayers() mirror.
    *
+   * @param array $map
+   *   The style map.
+   * @param string $root_key
+   *   The key's root: the selectable key of the element it belongs to.
+   * @param string $relative
+   *   The key's relative selector suffix (a '::' key), '' at the root.
+   * @param string|null $theme
+   *   The theme the entries are read for.
+   * @param \Drupal\daedalus_blueprint\Materials\MaterialsRoster $roster
+   *   The materials roster the worn references resolve against.
    * @param \Drupal\daedalus_stylish\Selector\SelectorMatcher $matcher
    *   The matcher over the document.
    *
@@ -578,10 +590,10 @@ class StyleStack {
   }
 
   /**
-   * The rule an ancestor layer id names: the position its value reaches
-   * the key through, for the own and the worn spelling alike.
+   * The rule an ancestor layer id names, own or worn spelling alike.
    *
-   * The client's ancestorRule() twin (js/src/code/layers.js): the id
+   * The position its value reaches the key through. The client's
+   * ancestorRule() twin (js/src/code/layers.js): the id
    * after the tier prefix is `{owner}::{position}`, with `|{variant}`
    * appended for a worn layer; `|` is a character neither the selector
    * grammar nor a machine name admits, so the tail after the LAST one is
@@ -610,9 +622,10 @@ class StyleStack {
   }
 
   /**
-   * The variant a worn ancestor layer id carries, or NULL for an own
-   * ancestor layer and for any other id (the client's ancestorVariant()
-   * twin).
+   * The variant a worn ancestor layer id carries, or NULL.
+   *
+   * NULL for an own ancestor layer and for any other id (the client's
+   * ancestorVariant() twin).
    */
   public function ancestorVariant(string $id): ?string {
     if (!str_starts_with($id, self::TIER_ANCESTOR . ':')) {

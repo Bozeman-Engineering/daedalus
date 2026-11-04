@@ -1,4 +1,3 @@
-import { h } from 'preact';
 import { useSelector } from 'react-redux';
 import { useEffect, useRef } from 'preact/hooks';
 import { getCurrentDrop } from '../../drag/drag-controller';
@@ -204,7 +203,9 @@ const InsertionCaret = () => {
         hidden
       />
       <div ref={emptyRef} className="daedalus-ui-caret__empty" hidden>
-        <span className="daedalus-ui-caret__empty-label">{Drupal.t('Drop here')}</span>
+        <span className="daedalus-ui-caret__empty-label">
+          {Drupal.t('Drop here')}
+        </span>
       </div>
       <div ref={elementRef} className="daedalus-ui-caret__element" hidden>
         <span

@@ -98,6 +98,19 @@ import {
  * panel and the canvas read the pushed defaults before the promise
  * resolves; it resolves with the batch's response payload.
  *
+ * @param {object} args
+ *   The commit's wiring.
+ * @param {object} args.source
+ *   The state source (commitBatch, getTree, refreshDefaults).
+ * @param {object} args.guide
+ *   The style guide payload (skinDefaults for a skin session).
+ * @param {object} args.session
+ *   The open pending session (pending.js shapes).
+ * @param {Array<object>} args.variants
+ *   The store's variant records.
+ * @param {object} args.styleMap
+ *   The style map a save session captures from.
+ *
  * @return {Promise<object>}
  *   The written variant's record (a skin session: the batch payload);
  *   rejects with the op queue's Error after its source reported it, so
@@ -139,7 +152,9 @@ export const commitSession = ({
       {
         kind: 'variant',
         id: session.reference,
-        styles: sessionStyles(session, { documentStyles: variant?.value ?? {} }),
+        styles: sessionStyles(session, {
+          documentStyles: variant?.value ?? {},
+        }),
       },
       Drupal.t('Pushed changes into !label', {
         '!label': variant?.label ?? session.reference,
@@ -248,14 +263,25 @@ export const commitSession = ({
  * The bar itself.
  *
  * @param {object} props
- *   - source, guide, styleMap, variants: the Inspector's usual wiring
- *     (variants = the store's variant records).
- *   - session: the open pending session (pending.js shapes).
- *   - usages: the update session's wearer count (the Inspector's one
- *     fetch per session entry, shared with the frame's blast line), or
- *     null while unanswered.
- *   - onSession: writes the session back (a move row's dismiss).
- *   - onClose: closes the session (Discard and a successful commit alike).
+ *   The component's props.
+ * @param {object} props.source
+ *   The state source (the Inspector's usual wiring).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.styleMap
+ *   The style map a save session captures from.
+ * @param {Array<object>} props.variants
+ *   The store's variant records.
+ * @param {object} props.session
+ *   The open pending session (pending.js shapes).
+ * @param {?number} [props.usages]
+ *   The update session's wearer count (the Inspector's one fetch per
+ *   session entry, shared with the frame's blast line), or null while
+ *   unanswered.
+ * @param {Function} props.onSession
+ *   Writes the session back (a move row's dismiss).
+ * @param {Function} props.onClose
+ *   Closes the session (Discard and a successful commit alike).
  */
 export const PushBar = ({
   source,
@@ -386,8 +412,7 @@ export const PushBar = ({
           data-pending-move={row.move.id}
         >
           <span className="daedalus-stylish-push-bar__move-text">
-            {Drupal.t('Selector')}{' '}
-            <code>{row.part}</code>
+            {Drupal.t('Selector')} <code>{row.part}</code>
             {' → '}
             <code>{row.move.to}</code>
           </span>

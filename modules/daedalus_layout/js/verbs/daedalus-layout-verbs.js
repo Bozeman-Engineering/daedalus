@@ -26,6 +26,21 @@ const registerVerbs = (app) => {
    * Queues operations against the page's root entity and reports failures
    * through the one mutation-failure display (flash + structured-error
    * notification; quiet for ops queued behind a failed one).
+   *
+   * @param {object[]} operations
+   *   The batch of spine ops to queue.
+   * @param {?{apply: Function, rollback: Function}} optimistic
+   *   The optimistic hooks the queue applies at enqueue and reverts on a
+   *   rejection, when the verb has any.
+   * @param {?string} key
+   *   The selectable key the verb ran on, so a failure is reported
+   *   against its element.
+   * @param {?(string|string[])} select
+   *   The uuid or uuids to select once the batch lands.
+   *
+   * @return {Promise<boolean>}
+   *   Resolves TRUE when the batch landed, FALSE when there was no page
+   *   context or the server refused it.
    */
   const mutate = (operations, optimistic = null, key = null, select = null) => {
     const { Blueprint } = Drupal.Daedalus;
@@ -47,6 +62,12 @@ const registerVerbs = (app) => {
    * mutation response does not re-render. A structure op on such an
    * element reloads the page on success, so the frame shows the result
    * (the slot's default after a release) instead of the optimistic hide.
+   *
+   * @param {string} key
+   *   The selectable key.
+   *
+   * @return {boolean}
+   *   TRUE when the key's element sits outside the main entity.
    */
   const outsideMainEntity = (key) => {
     const element = Drupal.Daedalus.Selection.getElement(key);
@@ -60,6 +81,12 @@ const registerVerbs = (app) => {
    * and snaps back if the server rejects the removal; the revert is most of
    * the failure display.
    * The response's subtree swap discards the hidden node on confirm.
+   *
+   * @param {string} key
+   *   The selectable key of the element being removed.
+   *
+   * @return {?{apply: Function, rollback: Function}}
+   *   The hooks, or null when the key has no element to hide.
    */
   const optimisticRemove = (key) => {
     const { Selection } = Drupal.Daedalus;
@@ -97,6 +124,12 @@ const registerVerbs = (app) => {
    * Composes per-key optimistic remove hooks for a multi-select Trash:
    * all members vanish at enqueue, and a rejection snaps them back in
    * reverse order (LIFO, matching the op queue's rollback discipline).
+   *
+   * @param {string[]} keys
+   *   The selectable keys of the multi-select set.
+   *
+   * @return {?{apply: Function, rollback: Function}}
+   *   The composed hooks, or null when no key has an element to hide.
    */
   const optimisticRemoveMany = (keys) => {
     const hooks = keys.map(optimisticRemove).filter(Boolean);
@@ -112,6 +145,12 @@ const registerVerbs = (app) => {
   /**
    * The UUID a selectable key qualifies: the component UUID for block keys,
    * the section UUID for section keys.
+   *
+   * @param {string} key
+   *   The selectable key (`block:<uuid>` or `container:<uuid>`).
+   *
+   * @return {string}
+   *   The UUID after the kind.
    */
   const uuidOf = (key) => key.split(':')[1];
 

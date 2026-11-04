@@ -12,10 +12,10 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
  * The design_system identity field every member entity shares.
  *
  * One definition, one read, one write, one save-time check, so the member
- * entity types (daedalus_stylish's four materials, the blueprint) cannot drift on
- * what membership means (see DesignSystemMemberInterface).
- * Non-revisionable beside the entity's other identity fields: the system
- * relationship belongs to the member, not to any one revision.
+ * entity types (daedalus_stylish's four materials, the blueprint) cannot drift
+ * on what membership means (see DesignSystemMemberInterface). Non-revisionable
+ * beside the entity's other identity fields: the system relationship belongs to
+ * the member, not to any one revision.
  */
 trait DesignSystemMemberTrait {
 

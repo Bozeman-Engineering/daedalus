@@ -579,12 +579,12 @@ abstract class PropertyGroupBase extends PluginBase implements PropertyGroupInte
   }
 
   /**
-   * Whether a component is exactly one function call: its parentheses
-   * open at the head and close only at its last character.
+   * Whether a component is exactly one function call.
    *
-   * "linear-gradient(#000, #fff) radial-gradient(red, blue)" is two
-   * functions with a space between, not a layer; "linear-gradient(#000,
-   * #fff) solid" trails a word. Balance itself is the caller's split's.
+   * Its parentheses open at the head and close only at its last character.
+   * "linear-gradient(#000, #fff) radial-gradient(red, blue)" is two functions
+   * with a space between, not a layer; "linear-gradient(#000, #fff) solid"
+   * trails a word. Balance itself is the caller's split's.
    */
   protected function isOneFunction(string $component): bool {
     $depth = 0;

@@ -11,8 +11,8 @@ use Drupal\daedalus_ui\EditorSettings;
  * Determines whether AI image generation is currently enabled.
  *
  * Generation is gated at two levels and runs only when both are on:
- *   - a site-wide master switch (daedalus_ai.settings.image_generation_enabled),
- *     and
+ *   - a site-wide master switch
+ *     (daedalus_ai.settings.image_generation_enabled), and
  *   - a per-user preference, toggled live from the Edit Mode toolbar and stored
  *     per-account via daedalus_ui EditorSettings (key
  *     daedalus_ai.generate_images).

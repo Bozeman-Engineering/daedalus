@@ -62,29 +62,29 @@ import { parseSelector } from '../../../daedalus_ui/js/edit_mode/materials/relat
  * A plane: one entry of the index projected for the printer.
  *
  * @typedef {object} Plane
- * @property {string} address
+ * @prop {string} address
  *   The index address: an element key or a `key::selector` part address.
- * @property {number} depth
+ * @prop {number} depth
  *   The effective lift depth (the plane-ancestor count, capped).
- * @property {string} label
+ * @prop {string} label
  *   The index's label for the entry (what the element says; the host
  *   words a content label as its type through app.Blueprint.typeForKey).
- * @property {string} kind
+ * @prop {string} kind
  *   The entry's kind ('entity', 'container', 'block', 'field', 'part').
- * @property {'element'|'part'} tier
+ * @prop {'element'|'part'} tier
  *   The entry's tier.
- * @property {?string} owner
+ * @prop {?string} owner
  *   A part plane's owning element key; null for an element plane.
- * @property {?string} selector
+ * @prop {?string} selector
  *   A part plane's canonical relative selector under its owner (what the
  *   part behavior's selectorFor takes); null for an element plane.
- * @property {boolean} lifted
+ * @prop {boolean} lifted
  *   Whether the plane lifts along Z (false outside an isolated lineage).
- * @property {number} lift
+ * @prop {number} lift
  *   The Z step the element itself takes, in gap units: its depth minus
  *   its nearest plane ancestor's (the translateZ composes with the
  *   ancestors' under preserve-3d); 0 when unlifted or at the root.
- * @property {boolean} labeled
+ * @prop {boolean} labeled
  *   Whether the plane carries its label (labels on, lifted, not collapsed
  *   under the cap).
  */
@@ -97,9 +97,9 @@ import { parseSelector } from '../../../daedalus_ui/js/edit_mode/materials/relat
  *   The settings' depthCap.
  *
  * @return {?number}
+ *   The cap, or null for no cap.
  */
-const capOf = (value) =>
-  Number.isInteger(value) && value >= 1 ? value : null;
+const capOf = (value) => (Number.isInteger(value) && value >= 1 ? value : null);
 
 /**
  * The selector a part address carries under its owner: the index's
@@ -111,6 +111,7 @@ const capOf = (value) =>
  *   Its index entry (owner set).
  *
  * @return {string}
+ *   The relative selector under the owner.
  */
 const selectorOf = (address, entry) => address.slice(entry.owner.length + 2);
 
@@ -124,6 +125,7 @@ const selectorOf = (address, entry) => address.slice(entry.owner.length + 2);
  *   Its index entry.
  *
  * @return {boolean}
+ *   True for a part whose selector ends in a pseudo-element.
  */
 const isBox = (address, entry) =>
   entry.tier === 'part' &&
@@ -141,6 +143,7 @@ const isBox = (address, entry) =>
  *   The reach predicate.
  *
  * @return {boolean}
+ *   True when the entry is a plane.
  */
 const isPlane = (address, entry, reach) =>
   reach(address) && !isBox(address, entry);
@@ -199,6 +202,7 @@ const structuralDepths = (index, root, reach) => {
  *   The address whose ancestry to climb.
  *
  * @return {?string}
+ *   The nearest plane ancestor's address, or null.
  */
 const planeAbove = (index, depths, address) => {
   let at = index.get(address)?.rowParent ?? null;
@@ -224,6 +228,7 @@ const planeAbove = (index, depths, address) => {
  *   The selected keys.
  *
  * @return {Set<string>}
+ *   The plane addresses the isolate keeps lifted.
  */
 const lineageOf = (index, depths, selection) => {
   const lineage = new Set();
@@ -333,6 +338,7 @@ export const planes = (index, root, reach, settings, selection = []) => {
  *   The reach predicate.
  *
  * @return {number}
+ *   The deepest depth; 0 for no planes.
  */
 export const maxDepth = (index, root, reach) => {
   if (!index) {

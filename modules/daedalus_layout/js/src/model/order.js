@@ -52,6 +52,7 @@ export const compareLabels = (a, b) =>
  *   The id that leads the list whatever its label, or null for none.
  *
  * @return {Array<object>}
+ *   A new list, the leading face first, the rest by label.
  */
 export const byLabel = (faces, leading = null) =>
   [...faces].sort(

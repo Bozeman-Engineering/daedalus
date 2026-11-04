@@ -45,6 +45,7 @@
  *   nothing to).
  *
  * @return {boolean}
+ *   Whether the row offers a rename.
  */
 export const rowRenamable = (node, isRoot, editTarget, inert = false) =>
   !inert &&
@@ -67,8 +68,13 @@ export const rowRenamable = (node, isRoot, editTarget, inert = false) =>
  * @param {string} value
  *   The rename input's raw value.
  * @param {Object} context
- *   { isRoot, editTarget, currentTitle }: the root row's gate and its live
- *   title (the unchanged-commit anchor); all irrelevant off the root.
+ *   The root row's gate and its live title; all irrelevant off the root.
+ * @param {boolean} context.isRoot
+ *   Whether the renamed row is the root row.
+ * @param {?string} context.editTarget
+ *   The root's edit target (the entity's label field), or null.
+ * @param {?string} context.currentTitle
+ *   The root's live title, the unchanged-commit anchor.
  *
  * @return {?Object}
  *   A blueprint operation, or null when the commit cancels.

@@ -8,7 +8,9 @@ use Drupal\Core\Plugin\Context\Context;
 use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\Plugin\Context\EntityContext;
 use Drupal\daedalus_blueprint_library\Entity\Blueprint;
+use Drupal\daedalus_layout\NestedSectionStorageInterface;
 use Drupal\entity_test\Entity\EntityTest;
+use Drupal\layout_builder\OverridesSectionStorageInterface;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use Drupal\layout_builder\SectionComponent;
 use Drupal\layout_builder\SectionStorageInterface;
@@ -20,7 +22,7 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
 /**
  * Tests the layout root: the one element the root sections render inside.
  *
- * daedalus_layout wraps the section list buildSections() returns in one
+ * `daedalus_layout` wraps the section list buildSections() returns in one
  * div.daedalus-layout-layout in every view mode and for every host shape, gives
  * the edit canvas's layout_builder_plus container the same class, and
  * declares that element as entity anatomy in daedalus_layout.page_builder.yml
@@ -82,6 +84,7 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
     $roots = $xpath->query('//div[contains(concat(" ", normalize-space(@class), " "), " daedalus-layout-layout ")]');
     $this->assertSame(1, $roots->length, 'The sections render inside exactly one layout root.');
     $root = $roots->item(0);
+    assert($root instanceof \DOMElement);
 
     $children = [];
     foreach ($root->childNodes as $child) {
@@ -128,7 +131,7 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
   }
 
   /**
-   * daedalus_layout declares the layout root as entity anatomy, with its box fact.
+   * The layout root is declared as entity anatomy, with its box fact.
    *
    * The rendered class and the declared part key are one fact; the part's
    * flex column (display: flex; flex-direction: column, the container
@@ -159,11 +162,13 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
   }
 
   /**
-   * The edit canvas's container is the layout root too: same class, same
-   * exactly-the-sections contract, so a page gap paints alike live and edit.
+   * The edit canvas's container is the layout root too.
    *
-   * The route entity's sections render through the layout_builder_plus
-   * element in edit mode (daedalus_ui's EditableUiBuilder event, daedalus_layout's
+   * Same class, same exactly-the-sections contract, so a page gap paints
+   * alike live and edit.
+   *
+   * The route entity's sections render through the layout_builder_plus element
+   * in edit mode (daedalus_ui's EditableUiBuilder event, daedalus_layout's
    * subscriber swapping buildSections()'s list out), so its container wears
    * LAYOUT_ROOT_CLASS beside its own id and class, which the AJAX rebuild
    * target and daedalus_ui's edit-mode plugin still read.
@@ -181,6 +186,7 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
     $roots = $xpath->query('//div[contains(concat(" ", normalize-space(@class), " "), " daedalus-layout-layout ")]');
     $this->assertSame(1, $roots->length, 'The edit canvas renders exactly one layout root.');
     $root = $roots->item(0);
+    assert($root instanceof \DOMElement);
     $this->assertSame('layout-builder', $root->getAttribute('id'), 'The layout root is the layout_builder_plus container (the AJAX rebuild target keeps its id).');
     $classes = explode(' ', $root->getAttribute('class'));
     $this->assertContains('layout-builder', $classes, 'The container keeps its layout-builder class beside the layout root class.');
@@ -229,7 +235,7 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
     $entity->save();
     $entity = EntityTest::load($entity->id());
     $storage = $this->getNestedStorage($entity);
-    $this->assertSame(0, $storage->count());
+    $this->assertCount(0, $storage);
     $this->container->get('layout_builder.tempstore_repository')->set($storage);
 
     $xpath = $this->htmlXpath($this->renderEditCanvas($entity));
@@ -237,6 +243,7 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
     $roots = $xpath->query('//div[contains(concat(" ", normalize-space(@class), " "), " daedalus-layout-layout ")]');
     $this->assertSame(1, $roots->length, 'A blank page still renders the edit canvas layout root.');
     $root = $roots->item(0);
+    assert($root instanceof \DOMElement);
     $this->assertSame('layout-builder', $root->getAttribute('id'));
 
     $children = [];
@@ -282,6 +289,7 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
     $wrappers = $xpath->query('//*[@data-main-entity]');
     $this->assertSame(1, $wrappers->length, 'The canvas carries one main-entity wrapper.');
     $wrapper = $wrappers->item(0);
+    assert($wrapper instanceof \DOMElement);
     $this->assertSame('entity_view_display::entity_test.entity_test.default::entity_view_display', $wrapper->getAttribute('data-daedalus-ui-entity-wrapper'), 'The root wrapper names the display.');
     $this->assertSame('entity:' . $display->uuid(), $wrapper->getAttribute('data-selectable'), 'The root wrapper carries the display\'s selectable key.');
     $this->assertSame('entity_view_display', $wrapper->getAttribute('data-entity-type'));
@@ -295,6 +303,7 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
     $roots = $xpath->query('//div[contains(concat(" ", normalize-space(@class), " "), " daedalus-layout-layout ")]');
     $this->assertSame(1, $roots->length, 'The template renders inside exactly one layout root.');
     $root = $roots->item(0);
+    assert($root instanceof \DOMElement);
     $this->assertSame('layout-builder', $root->getAttribute('id'));
     $this->assertSame($wrapper, $root->parentNode, 'The layout root sits directly inside the root wrapper.');
     $this->assertSame(1, $xpath->query('//*[@data-layout-builder-section-delta]')->length, 'The template\'s one section renders.');
@@ -316,7 +325,7 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
     $entity->save();
     $entity = EntityTest::load($entity->id());
     $storage = $this->getNestedStorage($entity);
-    $this->assertSame(0, $storage->count());
+    $this->assertCount(0, $storage);
     $this->container->get('layout_builder.tempstore_repository')->set($storage);
 
     $this->assertBlankCanvasHint($this->renderEditCanvas($entity), 'Empty page.');
@@ -339,11 +348,13 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
       'display' => EntityContext::fromEntity($display),
       'view_mode' => new Context(new ContextDefinition('string'), 'default'),
     ]);
-    $this->assertSame(0, $storage->count());
+    $this->assertCount(0, $storage);
 
     $html = $this->renderCanvasRoot($storage);
     $this->assertBlankCanvasHint($html, 'Empty template.');
-    $this->assertSame('entity_view_display', $this->htmlXpath($html)->query('//*[@data-main-entity]')->item(0)->getAttribute('data-entity-type'), 'The canvas root is the display host.');
+    $root = $this->htmlXpath($html)->query('//*[@data-main-entity]')->item(0);
+    assert($root instanceof \DOMElement);
+    $this->assertSame('entity_view_display', $root->getAttribute('data-entity-type'), 'The canvas root is the display host.');
   }
 
   /**
@@ -370,13 +381,18 @@ class LayoutRootTest extends NestedStorageKernelTestBase {
     ]);
     $blueprint->save();
     $storage = $this->container->get('daedalus_blueprint.host_resolver')->fromEntity($blueprint)->sectionStorage();
-    $this->assertSame(0, $storage->count());
-    $this->assertNotEmpty($storage->getRootStorage()->getDefaultSectionStorage()->getSections(), 'The subject bundle\'s display carries a template the canvas must not copy in.');
+    assert($storage instanceof NestedSectionStorageInterface);
+    $this->assertCount(0, $storage);
+    $root_storage = $storage->getRootStorage();
+    assert($root_storage instanceof OverridesSectionStorageInterface);
+    $this->assertNotEmpty($root_storage->getDefaultSectionStorage()->getSections(), 'The subject bundle\'s display carries a template the canvas must not copy in.');
 
     $html = $this->renderCanvasRoot($storage);
     $this->assertBlankCanvasHint($html, 'Empty blueprint.');
     $xpath = $this->htmlXpath($html);
-    $this->assertSame('blueprint', $xpath->query('//*[@data-main-entity]')->item(0)->getAttribute('data-entity-type'), 'The canvas root is the blueprint host.');
+    $root = $xpath->query('//*[@data-main-entity]')->item(0);
+    assert($root instanceof \DOMElement);
+    $this->assertSame('blueprint', $root->getAttribute('data-entity-type'), 'The canvas root is the blueprint host.');
     $this->assertSame(0, $xpath->query('//*[@data-layout-builder-section-delta]')->length, 'The blank blueprint canvas renders no section: the template stayed on the display.');
   }
 

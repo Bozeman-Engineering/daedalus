@@ -24,6 +24,7 @@ export const VIEW = 'exploded';
  * Whether the document is in the exploded view right now.
  *
  * @return {boolean}
+ *   True while <html> carries this module's value on the axis.
  */
 export const isExploded = () =>
   document.documentElement.getAttribute(ATTRIBUTE) === VIEW;

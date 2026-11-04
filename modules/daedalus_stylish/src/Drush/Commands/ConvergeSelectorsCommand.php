@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish\Drush\Commands;
 
-use Drupal\daedalus_stylish\RelativeSelectorConvergence;
+use Drupal\daedalus_layout\ComponentTransform\HostEntityWalker;
 use Drupal\daedalus_stylish\ShippedSync;
+use Drupal\daedalus_stylish\StyleStoreConvergenceInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -23,11 +24,13 @@ final class ConvergeSelectorsCommand extends ConvergenceCommandBase {
 
   public function __construct(
     #[Autowire(service: 'daedalus_stylish.shipped_sync')]
-    ShippedSync $shippedSync,
+    protected ShippedSync $shippedSync,
     #[Autowire(service: 'daedalus_stylish.relative_selector_convergence')]
-    RelativeSelectorConvergence $convergence,
+    protected StyleStoreConvergenceInterface $convergence,
+    #[Autowire(service: 'daedalus_layout.host_entity_walker')]
+    protected ?HostEntityWalker $hostEntityWalker = NULL,
   ) {
-    parent::__construct($shippedSync, $convergence);
+    parent::__construct();
   }
 
   /**

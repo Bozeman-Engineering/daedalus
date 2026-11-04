@@ -167,10 +167,10 @@ services:
       # outside its allowlist is refused in every mode.
       - '@daedalus_stylish.pseudo_vocabularies'
   daedalus_stylish.variant_repository:
-    # Request-lifetime identity map behind loadVariant(): each distinct
-    # variant reference resolves at most once per request and workspace
-    # window (misses included), reset by _daedalus_variant_change() on any
-    # variant save or delete and by VariantWorkspaceSubscriber on publish.
+    # Request-lifetime identity map behind loadVariant(): each distinct variant
+    # reference resolves at most once per request and workspace window (misses
+    # included), reset by _daedalus_stylish_variant_change() on any variant save
+    # or delete and by VariantWorkspaceSubscriber on publish.
     class: Drupal\daedalus_stylish\VariantRepository
     arguments:
       - '@entity_type.manager'

@@ -33,6 +33,8 @@ import {
   portalLeaveUrl,
 } from '../../js/edit_mode/components/portal/portal-model.js';
 
+// cspell:ignore fabout fnode fpage
+
 /**
  * A stub element: attributes, a parent, and the two DOM lookups the model
  * uses (closest by the portal selector only; contains by ancestry).

@@ -32,8 +32,12 @@
  * edit-mode wrapper) to outrank any map rule, and opens with `all: initial`
  * so the properties it does not set (a width, an inset, a transform the
  * page gave its box) win too, with the page's color and font restored by
- * inheritance right after. The page's box is exactly hidden behind the hint
- * for exactly as long as the hint exists.
+ * inheritance further down the rule. The page's box is exactly hidden
+ * behind the hint for exactly as long as the hint exists. The reset's line
+ * carries a stylelint `order/properties-order` guard: core's property
+ * order has no seat for `all`, so an unguarded autofix sinks it to the
+ * block's end, where it resets every declaration above it and the hint
+ * is never generated.
  */
 
 /* The dashed box is the CONTENT box, never the border box: a section is
@@ -52,11 +56,8 @@
 }
 
 #daedalus-ui-stage [data-container-empty-hint]::before {
+  /* stylelint-disable-next-line order/properties-order */
   all: initial;
-  /* The page's font back after the reset; its color comes back through the
-     `color` line below (currentColor on `color` itself reads the inherited
-     value), so the affordance still wears the theme's scheme. */
-  font: inherit;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -68,5 +69,9 @@
   color: color-mix(in sRGB, currentColor 60%, transparent);
   outline: 2px dashed color-mix(in sRGB, currentColor 40%, transparent);
   outline-offset: -2px;
+  /* The page's font back after the reset; its color comes back through the
+     `color` line above (currentColor on `color` itself reads the inherited
+     value), so the affordance still wears the theme's scheme. */
+  font: inherit;
   font-style: italic;
 }

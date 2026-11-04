@@ -89,12 +89,12 @@ HTML;
   /**
    * The spec site vocabulary, a hand-built catalog.
    *
-   * Mirrors a live site's schema: the text block's field_text_tag allows
-   * h1..h6 (a text block may be the page's one h1), so this roster matches
-   * what DialectCatalogBuilder emits from the site's real values. The
-   * materials (tokens, a site-minted palette token, the axis and style variants, a blueprint)
-   * ride a hand-built roster (materials()), the same shape the providers
-   * serve live.
+   * Mirrors a live site's schema: the text block's field_text_tag allows h1..h6
+   * (a text block may be the page's one h1), so this roster matches what
+   * DialectCatalogBuilder emits from the site's real values. The materials
+   * (tokens, a site-minted palette token, the axis and style variants, a
+   * blueprint) ride a hand-built roster (materials()), the same shape the
+   * providers serve live.
    */
   protected static function catalog(): DialectCatalog {
     return new DialectCatalog(
@@ -158,7 +158,12 @@ HTML;
       // layer's base section, the one declaration of a prose tag's
       // styleability); the types a container's children may be named by
       // are the spine's (the block types above plus the two kinds).
-      selectors: static::selectorRosters(['d-text' => ['.text-block-link' => 'Link'], 'd-image' => [], 'd-formatted-text' => [], 'd-teaser' => []]),
+      selectors: static::selectorRosters([
+        'd-text' => ['.text-block-link' => 'Link'],
+        'd-image' => [],
+        'd-formatted-text' => [],
+        'd-teaser' => [],
+      ]),
       // v0.5: the spine's instance namespace and its identity tags (the
       // rich-text identity classes and what the minter mints).
       instances: [
@@ -803,7 +808,7 @@ HTML,
   }
 
   /**
-   * a section blueprint is refused below the top level, its wearing named.
+   * A section blueprint is refused below the top level, its wearing named.
    *
    * The roster's one predicate (MaterialsRoster::applicable()) decides:
    * full_bleed's root wears container_full, root-only, so the reference
@@ -2123,7 +2128,12 @@ HTML;
     $this->assertStringStartsWith('Style a pseudo-element by its bare name', $errors[0]->hint);
     // The box is terminal and one per selector: a state after it, a
     // compound after it, and a second box are refused with the order.
-    foreach (['#section::after:hover', '#section::before .text-block-link', '#section::before::after', '#section > d-text::after > *'] as $selector) {
+    foreach ([
+      '#section::after:hover',
+      '#section::before .text-block-link',
+      '#section::before::after',
+      '#section > d-text::after > *',
+    ] as $selector) {
       $errors = [];
       $this->assertNull($css->parseSelector($selector, NULL, $known, $errors), $selector);
       $this->assertSame('BAD_SELECTOR', $errors[0]->code, $selector);
@@ -2418,9 +2428,6 @@ CSS, 1, $known, $errors);
   }
 
   /**
-   * The spec catalog with no instance namespaces declared.
-   */
-  /**
    * The selector rosters the fixture's styling layer would contribute.
    *
    * Every owner (the container, each block type given, any other block)
@@ -2442,6 +2449,9 @@ CSS, 1, $known, $errors);
     return $rosters;
   }
 
+  /**
+   * The spec catalog with no instance namespaces declared.
+   */
   protected static function bareCatalog(): DialectCatalog {
     return new DialectCatalog(
       containerLayoutId: 'daedalus_stylish_container',
@@ -2524,7 +2534,10 @@ CSS, 1, $known, $errors);
           'body' => ['field' => 'field_text_text', 'kind' => 'plain'],
         ],
       ],
-      conditions: ['hover' => ['wrapper' => ':hover', 'axis' => 'state'], 'narrow' => ['wrapper' => '@container (max-width: 767px)', 'axis' => 'width']],
+      conditions: [
+        'hover' => ['wrapper' => ':hover', 'axis' => 'state'],
+        'narrow' => ['wrapper' => '@container (max-width: 767px)', 'axis' => 'width'],
+      ],
       selectors: static::selectorRosters(['d-text' => ['.text-block-link' => 'Link']]),
       stylable: [
         'container' => new VocabularyRoster(Address::kind('container'), 'spec', [

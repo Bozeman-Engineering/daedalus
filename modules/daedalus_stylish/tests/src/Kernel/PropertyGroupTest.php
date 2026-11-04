@@ -65,7 +65,18 @@ class PropertyGroupTest extends KernelTestBase {
   public function testDiscoveryAndOwnership(): void {
     // Effects and Motion share weight 80; the id tie-break seats Effects
     // (what a treatment moves) before Motion (how it moves).
-    $curated = ['spacing', 'typography', 'background', 'border', 'shadow', 'sizing', 'layout', 'effects', 'motion', 'generated_content'];
+    $curated = [
+      'spacing',
+      'typography',
+      'background',
+      'border',
+      'shadow',
+      'sizing',
+      'layout',
+      'effects',
+      'motion',
+      'generated_content',
+    ];
     $groups = $this->manager->getGroups();
     // Curated groups first (weights 10-90); the generated wide tier
     // (weight 100, one derivative per CSS spec area) sorts after them all.
@@ -518,7 +529,11 @@ class PropertyGroupTest extends KernelTestBase {
     $this->container->get('file_system')->copy($this->root . '/core/misc/druplicon.png', 'public://box.png');
     $file = File::create(['uri' => 'public://box.png', 'filename' => 'box.png']);
     $file->save();
-    $media = Media::create(['bundle' => $image_type->id(), 'name' => 'Box', $source_field => ['target_id' => $file->id()]]);
+    $media = Media::create([
+      'bundle' => $image_type->id(),
+      'name' => 'Box',
+      $source_field => ['target_id' => $file->id()],
+    ]);
     $media->save();
     $file_type = $this->createMediaType('file');
     $document = Media::create(['bundle' => $file_type->id(), 'name' => 'Document']);

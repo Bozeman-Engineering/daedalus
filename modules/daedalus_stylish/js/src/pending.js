@@ -40,7 +40,7 @@ import { canonicalSelector } from '../../../daedalus_ui/js/edit_mode/materials/r
  * document (`> d-text` becoming `> d-text:has(a)`) staged as its own
  * pending fact, never as lines, because a variant entry may carry a
  * nested `variants` list the lines cannot express and because one move
- * is one dismissable row with an honest identity. A move names the
+ * is one dismissible row with an honest identity. A move names the
  * document rule key it leaves (`{slot}::{selector}`, the move_style op's
  * `key`) and the relative selector it lands at (`to`); applying it is the
  * rule-move transformation (rule-move.js planRuleMove: the rule and every
@@ -62,12 +62,30 @@ const isEntryObject = (value) =>
 
 /**
  * A pending value row's stable identity within one session.
+ *
+ * @param {string} relative
+ *   The row's document key.
+ * @param {string} condition
+ *   The row's condition compound.
+ * @param {string} property
+ *   The CSS property name.
+ *
+ * @return {string}
+ *   The row id.
  */
 export const pendingLineId = (relative, condition, property) =>
   `line|${relative}|${condition}|${property}`;
 
 /**
  * A pending reference row's stable identity within one session.
+ *
+ * @param {string} relative
+ *   The row's document key.
+ * @param {string} variant
+ *   The referenced variant.
+ *
+ * @return {string}
+ *   The row id.
  */
 export const pendingRefId = (relative, variant) => `ref|${relative}|${variant}`;
 
@@ -86,6 +104,13 @@ export const pendingMoveId = (from, to) => `move|${from}|${to}`;
  * entry ('' the root, a slot path): the slot is the rule's owner in the
  * document's key space, the selector what follows the first `::` (a
  * slot path never carries one; a selector may, as a pseudo).
+ *
+ * @param {string} key
+ *   The document key.
+ *
+ * @return {?{slot: string, selector: string}}
+ *   The owning slot and the relative selector, or null for a slot's own
+ *   entry.
  */
 const splitDocumentKey = (key) => {
   const pos = key.indexOf('::');
@@ -96,6 +121,14 @@ const splitDocumentKey = (key) => {
 
 /**
  * The document key of a relative selector under a slot.
+ *
+ * @param {string} slot
+ *   The owning slot.
+ * @param {string} selector
+ *   The relative selector.
+ *
+ * @return {string}
+ *   The `{slot}::{selector}` key.
  */
 const documentKey = (slot, selector) => `${slot}::${selector}`;
 
@@ -113,7 +146,14 @@ const documentKey = (slot, selector) => `${slot}::${selector}`;
  * throws: the chrome's gate (collisions refuse) stands before staging,
  * so reaching it here means the document changed under the session.
  *
+ * @param {string[]} keys
+ *   The document keys the move is planned over.
+ * @param {{from: string, to: string}} move
+ *   The staged move.
+ *
  * @return {?{prefix: string, moves: Object<string, string>}}
+ *   The slot's key prefix and the plan's source-to-target map, or null
+ *   when the keys hold nothing the move touches.
  */
 const planMoveOver = (keys, move) => {
   const { slot, selector } = splitDocumentKey(move.from);
@@ -139,6 +179,14 @@ const planMoveOver = (keys, move) => {
 
 /**
  * Where one planned step lands a document key (itself when untouched).
+ *
+ * @param {?{prefix: string, moves: Object<string, string>}} step
+ *   A planned step (planMoveOver), or null for a move carrying nothing.
+ * @param {string} key
+ *   The document key to follow.
+ *
+ * @return {string}
+ *   The key the step lands it at.
  */
 const landingOf = (step, key) => {
   if (step === null || !key.startsWith(step.prefix)) {
@@ -152,6 +200,14 @@ const landingOf = (step, key) => {
 
 /**
  * Where the session's planned steps, in order, land a document key.
+ *
+ * @param {Array<?object>} steps
+ *   The planned steps in staged order (applyMoves).
+ * @param {string} key
+ *   The document key to follow.
+ *
+ * @return {string}
+ *   The key after every step.
  */
 const followed = (steps, key) =>
   steps.reduce((current, step) => landingOf(step, current), key);
@@ -159,6 +215,14 @@ const followed = (steps, key) =>
 /**
  * The staged lines with one step's renames applied (ids re-minted; a
  * line the step leaves alone is the same object).
+ *
+ * @param {Array<object>} lines
+ *   The staged lines.
+ * @param {?object} step
+ *   The planned step (planMoveOver), or null.
+ *
+ * @return {Array<object>}
+ *   The lines with the renames applied.
  */
 const renamedLines = (lines, step) =>
   lines.map((line) => {
@@ -178,6 +242,11 @@ const renamedLines = (lines, step) =>
  * Every entry a step names moves WHOLE (its conditions, their
  * properties, a nested `variants` list) to its landing and keeps its
  * position in the map, as the move_style op rekeys the host map.
+ *
+ * @param {object} session
+ *   The line-staging session whose moves apply.
+ * @param {?object} documentStyles
+ *   The stored document, never mutated.
  *
  * @return {{styles: object, steps: Array<?object>}}
  *   The rekeyed document (a fresh object; the input is never mutated)
@@ -217,6 +286,7 @@ const applyMoves = (session, documentStyles) => {
  *   never mutated.
  *
  * @return {object}
+ *   The document as the moves leave it (a fresh object).
  */
 export const movedStyles = (session, documentStyles) =>
   stagesLines(session)
@@ -233,7 +303,7 @@ export const movedStyles = (session, documentStyles) =>
  * precede conditioned ones (delivery reading). Empty entries drop. A
  * session's staged moves render after the entry groups, one row each
  * ("from to to": the group's `part` is the selector the rule leaves,
- * `move.to` the selector it lands at), dismissable by `move.id`.
+ * `move.to` the selector it lands at), dismissible by `move.id`.
  *
  * @param {object} styles
  *   The element-relative payload (saveStyles()/pushStyles() shape).
@@ -247,6 +317,8 @@ export const movedStyles = (session, documentStyles) =>
  *   part: ?string, refs: Array<{variant: string, id: string}>,
  *   lines: Array<{condition: string, property: string, value: string,
  *   id: string}>, move: ?{id: string, to: string}}>}
+ *   One group per document key in tree order, its reference rows, its
+ *   value rows and the staged move leaving it.
  */
 export const payloadRows = (styles, rootKind = null, moves = []) => {
   const safeRoot =
@@ -333,7 +405,11 @@ export const payloadRows = (styles, rootKind = null, moves = []) => {
       return {
         relative: key,
         ...slotFacts(slot),
-        part: slot ? slot.selector : partPos === -1 ? null : key.slice(partPos + 2),
+        part: slot
+          ? slot.selector
+          : partPos === -1
+            ? null
+            : key.slice(partPos + 2),
         refs,
         lines,
         move: null,
@@ -404,7 +480,13 @@ export const prunedPayload = (styles, dismissed) => {
  * Value rows and reference rows both count — each is one dismissible fact
  * the commit takes or leaves.
  *
+ * @param {object} styles
+ *   The capture payload (saveStyles()).
+ * @param {Set<string>|string[]} dismissed
+ *   The dismissed row ids.
+ *
  * @return {{total: number, included: number}}
+ *   Every row, and the rows not dismissed.
  */
 export const payloadSummary = (styles, dismissed) => {
   const skip = dismissed instanceof Set ? dismissed : new Set(dismissed ?? []);
@@ -515,6 +597,12 @@ export const skinSession = (scope, anchor) => ({
  * The one read every staging function and every reader of
  * `session.lines` or `session.moves` gates on, so the skin session rides
  * the update session's machinery whole and a third kind never forks it.
+ *
+ * @param {?object} session
+ *   The pending session, or null.
+ *
+ * @return {boolean}
+ *   True for an update or skin session.
  */
 export const stagesLines = (session) =>
   session?.kind === 'update' || session?.kind === 'skin';
@@ -525,6 +613,19 @@ export const stagesLines = (session) =>
  * A string value is a pending set, null a pending unset (removal from the
  * variant). Save sessions take no staged lines — their pending set IS the
  * derived capture — so they pass through untouched.
+ *
+ * @param {object} session
+ *   The open pending session.
+ * @param {object} edit
+ *   The pending edit.
+ * @param {string} edit.relative
+ *   The row's document key.
+ * @param {string} edit.condition
+ *   The condition compound.
+ * @param {string} edit.property
+ *   The CSS property name.
+ * @param {?string} edit.value
+ *   The pending value, or null for a pending unset.
  *
  * @return {object}
  *   A fresh session; the input is never mutated.
@@ -557,6 +658,15 @@ export const stageLine = (
  * untouched. `lines` carry {property, value} ({value: null} = a pending
  * unset); ids mint here, the one id-minting path. A no-change replacement
  * returns the SAME session object so subscribers can skip re-rendering.
+ *
+ * @param {object} session
+ *   The open pending session.
+ * @param {string} relative
+ *   The island's document key.
+ * @param {string} condition
+ *   The island's condition compound.
+ * @param {Array<{property: string, value: ?string}>} lines
+ *   The island's whole diff against the baseline.
  *
  * @return {object}
  *   A fresh session (or the input when nothing changed); save sessions
@@ -625,6 +735,7 @@ export const stageIslandLines = (session, relative, condition, lines) => {
  * @param {string} condition
  *   The editing compound the value settled at.
  * @param {string} property
+ *   The CSS property name.
  * @param {?string} value
  *   The settled value; null or '' means unset.
  *
@@ -684,6 +795,13 @@ export const stageValue = (
  * rule keys and `to` outside the grammar are caller bugs (the chrome's
  * gate parses before it commits) and throw.
  *
+ * @param {object} session
+ *   The open pending session.
+ * @param {string} from
+ *   The document rule key the rule leaves.
+ * @param {string} to
+ *   The relative selector it lands at.
+ *
  * @return {object}
  *   A fresh session; the input is never mutated.
  */
@@ -718,7 +836,10 @@ export const stageMove = (session, from, to) => {
   }
   return {
     ...session,
-    moves: [...moves, { id: pendingMoveId(origin, target), from: origin, to: target }],
+    moves: [
+      ...moves,
+      { id: pendingMoveId(origin, target), from: origin, to: target },
+    ],
     lines,
   };
 };
@@ -728,6 +849,11 @@ export const stageMove = (session, from, to) => {
  * line, or drops the staged move and returns the lines it carried to the
  * keys they left (the reverse rename over the session's line keys); a
  * save session excludes the captured row from the commit.
+ *
+ * @param {object} session
+ *   The open pending session.
+ * @param {string} id
+ *   The row id (a line, move or captured row).
  *
  * @return {object}
  *   A fresh session; the input is never mutated.
@@ -765,6 +891,11 @@ export const dismissLine = (session, id) => {
  * Update sessions pass through: a dismissed staged line is GONE (the
  * baseline resurfaced); re-editing the line is its restore.
  *
+ * @param {object} session
+ *   The open pending session.
+ * @param {string} id
+ *   The dismissed row id.
+ *
  * @return {object}
  *   A fresh session; the input is never mutated.
  */
@@ -781,11 +912,13 @@ export const restoreLine = (session, id) =>
  * "anything to prompt about?" gate. A staged move is one row.
  *
  * @param {object} session
+ *   The open pending session.
  * @param {?object} capture
  *   A save session's live capture (saveStyles() payload); unused for
  *   update sessions.
  *
  * @return {number}
+ *   The pending rows.
  */
 export const sessionCount = (session, capture = null) =>
   stagesLines(session)
@@ -814,13 +947,18 @@ export const sessionCount = (session, capture = null) =>
  * post-Push truth).
  *
  * @param {object} session
+ *   The open pending session.
  * @param {object} context
- *   - capture: a save session's live capture payload.
- *   - documentStyles: an update session's target variant styles
- *     (variant.styles) or a skin session's scope defaults
- *     (guide.skinDefaults[scope]), never mutated.
+ *   What the session's kind commits over.
+ * @param {?object} [context.capture]
+ *   A save session's live capture payload.
+ * @param {?object} [context.documentStyles]
+ *   An update session's target variant styles (variant.styles) or a
+ *   skin session's scope defaults (guide.skinDefaults[scope]), never
+ *   mutated.
  *
  * @return {object}
+ *   The styles the push commits (a fresh object).
  */
 export const sessionStyles = (
   session,
@@ -881,6 +1019,8 @@ export const sessionStyles = (
  *
  * @return {Array<{op: string, scope: string, key: string, condition:
  *   string, properties: object}>}
+ *   One update_default patch per (key, condition) group; [] for any other
+ *   session kind.
  */
 export const skinPushOperations = (session, documentStyles = null) => {
   if (session?.kind !== 'skin') {
@@ -908,7 +1048,8 @@ export const skinPushOperations = (session, documentStyles = null) => {
       return;
     }
     const conditions = Object.entries(entry).filter(
-      ([condition, values]) => condition !== 'variants' && isEntryObject(values),
+      ([condition, values]) =>
+        condition !== 'variants' && isEntryObject(values),
     );
     conditions.forEach(([condition, values]) => {
       Object.keys(values).forEach((property) =>

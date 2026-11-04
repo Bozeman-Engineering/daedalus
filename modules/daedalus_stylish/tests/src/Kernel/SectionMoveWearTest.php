@@ -17,22 +17,21 @@ use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 /**
  * Tests root-only wear following a section's depth on move_element.
  *
- * A container's root-only wear (width on the shipped container) is a fact
- * of its depth, never a memory. ElementStylesSubscriber::onElementMoved
- * answers the spine's ElementMovedEvent the way birth defaults answer the
- * created events: a section landing nested loses every root reference
- * whose roster record is root-only (every-depth wear and own styles stay,
- * an emptied entry is dropped), a section coming out to root is redressed
- * with its layout's root defaults on the axes it does not already wear, a
- * root-to-root move touches nothing, and a component move is ignored. The
- * map write is declared as the host's daedalus_stylish field target exactly when
- * the map changed.
+ * A container's root-only wear (width on the shipped container) is a fact of
+ * its depth, never a memory. ElementStylesSubscriber::onElementMoved answers
+ * the spine's ElementMovedEvent the way birth defaults answer the created
+ * events: a section landing nested loses every root reference whose roster
+ * record is root-only (every-depth wear and own styles stay, an emptied entry
+ * is dropped), a section coming out to root is redressed with its layout's root
+ * defaults on the axes it does not already wear, a root-to-root move touches
+ * nothing, and a component move is ignored. The map write is declared as the
+ * host's daedalus_stylish field target exactly when the map changed.
  *
- * Real declarations and real shipped variants (daedalus_stylish_layouts installed):
- * container_site is the root-only birth width, container_md another
+ * Real declarations and real shipped variants (daedalus_stylish_layouts
+ * installed): container_site is the root-only birth width, container_md another
  * root-only width, columns the every-depth container_layout variant. The UI
- * drag and the AI's op lane issue the same move_element, so these pins
- * see every failure the browser would.
+ * drag and the AI's op lane issue the same move_element, so these pins see
+ * every failure the browser would.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -86,13 +85,13 @@ class SectionMoveWearTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and the strip reads the roster's depth stamp.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and the strip reads the roster's depth stamp.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
-    // The daedalus_stylish_layouts install syncs the shipped variants; a host saved
-    // directly (the whole-map lane) mirrors its references into the usage
+    // The daedalus_stylish_layouts install syncs the shipped variants; a host
+    // saved directly (the whole-map lane) mirrors its references into the usage
     // tables.
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
@@ -154,7 +153,7 @@ class SectionMoveWearTest extends KernelTestBase {
   }
 
   /**
-   * Asserts whether the result declares the host's daedalus_stylish field target.
+   * Asserts whether the result declares the host's daedalus_stylish target.
    */
   protected function assertDaedalusStylishTarget(BlueprintResult $result, EntityTest $entity, bool $declared): void {
     $target = ['uuid' => $entity->uuid(), 'field_name' => DaedalusStylishFieldManager::FIELD_NAME];
@@ -192,8 +191,16 @@ class SectionMoveWearTest extends KernelTestBase {
     $section_b = $uuid_service->generate();
     $nested = $uuid_service->generate();
     $this->batch($entity, [
-      ['op' => 'add_section', 'uuid' => $section_a, 'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside']],
-      ['op' => 'add_section', 'uuid' => $section_b, 'location' => ['anchor' => $section_a, 'placement' => 'after']],
+      [
+        'op' => 'add_section',
+        'uuid' => $section_a,
+        'location' => ['anchor' => $entity->uuid(), 'placement' => 'inside'],
+      ],
+      [
+        'op' => 'add_section',
+        'uuid' => $section_b,
+        'location' => ['anchor' => $section_a, 'placement' => 'after'],
+      ],
       ['op' => 'add_section', 'uuid' => $nested, 'location' => ['anchor' => $section_a, 'placement' => 'inside']],
     ]);
     $this->assertSame(['variants' => [['variant' => 'container_site', 'fragment' => '']]], $this->styleMap($entity)["container:$section_a"] ?? NULL);

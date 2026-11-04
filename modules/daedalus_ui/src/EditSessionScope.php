@@ -11,10 +11,10 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * Derives the edit-session scope: entity uuid + langcode + workspace.
  *
  * The scope names the BroadcastChannel that pairs a secondary window
- * (daedalus_stylish's popped-out inspector, the responsive preview) with the editing
- * page (js/broadcast/channel.js prefixes it per consumer). Deterministic
- * derivation is what lets either window refresh and reconnect; the scope
- * boundary is what keeps two different edit sessions (another entity,
+ * (daedalus_stylish's popped-out inspector, the responsive preview) with the
+ * editing page (js/broadcast/channel.js prefixes it per consumer).
+ * Deterministic derivation is what lets either window refresh and reconnect;
+ * the scope boundary is what keeps two different edit sessions (another entity,
  * another translation, another workspace) from cross-talking.
  */
 final class EditSessionScope {

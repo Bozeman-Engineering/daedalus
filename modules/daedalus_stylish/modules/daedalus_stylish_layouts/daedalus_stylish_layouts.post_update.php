@@ -34,14 +34,13 @@ function _daedalus_stylish_layouts_sync_shipped(?array $modules = NULL): void {
 /**
  * Imports the arrangement axis's shipped row variant (mode + share).
  *
- * Written when shipped variants synced on module install and by command
- * only: sites that installed daedalus_stylish_layouts before the arrangement axis
- * needed one explicit sync to receive the kind-scoped row variant the
- * layout widget's Columns mode wears. Every cache rebuild syncs shipped
- * definitions now (ShippedSync); the update stays for the sites still
- * carrying it and fails loudly if the sync does. Idempotent with the
- * earlier sync post updates ("one hash, two comparisons": existing
- * families are untouched, row imports as new).
+ * Written when shipped variants synced on module install and by command only:
+ * sites that installed daedalus_stylish_layouts before the arrangement axis
+ * needed one explicit sync to receive the kind-scoped row variant the layout
+ * widget's Columns mode wears. Every cache rebuild syncs shipped definitions
+ * now (ShippedSync); the update stays for the sites still carrying it and fails
+ * loudly if the sync does. Idempotent with the earlier sync post updates ("one
+ * hash, two comparisons": existing families are untouched, row imports as new).
  */
 function daedalus_stylish_layouts_post_update_arrangement_row_variant(): void {
   _daedalus_stylish_layouts_sync_shipped(['daedalus_stylish_layouts']);
@@ -50,12 +49,12 @@ function daedalus_stylish_layouts_post_update_arrangement_row_variant(): void {
 /**
  * Imports the generic container variant families (split_*, container_*).
  *
- * Written when shipped variants synced on module install and by command
- * only: sites that installed daedalus_stylish_layouts before the container model
- * needed one explicit sync to receive the kind-scoped proportions and
- * width families the daedalus_stylish_container layout's defaults reference. Every
- * cache rebuild syncs shipped definitions now (ShippedSync); the update
- * stays for the sites still carrying it.
+ * Written when shipped variants synced on module install and by command only:
+ * sites that installed daedalus_stylish_layouts before the container model
+ * needed one explicit sync to receive the kind-scoped proportions and width
+ * families the daedalus_stylish_container layout's defaults reference. Every
+ * cache rebuild syncs shipped definitions now (ShippedSync); the update stays
+ * for the sites still carrying it.
  */
 function daedalus_stylish_layouts_post_update_container_variants(): void {
   _daedalus_stylish_layouts_sync_shipped(['daedalus_stylish_layouts']);
@@ -65,10 +64,10 @@ function daedalus_stylish_layouts_post_update_container_variants(): void {
  * Syncs the generic variant families before the container migration.
  *
  * The migration re-points layout-exact variant references (twocol_lg,
- * fourcol_equal, ...) to the generic kind:container families, so those
- * variants must exist first. Idempotent with
- * daedalus_stylish_layouts_post_update_container_variants(); repeated here because
- * post updates run alphabetically across modules and this migrate_000N
+ * fourcol_equal, ...) to the generic kind:container families, so those variants
+ * must exist first. Idempotent with
+ * daedalus_stylish_layouts_post_update_container_variants(); repeated here
+ * because post updates run alphabetically across modules and this migrate_000N
  * sequence must be self-sufficient.
  */
 function daedalus_stylish_layouts_post_update_migrate_0001_sync_variants(): void {
@@ -116,8 +115,8 @@ function daedalus_stylish_layouts_post_update_migrate_0003_container_displays(&$
 /**
  * Migrates daedalus_variant entities to the container grammar.
  *
- * The kind:section and layout:daedalus_stylish_* scopes become kind:container, slot
- * paths lose their region()/section() segments, and mobile/tablet
+ * The kind:section and layout:daedalus_stylish_* scopes become kind:container,
+ * slot paths lose their region()/section() segments, and mobile/tablet
  * conditions become narrow - across ALL revisions. Unmodified shipped
  * daedalus_stylish_layouts variants are left alone: references re-point to the
  * generic families and they retire with the four layouts.
@@ -143,12 +142,12 @@ function daedalus_stylish_layouts_post_update_migrate_0006_retire_layout_variant
 /**
  * Converts the proportions grammar to mode + share on host entities.
  *
- * Worn split_* references and stepper-written explicit track overrides
- * become one `row` arrangement reference plus per-child flex-grow
- * overrides (the frozen ratios, children in order); track styles outside
- * the retired stepper's own minmax pattern stay Custom, loudly. The row
- * variant synced in daedalus_stylish_layouts_post_update_arrangement_row_variant()
- * (a < m, so it always runs first). Per-map details are logged to the
+ * Worn split_* references and stepper-written explicit track overrides become
+ * one `row` arrangement reference plus per-child flex-grow overrides (the
+ * frozen ratios, children in order); track styles outside the retired stepper's
+ * own minmax pattern stay Custom, loudly. The row variant synced in
+ * daedalus_stylish_layouts_post_update_arrangement_row_variant() (a < m, so it
+ * always runs first). Per-map details are logged to the
  * daedalus_stylish_layouts channel.
  */
 function daedalus_stylish_layouts_post_update_migrate_0007_row_arrangement(&$sandbox) {
@@ -303,11 +302,19 @@ function daedalus_stylish_layouts_post_update_rename_row_to_columns(&$sandbox) {
   if (\Drupal::hasService('daedalus_layout.host_entity_walker')) {
     $saved = $rename->walkHosts($sandbox, $from, $to);
     if (empty($sandbox['#finished']) || $sandbox['#finished'] < 1) {
-      return t('Repointed the "@from" wearing to "@to" on @count host revisions in this batch.', ['@from' => $from, '@to' => $to, '@count' => $saved]);
+      return t('Repointed the "@from" wearing to "@to" on @count host revisions in this batch.', [
+        '@from' => $from,
+        '@to' => $to,
+        '@count' => $saved,
+      ]);
     }
   }
   $count = $sandbox['daedalus_stylish_layouts_rename_lines']
     + count($rename->renameInVariants($from, $to));
   $sandbox['#finished'] = 1;
-  return t('Renamed the shipped Columns variant from "@from" to "@to" across host maps and variant styles (the host repoints logged per revision; @count retirement and variant report lines logged to the daedalus_stylish_layouts channel).', ['@from' => $from, '@to' => $to, '@count' => $count]);
+  return t('Renamed the shipped Columns variant from "@from" to "@to" across host maps and variant styles (the host repoints logged per revision; @count retirement and variant report lines logged to the daedalus_stylish_layouts channel).', [
+    '@from' => $from,
+    '@to' => $to,
+    '@count' => $count,
+  ]);
 }

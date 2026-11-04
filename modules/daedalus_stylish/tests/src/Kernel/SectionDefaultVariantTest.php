@@ -29,16 +29,16 @@ use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
  * gone with the op. Every guard degrades silently — a missing/unpublished/
  * mis-scoped/mis-axed default never fails the operation.
  *
- * daedalus_stylish_section_defaults_test declares {style: onecol_default, width:
- * onecol_wide, flow: {variant: onecol_row, depth: root}} for layout_onecol
- * (the ladder's pick here) and {style:
- * twocol_default, width: twocol_wide} for layout_twocol_section (the
- * explicit-layout birth). Both layouts qualify the width axis
- * {depth: root} (the production daedalus_stylish_layouts posture): a root-only
- * axis is never defaulted at nested depth — skipped on add — and a move
- * across depth strips or redresses it (SectionMoveWearTest). The flow axis
- * inverts that: the axis applies at every depth, only its DEFAULT is
- * depth-qualified root-only (the production container_layout posture).
+ * daedalus_stylish_section_defaults_test declares {style: onecol_default,
+ * width: onecol_wide, flow: {variant: onecol_row, depth: root}} for
+ * layout_onecol (the ladder's pick here) and {style: twocol_default, width:
+ * twocol_wide} for layout_twocol_section (the explicit-layout birth). Both
+ * layouts qualify the width axis {depth: root} (the production
+ * daedalus_stylish_layouts posture): a root-only axis is never defaulted at
+ * nested depth — skipped on add — and a move across depth strips or redresses
+ * it (SectionMoveWearTest). The flow axis inverts that: the axis applies at
+ * every depth, only its DEFAULT is depth-qualified root-only (the production
+ * container_layout posture).
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -53,7 +53,7 @@ class SectionDefaultVariantTest extends KernelTestBase {
   protected const ROOT_SEC = '11111111-1111-4111-8111-111111111111';
 
   /**
-   * The daedalus_layout uuid of the fixture's nested section (container identity).
+   * The fixture's nested section's daedalus_layout uuid (container identity).
    */
   protected const NESTED_SEC = '22222222-2222-4222-8222-222222222222';
 
@@ -100,9 +100,9 @@ class SectionDefaultVariantTest extends KernelTestBase {
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
     // The schema build path serves the materials roster, which reads the
-    // published materials (testLayoutEntryCarriesDefaultsLine).
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // published materials (testLayoutEntryCarriesDefaultsLine). The materials
+    // roster's daedalus_stylish provider reads all three storages on every
+    // build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
@@ -138,9 +138,9 @@ class SectionDefaultVariantTest extends KernelTestBase {
   /**
    * Creates a styling-enabled host: one root section nesting a section.
    *
-   * Structure: root section ROOT_SEC (daedalus_layout uuid) > container component
-   * (uuid == embedded section uuid, sections all the way down) > embedded
-   * section NESTED_SEC.
+   * Structure: root section ROOT_SEC (daedalus_layout uuid) > container
+   * component (uuid == embedded section uuid, sections all the way down) >
+   * embedded section NESTED_SEC.
    */
   protected function createHostEntity(array $map = []): EntityTest {
     $nested_section = new Section('layout_onecol', [], [], [

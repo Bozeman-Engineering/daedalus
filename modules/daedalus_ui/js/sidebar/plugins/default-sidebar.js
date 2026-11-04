@@ -20,6 +20,7 @@
      * @param {string|null} id
      *   The unique sidebar ID (its DOM id).
      * @return {Element|null}
+     *   The sidebar element, or null when the id is empty or matches nothing.
      */
     getElement(id = null) {
       return id ? document.getElementById(id) : null;
@@ -48,10 +49,7 @@
 
       // Record this panel as the one open in its (side, slot), for server-side
       // rendering. One cookie per (side, slot), valued with the open panel's id.
-      Drupal.Daedalus.setCookieValue(
-        `${side}_${slot}_sidebar`,
-        element.id,
-      );
+      Drupal.Daedalus.setCookieValue(`${side}_${slot}_sidebar`, element.id);
 
       Drupal.displace();
     }

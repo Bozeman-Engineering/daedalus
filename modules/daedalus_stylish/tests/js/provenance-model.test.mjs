@@ -383,7 +383,7 @@ test('inherited from an ancestor rule: lit in the floor hue, the sentence names 
   assert.equal(medium.header, '8px inherited from Section (> *) at Base');
   assert.deepEqual(doorways(medium), ['ancestor', 'drive']);
   assert.deepEqual(medium.alsoAt.map((entry) => entry.label), ['Narrow']);
-  // A child-combinated type rule: the `>` rides literally in the title
+  // A child-combinator type rule: the `>` rides literally in the title
   // (the mark is text, an escaped `>` would show as `&gt;`).
   const typed = { [`${SECTION}::> d-text`]: { default: { 'padding-top': '6px' }, narrow: { 'padding-top': '3px' } } };
   const chained = originAt(stackFor({ map: typed, document: documentFor() }), 'padding-top', 'default');

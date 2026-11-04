@@ -100,6 +100,14 @@ import { tagWord } from './style-guide.js';
 /**
  * A condition key as display vocabulary: 'default' is Base, singles wear
  * their site label, compound parts join with ' + ' ("Narrow + Dark").
+ *
+ * @param {string} name
+ *   The condition key.
+ * @param {object} conditions
+ *   The condition table (guide.conditions).
+ *
+ * @return {string}
+ *   The condition in words.
  */
 export const conditionText = (name, conditions) =>
   name === 'default' ? Drupal.t('Base') : compoundLabel(name, conditions);
@@ -119,6 +127,12 @@ export const conditionText = (name, conditions) =>
  * beneath its own (the stack carries them as two declared layers, the
  * kind's beneath the refinement's, and a sentence names the delivering
  * layer's own scope). Null for a base tag or an unparsed scope.
+ *
+ * @param {?string} scope
+ *   The declaring scope ("kind:container", "block_type:text").
+ *
+ * @return {?string}
+ *   The scope in words, or null.
  */
 export const declarationLabel = (scope) => {
   const pos = typeof scope === 'string' ? scope.indexOf(':') : -1;
@@ -156,6 +170,7 @@ export const declarationLabel = (scope) => {
  *   The style guide payload, for the tag words.
  *
  * @return {string}
+ *   The scope in words, '' for no scope.
  */
 export const skinScopeLabel = (scope, guide = null) => {
   if (typeof scope !== 'string') {
@@ -181,7 +196,13 @@ const driveDoorway = (condition, conditions) => ({
 // wearer the session anchors at when it is not the row's own target (a
 // worn ancestor value: the carrier rule, or the owner wearing it at its
 // root); null leaves the host's wear key as the anchor.
-const documentDoorway = (reference, label, condition, conditions, anchor = null) => ({
+const documentDoorway = (
+  reference,
+  label,
+  condition,
+  conditions,
+  anchor = null,
+) => ({
   id: 'document',
   label: Drupal.t('Edit !label at !condition…', {
     '!label': label,
@@ -239,6 +260,12 @@ const declaredDoorway = (scope, property, declaration) => ({
  * the own and the worn ancestor layer alike by style-stack.js; a worn
  * layer's `label` is the variant's), else a generic word when the tree
  * carried no node for the owner.
+ *
+ * @param {?object} layer
+ *   An ancestor stack layer.
+ *
+ * @return {string}
+ *   The owner's name.
  */
 export const ancestorName = (layer) =>
   layer?.owner ?? Drupal.t('the parent element');
@@ -309,6 +336,7 @@ const elementDoorway = (key) => ({
  *   A stack layer (id, tier, label, variant, scope).
  *
  * @return {string}
+ *   The supplier in words.
  */
 export const supplierName = (layer) => {
   switch (layer.tier) {
@@ -325,7 +353,8 @@ export const supplierName = (layer) => {
       return Drupal.t('the active skin');
     case TIER_DECLARED:
       return Drupal.t('the !declaration declaration', {
-        '!declaration': declarationLabel(layer.scope ?? null) ?? Drupal.t('element'),
+        '!declaration':
+          declarationLabel(layer.scope ?? null) ?? Drupal.t('element'),
       });
     default:
       return Drupal.t('this element');
@@ -382,6 +411,7 @@ export const supplierName = (layer) => {
  * @param {{winner: ?object, beneath: Array<object>, own: ?object}} read
  *   stackAt(stack, property, pose, conditions).
  * @param {object} input
+ *   The row's context.
  * @param {object} input.stack
  *   The buildStack() result the read came from: the editable layer, the
  *   layers' labels and scopes, and the "Also set at" roster read off it.
@@ -558,7 +588,8 @@ export const originOf = (
     const position = ancestorRule(entry.id);
     const ownLayer =
       stack.layers.find(
-        (candidate) => candidate.id === ancestorLayerId(position.key, position.selector),
+        (candidate) =>
+          candidate.id === ancestorLayerId(position.key, position.selector),
       ) ?? layer;
     const owner = ancestorName(ownLayer);
     const carrier = layer?.carrier ?? null;
@@ -572,13 +603,22 @@ export const originOf = (
       owner,
       anchor: carrier === null ? null : addressKey(carrier),
       rule,
-      words: rule === null ? null : addressLabel(guide, rule, owner, blockTypes, sectionLayouts),
+      words:
+        rule === null
+          ? null
+          : addressLabel(guide, rule, owner, blockTypes, sectionLayouts),
     };
   };
   // A worn ancestor origin's doorways: open the variant at its carrier,
   // edit at the carrier rule when there is one, then whatever follows.
   const wornDoorways = (worn, condition, rest = []) => [
-    documentDoorway(worn.variant, worn.label, condition, conditions, worn.anchor),
+    documentDoorway(
+      worn.variant,
+      worn.label,
+      condition,
+      conditions,
+      worn.anchor,
+    ),
     ...(worn.rule === null ? [] : [ancestorDoorway(worn.rule, worn.words)]),
     ...rest,
   ];
@@ -599,11 +639,7 @@ export const originOf = (
     if (!session && winner.tier === TIER_ELEMENT && winner.layer !== editable) {
       const doorway = elementDoorway(stack.key);
       if (own || staged) {
-        return hued(
-          winner,
-          Drupal.t('Overridden by this element'),
-          [doorway],
-        );
+        return hued(winner, Drupal.t('Overridden by this element'), [doorway]);
       }
       const tail = at(winner);
       const sentence = tail
@@ -627,7 +663,9 @@ export const originOf = (
         hint: label
           ? Drupal.t('opens the variant')
           : Drupal.t('where the winning value lives'),
-        winner: { variant: winner.tier === TIER_VARIANT ? winner.variant : null },
+        winner: {
+          variant: winner.tier === TIER_VARIANT ? winner.variant : null,
+        },
       };
       if (own || staged) {
         const sentence = label
@@ -664,9 +702,17 @@ export const originOf = (
                 '!label': label,
                 ...tail,
               })
-            : Drupal.t('!value from !label', { '!value': value, '!label': label });
+            : Drupal.t('!value from !label', {
+                '!value': value,
+                '!label': label,
+              });
           return hued(winner, sentence, [
-            documentDoorway(winner.variant, label, winner.condition, conditions),
+            documentDoorway(
+              winner.variant,
+              label,
+              winner.condition,
+              conditions,
+            ),
             ...(tail ? [driveDoorway(winner.condition, conditions)] : []),
           ]);
         }
@@ -690,11 +736,14 @@ export const originOf = (
                       '!rule': worn.words,
                     })
                 : tail
-                  ? Drupal.t('!value from !label worn by !owner, set at !condition', {
-                      ...args,
-                      '!owner': worn.owner,
-                      ...tail,
-                    })
+                  ? Drupal.t(
+                      '!value from !label worn by !owner, set at !condition',
+                      {
+                        ...args,
+                        '!owner': worn.owner,
+                        ...tail,
+                      },
+                    )
                   : Drupal.t('!value from !label worn by !owner', {
                       ...args,
                       '!owner': worn.owner,
@@ -751,11 +800,14 @@ export const originOf = (
         case TIER_DECLARED: {
           const declaration = declarationOf(winner);
           const sentence = tail
-            ? Drupal.t('!value from the !declaration declaration at !condition', {
-                '!value': value,
-                '!declaration': declaration,
-                ...tail,
-              })
+            ? Drupal.t(
+                '!value from the !declaration declaration at !condition',
+                {
+                  '!value': value,
+                  '!declaration': declaration,
+                  ...tail,
+                },
+              )
             : Drupal.t('!value from the !declaration declaration', {
                 '!value': value,
                 '!declaration': declaration,
@@ -854,10 +906,13 @@ export const originOf = (
                     "Your !value overrides !label's !beneath worn by !owner, set at !condition",
                     { ...args, '!owner': worn.owner, ...tail },
                   )
-                : Drupal.t("Your !value overrides !label's !beneath worn by !owner", {
-                    ...args,
-                    '!owner': worn.owner,
-                  });
+                : Drupal.t(
+                    "Your !value overrides !label's !beneath worn by !owner",
+                    {
+                      ...args,
+                      '!owner': worn.owner,
+                    },
+                  );
           return hued(winner, sentence, [
             {
               id: 'unset',
@@ -883,7 +938,10 @@ export const originOf = (
               "Your !value overrides !owner's !beneath (!selector) at !condition",
               { ...args, ...tail },
             )
-          : Drupal.t("Your !value overrides !owner's !beneath (!selector)", args);
+          : Drupal.t(
+              "Your !value overrides !owner's !beneath (!selector)",
+              args,
+            );
         return hued(winner, sentence, [
           {
             id: 'unset',
@@ -910,7 +968,9 @@ export const originOf = (
           {
             id: 'unset',
             label: Drupal.t('Unset'),
-            hint: Drupal.t("the skin's !skin returns", { '!skin': beneathValue }),
+            hint: Drupal.t("the skin's !skin returns", {
+              '!skin': beneathValue,
+            }),
           },
           ...skinDoorway(
             layerAt(stack, beaten.layer)?.scope ?? null,
@@ -1003,6 +1063,7 @@ export const originOf = (
  * @param {object} origin
  *   sidesOrigin()'s facts.
  * @param {object} input
+ *   The row's context.
  * @param {string} input.pose
  *   The editing compound.
  * @param {object} [input.conditions]
@@ -1011,8 +1072,12 @@ export const originOf = (
  *   The row's uniform value face, null when the sides differ.
  *
  * @return {string}
+ *   The sentence.
  */
-export const sidesSentence = (origin, { pose, conditions = {}, value = null }) => {
+export const sidesSentence = (
+  origin,
+  { pose, conditions = {}, value = null },
+) => {
   const posed = { '!condition': conditionText(pose, conditions) };
   // One group's story, lowercase: it follows a value or a side list.
   const story = (group) => {
@@ -1077,6 +1142,18 @@ export const sidesSentence = (origin, { pose, conditions = {}, value = null }) =
  * A token item's tooltip: the reference's condition-keyed resolutions,
  * so twins colliding here show where they honestly separate ("Dark:
  * 1.25rem"). Undefined when the token is one value everywhere.
+ *
+ * @param {?object} guide
+ *   The style guide (conditions, token scales).
+ * @param {?object} materials
+ *   The materials roster, for the resolutions.
+ * @param {string} ref
+ *   The token reference.
+ * @param {string} condition
+ *   The editing compound the shown value resolves at.
+ *
+ * @return {string|undefined}
+ *   The tooltip, or undefined.
  */
 const resolutionTitle = (guide, materials, ref, condition) => {
   const conditions = guide?.conditions ?? {};
@@ -1109,7 +1186,9 @@ const tokenLabel = (guide, token) =>
  * offering the escape. A free space has no provenance to steer.
  *
  * @param {?object} guide
+ *   The style guide (conditions, token scales).
  * @param {?object} materials
+ *   The materials roster, for the resolutions.
  * @param {string} condition
  *   The editing compound (reference displays resolve here).
  * @param {?object} space
@@ -1117,6 +1196,7 @@ const tokenLabel = (guide, token) =>
  * @param {string} value
  *   The shown value (the committed spelling or the draft echo).
  * @param {object} options
+ *   The menu's handlers.
  * @param {boolean} [options.escape]
  *   Whether "Custom value" is offered; defaults to the detented kind.
  * @param {Function} options.onPreview
@@ -1198,6 +1278,7 @@ export const tokenItems = (
  * token items, separated.
  *
  * @param {object} input
+ *   The menu's parts.
  * @param {?object} input.origin
  *   originOf(), or null for a row with no origin story (the padding
  *   row's shorthand field: four sides can have four origins).

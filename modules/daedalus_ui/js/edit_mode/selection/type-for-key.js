@@ -29,6 +29,8 @@ import { fallbackLabel } from './label-for-key';
  *   The selectable key.
  *
  * @return {string}
+ *   The element type name, or the key's fallback label when the index
+ *   records none.
  */
 export const typeFor = (index, key) =>
   index?.get(key)?.elementType ?? fallbackLabel(key);
@@ -41,5 +43,6 @@ export const typeFor = (index, key) =>
  *   The selectable key.
  *
  * @return {string}
+ *   The element type name.
  */
 export const typeForKey = (key) => typeFor(projectionIndex(), key);

@@ -97,8 +97,8 @@ class DressedDomOperationsTest extends BlueprintKernelTestBase {
     $this->installEntitySchema('block_content');
     $this->installConfig(['block_content']);
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
@@ -152,7 +152,9 @@ class DressedDomOperationsTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * The test vocabulary: the container's width axis, as daedalus_stylish serves it.
+   * The test vocabulary.
+   *
+   * The container's width axis, as daedalus_stylish serves it.
    */
   protected function catalog(): DialectCatalog {
     return new DialectCatalog(

@@ -40,8 +40,8 @@ final class DiscoverCommand extends Command {
     protected ConfigFactoryInterface $configFactory,
     #[Autowire(service: 'plugin.manager.daedalus_stylish_property_group')]
     protected PropertyGroupPluginManager $propertyGroups,
-    // NULL when the optional daedalus_stylish_discover module is not enabled; the
-    // class reference is safe because it is never loaded in that case.
+    // NULL when the optional daedalus_stylish_discover module is not enabled;
+    // the class reference is safe because it is never loaded in that case.
     #[Autowire(service: 'daedalus_stylish_discover.element_discovery')]
     protected ?ElementDiscovery $elementDiscovery = NULL,
   ) {

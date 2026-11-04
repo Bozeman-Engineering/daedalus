@@ -80,6 +80,9 @@ const FORMS = [
  * keys, slot keys and addresses alike; relative-selector.js is its
  * twin), admitted in its canonical spelling only.
  *
+ * @param {string} key
+ *   The selectable or style-map key.
+ *
  * @return {?{form: string, kind: string, uuid: string, selector: ?string}}
  *   The parsed key, or null when it does not parse. `selector` is the
  *   canonical relative selector after the "::" ('.class' a part, 'p' the
@@ -172,12 +175,24 @@ export const styleMapOf = (blueprint) => {
  * `children`, holding element nodes directly (a container layout's
  * ordered flow) or region nodes (a multi-region layout's named slots),
  * recursive and identical in shape at every depth.
+ *
+ * @param {?object} node
+ *   A lean-tree node.
+ *
+ * @return {boolean}
+ *   Whether the node is a container.
  */
 export const isContainerNode = (node) => node?.kind === 'container';
 
 /**
  * Whether a lean-tree node is a region: a multi-region layout's named
  * slot, transparent grouping with no uuid and no styles of its own.
+ *
+ * @param {?object} node
+ *   A lean-tree node.
+ *
+ * @return {boolean}
+ *   Whether the node is a region.
  */
 export const isRegionNode = (node) => node?.kind === 'region';
 
@@ -190,6 +205,9 @@ export const isRegionNode = (node) => node?.kind === 'region';
  * FLOW (the positional slot grammar) ask isFlowNode() first: a
  * multi-region container's children are reachable through here, but not
  * positionally addressable. A block node holds nothing.
+ *
+ * @param {?object} node
+ *   A lean-tree node.
  *
  * @return {Array}
  *   The ordered element nodes ([] when none).
@@ -211,6 +229,12 @@ export const nodeChildren = (node) =>
  * region nodes (every region of the layout, empty ones included), named
  * slots the grammar no longer speaks. A node that is no container is no
  * flow.
+ *
+ * @param {?object} node
+ *   A lean-tree node.
+ *
+ * @return {boolean}
+ *   Whether the node's children form one positional flow.
  */
 export const isFlowNode = (node) =>
   isContainerNode(node) &&
@@ -254,6 +278,12 @@ export const blockPluginBase = (node) => {
  * component carrying none maps to null — it styles against the universal
  * block kind, exactly as the server validator's fallback does. Nested
  * containers are walked so their components resolve at every depth.
+ *
+ * @param {?object} blueprint
+ *   The blueprint (its `layout` is the lean tree).
+ *
+ * @return {object}
+ *   The discriminator by component uuid.
  */
 export const componentBlockTypes = (blueprint) => {
   const types = {};
@@ -265,7 +295,8 @@ export const componentBlockTypes = (blueprint) => {
       }
       if (node?.uuid) {
         const base = blockPluginBase(node);
-        types[node.uuid] = node.block_type ?? (base === null ? null : `plugin:${base}`);
+        types[node.uuid] =
+          node.block_type ?? (base === null ? null : `plugin:${base}`);
       }
     });
   };
@@ -281,6 +312,12 @@ export const componentBlockTypes = (blueprint) => {
  * declarations (guide.layouts) key by it. Nested containers register at
  * every depth — one resolution rule: a section's declaration IS its
  * layout's declaration, top-level or nested.
+ *
+ * @param {?object} blueprint
+ *   The blueprint (its `layout` is the lean tree).
+ *
+ * @return {object}
+ *   The layout plugin id by section uuid.
  */
 export const sectionLayouts = (blueprint) => {
   const layouts = {};
@@ -307,6 +344,13 @@ export const sectionLayouts = (blueprint) => {
  * through the section → layout id table; every other kind has no bundle.
  * This is the one lookup every per-bundle resolution (declarations, parts,
  * controls, variant scopes) shares.
+ *
+ * @param {?object} parsed
+ *   A parsed key (parseKey).
+ * @param {object} [blockTypes]
+ *   The component uuid table (componentBlockTypes).
+ * @param {object} [layouts]
+ *   The section uuid table (sectionLayouts).
  *
  * @return {?string}
  *   The inline block type, 'plugin:{base id}', or layout plugin id, or
@@ -378,6 +422,11 @@ export const PART_PATTERN = /^\.[A-Za-z0-9_-]*\*$/;
  * an exact declaration always wins. Depth-first flatten order; the first
  * matching pattern is the match, and the selector must EXTEND the prefix
  * (the prefix alone is not an instance of the namespace).
+ *
+ * @param {?object} declaration
+ *   The owner declaration (its elements tree is searched).
+ * @param {?string} selector
+ *   The concrete selector, a single class.
  *
  * @return {?object}
  *   The pattern part's declaration, or null when the selector is not a
@@ -557,6 +606,9 @@ export const tagWord = (guide, tag) => {
  * before children; each part keeps its declaration as authored, nested
  * elements and contains slots included.
  *
+ * @param {?object} declaration
+ *   The declaration whose elements tree flattens.
+ *
  * @return {object}
  *   Part declarations keyed by selector, every depth of the tree.
  */
@@ -619,6 +671,16 @@ export const flattenElements = (declaration) => {
  * `.quote::after`, `> d-text::before`) resolves to its host's
  * generated box (pseudoNode(): the served declared box, else the
  * derivation from the host node), once the chain has landed.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {{kind: string, selector: ?string}} parsed
+ *   A parsed key (parseKey).
+ * @param {?string} bundle
+ *   The kind-appropriate discriminator (bundleForKey).
+ *
+ * @return {object}
+ *   The served node, or {} when the key lands nowhere declared.
  */
 export const declarationForKey = (guide, parsed, bundle) =>
   landingForKey(guide, parsed, bundle) ?? {};
@@ -676,6 +738,7 @@ export const landingForKey = (guide, parsed, bundle) => {
  *   The kind-appropriate discriminator (bundleForKey).
  *
  * @return {boolean}
+ *   Whether the key lands on a declared node.
  */
 export const declaredForKey = (guide, parsed, bundle) => {
   const { host, pseudo } = hostForKey(guide, parsed, bundle);
@@ -700,7 +763,16 @@ export const declaredForKey = (guide, parsed, bundle) => {
  * host is corrected first). The anchor (`&::before`) has no compounds,
  * so its host is the root itself.
  *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {{kind: string, selector: ?string}} parsed
+ *   A parsed key (parseKey).
+ * @param {?string} bundle
+ *   The kind-appropriate discriminator (bundleForKey).
+ *
  * @return {{host: ?object, pseudo: ?string}}
+ *   The chain's landing (null when a compound lands nowhere) and the
+ *   selector's terminal pseudo-element, null when it has none.
  */
 const hostForKey = (guide, parsed, bundle) => {
   const kinds = guide?.kinds ?? {};
@@ -726,7 +798,13 @@ const hostForKey = (guide, parsed, bundle) => {
     return { host: null, pseudo };
   }
   return {
-    host: walkChain(guide, selector?.compounds ?? [], declaration, declaration, declaration),
+    host: walkChain(
+      guide,
+      selector?.compounds ?? [],
+      declaration,
+      declaration,
+      declaration,
+    ),
     pseudo,
   };
 };
@@ -769,7 +847,9 @@ export const pseudoNode = (guide, host, pseudo) => {
   }
   const spec = specNode(guide, pseudo);
   const grants = spec?.grants ?? grantsOf(host);
-  const valueSpaces = spec?.valueSpaces ?? (isPlainObject(host?.valueSpaces) ? { ...host.valueSpaces } : {});
+  const valueSpaces =
+    spec?.valueSpaces ??
+    (isPlainObject(host?.valueSpaces) ? { ...host.valueSpaces } : {});
   if (GENERATED_BOXES.includes(pseudo)) {
     pseudoGroups(guide).forEach((id) => {
       if (Object.hasOwn(grants, id)) {
@@ -804,7 +884,13 @@ export const pseudoNode = (guide, host, pseudo) => {
  * and so granted by none here; it is still admitted at the write by
  * mode, as everywhere.
  *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {string} pseudo
+ *   The pseudo-element name ('before', 'after', ...).
+ *
  * @return {?{grants: object, valueSpaces: object}}
+ *   The served node, or null for a pseudo-element the table lacks.
  */
 const specNode = (guide, pseudo) => {
   const allowed = pseudoVocabulary(pseudo);
@@ -814,7 +900,9 @@ const specNode = (guide, pseudo) => {
   const groups = isPlainObject(guide?.groups) ? guide.groups : {};
   const ids = [];
   allowed.forEach((property) => {
-    const id = Object.keys(groups).find((group) => Object.hasOwn(groups[group]?.properties ?? {}, property));
+    const id = Object.keys(groups).find((group) =>
+      Object.hasOwn(groups[group]?.properties ?? {}, property),
+    );
     if (id !== undefined && !ids.includes(id)) {
       ids.push(id);
     }
@@ -822,7 +910,9 @@ const specNode = (guide, pseudo) => {
   const grants = {};
   const valueSpaces = {};
   ids.forEach((id) => {
-    grants[id] = Object.keys(groups[id].properties).filter((property) => allowed.includes(property));
+    grants[id] = Object.keys(groups[id].properties).filter((property) =>
+      allowed.includes(property),
+    );
     grants[id].forEach((property) => {
       const block = guide?.constraintDefaults?.[property];
       if (isPlainObject(block) && Object.keys(block).length) {
@@ -835,10 +925,20 @@ const specNode = (guide, pseudo) => {
 
 /**
  * The host's served node for a declared pseudo-element, or null (derived).
+ *
+ * @param {?object} host
+ *   The host declaration.
+ * @param {string} pseudo
+ *   The pseudo-element name.
+ *
+ * @return {?object}
+ *   The declared box's node, or null when the host declares none.
  */
 const declaredPseudo = (host, pseudo) => {
   const section = host?.pseudo;
-  return isPlainObject(section) && isPlainObject(section[pseudo]) ? section[pseudo] : null;
+  return isPlainObject(section) && isPlainObject(section[pseudo])
+    ? section[pseudo]
+    : null;
 };
 
 /**
@@ -852,6 +952,7 @@ const declaredPseudo = (host, pseudo) => {
  *   The style guide payload.
  *
  * @return {string[]}
+ *   The group ids, in panel order.
  */
 export const pseudoGroups = (guide) =>
   Object.keys(isPlainObject(guide?.groups) ? guide.groups : {}).filter(
@@ -861,6 +962,18 @@ export const pseudoGroups = (guide) =>
 /**
  * The declaration a compound's subject lands on, or null when undeclared
  * (PHP: VocabularyRosterBuilder::land()).
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {object} compound
+ *   The parsed compound (kind and name).
+ * @param {object} node
+ *   The current landing.
+ * @param {object} owner
+ *   The declaration a class part resolves against.
+ *
+ * @return {?object}
+ *   The landing, or null.
  */
 const land = (guide, compound, node, owner) => {
   if (compound.kind === CLASS_PART) {
@@ -907,6 +1020,7 @@ const land = (guide, compound, node, owner) => {
  *   of the compound the chain qualifies).
  *
  * @return {?object}
+ *   The last landing, or null.
  */
 const walkChain = (guide, compounds, node, owner, previous) => {
   let current = node;
@@ -921,7 +1035,16 @@ const walkChain = (guide, compounds, node, owner, previous) => {
       return null;
     }
     const argumentOwner = compound.kind === TYPE ? landing : currentOwner;
-    if (!judgeQualifiers(guide, compound.qualifiers, landing, argumentOwner, current, currentOwner)) {
+    if (
+      !judgeQualifiers(
+        guide,
+        compound.qualifiers,
+        landing,
+        argumentOwner,
+        current,
+        currentOwner,
+      )
+    ) {
       return null;
     }
     before = current;
@@ -947,6 +1070,7 @@ const walkChain = (guide, compounds, node, owner, previous) => {
  *   The bare pseudo-class name.
  *
  * @return {?string}
+ *   The condition name, or null when none is spelled by it.
  */
 export const conditionForPseudoClass = (conditions, name) =>
   Object.entries(isPlainObject(conditions) ? conditions : {}).find(
@@ -955,6 +1079,14 @@ export const conditionForPseudoClass = (conditions, name) =>
 
 /**
  * Whether a pseudo-class name spells a condition the guide publishes.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {string} name
+ *   The bare pseudo-class name.
+ *
+ * @return {boolean}
+ *   Whether a published condition is spelled by it.
  */
 const publishedState = (guide, name) =>
   conditionForPseudoClass(guide?.conditions, name) !== null;
@@ -979,30 +1111,71 @@ const publishedState = (guide, name) =>
  * ones, an open or guarded one admits them on the compound's landing; a
  * pseudo-class outside the wide selector tier lands nowhere in every
  * mode (the server's STYLE_SELECTOR_UNKNOWN).
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {object[]} qualifiers
+ *   The compound's parsed qualifiers.
+ * @param {object} landing
+ *   The qualified compound's landing.
+ * @param {object} argumentOwner
+ *   The declaration a `:has()` argument's parts resolve against.
+ * @param {object} node
+ *   The declaration the qualified compound resolved in.
+ * @param {object} owner
+ *   The declaration a class part of the chain resolves against.
+ *
+ * @return {boolean}
+ *   Whether every qualifier is admitted.
  */
-const judgeQualifiers = (guide, qualifiers, landing, argumentOwner, node, owner) =>
+const judgeQualifiers = (
+  guide,
+  qualifiers,
+  landing,
+  argumentOwner,
+  node,
+  owner,
+) =>
   qualifiers.every((qualifier) => {
     if (qualifier.name === HAS) {
-      return walkChain(guide, qualifier.argument, landing, argumentOwner, node) !== null;
+      return (
+        walkChain(guide, qualifier.argument, landing, argumentOwner, node) !==
+        null
+      );
     }
     if (qualifier.name === CLASS_QUALIFIER) {
       return (
         !propertiesClosed(guide) ||
-        land(guide, { kind: CLASS_PART, name: `.${qualifier.argument}` }, argumentOwner, argumentOwner) !== null
+        land(
+          guide,
+          { kind: CLASS_PART, name: `.${qualifier.argument}` },
+          argumentOwner,
+          argumentOwner,
+        ) !== null
       );
     }
     if (qualifier.name === ATTRIBUTE) {
       return !propertiesClosed(guide);
     }
     if (qualifier.name === NOT) {
-      return judgeMember(guide, qualifier.argument, landing, argumentOwner, node, owner);
+      return judgeMember(
+        guide,
+        qualifier.argument,
+        landing,
+        argumentOwner,
+        node,
+        owner,
+      );
     }
     if (qualifier.name === IS) {
       return qualifier.argument.every((member) =>
         judgeMember(guide, member, landing, argumentOwner, node, owner),
       );
     }
-    if (POSITIONS.includes(qualifier.name) || NTH_POSITIONS.includes(qualifier.name)) {
+    if (
+      POSITIONS.includes(qualifier.name) ||
+      NTH_POSITIONS.includes(qualifier.name)
+    ) {
       return true;
     }
     if (publishedState(guide, qualifier.name)) {
@@ -1019,10 +1192,33 @@ const judgeQualifiers = (guide, qualifiers, landing, argumentOwner, node, owner)
  * the qualified compound's own context (the alternative subject at the
  * same position, never the landing's part) and judges its qualifiers
  * from there.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {object} member
+ *   The predicate compound (kind null for an implied subject).
+ * @param {object} landing
+ *   The qualified compound's landing.
+ * @param {object} argumentOwner
+ *   The declaration a `:has()` argument's parts resolve against.
+ * @param {object} node
+ *   The declaration the qualified compound resolved in.
+ * @param {object} owner
+ *   The declaration a class part of the chain resolves against.
+ *
+ * @return {boolean}
+ *   Whether the member lands and its qualifiers are admitted.
  */
 const judgeMember = (guide, member, landing, argumentOwner, node, owner) => {
   if (member.kind === null) {
-    return judgeQualifiers(guide, member.qualifiers, landing, argumentOwner, node, owner);
+    return judgeQualifiers(
+      guide,
+      member.qualifiers,
+      landing,
+      argumentOwner,
+      node,
+      owner,
+    );
   }
   const memberLanding = land(guide, member, node, owner);
   return (
@@ -1045,6 +1241,14 @@ const judgeMember = (guide, member, landing, argumentOwner, node, owner) => {
  * (the universal block kind when undeclared: the server refuses an
  * unknown type on a strict site, and an open site is grammar-only
  * anyway), `kind:{kind}` the kind's node.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {?string} address
+ *   The printed root address.
+ *
+ * @return {?object}
+ *   The root declaration, or null.
  */
 const declarationForAddress = (guide, address) => {
   if (typeof address !== 'string') {
@@ -1093,7 +1297,11 @@ export const isInstancePartKey = (guide, parsed, bundle) => {
   const compounds = selector?.compounds;
   // A box of an instance part (`.s-a3::before`) is a rule of its own,
   // not the part (relative-selector.js isPart() is false with a pseudo).
-  if (selector?.pseudo || compounds?.length !== 1 || compounds[0].kind !== CLASS_PART) {
+  if (
+    selector?.pseudo ||
+    compounds?.length !== 1 ||
+    compounds[0].kind !== CLASS_PART
+  ) {
     return false;
   }
   const sub = compounds[0].name;
@@ -1114,7 +1322,11 @@ export const isPlainObject = (value) =>
  * var() reference, conditions included; this is what pickers and
  * completion details print beside the token name.
  *
+ * @param {string|object} value
+ *   The token's stored value (a string, or a condition-keyed map).
+ *
  * @return {string}
+ *   The display form.
  */
 export const tokenDisplayValue = (value) => {
   if (isPlainObject(value)) {
@@ -1180,6 +1392,7 @@ export const schemeDisplayValue = (guide, value) => {
  *   The style guide payload (conditions: name -> {label, wrapper, axis}).
  *
  * @return {?string}
+ *   The scheme condition's name, or null when the guide declares none.
  */
 export const schemeCondition = (guide) => {
   const conditions = guide?.conditions;
@@ -1246,6 +1459,8 @@ export const animationReference = (ident) =>
  *   The guide payload's tokenScales (prefixes served resolved).
  *
  * @return {?{scale: string, name: string}}
+ *   The scale and the token name, or null for a variable no scale
+ *   prefixes.
  */
 export const tokenReference = (variable, tokenScales) => {
   if (typeof variable !== 'string') {
@@ -1459,6 +1674,12 @@ export const resolvedConstraintsFor = (guide, declaration, property) => {
  * Whether a token record is offered in the basic rows (its skin's
  * `offered` flag; a record carrying none is offered, the store's
  * default).
+ *
+ * @param {{record: ?object}} token
+ *   A scale's token entry with its store record.
+ *
+ * @return {boolean}
+ *   Whether the token is offered.
  */
 export const offeredToken = (token) => token.record?.offered !== false;
 
@@ -1467,6 +1688,12 @@ export const offeredToken = (token) => token.record?.offered !== false;
  * shipped (a token in the skin's site layer that the package does not
  * ship, or any token of the site's own skin), the fact the provider
  * stamps per token.
+ *
+ * @param {{record: ?object}} token
+ *   A scale's token entry with its store record.
+ *
+ * @return {boolean}
+ *   Whether the token was minted on the site.
  */
 const siteMinted = (token) => token.record?.origin !== 'shipped';
 
@@ -1574,10 +1801,18 @@ export const definitionFor = (guide, property) => {
  * rows exactly like the basic-mode stop rows — client-side input shaping
  * only; the server validates every commit regardless.
  *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {object} declaration
+ *   The served node (declarationForKey).
+ * @param {object} entry
+ *   The style map entry: condition blocks of property values.
+ *
  * @return {Array<{id: string, label: ?string, rows: Array<{property: string,
  *   label: string, definition: ?object, constraints: ?object,
  *   values: Array<{condition: string, value: string}>}>,
  *   hasValues: boolean}>}
+ *   The sections in panel order, the catch-all last.
  */
 export const buildSections = (guide, declaration, entry) => {
   const groups = guide?.groups ?? {};
@@ -1681,8 +1916,18 @@ export const buildSections = (guide, declaration, entry) => {
  * inspector's Sections project it as the section's DEFAULT posture in
  * the collapse model (`folded: !autoOpen(...)`); the user's toggles are
  * the explicit postures over it.
+ *
+ * @param {{hasValues: boolean}} section
+ *   A buildSections() section.
+ * @param {Array<object>} rows
+ *   The section's visible rows.
+ * @param {object} lookups
+ *   The caller's row-keyed lookups.
+ * @param {Function} lookups.pendingFor
+ *   The pending line for a row, or null.
+ *
+ * @return {boolean}
+ *   Whether the section arrives open.
  */
 export const autoOpen = (section, rows, { pendingFor }) =>
-  Boolean(
-    section.hasValues || rows.some((row) => pendingFor(row) !== null),
-  );
+  Boolean(section.hasValues || rows.some((row) => pendingFor(row) !== null));

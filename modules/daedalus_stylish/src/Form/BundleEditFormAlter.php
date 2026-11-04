@@ -4,24 +4,25 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish\Form;
 
+use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
-use Drupal\daedalus_ui\Form\BundleEditFormAlter as DaedalusUiBundleEditFormAlter;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
+use Drupal\daedalus_ui\Form\BundleEditFormAlter as DaedalusUiBundleEditFormAlter;
 
 /**
  * Adds the per-bundle "Let editors style elements" box to bundle forms.
  *
  * The checkbox reflects and drives the style map field's existence via
- * DaedalusStylishFieldManager; on the add form, where no field exists yet,
- * it offers the gate's default (on) and the first save writes the choice
- * once the bundle exists. Unchecking records the deliberate opt-out (the
- * daedalus_stylish.settings opt_outs record) so auto-enablement never re-defaults
- * the bundle ON; checking clears it. Clearing the box reveals what the save
- * deletes: the count of the bundle's entities that store styles today
- * (core's #states, shown only when the box is cleared and there is
- * something to lose).
+ * DaedalusStylishFieldManager; on the add form, where no field exists yet, it
+ * offers the gate's default (on) and the first save writes the choice once the
+ * bundle exists. Unchecking records the deliberate opt-out (the
+ * daedalus_stylish.settings opt_outs record) so auto-enablement never
+ * re-defaults the bundle ON; checking clears it. Clearing the box reveals what
+ * the save deletes: the count of the bundle's entities that store styles today
+ * (core's #states, shown only when the box is cleared and there is something to
+ * lose).
  *
  * The box sits in the Styling group of the shared "Page builder" section
  * Daedalus UI owns (BundleEditFormAlter::ensureGroup()), which also decides
@@ -44,8 +45,10 @@ class BundleEditFormAlter {
     if (!$this->sectionOwner->ensureGroup($form, $form_state, DaedalusUiBundleEditFormAlter::GROUP_STYLING)) {
       return;
     }
+    $form_object = $form_state->getFormObject();
+    assert($form_object instanceof EntityFormInterface);
     /** @var \Drupal\Core\Config\Entity\ConfigEntityBundleBase $bundle_entity */
-    $bundle_entity = $form_state->getFormObject()->getEntity();
+    $bundle_entity = $form_object->getEntity();
     $bundle_of = $bundle_entity->getEntityType()->getBundleOf();
     $bundle = (string) $bundle_entity->id();
     // What the bundle stores today: the field's existence, or nothing yet
@@ -107,8 +110,10 @@ class BundleEditFormAlter {
    * here holds through later gate checks.
    */
   public function submit(array &$form, FormStateInterface $form_state): void {
+    $form_object = $form_state->getFormObject();
+    assert($form_object instanceof EntityFormInterface);
     /** @var \Drupal\Core\Config\Entity\ConfigEntityBundleBase $bundle_entity */
-    $bundle_entity = $form_state->getFormObject()->getEntity();
+    $bundle_entity = $form_object->getEntity();
     $bundle_of = $bundle_entity->getEntityType()->getBundleOf();
     $bundle = (string) $bundle_entity->id();
     $enabled = (bool) $form_state->getValue('daedalus_stylish_enabled');

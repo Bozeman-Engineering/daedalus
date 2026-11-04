@@ -290,7 +290,7 @@ final class StartChooser {
     // The Template card only when there is a template to follow, the Blank
     // card only where an empty page is the page's own to open (a locked
     // bundle's pages fill the template's slots and have no empty page):
-    // the verb's two judgements, read off the display and never off this
+    // the verb's two judgments, read off the display and never off this
     // host's own document (a read would seed it).
     $cards = [];
     if ($this->pageStart->templateOffered($host)) {

@@ -13,6 +13,7 @@ import { elementForKey } from './resolver';
  * for chrome that follows the selection, e.g. daedalus_stylish's spacing bands.
  *
  * @return {ReturnType<typeof createGeometryTracker>}
+ *   A geometry tracker keyed by selectable key.
  */
 export const createSelectableTracker = () =>
   createGeometryTracker({

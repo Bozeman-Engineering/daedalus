@@ -35,7 +35,7 @@ door is the one the owner module listed first. Permissions are the form's.
 
 | Setting | Owner | Written at | Doors | Config-only or canvas-owned, and why |
 |---|---|---|---|---|
-| `daedalus_ui.settings`: `colors` (main, secondary, highlight: the chrome's CSS variables) | daedalus_ui | Editor chrome form, `/admin/config/daedalus/ui/chrome` (route `daedalus_ui.settings`, `daedalus_ui\Form\SettingsForm`, `administer Daedalus UI configuration`) | Daedalus » UI (`daedalus_ui.settings`, weight -10). One door. bz_render (a Bozie repo) grafts its own `webdriver_url` details onto this form by form id; not a daedalus setting. | |
+| `daedalus_ui.settings`: `colors` (main, secondary, highlight: the chrome's CSS variables) | daedalus_ui | Editor chrome form, `/admin/config/daedalus/ui/chrome` (route `daedalus_ui.settings`, `daedalus_ui\Form\SettingsForm`, `administer Daedalus UI configuration`) | Daedalus » UI (`daedalus_ui.settings`, weight -10). One door. The form id is a contract: a module from outside the package may alter the form by id and add a details element of its own beneath the colors, and what it adds is that module's setting, not a Daedalus one. | |
 | `daedalus_ai.settings`: `assistant_id`, `image_generation_enabled`, `placeholder_image`, `model_choices` | daedalus_ai | AI chat form, `/admin/config/daedalus/ai/chat` (route `daedalus_ai.settings`, `daedalus_ai\Form\SettingsForm`, `administer site configuration`) | Daedalus » AI (`daedalus_ai.settings`, first door, weight -10); AI » Tools & Automation (`daedalus_ai.settings.ai_tools`, parent `ai.admin_config_tools`). Recipe: the `daedalus_ai` ingredient sets `assistant_id: daedalus` and `image_generation_enabled: false`. | `model_choices` is the list the chat kebab's per-user model choice draws from (permission `choose ai model`); `image_generation_enabled` has a per-user twin, "Generate images", in the Edit mode settings panel (below). |
 | `daedalus_ai_memory.settings`: `enabled_agents`, `cache_ttl`, `segment_budget_tokens`, `segment_budget_minimum_tokens`, `segment_budget_overrides`, `segment_headroom_tokens`, `reframe_minimum_tokens` | daedalus_ai_memory | Memory form, `/admin/config/ai/agent-memory` (route `daedalus_ai_memory.settings`, `administer site configuration`) | AI » Tools & Automation (`daedalus_ai_memory.settings`, first door, parent `ai.admin_config_tools`); Daedalus » AI (`daedalus_ai_memory.settings.daedalus`). Recipe: the `daedalus_ai` ingredient sets `enabled_agents`. | |
 | `daedalus_ai_ledger.settings`: `prices`, `caps`, `retention_days` | daedalus_ai_ledger | Ledger form, `/admin/config/ai/usage-ledger` (route `daedalus_ai_ledger.settings`, `administer ai usage ledger`) | AI » Tools & Automation (`daedalus_ai_ledger.settings`, first door); Daedalus » AI (`daedalus_ai_ledger.settings.daedalus`). | The status report (`LedgerRequirements`) reads the price table for drift; read-only. |
@@ -99,7 +99,8 @@ point `daedalus_ai.settings:assistant_id` and
 
 ## Not Daedalus settings
 
-`bz_atelier.settings`, `bz_atelier_scenarios.settings` and
-`bz_render.settings` are Bozie harness tooling in their own repos, with no
-forms. `twig_events` and `field_sample_value` (the latter's per-field
-third-party settings are its own) have no Daedalus surface.
+Tooling that drives the builder from outside the package (a scenario
+runner, a render harness, a diagnostics module) keeps its settings in its
+own repos and declares no form here; it is not part of this roster.
+`twig_events` and `field_sample_value` (the latter's per-field third-party
+settings are its own) have no Daedalus surface either.

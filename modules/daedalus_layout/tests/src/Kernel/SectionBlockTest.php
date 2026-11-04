@@ -125,7 +125,7 @@ class SectionBlockTest extends NestedStorageKernelTestBase {
   }
 
   /**
-   * A missing view mode throws instead of silently rendering a degraded subtree.
+   * A missing view mode throws, not silently rendering a degraded subtree.
    */
   public function testMissingContextsThrow(): void {
     $embedded = $this->createSection('layout_onecol', [
@@ -176,10 +176,10 @@ class SectionBlockTest extends NestedStorageKernelTestBase {
   /**
    * The container round-trips the defaults display under strict schema.
    *
-   * KernelTestBase enforces strict config schema on save, so saving a
-   * defaults display carrying a depth-2 container validates
-   * block.settings.daedalus_layout_section, including the recursion through core's
-   * layout_builder.section type.
+   * KernelTestBase enforces strict config schema on save, so saving a defaults
+   * display carrying a depth-2 container validates
+   * block.settings.daedalus_layout_section, including the recursion through
+   * core's layout_builder.section type.
    */
   public function testDefaultsDisplayRoundTripsUnderStrictSchema(): void {
     $depth_two = $this->createSection('layout_onecol', [

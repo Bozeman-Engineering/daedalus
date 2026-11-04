@@ -74,7 +74,6 @@ import {
   bundleForKey,
   declarationForKey,
   declaredForKey,
-  findBaseTagDeclaration,
   parseKey,
   propertiesClosed,
   propertyGranted,
@@ -114,6 +113,9 @@ const isPlainObject = (value) =>
 /**
  * Whether a value is a write address: `{key, selector}` with a
  * non-empty canonical selector.
+ *
+ * @param {*} address
+ *   The value to test.
  */
 export const isAddress = (address) =>
   isPlainObject(address) &&
@@ -128,8 +130,10 @@ export const isAddress = (address) =>
  * for a null selector).
  *
  * @param {{key: string, selector: ?string}} address
+ *   The address.
  *
  * @return {string}
+ *   The style-map key.
  */
 export const addressKey = ({ key, selector }) =>
   selector === null || selector === undefined || selector === ''
@@ -138,6 +142,11 @@ export const addressKey = ({ key, selector }) =>
 
 /**
  * Whether two addresses name one key.
+ *
+ * @param {?{key: string, selector: ?string}} a
+ *   An address, or anything else (then false).
+ * @param {?{key: string, selector: ?string}} b
+ *   The other address.
  */
 export const sameAddress = (a, b) =>
   isPlainObject(a) && isPlainObject(b) && addressKey(a) === addressKey(b);
@@ -156,6 +165,7 @@ export const sameAddress = (a, b) =>
  *   The owner's selectable key.
  *
  * @return {string}
+ *   The owner's name.
  */
 export const ownerName = (matcher, key) =>
   matcher?.facts?.(key)?.name ?? Drupal.t('the parent element');
@@ -167,6 +177,12 @@ const lower = (text) =>
 
 /**
  * A type compound as a singular noun: "Text block", "Container", "Block".
+ *
+ * @param {object} guide
+ *   The style guide payload (typeLabels reads its elements).
+ * @param {string} type
+ *   The type compound's name (a custom element tag, TYPE_CONTAINER or
+ *   TYPE_BLOCK).
  */
 const typeNoun = (guide, type) => {
   if (type === TYPE_CONTAINER) {
@@ -183,6 +199,12 @@ const typeNoun = (guide, type) => {
 
 /**
  * A type compound as a plural noun: "Text blocks", "Containers", "Blocks".
+ *
+ * @param {object} guide
+ *   The style guide payload (typeLabels reads its elements).
+ * @param {string} type
+ *   The type compound's name (a custom element tag, TYPE_CONTAINER or
+ *   TYPE_BLOCK).
  */
 const typeNouns = (guide, type) => {
   if (type === TYPE_CONTAINER) {
@@ -201,6 +223,11 @@ const typeNouns = (guide, type) => {
  * A tag's word lower-cased for the middle of a sentence ("link",
  * "paragraph"): the guide's one word for the tag (style-guide.js
  * tagWord()).
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {string} tag
+ *   The tag name ('a', 'p').
  */
 const tagNoun = (guide, tag) => lower(tagWord(guide, tag));
 
@@ -229,9 +256,12 @@ const upper = (text) =>
  * @param {string} owner
  *   The owner's name (ownerName).
  * @param {object} [blockTypes]
+ *   Component uuid → inline block type (source.getBlockTypes()).
  * @param {object} [sectionLayouts]
+ *   Section uuid → layout plugin id (source.getSectionLayouts()).
  *
  * @return {string}
+ *   The address's sentence.
  */
 export const addressLabel = (
   guide,
@@ -245,7 +275,10 @@ export const addressLabel = (
     return Drupal.t('!host › !box', {
       '!host': addressLabel(
         guide,
-        { key: address.key, selector: printSelector({ ...parsed, pseudo: null }) },
+        {
+          key: address.key,
+          selector: printSelector({ ...parsed, pseudo: null }),
+        },
         owner,
         blockTypes,
         sectionLayouts,
@@ -254,7 +287,13 @@ export const addressLabel = (
     });
   }
   const groups =
-    selectorWords(guide, address.key, address.selector, blockTypes, sectionLayouts) ?? [];
+    selectorWords(
+      guide,
+      address.key,
+      address.selector,
+      blockTypes,
+      sectionLayouts,
+    ) ?? [];
   const [first, second] = groups;
   const things = (group) => [group.plural, ...group.phrases].join(' ');
   // The ready-made phrases word the single unrelated shapes.
@@ -282,7 +321,7 @@ export const addressLabel = (
   }
   // A type then a part or tag (its relations riding along): "Text block
   // links in Welcome", and "directly in" when the type is
-  // child-combinated, so the two shapes the set offers side by side
+  // child-combinator, so the two shapes the set offers side by side
   // never read alike.
   if (
     groups.length === 2 &&
@@ -329,8 +368,10 @@ export const addressLabel = (
  * compound (no address set).
  *
  * @param {?string} selector
+ *   The facet's canonical selector, or null / '' for the root.
  *
  * @return {?{kind: string, host: ?string, pseudo: ?string}}
+ *   The facet's shape, or null for a shape with no address set.
  */
 const facetShape = (selector) => {
   if (selector === null || selector === undefined || selector === '') {
@@ -364,8 +405,47 @@ const facetShape = (selector) => {
 /**
  * A host facet's box selector: `&::before` for the root (a null host),
  * `.cls::after` / `a::after` for a part or tag host.
+ *
+ * @param {?string} host
+ *   The host's own selector ('.cls', 'a'), or null for the root.
+ * @param {string} pseudo
+ *   The box's name ('before', 'after').
  */
 const boxOf = (host, pseudo) => `${host ?? ANCHOR}${SUFFIX}${pseudo}`;
+
+/**
+ * Whether a mintable address is declared enough to offer: on a strict
+ * site every compound must land and a terminal pseudo-element must be
+ * declared by its host (the server refuses an undeclared type, part,
+ * children section, tag or box there; style-guide.js declaredForKey,
+ * the roster's declared()); on an open or guarded site everything is
+ * admitted grammar-only, an undeclared tag included (admission by mode
+ * is one rule for every vocabulary; a mintable tag comes from the live
+ * markup, so the browser knows it).
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {{key: string, selector: string}} address
+ *   The candidate address.
+ * @param {object} blockTypes
+ *   Component uuid → inline block type (source.getBlockTypes()).
+ * @param {object} sectionLayouts
+ *   Section uuid → layout plugin id (source.getSectionLayouts()).
+ */
+const declared = (guide, address, blockTypes, sectionLayouts) => {
+  if (!propertiesClosed(guide)) {
+    return true;
+  }
+  const parsed = parseKey(addressKey(address));
+  return (
+    parsed !== null &&
+    declaredForKey(
+      guide,
+      parsed,
+      bundleForKey(parsed, blockTypes, sectionLayouts),
+    )
+  );
+};
 
 /**
  * The generated boxes a facet offers as doorways: the root's own
@@ -380,6 +460,7 @@ const boxOf = (host, pseudo) => `${host ?? ANCHOR}${SUFFIX}${pseudo}`;
  * as "+ Before" / "+ After" (subject-model.js): seat only, no write.
  *
  * @param {object} args
+ *   The facet and its context.
  * @param {object} args.guide
  *   The style guide payload.
  * @param {string} args.key
@@ -387,9 +468,13 @@ const boxOf = (host, pseudo) => `${host ?? ANCHOR}${SUFFIX}${pseudo}`;
  * @param {?string} args.selector
  *   The facet's own selector (null for the root).
  * @param {object} [args.blockTypes]
+ *   Component uuid → inline block type (source.getBlockTypes()).
  * @param {object} [args.sectionLayouts]
+ *   Section uuid → layout plugin id (source.getSectionLayouts()).
  *
  * @return {Array<{key: string, selector: string, pseudo: string}>}
+ *   The facet's declared boxes in grammar order (before, after), each
+ *   as an address on the selected key with its box name.
  */
 export const boxAddresses = ({
   guide,
@@ -430,12 +515,15 @@ export const boxAddresses = ({
  * @param {{key: string, selector: ?string}} own
  *   The facet's own address (the selected key and its selector).
  * @param {object} [blockTypes]
+ *   Component uuid → inline block type (source.getBlockTypes()).
  * @param {object} [sectionLayouts]
+ *   Section uuid → layout plugin id (source.getSectionLayouts()).
  * @param {?object} [markup]
  *   The selected key's `_element.markup` annotation, so an instance
  *   part words itself ("This body text"), or null.
  *
  * @return {string}
+ *   The facet's face.
  */
 export const facetLabel = (
   guide,
@@ -486,30 +574,10 @@ export const facetLabel = (
 };
 
 /**
- * Whether a mintable address is declared enough to offer: on a strict
- * site every compound must land and a terminal pseudo-element must be
- * declared by its host (the server refuses an undeclared type, part,
- * children section, tag or box there; style-guide.js declaredForKey,
- * the roster's declared()); on an open or guarded site everything is
- * admitted grammar-only, an undeclared tag included (admission by mode
- * is one rule for every vocabulary; a mintable tag comes from the live
- * markup, so the browser knows it).
- */
-const declared = (guide, address, blockTypes, sectionLayouts) => {
-  if (!propertiesClosed(guide)) {
-    return true;
-  }
-  const parsed = parseKey(addressKey(address));
-  return (
-    parsed !== null &&
-    declaredForKey(guide, parsed, bundleForKey(parsed, blockTypes, sectionLayouts))
-  );
-};
-
-/**
  * The selected facet's address set, in switcher order.
  *
  * @param {object} args
+ *   The facet and everything the set is derived from.
  * @param {object} args.guide
  *   The style guide payload.
  * @param {?object} args.map
@@ -527,7 +595,9 @@ const declared = (guide, address, blockTypes, sectionLayouts) => {
  * @param {?Array<string>} [args.axes]
  *   The root scope's axis vocabulary.
  * @param {object} [args.blockTypes]
+ *   Component uuid → inline block type (source.getBlockTypes()).
  * @param {object} [args.sectionLayouts]
+ *   Section uuid → layout plugin id (source.getSectionLayouts()).
  * @param {?object} [args.markup]
  *   The selected key's `_element.markup` annotation (the own entry's
  *   words for an instance part), or null.
@@ -554,7 +624,8 @@ export const addressSet = ({
   sectionLayouts = {},
   markup = null,
 }) => {
-  const facet = selector === null || selector === '' ? null : canonicalSelector(selector);
+  const facet =
+    selector === null || selector === '' ? null : canonicalSelector(selector);
   if (selector !== null && selector !== '' && facet === null) {
     return [];
   }
@@ -610,7 +681,8 @@ export const addressSet = ({
   // An instance part's class is worn by one element in the world, so its
   // class of things is its tag (a declared part's class IS the class of
   // things, the type's anatomy on every element of the type).
-  const instance = kind === 'part' && INSTANCE_PART.test(host) && partTag !== null;
+  const instance =
+    kind === 'part' && INSTANCE_PART.test(host) && partTag !== null;
   const boxed = (candidate) =>
     pseudo === null ? candidate : `${candidate}${SUFFIX}${pseudo}`;
 
@@ -625,7 +697,14 @@ export const addressSet = ({
       seen.add(addressKey(own));
       set.push({
         ...own,
-        label: facetLabel(guide, matcher, own, blockTypes, sectionLayouts, markup),
+        label: facetLabel(
+          guide,
+          matcher,
+          own,
+          blockTypes,
+          sectionLayouts,
+          markup,
+        ),
         existing: held,
       });
     }
@@ -708,11 +787,16 @@ export const addressSet = ({
  * address.
  *
  * @param {object} guide
+ *   The style guide payload.
  * @param {{key: string, selector: ?string}} address
+ *   The write address.
  * @param {object} [blockTypes]
+ *   Component uuid → inline block type (source.getBlockTypes()).
  * @param {object} [sectionLayouts]
+ *   Section uuid → layout plugin id (source.getSectionLayouts()).
  *
  * @return {object}
+ *   The landing declaration, or {}.
  */
 export const addressDeclaration = (
   guide,
@@ -741,16 +825,23 @@ export const addressDeclaration = (
  *   row styles (a part the address's selector cannot reach, or the root
  *   beneath a part address).
  * @param {object} args
+ *   The sentence's subjects.
  * @param {string} args.property
+ *   The withheld property.
  * @param {{key: string, selector: string}} args.address
+ *   The write address.
  * @param {string} args.owner
  *   The owner's name (ownerName).
  * @param {?string} [args.part]
  *   The box's label for the 'reach' kind.
  *
  * @return {string}
+ *   The reason, a row's title.
  */
-export const withheldReason = (kind, { property, address, owner, part = null }) =>
+export const withheldReason = (
+  kind,
+  { property, address, owner, part = null },
+) =>
   kind === 'reach'
     ? Drupal.t(
         '"!selector" on !owner does not reach the !part this row styles; choose an address that does, or this element alone.',
@@ -762,7 +853,11 @@ export const withheldReason = (kind, { property, address, owner, part = null }) 
       )
     : Drupal.t(
         '!property is not allowed at "!selector" on !owner: the style guide does not grant it there. Choose this element alone to set it here.',
-        { '!property': property, '!selector': address.selector, '!owner': owner },
+        {
+          '!property': property,
+          '!selector': address.selector,
+          '!owner': owner,
+        },
       );
 
 /**
@@ -773,11 +868,17 @@ export const withheldReason = (kind, { property, address, owner, part = null }) 
  * grants stays hidden and is never judged here.
  *
  * @param {object} args
+ *   The address and the properties to judge.
  * @param {object} args.guide
+ *   The style guide payload.
  * @param {{key: string, selector: string}} args.address
+ *   The write address.
  * @param {string[]} args.properties
+ *   The properties the own key grants (or shows).
  * @param {object} [args.blockTypes]
+ *   Component uuid → inline block type (source.getBlockTypes()).
  * @param {object} [args.sectionLayouts]
+ *   Section uuid → layout plugin id (source.getSectionLayouts()).
  * @param {?Array} [args.document]
  *   The document tree, for the owner's name in the reason.
  *
@@ -792,12 +893,24 @@ export const withheldAt = ({
   sectionLayouts = {},
   document = null,
 }) => {
-  const declaration = addressDeclaration(guide, address, blockTypes, sectionLayouts);
-  const owner = ownerName(Array.isArray(document) ? createMatcher(document) : null, address.key);
+  const declaration = addressDeclaration(
+    guide,
+    address,
+    blockTypes,
+    sectionLayouts,
+  );
+  const owner = ownerName(
+    Array.isArray(document) ? createMatcher(document) : null,
+    address.key,
+  );
   const withheld = {};
   (Array.isArray(properties) ? properties : []).forEach((property) => {
     if (!propertyGranted(declaration, property)) {
-      withheld[property] = withheldReason('grant', { property, address, owner });
+      withheld[property] = withheldReason('grant', {
+        property,
+        address,
+        owner,
+      });
     }
   });
   return withheld;
@@ -806,8 +919,25 @@ export const withheldAt = ({
 /**
  * A part's label for the reach reason: its declared label under the
  * element's key, the class itself otherwise, "element" for the root.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {string} key
+ *   The element's selectable key.
+ * @param {?string} element
+ *   The part's selector ('.cls'), or null / '' for the root.
+ * @param {object} [blockTypes]
+ *   Component uuid → inline block type (source.getBlockTypes()).
+ * @param {object} [sectionLayouts]
+ *   Section uuid → layout plugin id (source.getSectionLayouts()).
  */
-export const boxLabel = (guide, key, element, blockTypes = {}, sectionLayouts = {}) => {
+export const boxLabel = (
+  guide,
+  key,
+  element,
+  blockTypes = {},
+  sectionLayouts = {},
+) => {
   if (element === '' || element === null || element === undefined) {
     return Drupal.t('element');
   }

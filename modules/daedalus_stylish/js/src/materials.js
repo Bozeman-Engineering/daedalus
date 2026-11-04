@@ -39,6 +39,12 @@ import {
 /**
  * A record's committable style spelling ('var(--color-accent)'), or null
  * for a record with none in the style slot.
+ *
+ * @param {?object} record
+ *   A material record.
+ *
+ * @return {?string}
+ *   The style spelling, or null.
  */
 export const styleReference = (record) => {
   const spelling = record?.spellings?.[SLOT.STYLE];
@@ -52,6 +58,12 @@ export const styleReference = (record) => {
  * the live drafts and the committed materials' delivery on the token
  * scope element), and the prompt's PHP reader
  * (MaterialsSchema::customProperty) reads it the same way.
+ *
+ * @param {?object} record
+ *   A token record.
+ *
+ * @return {?string}
+ *   The custom property name, or null when the spelling is not a var().
  */
 export const customProperty = (record) => {
   const spelling = styleReference(record);
@@ -64,6 +76,14 @@ export const customProperty = (record) => {
 
 /**
  * One token record as a picker/completion entry.
+ *
+ * @param {?object} guide
+ *   The style guide payload (tokenScales declares the scale).
+ * @param {object} record
+ *   The token record.
+ *
+ * @return {object}
+ *   The entry (tokenOptions' shape).
  */
 const tokenEntry = (guide, record) => {
   const declaration = guide?.tokenScales?.[record.group];
@@ -102,6 +122,7 @@ const tokenEntry = (guide, record) => {
  * @return {Array<{scale: string, scaleLabel: string, shape: ?string,
  *   name: string, ref: string, value: string, valueDark: ?string,
  *   record: object}>}
+ *   The entries, roster order.
  */
 export const tokenOptions = (guide, materials, shapes = null) =>
   materials
@@ -116,6 +137,16 @@ export const tokenOptions = (guide, materials, shapes = null) =>
 /**
  * One scale's tokens as picker/completion entries, roster order; [] for
  * an undeclared scale or one minting nothing.
+ *
+ * @param {?object} guide
+ *   The style guide payload.
+ * @param {object} materials
+ *   The materials roster.
+ * @param {string} scale
+ *   The scale id.
+ *
+ * @return {Array<object>}
+ *   The scale's tokenOptions entries.
  */
 export const scaleTokens = (guide, materials, scale) =>
   tokenOptions(guide, materials).filter((entry) => entry.scale === scale);
@@ -127,6 +158,13 @@ export const scaleTokens = (guide, materials, scale) =>
  * fallback, whitespace tolerated) resolves to its record; a literal, a
  * compound, an inline media value or a reference the roster lacks answers
  * null, and the caller paints the raw spelling honestly.
+ *
+ * @param {?object} guide
+ *   The style guide payload.
+ * @param {object} materials
+ *   The materials roster.
+ * @param {*} value
+ *   The style value as written.
  *
  * @return {?object}
  *   A tokenOptions entry.
@@ -147,6 +185,12 @@ export const materialOf = (guide, materials, value) => {
 /**
  * A record's committable keyframes-name spelling ('motion-fade_in'), or
  * null for a record with none in the animation slot.
+ *
+ * @param {?object} record
+ *   A material record.
+ *
+ * @return {?string}
+ *   The keyframes name, or null.
  */
 export const animationSpelling = (record) => {
   const spelling = record?.spellings?.[SLOT.ANIMATION];
@@ -159,6 +203,12 @@ export const animationSpelling = (record) => {
  * material delivers as (record data, never a face the row could paint:
  * an animation has no display value the way a token has one, so its
  * label is what every face shows beside the spelling).
+ *
+ * @param {object} record
+ *   The animation record.
+ *
+ * @return {object}
+ *   The entry (animationOptions' shape).
  */
 const animationEntry = (record) => ({
   name: record.id,
@@ -182,6 +232,7 @@ const animationEntry = (record) => ({
  *
  * @return {Array<{name: string, label: string, ref: string,
  *   steps: object, description: string, record: object}>}
+ *   The entries, roster order.
  */
 export const animationOptions = (materials) =>
   materials
@@ -217,6 +268,12 @@ export const animationOf = (materials, name) => {
  * A record's committable family spelling ('"Inter"', the quoted family a
  * font-family stack names), or null for a record with none in the font
  * slot.
+ *
+ * @param {?object} record
+ *   A material record.
+ *
+ * @return {?string}
+ *   The quoted family, or null.
  */
 export const fontSpelling = (record) => {
   const spelling = record?.spellings?.[SLOT.FONT];
@@ -227,12 +284,17 @@ export const fontSpelling = (record) => {
  * One font record as a picker entry: `family` the name stacks reference,
  * `spelling` its quoted form (the one component a stack commits), `faces`
  * the canonical faces the family ships ([{weight, style, source}]).
+ *
+ * @param {object} record
+ *   The font record.
+ *
+ * @return {object}
+ *   The entry (fontOptions' shape).
  */
 const fontEntry = (record) => ({
   name: record.id,
   label: record.label !== '' ? record.label : record.id,
-  family:
-    typeof record.value?.family === 'string' ? record.value.family : '',
+  family: typeof record.value?.family === 'string' ? record.value.family : '',
   spelling: fontSpelling(record),
   faces: Array.isArray(record.value?.faces) ? record.value.faces : [],
   description: typeof record.description === 'string' ? record.description : '',
@@ -252,6 +314,7 @@ const fontEntry = (record) => ({
  * @return {Array<{name: string, label: string, family: string,
  *   spelling: string, faces: Array<object>, description: string,
  *   record: object}>}
+ *   The entries, roster order.
  */
 export const fontOptions = (materials) =>
   materials
@@ -269,7 +332,13 @@ export const fontOptions = (materials) =>
  * literal face and the color field's mint gate: whether a value is a
  * reference is the grammar's answer, never a regex here.
  *
+ * @param {object} materials
+ *   The materials roster.
+ * @param {*} value
+ *   The style value as written.
+ *
  * @return {?string}
+ *   The trimmed literal, or null.
  */
 export const inlineLiteral = (materials, value) => {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -288,6 +357,13 @@ export const inlineLiteral = (materials, value) => {
  * A token on a scale the guide declares with the gradient shape (the
  * suite's `gradient` scale, or any package's); the shape is the scale's
  * declaration, so an undeclared scale's token never gates.
+ *
+ * @param {?object} guide
+ *   The style guide payload (tokenScales declares the shapes).
+ * @param {object} materials
+ *   The materials roster.
+ * @param {*} value
+ *   The style value as written.
  *
  * @return {?object}
  *   The tokenOptions entry, or null for anything else (a literal
@@ -323,6 +399,7 @@ export const gradientTokenOf = (guide, materials, value) => {
  *   Whether to paint the scheme half.
  *
  * @return {string}
+ *   The painted display value.
  */
 export const paintValue = (guide, materials, value, scheme = false) => {
   const base = scheme
@@ -362,7 +439,15 @@ export const paintValue = (guide, materials, value, scheme = false) => {
  * at library scope): `paintDark` is non-null exactly when the scheme
  * pass paints differently, so a single-valued token keeps a whole face.
  *
+ * @param {?object} guide
+ *   The style guide payload.
+ * @param {object} materials
+ *   The materials roster.
+ * @param {string|object} value
+ *   A stored value: a plain string or a condition-keyed map.
+ *
  * @return {{paint: string, paintDark: ?string}}
+ *   The default face and, when it differs, the scheme face.
  */
 export const facePair = (guide, materials, value) => {
   const paint = paintValue(guide, materials, value);

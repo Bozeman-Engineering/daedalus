@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_ui\Kernel;
 
+use Drupal\Core\Config\Schema\Mapping;
 use Drupal\Core\Config\Schema\SchemaIncompleteException;
 use Drupal\daedalus_ui\Form\BundleEditFormAlter;
 use Drupal\KernelTests\KernelTestBase;
@@ -32,9 +33,9 @@ class BundleSettingsSchemaTest extends KernelTestBase {
   /**
    * {@inheritdoc}
    *
-   * The module's hard dependencies (daedalus_blueprint + daedalus_blueprint_api)
-   * are invisible to kernel environments and must be listed explicitly or
-   * the container fails to compile.
+   * The module's hard dependencies (daedalus_blueprint +
+   * daedalus_blueprint_api) are invisible to kernel environments and must be
+   * listed explicitly or the container fails to compile.
    */
   protected static $modules = [
     'system',
@@ -99,7 +100,10 @@ class BundleSettingsSchemaTest extends KernelTestBase {
 
     // The stored value is typed as the schema says, through the type's own
     // name (the probe's exact match) and the shared mapping's keys.
-    $settings = $this->container->get('config.typed')->get('taxonomy.vocabulary.landing')->get('third_party_settings.daedalus_ui');
+    $config = $this->container->get('config.typed')->get('taxonomy.vocabulary.landing');
+    assert($config instanceof Mapping);
+    $settings = $config->get('third_party_settings.daedalus_ui');
+    assert($settings instanceof Mapping);
     $this->assertSame('taxonomy.vocabulary.*.third_party.daedalus_ui', $settings->getDataDefinition()->getDataType());
     $this->assertSame('boolean', $settings->get('enabled')->getDataDefinition()->getDataType());
     $this->assertSame(['enabled', 'initial_mode', 'presentation'], array_keys($settings->getDataDefinition()['mapping']));

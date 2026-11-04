@@ -70,8 +70,8 @@ REGEXP;
       foreach ($matches as $match) {
         $conditions = trim($match[2]);
         // An import that already targets a layer becomes a sublayer of the
-        // wrapper — a sublayer can never outrank unlayered (Daedalus Stylish) styles,
-        // and emitting two layer() tokens would be invalid CSS.
+        // wrapper — a sublayer can never outrank unlayered (Daedalus Stylish)
+        // styles, and emitting two layer() tokens would be invalid CSS.
         if (preg_match('/^layer(?:\(\s*([-\w.]+)\s*\))?(?:\s+|$)/i', $conditions, $layer_match)) {
           $sublayer = isset($layer_match[1]) && $layer_match[1] !== '' ? '.' . $layer_match[1] : '';
           $conditions = trim(substr($conditions, strlen($layer_match[0])));

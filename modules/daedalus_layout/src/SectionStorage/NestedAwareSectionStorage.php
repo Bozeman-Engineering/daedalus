@@ -440,8 +440,8 @@ class NestedAwareSectionStorage implements NestedSectionStorageInterface {
   /**
    * Recursively indexes a section list and the containers inside it.
    *
-   * Sections without an daedalus_layout uuid are stamped here (the index is the one
-   * walk guaranteed to see every section), and duplicate section uuids are
+   * Sections without an daedalus_layout uuid are stamped here (the index is the
+   * one walk guaranteed to see every section), and duplicate section uuids are
    * repaired deterministically: the same collision at the same path always
    * produces the same replacement, because indexing happens independently on
    * each request before tempstore is populated.

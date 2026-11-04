@@ -26,6 +26,8 @@ import { FAVORITES_ID } from './sets.js';
  *   The sets (sets.js buildSets).
  *
  * @return {Array<{id: string, foldable: boolean, folded: boolean, children: Array}>}
+ *   One node per set, All's kinds as its children, every node foldable
+ *   and every one but Favorites folded by default.
  */
 export const outlineOf = (sets) =>
   (sets ?? []).map((set) => ({

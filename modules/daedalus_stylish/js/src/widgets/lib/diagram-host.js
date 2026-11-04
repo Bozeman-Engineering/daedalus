@@ -15,6 +15,7 @@ import { styleTarget } from './use-highlight.js';
  *   A control model's `stacks` (property → stack).
  *
  * @return {Array<[string, Array<[string, object]>]>}
+ *   One [key, [[layerId, styles], ...]] entry per distinct stack.
  */
 export const stacksIdentity = (stacks) => {
   const seen = new Map();
@@ -63,6 +64,7 @@ export const stacksIdentity = (stacks) => {
  * released on null (the diagram's onHighlight(null) on unmount).
  *
  * @param {object} options
+ *   The host's inputs, below.
  * @param {?object} options.source
  *   The state source (readCanvas, setCanvasHighlight).
  * @param {object} options.model
@@ -86,7 +88,13 @@ export const stacksIdentity = (stacks) => {
  *   are the canvas's measured conversion bases (readCanvas), what the
  *   ring's px placeholders convert into the gesture's unit through.
  */
-export const useDiagramHost = ({ source, model, open, property, longhands }) => {
+export const useDiagramHost = ({
+  source,
+  model,
+  open,
+  property,
+  longhands,
+}) => {
   const identity = JSON.stringify([
     model.condition,
     stacksIdentity(model.stacks),

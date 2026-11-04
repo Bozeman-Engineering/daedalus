@@ -106,13 +106,8 @@
           if (request.body instanceof FormData) {
             const attachments = Drupal.Daedalus.AiAttachments;
             const settings = drupalSettings.daedalus_ai.attachments;
-            const { messages, files } = attachments.readMultipart(
-              request.body,
-            );
-            const oversized = attachments.oversized(
-              files,
-              settings.size_limit,
-            );
+            const { messages, files } = attachments.readMultipart(request.body);
+            const oversized = attachments.oversized(files, settings.size_limit);
             if (oversized.length > 0) {
               return {
                 error: Drupal.t('@names: over the @limit MB limit.', {

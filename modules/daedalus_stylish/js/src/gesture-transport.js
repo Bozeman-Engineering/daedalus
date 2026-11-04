@@ -31,6 +31,7 @@
  *   The rejection.
  *
  * @return {string}
+ *   The message and hint joined by a space; empty when neither exists.
  */
 export const failureText = (error) => {
   const first = error?.payload?.errors?.[0];
@@ -78,6 +79,13 @@ const csrfToken = () => {
 
 /**
  * Resolves a fetch response as JSON, rejecting on the error envelope.
+ *
+ * @param {Response} response
+ *   The fetch response.
+ *
+ * @return {Promise<object>}
+ *   The parsed body; rejects with an Error carrying it as `payload` when
+ *   the status is not ok.
  */
 export const asJson = async (response) => {
   const body = await response.json().catch(() => ({}));
@@ -96,12 +104,24 @@ export const asJson = async (response) => {
 
 /**
  * A read: no CSRF token (GET routes are permission-gated, not token-gated).
+ *
+ * @param {string} path
+ *   The route path, relative to the site (Drupal.url's input).
+ *
+ * @return {Promise<object>}
+ *   The JSON body.
  */
 export const get = (path) => fetch(Drupal.url(path)).then(asJson);
 
 /**
  * A text read (a route answering text/css): the body as a string,
  * rejecting on the shared JSON error envelope exactly as asJson does.
+ *
+ * @param {string} path
+ *   The route path, relative to the site.
+ *
+ * @return {Promise<string>}
+ *   The body text.
  */
 export const getText = (path) =>
   fetch(Drupal.url(path)).then((response) =>
@@ -110,6 +130,16 @@ export const getText = (path) =>
 
 /**
  * A write with the CSRF header; payload null sends no body.
+ *
+ * @param {string} method
+ *   The HTTP method (POST, PATCH, DELETE).
+ * @param {string} path
+ *   The route path, relative to the site.
+ * @param {?object} payload
+ *   The JSON body, or null for none.
+ *
+ * @return {Promise<object>}
+ *   The JSON body of the response.
  */
 export const send = async (method, path, payload = null) => {
   const token = await csrfToken();
@@ -123,6 +153,17 @@ export const send = async (method, path, payload = null) => {
   }).then(asJson);
 };
 
+/**
+ * A POST write with a JSON body.
+ *
+ * @param {string} path
+ *   The route path, relative to the site.
+ * @param {?object} payload
+ *   The JSON body, or null for none.
+ *
+ * @return {Promise<object>}
+ *   The JSON body of the response.
+ */
 export const post = (path, payload) => send('POST', path, payload);
 
 /**
@@ -131,7 +172,12 @@ export const post = (path, payload) => send('POST', path, payload);
  * is named here.
  *
  * @param {string} path
+ *   The route path, relative to the site.
  * @param {FormData} form
+ *   The multipart body.
+ *
+ * @return {Promise<object>}
+ *   The JSON body of the response.
  */
 export const postForm = async (path, form) => {
   const token = await csrfToken();
@@ -158,6 +204,7 @@ export const postForm = async (path, form) => {
  *   Called with each slice's {percentage, message, label}.
  *
  * @return {Promise<null>}
+ *   Resolves once the batch has finished and its record is cleaned up.
  */
 export const driveBatch = (batchUrl, onProgress = null) => {
   const url = (op) => batchUrl.replace(/([?&])op=[^&]*/, `$1op=${op}`);

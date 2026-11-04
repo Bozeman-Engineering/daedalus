@@ -96,6 +96,7 @@ export const materialRoute = (kind, reference) => {
  *   The stored token value.
  *
  * @return {{draft: string, conditions: string[]}}
+ *   The editor's draft and the condition names it leaves untouched.
  */
 export const editableValue = (value) => {
   if (isPlainObject(value)) {
@@ -122,6 +123,7 @@ export const editableValue = (value) => {
  *   The editor's committed string.
  *
  * @return {string|object}
+ *   The value to store, the other conditions kept verbatim.
  */
 export const mergedValue = (value, draft) =>
   isPlainObject(value) ? { ...value, default: draft } : draft;
@@ -145,6 +147,8 @@ export const mergedValue = (value, draft) =>
  *
  * @return {{draft: string, darkDraft: ?string, scheme: ?string,
  *   conditions: string[]}}
+ *   The pair control's drafts, the scheme condition, and the condition
+ *   names the editor leaves untouched.
  */
 export const editablePair = (guide, value) => {
   const scheme = schemeCondition(guide);
@@ -175,6 +179,7 @@ export const editablePair = (guide, value) => {
  *   The pair control's committed drafts (editablePair()'s shape).
  *
  * @return {string|object}
+ *   The value to store.
  */
 export const mergedPair = (value, { draft, darkDraft, scheme }) => {
   const merged = mergedValue(value, draft);
@@ -185,7 +190,9 @@ export const mergedPair = (value, { draft, darkDraft, scheme }) => {
     if (!isPlainObject(merged) || merged[scheme] === undefined) {
       return merged;
     }
-    const { [scheme]: removed, ...rest } = merged;
+    const rest = Object.fromEntries(
+      Object.entries(merged).filter(([name]) => name !== scheme),
+    );
     const names = Object.keys(rest);
     return names.length === 1 && names[0] === 'default' ? rest.default : rest;
   }
@@ -256,6 +263,23 @@ export const tokenNameError = (name, scale, materials) => {
 };
 
 /**
+ * The scale whose tokens are font-family stacks: the one the guide binds
+ * font-family to at site level (the suite's `font` scale), or null when
+ * nothing binds it. The client twin of SkinMaterialUsage::fontScales(): a
+ * token on that scale is where the editor offers the minted families.
+ *
+ * @param {object} guide
+ *   The style guide payload (constraintDefaults).
+ *
+ * @return {?string}
+ *   The scale id, or null.
+ */
+export const fontScale = (guide) => {
+  const scale = guide?.constraintDefaults?.['font-family']?.scale;
+  return typeof scale === 'string' && scale !== '' ? scale : null;
+};
+
+/**
  * The value editor a token's scale mounts, by shape.
  *
  * A scale's shape names the editor its tokens edit through, on the card
@@ -273,6 +297,7 @@ export const tokenNameError = (name, scale, materials) => {
  *   The scale's declared shape.
  *
  * @return {'color'|'gradient'|'stack'|'text'}
+ *   The editor kind.
  */
 export const tokenEditorKind = (guide, scale, shape) => {
   if (shape === 'color') {
@@ -306,6 +331,7 @@ export const tokenEditorKind = (guide, scale, shape) => {
  *   The materials roster the seed's palette reads from.
  *
  * @return {string}
+ *   The seed value, '' for a shape with no honest default.
  */
 export const tokenSeed = (shape, guide = {}, materials = null) => {
   if (shape === 'color') {
@@ -327,145 +353,12 @@ export const tokenSeed = (shape, guide = {}, materials = null) => {
  *   The scale's declared shape.
  *
  * @return {boolean}
+ *   Whether a face chip paints the value.
  */
 export const tokenPaintsFace = (shape) =>
   shape === 'color' || shape === 'gradient';
 
-// --- The sections and their rows. ---
-
-/**
- * Whether a row matches the search needle: its name, its spelling, its
- * value text (a token's display value, a font's family) and its
- * description, case-insensitive.
- */
-const matches = (row, needle) =>
-  needle === '' ||
-  [row.name, row.spelling ?? '', row.value ?? '', row.family ?? '', row.description]
-    .join('\n')
-    .toLowerCase()
-    .includes(needle);
-
-/**
- * One token's row.
- */
-const tokenRow = (token) => ({
-  kind: 'token',
-  reference: token.record.id,
-  name: token.name,
-  spelling: token.ref,
-  scale: token.scale,
-  shape: token.shape,
-  value: token.value,
-  valueDark: token.valueDark !== token.value ? token.valueDark : null,
-  paint: tokenPaintsFace(token.shape),
-  description:
-    typeof token.record.description === 'string' ? token.record.description : '',
-  offered: token.record.offered !== false,
-  shipped: isShipped(token.record),
-  record: token.record,
-});
-
-/**
- * One animation's row: the canonical offsets in order are its anatomy.
- */
-const animationRow = (animation) => ({
-  kind: 'animation',
-  reference: animation.record.id,
-  name: animation.name,
-  spelling: animation.ref,
-  offsets: Object.keys(canonicalizeSteps(animation.steps)),
-  description: animation.description,
-  offered: animation.record.offered !== false,
-  shipped: isShipped(animation.record),
-  record: animation.record,
-});
-
-/**
- * One font's row: the face labels in stored order are its anatomy; the
- * row's name renders in the family (the spelling).
- */
-const fontRow = (font) => ({
-  kind: 'font',
-  reference: font.record.id,
-  name: font.name,
-  spelling: font.spelling,
-  family: font.family,
-  faces: (Array.isArray(font.faces) ? font.faces : []).map(faceLabel),
-  description: font.description,
-  offered: font.record.offered !== false,
-  shipped: isShipped(font.record),
-  record: font.record,
-});
-
-/**
- * The Skin tab's sections: the tokens per scale, then the animations,
- * then the fonts, under one search.
- *
- * Roster order throughout (declared scale order, then authoring order =
- * display order). A section lists only while it has a row to list (a
- * scale no token is minted on, a kind the skin carries none of, or a
- * needle that matches nothing there), so the tab is what the skin holds
- * and nothing else. Every row carries its record (the card's subject: the
- * gestures, the live preview and the update op all take the record) and
- * the facts a row shows without opening: the name, the spelling, the
- * kind's value summary (a token's display value and its scheme half, an
- * animation's offsets, a font's face labels), whether a face chip is
- * honest, and the description and offered flag the card edits. No origin
- * fact renders on a row (the card says who shipped it); `shipped` rides
- * along for the card's lock.
- *
- * @param {object} guide
- *   The style guide payload.
- * @param {object} materials
- *   The materials roster.
- * @param {{search?: string}} filters
- *
- * @return {Array<{id: string, kind: string, label: string, scale: ?string,
- *   shape: ?string, rows: Array<object>}>}
- */
-export const skinSections = (guide, materials, { search = '' } = {}) => {
-  const needle = search.trim().toLowerCase();
-  const sections = [];
-  const scales = new Map();
-  tokenOptions(guide, materials).forEach((token) => {
-    if (!scales.has(token.scale)) {
-      scales.set(token.scale, {
-        id: `scale:${token.scale}`,
-        kind: 'token',
-        label: token.scaleLabel,
-        scale: token.scale,
-        shape: token.shape,
-        rows: [],
-      });
-    }
-    const row = tokenRow(token);
-    if (matches(row, needle)) {
-      scales.get(token.scale).rows.push(row);
-    }
-  });
-  sections.push(...scales.values());
-  sections.push({
-    id: 'animations',
-    kind: 'animation',
-    label: null,
-    scale: null,
-    shape: null,
-    rows: animationOptions(materials)
-      .map(animationRow)
-      .filter((row) => matches(row, needle)),
-  });
-  sections.push({
-    id: 'fonts',
-    kind: 'font',
-    label: null,
-    scale: null,
-    shape: null,
-    rows: fontOptions(materials)
-      .map(fontRow)
-      .filter((row) => matches(row, needle)),
-  });
-  return sections.filter((section) => section.rows.length > 0);
-};
+// --- The card's gesture roster. ---
 
 /**
  * The kinds "+ New" offers: a token when the guide declares a scale to
@@ -477,6 +370,7 @@ export const skinSections = (guide, materials, { search = '' } = {}) => {
  *   The skin material gates (drupalSettings.daedalusStylish.skinMaterials).
  *
  * @return {string[]}
+ *   The mintable kinds, in menu order.
  */
 export const mintableKinds = (guide, config = {}) => {
   if (!config?.canCreate) {
@@ -502,6 +396,7 @@ export const mintableKinds = (guide, config = {}) => {
  *
  * @return {?{kind: string, scale?: string, value?: (string|object),
  *   steps?: object, description: string}}
+ *   The mint card's seed, or null for a font.
  */
 export const copySeed = (record) => {
   const description =
@@ -523,8 +418,6 @@ export const copySeed = (record) => {
   }
   return null;
 };
-
-// --- The card's gesture roster. ---
 
 /**
  * The material card's gesture roster, as data, one rule for the three
@@ -570,8 +463,13 @@ export const copySeed = (record) => {
  * @return {{editValue: boolean, editDescription: boolean, offer: boolean,
  *   rename: boolean, revert: boolean, delete: boolean, copy: boolean,
  *   locks: {rename: ?string, delete: ?string}}}
+ *   The gestures the card offers, and the reason each lock holds.
  */
-export const materialCardGestures = (record, config = {}, management = null) => {
+export const materialCardGestures = (
+  record,
+  config = {},
+  management = null,
+) => {
   const update = Boolean(config.canUpdate);
   const anyDelete = Boolean(config.canDelete) || Boolean(config.canDeleteInUse);
   const used = (management?.usages ?? 0) > 0;
@@ -616,8 +514,10 @@ const STEP_ANIMATION_PROPERTIES = ['animation-timing-function'];
  * wearer's business exactly as animation-trigger is).
  *
  * @param {string} property
+ *   The CSS property name.
  *
  * @return {boolean}
+ *   Whether the property belongs to the wearer.
  */
 const wearerProperty = (property) =>
   (property === 'animation' ||
@@ -646,8 +546,10 @@ export const SEED_STEPS = Object.freeze({
  * "N%" read (positionPercent) maps every canonical offset.
  *
  * @param {string} offset
+ *   The offset as written.
  *
  * @return {?string}
+ *   The canonical percent, or null.
  */
 export const canonicalOffset = (offset) => {
   const text = String(offset ?? '')
@@ -682,6 +584,7 @@ export const canonicalOffset = (offset) => {
  *   Offset -> declarations.
  *
  * @return {object}
+ *   Canonical offset -> declarations, in offset order.
  */
 export const canonicalizeSteps = (steps) => {
   const folded = {};
@@ -716,6 +619,7 @@ export const canonicalizeSteps = (steps) => {
  *   Offset -> declarations (stored shape).
  *
  * @return {Array<{position: string, declarations: object}>}
+ *   The track's stops, in offset order.
  */
 export const stepStops = (steps) =>
   Object.entries(canonicalizeSteps(steps)).map(([position, declarations]) => ({
@@ -728,8 +632,10 @@ export const stepStops = (steps) =>
  * position -> declarations, in track order.
  *
  * @param {Array<{position: string, declarations: object}>} stops
+ *   The track's stops.
  *
  * @return {object}
+ *   Offset -> declarations.
  */
 export const stepsOf = (stops) =>
   Object.fromEntries(stops.map((stop) => [stop.position, stop.declarations]));
@@ -739,9 +645,12 @@ export const stepsOf = (stops) =>
  * read): canonical offsets, declarations compared by property and value.
  *
  * @param {object} a
+ *   A steps map.
  * @param {object} b
+ *   Another steps map.
  *
  * @return {boolean}
+ *   Whether the two commit the same thing.
  */
 export const sameSteps = (a, b) => {
   const left = canonicalizeSteps(a);
@@ -765,6 +674,16 @@ export const sameSteps = (a, b) => {
 /**
  * Whether a percent already has a step (two steps can never share an
  * offset: the validator's DUPLICATE_ANIMATION_OFFSET).
+ *
+ * @param {Array<{position: string, declarations: object}>} stops
+ *   The track's stops.
+ * @param {number} percent
+ *   The percent to test.
+ * @param {number} [except]
+ *   A stop index to leave out (the moved step's own).
+ *
+ * @return {boolean}
+ *   Whether another stop sits at the percent.
  */
 const occupied = (stops, percent, except = -1) =>
   stops.some(
@@ -778,10 +697,14 @@ const occupied = (stops, percent, except = -1) =>
  * (an offset is one step; the gesture cannot merge two).
  *
  * @param {Array<{position: string, declarations: object}>} stops
+ *   The track's stops.
  * @param {number} index
+ *   The moved step's index.
  * @param {number} percent
+ *   The percent it lands at.
  *
  * @return {?{stops: Array, selected: number}}
+ *   The sorted stops and the selected index, or null.
  */
 export const moveStep = (stops, index, percent) =>
   occupied(stops, trackPercent(percent), index)
@@ -794,9 +717,12 @@ export const moveStep = (stops, index, percent) =>
  * the percent already has a step.
  *
  * @param {Array<{position: string, declarations: object}>} stops
+ *   The track's stops.
  * @param {number} percent
+ *   The clicked percent.
  *
  * @return {?{stops: Array, selected: number}}
+ *   The sorted stops and the selected index, or null.
  */
 export const insertStep = (stops, percent) =>
   occupied(stops, trackPercent(percent))
@@ -809,10 +735,14 @@ export const insertStep = (stops, percent) =>
  * survival.
  *
  * @param {Array} stops
+ *   The track's stops.
  * @param {number} index
+ *   The removed step's index.
  * @param {number} selected
+ *   The selected index before the removal.
  *
  * @return {?{stops: Array, selected: number}}
+ *   The remaining stops and the surviving selection, or null.
  */
 export const removeStep = (stops, index, selected) =>
   removeStop(stops, index, selected, 1);
@@ -821,8 +751,10 @@ export const removeStep = (stops, index, selected) =>
  * A step's island text: its declarations, one per line.
  *
  * @param {object} declarations
+ *   Property -> value.
  *
  * @return {string}
+ *   The island text.
  */
 export const printStep = (declarations) =>
   printIsland(
@@ -869,8 +801,10 @@ export const WIDE_TIER_SET = 'wide:*';
  * spaces: a step is not an address, so no roster binds it here.
  *
  * @param {object} guide
+ *   The style guide payload (groups).
  *
  * @return {{grants: Object<string, string[]>}}
+ *   The node the analysis runs over.
  */
 export const stepDeclaration = (guide) => {
   const grants = {};
@@ -901,9 +835,12 @@ export const stepDeclaration = (guide) => {
  * CM6-lint-shaped.
  *
  * @param {string} text
+ *   The island text.
  * @param {{guide: object, materials: object}} options
+ *   The guide and the materials roster the analysis reads.
  *
  * @return {{declarations: Array<object>, diagnostics: Array<object>}}
+ *   The parsed declarations and the CM6-shaped diagnostics.
  */
 export const analyzeStep = (text, { guide, materials } = {}) => {
   const analysis = analyzeIsland(text, {
@@ -962,6 +899,7 @@ export const analyzeStep = (text, { guide, materials } = {}) => {
  *   analyzeStep()'s declarations.
  *
  * @return {{declarations: object, hasErrors: boolean}}
+ *   The settled map and whether any line was held out.
  */
 export const settledStep = (declarations) => {
   const settled = {};
@@ -983,7 +921,7 @@ export const settledStep = (declarations) => {
  * The compiled skin file this page loaded predates any animation minted
  * or edited this session, so the leader prints the whole roster into a
  * <style> tag later in the document than the file's <link> (the last
- * @keyframes of a name in document order wins): a mint plays before any
+ * `@keyframes` of a name in document order wins): a mint plays before any
  * reload, a settled session step plays on every wearer, and the
  * committed record supersedes the draft on the next store change.
  *
@@ -1065,6 +1003,7 @@ const WEIGHT_WORDS = Object.freeze({
  *   A canonical face {weight, style, source} (the server's shape).
  *
  * @return {string}
+ *   The label.
  */
 export const faceLabel = (face) => {
   const weight = String(face?.weight ?? '400').trim() || '400';
@@ -1082,6 +1021,7 @@ export const faceLabel = (face) => {
  * an underscore, the ends trimmed. "Scope One" is scope_one.
  *
  * @param {string} label
+ *   The family as typed.
  *
  * @return {string}
  *   The name, '' when nothing in the label survives the charset.
@@ -1093,27 +1033,14 @@ export const fontName = (label) =>
     .replace(/^_+|_+$/g, '');
 
 /**
- * The scale whose tokens are font-family stacks: the one the guide binds
- * font-family to at site level (the suite's `font` scale), or null when
- * nothing binds it. The client twin of SkinMaterialUsage::fontScales(): a
- * token on that scale is where the editor offers the minted families.
- *
- * @param {object} guide
- *
- * @return {?string}
- */
-export const fontScale = (guide) => {
-  const scale = guide?.constraintDefaults?.['font-family']?.scale;
-  return typeof scale === 'string' && scale !== '' ? scale : null;
-};
-
-/**
  * A font-family stack's components: split on the commas outside quotes,
  * trimmed, empties dropped.
  *
  * @param {string} stack
+ *   The font-family value.
  *
  * @return {string[]}
+ *   The components, as written.
  */
 export const stackComponents = (stack) => {
   const components = [];
@@ -1141,6 +1068,12 @@ export const stackComponents = (stack) => {
 
 /**
  * A component's family name: quotes stripped, escapes folded.
+ *
+ * @param {string} component
+ *   One stack component.
+ *
+ * @return {string}
+ *   The family name.
  */
 const familyOf = (component) => {
   const text = String(component ?? '').trim();
@@ -1162,6 +1095,7 @@ const familyOf = (component) => {
  *   The font's quoted family (the record's font spelling).
  *
  * @return {string}
+ *   The stack with the family first.
  */
 export const addFamilyToStack = (stack, spelling) => {
   const components = stackComponents(stack);
@@ -1191,6 +1125,7 @@ export const addFamilyToStack = (stack, spelling) => {
  *   The file's name.
  *
  * @return {{weight: string, style: string}}
+ *   The guessed face.
  */
 export const guessFace = (name) => {
   const base = String(name ?? '')
@@ -1230,6 +1165,7 @@ export const guessFace = (name) => {
  *
  * @return {{key: number, file: string, name: string, format: ?string,
  *   url: string, weight: string, style: string}}
+ *   The draft, its face guessed from the file name.
  */
 export const faceDraft = (upload, key) => ({
   key,
@@ -1249,9 +1185,11 @@ export const faceDraft = (upload, key) => ({
  * @param {object} face
  *   A canonical face {weight, style, source: {file}}.
  * @param {number} key
+ *   The draft's stable identity in the editor's list.
  *
  * @return {{key: number, file: string, name: string, format: ?string,
  *   url: ?string, weight: string, style: string}}
+ *   The draft.
  */
 export const storedFaceDraft = (face, key) => ({
   key,
@@ -1268,8 +1206,10 @@ export const storedFaceDraft = (face, key) => ({
  * (the typed source; a hosted kind is a later key beside `file`).
  *
  * @param {Array<object>} drafts
+ *   The editor's face drafts.
  *
  * @return {Array<{weight: string, style: string, source: {file: string}}>}
+ *   The op's faces.
  */
 export const facesOf = (drafts) =>
   drafts.map((draft) => ({
@@ -1287,8 +1227,10 @@ export const facesOf = (drafts) =>
  * trip. Weight keywords fold as the server does.
  *
  * @param {Array<object>} drafts
+ *   The editor's face drafts.
  *
  * @return {number}
+ *   The index of the first draft repeating an earlier face, -1 for none.
  */
 export const duplicateFace = (drafts) => {
   const seen = new Set();
@@ -1317,6 +1259,7 @@ export const duplicateFace = (drafts) => {
  *   The materials roster.
  *
  * @return {string}
+ *   The signature.
  */
 export const fontsSignature = (materials) =>
   JSON.stringify(
@@ -1334,6 +1277,7 @@ export const fontsSignature = (materials) =>
  *   The material record (delivery shape).
  *
  * @return {?string}
+ *   The spelling, or null for an unknown kind.
  */
 export const materialSpelling = (record) => {
   if (record?.kind === 'animation') {
@@ -1350,7 +1294,181 @@ export const materialSpelling = (record) => {
  * a condition-keyed value, the string itself otherwise.
  *
  * @param {object} record
+ *   The token record.
  *
  * @return {string}
+ *   The display value.
  */
 export const tokenValueText = (record) => tokenDisplayValue(record?.value);
+
+// --- The sections and their rows. ---
+
+/**
+ * Whether a row matches the search needle: its name, its spelling, its
+ * value text (a token's display value, a font's family) and its
+ * description, case-insensitive.
+ *
+ * @param {object} row
+ *   A section row.
+ * @param {string} needle
+ *   The search text, trimmed and lowercased.
+ *
+ * @return {boolean}
+ *   Whether the row matches.
+ */
+const matches = (row, needle) =>
+  needle === '' ||
+  [
+    row.name,
+    row.spelling ?? '',
+    row.value ?? '',
+    row.family ?? '',
+    row.description,
+  ]
+    .join('\n')
+    .toLowerCase()
+    .includes(needle);
+
+/**
+ * One token's row.
+ *
+ * @param {object} token
+ *   A token option (materials.js tokenOptions).
+ *
+ * @return {object}
+ *   The row.
+ */
+const tokenRow = (token) => ({
+  kind: 'token',
+  reference: token.record.id,
+  name: token.name,
+  spelling: token.ref,
+  scale: token.scale,
+  shape: token.shape,
+  value: token.value,
+  valueDark: token.valueDark !== token.value ? token.valueDark : null,
+  paint: tokenPaintsFace(token.shape),
+  description:
+    typeof token.record.description === 'string'
+      ? token.record.description
+      : '',
+  offered: token.record.offered !== false,
+  shipped: isShipped(token.record),
+  record: token.record,
+});
+
+/**
+ * One animation's row: the canonical offsets in order are its anatomy.
+ *
+ * @param {object} animation
+ *   An animation option (materials.js animationOptions).
+ *
+ * @return {object}
+ *   The row.
+ */
+const animationRow = (animation) => ({
+  kind: 'animation',
+  reference: animation.record.id,
+  name: animation.name,
+  spelling: animation.ref,
+  offsets: Object.keys(canonicalizeSteps(animation.steps)),
+  description: animation.description,
+  offered: animation.record.offered !== false,
+  shipped: isShipped(animation.record),
+  record: animation.record,
+});
+
+/**
+ * One font's row: the face labels in stored order are its anatomy; the
+ * row's name renders in the family (the spelling).
+ *
+ * @param {object} font
+ *   A font option (materials.js fontOptions).
+ *
+ * @return {object}
+ *   The row.
+ */
+const fontRow = (font) => ({
+  kind: 'font',
+  reference: font.record.id,
+  name: font.name,
+  spelling: font.spelling,
+  family: font.family,
+  faces: (Array.isArray(font.faces) ? font.faces : []).map(faceLabel),
+  description: font.description,
+  offered: font.record.offered !== false,
+  shipped: isShipped(font.record),
+  record: font.record,
+});
+
+/**
+ * The Skin tab's sections: the tokens per scale, then the animations,
+ * then the fonts, under one search.
+ *
+ * Roster order throughout (declared scale order, then authoring order =
+ * display order). A section lists only while it has a row to list (a
+ * scale no token is minted on, a kind the skin carries none of, or a
+ * needle that matches nothing there), so the tab is what the skin holds
+ * and nothing else. Every row carries its record (the card's subject: the
+ * gestures, the live preview and the update op all take the record) and
+ * the facts a row shows without opening: the name, the spelling, the
+ * kind's value summary (a token's display value and its scheme half, an
+ * animation's offsets, a font's face labels), whether a face chip is
+ * honest, and the description and offered flag the card edits. No origin
+ * fact renders on a row (the card says who shipped it); `shipped` rides
+ * along for the card's lock.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {object} materials
+ *   The materials roster.
+ * @param {{search?: string}} filters
+ *   The tab's filters: the search needle.
+ *
+ * @return {Array<{id: string, kind: string, label: string, scale: ?string,
+ *   shape: ?string, rows: Array<object>}>}
+ *   The sections that have a row to list, in roster order.
+ */
+export const skinSections = (guide, materials, { search = '' } = {}) => {
+  const needle = search.trim().toLowerCase();
+  const sections = [];
+  const scales = new Map();
+  tokenOptions(guide, materials).forEach((token) => {
+    if (!scales.has(token.scale)) {
+      scales.set(token.scale, {
+        id: `scale:${token.scale}`,
+        kind: 'token',
+        label: token.scaleLabel,
+        scale: token.scale,
+        shape: token.shape,
+        rows: [],
+      });
+    }
+    const row = tokenRow(token);
+    if (matches(row, needle)) {
+      scales.get(token.scale).rows.push(row);
+    }
+  });
+  sections.push(...scales.values());
+  sections.push({
+    id: 'animations',
+    kind: 'animation',
+    label: null,
+    scale: null,
+    shape: null,
+    rows: animationOptions(materials)
+      .map(animationRow)
+      .filter((row) => matches(row, needle)),
+  });
+  sections.push({
+    id: 'fonts',
+    kind: 'font',
+    label: null,
+    scale: null,
+    shape: null,
+    rows: fontOptions(materials)
+      .map(fontRow)
+      .filter((row) => matches(row, needle)),
+  });
+  return sections.filter((section) => section.rows.length > 0);
+};

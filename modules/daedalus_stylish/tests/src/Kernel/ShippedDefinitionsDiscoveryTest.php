@@ -20,12 +20,12 @@ use Symfony\Component\Console\Tester\CommandTester;
  *
  * ShippedDefinitionsImporter merges a module's hand-authored single file
  * (MODULE.daedalus_stylish.variants.yml) with every per-id file beside it
- * (MODULE.daedalus_stylish.variants.ID.yml), the machine-written form a blueprint's
- * variants ship in. daedalus_stylish_variants_files_test ships one variant in each
- * form; daedalus_stylish_variants_files_test_invalid ships the same machine name in
- * both, which discovery must refuse before anything imports. Exercised
- * through the variants importer, the lane's founding member: the skins,
- * importers share the discovery by construction.
+ * (MODULE.daedalus_stylish.variants.ID.yml), the machine-written form a
+ * blueprint's variants ship in. daedalus_stylish_variants_files_test ships one
+ * variant in each form; daedalus_stylish_variants_files_test_invalid ships the
+ * same machine name in both, which discovery must refuse before anything
+ * imports. Exercised through the variants importer, the lane's founding member:
+ * the skins, importers share the discovery by construction.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]

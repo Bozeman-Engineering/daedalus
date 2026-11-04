@@ -31,8 +31,8 @@ function daedalus_stylish_post_update_media_image_style_default(): void {
  *
  * The style map keys into the layout tree, and core's layout model is one
  * structure shared by all translations, so a translatable style map was an
- * accidental default (DaedalusStylishFieldManager never set the flag). New fields
- * are created untranslatable; this aligns fields created before the pin.
+ * accidental default (DaedalusStylishFieldManager never set the flag). New
+ * fields are created untranslatable; this aligns fields created before the pin.
  */
 function daedalus_stylish_post_update_pin_styles_untranslatable(): void {
   foreach (FieldStorageConfig::loadMultiple() as $storage) {
@@ -101,14 +101,14 @@ function daedalus_stylish_post_update_base_at_top_width_bands(): void {
 /**
  * Folds "wide" style conditions into base on host entities.
  *
- * Every content entity revision and translation carrying a style map is
- * walked through daedalus_layout's transform spine: wide-carrying conditions fold
- * into their compound without the wide part (wide -> default, wide+dark ->
- * dark, the wide values winning per property), and the values that used to
- * render at 768-1023px spill into the lane's medium compound first, so
- * that band keeps rendering as before. Per-map details are logged to the
- * daedalus_stylish channel. Entity view displays hold layout structure only, never
- * style data, so there is no display walk.
+ * Every content entity revision and translation carrying a style map is walked
+ * through daedalus_layout's transform spine: wide-carrying conditions fold into
+ * their compound without the wide part (wide -> default, wide+dark -> dark, the
+ * wide values winning per property), and the values that used to render at
+ * 768-1023px spill into the lane's medium compound first, so that band keeps
+ * rendering as before. Per-map details are logged to the daedalus_stylish
+ * channel. Entity view displays hold layout structure only, never style data,
+ * so there is no display walk.
  */
 function daedalus_stylish_post_update_width_bands_0001_hosts(&$sandbox) {
   if (!\Drupal::hasService('daedalus_layout.host_entity_walker')) {

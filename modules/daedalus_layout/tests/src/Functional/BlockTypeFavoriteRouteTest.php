@@ -124,7 +124,7 @@ class BlockTypeFavoriteRouteTest extends BrowserTestBase {
    * POSTs a JSON body to the route as the browser session.
    */
   private function post(array $body, string $token): ResponseInterface {
-    return $this->getHttpClient()->post($this->buildUrl(self::PATH), [
+    return $this->getHttpClient()->request('POST', $this->buildUrl(self::PATH), [
       'cookies' => $this->getSessionCookies(),
       'headers' => [
         'Content-Type' => 'application/json',

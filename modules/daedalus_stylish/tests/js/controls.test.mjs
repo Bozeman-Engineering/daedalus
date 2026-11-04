@@ -1884,11 +1884,11 @@ const strokeGuide = {
 const projectStroke = (styleMap) =>
   project(strokeGuide, BLOCK, styleMap, { blockTypes: textTypes, variants: buttonLibrary, context: linked, document: textDocument });
 
-test('landing: a colour authored on the first box moves a whole stroke off the width\'s read box, and the model answers it', () => {
-  // Colour authored on the link (the first candidate), width on the root
+test('landing: a color authored on the first box moves a whole stroke off the width\'s read box, and the model answers it', () => {
+  // Color authored on the link (the first candidate), width on the root
   // (the second). Per property the width READS from the root
   // (keys['border-width']); a whole stroke (a typed width over an unset
-  // style completes to width, style and colour) LANDS on the link, the
+  // style completes to width, style and color) LANDS on the link, the
   // first box any of its parts is authored on. A widget expanding its
   // patch against the own layer at keys['border-width'] reads the root
   // while its write lands on the link: confirmed here, and the model's
@@ -1909,7 +1909,7 @@ test('landing: a colour authored on the first box moves a whole stroke off the w
   // home box stands in, and the pipeline never asks for one.
   assert.equal(border.landing([]), border.home.key);
   // The unlinked block: the absent anchor takes no part, so the stroke
-  // lands on the root, its colour orphan out of play.
+  // lands on the root, its color orphan out of play.
   const [unlinkedBorder] = project(strokeGuide, BLOCK, styleMap, { blockTypes: textTypes, variants: buttonLibrary, context: unlinked, document: textDocument });
   assert.equal(unlinkedBorder.landing(STROKE), BLOCK);
 });

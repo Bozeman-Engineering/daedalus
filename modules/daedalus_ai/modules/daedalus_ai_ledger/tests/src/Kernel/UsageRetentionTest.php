@@ -8,6 +8,7 @@ use Drupal\ai\OperationType\Chat\ChatInput;
 use Drupal\ai\OperationType\Chat\ChatMessage;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
 use Drupal\daedalus_ai_ledger\CostResolver;
+use Drupal\daedalus_ai_ledger\Entity\AiUsage;
 use Drupal\daedalus_ai_ledger\UsageGate;
 use Drupal\daedalus_ai_ledger\UsageLedger;
 use Drupal\daedalus_ai_ledger\UsageRetention;
@@ -105,6 +106,7 @@ class UsageRetentionTest extends KernelTestBase {
     $storage = $this->container->get('entity_type.manager')->getStorage('ai_usage');
     $ids = $storage->getQuery()->accessCheck(FALSE)->sort('id', 'DESC')->range(0, 1)->execute();
     $row = $storage->load(reset($ids));
+    assert($row instanceof AiUsage);
     $row->set('created', $this->now - $days_old * self::DAY)->save();
     return (int) $row->id();
   }

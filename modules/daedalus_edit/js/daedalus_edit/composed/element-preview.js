@@ -58,6 +58,12 @@
 
 /**
  * The class token of a part key ('.text-block-link' -> 'text-block-link').
+ *
+ * @param {string} key
+ *   A part key.
+ *
+ * @return {string}
+ *   The class token.
  */
 const classOf = (key) => key.replace(/^\.+/, '');
 
@@ -78,6 +84,16 @@ const createElement = (tag) =>
 
 /**
  * The physical element a tree key addresses under a root, or null.
+ *
+ * @param {Element} root
+ *   The composed root.
+ * @param {object} tree
+ *   The resolved tree; a hoisted key addresses the root itself.
+ * @param {string} key
+ *   The tree key.
+ *
+ * @return {?Element}
+ *   The element, or null when the key matches nothing under the root.
  */
 const elementForKey = (root, tree, key) => {
   if (key === '' || tree.hoisted.includes(key)) {
@@ -88,6 +104,16 @@ const elementForKey = (root, tree, key) => {
 
 /**
  * The element a token's children mount in per the mounting rule.
+ *
+ * @param {Element} root
+ *   The composed root.
+ * @param {object} tree
+ *   The resolved tree, whose slots name each token's claimant key.
+ * @param {string} token
+ *   The mount token.
+ *
+ * @return {?Element}
+ *   The slot claimant's element, or the root while the claim is gone.
  */
 const mountForToken = (root, tree, token) => {
   const claimant = tree.slots[token];
@@ -104,6 +130,15 @@ const mountForToken = (root, tree, token) => {
  * class stays with its part). Classes merge instead of overwriting: the
  * old root-swap moved the whole class attribute wholesale, which is
  * exactly what stranded part classes on the wrong element.
+ *
+ * @param {Element} from
+ *   The element giving up the bag.
+ * @param {Element} to
+ *   The element receiving it.
+ * @param {string[]} ownAttributes
+ *   Attribute names that stay on the giving element.
+ * @param {string[]} keepClasses
+ *   Class tokens that stay on the giving element.
  */
 const migrateBag = (from, to, ownAttributes, keepClasses) => {
   Array.from(from.attributes).forEach(({ name, value }) => {
@@ -131,6 +166,17 @@ const migrateBag = (from, to, ownAttributes, keepClasses) => {
  * Sets the new tree's declared attributes, removes the old tree's declared
  * attributes the new tree no longer models (an unlinked href), and keeps
  * the element's class list in step with the modeled classes.
+ *
+ * @param {Element} element
+ *   The element the node renders as.
+ * @param {Object<string, string>} oldAttributes
+ *   The old tree's declared attributes for the node.
+ * @param {Object<string, string>} newAttributes
+ *   The new tree's declared attributes for the node.
+ * @param {string[]} oldClasses
+ *   The old tree's modeled classes for the node.
+ * @param {string[]} newClasses
+ *   The new tree's modeled classes for the node.
  */
 const applyModeled = (
   element,
@@ -167,13 +213,14 @@ const applyModeled = (
  *   in (the server rendered it, or a previous preview morphed to it).
  * @param {Object} newTree
  *   The resolved tree of the previewed property bag.
- * @param {Object} options
- *   The editor's bindings:
- *   - {string[]} ownAttributes: attribute names that never migrate off
- *     the element carrying them (the image's src/alt set).
- *   - {Object<string, string[]>} mountAttributes: per mount token, the
- *     attribute names that follow the token's mount element (the typing
- *     surface markers).
+ * @param {object} options
+ *   The editor's bindings.
+ * @param {string[]} options.ownAttributes
+ *   Attribute names that never migrate off the element carrying them
+ *   (the image's src/alt set).
+ * @param {Object<string, string[]>} options.mountAttributes
+ *   Per mount token, the attribute names that follow the token's mount
+ *   element (the typing surface markers).
  */
 export function applyResolved(
   EditableElement,

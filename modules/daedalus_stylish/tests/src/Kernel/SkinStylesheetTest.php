@@ -30,23 +30,23 @@ use Symfony\Component\Routing\Route;
  * Tests defaults delivery: the compiled defaults stylesheet and its stamps.
  *
  * One shared, hash-busted file carries two tiers: the DECLARED tier (every
- * refinement declaration's own `defaults`, code, printed first and with
- * no skin gate) and, only with an active published skin, that skin's
- * tokens (custom-property declarations on the token scope element,
+ * refinement declaration's own `defaults`, code, printed first and with no skin
+ * gate) and, only with an active published skin, that skin's tokens
+ * (custom-property declarations on the token scope element,
  * .daedalus-stylish-token-scope: width-conditioned values as @container blocks,
  * never @media, since the edit-mode canvas is a constrained div;
- * scheme/motion-conditioned values as @media blocks; compounds composed
- * by the same wrapper machinery style maps ride) and its site defaults.
- * The "daedalus_stylish/skin" library resolves the current file at discovery
- * time; recompiles run on skin saves, on a design-system switch (the
- * active skin is the active system's default_skin), on daedalus_stylish.settings
- * saves (breakpoint thresholds, container_roots), on workspace publish
- * (the staged revision previewing via page-level inline CSS in the
- * meantime), and on every declaration change (module install and
- * uninstall among them). The whole tier prints bare at zero specificity,
- * element scopes selecting by the element address daedalus_ui stamps
- * unconditionally (data-element), so a declared default lands on its
- * element with no skin at all and every authored rule beats it.
+ * scheme/motion-conditioned values as @media blocks; compounds composed by the
+ * same wrapper machinery style maps ride) and its site defaults. The
+ * "daedalus_stylish/skin" library resolves the current file at discovery time;
+ * recompiles run on skin saves, on a design-system switch (the active skin is
+ * the active system's default_skin), on daedalus_stylish.settings saves
+ * (breakpoint thresholds, container_roots), on workspace publish (the staged
+ * revision previewing via page-level inline CSS in the meantime), and on every
+ * declaration change (module install and uninstall among them). The whole tier
+ * prints bare at zero specificity, element scopes selecting by the element
+ * address daedalus_ui stamps unconditionally (data-element), so a declared
+ * default lands on its element with no skin at all and every authored rule
+ * beats it.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -99,8 +99,8 @@ class SkinStylesheetTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
-    // The materials roster's daedalus_stylish provider reads all four storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all four storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');
     // Skins are a value-usage source: publish resyncs their rows; the
     // module install hook's shipped sync reads every usage table.
@@ -318,8 +318,8 @@ class SkinStylesheetTest extends KernelTestBase {
     $css = file_get_contents($uri);
 
     // Every declaring refinement prints BARE at its element address,
-    // token-scope-prefixed and fully :where()-wrapped (zero specificity, no
-    // @scope, no donut), through the skin defaults' own printer path: root
+    // token-scope-prefixed and fully :where()-wrapped (zero specificity,
+    // no @scope, no donut), through the skin defaults' own printer path: root
     // rules at the address selector, part rules as :where() descendants.
     $this->assertSame(':where(' . $this->addressMember('block_plugin:fancy_menu') . ')', $this->elementSelector('block_plugin:fancy_menu'));
     $this->assertStringContainsString($this->elementSelector('block_plugin:fancy_menu') . " {\n  display: flex;\n}", $css);
@@ -367,7 +367,10 @@ class SkinStylesheetTest extends KernelTestBase {
   public function testComposedKindRootDefaultCompiles(): void {
     $this->assertNull($this->container->get('daedalus_stylish.skin_manager')->activeSkinName());
     $this->container->get('state')->set('daedalus_stylish_control_test.kinds', [
-      'container' => ['composed' => TRUE, 'defaults' => ['' => ['default' => ['display' => 'flex', 'flex-direction' => 'column', 'gap' => '0px']]]],
+      'container' => [
+        'composed' => TRUE,
+        'defaults' => ['' => ['default' => ['display' => 'flex', 'flex-direction' => 'column', 'gap' => '0px']]],
+      ],
     ]);
     $this->container->get('daedalus_stylish.style_guide')->resetCache();
     $this->container->get('daedalus_stylish.skin_stylesheet')->compile();
@@ -487,18 +490,17 @@ class SkinStylesheetTest extends KernelTestBase {
   /**
    * The shipped container kind's flex column selects every section.
    *
-   * daedalus_stylish_layouts declares `display: flex; flex-direction: column`
-   * on the composed container's root (the stack: the box fact its gap
-   * grant and children pseudo-part need, code rather than skin data, and
-   * the direction the row variant flips) and `gap: 0px` beside it (a
-   * plain stack's zero gap as a declared layer of the style stack, so
-   * the Gap row's floor is declared, never a widget literal). With no skin and no
-   * other declaring module the declared tier holds exactly that kind
-   * scope, and the file prints it bare at the kind's selector: every
-   * section's layout address, a section's <section> and a nested
-   * container's <div> alike, at zero specificity and with no donut (a
-   * default is the same value on every instance of its scope). The
-   * address itself is daedalus_ui's stamp (ElementAddressStampTest).
+   * `daedalus_stylish_layouts` declares `display: flex; flex-direction: column`
+   * on the composed container's root (the stack: the box fact its gap grant and
+   * children pseudo-part need, code rather than skin data, and the direction
+   * the row variant flips) and `gap: 0px` beside it (a plain stack's zero gap
+   * as a declared layer of the style stack, so the Gap row's floor is declared,
+   * never a widget literal). With no skin and no other declaring module the
+   * declared tier holds exactly that kind scope, and the file prints it bare at
+   * the kind's selector: every section's layout address, a section's <section>
+   * and a nested container's <div> alike, at zero specificity and with no donut
+   * (a default is the same value on every instance of its scope). The address
+   * itself is daedalus_ui's stamp (ElementAddressStampTest).
    */
   public function testShippedContainerKindDefaultSelectsEverySection(): void {
     $this->enableModules(['daedalus_stylish_layouts']);
@@ -598,8 +600,8 @@ class SkinStylesheetTest extends KernelTestBase {
     $this->activateSkin($skin);
     $this->assertStringContainsString('container-type: inline-size', file_get_contents($this->stylesheetUri()));
 
-    // Flipping the switch recompiles (daedalus_stylish.settings save) without it:
-    // the theme owns containment, the @container blocks stay.
+    // Flipping the switch recompiles (daedalus_stylish.settings save) without
+    // it: the theme owns containment, the @container blocks stay.
     $this->config('daedalus_stylish.settings')->set('container_roots', FALSE)->save();
     $css = file_get_contents($this->stylesheetUri());
     $this->assertStringNotContainsString('container-type', $css);
@@ -637,7 +639,8 @@ class SkinStylesheetTest extends KernelTestBase {
     $library = $discovery->getLibraryByName('daedalus_stylish', 'skin');
     $this->assertCount(1, $library['css']);
     $this->assertStringContainsString(basename($this->stylesheetUri()), $library['css'][0]['data']);
-    // Token definitions compete unlayered, like every daedalus-stylish-owned file.
+    // Token definitions compete unlayered, like every daedalus-stylish-owned
+    // file.
     $this->assertTrue($library['css'][0]['daedalus_stylish_layers_exempt'] ?? FALSE);
 
     // The library key is the file's DRUPAL_ROOT-relative path, not a browser
@@ -708,6 +711,7 @@ class SkinStylesheetTest extends KernelTestBase {
     // Stage a token edit: the shared public file keeps the live CSS.
     $this->switchToWorkspace('stage');
     $staged = $this->entityTypeManager->getStorage('daedalus_skin')->load($skin->id());
+    assert($staged instanceof DaedalusStylishSkin);
     $staged->setPackageTokens(['space' => ['4' => '9rem']]);
     $staged->save();
     $this->assertSame($live_uri, $this->stylesheetUri());

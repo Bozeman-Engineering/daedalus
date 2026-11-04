@@ -92,7 +92,11 @@ class VariantLifecycleTest extends KernelTestBase {
    * Creates a saved block-scoped variant.
    */
   protected function createVariant(string $label, string $machine_name, ?array $styles = NULL): DaedalusStylishVariantInterface {
-    $variant = DaedalusStylishVariant::create(['label' => $label, 'machine_name' => $machine_name, 'scope' => 'kind:block']);
+    $variant = DaedalusStylishVariant::create([
+      'label' => $label,
+      'machine_name' => $machine_name,
+      'scope' => 'kind:block',
+    ]);
     $variant->setStyles($styles ?? ['' => ['default' => ['padding' => '1rem']]]);
     $variant->save();
     return $variant;

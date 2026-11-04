@@ -54,6 +54,16 @@ export const MARKUP_VIEW_ID = 'markup';
  * so its tag fact rides the row as-is — but only while `tags` is on: the
  * tag is markup vocabulary, worn in this view alongside the shell rows'
  * tags and nowhere else.
+ *
+ * @param {{selector: string, label: string, elementType?: string, icon?: string, tag?: string, children: Array}} row
+ *   An instance row (instance-rows.js instanceRows).
+ * @param {string} ownerKey
+ *   The model key whose annotation carries the instance.
+ * @param {boolean} tags
+ *   Whether the row wears its tag fact (the Markup view's vocabulary).
+ *
+ * @return {object}
+ *   The pseudo row, its children mapped the same way.
  */
 const toInstanceRow = (row, ownerKey, tags = true) => {
   const pseudoRow = {
@@ -62,9 +72,7 @@ const toInstanceRow = (row, ownerKey, tags = true) => {
     parentKey: ownerKey,
     label: row.label,
     source: 'instance',
-    children: row.children.map((child) =>
-      toInstanceRow(child, ownerKey, tags),
-    ),
+    children: row.children.map((child) => toInstanceRow(child, ownerKey, tags)),
   };
   if (row.elementType) {
     pseudoRow.elementType = row.elementType;
@@ -101,7 +109,7 @@ const toInstanceRow = (row, ownerKey, tags = true) => {
  *
  * @param {object} node
  *   A projected model node (projection.js projectTree output).
- * @param {function} instances
+ * @param {function(string): Array<object>} instances
  *   The instance-row source (instance-rows.js instanceRows), keyed by
  *   model key.
  *
@@ -247,11 +255,11 @@ export const toViewTree = (node, instances = null, tags = null) => {
  * glow are spine facets read and written by the tree itself, not
  * behavior callbacks.)
  *
- * @param {function} getPartBehavior
+ * @param {function(): ?object} getPartBehavior
  *   The behavior lookup (view-registry.js getPartBehavior), injected so
  *   this module stays pure and node-testable.
- * @param {?{rows: function, placement: function, rootTag: function,
- *   partTag: function, partLabel: function}} instanceModel
+ * @param {?{rows: Function, placement: Function, rootTag: Function,
+ *   partTag: Function, partLabel: Function}} instanceModel
  *   The annotation-backed instance model: `rows` (instance-rows.js
  *   instanceRows) feeds toViewTree's instances argument, `placement`
  *   (markup-index.js partPlacement) is compose's placement channel, a

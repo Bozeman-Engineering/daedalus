@@ -53,7 +53,8 @@ const SLIDERS = [
     label: () => Drupal.t('Gap'),
     unit: 'px',
     step: 1,
-    tooltip: () => Drupal.t('The space between one layer and the next, in pixels'),
+    tooltip: () =>
+      Drupal.t('The space between one layer and the next, in pixels'),
   },
 ];
 
@@ -68,6 +69,14 @@ const ZOOM_STEP = 0.1;
  * The scale a stepper press lands on, held to the slider's hundredths so
  * a run of presses stays on whole percents (0.62 + 0.1 is 0.72 in
  * binary floating point today, 0.52 - 0.1 is not 0.42).
+ *
+ * @param {number} scale
+ *   The current scale.
+ * @param {number} direction
+ *   -1 for the minus pill, 1 for the plus.
+ *
+ * @return {number}
+ *   The scale one press away, before the store's clamp.
  */
 const steppedScale = (scale, direction) =>
   Math.round((scale + direction * ZOOM_STEP) * 100) / 100;
@@ -85,12 +94,20 @@ const TOGGLES = [
     name: 'isolate',
     label: () => Drupal.t('Isolate selection'),
     tooltip: () =>
-      Drupal.t('Lift only the selection, its ancestors and its descendants; everything else stays flat'),
+      Drupal.t(
+        'Lift only the selection, its ancestors and its descendants; everything else stays flat',
+      ),
   },
 ];
 
 /**
  * Whether the settings are already the defaults (Reset has nothing to do).
+ *
+ * @param {object} view
+ *   The current settings.
+ *
+ * @return {boolean}
+ *   True when every value is its default.
  */
 const atDefaults = (view) =>
   Object.keys(DEFAULTS).every((name) => view[name] === DEFAULTS[name]);
@@ -102,6 +119,33 @@ const atDefaults = (view) =>
  * decreaseLabel, increaseLabel}) the slider sits between a minus and a
  * plus pill in the same row, for a control whose useful moves are coarse
  * steps as often as a scrub.
+ *
+ * @param {object} props
+ *   The component's props.
+ * @param {string} props.id
+ *   The input's id, which the label and readout point at.
+ * @param {string} props.label
+ *   The control's label text.
+ * @param {string} props.tooltip
+ *   The slider's tooltip text.
+ * @param {string} props.unit
+ *   The unit the default readout appends to the value.
+ * @param {number} props.min
+ *   The slider's minimum.
+ * @param {number} props.max
+ *   The slider's maximum.
+ * @param {number} props.step
+ *   The slider's step.
+ * @param {number} props.value
+ *   The current value.
+ * @param {string} [props.readout]
+ *   The readout text, in place of the value and unit.
+ * @param {boolean} [props.disabled]
+ *   Whether the control is disabled.
+ * @param {Function} props.onInput
+ *   `onInput(value)`, every slider move, with the value as a number.
+ * @param {object} [props.steppers]
+ *   The stepper pills, when the control has them.
  */
 const Slider = ({
   id,
@@ -137,7 +181,10 @@ const Slider = ({
         <label className="daedalus-explode__label" htmlFor={id}>
           {label}
         </label>
-        <output className="daedalus-explode__readout daedalus-ui-chip daedalus-ui-chip--muted" htmlFor={id}>
+        <output
+          className="daedalus-explode__readout daedalus-ui-chip daedalus-ui-chip--muted"
+          htmlFor={id}
+        >
           {readout ?? `${value}${unit}`}
         </output>
       </div>
@@ -174,6 +221,19 @@ const Slider = ({
 
 /**
  * A labeled on/off segmented control.
+ *
+ * @param {object} props
+ *   The component's props.
+ * @param {string} props.id
+ *   The control's id, which the label derives its own from.
+ * @param {string} props.label
+ *   The control's label text.
+ * @param {string} props.tooltip
+ *   The segments' tooltip text.
+ * @param {boolean} props.on
+ *   Whether the toggle is on.
+ * @param {Function} props.onChange
+ *   `onChange(on)`, a press of either segment.
  */
 const Toggle = ({ id, label, tooltip, on, onChange }) => (
   <div className="daedalus-explode__control daedalus-explode__control--toggle">
@@ -212,6 +272,7 @@ const Toggle = ({ id, label, tooltip, on, onChange }) => (
  * The panel.
  *
  * @param {object} props
+ *   The component's props.
  * @param {{get: Function, set: Function, reset: Function, subscribe: Function}} props.settings
  *   The settings store.
  * @param {object} props.app
@@ -236,7 +297,11 @@ export const ExplodePanel = ({ settings, app }) => {
     };
   }, [app]);
 
-  const deepest = maxDepth(app.tree.index(), app.tree.root(), app.tree.reachable);
+  const deepest = maxDepth(
+    app.tree.index(),
+    app.tree.root(),
+    app.tree.reachable,
+  );
   // One step past the deepest plane is All (the store's null); a cap
   // deeper than the page also reads All, since that is what it does.
   const capAll = deepest + 1;
@@ -262,7 +327,9 @@ export const ExplodePanel = ({ settings, app }) => {
       <Slider
         id="daedalus-explode-scale"
         label={Drupal.t('Zoom')}
-        tooltip={Drupal.t('How large the exploded stack draws, as a percentage of the flat page')}
+        tooltip={Drupal.t(
+          'How large the exploded stack draws, as a percentage of the flat page',
+        )}
         unit="%"
         min={RANGES.scale[0]}
         max={RANGES.scale[1]}
@@ -282,7 +349,9 @@ export const ExplodePanel = ({ settings, app }) => {
       <Slider
         id="daedalus-explode-depthCap"
         label={Drupal.t('Depth cap')}
-        tooltip={Drupal.t('Layers deeper than this settle onto the last lifted one')}
+        tooltip={Drupal.t(
+          'Layers deeper than this settle onto the last lifted one',
+        )}
         unit=""
         min={1}
         max={capAll}
@@ -309,7 +378,9 @@ export const ExplodePanel = ({ settings, app }) => {
           type="button"
           className="daedalus-explode__reset daedalus-ui-pill-button"
           disabled={atDefaults(view)}
-          data-daedalus-ui-tooltip={Drupal.t('Return every control to its default')}
+          data-daedalus-ui-tooltip={Drupal.t(
+            'Return every control to its default',
+          )}
           onClick={() => settings.reset()}
         >
           {Drupal.t('Reset')}

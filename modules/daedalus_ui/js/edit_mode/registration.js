@@ -68,8 +68,7 @@ const buildApp = () => ({
 
   // Registration surfaces.
   modes: {
-    register: (plugin) =>
-      Drupal.Daedalus.ModeManager.registerPlugin(plugin),
+    register: (plugin) => Drupal.Daedalus.ModeManager.registerPlugin(plugin),
   },
   verbs: {
     register: (verb) => Drupal.Daedalus.Verbs.register(verb),
@@ -207,8 +206,7 @@ const buildApp = () => ({
     getSource: (type) => Drupal.Daedalus.Drag.getSource(type),
     makeDraggable: (element, type, getData) =>
       Drupal.Daedalus.Drag.makeDraggable(element, type, getData),
-    removeDraggable: (element) =>
-      Drupal.Daedalus.Drag.removeDraggable(element),
+    removeDraggable: (element) => Drupal.Daedalus.Drag.removeDraggable(element),
     // External arming, for drags that originate outside the page (OS file
     // drags): a detector recognizes the gesture and arms a registered
     // source; the drop handler delivers the files as data.files.
@@ -242,8 +240,7 @@ const buildApp = () => ({
   // Curated events. The store itself is app-private: subscribing to state
   // shapes here instead of window.listenToStateChange keeps the slice layout
   // free to change without breaking contrib.
-  onSelectionChange: (callback) =>
-    Drupal.Daedalus.Selection.onChange(callback),
+  onSelectionChange: (callback) => Drupal.Daedalus.Selection.onChange(callback),
   // The styling-aware counterpart: the ONE subscription that fires when
   // the selection, its subject facet (Selection.getTarget(), keyed by the
   // selected element) OR its write address (Selection.getAddress(), the
@@ -262,8 +259,7 @@ const buildApp = () => ({
     Drupal.Daedalus.Selection.onHoverSelectorChange(callback),
   onBlueprintChange: (callback) =>
     Drupal.Daedalus.Blueprint.onBlueprintChange(callback),
-  onHistoryChange: (callback) =>
-    Drupal.Daedalus.History.onChange(callback),
+  onHistoryChange: (callback) => Drupal.Daedalus.History.onChange(callback),
 
   // Runtime facades, resolved at read time.
   get Hotkeys() {
@@ -309,7 +305,8 @@ export const drainRegistrationQueue = () => {
     try {
       callback(app);
     } catch (error) {
-      console.error('A Daedalus registration callback failed:', error);
+      // The other queued callbacks still run; the failure surfaces.
+      Drupal.throwError(error);
     }
   };
   window.DaedalusUiQueue = { push: run };

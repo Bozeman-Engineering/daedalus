@@ -25,6 +25,16 @@
     // Modules export named bindings on purpose so an importer binds a
     // component or factory under its own name beside the ones it composes.
     "import/prefer-default-export": "off",
+    // Core's eslint 8 (eslint-scope 7) records no reference for a JSX tag
+    // and core ships no eslint-plugin-react to teach it, so the bindings
+    // JSX alone reads look unused: `h`, the pragma every JSX module imports
+    // (webpack.config.js, preset-react `pragma: 'h'`), `Fragment`, and a
+    // PascalCase binding, which is a component rendered as a tag. Every
+    // other binding, a parameter included, stays checked.
+    "no-unused-vars": [
+      "warn",
+      { "varsIgnorePattern": "^(h|Fragment|[A-Z][a-z][A-Za-z0-9]*)$" }
+    ],
     // The inspector's render trees express their branches as ternary
     // chains inside JSX (a ? <A /> : b ? <B /> : null); unrolling every
     // chain into if-chains around JSX is a rewrite of the components, not
@@ -52,6 +62,17 @@
   },
   "overrides": [
     {
+      "files": ["js/src/code/stitching.js"],
+      "rules": {
+        // The island registry sorts its islands into document order through
+        // Node.compareDocumentPosition(), whose answer is a bitmask by
+        // specification; reading its FOLLOWING bit is the one bitwise
+        // operation in the tree, and the rule exists to catch `&` typed
+        // for `&&`.
+        "no-bitwise": "off"
+      }
+    },
+    {
       "files": [
         "js/src/broadcast/popout-leader.js",
         "js/src/code/element-view.js",
@@ -59,7 +80,10 @@
         "js/src/highlight-claims.js",
         "js/src/inspector.js",
         "js/src/material-gestures.js",
+        "js/src/parts.js",
         "js/src/pending.js",
+        "js/src/printer.js",
+        "js/src/selector-matcher.js",
         "js/src/sources/leader-source.js",
         "js/src/style-guide.js",
         "js/src/variant-scope.js",

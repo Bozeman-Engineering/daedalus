@@ -15,23 +15,23 @@ use Drupal\workspaces\WorkspaceManagerInterface;
 /**
  * Ships site entities to disk: the disk lane's other direction, per kind.
  *
- * ShippedDefinitionsImporter brings MODULE.daedalus_stylish.<kind>*.yml INTO a site
- * (sync); a shipper takes a site's entities of one kind OUT to a module
- * (ship). A ship writes one per-id file, MODULE.daedalus_stylish.<kind>.FILE_ID.yml
- * (the machine-written form the importer discovers beside the hand-authored
- * single file, so a ship never touches a human's file), and adopts every
- * shipped entity IN PLACE: the entity keeps its id and uuid (references
- * elsewhere may hold either), gains the module as its provider and the
- * written payload as its source hash, and lands published. After a ship
- * the site is already consistent with disk: a sync of the module reports
- * UNCHANGED for every shipped name, nothing to run.
+ * ShippedDefinitionsImporter brings MODULE.daedalus_stylish.<kind>*.yml INTO a
+ * site (sync); a shipper takes a site's entities of one kind OUT to a module
+ * (ship). A ship writes one per-id file,
+ * MODULE.daedalus_stylish.<kind>.FILE_ID.yml (the machine-written form the
+ * importer discovers beside the hand-authored single file, so a ship never
+ * touches a human's file), and adopts every shipped entity IN PLACE: the entity
+ * keeps its id and uuid (references elsewhere may hold either), gains the
+ * module as its provider and the written payload as its source hash, and lands
+ * published. After a ship the site is already consistent with disk: a sync of
+ * the module reports UNCHANGED for every shipped name, nothing to run.
  *
- * The file's grammar stays the importer's: each subclass's definition()
- * emits exactly the keys its importer reads, and every definition a caller
- * ships is checked against the importer's shape rule before it is written,
- * so a shipper never writes what the importer would refuse to read.
- * Callers add what this module cannot know: the variants file's `blueprint:`
- * key belongs to whoever owns blueprints (daedalus_blueprint_library), not here.
+ * The file's grammar stays the importer's: each subclass's definition() emits
+ * exactly the keys its importer reads, and every definition a caller ships is
+ * checked against the importer's shape rule before it is written, so a shipper
+ * never writes what the importer would refuse to read. Callers add what this
+ * module cannot know: the variants file's `blueprint:` key belongs to whoever
+ * owns blueprints (daedalus_blueprint_library), not here.
  *
  * Machine names are the site-wide vocabulary of a kind, so a name already
  * shipped by another module, or by another file of the target module, is
@@ -189,8 +189,8 @@ abstract class ShippedDefinitionsShipper {
   /**
    * The per-id file a ship writes, relative to the Drupal root.
    *
-   * MODULE.daedalus_stylish.<kind>.FILE_ID.yml at the module's root, the name built
-   * through the importer (the grammar's one owner).
+   * MODULE.daedalus_stylish.<kind>.FILE_ID.yml at the module's root, the name
+   * built through the importer (the grammar's one owner).
    *
    * @throws \Drupal\Core\Extension\Exception\UnknownExtensionException
    *   When the module is not enabled: there is no directory to ship into.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Slot;
 
+use Drupal\Component\Plugin\Discovery\CachedDiscoveryInterface;
 use Drupal\Core\Block\BlockManagerInterface;
 use Drupal\Core\Config\ConfigCrudEvent;
 use Drupal\Core\Config\ConfigEvents;
@@ -43,7 +44,7 @@ final class SlotRosterSubscriber implements EventSubscriberInterface {
   use StringTranslationTrait;
 
   public function __construct(
-    protected BlockManagerInterface $blockManager,
+    protected BlockManagerInterface&CachedDiscoveryInterface $blockManager,
     protected SlotPlacements $slotPlacements,
   ) {}
 

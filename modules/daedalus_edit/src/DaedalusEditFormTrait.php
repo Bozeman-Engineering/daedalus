@@ -216,14 +216,14 @@ trait DaedalusEditFormTrait {
   /**
    * Give every control in a sidebar-hosted form the shared panel-kit look.
    *
-   * The panel control kit (daedalus_ui css/panel-controls.css) is the
-   * one control grammar in the rail: details wear daedalus-ui-details, text inputs
-   * wear daedalus-ui-input, buttons wear daedalus-ui-pill-button; per-widget styling was
-   * drift. Runs at after_build so widget-created elements are covered;
-   * group members are injected at pre-render by copy, so classes added
-   * here on the originals carry into the rendered panes. Checkboxes and
-   * selects need no class: the edit-mode form grammar in daedalus_ui
-   * css/form.css already skins them by element.
+   * The panel control kit (daedalus_ui css/panel-controls.css) is the one
+   * control grammar in the rail: details wear daedalus-ui-details, text inputs
+   * wear daedalus-ui-input, buttons wear daedalus-ui-pill-button; per-widget
+   * styling was drift. Runs at after_build so widget-created elements are
+   * covered; group members are injected at pre-render by copy, so classes added
+   * here on the originals carry into the rendered panes. Checkboxes and selects
+   * need no class: the edit-mode form grammar in daedalus_ui css/form.css
+   * already skins them by element.
    */
   private function applyPanelGrammar(array &$element): void {
     $type = $element['#type'] ?? NULL;

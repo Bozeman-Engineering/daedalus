@@ -578,7 +578,9 @@ class MaterialsSchema implements MaterialsWeightSourceInterface {
   }
 
   /**
-   * The dialect door's guidance paragraph: the kinds the narrowed shape carries.
+   * The dialect door's guidance paragraph.
+   *
+   * The kinds the narrowed shape carries.
    *
    * Opens by saying where the rest is (the brief, the always-on layer
    * the model edits from), then teaches each kind present in the
@@ -710,7 +712,9 @@ class MaterialsSchema implements MaterialsWeightSourceInterface {
   }
 
   /**
-   * The blueprints by id: label, description, scope, entity_id, fragment, looks, placement.
+   * The blueprints by id.
+   *
+   * Label, description, scope, entity_id, fragment, looks, placement.
    *
    * The fragment is the record's tree printed through the dialect printer
    * over the site's catalog (DialectPrinter::printFragment(): no ids, no
@@ -843,7 +847,9 @@ class MaterialsSchema implements MaterialsWeightSourceInterface {
   }
 
   /**
-   * The fonts, keyed by machine name: label, spelling, family, faces, description.
+   * The fonts, keyed by machine name.
+   *
+   * Label, spelling, family, faces, description.
    *
    * The record's value is {family, faces}: the family a font-family value
    * names and the faces (weight, style, source) the family ships, so a

@@ -29,6 +29,7 @@
  *   remain.
  *
  * @return {{claim: Function, release: Function, clear: Function}}
+ *   The stack's three calls.
  */
 export const createHighlightClaims = (apply) => {
   const stack = [];
@@ -47,6 +48,11 @@ export const createHighlightClaims = (apply) => {
    * Claims the highlight for an owner (any stable identity). A repeat
    * claim updates the owner's spec and moves it to the top; a null
    * spec is a release.
+   *
+   * @param {*} owner
+   *   The claim's owner: any stable identity (a row's key, a component).
+   * @param {?object} spec
+   *   The highlight spec to apply while this claim is on top, or null.
    */
   const claim = (owner, spec) => {
     if (!spec) {
@@ -61,6 +67,9 @@ export const createHighlightClaims = (apply) => {
   /**
    * Releases an owner's claim; the next claim (or null) applies.
    * Unknown owners are a silent no-op, so unmount cleanups are safe.
+   *
+   * @param {*} owner
+   *   The owner whose claim is released.
    */
   const release = (owner) => {
     if (remove(owner)) {
@@ -102,6 +111,7 @@ const registries = new WeakMap();
  *   A state source exposing setCanvasHighlight and onTargetChange.
  *
  * @return {{claim: Function, release: Function, clear: Function}}
+ *   The source's claim stack, the same object on every call.
  */
 export const highlightClaimsFor = (source) => {
   let claims = registries.get(source);

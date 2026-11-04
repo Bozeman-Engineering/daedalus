@@ -17,19 +17,28 @@
  * @see \Drupal\daedalus_edit\Ajax\MediaLibrarySelection
  * @see \Drupal\daedalus_edit\DaedalusEditMediaLibraryOpener
  */
-Drupal.AjaxCommands.prototype.daedalusEditMediaLibrarySelection = function (
-  ajax,
-  response,
-) {
-  const current = Drupal.Daedalus.Edit.CurrentlyEditingElement;
-  if (typeof current?.plugin?.mediaSelected !== 'function') {
-    // A selection with no edit able to receive it is an integration bug
-    // (the edit ended underneath the open modal, or the editor forgot to
-    // implement its half); silence here would be an invisible lost commit.
-    console.warn(
-      'Daedalus Edit received a media library selection but no current edit implements mediaSelected(); the selection was dropped.',
-    );
-    return;
-  }
-  current.plugin.mediaSelected(current, response.selectedIds.map(Number));
-};
+
+/**
+ * Routes a media library selection to the current edit.
+ *
+ * @param {Drupal.Ajax} ajax
+ *   The Ajax object that received the response.
+ * @param {object} response
+ *   The command payload; `selectedIds` lists the chosen media ids.
+ */
+Drupal.AjaxCommands.prototype.daedalusEditMediaLibrarySelection =
+  function daedalusEditMediaLibrarySelection(ajax, response) {
+    const current = Drupal.Daedalus.Edit.CurrentlyEditingElement;
+    if (typeof current?.plugin?.mediaSelected !== 'function') {
+      // A selection with no edit able to receive it is an integration bug
+      // (the edit ended underneath the open modal, or the editor forgot to
+      // implement its half); silence here would be an invisible lost commit.
+      Drupal.throwError(
+        new Error(
+          'Daedalus Edit received a media library selection but no current edit implements mediaSelected(); the selection was dropped.',
+        ),
+      );
+      return;
+    }
+    current.plugin.mediaSelected(current, response.selectedIds.map(Number));
+  };

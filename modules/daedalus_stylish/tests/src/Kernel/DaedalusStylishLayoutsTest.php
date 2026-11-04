@@ -12,13 +12,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the daedalus_stylish_container layout plugin and the consumer filter.
  *
- * The daedalus_stylish_layouts ships ONE layout, daedalus_stylish_container: daedalus_ui's
- * ComposedLayout with no template and no configuration form — the
- * universal container kind's declaration is generative (`composed: true`),
- * so the declaration's root forms ARE the section markup. Its vestigial
- * single region renders no wrapper. The page builder offers only this
- * layout: the module filters the layout_builder consumer and the daedalus_layout
- * consumer (the default-section form) down to its own definitions, while
+ * The daedalus_stylish_layouts ships ONE layout, daedalus_stylish_container:
+ * daedalus_ui's ComposedLayout with no template and no configuration form — the
+ * universal container kind's declaration is generative (`composed: true`), so
+ * the declaration's root forms ARE the section markup. Its vestigial single
+ * region renders no wrapper. The page builder offers only this layout: the
+ * module filters the layout_builder consumer and the daedalus_layout consumer
+ * (the default-section form) down to its own definitions, while
  * core/layout_discovery layouts stay valid plugins for anything already
  * rendering with them.
  */
@@ -35,9 +35,9 @@ class DaedalusStylishLayoutsTest extends KernelTestBase {
     'contextual',
     'layout_discovery',
     'layout_builder',
-    // daedalus_stylish_layouts' container-migration services reference daedalus_stylish's
-    // condition manager, so the info.yml dependency chain must be spelled
-    // out (kernel tests do not resolve it).
+    // daedalus_stylish_layouts' container-migration services reference
+    // daedalus_stylish's condition manager, so the info.yml dependency chain
+    // must be spelled out (kernel tests do not resolve it).
     'user',
     'field',
     'daedalus_blueprint',
@@ -55,11 +55,11 @@ class DaedalusStylishLayoutsTest extends KernelTestBase {
   /**
    * The container layout registers with its vestigial region.
    *
-   * The daedalus_stylish_container is the container model's ONE layout: a single
-   * "content" region that is a storage vestige (core's SectionComponent
+   * The daedalus_stylish_container is the container model's ONE layout: a
+   * single "content" region that is a storage vestige (core's SectionComponent
    * requires a region name) with no markup of its own. The retired
-   * daedalus_stylish_onecol..fourcol plugins are gone; their stored data converges
-   * through ContainerMigration's frozen shapes.
+   * daedalus_stylish_onecol..fourcol plugins are gone; their stored data
+   * converges through ContainerMigration's frozen shapes.
    */
   public function testLayoutDefinitions(): void {
     $definitions = $this->container->get('plugin.manager.core.layout')->getDefinitions();
@@ -72,7 +72,12 @@ class DaedalusStylishLayoutsTest extends KernelTestBase {
     $this->assertSame(ComposedLayout::class, trim($definition->getClass(), '\\'));
     $this->assertNull($definition->getTemplate());
     // The retired multi-region layouts no longer exist as plugins.
-    foreach (['daedalus_stylish_onecol', 'daedalus_stylish_twocol', 'daedalus_stylish_threecol', 'daedalus_stylish_fourcol'] as $retired) {
+    foreach ([
+      'daedalus_stylish_onecol',
+      'daedalus_stylish_twocol',
+      'daedalus_stylish_threecol',
+      'daedalus_stylish_fourcol',
+    ] as $retired) {
       $this->assertArrayNotHasKey($retired, $definitions);
     }
     // Core layouts stay valid plugins; only the pickers filter them out.

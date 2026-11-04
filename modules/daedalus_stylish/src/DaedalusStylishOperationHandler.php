@@ -21,9 +21,9 @@ use Drupal\daedalus_stylish\Selector\RuleMove;
  * Registers Daedalus Stylish's batch operations with daedalus_blueprint.
  *
  * Five element operations join the batch grammar, all built on the layered
- * entry model: an entry's own condition-keyed properties are OVERRIDES that layer
- * over the variants its "variants" list references and win on conflict, so
- * following a variant and tweaking on top are not mutually exclusive.
+ * entry model: an entry's own condition-keyed properties are OVERRIDES that
+ * layer over the variants its "variants" list references and win on conflict,
+ * so following a variant and tweaking on top are not mutually exclusive.
  * - update_style: a PATCH against one selectable key's styles. Values merge
  *   into the keyed entry under a condition, null values unset. The entry's
  *   variant references stay untouched — the write lands as overrides on
@@ -171,8 +171,9 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
    * @param \Drupal\Core\Session\AccountProxyInterface $currentUser
    *   The current user, update_default's permission gate.
    * @param iterable<\Drupal\daedalus_stylish\VariantApplicabilityCheckerInterface> $applicabilityCheckers
-   *   The applicability seam (tag daedalus_stylish.variant_applicability_checker):
-   *   cross-module vetoes consulted before a NEW apply of a variant.
+   *   The applicability seam (tag
+   *   daedalus_stylish.variant_applicability_checker): cross-module vetoes
+   *   consulted before a NEW apply of a variant.
    */
   public function __construct(
     protected StyleMapValidator $validator,
@@ -286,7 +287,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
   /**
    * Applies an update_default operation: one scope's defaults, patched.
    *
-   * @param \Drupal\Core\Entity\HostInterface $host
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
    *   The batch's entity: the page the gesture rides, untouched (the
    *   write is the active skin's).
    * @param array $operation
@@ -453,7 +454,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
   /**
    * Applies an update_style operation.
    *
-   * @param \Drupal\Core\Entity\HostInterface $host
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
    *   The entity whose style map is patched.
    * @param string $key
    *   The element or rule key the patch lands on.
@@ -613,7 +614,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
    * landing reads "to[.{condition}.{property}]"; a continuation's keeps
    * its landing key, the key that refused.
    *
-   * @param \Drupal\Core\Entity\HostInterface $host
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
    *   The entity whose style map is rekeyed.
    * @param string $key
    *   The rule key moving (validateTarget() has judged it a style key and
@@ -669,7 +670,13 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
     }
     if ($moving === []) {
       return BlueprintResult::semanticFailure([
-        new BlueprintError('key', 'STYLE_MOVE_NOTHING_TO_MOVE', sprintf('"%s" holds no entry and nothing continues it: there is no rule to move.', $key), ['key' => $key, 'to' => $to], 'A rule exists on this element once it holds styles or wears a variant (update_style, apply_variant). A row a worn variant supplies or an ancestor\'s rule delivers belongs to that variant or ancestor, not to this element: edit the selector there.'),
+        new BlueprintError(
+          'key',
+          'STYLE_MOVE_NOTHING_TO_MOVE',
+          sprintf('"%s" holds no entry and nothing continues it: there is no rule to move.', $key),
+          ['key' => $key, 'to' => $to],
+          'A rule exists on this element once it holds styles or wears a variant (update_style, apply_variant). A row a worn variant supplies or an ancestor\'s rule delivers belongs to that variant or ancestor, not to this element: edit the selector there.',
+        ),
       ]);
     }
 
@@ -792,7 +799,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
    *   (StyleMapValidator::orderedEntryRefs()), so list order carries no
    *   meaning.
    *
-   * @param \Drupal\Core\Entity\HostInterface $host
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
    *   The host entity.
    * @param array &$map
    *   The style map, modified in place.
@@ -1082,7 +1089,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
    * stays; references that rode out on moved elements are orphans owned by
    * their elements, untouched by gestures on this root.
    *
-   * @param \Drupal\Core\Entity\HostInterface $host
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
    *   The host entity.
    * @param array &$map
    *   The style map, modified in place.
@@ -1642,7 +1649,7 @@ class DaedalusStylishOperationHandler implements PageOnlyOperationsInterface, Pa
   /**
    * Writes the style map back and builds the success result.
    *
-   * @param \Drupal\Core\Entity\HostInterface $host
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
    *   The host entity.
    * @param array $map
    *   The style map to write.

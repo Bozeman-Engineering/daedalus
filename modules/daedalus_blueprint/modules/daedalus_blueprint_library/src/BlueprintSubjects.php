@@ -135,6 +135,8 @@ final class BlueprintSubjects {
    * @param mixed $bundles
    *   The gesture value: a list of `entity_type:bundle` strings; [] (or
    *   NULL) clears the list, which means any host the blueprint fits.
+   * @param string $path
+   *   The error path.
    *
    * @return string[]
    *   The entries, de-duplicated, in order.

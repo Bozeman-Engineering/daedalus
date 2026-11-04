@@ -34,10 +34,10 @@ final class SettingsForm extends ConfigFormBase {
   public function __construct(
     ConfigFactoryInterface $config_factory,
     TypedConfigManagerInterface $typedConfigManager,
-    private readonly CostResolver $costResolver,
-    private readonly UsageGate $usageGate,
-    private readonly UsageRetention $usageRetention,
-    private readonly AiProviderPluginManager $aiProvider,
+    protected CostResolver $costResolver,
+    protected UsageGate $usageGate,
+    protected UsageRetention $usageRetention,
+    protected AiProviderPluginManager $aiProvider,
   ) {
     parent::__construct($config_factory, $typedConfigManager);
   }

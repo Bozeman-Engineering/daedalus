@@ -154,16 +154,18 @@ const currentLinkEdit = () => {
 /**
  * Creates a link control bound to one editor's leaf callbacks.
  *
- * @param {Object} options
- *   The editor's bindings:
- *   - {string} fieldName: the link field's property name in the mirror
- *     (e.g. 'field_text_url'); snapshot reads and the autocomplete
- *     endpoint lookup key off it.
- *   - {Function} applyLink: (EditableElement, uri) => void — previews the
- *     uri on the leaf's markup (wrap/unwrap the root, set href).
- *   - {Function} returnFocus: (EditableElement) => ?Element — the element
- *     focus returns to when the popover closes with focus in its input
- *     (Enter, a scroll, a press that dismissed it).
+ * @param {object} options
+ *   The editor's bindings.
+ * @param {string} options.fieldName
+ *   The link field's property name in the mirror (e.g. 'field_text_url');
+ *   snapshot reads and the autocomplete endpoint lookup key off it.
+ * @param {Function} options.applyLink
+ *   (EditableElement, uri) => void — previews the uri on the leaf's
+ *   markup (wrap/unwrap the root, set href).
+ * @param {Function} options.returnFocus
+ *   (EditableElement) => ?Element — the element focus returns to when the
+ *   popover closes with focus in its input (Enter, a scroll, a press that
+ *   dismissed it).
  *
  * @return {Object}
  *   The control: buildWidget, open, preview, value, write, refresh,
@@ -193,9 +195,10 @@ export function create({ fieldName, applyLink, returnFocus }) {
      *   The element being edited.
      * @param {Element} container
      *   The frame's widget slot container.
-     * @param {Object} context
-     *   - {boolean} showLabel: render the entry's text label (the
-     *     frame's density ladder).
+     * @param {object} context
+     *   The frame's widget context.
+     * @param {boolean} context.showLabel
+     *   Render the entry's text label (the frame's density ladder).
      *
      * @return {Function}
      *   The widget cleanup.
@@ -223,7 +226,8 @@ export function create({ fieldName, applyLink, returnFocus }) {
 
       const list = document.createElement('div');
       list.className = 'daedalus-edit-link-suggestions';
-      list.id = `daedalus-edit-link-suggestions-${listboxCount++}`;
+      listboxCount += 1;
+      list.id = `daedalus-edit-link-suggestions-${listboxCount}`;
       list.setAttribute('role', 'listbox');
       list.hidden = true;
       input.setAttribute('role', 'combobox');
@@ -238,7 +242,7 @@ export function create({ fieldName, applyLink, returnFocus }) {
       let activeIndex = -1;
 
       const closeSuggestions = () => {
-        requestToken++;
+        requestToken += 1;
         clearTimeout(debounce);
         list.hidden = true;
         list.textContent = '';
@@ -326,7 +330,8 @@ export function create({ fieldName, applyLink, returnFocus }) {
       // core's system.entity_autocomplete endpoint (the minted urls). A
       // superseded response (the user kept typing) is dropped by token.
       const suggest = async (query) => {
-        const token = ++requestToken;
+        requestToken += 1;
+        const token = requestToken;
         const groups = await Promise.all(
           endpoints.map(async (endpoint) => {
             const url = `${endpoint.url}${endpoint.url.includes('?') ? '&' : '?'}q=${encodeURIComponent(query)}`;

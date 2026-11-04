@@ -5,13 +5,14 @@
  * Install, update and uninstall hooks for Daedalus Layout.
  */
 
-use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
+use Drupal\Core\Block\BlockPluginInterface;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage;
+use Drupal\layout_builder\Plugin\Block\InlineBlock;
+use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
-use Drupal\Core\Block\BlockPluginInterface;
-use Drupal\layout_builder\Plugin\Block\InlineBlock;
-use Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage;
+use Drupal\layout_builder\SectionListInterface;
 
 /**
  * Move color settings from daedalus_layout to daedalus_ui.
@@ -209,14 +210,16 @@ function _daedalus_layout_clone_block(BlockPluginInterface $block_plugin, array 
       return FALSE;
     }
     $cloned_block_content = $block_content->createDuplicate();
-    // Pre-migration data shape (this helper serves daedalus_layout_update_10001,
-    // which runs before the layout-block migration): an inline block whose
-    // block_content carries a layout field is a legacy layout block and its
-    // nested sections deep-clone with it.
+    // Pre-migration data shape (this helper serves
+    // daedalus_layout_update_10001, which runs before the layout-block
+    // migration): an inline block whose block_content carries a layout field is
+    // a legacy layout block and its nested sections deep-clone with it.
     if ($block_content->hasField('layout_builder__layout')) {
       // Duplicate all the nested entities within the layouts.
       $cloned_sections = [];
-      foreach ($block_content->layout_builder__layout->getSections() as $delta => $original_section) {
+      $layout = $block_content->get('layout_builder__layout');
+      assert($layout instanceof SectionListInterface);
+      foreach ($layout->getSections() as $delta => $original_section) {
         $cloned_sections[$delta] = _daedalus_layout_close_section($original_section);
       }
       $block_content->layout_builder__layout->setValue($cloned_sections);

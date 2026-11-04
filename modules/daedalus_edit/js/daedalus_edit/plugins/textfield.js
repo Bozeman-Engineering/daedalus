@@ -22,6 +22,12 @@ class TextfieldPlugin extends EditorPluginBase {
 
   /**
    * The widget's one input.
+   *
+   * @param {object} item
+   *   The item being edited.
+   *
+   * @return {?HTMLInputElement}
+   *   The input, or undefined when the widget is gone.
    */
   input(item) {
     return item.getFormItemInputs()[0];
@@ -58,6 +64,12 @@ class TextfieldPlugin extends EditorPluginBase {
   /**
    * The base unless the input was refetched: the same input holds the
    * draft the keystroke mirror wrote, never a remote.
+   *
+   * @param {object} item
+   *   The item being edited.
+   *
+   * @return {Object<string, *>}
+   *   The remote property values.
    */
   remoteValues(item) {
     if (this.input(item) === item.mirroredInput) {

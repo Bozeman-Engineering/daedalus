@@ -49,7 +49,7 @@ export const PORTAL_SELECTOR = `[${PORTAL_URL_ATTRIBUTE}], [${PORTAL_CLAIM_ATTRI
  * The portal a pointer target sits in.
  *
  * The chip is chrome painted OUTSIDE the portal (in #daedalus-root, a
- * tab on the portal's stroke), so a pointer travelling from the portal
+ * tab on the portal's stroke), so a pointer traveling from the portal
  * to the chip's Edit link leaves the portal's subtree on the way. Pointing
  * at the chip therefore keeps the portal the chip belongs to (`current`)
  * instead of resolving to nothing and hiding the very control being
@@ -58,14 +58,20 @@ export const PORTAL_SELECTOR = `[${PORTAL_URL_ATTRIBUTE}], [${PORTAL_CLAIM_ATTRI
  * @param {?EventTarget} target
  *   The pointer event target.
  * @param {object} [options]
- *   - chrome: the chip's own root element, or null before it mounts.
- *   - current: the portal currently shown, or null.
+ *   Where the chip sits.
+ * @param {?Element} [options.chrome]
+ *   The chip's own root element, or null before it mounts.
+ * @param {?Element} [options.current]
+ *   The portal currently shown, or null.
  *
- * @returns {?Element}
+ * @return {?Element}
  *   The portal's placement root (the element carrying the URL stamp), or
  *   null when the pointer is over neither a portal nor the chip.
  */
-export const portalForTarget = (target, { chrome = null, current = null } = {}) => {
+export const portalForTarget = (
+  target,
+  { chrome = null, current = null } = {},
+) => {
   if (!target || typeof target.closest !== 'function') {
     return null;
   }
@@ -81,7 +87,7 @@ export const portalForTarget = (target, { chrome = null, current = null } = {}) 
  * @param {?Element} portal
  *   A portal's placement root, or null.
  *
- * @returns {?{url: ?string, label: string, type: ?string, claim: ?{slot: string, blueprint: string}}}
+ * @return {?{url: ?string, label: string, type: ?string, claim: ?{slot: string, blueprint: string}}}
  *   The editing URL (null on a claimable door the actor may not edit at
  *   its root), the label, the kind word of the document the portal opens
  *   (stamped beside the URL; null without one), and the claim a slot door
@@ -132,7 +138,7 @@ export const portalIdentity = (portal) => {
  * @param {?{url: ?string, label: string, type: ?string, claim: ?{slot: string, blueprint: string}}} identity
  *   What the chip read off the portal (portalIdentity), or null.
  *
- * @returns {?{shows: ?string, document: {label: string}, blueprint: ?string, portal: ?{label: string, kind: ?string, url: string}, claimable: boolean}}
+ * @return {?{shows: ?string, document: {label: string}, blueprint: ?string, portal: ?{label: string, kind: ?string, url: string}, claimable: boolean}}
  *   The showing as the stamps tell it; null without an identity.
  */
 export const portalShowing = (identity) => {
@@ -155,10 +161,11 @@ export const portalShowing = (identity) => {
  * @param {?string} type
  *   The stamped kind word ("Blueprint", "Site frame"), or null.
  *
- * @returns {?string}
+ * @return {?string}
  *   "blueprint", "site frame"; null without a kind.
  */
-export const portalKindWord = (type) => (type ? type.toLocaleLowerCase() : null);
+export const portalKindWord = (type) =>
+  type ? type.toLocaleLowerCase() : null;
 
 /**
  * The chip's label: the portal's name and, lowercased, what it is.
@@ -172,12 +179,54 @@ export const portalKindWord = (type) => (type ? type.toLocaleLowerCase() : null)
  * @param {{label: string, type: ?string}} identity
  *   What the chip read off the portal (portalIdentity).
  *
- * @returns {string}
+ * @return {string}
  *   The label.
  */
 export const portalChipLabel = ({ label, type }) => {
   const kind = portalKindWord(type);
   return kind ? `${label} · ${kind}` : label;
+};
+
+/**
+ * The portal the pointer is really over, the page's own content set aside.
+ *
+ * A slot door (the template's or the frame's slot block) is a portal
+ * whose subtree holds the document beneath it: the page's own fill, every
+ * element of it a selectable of this page. Pointing at the fill is
+ * pointing at the page, not at the door, so the hover reads the same rule
+ * the double-click does: a key resolved INSIDE the portal (on an element
+ * the portal contains, other than the portal itself) sets the portal
+ * aside; a key resolved on the portal itself or above it, or no key at
+ * all, keeps it. A key whose element cannot be placed (none given) keeps
+ * the portal too: the hover errs toward showing the door.
+ *
+ * @param {object} args
+ *   The pointer's resolution.
+ * @param {?Element} args.portal
+ *   The portal under the pointer (portalForTarget), or null.
+ * @param {?string} args.resolvedKey
+ *   What the selection resolver returned for the same target (null when
+ *   nothing selectable is there).
+ * @param {?Element} args.resolvedElement
+ *   The element carrying that key, or null.
+ *
+ * @return {?Element}
+ *   The portal, or null when the pointer is over the page's own content
+ *   inside it.
+ */
+export const portalUnder = ({
+  portal = null,
+  resolvedKey = null,
+  resolvedElement = null,
+}) => {
+  if (!portal) {
+    return null;
+  }
+  if (resolvedKey === null || resolvedKey === undefined || !resolvedElement) {
+    return portal;
+  }
+  const inside = resolvedElement !== portal && portal.contains(resolvedElement);
+  return inside ? null : portal;
 };
 
 /**
@@ -196,14 +245,18 @@ export const portalChipLabel = ({ label, type }) => {
  * portal wins its subtree and the page keeps everything above it.
  *
  * @param {object} args
- *   - portal: the portal under the pointer (portalForTarget), or null.
- *   - resolvedKey: what the selection resolver returned for the same
- *     target (null when nothing selectable is there).
- *   - resolvedElement: the element carrying that key (the resolver's
- *     elementForKey), or null. A key passed without its element cannot
- *     be placed against the portal and keeps the drill.
+ *   The pointer's resolution.
+ * @param {?Element} args.portal
+ *   The portal under the pointer (portalForTarget), or null.
+ * @param {?string} args.resolvedKey
+ *   What the selection resolver returned for the same target (null when
+ *   nothing selectable is there).
+ * @param {?Element} args.resolvedElement
+ *   The element carrying that key (the resolver's elementForKey), or
+ *   null. A key passed without its element cannot be placed against the
+ *   portal and keeps the drill.
  *
- * @returns {?string}
+ * @return {?string}
  *   The URL to navigate to, or null to leave the gesture alone.
  */
 export const portalNavigation = ({
@@ -225,45 +278,6 @@ export const portalNavigation = ({
 };
 
 /**
- * The portal the pointer is really over, the page's own content set aside.
- *
- * A slot door (the template's or the frame's slot block) is a portal
- * whose subtree holds the document beneath it: the page's own fill, every
- * element of it a selectable of this page. Pointing at the fill is
- * pointing at the page, not at the door, so the hover reads the same rule
- * the double-click does: a key resolved INSIDE the portal (on an element
- * the portal contains, other than the portal itself) sets the portal
- * aside; a key resolved on the portal itself or above it, or no key at
- * all, keeps it. A key whose element cannot be placed (none given) keeps
- * the portal too: the hover errs toward showing the door.
- *
- * @param {object} args
- *   - portal: the portal under the pointer (portalForTarget), or null.
- *   - resolvedKey: what the selection resolver returned for the same
- *     target (null when nothing selectable is there).
- *   - resolvedElement: the element carrying that key, or null.
- *
- * @returns {?Element}
- *   The portal, or null when the pointer is over the page's own content
- *   inside it.
- */
-export const portalUnder = ({
-  portal = null,
-  resolvedKey = null,
-  resolvedElement = null,
-}) => {
-  if (!portal) {
-    return null;
-  }
-  if (resolvedKey === null || resolvedKey === undefined || !resolvedElement) {
-    return portal;
-  }
-  const inside =
-    resolvedElement !== portal && portal.contains(resolvedElement);
-  return inside ? null : portal;
-};
-
-/**
  * The URL a leave actually navigates to: the editing URL carrying where
  * it left from.
  *
@@ -280,7 +294,7 @@ export const portalUnder = ({
  *   The current page's path (window.location.pathname), or nothing when
  *   there is no page to return to.
  *
- * @returns {string}
+ * @return {string}
  *   The url with `destination=<fromPath>` appended (`?` or `&` as the url
  *   already carries a query); a falsy fromPath returns the url unchanged.
  */

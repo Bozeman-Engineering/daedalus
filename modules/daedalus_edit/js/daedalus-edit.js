@@ -58,7 +58,8 @@ import './daedalus_edit/plugins/inline-editor.js';
    *   Whether there is an invalid form item that needs to be resolved.
    */
   Drupal.Daedalus.Edit.hasInvalidFormItem = () => {
-    const isValid = Drupal.Daedalus.Edit.CurrentlyEditingElement?.plugin.isValid();
+    const isValid =
+      Drupal.Daedalus.Edit.CurrentlyEditingElement?.plugin.isValid();
     return typeof isValid === 'boolean' ? !isValid : false;
   };
 
@@ -123,6 +124,9 @@ import './daedalus_edit/plugins/inline-editor.js';
 
   /**
    * Disables interactive elements while in edit mode.
+   *
+   * @param {Event} e
+   *   The event to swallow.
    */
   Drupal.Daedalus.Edit.DoNothing = (e) => {
     e.preventDefault();

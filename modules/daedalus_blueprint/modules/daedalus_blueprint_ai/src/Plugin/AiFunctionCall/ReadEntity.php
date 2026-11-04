@@ -75,8 +75,8 @@ class ReadEntity extends DaedalusBlueprintToolBase {
       return;
     }
 
-    // A page is page_read's, whole (PageHosts::isPage(): the one meaning across the
-    // AI doors), in every mode of this tool: the JSON summary and the full
+    // A page is page_read's, whole (PageHosts::isPage(): the one meaning across
+    // the AI doors), in every mode of this tool: the JSON summary and the full
     // read alike. The gate sits before any read of the document, so a
     // never-edited page's template seed is not fired by a read.
     if ($this->pageHosts->isPage($host)) {

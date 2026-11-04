@@ -27,9 +27,9 @@ namespace Drupal\daedalus_blueprint\Materials;
  * - layout:{layout_id}: the container kind refined by layout plugin.
  * - base:{tag}: bare prose markup by tag (tag treatments, site defaults).
  *
- * The grammar here is charset only. Which kinds, tags, bundles, plugins
- * and layouts exist is vocabulary, and stays with the module that owns
- * it (daedalus_stylish's style guide law); an address that parses may still name
+ * The grammar here is charset only. Which kinds, tags, bundles, plugins and
+ * layouts exist is vocabulary, and stays with the module that owns it
+ * (daedalus_stylish's style guide law); an address that parses may still name
  * nothing declared.
  *
  * Immutable and stringable: printed, an address is exactly the string

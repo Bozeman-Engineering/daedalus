@@ -33,6 +33,16 @@
     // load-bearing; the parser reads every file as a module and would call
     // it redundant.
     "strict": "off",
+    // A classic script opens with a file docblock (@file) and the IIFE that
+    // wraps it, core's shape; jsdoc attaches that block to the IIFE and
+    // asks it to document the injected globals (Drupal, once, jQuery). A
+    // block carrying @file describes the file, so it exempts the function
+    // it precedes; the rule's default exemption (inheritdoc) restated
+    // because the list replaces it whole.
+    "jsdoc/require-param": [
+      "warn",
+      { "exemptedBy": ["inheritdoc", "file"] }
+    ],
     // Core's airbnb rule forbids for...of for the regenerator runtime a
     // transpiled build would need; the bundle's preset-env compiles for...of
     // without it (regenerator serves generators and async), and the native
@@ -55,6 +65,28 @@
   },
   "overrides": [
     {
+      "files": ["js/edit_mode/**/*.js"],
+      "rules": {
+        // The app's component files are JSX, and core's toolchain has no
+        // JSX-aware usage rule (no eslint-plugin-react, so nothing credits
+        // a binding referenced only as an element, `<RowIcon />`). JSX's
+        // own rule names the bindings at stake: a tag whose first letter is
+        // capitalized is a component reference. Those are set aside;
+        // everything else (camelCase bindings, UPPER_SNAKE constants,
+        // arguments) stays under the rule with airbnb's options, restated
+        // because an options object replaces the inherited one whole.
+        "no-unused-vars": [
+          "warn",
+          {
+            "vars": "all",
+            "args": "after-used",
+            "ignoreRestSiblings": true,
+            "varsIgnorePattern": "^[A-Z][A-Za-z0-9]*$"
+          }
+        ]
+      }
+    },
+    {
       "files": [
         "js/canvas_vector/canvas-vector.js",
         "js/canvas_vector/emulate-media.js",
@@ -64,6 +96,7 @@
         "js/edit_mode/drag/gaps.js",
         "js/edit_mode/drag/keyboard-lift.js",
         "js/edit_mode/hotkeys/hotkeys.js",
+        "js/edit_mode/materials/relative-selector.js",
         "js/edit_mode/selection/resolver.js",
         "js/edit_mode/settings/hotkey/hotkey-settings.js",
         "js/edit_mode/settings/media-file-associations/media-file-association.js",
@@ -72,7 +105,8 @@
       "rules": {
         // These modules are written as const arrow functions that call one
         // another only from callbacks (event handlers, store subscriptions,
-        // the mutual recursion of a tree walk), so a binding resolves at
+        // the mutual recursion of a tree walk, the recursive descent of the
+        // selector grammar's parser and printer), so a binding resolves at
         // call time, after the module body ran, and no textual order
         // satisfies the cycle. Same-scope use before definition stays an
         // error.
@@ -80,6 +114,55 @@
           "error",
           { "functions": false, "classes": true, "variables": false }
         ]
+      }
+    },
+    {
+      "files": ["js/outline/collapse-controls.js"],
+      "rules": {
+        // The one JSX file outside the app tree: the app's bundle compiles
+        // it with the automatic runtime, and daedalus_stylish's bundle
+        // compiles it too, with preset-react's classic `h` pragma, so its
+        // `import { h }` is load-bearing there and reads as unused here. The
+        // component references are set aside as in the app tree.
+        "no-unused-vars": [
+          "warn",
+          {
+            "vars": "all",
+            "args": "after-used",
+            "ignoreRestSiblings": true,
+            "varsIgnorePattern": "^(h|[A-Z][A-Za-z0-9]*)$"
+          }
+        ]
+      }
+    },
+    {
+      "files": ["js/edit_mode/ops/op-queue.js", "js/sidebar/sidebar-manager.js"],
+      "rules": {
+        // The rule exists to catch work that could run in parallel. These
+        // two loops are sequential by contract: the op queue applies each
+        // op on the page the previous one left, and the sidebar closes its
+        // panels one at a time so each close hook sees the previous panel
+        // gone. A Promise.all would change what the code does.
+        "no-await-in-loop": "off"
+      }
+    },
+    {
+      "files": ["js/edit_mode/utilities/uuid.js", "js/messenger-model.js"],
+      "rules": {
+        // The rule exists to catch `&` typed for `&&`. These two files are
+        // bit work by definition: the RFC 4122 version and variant fields of
+        // a v4 UUID, and a 32-bit string hash that wraps by shifting.
+        "no-bitwise": "off"
+      }
+    },
+    {
+      "files": ["js/logging.js"],
+      "rules": {
+        // The rule forbids diagnostics left in shipped code. This file is
+        // the documented debug flag the doctrine sends them to: the one
+        // console spine, off until a developer enables a module from the
+        // console, so its two console.log calls are its purpose.
+        "no-console": "off"
       }
     }
   ]

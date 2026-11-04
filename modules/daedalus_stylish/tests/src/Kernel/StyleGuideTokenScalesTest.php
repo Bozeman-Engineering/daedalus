@@ -64,8 +64,8 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
@@ -128,8 +128,9 @@ class StyleGuideTokenScalesTest extends KernelTestBase {
   /**
    * A site without token scales has none: no section, no vocabulary.
    *
-   * Daedalus Stylish ships eleven scales at module level, so "no scales" is a site
-   * whose declaration withdraws the section (the fixture replaces the lane).
+   * Daedalus Stylish ships eleven scales at module level, so "no scales" is a
+   * site whose declaration withdraws the section (the fixture replaces the
+   * lane).
    */
   public function testNoScalesDeclared(): void {
     $this->declareSite([]);

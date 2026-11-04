@@ -24,7 +24,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * Runs after every daedalus reader of the event (TokenPropagationSubscriber
  * at -10, the page language at 100) and before ai_assistant_api's capture
  * at -1000, and empties the context for the agents listed in
- * enabled_agents; every other agent keeps the contrib behaviour.
+ * enabled_agents; every other agent keeps the contrib behavior.
  */
 final class FrontendContextSubscriber implements EventSubscriberInterface {
 

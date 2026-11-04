@@ -364,12 +364,12 @@ class ElementResolverTest extends KernelTestBase {
    *
    * The daedalus_layout module renders the root sections inside one
    * div.daedalus-layout-layout and declares it as entity anatomy in its own
-   * page_builder.yml (shell ownership follows template ownership: the
-   * section list is markup daedalus_layout builds inside {{ content }}). The
-   * shipped entity kind carries no parts of its own, so this case enables
-   * daedalus_layout and resolves the layered entity declaration: the part is its
-   * own unconditional div under the root, never hoisted (the theme owns
-   * the entity root).
+   * page_builder.yml (shell ownership follows template ownership: the section
+   * list is markup daedalus_layout builds inside {{ content }}). The shipped
+   * entity kind carries no parts of its own, so this case enables
+   * daedalus_layout and resolves the layered entity declaration: the part is
+   * its own unconditional div under the root, never hoisted (the theme owns the
+   * entity root).
    */
   public function testEntityLayoutRoot(): void {
     $declarations = $this->container->get('daedalus_ui.page_builder_declarations');
@@ -431,19 +431,19 @@ class ElementResolverTest extends KernelTestBase {
   /**
    * The PHP resolver's two entries and its client twin resolve identical trees.
    *
-   * The round-trip lock (the CssPrinter/printer.js pattern, see daedalus_stylish's
-   * PrinterEquivalenceTest): every shipped variation shape resolves here
-   * through the PHP entity entry (resolve()) against real entities, through
-   * the PHP facade entry (resolveData()) against the documented data facade
-   * — the shape the editors derive from the blueprint mirror and the
-   * gesture's previewed values — and through the JS twin
+   * The round-trip lock (the CssPrinter/printer.js pattern, see
+   * daedalus_stylish's PrinterEquivalenceTest): every shipped variation shape
+   * resolves here through the PHP entity entry (resolve()) against real
+   * entities, through the PHP facade entry (resolveData()) against the
+   * documented data facade — the shape the editors derive from the blueprint
+   * mirror and the gesture's previewed values — and through the JS twin
    * (js/edit_mode/blueprint/element-resolver.js, via node running
-   * tests/js/resolve-cases.mjs) against that same facade. The three trees
-   * must be deeply equal, or the live editing preview (or a card sketched
-   * from a facade) shows something other than what commits. The facade the
-   * entity entry reads (readEntity()) must also equal the hand-written one,
-   * so the twin's facade contract and the PHP reader agree on what an
-   * entity state looks like.
+   * tests/js/resolve-cases.mjs) against that same facade. The three trees must
+   * be deeply equal, or the live editing preview (or a card sketched from a
+   * facade) shows something other than what commits. The facade the entity
+   * entry reads (readEntity()) must also equal the hand-written one, so the
+   * twin's facade contract and the PHP reader agree on what an entity state
+   * looks like.
    */
   public function testClientTwinEquivalence(): void {
     $node = $this->findNode();

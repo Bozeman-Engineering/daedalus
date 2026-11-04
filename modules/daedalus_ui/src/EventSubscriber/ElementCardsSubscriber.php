@@ -314,7 +314,7 @@ final class ElementCardsSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * One root form at its fullest: the facade and depth that show the most of it.
+   * One root form at its fullest: the facade and depth showing most of it.
    *
    * The form's own conditions as sample data (an attribute's field filled
    * with a placeholder, a tag-deciding field with a value from its roster,

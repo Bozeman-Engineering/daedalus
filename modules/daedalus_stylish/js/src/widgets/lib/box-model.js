@@ -137,6 +137,25 @@ export const BOX_FAMILIES = {
 };
 
 /**
+ * A box family's descriptor, or a thrown error for a name outside
+ * BOX_FAMILIES: every family read goes through here so a typo fails
+ * loudly instead of reading undefined.
+ *
+ * @param {string} family
+ *   A BOX_FAMILIES key ('padding', 'border-width', ...).
+ *
+ * @return {{shorthand: string, longhand: Function, length: boolean}}
+ *   The family's BOX_FAMILIES entry.
+ */
+const familyDescriptor = (family) => {
+  const descriptor = BOX_FAMILIES[family];
+  if (!descriptor) {
+    throw new Error(`Unknown box family: ${family}`);
+  }
+  return descriptor;
+};
+
+/**
  * The one naming rule: the longhand a box family spells for one side.
  *
  * @param {string} family
@@ -148,14 +167,6 @@ export const BOX_FAMILIES = {
  *   The longhand property name ('border-width', 'top' →
  *   'border-top-width').
  */
-const familyDescriptor = (family) => {
-  const descriptor = BOX_FAMILIES[family];
-  if (!descriptor) {
-    throw new Error(`Unknown box family: ${family}`);
-  }
-  return descriptor;
-};
-
 export const familyLonghand = (family, side) =>
   familyDescriptor(family).longhand(side);
 
@@ -208,8 +219,10 @@ export const propertySides = (property, name) => {
  * @param {string} property
  *   The box shorthand family (a BOX_FAMILIES key).
  * @param {string[]} sides
+ *   The physical sides (SIDES) to name.
  *
  * @return {string[]}
+ *   The sides' longhand property names, in the given order.
  */
 export const sideLonghands = (property, sides) =>
   sides.map((side) => familyLonghand(property, side));
@@ -253,6 +266,8 @@ export const grantedSides = (granted, property = 'padding') =>
  *   A property name.
  *
  * @return {string[]}
+ *   The physical side longhands the property addresses, or the
+ *   property alone.
  */
 export const longhandGrain = (name) => {
   for (const family of Object.keys(BOX_FAMILIES)) {
@@ -269,9 +284,12 @@ export const longhandGrain = (name) => {
  * SHADOW when one is the element's own and the other a worn variant's.
  *
  * @param {string} own
+ *   The element's own declaration's property name.
  * @param {string} worn
+ *   The worn variant's declaration's property name.
  *
  * @return {boolean}
+ *   Whether the two grains share a longhand.
  */
 export const sharesGrain = (own, worn) => {
   if (own === worn) {
@@ -285,6 +303,12 @@ export const sharesGrain = (own, worn) => {
  * A shorthand's components: the runs between top-level whitespace, each
  * function consumed to its balanced close so its inner spaces never
  * split it.
+ *
+ * @param {string} text
+ *   The shorthand value text.
+ *
+ * @return {string[]}
+ *   The components, in order.
  */
 const splitComponents = (text) => {
   const parts = [];
@@ -292,9 +316,9 @@ const splitComponents = (text) => {
   let depth = 0;
   for (const char of text) {
     if (char === '(') {
-      depth++;
+      depth += 1;
     } else if (char === ')') {
-      depth--;
+      depth -= 1;
     }
     if (depth === 0 && /\s/.test(char)) {
       if (current !== '') {
@@ -434,6 +458,12 @@ export const resolveSides = (values, property = 'padding') => {
  * rule wears, reaching this element (a worn ancestor layer, layers.js
  * ancestorVariant), reads as a variant: the identity is the variant's
  * even though the tier keeps "this element wears" honest.
+ *
+ * @param {object} layer
+ *   A stack layer (style-stack.js), with its tier and id.
+ *
+ * @return {string}
+ *   One of 'authored', 'variant', 'skin', 'declared'.
  */
 const sideState = (layer) => {
   switch (layer.tier) {
@@ -455,6 +485,12 @@ const sideState = (layer) => {
 /**
  * The variant a layer supplies a side from: an own wearing's reference,
  * or the variant an ancestor's rule wears; null for every other layer.
+ *
+ * @param {object} layer
+ *   A stack layer (style-stack.js), with its tier, id and variant.
+ *
+ * @return {?string}
+ *   The supplying variant's reference, or null.
  */
 const suppliedReference = (layer) =>
   layer.tier === TIER_VARIANT ? layer.variant : ancestorVariant(layer.id);
@@ -480,12 +516,14 @@ const computedSide = () => ({
  * map (a control model's `stacks`), null when the map carries none.
  *
  * @param {?Object<string, object>} stacks
+ *   The per-property layer stacks (a control model's `stacks`).
  * @param {string} property
  *   The box shorthand family (a BOX_FAMILIES key).
  * @param {string} side
  *   A physical side (SIDES).
  *
  * @return {?object}
+ *   The side longhand's stack, or null.
  */
 const sideStack = (stacks, property, side) =>
   stacks?.[familyLonghand(property, side)] ?? null;
@@ -579,8 +617,12 @@ export const sideProvenance = (
       // The delivering condition for the declaration that resolved the
       // side: the same cascade posedBlock merged, read per property.
       const from =
-        entryAtPose(layer.styles, resolved[side].property, condition, conditions)
-          ?.condition ?? condition;
+        entryAtPose(
+          layer.styles,
+          resolved[side].property,
+          condition,
+          conditions,
+        )?.condition ?? condition;
       states[side] = {
         state: sideState(layer),
         layer: index,
@@ -595,6 +637,72 @@ export const sideProvenance = (
     });
   });
   return states;
+};
+
+/**
+ * The topmost layer authoring the family on any offered side at ANY
+ * condition (the hover-only padding while posed at Base), with the
+ * conditions it names, Base first then the guide's order; null when no
+ * layer authors the family at all.
+ *
+ * @param {?Object<string, object>} stacks
+ *   The per-property layer stacks (see sideProvenance).
+ * @param {string} property
+ *   The box shorthand family (a BOX_FAMILIES key).
+ * @param {string[]} sides
+ *   The sides the row OFFERS (grantedSides()).
+ * @param {object} conditions
+ *   The condition table (guide.conditions).
+ *
+ * @return {?{layer: object, index: number, named: string[]}}
+ *   The authoring layer, its stack index and the conditions it names
+ *   the family under, or null.
+ */
+const familyAuthor = (stacks, property, sides, conditions) => {
+  const order = ['default', ...Object.keys(conditions ?? {})];
+  const rank = (name) => {
+    const index = order.indexOf(name);
+    return index === -1 ? order.length : index;
+  };
+  let found = null;
+  sides.forEach((side) => {
+    const layers = sideStack(stacks, property, side)?.layers ?? [];
+    for (let index = layers.length - 1; index >= 0; index -= 1) {
+      if (found !== null && found.index > index) {
+        break;
+      }
+      const layer = layers[index];
+      const named = Object.entries(layer.styles ?? {})
+        .filter(
+          ([name, block]) =>
+            name !== 'variants' &&
+            block !== null &&
+            typeof block === 'object' &&
+            !Array.isArray(block) &&
+            Object.entries(block).some(
+              ([key, value]) =>
+                value !== null &&
+                value !== undefined &&
+                (propertySides(property, key) ?? []).includes(side),
+            ),
+        )
+        .map(([name]) => name);
+      if (named.length) {
+        const merged =
+          found !== null && found.index === index
+            ? [...new Set([...found.named, ...named])]
+            : named;
+        found = { layer, index, named: merged };
+        break;
+      }
+    }
+  });
+  return found === null
+    ? null
+    : {
+        ...found,
+        named: [...found.named].sort((a, b) => rank(a) - rank(b)),
+      };
 };
 
 /**
@@ -699,59 +807,6 @@ export const sidesOrigin = (
     groups: [],
     named: author?.named ?? [],
   };
-};
-
-/**
- * The topmost layer authoring the family on any offered side at ANY
- * condition (the hover-only padding while posed at Base), with the
- * conditions it names, Base first then the guide's order; null when no
- * layer authors the family at all.
- */
-const familyAuthor = (stacks, property, sides, conditions) => {
-  const order = ['default', ...Object.keys(conditions ?? {})];
-  const rank = (name) => {
-    const index = order.indexOf(name);
-    return index === -1 ? order.length : index;
-  };
-  let found = null;
-  sides.forEach((side) => {
-    const layers = sideStack(stacks, property, side)?.layers ?? [];
-    for (let index = layers.length - 1; index >= 0; index -= 1) {
-      if (found !== null && found.index > index) {
-        break;
-      }
-      const layer = layers[index];
-      const named = Object.entries(layer.styles ?? {})
-        .filter(
-          ([name, block]) =>
-            name !== 'variants' &&
-            block !== null &&
-            typeof block === 'object' &&
-            !Array.isArray(block) &&
-            Object.entries(block).some(
-              ([key, value]) =>
-                value !== null &&
-                value !== undefined &&
-                (propertySides(property, key) ?? []).includes(side),
-            ),
-        )
-        .map(([name]) => name);
-      if (named.length) {
-        const merged =
-          found !== null && found.index === index
-            ? [...new Set([...found.named, ...named])]
-            : named;
-        found = { layer, index, named: merged };
-        break;
-      }
-    }
-  });
-  return found === null
-    ? null
-    : {
-        ...found,
-        named: [...found.named].sort((a, b) => rank(a) - rank(b)),
-      };
 };
 
 /**
@@ -872,6 +927,12 @@ export const sidesPatch = (own, valuesBySide, property = 'padding') => {
  * 1/2/3/4 rule run backwards): equal left/right drop left, then equal
  * top/bottom drop bottom, then an all-equal set drops right. Comparison
  * is normalized; the kept components keep their own spelling.
+ *
+ * @param {{top: string, right: string, bottom: string, left: string}} values
+ *   The four sides' values.
+ *
+ * @return {string}
+ *   The space-joined shorthand.
  */
 const shorthandText = (values) => {
   const parts = [values.top, values.right, values.bottom, values.left];
@@ -886,6 +947,39 @@ const shorthandText = (values) => {
   }
   return parts.join(' ');
 };
+
+/**
+ * Whether a side cell reads as its MEASUREMENT (the canvas's computed
+ * value, converted into the gesture's unit, as a placeholder over an
+ * empty editor) rather than as a value of the stack's.
+ *
+ * Two sides measure. A computed side (nothing in the stack styles it)
+ * has nothing else to show. A SUPPLIED side (a worn variant's, the
+ * skin's, the declaration's) whose value is outside the dimension
+ * grammar (the Site width variant's `padding-inline: max(...)`, a
+ * skin's `calc()` shorthand no splitter can open) has a value the cell
+ * cannot scrub or the editor edit per side, so it shows what that value
+ * measures as, in the supplier's hue (the origin still names itself on
+ * hover), and a gesture writes the physical longhand over it: someone
+ * dialing in a padding meant it, and the wear bar names the override.
+ * An OWN side outside the grammar is the caller's opaque
+ * set-but-unsplittable state (the shorthand's own editor still works),
+ * never a measurement: measuring over it would invite a per-side write
+ * the expansion cannot honestly make.
+ *
+ * @param {string} state
+ *   The side's provenance state (sideProvenance: 'authored' | 'variant'
+ *   | 'skin' | 'declared' | 'computed').
+ * @param {*} face
+ *   The side's display value (a worn reference's face at the pose, a
+ *   literal as itself), null when the layer resolves no per-side value.
+ *
+ * @return {boolean}
+ *   Whether the cell shows its measurement.
+ */
+export const sideMeasured = (state, face) =>
+  state === 'computed' ||
+  (state !== 'authored' && fieldState(face ?? '').mode !== 'dimension');
 
 /**
  * The shorthand field's longhand-aware view of a box property: whether
@@ -1122,8 +1216,10 @@ export const spreadSides = (side, modifiers = {}) => {
  * precision rule.
  *
  * @param {{altKey?: boolean, shiftKey?: boolean}} modifiers
+ *   The gesture's modifier state (a pointer event works as-is).
  *
  * @return {{shiftKey: boolean, altKey: false}}
+ *   The diagram's grain vocabulary: Shift alone, Alt always off.
  */
 export const diagramModifiers = (modifiers = {}) => ({
   shiftKey: Boolean(modifiers.shiftKey) && !modifiers.altKey,
@@ -1136,10 +1232,12 @@ export const diagramModifiers = (modifiers = {}) => ({
  * Shift.
  *
  * @param {{altKey?: boolean, shiftKey?: boolean}} modifiers
+ *   The gesture's modifier state (a pointer event works as-is).
  * @param {string} unit
  *   The unit the gesture works in (px by default).
  *
  * @return {number}
+ *   The step, in the unit.
  */
 export const diagramStep = (modifiers = {}, unit = 'px') =>
   stepSize(diagramModifiers(modifiers), unit);
@@ -1153,45 +1251,15 @@ export const diagramStep = (modifiers = {}, unit = 'px') =>
  * @param {number} movementX
  *   The tick's horizontal pointer travel.
  * @param {{altKey?: boolean, shiftKey?: boolean}} modifiers
+ *   The gesture's modifier state (a pointer event works as-is).
  * @param {string} unit
  *   The unit the scrub works in (px by default).
  *
  * @return {{raw: number, number: number, step: number}}
+ *   The advanced accumulator, the snapped value and the step used.
  */
 export const diagramScrub = (raw, movementX, modifiers = {}, unit = 'px') =>
   scrubAdvance(raw, movementX, diagramModifiers(modifiers), unit);
-
-/**
- * Whether a side cell reads as its MEASUREMENT (the canvas's computed
- * value, converted into the gesture's unit, as a placeholder over an
- * empty editor) rather than as a value of the stack's.
- *
- * Two sides measure. A computed side (nothing in the stack styles it)
- * has nothing else to show. A SUPPLIED side (a worn variant's, the
- * skin's, the declaration's) whose value is outside the dimension
- * grammar (the Site width variant's `padding-inline: max(...)`, a
- * skin's `calc()` shorthand no splitter can open) has a value the cell
- * cannot scrub or the editor edit per side, so it shows what that value
- * measures as, in the supplier's hue (the origin still names itself on
- * hover), and a gesture writes the physical longhand over it: someone
- * dialing in a padding meant it, and the wear bar names the override.
- * An OWN side outside the grammar is the caller's opaque
- * set-but-unsplittable state (the shorthand's own editor still works),
- * never a measurement: measuring over it would invite a per-side write
- * the expansion cannot honestly make.
- *
- * @param {string} state
- *   The side's provenance state (sideProvenance: 'authored' | 'variant'
- *   | 'skin' | 'declared' | 'computed').
- * @param {*} face
- *   The side's display value (a worn reference's face at the pose, a
- *   literal as itself), null when the layer resolves no per-side value.
- *
- * @return {boolean}
- */
-export const sideMeasured = (state, face) =>
-  state === 'computed' ||
-  (state !== 'authored' && fieldState(face ?? '').mode !== 'dimension');
 
 /**
  * A side cell's gesture anchor: the unit its scrub, its arrows and the
@@ -1231,7 +1299,13 @@ export const sideMeasured = (state, face) =>
  *   mode is fieldState's over the shown text ('text' makes an open cell
  *   click-to-edit only); number and unit are the gesture's start.
  */
-export const sideAnchor = (space, shown, measured, options = [], bases = null) => {
+export const sideAnchor = (
+  space,
+  shown,
+  measured,
+  options = [],
+  bases = null,
+) => {
   const state = fieldState(shown ?? '');
   const named =
     state.mode === 'dimension' && state.unit !== '' ? state.unit : null;
@@ -1265,6 +1339,8 @@ export const sideAnchor = (space, shown, measured, options = [], bases = null) =
  *   The gesture's unit context.
  *
  * @return {{raw: number, unit: string, index?: number}}
+ *   The gesture's starting accumulator and unit, with the matched
+ *   stop's index for a closed space.
  */
 export const sideScrubSeed = (space, shown, number, unit) => {
   if (space.kind === 'closed') {
@@ -1309,6 +1385,7 @@ export const sideScrubSeed = (space, shown, number, unit) => {
  * @param {number} movementX
  *   The tick's horizontal pointer travel.
  * @param {{altKey?: boolean, shiftKey?: boolean}} modifiers
+ *   The tick's modifier state (a pointer event works as-is).
  *
  * @return {{raw: number, unit: string, index?: number, number: ?number,
  *   text: string, stop: ?object}}
@@ -1383,6 +1460,7 @@ export const sideScrubMove = (space, scrub, movementX, modifiers = {}) => {
  * @param {number} direction
  *   +1 or -1, in value terms.
  * @param {{altKey?: boolean, shiftKey?: boolean}} modifiers
+ *   The press's modifier state (a keyboard event works as-is).
  *
  * @return {?{text: string, stop: ?object, number?: number,
  *   index?: number}}
@@ -1431,6 +1509,7 @@ export const sideStepValue = (space, anchor, direction, modifiers = {}) => {
  *   The settled display text.
  *
  * @return {string}
+ *   The stop's reference, or the text itself.
  */
 export const settleSpelling = (space, text) =>
   magneticCapture(space.stops, text)?.ref ?? text;
@@ -1457,6 +1536,7 @@ export const settleSpelling = (space, text) =>
  *   winner at the pose: style-stack.js stackAt).
  *
  * @return {string}
+ *   The field's display text, empty for nothing set.
  */
 export const uniformFieldText = (state, raw) => {
   if (!state.set) {

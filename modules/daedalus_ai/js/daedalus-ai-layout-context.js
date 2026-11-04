@@ -16,8 +16,7 @@
         return;
       }
       Drupal.Daedalus.AiContext.register('view_mode', () => {
-        const editPlugin =
-          Drupal.Daedalus?.ModeManager?.getPlugin('edit');
+        const editPlugin = Drupal.Daedalus?.ModeManager?.getPlugin('edit');
         if (!editPlugin) {
           return null;
         }

@@ -33,7 +33,6 @@
         message: Drupal.t('Updating hotkey...'),
       },
       error: (error) => {
-        console.error('Unable to update hotkey: ', error.responseText || error);
         Drupal.Daedalus.ModeManager.getPlugin('edit').handleError(
           error,
           'Unable to update hotkey.',
@@ -86,8 +85,7 @@
         endCapture();
         return;
       }
-      const bindingString =
-        Drupal.Daedalus.Hotkeys.eventToBindingString(e);
+      const bindingString = Drupal.Daedalus.Hotkeys.eventToBindingString(e);
       if (bindingString === null) {
         // A bare modifier went down: commit it on keyup (hold-style
         // bindings), unless more keys turn it into a combo.
@@ -174,7 +172,7 @@
   };
 
   Drupal.behaviors.HotkeysConfig = {
-    attach(context, settings) {
+    attach(context) {
       once('hotkeys-config', '.hotkeys-list', context).forEach((list) => {
         // The registry lives in the app bundle, which loads independently
         // of this behavior; the queue runs the setup immediately when the
@@ -204,8 +202,7 @@
               }
             });
           };
-          const unsubscribe =
-            Drupal.Daedalus.Hotkeys.onChange(scheduleRender);
+          const unsubscribe = Drupal.Daedalus.Hotkeys.onChange(scheduleRender);
           scheduleRender();
         });
       });

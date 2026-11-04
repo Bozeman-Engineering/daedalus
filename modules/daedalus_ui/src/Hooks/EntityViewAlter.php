@@ -129,8 +129,9 @@ class EntityViewAlter {
     // The editable elements need attributes and wrappers to let the JS know
     // what is editable. When this entity is rendered via a page request or
     // LoadEditablePage, dispatch a builder event and let Daedalus Layout
-    // replace the page with its UI. We don't need to worry about Daedalus Edit because
-    // it adds its field attributes based on whether we are in Edit mode.
+    // replace the page with its UI. We don't need to worry about Daedalus Edit
+    // because it adds its field attributes based on whether we are in Edit
+    // mode.
     $event = $this->eventDispatcher->dispatch(new EditableUiBuilder($build, $mode, $host, $build['#view_mode']), EditableUiBuilder::class);
     $build = $event->getBuild();
 

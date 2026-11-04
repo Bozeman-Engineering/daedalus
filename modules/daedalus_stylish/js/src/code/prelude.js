@@ -7,7 +7,11 @@ import {
   parseSelector,
   printCompound,
 } from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
-import { PSEUDO, UNKNOWN, parseCompound } from '../../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
+import {
+  PSEUDO,
+  UNKNOWN,
+  parseCompound,
+} from '../../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
 
 /**
  * A row's prelude: the nested-rule head a designer would write for it.
@@ -72,11 +76,24 @@ const COMBINATOR_SYMBOLS = { [CHILD]: '>', [NEXT]: '+', [SUBSEQUENT]: '~' };
 /**
  * A condition's at-rule wrappers and its glued states, in compound
  * order (the canonical axis order).
+ *
+ * @param {?string} condition
+ *   The island's condition; '' and 'default' are the bare element.
+ * @param {?object} guide
+ *   The style guide payload (its `conditions` table parses the compound).
+ *
+ * @return {{wrappers: string[], states: string}}
+ *   The at-rule wrappers' CSS and the states glued into one selector
+ *   suffix.
  */
 const conditionPieces = (condition, guide) => {
   const wrappers = [];
   let states = '';
-  if (typeof condition === 'string' && condition !== '' && condition !== 'default') {
+  if (
+    typeof condition === 'string' &&
+    condition !== '' &&
+    condition !== 'default'
+  ) {
     parseCompound(condition, guide?.conditions ?? {}).forEach((clause) => {
       if (clause.kind === UNKNOWN) {
         states += `:${clause.text}`;
@@ -93,6 +110,13 @@ const conditionPieces = (condition, guide) => {
 /**
  * Merges adjacent text parts, so a renderer and a reader see the fewest
  * pieces that still separate the chipped and wrapped ones.
+ *
+ * @param {Array<{kind: string, text?: string}>} parts
+ *   The prelude parts in order.
+ *
+ * @return {Array<{kind: string, text?: string}>}
+ *   The parts with runs of text folded into one (copies; the input
+ *   stands).
  */
 const mergeText = (parts) =>
   parts.reduce((merged, part) => {

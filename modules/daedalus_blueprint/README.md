@@ -132,11 +132,11 @@ reverts toward the disk; a shipped skin alone keeps taking the site's
 token and defaults edits, in its own site layer over the package's.
 
 The package author works the other way round: the site is the canvas and
-drush (`daedalus-blueprint:design-system:ship`, `daedalus-blueprint:blueprint-ship`) carries the result
-back into the module's files. The lane's two directions have two words:
-disk to site is sync (`daedalus_stylish:sync`, the same run a cache rebuild does),
-site to disk is ship. On such a development site, lift the lock in
-`settings.php`:
+drush (`daedalus-blueprint:design-system:ship`,
+`daedalus-blueprint:blueprint-ship`) carries the result back into the
+module's files. The lane's two directions have two words: disk to site is
+sync (`daedalus_stylish:sync`, the same run a cache rebuild does), site to
+disk is ship. On such a development site, lift the lock in `settings.php`:
 
 ```php
 $settings['daedalus_blueprint_developer'] = TRUE;
@@ -687,8 +687,8 @@ demand: `eb_read_schema`'s optional `group` (a declared id, or
 `ungrouped`) puts that group's shared block blueprints in place of the
 whole set, narrowed AFTER the cached schema is read (the cache key never
 carries a group); an unknown id answers a corrective naming the ids, and
-a bundle whose schema carries no materials refuses the parameter. A schema read with no bundle host keeps block scope
-unfiltered by fit.
+a bundle whose schema carries no materials refuses the parameter. A schema
+read with no bundle host keeps block scope unfiltered by fit.
 
 ## Capabilities: what an actor may do
 

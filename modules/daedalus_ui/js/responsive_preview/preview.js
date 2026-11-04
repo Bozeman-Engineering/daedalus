@@ -21,7 +21,7 @@ import { openChannel } from '../broadcast/channel.js';
 import { createReloadCoordinator } from './reload-coordinator.js';
 import { createDeviceList } from './device-list.js';
 
-(function (Drupal, drupalSettings, once) {
+((Drupal, drupalSettings, once) => {
   Drupal.behaviors.daedalusUiResponsivePreview = {
     attach: (context) => {
       once(

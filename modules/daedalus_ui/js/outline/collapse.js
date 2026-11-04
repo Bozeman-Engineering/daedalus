@@ -51,6 +51,14 @@ const hasMark = (folds, id) =>
 /**
  * The state with the given postures written, or the same object when
  * every one already holds.
+ *
+ * @param {?object} folds
+ *   The outline's explicit postures.
+ * @param {object} postures
+ *   Row ids to the posture to write (true collapsed, false expanded).
+ *
+ * @return {?object}
+ *   The next state.
  */
 const written = (folds, postures) => {
   const changed = Object.entries(postures).filter(
@@ -64,6 +72,11 @@ const written = (folds, postures) => {
 
 /**
  * Every node of an outline in render order (parents before children).
+ *
+ * @param {Array<object>} outline
+ *   The outline, a list of nodes in the outline shape.
+ * @param {function(object): void} visit
+ *   Called with each node.
  */
 const walk = (outline, visit) => {
   (Array.isArray(outline) ? outline : []).forEach((node) => {
@@ -81,30 +94,61 @@ const walk = (outline, visit) => {
  *   The row, in the outline shape.
  *
  * @return {boolean}
+ *   True when the row is collapsed.
  */
 export const isCollapsed = (folds, node) =>
   hasMark(folds, node.id) ? Boolean(folds[node.id]) : Boolean(node.folded);
 
 /**
  * The state with one row's posture flipped: the chevron's gesture.
+ *
+ * @param {?object} folds
+ *   The outline's explicit postures.
+ * @param {object} node
+ *   The row, in the outline shape.
+ *
+ * @return {?object}
+ *   The next state.
  */
 export const toggle = (folds, node) =>
   written(folds, { [node.id]: !isCollapsed(folds, node) });
 
 /**
  * The state with one row expanded, the same object when it already is.
+ *
+ * @param {?object} folds
+ *   The outline's explicit postures.
+ * @param {object} node
+ *   The row, in the outline shape.
+ *
+ * @return {?object}
+ *   The next state.
  */
 export const expand = (folds, node) =>
   isCollapsed(folds, node) ? written(folds, { [node.id]: false }) : folds;
 
 /**
  * The state with one row collapsed, the same object when it already is.
+ *
+ * @param {?object} folds
+ *   The outline's explicit postures.
+ * @param {object} node
+ *   The row, in the outline shape.
+ *
+ * @return {?object}
+ *   The next state.
  */
 export const collapse = (folds, node) =>
   isCollapsed(folds, node) ? folds : written(folds, { [node.id]: true });
 
 /**
  * The foldable rows of an outline, in render order.
+ *
+ * @param {Array<object>} outline
+ *   The outline, a list of nodes in the outline shape.
+ *
+ * @return {Array<object>}
+ *   The nodes whose `foldable` is true.
  */
 const foldableNodes = (outline) => {
   const nodes = [];
@@ -121,8 +165,10 @@ const foldableNodes = (outline) => {
  * all-gestures reach.
  *
  * @param {Array<object>} outline
+ *   The outline, a list of nodes in the outline shape.
  *
  * @return {Array<string>}
+ *   The ids.
  */
 export const foldableIds = (outline) =>
   foldableNodes(outline).map((node) => node.id);
@@ -131,6 +177,14 @@ export const foldableIds = (outline) =>
  * The state with every foldable row of the outline collapsed: the
  * collapse-all gesture. Postures of rows the outline does not hold
  * (another scope's rows, rows a view projected away) survive it.
+ *
+ * @param {?object} folds
+ *   The outline's explicit postures.
+ * @param {Array<object>} outline
+ *   The outline, a list of nodes in the outline shape.
+ *
+ * @return {?object}
+ *   The next state.
  */
 export const collapseAll = (folds, outline) =>
   written(
@@ -145,6 +199,14 @@ export const collapseAll = (folds, outline) =>
 /**
  * The state with every foldable row of the outline expanded: the
  * expand-all gesture.
+ *
+ * @param {?object} folds
+ *   The outline's explicit postures.
+ * @param {Array<object>} outline
+ *   The outline, a list of nodes in the outline shape.
+ *
+ * @return {?object}
+ *   The next state.
  */
 export const expandAll = (folds, outline) =>
   written(
@@ -160,6 +222,14 @@ export const expandAll = (folds, outline) =>
  * Whether every foldable row of the outline is collapsed: collapse-all
  * would do nothing, so its control is disabled. Vacuously true for an
  * outline without a foldable row (both controls are then disabled).
+ *
+ * @param {?object} folds
+ *   The outline's explicit postures.
+ * @param {Array<object>} outline
+ *   The outline, a list of nodes in the outline shape.
+ *
+ * @return {boolean}
+ *   True when no foldable row is expanded.
  */
 export const allCollapsed = (folds, outline) =>
   foldableNodes(outline).every((node) => isCollapsed(folds, node));
@@ -168,6 +238,14 @@ export const allCollapsed = (folds, outline) =>
  * Whether every foldable row of the outline is expanded: expand-all
  * would do nothing, so its control is disabled. Vacuously true for an
  * outline without a foldable row.
+ *
+ * @param {?object} folds
+ *   The outline's explicit postures.
+ * @param {Array<object>} outline
+ *   The outline, a list of nodes in the outline shape.
+ *
+ * @return {boolean}
+ *   True when no foldable row is collapsed.
  */
 export const allExpanded = (folds, outline) =>
   foldableNodes(outline).every((node) => !isCollapsed(folds, node));
@@ -175,6 +253,14 @@ export const allExpanded = (folds, outline) =>
 /**
  * The rows above `id`, from the outline's root down to its parent, as
  * nodes; [] when the outline lacks the id or the id is a root's.
+ *
+ * @param {Array<object>} outline
+ *   The outline, a list of nodes in the outline shape.
+ * @param {?string} id
+ *   The row's id.
+ *
+ * @return {Array<object>}
+ *   The ancestor nodes, root first.
  */
 const ancestorNodes = (outline, id) => {
   if (id === null || id === undefined) {
@@ -202,9 +288,12 @@ const ancestorNodes = (outline, id) => {
  * wrong rows; a scoped outline answers from its own root.
  *
  * @param {Array<object>} outline
+ *   The outline, a list of nodes in the outline shape.
  * @param {?string} id
+ *   The row's id.
  *
  * @return {Array<string>}
+ *   The ancestor ids, root first.
  */
 export const ancestorsOf = (outline, id) =>
   ancestorNodes(outline, id).map((node) => node.id);
@@ -215,6 +304,16 @@ export const ancestorsOf = (outline, id) =>
  * a unit when selected; code mode opens the selection separately with
  * expand). The same object when the row is already visible, and no
  * change for an id the outline lacks.
+ *
+ * @param {?object} folds
+ *   The outline's explicit postures.
+ * @param {Array<object>} outline
+ *   The outline, a list of nodes in the outline shape.
+ * @param {?string} id
+ *   The row's id.
+ *
+ * @return {?object}
+ *   The next state.
  */
 export const reveal = (folds, outline, id) =>
   written(

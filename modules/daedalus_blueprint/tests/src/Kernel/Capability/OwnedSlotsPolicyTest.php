@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_blueprint\Kernel\Capability;
 
 use Drupal\Component\Uuid\Php as PhpUuid;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\daedalus_blueprint\Capability\Policy\OwnershipPolicy;
 use Drupal\daedalus_blueprint\Capability\Showing;
 use Drupal\daedalus_blueprint\Capability\VerdictStamper;
@@ -24,6 +25,7 @@ use Drupal\daedalus_blueprint_library\Entity\Blueprint;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -313,13 +315,27 @@ class OwnedSlotsPolicyTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * The raw section list of a page's override field, as stored.
+   *
+   * @return \Drupal\layout_builder\Section[]
+   *   The sections, the blank marker included (the host's reads hide it).
+   */
+  protected static function rawSections(FieldableEntityInterface $entity): array {
+    $list = $entity->get(ContentHost::LAYOUT_FIELD);
+    assert($list instanceof SectionListInterface);
+    return $list->getSections();
+  }
+
+  /**
    * The locked page owns a document and is rendered inside the template.
    */
   public function testLockedPageOwnsDocumentInsideTemplate(): void {
     $resolver = $this->container->get('daedalus_blueprint.host_resolver');
     [$host, $section_uuid] = $this->lockedPageWithOwnSection();
 
-    $this->assertTrue($host->entity()->hasField(ContentHost::LAYOUT_FIELD), 'daedalus_layout added the override field to the locked bundle.');
+    $entity = $host->entity();
+    assert($entity instanceof FieldableEntityInterface);
+    $this->assertTrue($entity->hasField(ContentHost::LAYOUT_FIELD), 'daedalus_layout added the override field to the locked bundle.');
     $this->assertTrue($host->hasDocument(), 'The page owns a document.');
     $owner = $resolver->foreignOwner($host);
     $this->assertInstanceOf(DisplayHost::class, $owner, 'And is rendered inside its template, whose host owns the rest.');
@@ -337,7 +353,9 @@ class OwnedSlotsPolicyTest extends BlueprintKernelTestBase {
     $this->assertSame([], $empty->ownSections(), 'An empty locked page is not seeded from the template.');
     $this->assertSame([$this->templateSection], array_map($uuid_of, $empty->sections()));
     $empty->styleMap();
-    $this->assertSame([], $empty->entity()->get(ContentHost::LAYOUT_FIELD)->getSections(), 'Neither document door seeded the field.');
+    $empty_entity = $empty->entity();
+    assert($empty_entity instanceof FieldableEntityInterface);
+    $this->assertSame([], self::rawSections($empty_entity), 'Neither document door seeded the field.');
     $this->assertNotNull($resolver->foreignOwner($empty));
 
     // An overridable bundle's page owns the whole document it renders.
@@ -705,13 +723,14 @@ class OwnedSlotsPolicyTest extends BlueprintKernelTestBase {
   public function testLockedPageReservedStartsFillNothing(): void {
     $start = $this->container->get('daedalus_blueprint.page_start');
     $entity = $this->entityTypeManager->getStorage('entity_test_rev')->create(['name' => 'New']);
+    assert($entity instanceof FieldableEntityInterface);
     $host = $this->host($entity);
     $this->assertTrue($start->takesStart($host), 'A page rendered inside its template carries a document: the slots it fills.');
     $this->assertFalse($start->blankOffered($host), 'An empty page is not its own to open.');
     $this->assertTrue($start->apply($host, PageStart::TEMPLATE)->isSuccess(), 'Template is the default start its pages get.');
-    $this->assertSame([], $entity->get(ContentHost::LAYOUT_FIELD)->getSections());
+    $this->assertSame([], self::rawSections($entity));
     $this->assertTrue($start->apply($host, PageStart::BLANK)->isSuccess(), 'Blank is accepted and fills nothing.');
-    $this->assertSame([], $entity->get(ContentHost::LAYOUT_FIELD)->getSections(), 'No marker: a locked page\'s field is its fills or nothing.');
+    $this->assertSame([], self::rawSections($entity), 'No marker: a locked page\'s field is its fills or nothing.');
     $own = $this->host($this->entityTypeManager->getStorage('entity_test')->create(['name' => 'Own']));
     $this->assertTrue($start->takesStart($own), 'An overridable bundle\'s page takes a start.');
     $this->assertTrue($start->blankOffered($own), 'And an empty page of its own.');

@@ -4,13 +4,13 @@ import { normalizeValue, propertyStops } from '../../widget-values.js';
 import {
   discreteScrubMove,
   discreteScrubStart,
+  displayAt,
   surfaceFor,
   valueOrient,
   valueSpaceFor,
   wearing,
 } from '../../value-space.js';
 import { tokenItems } from '../../provenance-model.js';
-import { displayAt } from '../../value-space.js';
 import { stackAt } from '../../style-stack.js';
 import { ownAtPose } from '../../controls.js';
 import { Face } from '../../face.js';
@@ -163,6 +163,70 @@ import { useRowMenu } from './use-row-menu.js';
  * construction, so it offers none). Without `stack` the row has no
  * origin story: the field's menu is its tokens alone, the native menu
  * rides through elsewhere, and every null pick is refused.
+ *
+ * @param {object} props
+ *   The row's props.
+ * @param {?object} props.guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide), the
+ *   value space's first source; null without one.
+ * @param {object} props.materials
+ *   The materials roster (the painted stops, the worn faces).
+ * @param {string} [props.condition]
+ *   The editing compound; 'default' when unset.
+ * @param {string} props.label
+ *   The row label (the scrub label on the field surface).
+ * @param {string} props.property
+ *   The CSS property the row edits.
+ * @param {?string} props.value
+ *   The shown value: the winner's at the pose, or a pick widget's
+ *   draft-layered value.
+ * @param {object} [props.definition]
+ *   The property's definition (model.propertyDefinitions[property]).
+ * @param {object} [props.constraints]
+ *   The property's constraints (model.constraints[property]).
+ * @param {?object} [props.stack]
+ *   The bound target's layer stack for the origin story; null for none.
+ * @param {?object} [props.read]
+ *   The property's read at the pose; taken from the stack when null.
+ * @param {?string} [props.placeholder]
+ *   A value attributed from outside the stack (see above), raw.
+ * @param {?Array} [props.fallback]
+ *   An axis-relative built-in stop table standing in for the
+ *   property's own (see above).
+ * @param {?object} [props.icons]
+ *   The chip icon map keyed by stop id.
+ * @param {boolean} [props.disabled]
+ *   Whether the surface renders inert.
+ * @param {?string} [props.disabledTitle]
+ *   The disabled reason, on the surface's hover title.
+ * @param {?object} [props.state]
+ *   A pick widget's own lit-state mapping over the stop table (see
+ *   above); null to map the value here.
+ * @param {?Function} [props.faceStyle]
+ *   (stop) => inline style for a text face, or null for the panel's.
+ * @param {?Function} [props.onPick]
+ *   A pick widget's own gesture, (stop | null) => void; null when the
+ *   row is the gesture.
+ * @param {Function} props.onPreview
+ *   The widget contract's preview handler (properties → void).
+ * @param {Function} props.onRelease
+ *   The widget contract's release handler (properties → void).
+ * @param {Function} props.onCommit
+ *   The widget contract's commit handler (properties → Promise).
+ * @param {?Function} [props.onPickCondition]
+ *   Drives the canvas to a condition (the menu's doorways).
+ * @param {?Function} [props.onOpenDocument]
+ *   Opens a variant's document (the menu's doorway).
+ * @param {object} [props.law]
+ *   The law gate ({canView}, drupalSettings.daedalusStylish.law), for
+ *   the origin's declared-tier doorway.
+ * @param {?object} [props.source]
+ *   The state source (see above); null in the satellite.
+ * @param {?{key: string, selector: ?string}} [props.highlight]
+ *   The row's canvas address (see above); null claims nothing.
+ *
+ * @return {?object}
+ *   The row element, or null while the row hides.
  */
 export const ChoiceRow = ({
   guide,
@@ -219,7 +283,8 @@ export const ChoiceRow = ({
   // The row's read: the winner at the pose, the layers beneath, and
   // what the editable layer says (the Unset verb's test).
   const read =
-    readProp ?? (stack ? stackAt(stack, property, condition, conditions) : null);
+    readProp ??
+    (stack ? stackAt(stack, property, condition, conditions) : null);
   const unsettable = ownAtPose(read, condition);
 
   // Every hook runs on every render, before the hide rule can return and
@@ -507,12 +572,16 @@ export const ChoiceRow = ({
               onPointerCancel={onScrubUp}
             >
               <Mark origin={origin} slide={live} />
-              <span className="daedalus-stylish-inspector__widget-axis">{label}</span>
+              <span className="daedalus-stylish-inspector__widget-axis">
+                {label}
+              </span>
             </span>
           ) : (
             <Fragment>
               <Mark origin={origin} />
-              <span className="daedalus-stylish-inspector__widget-axis">{label}</span>
+              <span className="daedalus-stylish-inspector__widget-axis">
+                {label}
+              </span>
             </Fragment>
           )}
         </span>
@@ -523,7 +592,9 @@ export const ChoiceRow = ({
               state={lit}
               custom={lit.value}
               placeholder={
-                attributedStop ? { id: attributedStop.id, value: attributed } : null
+                attributedStop
+                  ? { id: attributedStop.id, value: attributed }
+                  : null
               }
               icons={icons}
               disabled={disabled}
@@ -557,6 +628,35 @@ export const ChoiceRow = ({
  * lit stop's face and handed on to the listbox. A hook, not a
  * component, for the two-slot reason: preact renders one subtree per
  * component, and the row places the slots apart.
+ *
+ * @param {object} options
+ *   The well's options.
+ * @param {Array} options.offer
+ *   The offer entries (choiceStops over the space).
+ * @param {object} options.lit
+ *   The lit state over the offer (choiceState): `selected` is the lit
+ *   stop's id, `value` the shown value.
+ * @param {boolean} options.painted
+ *   Whether the stops paint (a color or image space): the palette grid
+ *   instead of the listbox.
+ * @param {boolean} options.closed
+ *   Whether the space is closed (the custom face's wording).
+ * @param {string} options.label
+ *   The well's accessible name.
+ * @param {boolean} options.disabled
+ *   Whether the face button renders inert.
+ * @param {?string} options.title
+ *   The button's title; the face's own sentence when undefined.
+ * @param {boolean} options.chunk
+ *   Whether the ka-chunk pulse class is on (a scrub crossed a detent).
+ * @param {?Function} options.faceStyle
+ *   (stop) => inline style for a text face, or null.
+ * @param {Function} options.onPick
+ *   Called with the picked stop (the lit one for an unset).
+ *
+ * @return {{open: boolean, well: object, popover: ?object}}
+ *   Whether the popover is open, the face button and the portaled
+ *   popover (null while closed).
  */
 const useChoiceWell = ({
   offer,
@@ -652,7 +752,10 @@ const useChoiceWell = ({
           –
         </span>
       )}
-      <span className="daedalus-stylish-choice-well__chevron" aria-hidden="true">
+      <span
+        className="daedalus-stylish-choice-well__chevron"
+        aria-hidden="true"
+      >
         ▾
       </span>
     </button>
@@ -696,6 +799,24 @@ const useChoiceWell = ({
  * `faceStyle(stop)` is an inline style the option itself wears (the
  * Font row's option set in the stack it names), null for the panel's
  * own type.
+ *
+ * @param {object} props
+ *   The listbox's props.
+ * @param {Array} props.offer
+ *   The offer entries, one row each.
+ * @param {?string} props.selected
+ *   The lit stop's id, or null for none.
+ * @param {string} props.label
+ *   The listbox's accessible name.
+ * @param {?Function} [props.glyph]
+ *   (stop) => vnode drawn before the row's text, or null.
+ * @param {?Function} [props.faceStyle]
+ *   (stop) => inline style the option wears, or null.
+ * @param {Function} props.onPick
+ *   Called with the picked stop (the lit one for an unset).
+ *
+ * @return {object}
+ *   The listbox element.
  */
 export const ChoiceList = ({
   offer,
@@ -760,11 +881,16 @@ export const ChoiceList = ({
             onClick={() => onPick(active ? null : stop)}
             onFocus={() => setFocusId(stop.id)}
           >
-            <span className="daedalus-stylish-choice-list__check" aria-hidden="true">
+            <span
+              className="daedalus-stylish-choice-list__check"
+              aria-hidden="true"
+            >
               {active ? '✓' : ''}
             </span>
             {glyph !== null && glyph(stop)}
-            <span className="daedalus-stylish-choice-list__label">{stop.text}</span>
+            <span className="daedalus-stylish-choice-list__label">
+              {stop.text}
+            </span>
           </button>
         );
       })}

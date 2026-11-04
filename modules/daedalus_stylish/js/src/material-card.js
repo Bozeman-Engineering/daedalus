@@ -104,6 +104,7 @@ const WORDS = {
  *   A skinSections() row.
  *
  * @return {string}
+ *   The summary text.
  */
 export const rowSummary = (row) => {
   if (row.kind === 'animation') {
@@ -132,6 +133,7 @@ export const rowSummary = (row) => {
  *   materialCardGestures().
  *
  * @return {?string}
+ *   The sentence, or null for the site's own material.
  */
 export const originSentence = (row, management, gestures) => {
   if (!row.shipped) {
@@ -156,11 +158,14 @@ export const originSentence = (row, management, gestures) => {
  * `locks`), in the card's words.
  *
  * @param {'rename'|'delete'} action
+ *   The disabled gesture.
  * @param {?string} lock
  *   'shipped' or 'in-use'.
  * @param {?object} management
+ *   The usage read (its provider names the shipping module), or null.
  *
  * @return {?string}
+ *   The reason, or null when the gesture is not locked.
  */
 export const lockReason = (action, lock, management) => {
   if (lock === null || lock === undefined) {
@@ -185,9 +190,12 @@ export const lockReason = (action, lock, management) => {
  * The use line: the live count in the kind's words.
  *
  * @param {string} kind
+ *   The material kind ('token', 'animation' or 'font').
  * @param {?object} management
+ *   The usage read, or null while it is in flight.
  *
  * @return {string}
+ *   The use line.
  */
 export const usageText = (kind, management) => {
   if (management === null) {
@@ -202,12 +210,15 @@ export const usageText = (kind, management) => {
  * The row: preview, name, value summary. A button (the card toggle).
  *
  * @param {object} props
+ *   The row's props.
  * @param {object} props.row
  *   A skinSections() row.
  * @param {boolean} props.open
+ *   Whether the row's card is open.
  * @param {string} [props.schemeLabel]
  *   The guide's scheme axis label (the dark half's tooltip).
  * @param {Function} props.onToggle
+ *   The card toggle, called with the click event.
  */
 export const MaterialRow = ({ row, open, schemeLabel = null, onToggle }) => (
   <button
@@ -228,7 +239,11 @@ export const MaterialRow = ({ row, open, schemeLabel = null, onToggle }) => (
     )}
     <span
       className="daedalus-stylish-skin__row-name"
-      style={row.kind === 'font' ? { fontFamily: row.spelling ?? undefined } : undefined}
+      style={
+        row.kind === 'font'
+          ? { fontFamily: row.spelling ?? undefined }
+          : undefined
+      }
     >
       {row.name}
     </span>
@@ -250,13 +265,17 @@ export const MaterialRow = ({ row, open, schemeLabel = null, onToggle }) => (
  * The card. See the module docblock.
  *
  * @param {object} props
+ *   The card's props.
  * @param {object} props.row
  *   The open row (skinSections()), its record the store's.
  * @param {object} props.guide
+ *   The style guide payload.
  * @param {object} props.materials
+ *   The materials roster.
  * @param {object} props.config
  *   The skin material gates (drupalSettings.daedalusStylish.skinMaterials).
  * @param {object} props.source
+ *   The state source (the ops and the usage read).
  * @param {Function} props.onCard
  *   Moves the open card: the renamed id, or null to close.
  * @param {Function} props.onCopy
@@ -303,9 +322,15 @@ export const MaterialCard = ({
   const offered = record.offered !== false;
 
   // The token's editor by its scale's shape, and its pair split.
-  const Editor = kind === 'token' ? tokenEditor(guide, record.group ?? null, row.shape) : null;
+  const Editor =
+    kind === 'token'
+      ? tokenEditor(guide, record.group ?? null, row.shape)
+      : null;
   const pair = kind === 'token' ? editablePair(guide, record.value) : null;
-  const faces = kind === 'font' && Array.isArray(record.value?.faces) ? record.value.faces : [];
+  const faces =
+    kind === 'font' && Array.isArray(record.value?.faces)
+      ? record.value.faces
+      : [];
 
   useEffect(() => {
     if (!canManage) {
@@ -334,7 +359,11 @@ export const MaterialCard = ({
     previewed.current = true;
     source.previewMaterial(
       record,
-      mergedPair(record.value, { draft: next, darkDraft: nextDark, scheme: pair.scheme }),
+      mergedPair(record.value, {
+        draft: next,
+        darkDraft: nextDark,
+        scheme: pair.scheme,
+      }),
     );
   };
 
@@ -399,9 +428,12 @@ export const MaterialCard = ({
           setEditing(false);
           source.notify?.(
             'status',
-            Drupal.t('Updated the faces of !id; every stack naming it follows.', {
-              '!id': reference,
-            }),
+            Drupal.t(
+              'Updated the faces of !id; every stack naming it follows.',
+              {
+                '!id': reference,
+              },
+            ),
           );
           return null;
         })
@@ -461,7 +493,7 @@ export const MaterialCard = ({
         const confirmed = await Drupal.Daedalus.dialog.confirm({
           title: Drupal.t('Revert to defaults'),
           message: Drupal.t(
-            'Drop the site\'s changes to !id and use what its module ships?',
+            "Drop the site's changes to !id and use what its module ships?",
             { '!id': reference },
           ),
           detail:
@@ -483,7 +515,9 @@ export const MaterialCard = ({
           source.applyResponse(response);
           source.notify?.(
             'status',
-            Drupal.t('!id wears the shipped record again.', { '!id': reference }),
+            Drupal.t('!id wears the shipped record again.', {
+              '!id': reference,
+            }),
           );
           return null;
         });
@@ -553,13 +587,16 @@ export const MaterialCard = ({
       return;
     }
     if (kind === 'font') {
-      setFaceDrafts(faces.map((face, index) => storedFaceDraft(face, index + 1)));
+      setFaceDrafts(
+        faces.map((face, index) => storedFaceDraft(face, index + 1)),
+      );
     }
     setEditing(true);
   };
   const editingNow = kind === 'token' ? valueDraft !== null : editing;
   const origin = originSentence(row, management, gestures);
-  const facesHold = kind === 'font' ? facesBlocked(faceDrafts, uploading) : null;
+  const facesHold =
+    kind === 'font' ? facesBlocked(faceDrafts, uploading) : null;
 
   return (
     <div
@@ -591,7 +628,11 @@ export const MaterialCard = ({
         ) : (
           <span
             className="daedalus-stylish-library-card__label"
-            style={kind === 'font' ? { fontFamily: row.spelling ?? undefined } : undefined}
+            style={
+              kind === 'font'
+                ? { fontFamily: row.spelling ?? undefined }
+                : undefined
+            }
           >
             {row.name}
           </span>
@@ -611,7 +652,7 @@ export const MaterialCard = ({
       {!gestures.editValue && (
         <div className="daedalus-stylish-material-card__reason">
           {Drupal.t(
-            "Your account cannot update skin materials; the skin is read-only here.",
+            'Your account cannot update skin materials; the skin is read-only here.',
           )}
         </div>
       )}
@@ -848,7 +889,10 @@ export const MaterialCard = ({
                 type="button"
                 className="daedalus-ui-pill-button daedalus-stylish-library-card__action daedalus-stylish-library-card__action--delete daedalus-stylish-material-card__delete"
                 disabled={busy || !gestures.delete}
-                title={lockReason('delete', gestures.locks.delete, management) ?? undefined}
+                title={
+                  lockReason('delete', gestures.locks.delete, management) ??
+                  undefined
+                }
                 onClick={destroy}
               >
                 {Drupal.t('Delete…')}

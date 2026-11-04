@@ -16,13 +16,13 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
  * Stashes a pending-generation batch for the CURRENT user.
  *
  * In production, PendingTargetCollector::flush() writes the batch to the
- * 'daedalus_ai_deferred' private tempstore during the chat request, so the batch
- * is owned by the user the browser is logged in as. A behavior test cannot
- * reach that store from the test runner (the runner process is not the
+ * 'daedalus_ai_deferred' private tempstore during the chat request, so the
+ * batch is owned by the user the browser is logged in as. A behavior test
+ * cannot reach that store from the test runner (the runner process is not the
  * browser's session/user), so this route lets the BROWSER stash the batch
- * itself, landing it under the same owner the DeferredProcessingController
- * will read it back for. The payload mirrors flush()'s storage shape
- * exactly: {type: "...", jobs: [{media_uuid: "...", target: ...}, ...]}.
+ * itself, landing it under the same owner the DeferredProcessingController will
+ * read it back for. The payload mirrors flush()'s storage shape exactly: {type:
+ * "...", jobs: [{media_uuid: "...", target: ...}, ...]}.
  */
 class StashDeferredBatch extends ControllerBase {
 

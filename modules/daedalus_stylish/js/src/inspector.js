@@ -40,7 +40,6 @@ import {
   axisLabel,
   axisVocabulary,
   captureScope,
-  entryRefs,
   findVariant,
   locked,
   saveStyles,
@@ -91,7 +90,11 @@ import {
 import { formatSlotKey, rootKindForScope } from './slot-key.js';
 import { createMatcher } from './selector-matcher.js';
 import { Portal } from './popover.js';
-import { vectorCondition, conditionPose, literalClauses } from './editing-at.js';
+import {
+  vectorCondition,
+  conditionPose,
+  literalClauses,
+} from './editing-at.js';
 import {
   conditionText,
   originOf,
@@ -152,6 +155,12 @@ import {
  * Whether a property row is dimension-shaped: the DimensionField's
  * territory, whatever the constraints say (the field's value space
  * absorbs a closing scale/allowed vocabulary as its closed render).
+ *
+ * @param {object} row
+ *   A property row (style-guide.js buildSections).
+ *
+ * @return {boolean}
+ *   True for a dimension or number definition.
  */
 const dimensionRow = (row) =>
   row.definition?.type === 'dimension' || row.definition?.type === 'number';
@@ -187,6 +196,12 @@ const dimensionRow = (row) =>
  *   server accepts on every keyword property.
  * The server validates every commit regardless, so client shaping is UX,
  * not enforcement.
+ *
+ * @param {object} row
+ *   A property row (style-guide.js buildSections).
+ *
+ * @return {{kind: string}}
+ *   The editor shape: dimension, media, color or text.
  */
 const controlFor = (row) => {
   if (dimensionRow(row)) {
@@ -266,6 +281,54 @@ const controlFor = (row) => {
  * properties as one group. The boundary is here; nothing under this
  * seam hands a pair to a widget, and this row is never ported to the
  * object shape.
+ *
+ * @param {object} props
+ *   The row's props.
+ * @param {object} props.row
+ *   The property row (property, label, definition).
+ * @param {object} props.stack
+ *   The styling target's style stack (style-stack.js).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials store, for the value space.
+ * @param {string} props.condition
+ *   The posed condition.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {string} props.highlightKey
+ *   The selectable key the row's canvas highlight tints.
+ * @param {?string} props.highlightSelector
+ *   The part selector under that key, or null for the element itself.
+ * @param {?{canPick: boolean, onPick: Function}} props.media
+ *   The media library door: whether the row may pick, and the picker
+ *   opener taking the property.
+ * @param {?object} [props.skinMaterials]
+ *   The skin's material grants (canCreate gates save-as-token).
+ * @param {?object} [props.sheet]
+ *   The editing session's document context (stage, baselineOf,
+ *   onWinner), or null outside a session.
+ * @param {?object} [props.pendingMark]
+ *   The staged line at the editing compound, or null.
+ * @param {boolean} [props.disabled]
+ *   Whether the write address withholds the row.
+ * @param {?string} [props.disabledTitle]
+ *   The reason, as the disabled row's title.
+ * @param {?Function} [props.onOpenDocument]
+ *   Opens a document reference (the menu's doorways).
+ * @param {object} [props.law]
+ *   The law projection, for the value space's constraints.
+ * @param {Function} props.onPreview
+ *   `(property, value)`: previews on the canvas.
+ * @param {Function} props.onRelease
+ *   `(property, value)`: releases the preview.
+ * @param {Function} props.onCommit
+ *   `(property, value)`: commits through the op queue.
+ * @param {Function} props.onPickCondition
+ *   Drives the canvas to a condition (the menu's doorway).
+ *
+ * @return {object}
+ *   The rendered row.
  */
 const PropertyWidget = ({
   row,
@@ -625,7 +688,9 @@ const PropertyWidget = ({
   return (
     <div
       className={classes}
-      style={origin.color ? { '--daedalus-stylish-origin': origin.color } : undefined}
+      style={
+        origin.color ? { '--daedalus-stylish-origin': origin.color } : undefined
+      }
       onContextMenu={onRowContextMenu}
       {...highlight}
     >
@@ -639,7 +704,9 @@ const PropertyWidget = ({
         {control.kind !== 'dimension' && (
           <span className="daedalus-stylish-inspector__widget-label">
             <Mark origin={origin} />
-            <span className="daedalus-stylish-inspector__property-label">{row.label}</span>
+            <span className="daedalus-stylish-inspector__property-label">
+              {row.label}
+            </span>
           </span>
         )}
         {control.kind === 'dimension' && (
@@ -683,7 +750,11 @@ const PropertyWidget = ({
                   {...mediaPalette.triggerProps}
                   type="button"
                   className="daedalus-stylish-inspector__palette-picker"
-                  title={disabled ? (disabledTitle ?? undefined) : Drupal.t('Insert a palette value')}
+                  title={
+                    disabled
+                      ? (disabledTitle ?? undefined)
+                      : Drupal.t('Insert a palette value')
+                  }
                   disabled={disabled}
                 >
                   {'{}'}
@@ -700,7 +771,9 @@ const PropertyWidget = ({
                   className={`daedalus-stylish-inspector__gradient-opener${gradientChip.expanded ? ' daedalus-stylish-inspector__gradient-opener--open' : ''}`}
                   title={
                     gradientToken
-                      ? Drupal.t('Edit the gradient token this value references')
+                      ? Drupal.t(
+                          'Edit the gradient token this value references',
+                        )
                       : Drupal.t('Build a gradient')
                   }
                   aria-expanded={gradientChip.expanded}
@@ -721,12 +794,15 @@ const PropertyWidget = ({
                   library URL the chip stays away and the row degrades
                   honestly to free text; a closed space (stops only) never
                   offers a media pick it would reject. */}
-              {control.kind === 'media' && !closed && !disabled && media?.canPick && (
-                <MediaButton
-                  thumbnail={mediaThumbnail}
-                  onClick={() => media.onPick(row.property)}
-                />
-              )}
+              {control.kind === 'media' &&
+                !closed &&
+                !disabled &&
+                media?.canPick && (
+                  <MediaButton
+                    thumbnail={mediaThumbnail}
+                    onClick={() => media.onPick(row.property)}
+                  />
+                )}
               {control.kind === 'color' && colorField.field}
               {control.kind !== 'color' && (
                 /* The text-shape input (widgets/lib/text-field.js, the
@@ -832,6 +908,52 @@ const PropertyWidget = ({
  * address cannot take: each renders DISABLED with the reason as its
  * title, the row itself unchanged (the value still reads from this
  * element's stack), the same posture the basic widgets take.
+ *
+ * @param {object} props
+ *   The sections' props.
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials store.
+ * @param {Array<object>} props.sections
+ *   The roster (style-guide.js buildSections).
+ * @param {object} props.stack
+ *   The styling target's style stack.
+ * @param {string} props.condition
+ *   The posed condition.
+ * @param {object} props.source
+ *   The state source.
+ * @param {string} props.highlightKey
+ *   The selectable key the rows' canvas highlights tint.
+ * @param {?string} props.highlightSelector
+ *   The part selector under that key, or null.
+ * @param {?{canPick: boolean, onPick: Function}} props.media
+ *   The media library door.
+ * @param {?object} [props.skinMaterials]
+ *   The skin's material grants.
+ * @param {?object} [props.sheet]
+ *   The editing session's document context, or null.
+ * @param {?object} [props.pending]
+ *   The slot's pending table (condition → property → line), or null.
+ * @param {?Object<string, string>} [props.withheld]
+ *   Property → reason for the rows the write address cannot take.
+ * @param {?Element} [props.head]
+ *   The inspector's pinned head slot the list head portals into.
+ * @param {?Function} [props.onOpenDocument]
+ *   Opens a document reference.
+ * @param {object} [props.law]
+ *   The law projection.
+ * @param {Function} props.onPreview
+ *   `(property, value)`: previews on the canvas.
+ * @param {Function} props.onRelease
+ *   `(property, value)`: releases the preview.
+ * @param {Function} props.onCommit
+ *   `(property, value)`: commits through the op queue.
+ * @param {Function} props.onPickCondition
+ *   Drives the canvas to a condition.
+ *
+ * @return {object}
+ *   The rendered sections.
  */
 const Sections = ({
   guide,
@@ -1057,6 +1179,38 @@ const Sections = ({
  * (`linked: false` on the session; one-way, since re-linking is just
  * discarding nothing: the Design system place's Assign gesture covers
  * regret).
+ *
+ * @param {object} props
+ *   The frame's props.
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.library
+ *   The variant library.
+ * @param {object} props.session
+ *   The editing session (session-model.js).
+ * @param {?object} props.editing
+ *   The document being edited, or null in the creating posture.
+ * @param {?object} props.entry
+ *   The selection's variant entry, for the switcher roster.
+ * @param {object} props.axes
+ *   The scope's axes.
+ * @param {string[]} [props.vocabulary]
+ *   The axis names a draft may pick from.
+ * @param {?number} [props.usages]
+ *   The session's impact count, or null while unknown.
+ * @param {?object} [props.consent]
+ *   The mint-time consent facts (the blueprint the draft belongs to).
+ * @param {Function} props.onSession
+ *   Writes the next session.
+ * @param {Function} props.onPark
+ *   Parks the session.
+ * @param {Function} props.onSwitch
+ *   Switches to another worn document by its id.
+ * @param {*} props.children
+ *   The body: the existing document machinery.
+ *
+ * @return {object}
+ *   The rendered frame.
  */
 const SessionFrame = ({
   guide,
@@ -1159,7 +1313,9 @@ const SessionFrame = ({
                   ))}
                 </select>
               ) : (
-                <span className="daedalus-stylish-session__label">{header.label}</span>
+                <span className="daedalus-stylish-session__label">
+                  {header.label}
+                </span>
               )}
             </span>
           )}
@@ -1234,7 +1390,9 @@ const SessionFrame = ({
                 "The captured element sits inside this blueprint's placement, so the new variant becomes one of its switchable looks, offered on its placements only.",
               )}
             >
-              {Drupal.t('Belongs to !blueprint', { '!blueprint': consent.label })}
+              {Drupal.t('Belongs to !blueprint', {
+                '!blueprint': consent.label,
+              })}
             </span>
             <button
               type="button"
@@ -1256,6 +1414,28 @@ const SessionFrame = ({
 };
 
 /**
+ * The no-selection empty state, one for every posture that needs a
+ * selection: the widget modes' body, and code mode's Element and
+ * Subtree scopes (an anchored scope without an anchor is honestly
+ * empty; it never falls through to the page).
+ *
+ * @param {object} props
+ *   The props.
+ * @param {string} [props.className]
+ *   An extra class for the posture's placement.
+ *
+ * @return {object}
+ *   The rendered empty state.
+ */
+const SelectAnElement = ({ className = '' }) => (
+  <div
+    className={`daedalus-stylish-inspector__empty${className ? ` ${className}` : ''}`}
+  >
+    {Drupal.t('Select an element to style it.')}
+  </div>
+);
+
+/**
  * The parked session's resume chip: the suspended mode as a visible
  * object.
  *
@@ -1266,19 +1446,19 @@ const SessionFrame = ({
  * thing you can point at. Discard here is the explicit gesture, the
  * bar's own Discard in chip form: no prompt (prompts belong to the
  * IMPLICIT leave events).
+ *
+ * @param {object} props
+ *   The chip's props.
+ * @param {{label: string, count: number}} props.chip
+ *   The parked session's identity and staged count.
+ * @param {Function} props.onResume
+ *   Reopens the session where it parked.
+ * @param {Function} props.onDiscard
+ *   Discards the parked session.
+ *
+ * @return {object}
+ *   The rendered chip.
  */
-/**
- * The no-selection empty state, one for every posture that needs a
- * selection: the widget modes' body, and code mode's Element and
- * Subtree scopes (an anchored scope without an anchor is honestly
- * empty; it never falls through to the page).
- */
-const SelectAnElement = ({ className = '' }) => (
-  <div className={`daedalus-stylish-inspector__empty${className ? ` ${className}` : ''}`}>
-    {Drupal.t('Select an element to style it.')}
-  </div>
-);
-
 const ParkedChip = ({ chip, onResume, onDiscard }) => (
   <div className="daedalus-stylish-parked">
     <span className="daedalus-stylish-parked__label">
@@ -1323,6 +1503,28 @@ const ParkedChip = ({ chip, onResume, onDiscard }) => (
  * every render, so element edits made while the draft is open stay
  * captured; the Push/Discard bar is the one commit surface — Save variant
  * creates the document and wears it.
+ *
+ * @param {object} props
+ *   The draft's props.
+ * @param {object} props.source
+ *   The state source (getTree for the layout).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {?object} props.styleMap
+ *   The page's style map the capture reads.
+ * @param {object} props.variants
+ *   The variant library (bound as `library`).
+ * @param {object} props.blockTypes
+ *   Component uuid → inline block type.
+ * @param {object} props.sectionLayouts
+ *   Section uuid → layout id.
+ * @param {object} props.session
+ *   The creating session (anchor, axis, dismissed).
+ * @param {Function} props.onSession
+ *   Writes the next session.
+ *
+ * @return {object}
+ *   The rendered draft.
  */
 const DraftDocument = ({
   source,
@@ -1416,11 +1618,18 @@ const DraftDocument = ({
         </div>
       ) : (
         rows.map((group) => (
-          <div key={group.relative || 'root'} className="daedalus-stylish-draft__group">
+          <div
+            key={group.relative || 'root'}
+            className="daedalus-stylish-draft__group"
+          >
             <div className="daedalus-stylish-document__header">
-              <span className="daedalus-stylish-document__kind">{kindText(group)}</span>
+              <span className="daedalus-stylish-document__kind">
+                {kindText(group)}
+              </span>
               {group.detail && (
-                <code className="daedalus-stylish-document__detail">{group.detail}</code>
+                <code className="daedalus-stylish-document__detail">
+                  {group.detail}
+                </code>
               )}
               {group.kind === null && (
                 <code className="daedalus-stylish-document__detail">
@@ -1428,7 +1637,9 @@ const DraftDocument = ({
                 </code>
               )}
               {group.part !== null && (
-                <span className="daedalus-stylish-draft__part">{partText(group)}</span>
+                <span className="daedalus-stylish-draft__part">
+                  {partText(group)}
+                </span>
               )}
             </div>
             {group.refs.map((ref) => (
@@ -1495,6 +1706,7 @@ const DraftDocument = ({
  * them directly, the satellite source relays them as intents.
  *
  * @param {object} props
+ *   The inspector's props.
  * @param {object} props.source
  *   The state source (see sources/leader-source.js for the interface).
  * @param {object} [props.guide]
@@ -1566,8 +1778,7 @@ export const Inspector = ({
     return unsubscribe;
   }, [source]);
   const guide = useMemo(
-    () =>
-      skinDefaults === null ? bootGuide : { ...bootGuide, skinDefaults },
+    () => (skinDefaults === null ? bootGuide : { ...bootGuide, skinDefaults }),
     [bootGuide, skinDefaults],
   );
   const [selected, setSelected] = useState(source.getSelected());
@@ -2139,9 +2350,7 @@ export const Inspector = ({
     setSpineAddress(source.getAddress());
     setVector(source.getCanvasVector?.() ?? null);
     setForceState(source.getForceState?.() ?? null);
-    setPlaceValue(
-      source.getPlace?.() ?? { place: 'styles', editing: null },
-    );
+    setPlaceValue(source.getPlace?.() ?? { place: 'styles', editing: null });
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [source]);
 
@@ -2434,8 +2643,8 @@ export const Inspector = ({
             title: Drupal.t('Pending skin changes'),
             message: Drupal.formatPlural(
               sessionCount(session),
-              'Push 1 pending change to the skin\'s !scope default?',
-              'Push @count pending changes to the skin\'s !scope default?',
+              "Push 1 pending change to the skin's !scope default?",
+              "Push @count pending changes to the skin's !scope default?",
               { '!scope': skinScopeLabel(session.scope, guide) },
             ),
             detail: Drupal.t('This restyles every !scope site-wide.', {
@@ -2445,50 +2654,50 @@ export const Inspector = ({
             cancelLabel: Drupal.t('Discard'),
           })
         : session.kind === 'update'
-        ? // The loud count rides the prompt too: the impact is on screen
-          // before the choice, even when the bar has scrolled out of mind.
-          fetchUsage(session.reference)
-            .catch(() => ({ usages: null }))
-            .then(({ usages }) => {
-              const label =
-                findVariant(library, session.reference)?.label ??
-                session.reference;
-              return Drupal.Daedalus.dialog.confirm({
-                title: Drupal.t('Pending variant changes'),
-                message: Drupal.formatPlural(
-                  sessionCount(session),
-                  'Push 1 pending change to "!label"?',
-                  'Push @count pending changes to "!label"?',
-                  { '!label': label },
-                ),
-                detail:
-                  usages === null
-                    ? Drupal.t(
-                        'Every piece of content wearing the variant updates.',
-                      )
-                    : // The mode's unit is "places" (the blast line's word);
-                      // the Materials card keeps the catalog's
-                      // "pieces of content".
-                      Drupal.formatPlural(
-                        usages,
-                        'This restyles 1 place site-wide.',
-                        'This restyles @count places site-wide.',
-                      ),
-                confirmLabel: Drupal.t('Push'),
-                cancelLabel: Drupal.t('Discard'),
-              });
-            })
-        : Drupal.Daedalus.dialog.confirm({
-            title: Drupal.t('Unsaved variant'),
-            message: Drupal.t('Save the captured styles as "!label"?', {
-              '!label': session.label.trim(),
-            }),
-            detail: Drupal.t(
-              'Discarding leaves every element exactly as it looks.',
-            ),
-            confirmLabel: Drupal.t('Save variant'),
-            cancelLabel: Drupal.t('Discard'),
-          });
+          ? // The loud count rides the prompt too: the impact is on screen
+            // before the choice, even when the bar has scrolled out of mind.
+            fetchUsage(session.reference)
+              .catch(() => ({ usages: null }))
+              .then(({ usages }) => {
+                const label =
+                  findVariant(library, session.reference)?.label ??
+                  session.reference;
+                return Drupal.Daedalus.dialog.confirm({
+                  title: Drupal.t('Pending variant changes'),
+                  message: Drupal.formatPlural(
+                    sessionCount(session),
+                    'Push 1 pending change to "!label"?',
+                    'Push @count pending changes to "!label"?',
+                    { '!label': label },
+                  ),
+                  detail:
+                    usages === null
+                      ? Drupal.t(
+                          'Every piece of content wearing the variant updates.',
+                        )
+                      : // The mode's unit is "places" (the blast line's word);
+                        // the Materials card keeps the catalog's
+                        // "pieces of content".
+                        Drupal.formatPlural(
+                          usages,
+                          'This restyles 1 place site-wide.',
+                          'This restyles @count places site-wide.',
+                        ),
+                  confirmLabel: Drupal.t('Push'),
+                  cancelLabel: Drupal.t('Discard'),
+                });
+              })
+          : Drupal.Daedalus.dialog.confirm({
+              title: Drupal.t('Unsaved variant'),
+              message: Drupal.t('Save the captured styles as "!label"?', {
+                '!label': session.label.trim(),
+              }),
+              detail: Drupal.t(
+                'Discarding leaves every element exactly as it looks.',
+              ),
+              confirmLabel: Drupal.t('Save variant'),
+              cancelLabel: Drupal.t('Discard'),
+            });
     ask
       .then((confirmed) => {
         if (!confirmed) {
@@ -2548,7 +2757,12 @@ export const Inspector = ({
   // never held. Writes land here, and the canonical spelling falls out of
   // the derivation (the clause grammar's canonical order), so lookups
   // against the stored map always agree.
-  const condition = vectorCondition(vector, forceState, guide.conditions ?? {}, inUse);
+  const condition = vectorCondition(
+    vector,
+    forceState,
+    guide.conditions ?? {},
+    inUse,
+  );
   // "Drive the canvas there": pose the vector and force state so the
   // clicked condition renders — and, because the compound derives from the
   // pose, so writes land at it. Axes the condition does not name reset to
@@ -2643,15 +2857,14 @@ export const Inspector = ({
   // the rows read and write is the root position for a base block
   // (it styles the subject element itself) and the drilled relative key
   // for an element scope.
-  const subjectSkinScopes =
-    stylable
-      ? skinScopesAt({
-          key: targetKey,
-          blockTypes: source.getBlockTypes(),
-          sectionLayouts: source.getSectionLayouts(),
-          document,
-        })
-      : [];
+  const subjectSkinScopes = stylable
+    ? skinScopesAt({
+        key: targetKey,
+        blockTypes: source.getBlockTypes(),
+        sectionLayouts: source.getSectionLayouts(),
+        document,
+      })
+    : [];
   const skinWearing =
     editedSkinScope !== null && subjectSkinScopes.includes(editedSkinScope)
       ? {
@@ -2922,7 +3135,11 @@ export const Inspector = ({
                 stagesLines(previous) &&
                 previous.reference === editedDocument.reference &&
                 previous.anchor === wearKey;
-              return stageMove(open ? previous : editedDocument.mint(), from, to);
+              return stageMove(
+                open ? previous : editedDocument.mint(),
+                from,
+                to,
+              );
             }),
         }
       : null;
@@ -2970,7 +3187,9 @@ export const Inspector = ({
           lineCondition,
           guide?.conditions ?? {},
         );
-        return read.winner !== null && read.winner.layer > editableLayer(keyStack);
+        return (
+          read.winner !== null && read.winner.layer > editableLayer(keyStack)
+        );
       };
       widgetSheet.session.lines.forEach(
         ({ relative, condition: lineCondition, property, value }) => {
@@ -3126,7 +3345,8 @@ export const Inspector = ({
   // place to navigate away from, Push/Discard/park are the exits. A parked
   // session leaves the places up and renders the resume chip instead.
   const frameMounted =
-    posture === 'creating' || (posture === 'editing' && editedDocument !== null);
+    posture === 'creating' ||
+    (posture === 'editing' && editedDocument !== null);
   const draftVocabulary =
     pending?.kind === 'save'
       ? axisVocabulary(
@@ -3237,7 +3457,12 @@ export const Inspector = ({
               (!frameMounted || sheetContext) && (
                 <StyledAt
                   stack={mapStack}
-                  selector={address?.selector ?? targetKey?.selector ?? targetSelector ?? null}
+                  selector={
+                    address?.selector ??
+                    targetKey?.selector ??
+                    targetSelector ??
+                    null
+                  }
                   conditions={guide.conditions ?? {}}
                   condition={condition}
                   onDrive={driveCanvas}
@@ -3252,77 +3477,77 @@ export const Inspector = ({
             Exactly one of the four is lit: a mode click always lands in
             the styling place, Design system always in the catalog. */}
         <div className="daedalus-stylish-inspector__mode-row">
-        <div
-          className="daedalus-stylish-inspector__ui-mode daedalus-ui-segments"
-          role="group"
-          aria-label={Drupal.t('Styling mode')}
-        >
-          <button
-            type="button"
-            className={`daedalus-stylish-inspector__ui-mode-button daedalus-ui-segment${shownPlace === 'styles' && mode === 'basic' ? ' daedalus-ui-segment--active' : ''}`}
-            aria-pressed={shownPlace === 'styles' && mode === 'basic'}
-            onClick={() => pickMode('basic')}
+          <div
+            className="daedalus-stylish-inspector__ui-mode daedalus-ui-segments"
+            role="group"
+            aria-label={Drupal.t('Styling mode')}
           >
-            {Drupal.t('Basic')}
-          </button>
-          <button
-            type="button"
-            className={`daedalus-stylish-inspector__ui-mode-button daedalus-ui-segment${shownPlace === 'styles' && mode === 'advanced' ? ' daedalus-ui-segment--active' : ''}`}
-            aria-pressed={shownPlace === 'styles' && mode === 'advanced'}
-            onClick={() => pickMode('advanced')}
-          >
-            {Drupal.t('Advanced')}
-          </button>
-          {/* Reachable without a selection too: code mode then shows the
+            <button
+              type="button"
+              className={`daedalus-stylish-inspector__ui-mode-button daedalus-ui-segment${shownPlace === 'styles' && mode === 'basic' ? ' daedalus-ui-segment--active' : ''}`}
+              aria-pressed={shownPlace === 'styles' && mode === 'basic'}
+              onClick={() => pickMode('basic')}
+            >
+              {Drupal.t('Basic')}
+            </button>
+            <button
+              type="button"
+              className={`daedalus-stylish-inspector__ui-mode-button daedalus-ui-segment${shownPlace === 'styles' && mode === 'advanced' ? ' daedalus-ui-segment--active' : ''}`}
+              aria-pressed={shownPlace === 'styles' && mode === 'advanced'}
+              onClick={() => pickMode('advanced')}
+            >
+              {Drupal.t('Advanced')}
+            </button>
+            {/* Reachable without a selection too: code mode then shows the
               page tree (the widget modes need an element); an unstylable
               selection shows its honest empty state. */}
-          <button
-            type="button"
-            className={`daedalus-stylish-inspector__ui-mode-button daedalus-ui-segment daedalus-stylish-inspector__ui-mode-button--code${shownPlace === 'styles' && mode === 'code' ? ' daedalus-ui-segment--active' : ''}`}
-            title={Drupal.t('Edit as CSS')}
-            aria-pressed={shownPlace === 'styles' && mode === 'code'}
-            onClick={() => pickMode('code')}
-          >
-            {/* The braces glyph (phosphor "brackets-curly"): the code
-                segment's identity, replacing the old text glyph. */}
-            <svg
-              viewBox="0 0 256 256"
-              width="13"
-              height="13"
-              fill="currentColor"
-              aria-hidden="true"
+            <button
+              type="button"
+              className={`daedalus-stylish-inspector__ui-mode-button daedalus-ui-segment daedalus-stylish-inspector__ui-mode-button--code${shownPlace === 'styles' && mode === 'code' ? ' daedalus-ui-segment--active' : ''}`}
+              title={Drupal.t('Edit as CSS')}
+              aria-pressed={shownPlace === 'styles' && mode === 'code'}
+              onClick={() => pickMode('code')}
             >
-              <path d="M43.18,128a29.78,29.78,0,0,1,8,10.26c4.8,9.9,4.8,22,4.8,33.74,0,24.31,1,36,24,36a8,8,0,0,1,0,16c-17.48,0-29.32-6.14-35.2-18.26-4.8-9.9-4.8-22-4.8-33.74,0-24.31-1-36-24-36a8,8,0,0,1,0-16c23,0,24-11.69,24-36,0-11.72,0-23.84,4.8-33.74C50.68,38.14,62.52,32,80,32a8,8,0,0,1,0,16C57,48,56,59.69,56,84c0,11.72,0,23.84-4.8,33.74A29.78,29.78,0,0,1,43.18,128ZM240,120c-23,0-24-11.69-24-36,0-11.72,0-23.84-4.8-33.74C205.32,38.14,193.48,32,176,32a8,8,0,0,0,0,16c23,0,24,11.69,24,36,0,11.72,0,23.84,4.8,33.74a29.78,29.78,0,0,0,8,10.26,29.78,29.78,0,0,0-8,10.26c-4.8,9.9-4.8,22-4.8,33.74,0,24.31-1,36-24,36a8,8,0,0,0,0,16c17.48,0,29.32-6.14,35.2-18.26,4.8-9.9,4.8-22,4.8-33.74,0-24.31,1-36,24-36a8,8,0,0,0,0-16Z" />
-            </svg>
-          </button>
-        </div>
-        {/* The Design system place: the catalog, mode-independent,
+              {/* The braces glyph (phosphor "brackets-curly"): the code
+                segment's identity, replacing the old text glyph. */}
+              <svg
+                viewBox="0 0 256 256"
+                width="13"
+                height="13"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M43.18,128a29.78,29.78,0,0,1,8,10.26c4.8,9.9,4.8,22,4.8,33.74,0,24.31,1,36,24,36a8,8,0,0,1,0,16c-17.48,0-29.32-6.14-35.2-18.26-4.8-9.9-4.8-22-4.8-33.74,0-24.31-1-36-24-36a8,8,0,0,1,0-16c23,0,24-11.69,24-36,0-11.72,0-23.84,4.8-33.74C50.68,38.14,62.52,32,80,32a8,8,0,0,1,0,16C57,48,56,59.69,56,84c0,11.72,0,23.84-4.8,33.74A29.78,29.78,0,0,1,43.18,128ZM240,120c-23,0-24-11.69-24-36,0-11.72,0-23.84-4.8-33.74C205.32,38.14,193.48,32,176,32a8,8,0,0,0,0,16c23,0,24,11.69,24,36,0,11.72,0,23.84,4.8,33.74a29.78,29.78,0,0,0,8,10.26,29.78,29.78,0,0,0-8,10.26c-4.8,9.9-4.8,22-4.8,33.74,0,24.31-1,36-24,36a8,8,0,0,0,0,16c17.48,0,29.32-6.14,35.2-18.26,4.8-9.9,4.8-22,4.8-33.74,0-24.31,1-36,24-36a8,8,0,0,0,0-16Z" />
+              </svg>
+            </button>
+          </div>
+          {/* The Design system place: the catalog, mode-independent,
             selection-free. A text button with a four-square glyph, not
             a fourth segment: the track means the styling mode and the
             catalog is not one. The session frame replaces the places
             while it is mounted, so the button waits it out honestly (a
             mode click still re-bodies the session). */}
-        <button
-          type="button"
-          className={`daedalus-stylish-inspector__place${shownPlace === 'materials' ? ' daedalus-stylish-inspector__place--shown' : ''}`}
-          aria-pressed={shownPlace === 'materials'}
-          disabled={frameMounted}
-          onClick={() => setPlace('materials', editing)}
-        >
-          <svg
-            viewBox="0 0 12 12"
-            width="12"
-            height="12"
-            fill="currentColor"
-            aria-hidden="true"
+          <button
+            type="button"
+            className={`daedalus-stylish-inspector__place${shownPlace === 'materials' ? ' daedalus-stylish-inspector__place--shown' : ''}`}
+            aria-pressed={shownPlace === 'materials'}
+            disabled={frameMounted}
+            onClick={() => setPlace('materials', editing)}
           >
-            <rect x="0" y="0" width="5" height="5" rx="1" />
-            <rect x="7" y="0" width="5" height="5" rx="1" />
-            <rect x="0" y="7" width="5" height="5" rx="1" />
-            <rect x="7" y="7" width="5" height="5" rx="1" />
-          </svg>
-          {Drupal.t('Design system')}
-        </button>
+            <svg
+              viewBox="0 0 12 12"
+              width="12"
+              height="12"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <rect x="0" y="0" width="5" height="5" rx="1" />
+              <rect x="7" y="0" width="5" height="5" rx="1" />
+              <rect x="0" y="7" width="5" height="5" rx="1" />
+              <rect x="7" y="7" width="5" height="5" rx="1" />
+            </svg>
+            {Drupal.t('Design system')}
+          </button>
         </div>
         {/* The head slot: daedalus_ui's panel slot (empty, it takes no
             room, panel-controls.css), lent to the mode view as its

@@ -40,6 +40,7 @@ const MODIFIER_LABELS = IS_MAC
  *   A binding string as register() stores it.
  *
  * @return {string}
+ *   The human-readable combo.
  */
 export const describeBinding = (str) => {
   if (!str) {
@@ -77,6 +78,12 @@ const EVENT_KEY_MODIFIERS = {
  *
  * 'mod' resolves to the platform modifier at parse time, so a stored
  * 'mod+d' matches meta+d on a Mac and ctrl+d elsewhere.
+ *
+ * @param {string} str
+ *   A binding string as register() stores it.
+ *
+ * @return {?{key: string, modifiers: object, raw: string}}
+ *   The parsed binding, or null when unbound or malformed.
  */
 export const parseBinding = (str) => {
   if (!str) {
@@ -101,6 +108,12 @@ export const parseBinding = (str) => {
 /**
  * Derives a lowercase key name from KeyboardEvent.code for letters and
  * digits ('KeyA' → 'a', 'Digit1' → '1'), or null for anything else.
+ *
+ * @param {string} code
+ *   The KeyboardEvent.code.
+ *
+ * @return {?string}
+ *   The key name, or null.
  */
 const keyFromCode = (code) => {
   if (/^Key[A-Z]$/.test(code)) {
@@ -120,6 +133,12 @@ const keyFromCode = (code) => {
  * the key falls back to the layout-independent event.code. Everything else
  * matches on event.key — the character the user's layout actually produced,
  * which is what non-qwerty users expect their remaps to follow.
+ *
+ * @param {KeyboardEvent} event
+ *   The key event.
+ *
+ * @return {{key: string, modifiers: object}}
+ *   The keystroke's descriptor.
  */
 export const normalizeEvent = (event) => {
   let key = event.key.toLowerCase();
@@ -150,6 +169,14 @@ export const normalizeEvent = (event) => {
  * When the binding's key is itself a modifier ('alt'), that modifier is
  * necessarily active on its own keydown, so it is treated as implied
  * rather than required to be declared.
+ *
+ * @param {?object} parsed
+ *   A parsed binding (parseBinding), or null when unbound.
+ * @param {{key: string, modifiers: object}} desc
+ *   The keystroke's descriptor (normalizeEvent).
+ *
+ * @return {boolean}
+ *   Whether the keystroke matches.
  */
 export const matches = (parsed, desc) => {
   if (!parsed || parsed.key !== desc.key) {
@@ -164,6 +191,12 @@ export const matches = (parsed, desc) => {
 /**
  * How many modifiers a binding requires — ties between same-context
  * bindings go to the more specific one.
+ *
+ * @param {object} parsed
+ *   A parsed binding.
+ *
+ * @return {number}
+ *   The modifier count.
  */
 export const specificity = (parsed) =>
   MODIFIERS.reduce(
@@ -174,6 +207,14 @@ export const specificity = (parsed) =>
 /**
  * Whether the release of `key` ends a hold on `parsed` — the hold's own
  * key or any of its modifiers going up releases it.
+ *
+ * @param {object} parsed
+ *   The held binding, parsed.
+ * @param {string} key
+ *   The released key's name.
+ *
+ * @return {boolean}
+ *   Whether the hold ends.
  */
 export const releasedBy = (parsed, key) =>
   parsed.key === key || parsed.modifiers[key] === true;
@@ -184,6 +225,12 @@ export const releasedBy = (parsed, key) =>
  * caller decides whether to commit it on keyup as a hold-style binding).
  * The platform primary modifier is stored as 'mod' so the setting is
  * portable across the user's machines.
+ *
+ * @param {KeyboardEvent} event
+ *   The capture keydown event.
+ *
+ * @return {?string}
+ *   The binding string, or null for a bare modifier.
  */
 export const eventToBindingString = (event) => {
   const desc = normalizeEvent(event);

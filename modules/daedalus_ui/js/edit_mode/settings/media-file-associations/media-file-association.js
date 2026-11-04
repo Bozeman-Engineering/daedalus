@@ -24,7 +24,7 @@
    * @type {{attach(*, *): void}}
    */
   Drupal.behaviors.RemoveMediaFileAssociation = {
-    attach(context, settings) {
+    attach(context) {
       once('media-file-association', '.remove-association', context).forEach(
         (button) => {
           button.addEventListener('click', (e) => {
@@ -53,10 +53,6 @@
                 }
               },
               error: (error) => {
-                console.error(
-                  'Unable to remove media file association: ',
-                  error.responseText || error,
-                );
                 Drupal.Daedalus.ModeManager.getPlugin('edit').handleError(
                   error,
                   'Unable to remove media file association.',

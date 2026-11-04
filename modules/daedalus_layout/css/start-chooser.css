@@ -74,8 +74,8 @@
 
 .daedalus-layout-start-filters__filter[aria-current] {
   color: var(--daedalus-layout-start-ink);
-  font-weight: 700;
   border-bottom-color: var(--daedalus-layout-start-accent);
+  font-weight: 700;
 }
 
 /* The cards: a grid that drops to two across, then one. */
@@ -97,17 +97,17 @@
 .daedalus-layout-start-card {
   display: block;
   height: 100%;
-  color: inherit;
   text-decoration: none;
+  color: inherit;
   border: 1px solid var(--daedalus-layout-start-line);
   border-radius: 4px;
   background: #fff;
-  box-shadow: 0 2px 4px rgba(35, 36, 41, 0.08);
+  box-shadow: 0 2px 4px rgb(35, 36, 41, 0.08);
 }
 
 .daedalus-layout-start-card:hover {
   border-color: var(--daedalus-layout-start-accent);
-  box-shadow: 0 4px 10px rgba(0, 62, 204, 0.16);
+  box-shadow: 0 4px 10px rgb(0, 62, 204, 0.16);
 }
 
 .daedalus-layout-start-card:focus-visible {
@@ -135,11 +135,11 @@
   left: 0;
   width: calc(100% / var(--daedalus-layout-start-scale));
   height: calc(100% / var(--daedalus-layout-start-scale));
-  border: 0;
-  background: transparent;
   transform: scale(var(--daedalus-layout-start-scale));
   transform-origin: 0 0;
   pointer-events: none;
+  border: 0;
+  background: transparent;
 }
 
 /* The cut: the page fades out where the window ends. */
@@ -150,7 +150,7 @@
   left: 0;
   height: 22%;
   content: "";
-  background: linear-gradient(rgba(255, 255, 255, 0), #fff);
+  background: linear-gradient(rgb(255, 255, 255, 0), #fff);
 }
 
 /* The default's face is tinted. */

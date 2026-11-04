@@ -45,7 +45,6 @@ export const hash = (text) => {
   let value = 0;
   for (let i = 0; i < text.length; i++) {
     // The djb2-style hash keeps the value a 32-bit integer by shifting.
-    // eslint-disable-next-line no-bitwise
     value = ((value << 5) - value + text.charCodeAt(i)) | 0;
   }
   return value;
@@ -80,9 +79,19 @@ export const durationFor = (type) => DURATIONS[type] ?? DEFAULT_DURATION;
  * already showing.
  *
  * @param {object} request
- *   The call: {text, type, duration, scroll, target}. `duration` -1 (or 0)
- *   means the toast never leaves on its own; `target` is the element id or
- *   selectable key the outcome concerns, for the history's scroll-back.
+ *   The call.
+ * @param {string} request.text
+ *   The message text.
+ * @param {string} [request.type]
+ *   The message type; 'error' when omitted.
+ * @param {number} [request.duration]
+ *   Milliseconds the toast shows; -1 (or 0) means the toast never leaves
+ *   on its own. The type's default when omitted.
+ * @param {boolean} [request.scroll]
+ *   Whether to bring the toast into view (default true).
+ * @param {?string} [request.target]
+ *   The element id or selectable key the outcome concerns, for the
+ *   history's scroll-back.
  * @param {Array<string>} showing
  *   The ids of the toasts currently on screen.
  *

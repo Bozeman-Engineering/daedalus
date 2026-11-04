@@ -23,8 +23,8 @@ use Drupal\workspaces\WorkspaceManagerInterface;
 /**
  * Imports and syncs module-shipped skins: the skins disk lane.
  *
- * A module ships default skins in a MODULE.daedalus_stylish.skins.yml at its root,
- * keyed by machine name:
+ * A module ships default skins in a MODULE.daedalus_stylish.skins.yml at its
+ * root, keyed by machine name:
  * @code
  * aurora:
  *   label: 'Aurora'
@@ -131,6 +131,21 @@ class SkinImporter extends ShippedDefinitionsImporter {
    * gestures are), so this lane validates the three shipped tiers itself
    * (landDefaults(), landAnimations(), landFonts()).
    *
+   * @param \Drupal\Core\Extension\ModuleHandlerInterface $moduleHandler
+   *   The module handler: the shipping modules and their paths.
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entityTypeManager
+   *   The entity type manager, for the skin storage.
+   * @param \Drupal\daedalus_blueprint\BlueprintDeserializerInterface $deserializer
+   *   The blueprint deserializer that lands each definition on the spine.
+   * @param \Drupal\Core\DefaultContent\AdminAccountSwitcher $accountSwitcher
+   *   The administrative account switch (the base class has the why).
+   * @param \Drupal\Component\Datetime\TimeInterface $time
+   *   The time service, for the shipped-source hash stamp.
+   * @param \Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem $activeDesignSystem
+   *   The design-system unit: the module default for a skin's membership.
+   * @param \Drupal\workspaces\WorkspaceManagerInterface|null $workspaceManager
+   *   Optional: with Workspaces, the sync executes outside any active
+   *   workspace so shipped defaults land LIVE (the base class has the why).
    * @param \Drupal\daedalus_stylish\StyleMapValidator $validator
    *   The style map validator, the defaults and animations seams.
    * @param \Drupal\daedalus_stylish\ConditionTypePluginManager $conditionTypes
@@ -332,6 +347,10 @@ class SkinImporter extends ShippedDefinitionsImporter {
    * module's asset}: the one hash function then compares disk and site
    * whatever each calls the file.
    *
+   * @param string $module
+   *   The shipping module, whose assets/fonts/ holds the faces' files.
+   * @param string $name
+   *   The skin's machine name, for the refusal's coordinates.
    * @param array $fonts
    *   The canonical fonts tier as the file spells it (faces naming
    *   basenames).
@@ -466,7 +485,10 @@ class SkinImporter extends ShippedDefinitionsImporter {
    *   developer error, never skippable.
    */
   protected function landDefaults(string $module, string $name, DaedalusStylishSkinInterface $skin, array $shipped): void {
-    $errors = $this->validator->validateDefaults($shipped['defaults'], ['skin_tokens' => $shipped['tokens'], 'skin_animations' => $shipped['animations']]);
+    $errors = $this->validator->validateDefaults($shipped['defaults'], [
+      'skin_tokens' => $shipped['tokens'],
+      'skin_animations' => $shipped['animations'],
+    ]);
     if ($errors) {
       throw new ShippedSkinException($module, $name, array_map(
         static fn (BlueprintError $error) => $error->withPath('fields.defaults.' . $error->getPath()),
@@ -482,7 +504,7 @@ class SkinImporter extends ShippedDefinitionsImporter {
   /**
    * Lands the shipped animations tier on the skin's package layer, loudly.
    *
-   * landDefaults()'s twin for the motion section: the animations field has
+   * `landDefaults()`'s twin for the motion section: the animations field has
    * no blueprint write (the material gestures are its door), so the disk
    * lane validates the shipped tier itself through the animations seam
    * (StyleMapValidator::validateAnimations()), against the skin's OWN
@@ -509,7 +531,7 @@ class SkinImporter extends ShippedDefinitionsImporter {
   /**
    * Lands the shipped fonts tier on the skin's package layer, loudly.
    *
-   * landAnimations()'s twin for the type section: the fonts field has no
+   * `landAnimations()`'s twin for the type section: the fonts field has no
    * blueprint write (the material gestures are its door), so the disk
    * lane lands the tier itself. Each face's basename becomes a managed
    * file uuid: a file the skin already holds with the same bytes is kept
@@ -609,6 +631,12 @@ class SkinImporter extends ShippedDefinitionsImporter {
   /**
    * Lands one font record's faces: files in, uuids out.
    *
+   * @param string $module
+   *   The shipping module, whose assets/fonts/ holds the faces' files.
+   * @param string $name
+   *   The skin's machine name, for the refusal's coordinates.
+   * @param string $font_name
+   *   The font's name, the refusal's error path root.
    * @param array $record
    *   The canonical record as the file spells it (faces naming basenames).
    * @param array $held

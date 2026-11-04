@@ -29,6 +29,12 @@ const PATTERN = /url\(\s*(["']?)media:([^"'()\s]*)\s*\1\s*\)/gi;
 
 /**
  * Whether a value mentions the media scheme at all (MediaToken::mentions).
+ *
+ * @param {*} value
+ *   A style value; anything but a string answers false.
+ *
+ * @return {boolean}
+ *   Whether `media:` occurs in the value, any case.
  */
 export const mentionsMedia = (value) =>
   typeof value === 'string' && value.toLowerCase().includes('media:');
@@ -36,6 +42,15 @@ export const mentionsMedia = (value) =>
 /**
  * Replaces every token via a callback receiving the token's payload
  * (MediaToken::substitute mirror).
+ *
+ * @param {string} value
+ *   The style value.
+ * @param {function(string): string} replacement
+ *   Receives each token's payload (the uuid slot) and returns its
+ *   replacement text.
+ *
+ * @return {string}
+ *   The value with every token replaced.
  */
 export const substituteMediaTokens = (value, replacement) =>
   value.replace(PATTERN, (match, quote, uuid) => replacement(uuid));
@@ -46,6 +61,12 @@ export const substituteMediaTokens = (value, replacement) =>
  * The media row's thumbnail read: a layered value ("gradient, token") shows
  * its first media layer's image. matchAll clones the regex, so the shared
  * PATTERN's lastIndex stays untouched.
+ *
+ * @param {*} value
+ *   A style value; anything but a string answers null.
+ *
+ * @return {?string}
+ *   The first token's payload, lowercased, or null.
  */
 export const firstMediaUuid = (value) => {
   if (typeof value !== 'string' || !mentionsMedia(value)) {
@@ -65,6 +86,12 @@ export const firstMediaUuid = (value) => {
  * unlike firstMediaUuid's first-layer read: a layered value or trailing
  * content is occupancy the pair state must keep reading as custom.
  * Lowercased for table lookup, like every client uuid key.
+ *
+ * @param {*} value
+ *   A style value; anything but a string answers null.
+ *
+ * @return {?string}
+ *   The one token's payload, lowercased, or null.
  */
 export const mediaTokenUuid = (value) => {
   if (typeof value !== 'string' || !mentionsMedia(value)) {
@@ -85,6 +112,15 @@ export const mediaTokenUuid = (value) => {
  * so payload lookup lowercases; a missing or empty entry substitutes
  * "none", sound in every <image> slot. A non-string or token-free value is
  * returned as is.
+ *
+ * @param {*} value
+ *   A style value.
+ * @param {?Object<string, ?string>} urls
+ *   The uuid -> URL table (lowercased keys); null resolves every token
+ *   to "none".
+ *
+ * @return {*}
+ *   The value with its tokens resolved, or the value untouched.
  */
 export const resolveMediaValue = (value, urls) => {
   if (typeof value !== 'string' || !mentionsMedia(value)) {

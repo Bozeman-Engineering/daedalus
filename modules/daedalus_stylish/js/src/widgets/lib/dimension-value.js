@@ -71,9 +71,12 @@ const PX_BASIS = { px: 1, pt: 4 / 3, rem: 16, em: 16 };
  * satellite; a font-size the probe could not read).
  *
  * @param {string} unit
+ *   The unit to measure.
  * @param {?{rootPx: ?number, fontPx: ?number}} bases
+ *   The canvas's measured bases (readCanvas), null off canvas.
  *
  * @return {?number}
+ *   Pixels per one of `unit`, or null when it cannot be known.
  */
 const measuredPx = (unit, bases) => {
   if (unit === 'px') {
@@ -135,10 +138,14 @@ export const convertLength = (text, unit, bases = null) => {
  * honest ('50%' stays '50%' beneath a rem select).
  *
  * @param {*} text
+ *   The measured length ('32px'), or anything else.
  * @param {string} unit
+ *   The unit the face works in.
  * @param {?{rootPx: ?number, fontPx: ?number}} bases
+ *   The canvas's measured bases (readCanvas), null off canvas.
  *
  * @return {?string}
+ *   The length re-spelled in `unit`, or null when it cannot be.
  */
 export const lengthIn = (text, unit, bases = null) => {
   const parsed = parseDimension(typeof text === 'string' ? text : '');
@@ -186,11 +193,25 @@ export const parseDimension = (text) => {
 /**
  * Renders a number without float noise: at most 4 decimals, no trailing
  * zeros (4/3 → '1.3333', 0.30000000000000004 → '0.3').
+ *
+ * @param {number} number
+ *   The number to render.
+ *
+ * @return {string}
+ *   Its noise-free text.
  */
 export const formatNumber = (number) => String(Number(number.toFixed(4)));
 
 /**
  * Formats a number + unit back to a CSS component ('' unit → bare number).
+ *
+ * @param {number} number
+ *   The component's number.
+ * @param {string} unit
+ *   Its unit, '' for a bare number.
+ *
+ * @return {string}
+ *   The CSS component ('16px', '1.5').
  */
 export const formatDimension = (number, unit = '') =>
   `${formatNumber(number)}${unit}`;
@@ -207,6 +228,7 @@ export const formatDimension = (number, unit = '') =>
  * @param {*} text
  *   The shown value.
  * @return {string}
+ *   The number alone, or the text verbatim.
  */
 export const numberFace = (text) => {
   const trimmed = typeof text === 'string' ? text.trim() : '';
@@ -240,10 +262,12 @@ const TENTH_UNITS = ['rem', 'em', 'ch', 'ex', ''];
  * are the exact-value path and never pass through here.
  *
  * @param {string} unit
+ *   The unit the gesture works in.
  * @param {boolean} fine
  *   Whether the gesture holds the fine modifier (Alt in the field
  *   editor; the ring never does, Alt is spread there).
  * @return {number}
+ *   The decimal places a generated value may carry.
  */
 export const unitPrecision = (unit, fine = false) => {
   if (WHOLE_UNITS.includes(unit)) {
@@ -256,10 +280,13 @@ export const unitPrecision = (unit, fine = false) => {
  * Rounds a gesture-generated value to its unit's precision.
  *
  * @param {number} number
+ *   The generated value.
  * @param {string} unit
+ *   The unit it is in.
  * @param {boolean} fine
  *   The gesture's fine modifier (unitPrecision).
  * @return {number}
+ *   The value rounded to the unit's decimal places.
  */
 export const quantize = (number, unit, fine = false) =>
   Number(number.toFixed(unitPrecision(unit, fine)));
@@ -270,13 +297,19 @@ export const quantize = (number, unit, fine = false) =>
  * (a whole rem per press is too coarse to steer with).
  *
  * @param {string} unit
+ *   The unit the step is in.
  * @return {number}
+ *   The step's size in that unit.
  */
 export const unitGrain = (unit) => (TENTH_UNITS.includes(unit) ? 0.1 : 1);
 
 /**
  * Converts a bound (a dimension string or bare number) into `unit`.
  *
+ * @param {string|number} bound
+ *   The constraint's min or max as declared ('2rem', 0).
+ * @param {string} unit
+ *   The value's unit the bound converts into.
  * @return {?number}
  *   The bound's number expressed in `unit`, or null when the two are not
  *   comparable — same rule as the server's compare(): identical units
@@ -299,6 +332,12 @@ const boundInUnit = (bound, unit) => {
 /**
  * Compares a parsed value against a bound (spaceship semantics).
  *
+ * @param {number} number
+ *   The value's number.
+ * @param {string} unit
+ *   The value's unit.
+ * @param {string|number} bound
+ *   The constraint's min or max as declared ('2rem', 0).
  * @return {?number}
  *   -1, 0, or 1, or null when the units are not comparable.
  */
@@ -320,6 +359,15 @@ export const compareToBound = (number, unit, bound) => {
  *   the value's unit when comparable. An incomparable bound (min '2ch'
  *   against a px value) is skipped — the widget cannot honestly clamp what
  *   it cannot compare; the server reports those on commit.
+ *
+ * @param {number} number
+ *   The generated value.
+ * @param {string} unit
+ *   The unit it is in.
+ * @param {?object} definition
+ *   The property definition (`negative` opens the floor).
+ * @param {?object} constraints
+ *   The style-guide constraints (min, max).
  *
  * @return {number}
  *   The clamped number, still in `unit`.
@@ -388,6 +436,7 @@ export const stepSize = (modifiers = {}, unit = 'px') => {
  *   Any object carrying the standard modifier flags (a pointer event
  *   works as-is).
  * @return {number}
+ *   The travel-rate multiplier.
  */
 export const scrubRate = (modifiers = {}) => {
   if (modifiers.metaKey || modifiers.ctrlKey) {
@@ -405,6 +454,12 @@ export const scrubRate = (modifiers = {}) => {
 /**
  * Number of decimal places a value carries (float-noise-free, via the
  * formatted representation).
+ *
+ * @param {number} number
+ *   The value to count.
+ *
+ * @return {number}
+ *   Its decimal places, 0 for a whole number.
  */
 const decimalsOf = (number) => {
   const text = formatNumber(number);
@@ -425,6 +480,7 @@ const decimalsOf = (number) => {
  * @param {number} step
  *   The step size (stepSize()).
  * @return {number}
+ *   The stepped value at the operands' precision.
  */
 export const applyStep = (number, direction, step) => {
   const decimals = Math.max(decimalsOf(number), decimalsOf(step));
@@ -440,7 +496,13 @@ export const applyStep = (number, direction, step) => {
  * current unit is always included so an existing value never renders as an
  * impossible state ('' — a bare number — is not a listed option).
  *
+ * @param {?object} constraints
+ *   The style-guide constraints (`units` when declared).
+ * @param {?string} currentUnit
+ *   The shown value's unit, or null when it carries none.
+ *
  * @return {string[]}
+ *   The units the select offers, in order.
  */
 export const unitOptions = (constraints = {}, currentUnit = null) => {
   const base =
@@ -473,8 +535,11 @@ export const unitOptions = (constraints = {}, currentUnit = null) => {
  *
  * @param {{spaceUnit?: ?string, picked?: ?string, last?: ?string,
  *   options?: Array<string>}} context
+ *   The space's unit, the select's memory (unitMemory) and the offered
+ *   units (unitOptions).
  *
  * @return {string}
+ *   The unit the field works in.
  */
 export const contextUnit = ({
   spaceUnit = null,
@@ -551,6 +616,7 @@ export const openChrome = ({
  *   context for the property, and whether typed text is in flight.
  *
  * @return {{last: ?string, picked: ?string}}
+ *   The memory after the arrival.
  */
 export const unitMemory = (
   state,
@@ -589,6 +655,7 @@ export const unitMemory = (
  *   precision the gesture will.
  *
  * @return {number}
+ *   The seed in `unit`, 0 when nothing converts.
  */
 export const seedAnchor = (placeholder, unit, bases = null, fine = false) =>
   quantize(convertLength(placeholder, unit, bases) ?? 0, unit, fine);
@@ -686,6 +753,7 @@ export const settleText = (text, fallbackUnit = '') => {
  * @param {string} unit
  *   The unit the scrub works in (sizes the unmodified step, stepSize).
  * @return {{raw: number, number: number, step: number}}
+ *   The advanced accumulator, the snapped number and the step it used.
  */
 export const scrubAdvance = (raw, movementX, modifiers = {}, unit = 'px') => {
   const step = stepSize(modifiers, unit);

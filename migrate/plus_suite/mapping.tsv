@@ -33,6 +33,7 @@
 # --- machine names (module, theme, recipe projects); sub-modules, hooks,
 # --- plugin IDs, config, schema, routes, services, libraries, permissions
 # --- and PHP namespaces follow by prefix.
+# cspell:ignore ebdsa ebsc ebtc
 id	navigation_plus	daedalus_ui	module; also service navigation_plus.ui -> daedalus_ui.ui
 id	lb_plus	daedalus_layout	module
 id	edit_plus	daedalus_edit	module
@@ -54,8 +55,8 @@ id	edit_plus_page	daedalus_edit_page
 id	entity_blueprint_api	daedalus_blueprint_api	
 id	entity_blueprint_ai	daedalus_blueprint_ai	
 id	entity_blueprint_ai_anthropic	daedalus_blueprint_ai_anthropic	deleted module (2026-10-19, its subscribers moved into daedalus_blueprint_ai): the renamer drops it from core.extension as a name with no twin on disk
-forbid	entity_blueprint_ai_dev_tools		deleted module; the prompt audit and tool capture moved to bz_diagnostics (bz-diagnostics:prompt-audit, bz-diagnostics:tool-capture); any hit is a leftover reference to delete by hand
-forbid	entity_blueprint_ai_log_repair		deleted module; the log repair moved to bz_diagnostics; any hit is a leftover reference to delete by hand
+forbid	entity_blueprint_ai_dev_tools		deleted module; its prompt audit and tool capture now live in a diagnostics module that ships outside this package, so any hit is a stale reference and is deleted by hand
+forbid	entity_blueprint_ai_log_repair		deleted module; its log repair now lives in a diagnostics module that ships outside this package, so any hit is a stale reference and is deleted by hand
 id	entity_blueprint_config	daedalus_blueprint_config	
 id	entity_blueprint_config_ai	daedalus_blueprint_config_ai	
 id	ai_plus_anthropic	daedalus_ai_anthropic	deleted module (2026-10-19, its subscribers are daedalus_ai's block producers): the renamer drops it from core.extension as a name with no twin on disk
@@ -298,11 +299,11 @@ prefix	np-	daedalus-ui-	.np-frame -> .daedalus-ui-frame, data-np-tooltip, --np-s
 regex	(?<![A-Za-z0-9_])np(?=[A-Z])	daedalusUi	the dataset key of a data-np-* attribute (mount.dataset.npTreeMounted)
 id	ebdsa	dd-blueprint-activate	drush daedalus-blueprint:design-system:activate
 id	ebsc	dd-blueprint-schema	drush daedalus-blueprint:schema
-forbid	ebtc		deleted alias; the tool capture is bz_diagnostics' drush bz-diagnostics:tool-capture
+forbid	ebtc		deleted alias; tool capture ships in a diagnostics module outside this package and has its own drush command there
 id	ebd	dd-blueprint-deserialize	drush daedalus-blueprint:deserialize
 id	ebs	dd-blueprint-serialize	drush daedalus-blueprint:serialize
-forbid	ait		deleted alias here; the tail is bz_diagnostics' drush bz-diagnostics:tail (alias ait)
-forbid	pau		deleted alias; the prompt audit is bz_diagnostics' drush bz-diagnostics:prompt-audit
+forbid	ait		deleted alias here; the log tail ships in a diagnostics module outside this package and keeps this alias there
+forbid	pau		deleted alias; the prompt audit ships in a diagnostics module outside this package and has its own drush command there
 # --- plus-suite-to-daedalus-migration (2026-09-19): the rows a site's persisted
 # --- state needs beyond the code rename. The lb_plus permission row above
 # --- (`administer layout builder + configuration`) is the migration's too:

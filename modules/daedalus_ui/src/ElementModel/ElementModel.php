@@ -341,9 +341,9 @@ final class ElementModel {
   /**
    * The block_content bundles whose inline blocks render composed.
    *
-   * The list twin of isComposedInlineBlock(): consumers that enumerate
-   * bundles rather than test one (e.g. daedalus_stylish surfacing composed block
-   * types in its AI schema) read the list through here.
+   * The list twin of isComposedInlineBlock(): consumers that enumerate bundles
+   * rather than test one (e.g. daedalus_stylish surfacing composed block types
+   * in its AI schema) read the list through here.
    *
    * @return string[]
    *   block_content bundle machine names.

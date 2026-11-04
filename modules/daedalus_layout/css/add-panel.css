@@ -178,28 +178,28 @@
 /* ——— The star ——— */
 
 /* A row's own micro-control: quiet until the row is hovered or focused,
-   always shown when on. It wears the icons' grey in both states, and on
+   always shown when on. It wears the icons' gray in both states, and on
    and off differ by fill alone: stroked when off, filled when on. The
    rows' icons are background-image assets drawn in the fixed mid-gray
    (#8e8e93, the search glyph's tone above, since an asset cannot inherit);
-   the star is inline SVG, so it takes the scheme-aware form of that grey,
+   the star is inline SVG, so it takes the scheme-aware form of that gray,
    --daedalus-text-muted (#6e6e73 light, #98989d dark), rather than a
    literal the schemes could not adjust. No accent hue: a favorite is a
    listing fact, not a warning. */
 .daedalus-layout-add-panel__star {
   display: grid;
   flex: 0 0 auto;
+  place-items: center;
   width: 1.5rem;
   height: 1.5rem;
   margin: 0;
   padding: 0;
   cursor: pointer;
+  opacity: 0;
   color: var(--daedalus-text-muted);
   border: 0;
   border-radius: calc(var(--daedalus-border-radius) - 0.125rem);
   background: none;
-  opacity: 0;
-  place-items: center;
 }
 
 .daedalus-layout-add-panel__row:hover .daedalus-layout-add-panel__star,
@@ -232,7 +232,7 @@
   stroke-linejoin: round;
 }
 
-/* On: the same grey, filled. The colour is the base rule's; only the
+/* On: the same gray, filled. The color is the base rule's; only the
    fill changes. */
 .daedalus-layout-add-panel__star[aria-pressed="true"] svg {
   fill: currentColor;
@@ -266,6 +266,7 @@
 .daedalus-layout-add-panel-peek {
   --daedalus-layout-peek-width: 22rem;
   --daedalus-layout-peek-scale: 0.4;
+
   position: fixed;
   z-index: 1262;
   overflow: hidden;
@@ -298,11 +299,11 @@
   top: 0;
   left: 0;
   width: calc(100% / var(--daedalus-layout-peek-scale));
-  border: 0;
-  background: transparent;
   transform: scale(var(--daedalus-layout-peek-scale));
   transform-origin: 0 0;
   pointer-events: none;
+  border: 0;
+  background: transparent;
 }
 
 /* The loading state: the chooser's shimmer, beneath the frame until the
@@ -335,7 +336,7 @@
   left: 0;
   height: 22%;
   content: "";
-  background: linear-gradient(rgba(255, 255, 255, 0), #fff);
+  background: linear-gradient(rgb(255, 255, 255, 0), #fff);
 }
 
 /* The caption names the face; a refusal's sentence stands in the

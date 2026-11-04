@@ -14,6 +14,7 @@ namespace Drupal\daedalus_blueprint\Materials;
  * relative selector, relative to the element the root names, in CSS's
  * own recursive shape:
  *
+ * @code
  *   selector   := chain [ pseudo ] | '&' pseudo
  *   chain      := anchor ( combinator compound )*            the owner itself, qualified, then its subtree
  *               | [ lead ] compound ( combinator compound )*
@@ -38,6 +39,7 @@ namespace Drupal\daedalus_blueprint\Materials;
  *   type       := 'd-' [a-z][a-z0-9-]*     d-container, d-block, d-{bundle}
  *   class      := [A-Za-z0-9_-]+            a declared part, an instance part, or a markup class
  *   pseudo-class := -?[a-z][a-z0-9-]*       any name: a state, a position, an input state
+ * @endcode
  *
  * The grammar is CSS's selector grammar; the vocabulary (which tags,
  * types, parts, classes, attributes and pseudo-class names exist on a
@@ -1161,10 +1163,12 @@ final class RelativeSelector implements \Stringable {
   }
 
   /**
-   * The first compound: the qualified anchor when the selector begins
-   * with one.
+   * The first compound.
+   *
+   * The qualified anchor when the selector begins with one.
    *
    * @return array{combinator: string, kind: string, name: string, qualifiers: array}
+   *   The compound: its combinator, kind, name and qualifiers.
    *
    * @throws \LogicException
    *   When the selector is the owner's own pseudo-element (`&::before`):
@@ -1176,13 +1180,16 @@ final class RelativeSelector implements \Stringable {
   }
 
   /**
-   * The last compound: the one the rule's targets are, the one the
-   * roster walk lands on, and the host of a terminal pseudo-element.
+   * The last compound.
+   *
+   * The one the rule's targets are, the one the roster walk lands on, and
+   * the host of a terminal pseudo-element.
    *
    * For the qualified anchor alone (`&:first-child`, `&:first-child::before`)
    * it is the anchor compound: the targets are the owner itself.
    *
    * @return array{combinator: string, kind: string, name: string, qualifiers: array}
+   *   The compound: its combinator, kind, name and qualifiers.
    *
    * @throws \LogicException
    *   When the selector is the owner's own pseudo-element (see first()).
@@ -1257,8 +1264,9 @@ final class RelativeSelector implements \Stringable {
   }
 
   /**
-   * Whether the selector is one unqualified compound of a combinator and
-   * kind, with no pseudo behind it.
+   * Whether the selector is one unqualified compound of a combinator and kind.
+   *
+   * The compound carries no pseudo behind it.
    */
   private function isOne(string $combinator, string $kind): bool {
     return $this->pseudo === NULL
@@ -1269,8 +1277,9 @@ final class RelativeSelector implements \Stringable {
   }
 
   /**
-   * Whether the selector crosses into children: a relation or a type at
-   * the top level.
+   * Whether the selector crosses into children.
+   *
+   * A relation or a type at the top level.
    *
    * A rule shaped like this addresses other elements' roots by relation
    * (`>`, `+`, `~` or a type anywhere in the chain), so its delivery
@@ -1317,6 +1326,7 @@ final class RelativeSelector implements \Stringable {
    * inside `:not()` travels no better than one in the chain).
    *
    * @return string[]
+   *   The class names, in print order.
    */
   public function classes(): array {
     return self::classesOf($this->compounds);
@@ -1326,6 +1336,7 @@ final class RelativeSelector implements \Stringable {
    * The classes of compounds and their qualifiers, in print order.
    *
    * @return string[]
+   *   The class names, in print order.
    */
   private static function classesOf(array $compounds): array {
     $classes = [];
@@ -1471,8 +1482,9 @@ final class RelativeSelector implements \Stringable {
   }
 
   /**
-   * The canonical spelling: the chain (or the anchor) with the pseudo
-   * glued to it.
+   * The canonical spelling.
+   *
+   * The chain (or the anchor) with the pseudo glued to it.
    */
   public function __toString(): string {
     return ($this->compounds === [] ? self::ANCHOR : self::printCompounds($this->compounds))

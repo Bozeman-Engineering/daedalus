@@ -39,6 +39,7 @@ import { csrfToken, refusalError } from './blueprint-gestures.js';
  *   The effective navigation mode (the cookie's value, or 'none').
  *
  * @return {string}
+ *   The URL, the mode on its query.
  */
 export const peekUrl = (context, mode) =>
   Drupal.url(

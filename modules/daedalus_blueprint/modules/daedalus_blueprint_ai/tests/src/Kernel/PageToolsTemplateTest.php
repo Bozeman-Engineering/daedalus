@@ -223,7 +223,9 @@ class PageToolsTemplateTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Visibility follows the document's kind: a hidden bundle hides its templates.
+   * Visibility follows the document's kind.
+   *
+   * A hidden bundle hides its templates.
    */
   public function testHiddenTargetBundleHidesTemplate(): void {
     $this->config('daedalus_blueprint_ai.settings')

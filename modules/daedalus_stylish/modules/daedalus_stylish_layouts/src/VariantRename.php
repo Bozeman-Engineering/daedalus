@@ -183,8 +183,6 @@ class VariantRename {
     return $lines;
   }
 
-
-
   /**
    * Deletes a provider's unmodified shipped variant under a retired name.
    *

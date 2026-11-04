@@ -65,9 +65,10 @@ class StandaloneInstallTest extends BrowserTestBase {
       'The fixture must not have layout_builder, or this test cannot catch the regression.',
     );
 
-    // A throwaway recipe that just enables daedalus_blueprint. applyRecipe() runs
-    // it in a subprocess and asserts the process exited 0; if a service couples
-    // to layout_builder at class-load time the container build fatals there.
+    // A throwaway recipe that just enables daedalus_blueprint. applyRecipe()
+    // runs it in a subprocess and asserts the process exited 0; if a service
+    // couples to layout_builder at class-load time the container build fatals
+    // there.
     $recipe = $this->createRecipe([
       'name' => 'Daedalus Blueprint standalone install',
       'type' => 'Site',

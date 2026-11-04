@@ -59,8 +59,9 @@ use Drupal\Component\Serialization\Yaml;
   label: new TranslatableMarkup('AI'),
   side: 'right',
   // Bottom-right is where people expect an AI chat (the web-wide chat
-  // convention); the top slot belongs to the Daedalus Stylish inspector. Both can be
-  // open at once -- the AI restyles while the inspector shows values change.
+  // convention); the top slot belongs to the Daedalus Stylish inspector. Both
+  // can be open at once -- the AI restyles while the inspector shows values
+  // change.
   slot: 'bottom',
   // In Edit Mode the toggle collects into the top bar's right toggle group;
   // after the Daedalus Stylish inspector (weight 0) so AI sits beside Styles.
@@ -558,8 +559,8 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
     $params['messageStyles']['default']['user']['outerContainer']['backgroundColor'] = 'var(--daedalus-toggle-background)';
     $params['messageStyles']['default']['user']['bubble']['color'] = 'var(--daedalus-text)';
     $params['messageStyles']['default']['ai']['bubble']['color'] = 'var(--daedalus-text)';
-    // The input wears the chrome's recessed-well treatment (the block
-    // palette's filter pill in daedalus_layout): a borderless toggle-background well —
+    // The input wears the chrome's recessed-well treatment (the block palette's
+    // filter pill in daedalus_layout): a borderless toggle-background well —
     // inputs are wells, not raised boxes. The focus entry stays to suppress
     // deep-chat's default blue focus border; focus shows no ring at all. The
     // border stays 1px transparent so focus doesn't shift layout.

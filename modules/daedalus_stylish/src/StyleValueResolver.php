@@ -32,10 +32,10 @@ use Drupal\daedalus_blueprint\Result\BlueprintError;
  *   handlers perform their effects and the canonical resolved strings
  *   replace the stand-ins, so a failed write mints nothing.
  *
- * Daedalus Stylish registers no handlers itself: the tier is generic machinery, and
- * what a marker means (e.g. daedalus_ai's `_generate`) is its handler's
- * business. An object value carrying no registered marker key is a
- * validation error, never a pass-through.
+ * Daedalus Stylish registers no handlers itself: the tier is generic machinery,
+ * and what a marker means (e.g. daedalus_ai's `_generate`) is its handler's
+ * business. An object value carrying no registered marker key is a validation
+ * error, never a pass-through.
  */
 final class StyleValueResolver {
 

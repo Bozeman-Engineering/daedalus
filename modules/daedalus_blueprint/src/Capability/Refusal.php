@@ -19,7 +19,9 @@ use Drupal\daedalus_blueprint\Result\BlueprintError;
 final class Refusal {
 
   /**
-   * The refusal for a missing permission: the one spelling, whichever policy asks.
+   * The refusal for a missing permission.
+   *
+   * The one spelling, whichever policy asks.
    *
    * @param string[] $permissions
    *   The permissions, any one of which opens the gesture.

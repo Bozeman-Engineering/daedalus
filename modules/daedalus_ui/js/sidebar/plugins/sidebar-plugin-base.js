@@ -27,30 +27,30 @@
     type = 'base';
 
     /**
-     * Open the sidebar
+     * Open the sidebar.
      *
-     * @param {string|null} id
-     *   The specific sidebar instance ID to open
+     * An override receives the sidebar instance id to open (a string, or
+     * null for the plugin's only sidebar); the base opens nothing.
      *
      * @return {Promise}
      *   Resolves when the sidebar is opened.
      */
-    open(id = null) {
+    open() {
       return Promise.resolve();
     }
 
     /**
-     * Close the sidebar
+     * Close the sidebar.
      *
-     * Can reject if the sidebar cannot be closed (e.g., invalid form data).
-     *
-     * @param {string|null} id
-     *   The specific sidebar instance ID to close
+     * An override receives the sidebar instance id to close (a string, or
+     * null for the plugin's only sidebar) and may reject with CLOSE_BLOCKED
+     * when the sidebar cannot close (e.g., invalid form data); the base
+     * closes nothing.
      *
      * @return {Promise}
      *   Resolves when the sidebar is closed, rejects if it cannot be closed.
      */
-    close(id = null) {
+    close() {
       return Promise.resolve();
     }
   }

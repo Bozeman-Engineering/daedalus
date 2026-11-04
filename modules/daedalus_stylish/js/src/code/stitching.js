@@ -104,7 +104,13 @@ export const nextTabTarget = (text, pos) => {
  * The last stop before the cursor, or `exit` — the chain leaves for the
  * previous island's last stop.
  *
+ * @param {string} text
+ *   The island's buffer text.
+ * @param {number} pos
+ *   The cursor's offset in the buffer.
+ *
  * @return {{type: string, pos?: number}}
+ *   A `stop` at the last tab stop before the cursor, or `exit`.
  */
 export const previousTabTarget = (text, pos) => {
   const stops = tabStops(String(text ?? ''));
@@ -140,7 +146,6 @@ export const createStitching = () => {
       .filter((entry) => entry.element && entry.element.isConnected)
       .sort((a, b) =>
         // compareDocumentPosition() answers with a bitmask.
-        // eslint-disable-next-line no-bitwise
         a.element.compareDocumentPosition(b.element) &
         DOCUMENT_POSITION_FOLLOWING
           ? -1

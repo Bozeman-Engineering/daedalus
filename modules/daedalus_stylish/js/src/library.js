@@ -71,6 +71,37 @@ import { RevisionList, revisionDate } from './revision-list.js';
  * daedalus_blueprint_library's routes behind the variant gates' `canOwn`
  * (the library's ownership grant); the blueprints themselves are the store's
  * records, the same in both windows.
+ *
+ * @param {object} props
+ *   The card's props.
+ * @param {object} props.variant
+ *   The variant record (the store's; the prop follows every delta).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials roster (the blueprints the ownership gestures need).
+ * @param {object} props.config
+ *   The variant gesture gates (drupalSettings.daedalusStylish.variants).
+ * @param {?object} props.styleMap
+ *   The page's style map (mirror view): the wearer reads.
+ * @param {?string} props.target
+ *   The styling target's wear key (the selected element, or the rule the
+ *   target chip names), or null with nothing selected.
+ * @param {?Array<object>} props.offer
+ *   The target's applicable variants (the apply doorway's fit read).
+ * @param {?string} props.provenance
+ *   The target's blueprint provenance, or null.
+ * @param {?{isOn: Function, toggle: Function}} props.outline
+ *   The wearer outline toggle (isOn(reference), toggle(reference)), or
+ *   null when the page offers none.
+ * @param {?Function} props.onApply
+ *   (variant): applies it to the styling target; null hides the doorway.
+ * @param {Function} props.onEditStyles
+ *   (variant): enters the editing session on the variant.
+ * @param {Function} props.onCard
+ *   Moves the open card: the id to open, or null to close.
+ * @param {object} props.source
+ *   The state source (the ops, the usage read, the dialog).
  */
 const VariantCard = ({
   variant,
@@ -455,7 +486,9 @@ const VariantCard = ({
             }}
           />
         ) : (
-          <span className="daedalus-stylish-library-card__label">{variant.label}</span>
+          <span className="daedalus-stylish-library-card__label">
+            {variant.label}
+          </span>
         )}
         {variant.scope && (
           <span
@@ -499,7 +532,9 @@ const VariantCard = ({
           >
             {ownership.orphaned
               ? Drupal.t('owner gone')
-              : Drupal.t('owned by !blueprint', { '!blueprint': ownership.label })}
+              : Drupal.t('owned by !blueprint', {
+                  '!blueprint': ownership.label,
+                })}
           </span>
         )}
       </div>
@@ -513,7 +548,9 @@ const VariantCard = ({
                 'Shipped by !provider. Copy it as your variant to change it.',
                 { '!provider': management.provider },
               )
-            : Drupal.t('Shipped by a module. Copy it as your variant to change it.')}
+            : Drupal.t(
+                'Shipped by a module. Copy it as your variant to change it.',
+              )}
         </div>
       )}
       {/* The AI opt-out beside the description it silences: the toggle
@@ -765,6 +802,35 @@ const VariantCard = ({
  * effective view speak), the axis chip, and the description's first
  * line as the row's tooltip; no origin marker (who ships a variant is
  * the open card's sentence).
+ *
+ * @param {object} props
+ *   The view's props.
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials roster (the variant records, the blueprints).
+ * @param {object} props.config
+ *   The variant gesture gates (drupalSettings.daedalusStylish.variants).
+ * @param {?object} props.styleMap
+ *   The page's style map (mirror view).
+ * @param {?string} props.target
+ *   The styling target's wear key, or null with nothing selected.
+ * @param {?Array<object>} props.offer
+ *   The target's applicable variants.
+ * @param {?string} props.provenance
+ *   The target's blueprint provenance, or null.
+ * @param {?string} props.card
+ *   The open card's variant reference, or null.
+ * @param {Function} props.onCard
+ *   Moves the open card: the reference to open, or null to close.
+ * @param {?{isOn: Function, toggle: Function}} props.outline
+ *   The wearer outline toggle, or null when the page offers none.
+ * @param {?Function} props.onApply
+ *   (variant): applies it to the styling target; null hides the doorway.
+ * @param {Function} props.onEditStyles
+ *   (variant): enters the editing session on the variant.
+ * @param {object} props.source
+ *   The state source.
  */
 export const LibraryView = ({
   guide,
@@ -859,7 +925,9 @@ export const LibraryView = ({
                     background: layerColor(variantLayerId(row.reference)),
                   }}
                 />
-                <span className="daedalus-stylish-library__name">{row.label}</span>
+                <span className="daedalus-stylish-library__name">
+                  {row.label}
+                </span>
                 <span className="daedalus-ui-chip daedalus-stylish-library__axis">
                   {axisLabel(guide, row.axis)}
                 </span>

@@ -73,6 +73,7 @@ import {
  *   The selected element's selectable key.
  *
  * @return {string}
+ *   The element's name, "Element" when the document has none.
  */
 export const elementWord = (matcher, key) =>
   matcher?.facts?.(key)?.name ?? Drupal.t('Element');
@@ -91,6 +92,7 @@ export const elementWord = (matcher, key) =>
  *   The selected element's selectable key.
  *
  * @return {?string}
+ *   The icon URL, or null.
  */
 export const elementIcon = (matcher, key) =>
   matcher?.facts?.(key)?.icon ?? null;
@@ -100,6 +102,7 @@ export const elementIcon = (matcher, key) =>
  * menu items in switcher order.
  *
  * @param {object} args
+ *   The chip's inputs.
  * @param {object} args.guide
  *   The style guide payload.
  * @param {?object} args.matcher
@@ -116,7 +119,9 @@ export const elementIcon = (matcher, key) =>
  *   The write address the rows write at (the spine's, when it is not
  *   the subject's own key), or null while a write lands on the own key.
  * @param {object} [args.blockTypes]
+ *   The block type roster, for the address labels.
  * @param {object} [args.sectionLayouts]
+ *   The section layout roster, for the address labels.
  * @param {?object} [args.markup]
  *   The selected key's `_element.markup` annotation, or null.
  * @param {boolean} [args.boxes]
@@ -154,10 +159,19 @@ export const subjectChip = ({
   const ownEntry = addresses.find((entry) => sameAddress(entry, ownAddress));
   const ownFace =
     ownEntry === undefined
-      ? facetLabel(guide, matcher, ownAddress, blockTypes, sectionLayouts, markup)
+      ? facetLabel(
+          guide,
+          matcher,
+          ownAddress,
+          blockTypes,
+          sectionLayouts,
+          markup,
+        )
       : ownEntry.label;
   const standing =
-    address === null || address === undefined || sameAddress(address, ownAddress)
+    address === null ||
+    address === undefined ||
+    sameAddress(address, ownAddress)
       ? null
       : address;
   const member =
@@ -174,7 +188,14 @@ export const subjectChip = ({
           ...standing,
           label:
             standing.key === ownAddress.key
-              ? facetLabel(guide, matcher, standing, blockTypes, sectionLayouts, markup)
+              ? facetLabel(
+                  guide,
+                  matcher,
+                  standing,
+                  blockTypes,
+                  sectionLayouts,
+                  markup,
+                )
               : addressLabel(
                   guide,
                   standing,

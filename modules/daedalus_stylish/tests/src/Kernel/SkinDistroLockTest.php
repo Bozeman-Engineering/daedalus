@@ -221,7 +221,12 @@ class SkinDistroLockTest extends KernelTestBase {
     $skin->setPackageTokens(['space' => ['gutter' => '1rem']]);
     // daedalus_stylish_control_test ships no skins file: a provider whose
     // next release dropped the entry.
-    $skin->setShippedSource('daedalus_stylish_control_test', ['tokens' => $skin->packageTokens(), 'animations' => [], 'fonts' => [], 'defaults' => []]);
+    $skin->setShippedSource('daedalus_stylish_control_test', [
+      'tokens' => $skin->packageTokens(),
+      'animations' => [],
+      'fonts' => [],
+      'defaults' => [],
+    ]);
     $skin->save();
     $this->assertNull(\Drupal::service('daedalus_stylish.skin_importer')->getShippedData($this->loadSkin('orphaned')));
 

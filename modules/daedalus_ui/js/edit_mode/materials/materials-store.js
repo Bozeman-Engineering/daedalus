@@ -58,6 +58,9 @@ const openWire = () => {
  * Applies a mutation response's materials delta and relays it to the
  * session's other windows. An empty delta (the shape every response
  * carries) touches nothing.
+ *
+ * @param {{upsert: object[], remove: Array<{kind: string, id: string}>}} delta
+ *   The response's materials delta.
  */
 export const applyMaterialsDelta = (delta) => {
   assertDelta(delta);

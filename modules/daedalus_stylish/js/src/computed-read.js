@@ -2,7 +2,10 @@ import { CHROME_SELECTOR } from './layout-context.js';
 import { parseKey } from './style-guide.js';
 import { hostTargets, donutLimit } from './printer.js';
 import { parseSelector } from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
-import { OWNER, reach } from '../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
+import {
+  OWNER,
+  reach,
+} from '../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
 
 /**
  * THE shared canvas computed-read seam.
@@ -51,7 +54,9 @@ import { OWNER, reach } from '../../../daedalus_ui/js/edit_mode/materials/select
  *   grammar's verdict is resolveTargets' empty answer, not this one's).
  */
 export const pseudoOf = (selector) =>
-  typeof selector === 'string' ? (parseSelector(selector)?.pseudo ?? null) : null;
+  typeof selector === 'string'
+    ? (parseSelector(selector)?.pseudo ?? null)
+    : null;
 
 /**
  * The @scope donut boundary for container-rooted styles: a container's
@@ -188,9 +193,10 @@ export const resolveTargets = (key, selector = null, conditions = {}) => {
       }
       return;
     }
-    const query = target.startsWith(':scope') || target.startsWith(':where(:scope)')
-      ? target
-      : `:scope ${target}`;
+    const query =
+      target.startsWith(':scope') || target.startsWith(':where(:scope)')
+        ? target
+        : `:scope ${target}`;
     root.querySelectorAll(query).forEach(add);
   });
   return matches;
@@ -208,14 +214,19 @@ export const resolveTargets = (key, selector = null, conditions = {}) => {
  * @param {Element} element
  *   The element, or a box's host (a resolveTargets match).
  * @param {string[]} properties
+ *   The properties to read.
  * @param {?string} pseudo
  *   'before' / 'after' to read the element's generated box (pseudoOf the
  *   target's selector), null for the element itself.
  *
  * @return {Object<string, string>}
+ *   The computed value per property.
  */
 export const readComputed = (element, properties, pseudo = null) => {
-  const computed = getComputedStyle(element, pseudo === null ? null : `::${pseudo}`);
+  const computed = getComputedStyle(
+    element,
+    pseudo === null ? null : `::${pseudo}`,
+  );
   const values = {};
   properties.forEach((property) => {
     values[property] = computed.getPropertyValue(property);
@@ -226,6 +237,12 @@ export const readComputed = (element, properties, pseudo = null) => {
 /**
  * The px a font-size computes to, or null when the read is no length
  * (an empty read on a detached node).
+ *
+ * @param {CSSStyleDeclaration} computed
+ *   A computed declaration.
+ *
+ * @return {?number}
+ *   The px, or null.
  */
 const fontSizePx = (computed) => {
   const number = parseFloat(computed.getPropertyValue('font-size'));
@@ -249,6 +266,7 @@ const fontSizePx = (computed) => {
  *   element itself.
  *
  * @return {{rootPx: ?number, fontPx: ?number}}
+ *   The root's and the element's font size px, each null when unread.
  */
 export const lengthBases = (element, pseudo = null) => ({
   rootPx: fontSizePx(getComputedStyle(document.documentElement)),
@@ -266,8 +284,10 @@ export const lengthBases = (element, pseudo = null) => ({
  * children (absolute/fixed take no gap), and zero-size boxes.
  *
  * @param {Element} element
+ *   The container.
  *
  * @return {DOMRect[]}
+ *   The in-flow children's border-box rects.
  */
 export const flowChildRects = (element) => {
   const rects = [];
@@ -294,6 +314,12 @@ export const flowChildRects = (element) => {
 
 /**
  * Parses a computed length to px, treating non-lengths ('normal', '') as 0.
+ *
+ * @param {string} value
+ *   A computed length.
+ *
+ * @return {number}
+ *   The px.
  */
 const px = (value) => {
   const number = parseFloat(value);
@@ -304,8 +330,10 @@ const px = (value) => {
  * Digests a computed declaration into per-side padding px.
  *
  * @param {{getPropertyValue: function(string): string}} computed
+ *   A computed declaration.
  *
  * @return {{top: number, right: number, bottom: number, left: number}}
+ *   The padding per side, px.
  */
 export const paddingPx = (computed) => ({
   top: px(computed.getPropertyValue('padding-top')),
@@ -320,8 +348,10 @@ export const paddingPx = (computed) => ({
  * inside the borders.
  *
  * @param {{getPropertyValue: function(string): string}} computed
+ *   A computed declaration.
  *
  * @return {{top: number, right: number, bottom: number, left: number}}
+ *   The border width per side, px.
  */
 export const borderPx = (computed) => ({
   top: px(computed.getPropertyValue('border-top-width')),
@@ -340,9 +370,11 @@ export const borderPx = (computed) => ({
  * negative and auto margins claim no space the value owns.
  *
  * @param {{getPropertyValue: function(string): string}} computed
+ *   A computed declaration.
  *
  * @return {{top: ?number, right: ?number, bottom: ?number,
  *   left: ?number}}
+ *   The margin per side, px, null where no length was read.
  */
 export const marginPx = (computed) => {
   const signed = (value) => {
@@ -361,8 +393,10 @@ export const marginPx = (computed) => {
  * Digests a computed declaration into row/column gap px ('normal' → 0).
  *
  * @param {{getPropertyValue: function(string): string}} computed
+ *   A computed declaration.
  *
  * @return {{row: number, column: number}}
+ *   The gaps, px.
  */
 export const gapPx = (computed) => ({
   row: px(computed.getPropertyValue('row-gap')),

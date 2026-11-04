@@ -31,13 +31,13 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  *
  * A module's definitions come from two file forms merged: the hand-authored
  * MODULE.{suffix} (e.g. x.daedalus_stylish.variants.yml) plus every per-id file
- * MODULE.{suffix minus .yml}.ID.yml beside it (x.daedalus_stylish.variants.card.yml).
- * The per-id form is the machine-written lane (a blueprint shipped with its
- * variants lands as one such file) so writers never touch the comment-heavy
- * single file; a machine name shipped in two of one module's files is a
- * developer error (FAILED on the sync report under the file's name, an
- * exception for the loud reader). One grammar for every importer: skins,
- * skins gain the per-id form by construction.
+ * MODULE.{suffix minus .yml}.ID.yml beside it
+ * (x.daedalus_stylish.variants.card.yml). The per-id form is the
+ * machine-written lane (a blueprint shipped with its variants lands as one such
+ * file) so writers never touch the comment-heavy single file; a machine name
+ * shipped in two of one module's files is a developer error (FAILED on the sync
+ * report under the file's name, an exception for the loud reader). One grammar
+ * for every importer: skins, skins gain the per-id form by construction.
  *
  * Activation belongs to ShippedSync, which runs the four importers in
  * dependency order (skins, variants) on every cache
@@ -191,7 +191,7 @@ abstract class ShippedDefinitionsImporter {
   }
 
   /**
-   * The per-id shipped file's suffix, e.g. 'daedalus_stylish.variants.card.yml'.
+   * A per-id shipped file's suffix, e.g. 'daedalus_stylish.variants.card.yml'.
    *
    * A module's per-id files are MODULE.{perFileSuffix(ID)} beside its
    * single file; '*' names the whole family (discovery's glob, the sync
@@ -473,22 +473,21 @@ abstract class ShippedDefinitionsImporter {
    *
    * Tolerant and complete: every definition of every module in the set is
    * attempted, and a definition that cannot import (malformed, failing the
-   * spine's structural validation, colliding with an entity its module
-   * does not ship) is recorded FAILED with its errors while the rest of
-   * the file lands. A definition the site's law refuses is not a failure:
-   * it lands CREATED / UPDATED like any other and the roster's verdict
-   * withholds it (see the class doc). Two waits are not reads either: a
-   * design-system package whose system is not the active one is DEFERRED
-   * on the report (its definitions are structured by the stratum its own
-   * system layers) and lands when its system becomes active; and a kind
-   * that waits for the default theme (themeAwaited(): the skins kind
-   * while system.theme names a theme not installed) defers every module
-   * shipping it, recorded with the theme it waits for, and lands when the
-   * theme does. Nothing the disk lane can refuse throws out of here; callers read the
-   * report, and the sync command, the update hooks and the rebuild log
-   * each surface its failures in their own medium. ShippedSync runs the
-   * five kinds in dependency order; call one kind's sync() directly only
-   * when the others cannot matter.
+   * spine's structural validation, colliding with an entity its module does not
+   * ship) is recorded FAILED with its errors while the rest of the file lands.
+   * A definition the site's law refuses is not a failure: it lands CREATED /
+   * UPDATED like any other and the roster's verdict withholds it (see the class
+   * doc). Two waits are not reads either: a design-system package whose system
+   * is not the active one is DEFERRED on the report (its definitions are
+   * structured by the stratum its own system layers) and lands when its system
+   * becomes active; and a kind that waits for the default theme
+   * (themeAwaited(): the skins kind while system.theme names a theme not
+   * installed) defers every module shipping it, recorded with the theme it
+   * waits for, and lands when the theme does. Nothing the disk lane can refuse
+   * throws out of here; callers read the report, and the sync command, the
+   * update hooks and the rebuild log each surface its failures in their own
+   * medium. ShippedSync runs the five kinds in dependency order; call one
+   * kind's sync() directly only when the others cannot matter.
    *
    * @param string[]|null $modules
    *   Modules to sync, or NULL for every enabled module. Modules shipping no

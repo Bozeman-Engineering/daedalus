@@ -71,16 +71,29 @@ export const BLUEPRINT_PREFIX = 'blueprint:';
  *   The materials record's id.
  *
  * @return {string}
+ *   The face id, the record's id behind BLUEPRINT_PREFIX.
  */
 export const blueprintFaceId = (recordId) => `${BLUEPRINT_PREFIX}${recordId}`;
 
 /**
  * Whether a face id names a blueprint.
+ *
+ * @param {string} id
+ *   A face id.
+ *
+ * @return {boolean}
+ *   True when the id carries BLUEPRINT_PREFIX.
  */
 export const isBlueprintId = (id) => String(id).startsWith(BLUEPRINT_PREFIX);
 
 /**
  * The record id a blueprint face id names, or null for a block's id.
+ *
+ * @param {string} id
+ *   A face id.
+ *
+ * @return {?string}
+ *   The materials record's id, or null when the face is a block's.
  */
 export const blueprintRecordId = (id) =>
   isBlueprintId(id) ? String(id).slice(BLUEPRINT_PREFIX.length) : null;
@@ -90,6 +103,13 @@ export const blueprintRecordId = (id) =>
  *
  * The server's shape is trusted; only the list-valued and nullable keys
  * are made safe to read without a guard.
+ *
+ * @param {object} face
+ *   A block's face as AddPanelAnswer serializes it.
+ *
+ * @return {object}
+ *   The face: its strings as strings, `icon` or null, `groups` a list,
+ *   the booleans booleans, and `blueprint` null (a block has no record).
  */
 export const blockFace = (face) => ({
   id: String(face.id),
@@ -114,6 +134,7 @@ export const blockFace = (face) => ({
  *   A materials record of kind `blueprint`, in the delivery's shape.
  *
  * @return {object}
+ *   The face, kind KIND_BLUEPRINT, the record under `blueprint`.
  */
 export const blueprintFace = (record) => ({
   id: blueprintFaceId(record.id),
@@ -141,6 +162,7 @@ export const blueprintFace = (record) => ({
  *   The materials store's blueprint records.
  *
  * @return {Array<object>}
+ *   The faces, each id once, the blocks' before the blueprints'.
  */
 export const faceList = (blockFaces, blueprintRecords) => {
   const seen = new Set();
@@ -166,6 +188,7 @@ export const faceList = (blockFaces, blueprintRecords) => {
  *   The editor's marks, id to boolean (AddPanelAnswer's `favorites`).
  *
  * @return {boolean}
+ *   The mark when the editor made one, else the face's own default.
  */
 export const isFavorite = (face, marks) =>
   marks !== null &&
@@ -249,5 +272,6 @@ export const newBlueprintIds = (previousRecords, records) => {
  *   The face's id.
  *
  * @return {string}
+ *   The key, `setId|faceId`.
  */
 export const rowKey = (setId, faceId) => `${setId}|${faceId}`;

@@ -9,14 +9,14 @@ use Drupal\Core\Ajax\CommandInterface;
 /**
  * Delivers a media library selection to the waiting style picker.
  *
- * The one selection command of the daedalus_stylish opener contract: the client-side
- * handler (js/src/media-library.js) routes it to the picker that opened the
- * library. The payload is everything a pick needs and nothing more — the
- * semantic token the picker commits through update_style, the uuid it keys
- * the client's uuid -> URL table by, and the server-resolved preview URL so
- * the staged preview is instant (NULL when the media resolves to no image
- * file; the client then degrades the preview to "none", exactly like the
- * server's emit gate).
+ * The one selection command of the daedalus_stylish opener contract: the
+ * client-side handler (js/src/media-library.js) routes it to the picker that
+ * opened the library. The payload is everything a pick needs and nothing more —
+ * the semantic token the picker commits through update_style, the uuid it keys
+ * the client's uuid -> URL table by, and the server-resolved preview URL so the
+ * staged preview is instant (NULL when the media resolves to no image file; the
+ * client then degrades the preview to "none", exactly like the server's emit
+ * gate).
  *
  * @see \Drupal\daedalus_stylish\DaedalusStylishMediaLibraryOpener::getSelectionResponse()
  * @see js/src/media-library.js

@@ -11,15 +11,15 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
  * The one-box convergence: container part styles hoist onto the root.
  *
  * The container is ONE element at every depth now; the old inner
- * `.daedalus-stylish-layout-container` part no longer exists in the declaration or
- * the render. Stored styles addressed to it (`::.daedalus-stylish-layout-container`
- * and its `::>` children entries) have no element left, so every store
- * re-keys them onto the root: host style maps (the sweep), daedalus_variant
- * styles (all revisions, composition slot paths included), daedalus_skin
- * defaults. When the root already carries an entry,
- * the two merge per condition with the ROOT's properties winning (the two
- * boxes are one now; a genuine property collision is reported loudly) and
- * variant reference lists concatenating.
+ * `.daedalus-stylish-layout-container` part no longer exists in the declaration
+ * or the render. Stored styles addressed to it
+ * (`::.daedalus-stylish-layout-container` and its `::>` children entries) have
+ * no element left, so every store re-keys them onto the root: host style maps
+ * (the sweep), daedalus_variant styles (all revisions, composition slot paths
+ * included), daedalus_skin defaults. When the root already carries an entry,
+ * the two merge per condition with the ROOT's properties winning (the two boxes
+ * are one now; a genuine property collision is reported loudly) and variant
+ * reference lists concatenating.
  *
  * Shipped-unmodified variants and skins are SKIPPED: the sync lane owns
  * them (their disk sources were rewritten to the root key with the
@@ -50,14 +50,14 @@ class ContainerPartHoist {
   /**
    * Strips the retired part segment from a style key or slot path.
    *
-   * `container:{uuid}::.daedalus-stylish-layout-container` becomes the root key,
-   * the part's children entry (`::.daedalus-stylish-layout-container > *`, or
-   * the legacy `::.daedalus-stylish-layout-container::>` spelling) becomes the
-   * root's `::> *` children entry, and a composition slot path
+   * `container:{uuid}::.daedalus-stylish-layout-container` becomes the root
+   * key, the part's children entry (`::.daedalus-stylish-layout-container > *`,
+   * or the legacy `::.daedalus-stylish-layout-container::>` spelling) becomes
+   * the root's `::> *` children entry, and a composition slot path
    * (`container(1)::.daedalus-stylish-layout-container`) loses the segment the
-   * same way. The children spelling written is the relative selector
-   * grammar's canonical one (RelativeSelectorSweep converges the legacy
-   * spelling on every store this hoist does not reach first).
+   * same way. The children spelling written is the relative selector grammar's
+   * canonical one (RelativeSelectorSweep converges the legacy spelling on every
+   * store this hoist does not reach first).
    */
   public function hoistKey(string $key): string {
     return str_replace([
@@ -318,7 +318,5 @@ class ContainerPartHoist {
     }
     return $lines;
   }
-
-
 
 }

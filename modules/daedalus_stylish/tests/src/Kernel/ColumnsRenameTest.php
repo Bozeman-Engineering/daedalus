@@ -22,20 +22,19 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the one-shot rename of the shipped Columns variant (row → columns).
  *
- * The real post-update runs against the real shipped set (the module
- * installed, so `columns` synced on install) over the two stores a
- * machine name lives in: host style maps across revisions (a direct
- * wearing and one a composition stamped "via", both keeping their place
- * and their provenance) and variant styles across revisions (a composition nesting the name; a
- * shipped-unmodified one is left to the sync lane). Then the legacy
- * shipped `row` entity retires, `columns` stands shipped and unmodified,
- * the same sync lands the real Row under the freed `row` name, and a
- * second walk rewrites nothing (the retire step is never rerun: the
- * post-update is a one-shot precisely because `row` is minted again).
- * Translations ride the same walk by construction (the map field is
- * untranslatable and HostEntityWalker's own suite covers translated
- * layout fields), so the fixture stays monolingual. A modified shipped
- * `row` is kept, the retirement's report says so.
+ * The real post-update runs against the real shipped set (the module installed,
+ * so `columns` synced on install) over the two stores a machine name lives in:
+ * host style maps across revisions (a direct wearing and one a composition
+ * stamped "via", both keeping their place and their provenance) and variant
+ * styles across revisions (a composition nesting the name; a shipped-unmodified
+ * one is left to the sync lane). Then the legacy shipped `row` entity retires,
+ * `columns` stands shipped and unmodified, the same sync lands the real Row
+ * under the freed `row` name, and a second walk rewrites nothing (the retire
+ * step is never rerun: the post-update is a one-shot precisely because `row` is
+ * minted again). Translations ride the same walk by construction (the map field
+ * is untranslatable and HostEntityWalker's own suite covers translated layout
+ * fields), so the fixture stays monolingual. A modified shipped `row` is kept,
+ * the retirement's report says so.
  *
  * @group daedalus_stylish
  */
@@ -84,8 +83,8 @@ class ColumnsRenameTest extends KernelTestBase {
     $this->installEntitySchema('entity_test_mulrev');
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
@@ -204,7 +203,11 @@ class ColumnsRenameTest extends KernelTestBase {
     $storage = $this->container->get('entity_type.manager')->getStorage('daedalus_variant');
 
     // A user composition nesting the old name on its slot, two revisions.
-    $card = DaedalusStylishVariant::create(['label' => 'Card Left', 'machine_name' => 'card_left', 'scope' => 'kind:container']);
+    $card = DaedalusStylishVariant::create([
+      'label' => 'Card Left',
+      'machine_name' => 'card_left',
+      'scope' => 'kind:container',
+    ]);
     $card->setStyles([
       '' => ['default' => ['padding' => '2rem']],
       'container(1)' => ['variants' => [['variant' => 'row', 'fragment' => '']], 'default' => ['margin' => '1px']],
@@ -221,7 +224,11 @@ class ColumnsRenameTest extends KernelTestBase {
     // A shipped-unmodified composition from another provider nesting the
     // old name: the sync lane's, never rewritten in place.
     $shipped_styles = ['container(1)' => ['variants' => [['variant' => 'row', 'fragment' => '']]]];
-    $shipped = DaedalusStylishVariant::create(['label' => 'Card Shipped', 'machine_name' => 'card_shipped', 'scope' => 'kind:container']);
+    $shipped = DaedalusStylishVariant::create([
+      'label' => 'Card Shipped',
+      'machine_name' => 'card_shipped',
+      'scope' => 'kind:container',
+    ]);
     $shipped->setStyles($shipped_styles);
     $shipped->setShippedSource('cs_stylish', $shipped_styles);
     $shipped->save();
@@ -236,15 +243,25 @@ class ColumnsRenameTest extends KernelTestBase {
       OverridesSectionStorage::FIELD_NAME => [$this->containerSection($section), $this->containerSection($nested)],
     ]);
     $this->stageMap($host, [
-      "container:$section" => ['variants' => [['variant' => 'container_site', 'fragment' => ''], ['variant' => 'row', 'fragment' => '']]],
-      "container:$nested" => ['variants' => [['variant' => 'row', 'fragment' => '', 'via' => 'card_left'], ['variant' => 'card_left', 'fragment' => 'container(1)']]],
+      "container:$section" => [
+        'variants' => [['variant' => 'container_site', 'fragment' => ''], ['variant' => 'row', 'fragment' => '']],
+      ],
+      "container:$nested" => [
+        'variants' => [
+          ['variant' => 'row', 'fragment' => '', 'via' => 'card_left'],
+          ['variant' => 'card_left', 'fragment' => 'container(1)'],
+        ],
+      ],
     ]);
     $revision_1 = $host->getRevisionId();
     $host_storage = $this->container->get('entity_type.manager')->getStorage('entity_test_mulrev');
     /** @var \Drupal\entity_test\Entity\EntityTestMulRev $revision_2 */
     $revision_2 = $host_storage->createRevision($host);
     $this->stageMap($revision_2, [
-      "container:$section" => ['variants' => [['variant' => 'row', 'fragment' => '']], 'default' => ['padding-top' => '2rem']],
+      "container:$section" => [
+        'variants' => [['variant' => 'row', 'fragment' => '']],
+        'default' => ['padding-top' => '2rem'],
+      ],
       "container:$nested" => ['default' => ['gap' => '1rem']],
     ]);
     $revision_2_id = $revision_2->getRevisionId();
@@ -263,11 +280,21 @@ class ColumnsRenameTest extends KernelTestBase {
 
     // Host maps: every revision repointed, place and provenance kept.
     $this->assertSame([
-      "container:$section" => ['variants' => [['variant' => 'container_site', 'fragment' => ''], ['variant' => 'columns', 'fragment' => '']]],
-      "container:$nested" => ['variants' => [['variant' => 'columns', 'fragment' => '', 'via' => 'card_left'], ['variant' => 'card_left', 'fragment' => 'container(1)']]],
+      "container:$section" => [
+        'variants' => [['variant' => 'container_site', 'fragment' => ''], ['variant' => 'columns', 'fragment' => '']],
+      ],
+      "container:$nested" => [
+        'variants' => [
+          ['variant' => 'columns', 'fragment' => '', 'via' => 'card_left'],
+          ['variant' => 'card_left', 'fragment' => 'container(1)'],
+        ],
+      ],
     ], $this->revisionMap($revision_1), 'The old revision repointed, the via origin riding along.');
     $this->assertSame([
-      "container:$section" => ['variants' => [['variant' => 'columns', 'fragment' => '']], 'default' => ['padding-top' => '2rem']],
+      "container:$section" => [
+        'variants' => [['variant' => 'columns', 'fragment' => '']],
+        'default' => ['padding-top' => '2rem'],
+      ],
       "container:$nested" => ['default' => ['gap' => '1rem']],
     ], $this->revisionMap($revision_2_id), 'The default revision repointed.');
     $host_storage->resetCache();

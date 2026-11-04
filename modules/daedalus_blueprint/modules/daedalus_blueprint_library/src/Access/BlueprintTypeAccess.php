@@ -14,7 +14,7 @@ use Drupal\daedalus_blueprint_library\BlueprintTypeInterface;
 use Symfony\Component\Routing\Route;
 
 /**
- * "May this actor work on blueprints of some type?": the any-type gate.
+ * The any-type gate: "May this actor work on blueprints of some type?".
  *
  * The question every surface that is not about ONE blueprint asks: the
  * admin listing, the gesture routes whose reference resolves inside the

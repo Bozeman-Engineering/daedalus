@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Unit\Materials;
 
+// cspell:ignore childx
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\Tests\daedalus\Traits\NodeSuitesTrait;
@@ -54,7 +55,10 @@ class RelativeSelectorTest extends UnitTestCase {
    * A `:not()` qualifier over one compound (kind and name NULL when implied).
    */
   private static function not(?string $kind, ?string $name, array $qualifiers = []): array {
-    return ['name' => 'not', 'argument' => ['combinator' => NULL, 'kind' => $kind, 'name' => $name, 'qualifiers' => $qualifiers]];
+    return [
+      'name' => 'not',
+      'argument' => ['combinator' => NULL, 'kind' => $kind, 'name' => $name, 'qualifiers' => $qualifiers],
+    ];
   }
 
   /**
@@ -89,7 +93,10 @@ class RelativeSelectorTest extends UnitTestCase {
    * An attribute qualifier.
    */
   private static function attr(string $attribute, ?string $operator = NULL, ?string $value = NULL, ?string $flag = NULL): array {
-    return ['name' => 'attribute', 'argument' => ['attribute' => $attribute, 'operator' => $operator, 'value' => $value, 'flag' => $flag]];
+    return [
+      'name' => 'attribute',
+      'argument' => ['attribute' => $attribute, 'operator' => $operator, 'value' => $value, 'flag' => $flag],
+    ];
   }
 
   /**
@@ -144,60 +151,292 @@ class RelativeSelectorTest extends UnitTestCase {
       // (the implied subject prints nothing), on any subject kind, the
       // anchor included, inside `:has()`, among other qualifiers, before
       // the box.
-      'is over tags' => ['*:is(h1, h2)', [$c('descendant', 'universal', '*', [$is($member('tag', 'h1'), $member('tag', 'h2'))])], FALSE, FALSE],
-      'is over states then child' => ['.menu-item:is(:focus-within, :hover) > ul', [$c('descendant', 'class', '.menu-item', [$is($member(NULL, NULL, [$at('focus-within')]), $member(NULL, NULL, [$at('hover')]))]), $c('child', 'tag', 'ul')], TRUE, TRUE],
-      'is over parts' => ['*:is(.a, .b)', [$c('descendant', 'universal', '*', [$is($member('class', '.a'), $member('class', '.b'))])], FALSE, FALSE],
-      'children is over tags' => ['> *:is(div, p)', [$c('child', 'universal', '*', [$is($member('tag', 'div'), $member('tag', 'p'))])], FALSE, TRUE],
-      'is over a negation and a tag' => ['*:is(:not(.b), a)', [$c('descendant', 'universal', '*', [$is($member(NULL, NULL, [$not('class', '.b')]), $member('tag', 'a'))])], FALSE, FALSE],
-      'is inside has' => ['> d-text:has(*:is(a, button))', [$c('child', 'type', 'd-text', [$has([$c('descendant', 'universal', '*', [$is($member('tag', 'a'), $member('tag', 'button'))])])])], FALSE, TRUE],
-      'is over types by descent' => ['*:is(d-image, d-text)', [$c('descendant', 'universal', '*', [$is($member('type', 'd-image'), $member('type', 'd-text'))])], FALSE, TRUE],
-      'is on the anchor then child' => ['&:is(.a, .b) > ul', [$anchor([$is($member('class', '.a'), $member('class', '.b'))]), $c('child', 'tag', 'ul')], FALSE, TRUE],
-      'is among qualifiers' => ['li:hover:is(.a, .b):not(.c)', [$c('descendant', 'tag', 'li', [$at('hover'), $is($member('class', '.a'), $member('class', '.b')), $not('class', '.c')])], FALSE, FALSE],
-      'is over positions on a type then descendant' => ['> d-text:is(:first-child, :last-child) a', [$c('child', 'type', 'd-text', [$is($member(NULL, NULL, [$at('first-child')]), $member(NULL, NULL, [$at('last-child')]))]), $c('descendant', 'tag', 'a')], FALSE, TRUE],
-      'is member with has' => ['*:is(a:has(img), button)', [$c('descendant', 'universal', '*', [$is($member('tag', 'a', [$has([$c('descendant', 'tag', 'img')])]), $member('tag', 'button'))])], FALSE, FALSE],
-      'is over a class and an attribute' => ['a:is(.x, [href])', [$c('descendant', 'tag', 'a', [$is($member('class', '.x'), $member(NULL, NULL, [$attr('href')]))])], FALSE, FALSE],
-      'is then box' => ['*:is(h1, h2)::before', [$c('descendant', 'universal', '*', [$is($member('tag', 'h1'), $member('tag', 'h2'))])], FALSE, FALSE, 'before'],
+      'is over tags' => [
+        '*:is(h1, h2)',
+        [$c('descendant', 'universal', '*', [$is($member('tag', 'h1'), $member('tag', 'h2'))])],
+        FALSE,
+        FALSE,
+      ],
+      'is over states then child' => [
+        '.menu-item:is(:focus-within, :hover) > ul',
+        [
+          $c('descendant', 'class', '.menu-item', [$is($member(NULL, NULL, [$at('focus-within')]), $member(NULL, NULL, [$at('hover')]))]),
+          $c('child', 'tag', 'ul'),
+        ],
+        TRUE,
+        TRUE,
+      ],
+      'is over parts' => [
+        '*:is(.a, .b)',
+        [$c('descendant', 'universal', '*', [$is($member('class', '.a'), $member('class', '.b'))])],
+        FALSE,
+        FALSE,
+      ],
+      'children is over tags' => [
+        '> *:is(div, p)',
+        [$c('child', 'universal', '*', [$is($member('tag', 'div'), $member('tag', 'p'))])],
+        FALSE,
+        TRUE,
+      ],
+      'is over a negation and a tag' => [
+        '*:is(:not(.b), a)',
+        [$c('descendant', 'universal', '*', [$is($member(NULL, NULL, [$not('class', '.b')]), $member('tag', 'a'))])],
+        FALSE,
+        FALSE,
+      ],
+      'is inside has' => [
+        '> d-text:has(*:is(a, button))',
+        [$c('child', 'type', 'd-text', [$has([$c('descendant', 'universal', '*', [$is($member('tag', 'a'), $member('tag', 'button'))])])])],
+        FALSE,
+        TRUE,
+      ],
+      'is over types by descent' => [
+        '*:is(d-image, d-text)',
+        [$c('descendant', 'universal', '*', [$is($member('type', 'd-image'), $member('type', 'd-text'))])],
+        FALSE,
+        TRUE,
+      ],
+      'is on the anchor then child' => [
+        '&:is(.a, .b) > ul',
+        [$anchor([$is($member('class', '.a'), $member('class', '.b'))]), $c('child', 'tag', 'ul')],
+        FALSE,
+        TRUE,
+      ],
+      'is among qualifiers' => [
+        'li:hover:is(.a, .b):not(.c)',
+        [
+          $c('descendant', 'tag', 'li', [
+            $at('hover'),
+            $is($member('class', '.a'), $member('class', '.b')),
+            $not('class', '.c'),
+          ]),
+        ],
+        FALSE,
+        FALSE,
+      ],
+      'is over positions on a type then descendant' => [
+        '> d-text:is(:first-child, :last-child) a',
+        [
+          $c('child', 'type', 'd-text', [$is($member(NULL, NULL, [$at('first-child')]), $member(NULL, NULL, [$at('last-child')]))]),
+          $c('descendant', 'tag', 'a'),
+        ],
+        FALSE,
+        TRUE,
+      ],
+      'is member with has' => [
+        '*:is(a:has(img), button)',
+        [$c('descendant', 'universal', '*', [$is($member('tag', 'a', [$has([$c('descendant', 'tag', 'img')])]), $member('tag', 'button'))])],
+        FALSE,
+        FALSE,
+      ],
+      'is over a class and an attribute' => [
+        'a:is(.x, [href])',
+        [$c('descendant', 'tag', 'a', [$is($member('class', '.x'), $member(NULL, NULL, [$attr('href')]))])],
+        FALSE,
+        FALSE,
+      ],
+      'is then box' => [
+        '*:is(h1, h2)::before',
+        [$c('descendant', 'universal', '*', [$is($member('tag', 'h1'), $member('tag', 'h2'))])],
+        FALSE,
+        FALSE,
+        'before',
+      ],
       // Position pseudo-classes qualify any compound: the seven without
       // an argument, the four `An+B` forms canonical as CSS serializes them,
       // inside `:not()` (the implied subject) and inside `:has()`.
-      'children not last' => ['> *:not(:last-child)', [$c('child', 'universal', '*', [$not(NULL, NULL, [$at('last-child')])])], FALSE, TRUE],
+      'children not last' => [
+        '> *:not(:last-child)',
+        [$c('child', 'universal', '*', [$not(NULL, NULL, [$at('last-child')])])],
+        FALSE,
+        TRUE,
+      ],
       'first child' => ['> *:first-child', [$c('child', 'universal', '*', [$at('first-child')])], FALSE, TRUE],
-      'two positions sorted' => ['> *:first-child:last-child', [$c('child', 'universal', '*', [$at('first-child'), $at('last-child')])], FALSE, TRUE],
-      'tag nth-child' => ['li:nth-child(2n+1)', [$c('descendant', 'tag', 'li', [$at('nth-child', '2n+1')])], FALSE, FALSE],
-      'tag nth-child odd' => ['li:nth-child(odd)', [$c('descendant', 'tag', 'li', [$at('nth-child', 'odd')])], FALSE, FALSE],
-      'type nth-of-type' => ['> d-text:nth-of-type(2)', [$c('child', 'type', 'd-text', [$at('nth-of-type', '2')])], FALSE, TRUE],
-      'type nth-last-child' => ['> d-text:nth-last-child(-n+3)', [$c('child', 'type', 'd-text', [$at('nth-last-child', '-n+3')])], FALSE, TRUE],
-      'type nth-last-of-type' => ['> d-text:nth-last-of-type(even)', [$c('child', 'type', 'd-text', [$at('nth-last-of-type', 'even')])], FALSE, TRUE],
+      'two positions sorted' => [
+        '> *:first-child:last-child',
+        [$c('child', 'universal', '*', [$at('first-child'), $at('last-child')])],
+        FALSE,
+        TRUE,
+      ],
+      'tag nth-child' => [
+        'li:nth-child(2n+1)',
+        [$c('descendant', 'tag', 'li', [$at('nth-child', '2n+1')])],
+        FALSE,
+        FALSE,
+      ],
+      'tag nth-child odd' => [
+        'li:nth-child(odd)',
+        [$c('descendant', 'tag', 'li', [$at('nth-child', 'odd')])],
+        FALSE,
+        FALSE,
+      ],
+      'type nth-of-type' => [
+        '> d-text:nth-of-type(2)',
+        [$c('child', 'type', 'd-text', [$at('nth-of-type', '2')])],
+        FALSE,
+        TRUE,
+      ],
+      'type nth-last-child' => [
+        '> d-text:nth-last-child(-n+3)',
+        [$c('child', 'type', 'd-text', [$at('nth-last-child', '-n+3')])],
+        FALSE,
+        TRUE,
+      ],
+      'type nth-last-of-type' => [
+        '> d-text:nth-last-of-type(even)',
+        [$c('child', 'type', 'd-text', [$at('nth-last-of-type', 'even')])],
+        FALSE,
+        TRUE,
+      ],
       'part only child' => ['.cls:only-child', [$c('descendant', 'class', '.cls', [$at('only-child')])], TRUE, FALSE],
       'type empty' => ['> d-text:empty', [$c('child', 'type', 'd-text', [$at('empty')])], FALSE, TRUE],
-      'type first-of-type last-of-type only-of-type' => ['> d-text:first-of-type:last-of-type:only-of-type', [$c('child', 'type', 'd-text', [$at('first-of-type'), $at('last-of-type'), $at('only-of-type')])], FALSE, TRUE],
-      'position among qualifiers' => ['> d-text:first-child:has(a):not(.featured):nth-child(n)', [$c('child', 'type', 'd-text', [$at('first-child'), $has([$c('descendant', 'tag', 'a')]), $not('class', '.featured'), $at('nth-child', 'n')])], FALSE, TRUE],
-      'position inside has' => ['> d-text:has(a:first-child)', [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a', [$at('first-child')])])])], FALSE, TRUE],
-      'position on a not subject' => ['> d-text:not(p:first-child)', [$c('child', 'type', 'd-text', [$not('tag', 'p', [$at('first-child')])])], FALSE, TRUE],
-      'position then box' => ['> *:not(:last-child)::after', [$c('child', 'universal', '*', [$not(NULL, NULL, [$at('last-child')])])], FALSE, TRUE, 'after'],
+      'type first-of-type last-of-type only-of-type' => [
+        '> d-text:first-of-type:last-of-type:only-of-type',
+        [$c('child', 'type', 'd-text', [$at('first-of-type'), $at('last-of-type'), $at('only-of-type')])],
+        FALSE,
+        TRUE,
+      ],
+      'position among qualifiers' => [
+        '> d-text:first-child:has(a):not(.featured):nth-child(n)',
+        [
+          $c('child', 'type', 'd-text', [
+            $at('first-child'),
+            $has([$c('descendant', 'tag', 'a')]),
+            $not('class', '.featured'),
+            $at('nth-child', 'n'),
+          ]),
+        ],
+        FALSE,
+        TRUE,
+      ],
+      'position inside has' => [
+        '> d-text:has(a:first-child)',
+        [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a', [$at('first-child')])])])],
+        FALSE,
+        TRUE,
+      ],
+      'position on a not subject' => [
+        '> d-text:not(p:first-child)',
+        [$c('child', 'type', 'd-text', [$not('tag', 'p', [$at('first-child')])])],
+        FALSE,
+        TRUE,
+      ],
+      'position then box' => [
+        '> *:not(:last-child)::after',
+        [$c('child', 'universal', '*', [$not(NULL, NULL, [$at('last-child')])])],
+        FALSE,
+        TRUE,
+        'after',
+      ],
       // The qualified anchor: the owner itself as the leading compound,
       // alone, with its subtree behind it, with its box.
       'anchor first child' => ['&:first-child', [$anchor([$at('first-child')])], FALSE, FALSE],
-      'anchor not last then children' => ['&:not(:last-child) > *', [$anchor([$not(NULL, NULL, [$at('last-child')])]), $c('child', 'universal', '*')], FALSE, TRUE],
-      'anchor nth then part' => ['&:nth-child(2n) .cls', [$anchor([$at('nth-child', '2n')]), $c('descendant', 'class', '.cls')], TRUE, FALSE],
-      'anchor then child part' => ['&:first-child > .cls', [$anchor([$at('first-child')]), $c('child', 'class', '.cls')], TRUE, TRUE],
-      'anchor then tag' => ['&:last-child p', [$anchor([$at('last-child')]), $c('descendant', 'tag', 'p')], FALSE, FALSE],
-      'anchor then type' => ['&:only-child > d-text .link', [$anchor([$at('only-child')]), $c('child', 'type', 'd-text'), $c('descendant', 'class', '.link')], FALSE, TRUE],
-      'anchor two positions' => ['&:first-child:last-child', [$anchor([$at('first-child'), $at('last-child')])], FALSE, FALSE],
-      'anchor has' => ['&:has(a) p', [$anchor([$has([$c('descendant', 'tag', 'a')])]), $c('descendant', 'tag', 'p')], FALSE, FALSE],
-      'anchor not part' => ['&:not(.x) > *', [$anchor([$not('class', '.x')]), $c('child', 'universal', '*')], FALSE, TRUE],
+      'anchor not last then children' => [
+        '&:not(:last-child) > *',
+        [$anchor([$not(NULL, NULL, [$at('last-child')])]), $c('child', 'universal', '*')],
+        FALSE,
+        TRUE,
+      ],
+      'anchor nth then part' => [
+        '&:nth-child(2n) .cls',
+        [$anchor([$at('nth-child', '2n')]), $c('descendant', 'class', '.cls')],
+        TRUE,
+        FALSE,
+      ],
+      'anchor then child part' => [
+        '&:first-child > .cls',
+        [$anchor([$at('first-child')]), $c('child', 'class', '.cls')],
+        TRUE,
+        TRUE,
+      ],
+      'anchor then tag' => [
+        '&:last-child p',
+        [$anchor([$at('last-child')]), $c('descendant', 'tag', 'p')],
+        FALSE,
+        FALSE,
+      ],
+      'anchor then type' => [
+        '&:only-child > d-text .link',
+        [$anchor([$at('only-child')]), $c('child', 'type', 'd-text'), $c('descendant', 'class', '.link')],
+        FALSE,
+        TRUE,
+      ],
+      'anchor two positions' => [
+        '&:first-child:last-child',
+        [$anchor([$at('first-child'), $at('last-child')])],
+        FALSE,
+        FALSE,
+      ],
+      'anchor has' => [
+        '&:has(a) p',
+        [$anchor([$has([$c('descendant', 'tag', 'a')])]), $c('descendant', 'tag', 'p')],
+        FALSE,
+        FALSE,
+      ],
+      'anchor not part' => [
+        '&:not(.x) > *',
+        [$anchor([$not('class', '.x')]), $c('child', 'universal', '*')],
+        FALSE,
+        TRUE,
+      ],
       'anchor before' => ['&:first-child::before', [$anchor([$at('first-child')])], FALSE, FALSE, 'before'],
-      'anchor chain after' => ['&:first-child > *:not(:last-child)::after', [$anchor([$at('first-child')]), $c('child', 'universal', '*', [$not(NULL, NULL, [$at('last-child')])])], FALSE, TRUE, 'after'],
+      'anchor chain after' => [
+        '&:first-child > *:not(:last-child)::after',
+        [$anchor([$at('first-child')]), $c('child', 'universal', '*', [$not(NULL, NULL, [$at('last-child')])])],
+        FALSE,
+        TRUE,
+        'after',
+      ],
       // A. A state (any pseudo-class) on a non-terminal compound, the
       // anchor included; a bare pseudo-class is the universal's.
-      'state on a tag then child' => ['li:hover > ul', [$c('descendant', 'tag', 'li', [$at('hover')]), $c('child', 'tag', 'ul')], FALSE, TRUE],
-      'position on a tag then child' => ['li:first-child > a', [$c('descendant', 'tag', 'li', [$at('first-child')]), $c('child', 'tag', 'a')], FALSE, TRUE],
-      'state on a tag then descendant' => ['a:hover span', [$c('descendant', 'tag', 'a', [$at('hover')]), $c('descendant', 'tag', 'span')], FALSE, FALSE],
-      'state on a part then descendant' => ['.card:hover img', [$c('descendant', 'class', '.card', [$at('hover')]), $c('descendant', 'tag', 'img')], TRUE, FALSE],
-      'state mid chain' => ['> ul li:hover > ul', [$c('child', 'tag', 'ul'), $c('descendant', 'tag', 'li', [$at('hover')]), $c('child', 'tag', 'ul')], FALSE, TRUE],
-      'state on the anchor then child' => ['&:hover > ul', [$anchor([$at('hover')]), $c('child', 'tag', 'ul')], FALSE, TRUE],
-      'state on the universal then child' => ['*:hover > ul', [$c('descendant', 'universal', '*', [$at('hover')]), $c('child', 'tag', 'ul')], FALSE, TRUE],
-      'state on a type then descendant' => ['> d-text:hover a', [$c('child', 'type', 'd-text', [$at('hover')]), $c('descendant', 'tag', 'a')], FALSE, TRUE],
+      'state on a tag then child' => [
+        'li:hover > ul',
+        [$c('descendant', 'tag', 'li', [$at('hover')]), $c('child', 'tag', 'ul')],
+        FALSE,
+        TRUE,
+      ],
+      'position on a tag then child' => [
+        'li:first-child > a',
+        [$c('descendant', 'tag', 'li', [$at('first-child')]), $c('child', 'tag', 'a')],
+        FALSE,
+        TRUE,
+      ],
+      'state on a tag then descendant' => [
+        'a:hover span',
+        [$c('descendant', 'tag', 'a', [$at('hover')]), $c('descendant', 'tag', 'span')],
+        FALSE,
+        FALSE,
+      ],
+      'state on a part then descendant' => [
+        '.card:hover img',
+        [$c('descendant', 'class', '.card', [$at('hover')]), $c('descendant', 'tag', 'img')],
+        TRUE,
+        FALSE,
+      ],
+      'state mid chain' => [
+        '> ul li:hover > ul',
+        [$c('child', 'tag', 'ul'), $c('descendant', 'tag', 'li', [$at('hover')]), $c('child', 'tag', 'ul')],
+        FALSE,
+        TRUE,
+      ],
+      'state on the anchor then child' => [
+        '&:hover > ul',
+        [$anchor([$at('hover')]), $c('child', 'tag', 'ul')],
+        FALSE,
+        TRUE,
+      ],
+      'state on the universal then child' => [
+        '*:hover > ul',
+        [$c('descendant', 'universal', '*', [$at('hover')]), $c('child', 'tag', 'ul')],
+        FALSE,
+        TRUE,
+      ],
+      'state on a type then descendant' => [
+        '> d-text:hover a',
+        [$c('child', 'type', 'd-text', [$at('hover')]), $c('descendant', 'tag', 'a')],
+        FALSE,
+        TRUE,
+      ],
       // B. A state on the last compound (whether it peels into a
       // condition is the digester's; the grammar carries a qualifier).
       'state on a tag' => ['a:hover', [$c('descendant', 'tag', 'a', [$at('hover')])], FALSE, FALSE],
@@ -206,63 +445,250 @@ class RelativeSelectorTest extends UnitTestCase {
       'state on the universal' => ['*:hover', [$c('descendant', 'universal', '*', [$at('hover')])], FALSE, FALSE],
       'unpublished state' => ['a:visited', [$c('descendant', 'tag', 'a', [$at('visited')])], FALSE, FALSE],
       'input state' => ['input:checked', [$c('descendant', 'tag', 'input', [$at('checked')])], FALSE, FALSE],
-      'position and state sorted' => ['li:first-child:hover', [$c('descendant', 'tag', 'li', [$at('first-child'), $at('hover')])], FALSE, FALSE],
-      'two states sorted' => ['p:active:hover', [$c('descendant', 'tag', 'p', [$at('active'), $at('hover')])], FALSE, FALSE],
+      'position and state sorted' => [
+        'li:first-child:hover',
+        [$c('descendant', 'tag', 'li', [$at('first-child'), $at('hover')])],
+        FALSE,
+        FALSE,
+      ],
+      'two states sorted' => [
+        'p:active:hover',
+        [$c('descendant', 'tag', 'p', [$at('active'), $at('hover')])],
+        FALSE,
+        FALSE,
+      ],
       'state then box' => ['&:hover::before', [$anchor([$at('hover')])], FALSE, FALSE, 'before'],
       // E. A negated state. F. A state inside a qualifier.
-      'negated state' => ['li:not(:hover)', [$c('descendant', 'tag', 'li', [$not(NULL, NULL, [$at('hover')])])], FALSE, FALSE],
-      'negated focus-visible' => ['a:not(:focus-visible)', [$c('descendant', 'tag', 'a', [$not(NULL, NULL, [$at('focus-visible')])])], FALSE, FALSE],
-      'state inside has' => ['> d-text:has(a:hover)', [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a', [$at('hover')])])])], FALSE, TRUE],
-      'state on a has child' => ['li:has(> ul:hover)', [$c('descendant', 'tag', 'li', [$has([$c('child', 'tag', 'ul', [$at('hover')])])])], FALSE, FALSE],
-      'state alone inside has' => ['*:has(*:focus-within)', [$c('descendant', 'universal', '*', [$has([$c('descendant', 'universal', '*', [$at('focus-within')])])])], FALSE, FALSE],
+      'negated state' => [
+        'li:not(:hover)',
+        [$c('descendant', 'tag', 'li', [$not(NULL, NULL, [$at('hover')])])],
+        FALSE,
+        FALSE,
+      ],
+      'negated focus-visible' => [
+        'a:not(:focus-visible)',
+        [$c('descendant', 'tag', 'a', [$not(NULL, NULL, [$at('focus-visible')])])],
+        FALSE,
+        FALSE,
+      ],
+      'state inside has' => [
+        '> d-text:has(a:hover)',
+        [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a', [$at('hover')])])])],
+        FALSE,
+        TRUE,
+      ],
+      'state on a has child' => [
+        'li:has(> ul:hover)',
+        [$c('descendant', 'tag', 'li', [$has([$c('child', 'tag', 'ul', [$at('hover')])])])],
+        FALSE,
+        FALSE,
+      ],
+      'state alone inside has' => [
+        '*:has(*:focus-within)',
+        [$c('descendant', 'universal', '*', [$has([$c('descendant', 'universal', '*', [$at('focus-within')])])])],
+        FALSE,
+        FALSE,
+      ],
       // G. A class on any compound: a tag, a type, the anchor; a second
       // class on a part is the part's qualifier; a class after a tag or
       // the children is a compound of its own.
-      'class on a tag then child' => ['li.active > ul', [$c('descendant', 'tag', 'li', [$cls('active')]), $c('child', 'tag', 'ul')], FALSE, TRUE],
+      'class on a tag then child' => [
+        'li.active > ul',
+        [$c('descendant', 'tag', 'li', [$cls('active')]), $c('child', 'tag', 'ul')],
+        FALSE,
+        TRUE,
+      ],
       'class on a tag' => ['li.open', [$c('descendant', 'tag', 'li', [$cls('open')])], FALSE, FALSE],
-      'class on the anchor then child' => ['&.open > ul', [$anchor([$cls('open')]), $c('child', 'tag', 'ul')], FALSE, TRUE],
-      'class on the anchor then part' => ['&.open .menu', [$anchor([$cls('open')]), $c('descendant', 'class', '.menu')], TRUE, FALSE],
+      'class on the anchor then child' => [
+        '&.open > ul',
+        [$anchor([$cls('open')]), $c('child', 'tag', 'ul')],
+        FALSE,
+        TRUE,
+      ],
+      'class on the anchor then part' => [
+        '&.open .menu',
+        [$anchor([$cls('open')]), $c('descendant', 'class', '.menu')],
+        TRUE,
+        FALSE,
+      ],
       'class on the anchor' => ['&.open', [$anchor([$cls('open')])], FALSE, FALSE],
       'class on a link' => ['a.button', [$c('descendant', 'tag', 'a', [$cls('button')])], FALSE, FALSE],
-      'part then child tag' => ['.is-open > ul', [$c('descendant', 'class', '.is-open'), $c('child', 'tag', 'ul')], TRUE, TRUE],
+      'part then child tag' => [
+        '.is-open > ul',
+        [$c('descendant', 'class', '.is-open'), $c('child', 'tag', 'ul')],
+        TRUE,
+        TRUE,
+      ],
       'class on a type' => ['> d-text.featured', [$c('child', 'type', 'd-text', [$cls('featured')])], FALSE, TRUE],
       'two classes on a part' => ['.a.b', [$c('descendant', 'class', '.a', [$cls('b')])], TRUE, FALSE],
       'two classes on a tag' => ['li.a.b', [$c('descendant', 'tag', 'li', [$cls('a'), $cls('b')])], FALSE, FALSE],
       'two classes on the anchor' => ['&.a.b', [$anchor([$cls('a'), $cls('b')])], FALSE, FALSE],
-      'class and state on a tag' => ['li.active:hover > ul', [$c('descendant', 'tag', 'li', [$cls('active'), $at('hover')]), $c('child', 'tag', 'ul')], FALSE, TRUE],
-      'two classes inside not' => ['p:not(.a.b)', [$c('descendant', 'tag', 'p', [$not('class', '.a', [$cls('b')])])], FALSE, FALSE],
+      'class and state on a tag' => [
+        'li.active:hover > ul',
+        [$c('descendant', 'tag', 'li', [$cls('active'), $at('hover')]), $c('child', 'tag', 'ul')],
+        FALSE,
+        TRUE,
+      ],
+      'two classes inside not' => [
+        'p:not(.a.b)',
+        [$c('descendant', 'tag', 'p', [$not('class', '.a', [$cls('b')])])],
+        FALSE,
+        FALSE,
+      ],
       'part after part' => ['.a .b', [$c('descendant', 'class', '.a'), $c('descendant', 'class', '.b')], TRUE, FALSE],
       'part after tag' => ['p .a', [$c('descendant', 'tag', 'p'), $c('descendant', 'class', '.a')], FALSE, FALSE],
       'part after children' => ['> * .a', [$c('child', 'universal', '*'), $c('descendant', 'class', '.a')], FALSE, TRUE],
-      'part after tag by sibling' => ['p + .cls', [$c('descendant', 'tag', 'p'), $c('next', 'class', '.cls')], FALSE, TRUE],
+      'part after tag by sibling' => [
+        'p + .cls',
+        [$c('descendant', 'tag', 'p'), $c('next', 'class', '.cls')],
+        FALSE,
+        TRUE,
+      ],
       // H. Attribute predicates: the six operators, the flag, several on
       // one compound, inside `:not()`, on the anchor, leading.
-      'attribute prefix' => ['a[href^="http"]', [$c('descendant', 'tag', 'a', [$attr('href', '^=', 'http')])], FALSE, FALSE],
-      'attribute equals' => ['input[type="checkbox"]', [$c('descendant', 'tag', 'input', [$attr('type', '=', 'checkbox')])], FALSE, FALSE],
-      'attribute leading then child' => ['*[aria-expanded="true"] > ul', [$c('descendant', 'universal', '*', [$attr('aria-expanded', '=', 'true')]), $c('child', 'tag', 'ul')], FALSE, TRUE],
-      'attribute on a tag' => ['li[aria-current="page"]', [$c('descendant', 'tag', 'li', [$attr('aria-current', '=', 'page')])], FALSE, FALSE],
-      'attribute underscore value' => ['a[target="_blank"]', [$c('descendant', 'tag', 'a', [$attr('target', '=', '_blank')])], FALSE, FALSE],
+      'attribute prefix' => [
+        'a[href^="http"]',
+        [$c('descendant', 'tag', 'a', [$attr('href', '^=', 'http')])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute equals' => [
+        'input[type="checkbox"]',
+        [$c('descendant', 'tag', 'input', [$attr('type', '=', 'checkbox')])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute leading then child' => [
+        '*[aria-expanded="true"] > ul',
+        [$c('descendant', 'universal', '*', [$attr('aria-expanded', '=', 'true')]), $c('child', 'tag', 'ul')],
+        FALSE,
+        TRUE,
+      ],
+      'attribute on a tag' => [
+        'li[aria-current="page"]',
+        [$c('descendant', 'tag', 'li', [$attr('aria-current', '=', 'page')])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute underscore value' => [
+        'a[target="_blank"]',
+        [$c('descendant', 'tag', 'a', [$attr('target', '=', '_blank')])],
+        FALSE,
+        FALSE,
+      ],
       'attribute presence' => ['*[x]', [$c('descendant', 'universal', '*', [$attr('x')])], FALSE, FALSE],
-      'attribute presence on children' => ['> *[hidden]', [$c('child', 'universal', '*', [$attr('hidden')])], FALSE, TRUE],
-      'attribute on the anchor' => ['&[aria-expanded="true"] > ul', [$anchor([$attr('aria-expanded', '=', 'true')]), $c('child', 'tag', 'ul')], FALSE, TRUE],
-      'attribute dash match' => ['*[lang|="en"]', [$c('descendant', 'universal', '*', [$attr('lang', '|=', 'en')])], FALSE, FALSE],
-      'attribute word match' => ['*[class~="x"]', [$c('descendant', 'universal', '*', [$attr('class', '~=', 'x')])], FALSE, FALSE],
-      'attribute suffix insensitive' => ['*[data-x$="y" i]', [$c('descendant', 'universal', '*', [$attr('data-x', '$=', 'y', 'i')])], FALSE, FALSE],
-      'attribute substring sensitive' => ['*[data-x*="y" s]', [$c('descendant', 'universal', '*', [$attr('data-x', '*=', 'y', 's')])], FALSE, FALSE],
-      'two attributes' => ['a[href^="http"][target="_blank"]', [$c('descendant', 'tag', 'a', [$attr('href', '^=', 'http'), $attr('target', '=', '_blank')])], FALSE, FALSE],
-      'attribute inside not' => ['*:not([hidden])', [$c('descendant', 'universal', '*', [$not(NULL, NULL, [$attr('hidden')])])], FALSE, FALSE],
+      'attribute presence on children' => [
+        '> *[hidden]',
+        [$c('child', 'universal', '*', [$attr('hidden')])],
+        FALSE,
+        TRUE,
+      ],
+      'attribute on the anchor' => [
+        '&[aria-expanded="true"] > ul',
+        [$anchor([$attr('aria-expanded', '=', 'true')]), $c('child', 'tag', 'ul')],
+        FALSE,
+        TRUE,
+      ],
+      'attribute dash match' => [
+        '*[lang|="en"]',
+        [$c('descendant', 'universal', '*', [$attr('lang', '|=', 'en')])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute word match' => [
+        '*[class~="x"]',
+        [$c('descendant', 'universal', '*', [$attr('class', '~=', 'x')])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute suffix insensitive' => [
+        '*[data-x$="y" i]',
+        [$c('descendant', 'universal', '*', [$attr('data-x', '$=', 'y', 'i')])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute substring sensitive' => [
+        '*[data-x*="y" s]',
+        [$c('descendant', 'universal', '*', [$attr('data-x', '*=', 'y', 's')])],
+        FALSE,
+        FALSE,
+      ],
+      'two attributes' => [
+        'a[href^="http"][target="_blank"]',
+        [$c('descendant', 'tag', 'a', [$attr('href', '^=', 'http'), $attr('target', '=', '_blank')])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute inside not' => [
+        '*:not([hidden])',
+        [$c('descendant', 'universal', '*', [$not(NULL, NULL, [$attr('hidden')])])],
+        FALSE,
+        FALSE,
+      ],
       'attribute empty value' => ['*[x=""]', [$c('descendant', 'universal', '*', [$attr('x', '=', '')])], FALSE, FALSE],
-      'attribute escaped quote' => ['*[x="say \"hi\""]', [$c('descendant', 'universal', '*', [$attr('x', '=', 'say "hi"')])], FALSE, FALSE],
-      'attribute escaped backslash' => ['*[x="a\\\\b"]', [$c('descendant', 'universal', '*', [$attr('x', '=', 'a\\b')])], FALSE, FALSE],
-      'attribute control character' => ['*[x="tab\9 "]', [$c('descendant', 'universal', '*', [$attr('x', '=', "tab\t")])], FALSE, FALSE],
-      'attribute value with a double colon' => ['*[data-x="a::b"]', [$c('descendant', 'universal', '*', [$attr('data-x', '=', 'a::b')])], FALSE, FALSE],
-      'attribute value with a paren inside has' => ['> d-text:has(a[data-x=")"])', [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a', [$attr('data-x', '=', ')')])])])], FALSE, TRUE],
-      'class state attribute sorted' => ['li.active:hover[aria-current="page"]', [$c('descendant', 'tag', 'li', [$cls('active'), $at('hover'), $attr('aria-current', '=', 'page')])], FALSE, FALSE],
-      'attribute then box' => ['a[href^="http"]::after', [$c('descendant', 'tag', 'a', [$attr('href', '^=', 'http')])], FALSE, FALSE, 'after'],
-      'class then box' => ['li.active::before', [$c('descendant', 'tag', 'li', [$cls('active')])], FALSE, FALSE, 'before'],
+      'attribute escaped quote' => [
+        '*[x="say \"hi\""]',
+        [$c('descendant', 'universal', '*', [$attr('x', '=', 'say "hi"')])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute escaped backslash' => [
+        '*[x="a\\\\b"]',
+        [$c('descendant', 'universal', '*', [$attr('x', '=', 'a\\b')])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute control character' => [
+        '*[x="tab\9 "]',
+        [$c('descendant', 'universal', '*', [$attr('x', '=', "tab\t")])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute value with a double colon' => [
+        '*[data-x="a::b"]',
+        [$c('descendant', 'universal', '*', [$attr('data-x', '=', 'a::b')])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute value with a paren inside has' => [
+        '> d-text:has(a[data-x=")"])',
+        [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a', [$attr('data-x', '=', ')')])])])],
+        FALSE,
+        TRUE,
+      ],
+      'class state attribute sorted' => [
+        'li.active:hover[aria-current="page"]',
+        [$c('descendant', 'tag', 'li', [$cls('active'), $at('hover'), $attr('aria-current', '=', 'page')])],
+        FALSE,
+        FALSE,
+      ],
+      'attribute then box' => [
+        'a[href^="http"]::after',
+        [$c('descendant', 'tag', 'a', [$attr('href', '^=', 'http')])],
+        FALSE,
+        FALSE,
+        'after',
+      ],
+      'class then box' => [
+        'li.active::before',
+        [$c('descendant', 'tag', 'li', [$cls('active')])],
+        FALSE,
+        FALSE,
+        'before',
+      ],
       // The implied subject is the universal in a chain.
-      'position on the universal' => ['*:first-child', [$c('descendant', 'universal', '*', [$at('first-child')])], FALSE, FALSE],
-      'qualified universal by descent' => ['d-text *:has(a)', [$c('descendant', 'type', 'd-text'), $c('descendant', 'universal', '*', [$has([$c('descendant', 'tag', 'a')])])], FALSE, TRUE],
+      'position on the universal' => [
+        '*:first-child',
+        [$c('descendant', 'universal', '*', [$at('first-child')])],
+        FALSE,
+        FALSE,
+      ],
+      'qualified universal by descent' => [
+        'd-text *:has(a)',
+        [$c('descendant', 'type', 'd-text'), $c('descendant', 'universal', '*', [$has([$c('descendant', 'tag', 'a')])])],
+        FALSE,
+        TRUE,
+      ],
       'part' => ['.cls', [$c('descendant', 'class', '.cls')], TRUE, FALSE],
       'tag' => ['p', [$c('descendant', 'tag', 'p')], FALSE, FALSE],
       'children' => ['> *', [$c('child', 'universal', '*')], FALSE, TRUE],
@@ -270,38 +696,121 @@ class RelativeSelectorTest extends UnitTestCase {
       'tag children' => ['p > *', [$c('descendant', 'tag', 'p'), $c('child', 'universal', '*')], FALSE, TRUE],
       'child type' => ['> d-text', [$c('child', 'type', 'd-text')], FALSE, TRUE],
       'descendant type' => ['d-text', [$c('descendant', 'type', 'd-text')], FALSE, TRUE],
-      'type part' => ['> d-text .link', [$c('child', 'type', 'd-text'), $c('descendant', 'class', '.link')], FALSE, TRUE],
+      'type part' => [
+        '> d-text .link',
+        [$c('child', 'type', 'd-text'), $c('descendant', 'class', '.link')],
+        FALSE,
+        TRUE,
+      ],
       'child part' => ['> .cls', [$c('child', 'class', '.cls')], TRUE, TRUE],
       'part tag' => ['.cls p', [$c('descendant', 'class', '.cls'), $c('descendant', 'tag', 'p')], TRUE, FALSE],
-      'grandchildren' => ['d-container > * > *', [$c('descendant', 'type', 'd-container'), $c('child', 'universal', '*'), $c('child', 'universal', '*')], FALSE, TRUE],
-      'type tag' => ['> d-formatted-text p', [$c('child', 'type', 'd-formatted-text'), $c('descendant', 'tag', 'p')], FALSE, TRUE],
+      'grandchildren' => [
+        'd-container > * > *',
+        [$c('descendant', 'type', 'd-container'), $c('child', 'universal', '*'), $c('child', 'universal', '*')],
+        FALSE,
+        TRUE,
+      ],
+      'type tag' => [
+        '> d-formatted-text p',
+        [$c('child', 'type', 'd-formatted-text'), $c('descendant', 'tag', 'p')],
+        FALSE,
+        TRUE,
+      ],
       'next sibling' => ['> p + p', [$c('child', 'tag', 'p'), $c('next', 'tag', 'p')], FALSE, TRUE],
       'subsequent sibling' => ['p ~ p', [$c('descendant', 'tag', 'p'), $c('subsequent', 'tag', 'p')], FALSE, TRUE],
       'next universal' => ['> p + *', [$c('child', 'tag', 'p'), $c('next', 'universal', '*')], FALSE, TRUE],
-      'part sibling' => ['> d-text .link ~ .link', [$c('child', 'type', 'd-text'), $c('descendant', 'class', '.link'), $c('subsequent', 'class', '.link')], FALSE, TRUE],
+      'part sibling' => [
+        '> d-text .link ~ .link',
+        [$c('child', 'type', 'd-text'), $c('descendant', 'class', '.link'), $c('subsequent', 'class', '.link')],
+        FALSE,
+        TRUE,
+      ],
       'has' => ['> d-text:has(a)', [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a')])])], FALSE, TRUE],
-      'has next' => ['> d-text:has(+ d-image)', [$c('child', 'type', 'd-text', [$has([$c('next', 'type', 'd-image')])])], FALSE, TRUE],
-      'has child then children' => ['> d-container:has(> d-image) > *', [$c('child', 'type', 'd-container', [$has([$c('child', 'type', 'd-image')])]), $c('child', 'universal', '*')], FALSE, TRUE],
-      'two has' => ['> d-text:has(a):has(img)', [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a')]), $has([$c('descendant', 'tag', 'img')])])], FALSE, TRUE],
+      'has next' => [
+        '> d-text:has(+ d-image)',
+        [$c('child', 'type', 'd-text', [$has([$c('next', 'type', 'd-image')])])],
+        FALSE,
+        TRUE,
+      ],
+      'has child then children' => [
+        '> d-container:has(> d-image) > *',
+        [$c('child', 'type', 'd-container', [$has([$c('child', 'type', 'd-image')])]), $c('child', 'universal', '*')],
+        FALSE,
+        TRUE,
+      ],
+      'two has' => [
+        '> d-text:has(a):has(img)',
+        [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a')]), $has([$c('descendant', 'tag', 'img')])])],
+        FALSE,
+        TRUE,
+      ],
       'not' => ['> *:not(d-image)', [$c('child', 'universal', '*', [$not('type', 'd-image')])], FALSE, TRUE],
-      'two nots' => ['> *:not(d-image):not(d-video)', [$c('child', 'universal', '*', [$not('type', 'd-image'), $not('type', 'd-video')])], FALSE, TRUE],
-      'not has' => ['> d-text:not(:has(a))', [$c('child', 'type', 'd-text', [$not(NULL, NULL, [$has([$c('descendant', 'tag', 'a')])])])], FALSE, TRUE],
-      'has then not' => ['> d-text:has(a):not(.featured)', [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a')]), $not('class', '.featured')])], FALSE, TRUE],
-      'qualified part first' => ['.cls:not(.x)', [$c('descendant', 'class', '.cls', [$not('class', '.x')])], TRUE, FALSE],
-      'qualifier argument reaches nothing' => ['p:has(> a)', [$c('descendant', 'tag', 'p', [$has([$c('child', 'tag', 'a')])])], FALSE, FALSE],
+      'two nots' => [
+        '> *:not(d-image):not(d-video)',
+        [$c('child', 'universal', '*', [$not('type', 'd-image'), $not('type', 'd-video')])],
+        FALSE,
+        TRUE,
+      ],
+      'not has' => [
+        '> d-text:not(:has(a))',
+        [$c('child', 'type', 'd-text', [$not(NULL, NULL, [$has([$c('descendant', 'tag', 'a')])])])],
+        FALSE,
+        TRUE,
+      ],
+      'has then not' => [
+        '> d-text:has(a):not(.featured)',
+        [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a')]), $not('class', '.featured')])],
+        FALSE,
+        TRUE,
+      ],
+      'qualified part first' => [
+        '.cls:not(.x)',
+        [$c('descendant', 'class', '.cls', [$not('class', '.x')])],
+        TRUE,
+        FALSE,
+      ],
+      'qualifier argument reaches nothing' => [
+        'p:has(> a)',
+        [$c('descendant', 'tag', 'p', [$has([$c('child', 'tag', 'a')])])],
+        FALSE,
+        FALSE,
+      ],
       // The terminal pseudo-element rides the selector, never a compound;
       // any name the browser spells (K): the two generated boxes, the five
       // with a vocabulary of their own, any other, the legacy single
       // colon for the four it still names.
       'tag marker' => ['li::marker', [$c('descendant', 'tag', 'li')], FALSE, FALSE, 'marker'],
-      'attribute placeholder' => ['input[type="text"]::placeholder', [$c('descendant', 'tag', 'input', [$attr('type', '=', 'text')])], FALSE, FALSE, 'placeholder'],
+      'attribute placeholder' => [
+        'input[type="text"]::placeholder',
+        [$c('descendant', 'tag', 'input', [$attr('type', '=', 'text')])],
+        FALSE,
+        FALSE,
+        'placeholder',
+      ],
       'own selection' => ['&::selection', [], FALSE, FALSE, 'selection'],
-      'child type first letter' => ['> d-text::first-letter', [$c('child', 'type', 'd-text')], FALSE, TRUE, 'first-letter'],
+      'child type first letter' => [
+        '> d-text::first-letter',
+        [$c('child', 'type', 'd-text')],
+        FALSE,
+        TRUE,
+        'first-letter',
+      ],
       'tag first line' => ['p::first-line', [$c('descendant', 'tag', 'p')], FALSE, FALSE, 'first-line'],
       'own backdrop' => ['&::backdrop', [], FALSE, FALSE, 'backdrop'],
-      'state then marker' => ['li:hover::marker', [$c('descendant', 'tag', 'li', [$at('hover')])], FALSE, FALSE, 'marker'],
-      'single-colon marker is a pseudo-class' => ['p:marker', [$c('descendant', 'tag', 'p', [$at('marker')])], FALSE, FALSE],
-      // the owner's own has no compounds at all.
+      'state then marker' => [
+        'li:hover::marker',
+        [$c('descendant', 'tag', 'li', [$at('hover')])],
+        FALSE,
+        FALSE,
+        'marker',
+      ],
+      'single-colon marker is a pseudo-class' => [
+        'p:marker',
+        [$c('descendant', 'tag', 'p', [$at('marker')])],
+        FALSE,
+        FALSE,
+      ],
+      // The owner's own has no compounds at all.
       'own before' => ['&::before', [], FALSE, FALSE, 'before'],
       'own after' => ['&::after', [], FALSE, FALSE, 'after'],
       'part after' => ['.quote::after', [$c('descendant', 'class', '.quote')], TRUE, FALSE, 'after'],
@@ -309,14 +818,27 @@ class RelativeSelectorTest extends UnitTestCase {
       'child type before' => ['> d-text::before', [$c('child', 'type', 'd-text')], FALSE, TRUE, 'before'],
       'children before' => ['> *::before', [$c('child', 'universal', '*')], FALSE, TRUE, 'before'],
       'sibling after' => ['> p + p::after', [$c('child', 'tag', 'p'), $c('next', 'tag', 'p')], FALSE, TRUE, 'after'],
-      'qualified before' => ['> d-text:has(a)::before', [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a')])])], FALSE, TRUE, 'before'],
-      'type part before' => ['> d-text .link::before', [$c('child', 'type', 'd-text'), $c('descendant', 'class', '.link')], FALSE, TRUE, 'before'],
+      'qualified before' => [
+        '> d-text:has(a)::before',
+        [$c('child', 'type', 'd-text', [$has([$c('descendant', 'tag', 'a')])])],
+        FALSE,
+        TRUE,
+        'before',
+      ],
+      'type part before' => [
+        '> d-text .link::before',
+        [$c('child', 'type', 'd-text'), $c('descendant', 'class', '.link')],
+        FALSE,
+        TRUE,
+        'before',
+      ],
     ];
   }
 
   /**
-   * Whitespace, case and quoting are free on the way in; the print is
-   * the one spelling.
+   * Whitespace, case and quoting are free on the way in.
+   *
+   * The print is the one spelling.
    */
   public function testCanonicalization(): void {
     $this->assertSame('> *', (string) RelativeSelector::parse('>*'));
@@ -670,7 +1192,7 @@ class RelativeSelectorTest extends UnitTestCase {
       'anchor inside not' => ['> *:not(&:first-child)'],
       'anchor twice' => ['&:first-child & > p'],
       'anchor behind a lead' => ['> &:first-child'],
-      'anchor after a compound' => ['p &:first-child'],
+      'anchor after a tag' => ['p &:first-child'],
       'anchor with a nested has' => ['&:first-child:has(:has(a))'],
       'anchor with a bare colon' => ['&:'],
       'anchor box behind a space' => ['&:first-child ::before'],
@@ -893,7 +1415,7 @@ class RelativeSelectorTest extends UnitTestCase {
   }
 
   /**
-   * under() continues a rule by descent and lets the grammar refuse.
+   * The under() call continues a rule by descent and lets the grammar refuse.
    */
   public function testUnder(): void {
     $under = static fn (string $rule, string $suffix): ?string => RelativeSelector::under(RelativeSelector::fromString($rule), RelativeSelector::fromString($suffix))?->__toString();
@@ -959,7 +1481,7 @@ class RelativeSelectorTest extends UnitTestCase {
   }
 
   /**
-   * continues() reads under() back: a rule's continuations by descent.
+   * The continues() call reads under() back: a rule's continuations by descent.
    */
   public function testContinues(): void {
     $continues = static fn (string $rule, string $candidate): bool => RelativeSelector::continues(RelativeSelector::fromString($rule), RelativeSelector::fromString($candidate));
@@ -1111,12 +1633,16 @@ class RelativeSelectorTest extends UnitTestCase {
       ['> d-text', '.link::before'], ['> d-text', 'p::after'], ['a', '.cls::before'],
       ['> d-text::before', '&::after'], ['> d-text::before', '.link'], ['&::before', 'p'],
       ['> d-text', '&:first-child'], ['> *', '&:nth-child(2n)'], ['> d-text:has(a)', '&:not(:last-child) > *'],
-      ['> d-text:not(.x)', '&:has(a)'], ['> d-text', '&:first-child .link::before'], ['> d-text', '&:first-child::after'],
-      ['> d-text', '> *:not(:last-child)'], ['&:first-child', '.cls'], ['&:first-child', '> *'], ['&:first-child', '&:last-child'],
+      ['> d-text:not(.x)', '&:has(a)'], ['> d-text', '&:first-child .link::before'],
+      ['> d-text', '&:first-child::after'],
+      ['> d-text', '> *:not(:last-child)'], ['&:first-child', '.cls'], ['&:first-child', '> *'],
+      ['&:first-child', '&:last-child'],
       ['&:first-child', '&::before'], ['&:first-child > d-text', '.link'], ['> d-text::before', '&:first-child'],
       ['a', '&:first-child .cls'], ['&:first-child::before', '.cls'],
-      ['li', '&:hover > ul'], ['li', '&.open > ul'], ['> d-text', '&[aria-expanded="true"] a'], ['> d-text:has(a)', '&.featured:hover'],
-      ['.cls', '&.x'], ['.x', '&.a'], ['> *', '&.cls'], ['li:hover', '> ul'], ['&.open', '.menu'], ['a:hover', '&::before'],
+      ['li', '&:hover > ul'], ['li', '&.open > ul'], ['> d-text', '&[aria-expanded="true"] a'],
+      ['> d-text:has(a)', '&.featured:hover'],
+      ['.cls', '&.x'], ['.x', '&.a'], ['> *', '&.cls'], ['li:hover', '> ul'], ['&.open', '.menu'],
+      ['a:hover', '&::before'],
       ['*[x]', '&.cls'], ['li.active', '&:hover > ul'],
       ['> *', '&:is(.a, .b)'], ['> d-text', '&:is(:focus-within, :hover) a'], ['> *', '&:is(.a)'], ['*:is(h1, h2)', 'a'],
     ];

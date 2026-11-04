@@ -52,6 +52,9 @@ class FailureReasonTest extends UnitTestCase {
     ];
   }
 
+  /**
+   * Each message shape distills to exactly its sentence.
+   */
   #[DataProvider('messages')]
   public function testDistill(string $raw, string $expected): void {
     $this->assertSame($expected, FailureReason::distill($raw));

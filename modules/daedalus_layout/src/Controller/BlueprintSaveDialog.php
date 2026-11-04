@@ -535,7 +535,7 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
   }
 
   /**
-   * What the blueprint is material for: scope (read-only), subject, hosts, groups.
+   * What the blueprint is material for: scope, subject, hosts, groups.
    *
    * Renders only for a resolved blueprint with the subject vocabulary at
    * hand. The scope is identity (a placement's provenance and the
@@ -714,7 +714,7 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
   }
 
   /**
-   * The icon picker section: the daedalus_layout_icon_picker markup, dialog-composed.
+   * The icon picker section: the daedalus_layout_icon_picker markup.
    *
    * The dialogs are inert markup, not FormAPI forms, so the picker's
    * contract is hand-composed here instead of rendering the form element:

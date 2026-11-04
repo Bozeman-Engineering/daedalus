@@ -36,11 +36,11 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  * back to open an attachment, CSS carries it in url('file:...'), HTML
  * attributes and media labels repeat it, so it must be a name every one of
  * them can repeat byte for byte. macOS screenshots carry a NARROW NO-BREAK
- * SPACE before "PM" that a model normalises to a plain space, and the handle
+ * SPACE before "PM" that a model normalizes to a plain space, and the handle
  * stops resolving. Core's own sanitization (the file module's subscriber on
  * FileUploadSanitizeNameEvent) applies `file.settings.filename_sanitization`,
  * every switch off by default, so a guarantee resting on it would rest on
- * config every fresh site lacks; the lane canonicalises the name itself,
+ * config every fresh site lacks; the lane canonicalizes the name itself,
  * before the handler, through canonicalName(): core's full posture minus the
  * lowercase switch (the stem keeps its case, the extension is lowercased).
  * Core's handler then dispatches the event as always, so the system module's

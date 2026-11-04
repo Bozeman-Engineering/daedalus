@@ -68,15 +68,24 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 class StartChooserTest extends BrowserTestBase {
 
-  use DaedalusFixtureTrait {
-    setUp as daedalusSetUp;
-  }
+  use DaedalusFixtureTrait;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = '';
 
   /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
-    $this->daedalusSetUp();
+    parent::setUp();
+    $this->installFixture();
     // The group vocabulary (heroes, sections) and a second bundle entity type
     // (vocabularies); neither is part of the recipe.
     \Drupal::service('module_installer')->install(['daedalus_layout_site_groups_test', 'taxonomy']);
@@ -91,7 +100,11 @@ class StartChooserTest extends BrowserTestBase {
       ['kind' => 'block', 'field' => 'title'],
     ]);
     $this->createPageBlueprint('notice', 'Notice', 'One section of text.', ['sections'], [
-      ['kind' => 'block', 'block_type' => 'text', 'block_fields' => ['field_text_text' => ['value' => 'Notice section']]],
+      [
+        'kind' => 'block',
+        'block_type' => 'text',
+        'block_fields' => ['field_text_text' => ['value' => 'Notice section']],
+      ],
     ]);
     // A block blueprint, which no chooser ever offers.
     $this->createBlueprint('card', 'Card', 'block', [], [

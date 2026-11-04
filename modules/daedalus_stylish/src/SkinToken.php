@@ -7,14 +7,14 @@ namespace Drupal\daedalus_stylish;
 /**
  * One token of a skin, resolved: the usage lane's handle on it.
  *
- * A token is not an entity (its record is a fact of the skin's tokens
- * map), so the name-keyed spines that address a material by entity (the
- * delete batch, the usage counts) address a token through this handle: the skin it lives on, its scale and name, its record as
- * worn (the merge of both layers) and the custom property it delivers
- * as, resolved once through the guide (SkinMaterialManager::resolve()).
- * A rename carries its target name too, so one batch shape serves the
- * rewrite-then-delete and the rewrite-then-rename jobs. SkinAnimation is
- * its twin for the skin's motion section.
+ * A token is not an entity (its record is a fact of the skin's tokens map), so
+ * the name-keyed spines that address a material by entity (the delete batch,
+ * the usage counts) address a token through this handle: the skin it lives on,
+ * its scale and name, its record as worn (the merge of both layers) and the
+ * custom property it delivers as, resolved once through the guide
+ * (SkinMaterialManager::resolve()). A rename carries its target name too, so
+ * one batch shape serves the rewrite-then-delete and the rewrite-then-rename
+ * jobs. SkinAnimation is its twin for the skin's motion section.
  *
  * The batch id (batchId()) is what the Batch API serializes between
  * requests: the skin's entity id (pinned, so a design system switch

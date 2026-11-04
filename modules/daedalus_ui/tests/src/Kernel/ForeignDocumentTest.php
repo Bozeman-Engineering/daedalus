@@ -25,19 +25,18 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the verdicts a foreign document's delivery carries.
  *
- * A host with no document of its own (an entity of a bundle whose display
- * is not overridable) renders its display's document. The annotator copies
- * the spine's verdict onto every container and block node of that
- * document's tree, at every depth, as `_element.can` and `_element.refused` (everything
- * refused FOREIGN_DOCUMENT, except content on a field block presenting the
- * host's own field); the host-level verdict (hostVerdict()) names the
- * owner and carries the portal only for an actor who may open the
- * template. A host's own document and a template host's root are refused
- * nothing. A host can own a document and still be rendered inside a
- * foreign one: a page of the locked bundle carries the override field
- * (daedalus_layout adds it to every Layout Builder enabled bundle) and
- * what that field holds is the page's own, refused nothing, while the
- * template around it stays foreign and the page is never seeded.
+ * A host with no document of its own (an entity of a bundle whose display is
+ * not overridable) renders its display's document. The annotator copies the
+ * spine's verdict onto every container and block node of that document's tree,
+ * at every depth, as `_element.can` and `_element.refused` (everything refused
+ * FOREIGN_DOCUMENT, except content on a field block presenting the host's own
+ * field); the host-level verdict (hostVerdict()) names the owner and carries
+ * the portal only for an actor who may open the template. A host's own document
+ * and a template host's root are refused nothing. A host can own a document and
+ * still be rendered inside a foreign one: a page of the locked bundle carries
+ * the override field (daedalus_layout adds it to every Layout Builder enabled
+ * bundle) and what that field holds is the page's own, refused nothing, while
+ * the template around it stays foreign and the page is never seeded.
  */
 #[Group('daedalus_ui')]
 #[RunTestsInSeparateProcesses]

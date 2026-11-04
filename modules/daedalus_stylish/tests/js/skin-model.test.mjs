@@ -71,6 +71,8 @@ import {
   tokenRecord,
 } from './materials-fixture.mjs';
 
+// cspell:ignore transfrom
+
 const tests = [];
 const test = (name, run) => tests.push([name, run]);
 

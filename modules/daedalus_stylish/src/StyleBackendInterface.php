@@ -9,12 +9,12 @@ use Drupal\daedalus_blueprint\Host\HostInterface;
 /**
  * Translates a host's style map into rendered output.
  *
- * The style map always stores semantic CSS values; backends translate at
- * render time, so switching backends is a service swap
- * (the daedalus_stylish.style_backend alias), never a data migration. The shipped
+ * The style map always stores semantic CSS values; backends translate at render
+ * time, so switching backends is a service swap (the
+ * daedalus_stylish.style_backend alias), never a data migration. The shipped
  * backend prints @scope CSS into an inline <style> element; a utility-class
- * backend (e.g. Tailwind) would instead stamp classes on elements through
- * other seams and return nothing here.
+ * backend (e.g. Tailwind) would instead stamp classes on elements through other
+ * seams and return nothing here.
  */
 interface StyleBackendInterface {
 

@@ -71,6 +71,25 @@ import { openChannel } from '../../../../daedalus_ui/js/broadcast/channel.js';
  * snapshot broadcast at leader boot re-provokes a hello from any satellite
  * that outlived a leader refresh.
  */
+
+/**
+ * Creates the leader for one Edit Mode scope.
+ *
+ * @param {object} props
+ *   The leader's wiring.
+ * @param {string} props.scope
+ *   The Edit Mode scope the channel is opened under (the satellite opens
+ *   the same one).
+ * @param {string} props.url
+ *   The satellite window's URL.
+ * @param {object} props.source
+ *   The state source: the getters the snapshot reads and the change
+ *   subscriptions that trigger a broadcast.
+ *
+ * @return {object}
+ *   The leader: isPoppedOut(), onChange(callback), open(), bringBack(),
+ *   openVariantPicker(), collapseOutline(gesture), openDoor(payload).
+ */
 export const createPopoutLeader = ({ scope, url, source }) => {
   let poppedOut = false;
   let satelliteWindow = null;
@@ -372,6 +391,12 @@ export const createPopoutLeader = ({ scope, url, source }) => {
 
     /**
      * Subscribes to popped-out changes; returns unsubscribe.
+     *
+     * @param {function(boolean): void} callback
+     *   Called with the popped-out state after every change.
+     *
+     * @return {Function}
+     *   Removes the subscription.
      */
     onChange: (callback) => {
       listeners.add(callback);
@@ -430,8 +455,7 @@ export const createPopoutLeader = ({ scope, url, source }) => {
      * @param {string} gesture
      *   'collapse_all' or 'expand_all'.
      */
-    collapseOutline: (gesture) =>
-      channel.post('collapse-outline', { gesture }),
+    collapseOutline: (gesture) => channel.post('collapse-outline', { gesture }),
 
     /**
      * Runs a page elements panel doorway in the satellite's inspector.

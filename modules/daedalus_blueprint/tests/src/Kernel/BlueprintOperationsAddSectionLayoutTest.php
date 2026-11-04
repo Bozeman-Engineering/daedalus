@@ -17,11 +17,11 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
  *
  * A section is born with its real layout: without an explicit layout the
  * default ladder mints a container; an explicit layout names a named-slot
- * layout (or pins layout settings) at birth. change_section_layout is
- * retired — sections keep their layout for life — so this covers the
- * birth-layout validation the old op used to own, plus the retired-op
- * corrective. Nested happy paths (section UUID addressing needs daedalus_layout)
- * live in daedalus_layout's AddSectionExplicitLayoutTest.
+ * layout (or pins layout settings) at birth. change_section_layout is retired —
+ * sections keep their layout for life — so this covers the birth-layout
+ * validation the old op used to own, plus the retired-op corrective. Nested
+ * happy paths (section UUID addressing needs daedalus_layout) live in
+ * daedalus_layout's AddSectionExplicitLayoutTest.
  */
 #[RunTestsInSeparateProcesses]
 #[CoversClass(BlueprintOperations::class)]

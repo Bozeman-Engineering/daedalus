@@ -79,7 +79,10 @@ export const lineMenuItems = (line) => {
     return [{ type: 'unset' }];
   }
   if (layerTier(line.layer) === TIER_SKIN) {
-    return [{ type: 'lift' }, { type: 'edit-skin', scope: layerScope(line.layer) }];
+    return [
+      { type: 'lift' },
+      { type: 'edit-skin', scope: layerScope(line.layer) },
+    ];
   }
   return [{ type: 'lift' }];
 };
@@ -92,6 +95,11 @@ export const lineMenuItems = (line) => {
  * whose entry wears the reference: the root with a null selector, or a
  * rule under it.
  *
+ * @param {string} layer
+ *   The line's layer id.
+ * @param {Array<object>} layers
+ *   The island stack's layer records.
+ *
  * @return {?{key: string, selector: ?string}}
  *   The carrier, or null when the layers hold no record for the run.
  */
@@ -100,6 +108,9 @@ const carrierOf = (layer, layers) =>
 
 /**
  * The rule a carrier names: a non-empty selector under its key.
+ *
+ * @param {?{key: string, selector: ?string}} carrier
+ *   A layer's carrier (carrierOf), or null.
  *
  * @return {?{key: string, selector: string}}
  *   The carrier rule, or null for a root carrier or no carrier.

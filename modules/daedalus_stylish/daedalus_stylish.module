@@ -129,7 +129,7 @@ function daedalus_stylish_entity_view(array &$build, EntityInterface $entity, En
  * fill shown by a door in the page's own template IS walked, the page's
  * view building it eagerly; the stamp here lands on it a second time,
  * idempotently). Without the stamp the copy falls back to the composed
- * container's default column while the scoped CSS still colours it.
+ * container's default column while the scoped CSS still colors it.
  */
 function daedalus_stylish_daedalus_blueprint_inner_render_alter(array &$build, HostInterface $inner, ?FieldableEntityInterface $subject): void {
   if (!$inner->hasStyleStore()) {
@@ -312,9 +312,9 @@ function daedalus_stylish_library_info_build(): array {
   $path = \Drupal::service('daedalus_stylish.variant_stylesheet')->libraryPath();
   if ($path !== NULL) {
     // User-authored variant CSS must win the cascade the same way the inline
-    // per-entity styles do: unlayered. Without the exemption daedalus_stylish_layers
-    // wraps this file into the site layer, where theme specificity beats it
-    // again.
+    // per-entity styles do: unlayered. Without the exemption
+    // daedalus_stylish_layers wraps this file into the site layer, where theme
+    // specificity beats it again.
     $libraries['variants']['css']['theme'][$path] = [
       'preprocess' => FALSE,
       'daedalus_stylish_layers_exempt' => TRUE,
@@ -626,9 +626,9 @@ function _daedalus_stylish_map_has_variant_refs(array $map): bool {
  */
 function daedalus_stylish_entity_insert(EntityInterface $entity): void {
   _daedalus_stylish_gate_check($entity);
-  _daedalus_variant_change($entity);
-  _daedalus_skin_change($entity);
-  _daedalus_design_system_change($entity);
+  _daedalus_stylish_variant_change($entity);
+  _daedalus_stylish_skin_change($entity);
+  _daedalus_stylish_design_system_change($entity);
   _daedalus_stylish_media_change($entity);
   _daedalus_stylish_usage_track($entity);
   _daedalus_stylish_value_usage_track($entity);
@@ -639,9 +639,9 @@ function daedalus_stylish_entity_insert(EntityInterface $entity): void {
  */
 function daedalus_stylish_entity_update(EntityInterface $entity): void {
   _daedalus_stylish_gate_check($entity);
-  _daedalus_variant_change($entity);
-  _daedalus_skin_change($entity);
-  _daedalus_design_system_change($entity);
+  _daedalus_stylish_variant_change($entity);
+  _daedalus_stylish_skin_change($entity);
+  _daedalus_stylish_design_system_change($entity);
   _daedalus_stylish_media_change($entity);
   _daedalus_stylish_usage_track($entity);
   _daedalus_stylish_value_usage_track($entity);
@@ -651,8 +651,8 @@ function daedalus_stylish_entity_update(EntityInterface $entity): void {
  * Implements hook_entity_delete().
  */
 function daedalus_stylish_entity_delete(EntityInterface $entity): void {
-  _daedalus_variant_change($entity);
-  _daedalus_skin_change($entity, TRUE);
+  _daedalus_stylish_variant_change($entity);
+  _daedalus_stylish_skin_change($entity, TRUE);
   _daedalus_stylish_media_change($entity);
   if (_daedalus_stylish_style_host($entity) !== NULL) {
     \Drupal::service('daedalus_stylish.variant_usage')->untrack($entity);
@@ -818,7 +818,7 @@ function daedalus_stylish_rebuild(): void {
  * broad. Workspace PUBLISH is covered by VariantWorkspaceSubscriber because
  * publishing does not fire per-entity update hooks.
  */
-function _daedalus_variant_change(EntityInterface $entity): void {
+function _daedalus_stylish_variant_change(EntityInterface $entity): void {
   if ($entity instanceof DaedalusStylishVariantInterface) {
     // The resolved-reference identity map must not outlive the write: a
     // gesture that saves a variant and re-resolves it in the same request
@@ -843,18 +843,17 @@ function _daedalus_variant_change(EntityInterface $entity): void {
 /**
  * Recompiles delivery when a skin changes.
  *
- * The skin counterpart of _daedalus_variant_change(), and a law change: a
- * skin write is where tokens are minted, and a token's minting flips the
- * verdict on every variant that references it (withheld under strict law
- * while unminted, offered once minted), so the write ends in both
- * compiles and the active skin's write carries every variant on the
- * delta beside its own tokens. Compilation always reads the live default
- * revision — a save inside a workspace leaves the files unchanged (its
- * staged CSS previews via the page-level inline fallback) but still
- * invalidates the consumers, harmlessly broad, and a save of an INACTIVE
- * skin recompiles to identical files. Workspace PUBLISH is covered by
- * SkinWorkspaceSubscriber; a design-system switch by
- * DesignSystemSwitchSubscriber and threshold changes by
+ * The skin counterpart of _daedalus_stylish_variant_change(), and a law change:
+ * a skin write is where tokens are minted, and a token's minting flips the
+ * verdict on every variant that references it (withheld under strict law while
+ * unminted, offered once minted), so the write ends in both compiles and the
+ * active skin's write carries every variant on the delta beside its own tokens.
+ * Compilation always reads the live default revision — a save inside a
+ * workspace leaves the files unchanged (its staged CSS previews via the
+ * page-level inline fallback) but still invalidates the consumers, harmlessly
+ * broad, and a save of an INACTIVE skin recompiles to identical files.
+ * Workspace PUBLISH is covered by SkinWorkspaceSubscriber; a design-system
+ * switch by DesignSystemSwitchSubscriber and threshold changes by
  * DefaultsSettingsSubscriber.
  *
  * The skin's fonts' files are held through core's file usage, synced to
@@ -868,7 +867,7 @@ function _daedalus_variant_change(EntityInterface $entity): void {
  * @param bool $deleted
  *   TRUE from hook_entity_delete().
  */
-function _daedalus_skin_change(EntityInterface $entity, bool $deleted = FALSE): void {
+function _daedalus_stylish_skin_change(EntityInterface $entity, bool $deleted = FALSE): void {
   if ($entity instanceof DaedalusStylishSkinInterface) {
     $files = \Drupal::service('daedalus_stylish.font_files');
     if ($deleted) {
@@ -929,7 +928,7 @@ function _daedalus_skin_change(EntityInterface $entity, bool $deleted = FALSE): 
  * skin. Every writer of the unit reaches it (the design system form,
  * config sync's entity import, and the copy gesture: a site's own unit
  * takes its first copy as its default_skin, written AFTER the copy's
- * save, where _daedalus_skin_change() saw a skin that was not yet worn,
+ * save, where _daedalus_stylish_skin_change() saw a skin that was not yet worn,
  * so this hook is what lands the copy's tokens on the delta and
  * recompiles the files). The skin worn before is judged from the
  * original unit through the same rule the read applies
@@ -947,7 +946,7 @@ function _daedalus_skin_change(EntityInterface $entity, bool $deleted = FALSE): 
  * resets its static cache only after the config save, so at that event
  * SkinManager would still read the unit as it was.
  */
-function _daedalus_design_system_change(EntityInterface $entity): void {
+function _daedalus_stylish_design_system_change(EntityInterface $entity): void {
   if (!$entity instanceof DesignSystemInterface) {
     return;
   }

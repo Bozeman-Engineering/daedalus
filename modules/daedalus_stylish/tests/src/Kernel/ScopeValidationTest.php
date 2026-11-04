@@ -21,8 +21,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * source element and no host entity — the path disk-shipped variants take at
  * import, AI-authored variants at create, and the variant gestures
  * (VariantManager) converge on. The style guide in play comes from
- * daedalus_stylish_guide_test: section declares spacing with padding max 4rem, block
- * declares spacing, and the testimonial block type declares typography
+ * daedalus_stylish_guide_test: section declares spacing with padding max 4rem,
+ * block declares spacing, and the testimonial block type declares typography
  * (font-size max 2rem) plus a .testimonial__quote sub-element (font-size max
  * 1.75rem).
  */

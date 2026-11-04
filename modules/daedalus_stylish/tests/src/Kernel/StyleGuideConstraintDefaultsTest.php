@@ -226,7 +226,10 @@ class StyleGuideConstraintDefaultsTest extends KernelTestBase {
     $codes = $this->codes($this->validator->validateAt([
       '' => ['default' => ['padding-top' => '13px', 'padding-left' => '13px', 'row-gap' => '0']],
     ], Address::fromString('kind:block'), ['theme' => self::THEME]));
-    $this->assertSame(['default.padding-top' => ['STYLE_VALUE_NOT_ON_SCALE'], 'default.row-gap' => ['STYLE_VALUE_NOT_ON_SCALE']], $codes, 'the expanded sides are law where the shorthand\'s block is, and padding-left answers to its own cap');
+    $this->assertSame([
+      'default.padding-top' => ['STYLE_VALUE_NOT_ON_SCALE'],
+      'default.row-gap' => ['STYLE_VALUE_NOT_ON_SCALE'],
+    ], $codes, 'the expanded sides are law where the shorthand\'s block is, and padding-left answers to its own cap');
     $this->assertSame([], $this->validator->validateAt([
       '' => ['default' => ['padding-top' => '0', 'border-top-left-radius' => '0']],
     ], Address::fromString('kind:block'), ['theme' => self::THEME]), 'the shorthand\'s allowed literal is allowed on its expanded sides');
@@ -243,21 +246,20 @@ class StyleGuideConstraintDefaultsTest extends KernelTestBase {
   /**
    * The shipped site lane binds the seven properties every skin can honor.
    *
-   * Daedalus Stylish's own site declaration (daedalus_stylish.page_builder.yml) is the base
-   * of every site's constraint defaults: font-family to font, the type
-   * trio to text / weight / leading, padding and gap to space and
-   * border-radius to radius (the dimension bindings with the zero
-   * literal beside them), each on a scale every shipped skin mints, the
-   * shorthands served expanded over their families. On a bare site
-   * (no package layers, no skin) the map is exactly these, and they are
-   * law wherever a grant reaches them (guarded and strict): a literal
-   * stack or size is off the scale, and so is a reference to a token the
-   * scale does not mint (no skin here, so the closed space is honestly
-   * empty; the shipped skins' token defaults pass through
-   * ShippedSyncTest, where the minting skin is the one under sync); the
-   * allowed zero passes on the shorthand and its expanded sides. Open
-   * mode demotes the bindings to offer-shaping like every authored block.
-   * Nothing else ships bound: tracking and color are a package's to bind.
+   * Daedalus Stylish's own site declaration (daedalus_stylish.page_builder.yml)
+   * is the base of every site's constraint defaults: font-family to font, the
+   * type trio to text / weight / leading, padding and gap to space and
+   * border-radius to radius (the dimension bindings with the zero literal
+   * beside them), each on a scale every shipped skin mints, the shorthands
+   * served expanded over their families. On a bare site (no package layers, no
+   * skin) the map is exactly these, and they are law wherever a grant reaches
+   * them (guarded and strict): a literal stack or size is off the scale, and so
+   * is a reference to a token the scale does not mint (no skin here, so the
+   * closed space is honestly empty; the shipped skins' token defaults pass
+   * through ShippedSyncTest, where the minting skin is the one under sync); the
+   * allowed zero passes on the shorthand and its expanded sides. Open mode
+   * demotes the bindings to offer-shaping like every authored block. Nothing
+   * else ships bound: tracking and color are a package's to bind.
    */
   public function testShippedBindings(): void {
     $space = ['scale' => 'space', 'allowed' => ['0']];
@@ -281,7 +283,9 @@ class StyleGuideConstraintDefaultsTest extends KernelTestBase {
       'border-bottom-right-radius' => $radius,
       'border-bottom-left-radius' => $radius,
     ], $this->styleGuide->getConstraintDefaults(self::THEME), 'the bare site serves the suite\'s seven bindings, the families expanded');
-    $this->declareKinds(['block' => ['property_groups' => ['typography' => [], 'spacing' => [], 'border' => [], 'layout' => []]]]);
+    $this->declareKinds([
+      'block' => ['property_groups' => ['typography' => [], 'spacing' => [], 'border' => [], 'layout' => []]],
+    ]);
 
     $codes = $this->codes($this->validator->validateAt([
       '' => [

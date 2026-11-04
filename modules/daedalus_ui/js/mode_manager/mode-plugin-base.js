@@ -13,6 +13,7 @@ export class ModePluginBase {
    * Enable the mode.
    *
    * @return {Promise}
+   *   Resolves when the mode is enabled.
    */
   enable() {
     const topBar = document.querySelector(`#${this.id}-top-bar`);
@@ -25,12 +26,10 @@ export class ModePluginBase {
   /**
    * Disable the mode.
    *
-   * @param modesDisabled
-   *   False if we are just disabling the mode to switch to another mode.
-   *   True if we are just exiting the current mode.
    * @return {Promise}
+   *   Resolves when the mode is disabled.
    */
-  disable(modesDisabled = false) {
+  disable() {
     const topBar = document.querySelector(`#${this.id}-top-bar`);
     if (topBar) {
       topBar.classList.add('daedalus-ui-hidden');
@@ -43,7 +42,7 @@ export class ModePluginBase {
    *
    * Wraps Drupal.ajax in order to pass along Daedalus UI state.
    *
-   * @param settings
+   * @param {object} settings
    *   Settings for Drupal.ajax.
    *
    * @return {Drupal.Ajax}
@@ -65,11 +64,11 @@ export class ModePluginBase {
    * /place/block does not.
    * _wrapper_format: drupal_ajax
    *
-   * @param path
+   * @param {string} path
    *   The URL path segment.
-   * @param params
-   *   (optional) Query string parameters to include. Query string parameters in
-   *   the path string are preserved as well.
+   * @param {object} [params]
+   *   Query string parameters to include. Query string parameters in the
+   *   path string are preserved as well.
    *
    * @return {string}
    *   The URL path.

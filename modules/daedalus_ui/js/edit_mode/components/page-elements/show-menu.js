@@ -1,4 +1,3 @@
-import { h } from 'preact';
 import { useSelector, useDispatch } from 'react-redux';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { setViewVisibility } from '../../store/slices/view-slice';
@@ -95,7 +94,11 @@ export const ShowMenu = () => {
   };
 
   return (
-    <div className="daedalus-ui-show-menu" data-daedalus-ui-conceal="minimal" ref={menuRef}>
+    <div
+      className="daedalus-ui-show-menu"
+      data-daedalus-ui-conceal="minimal"
+      ref={menuRef}
+    >
       <button
         type="button"
         className="daedalus-ui-show-menu__button daedalus-ui-icon-button daedalus-ui-icon-button--muted"

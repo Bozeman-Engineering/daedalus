@@ -1,4 +1,5 @@
 import { conditionForPseudoClass, parseKey } from './style-guide.js';
+import { hasControlChar } from './control-chars.js';
 import { parseSlotKey, rootKindForScope, fragmentStyles } from './slot-key.js';
 import { cascadeOrder } from './condition-cascade.js';
 import {
@@ -57,8 +58,10 @@ import {
 // hygiene gate, not a vocabulary check. Mirrors CssPrinter.php's
 // printDeclarations() gate, byte for byte.
 const PROPERTY_PATTERN = /^-{0,2}[A-Za-z][A-Za-z0-9_-]*$/;
-// eslint-disable-next-line no-control-regex
-const VALUE_FORBIDDEN = /[;{}<>\x00-\x08\x0B\x0C\x0E-\x1F]/;
+const VALUE_FORBIDDEN = /[;{}<>]/;
+// The control characters a value may carry: tab, line feed, carriage
+// return (the gate's \x09, \x0A and \x0D gaps).
+const VALUE_WHITESPACE = '\t\n\r';
 
 const isEntryObject = (value) => value !== null && typeof value === 'object';
 
@@ -112,6 +115,14 @@ export const TRIGGER_HOLD_SUPPORTS = '@supports not (animation-trigger: none)';
  * cascade vocabulary (condition-cascade.js) owns the rule and the
  * rationale; the server mirror is CssPrinter::orderedConditions() and
  * the texts must stay byte-identical.
+ *
+ * @param {object} entry
+ *   The style entry: condition key => property map.
+ * @param {object} conditions
+ *   The condition table (guide.conditions), for cascade order.
+ *
+ * @return {Array<[string, object]>}
+ *   The [condition, properties] pairs in emission order.
  */
 const orderedConditions = (entry, conditions) =>
   cascadeOrder(Object.keys(entry), conditions).map((key) => [key, entry[key]]);
@@ -144,6 +155,7 @@ export const CONTAINER_SCOPE_LIMIT =
  *   The key's canonical relative selector, or null for the root.
  *
  * @return {?string}
+ *   The @scope limit selector list, or null for no donut.
  */
 export const donutLimit = (selector) => {
   if (selector === null) {
@@ -172,6 +184,14 @@ export const donutLimit = (selector) => {
  *
  * The subject alone weighs: a qualifier takes its argument's weight, and
  * every argument compound prints inside :where().
+ *
+ * @param {Array<object>} compounds
+ *   The parsed selector's compounds.
+ * @param {number} from
+ *   The index the search stops at, inclusive.
+ *
+ * @return {number}
+ *   The index of the last weighted compound at or after `from`, or -1.
  */
 const lastWeighted = (compounds, from) => {
   for (let i = compounds.length - 1; i >= from; i -= 1) {
@@ -184,8 +204,15 @@ const lastWeighted = (compounds, from) => {
 
 /**
  * Whether a compound is reached by a sibling combinator (`+`, `~`).
+ *
+ * @param {object} compound
+ *   A parsed compound.
+ *
+ * @return {boolean}
+ *   True when its combinator is `+` or `~`.
  */
-const isSibling = (compound) => [NEXT, SUBSEQUENT].includes(compound.combinator);
+const isSibling = (compound) =>
+  [NEXT, SUBSEQUENT].includes(compound.combinator);
 
 /**
  * The symbols of the spelled combinators (the descendant one is a space).
@@ -195,6 +222,12 @@ const COMBINATOR_SYMBOLS = { [CHILD]: '>', [NEXT]: '+', [SUBSEQUENT]: '~' };
 /**
  * Prints the combinator reaching a compound: ` > `, ` + ` or ` ~ `, the one
  * space for a descendant.
+ *
+ * @param {object} compound
+ *   A parsed compound.
+ *
+ * @return {string}
+ *   The combinator text, spaces included.
  */
 const renderCombinator = (compound) =>
   compound.combinator === DESCENDANT
@@ -209,6 +242,14 @@ const renderCombinator = (compound) =>
  * condition suffix on an entry's target (printEntry) and a pseudo-class
  * qualifier at its compound (renderQualifiers). The server printer owns
  * the rationale; the texts must stay byte-identical.
+ *
+ * @param {string} wrapper
+ *   The pseudo-class spelling (`:hover`).
+ * @param {string} condition
+ *   The published state's condition name.
+ *
+ * @return {string}
+ *   The `:is()` of the pseudo-class and the force-state stamp.
  */
 const forceStateDual = (wrapper, condition) =>
   `:is(${wrapper}, [data-force-state~="${condition}"])`;
@@ -227,6 +268,16 @@ const forceStateDual = (wrapper, condition) =>
  * […]), :is(:hover, […])))`, `*:where(:is(h1, h2))`). Inside such a
  * member (`inWhere`) nothing wraps: the one :where() has zeroed it all.
  * The server printer owns the rationale.
+ *
+ * @param {object} compound
+ *   The parsed compound whose qualifiers print.
+ * @param {object} conditions
+ *   The condition table (guide.conditions), for the force-state dual.
+ * @param {boolean} inWhere
+ *   True inside an `:is()` member, where nothing wraps.
+ *
+ * @return {string}
+ *   The qualifiers' selector text, glued together.
  */
 const renderQualifiers = (compound, conditions, inWhere = false) =>
   compound.qualifiers
@@ -250,6 +301,14 @@ const renderQualifiers = (compound, conditions, inWhere = false) =>
  * state, else the grammar's own spelling. Only a bare pseudo-class can
  * spell a state: a class and an attribute carry their argument, and so
  * does the nth family.
+ *
+ * @param {object} qualifier
+ *   The parsed qualifier (name and argument).
+ * @param {object} conditions
+ *   The condition table (guide.conditions), for the force-state dual.
+ *
+ * @return {string}
+ *   The qualifier's selector text, unwrapped.
  */
 const renderQualifier = (qualifier, conditions) => {
   if (qualifier.name === IS) {
@@ -267,6 +326,16 @@ const renderQualifier = (qualifier, conditions) => {
 /**
  * Prints a `:has()` argument: its lead, then each compound in :where()
  * (bare inside an `:is()` member, `inWhere`).
+ *
+ * @param {Array<object>} compounds
+ *   The argument's parsed compounds.
+ * @param {object} conditions
+ *   The condition table (guide.conditions), for the force-state dual.
+ * @param {boolean} inWhere
+ *   True inside an `:is()` member, where nothing wraps.
+ *
+ * @return {string}
+ *   The argument's selector text.
  */
 const renderArgument = (compounds, conditions, inWhere = false) => {
   const lead =
@@ -288,6 +357,18 @@ const renderArgument = (compounds, conditions, inWhere = false) => {
  * nothing; the qualified anchor is the scoping root (`:scope`). Inside a
  * :where() already (`inWhere`: an `:is()` member and everything it holds)
  * the subject prints bare and the qualifiers unwrapped.
+ *
+ * @param {object} compound
+ *   The parsed compound.
+ * @param {boolean} bare
+ *   True when the compound carries the chain's weight.
+ * @param {object} conditions
+ *   The condition table (guide.conditions), for the force-state dual.
+ * @param {boolean} inWhere
+ *   True inside an `:is()` member, where nothing wraps.
+ *
+ * @return {string}
+ *   The compound's selector text.
  */
 const renderCompound = (compound, bare, conditions, inWhere = false) => {
   if (compound.kind === null) {
@@ -309,6 +390,16 @@ const renderCompound = (compound, bare, conditions, inWhere = false) => {
  * The `:scope` link of a chain (CssPrinter::scopeLink mirror): bare when
  * it carries the weight, else inside :where(); the qualified anchor's
  * print when the owner stands first, the plain scoping root otherwise.
+ *
+ * @param {Array<object>} compounds
+ *   The parsed selector's compounds.
+ * @param {boolean} bare
+ *   True when the link carries the chain's weight.
+ * @param {object} conditions
+ *   The condition table (guide.conditions), for the force-state dual.
+ *
+ * @return {string}
+ *   The link's selector text.
  */
 const scopeLink = (compounds, bare, conditions) => {
   if (compounds[0].kind === ANCHOR_KIND) {
@@ -319,6 +410,18 @@ const scopeLink = (compounds, bare, conditions) => {
 
 /**
  * Prints the chain from one compound on, each behind its combinator.
+ *
+ * @param {Array<object>} compounds
+ *   The parsed selector's compounds.
+ * @param {number} carrier
+ *   The index of the compound carrying the weight (lastWeighted), or -1.
+ * @param {number} from
+ *   The index the print starts at.
+ * @param {object} conditions
+ *   The condition table (guide.conditions), for the force-state dual.
+ *
+ * @return {string}
+ *   The chain's selector text from `from` on.
  */
 const renderTail = (compounds, carrier, from, conditions) =>
   compounds
@@ -328,6 +431,73 @@ const renderTail = (compounds, carrier, from, conditions) =>
         : `${renderCombinator(compound)}${renderCompound(compound, i === carrier, conditions)}`,
     )
     .join('');
+
+/**
+ * The terminal pseudo-element a selector prints, as selector text
+ * (CssPrinter::pseudoTail mirror): '::before' / '::after', or '' for an
+ * element (null included).
+ *
+ * @param {?string} selector
+ *   The key's canonical relative selector, or null for the root.
+ *
+ * @return {string}
+ *   The pseudo-element text, or '' for an element.
+ */
+const pseudoTail = (selector) => {
+  const pseudo = selector === null ? null : parseSelector(selector).pseudo;
+  return pseudo === null ? '' : `${SUFFIX}${pseudo}`;
+};
+
+/**
+ * The @scope targets of a selector's HOSTS (CssPrinter::hostTargets
+ * mirror): scopeTargets without the pseudo-element, the selectors a
+ * condition suffix appends to. The owner's anchor hosts on the scoping
+ * root itself. The canvas reads through these (computed-read.js
+ * resolveTargets): a generated box has no node, so the DOM twin of a
+ * box's rule is its hosts, and the box rides the computed read as
+ * getComputedStyle's pseudo argument.
+ *
+ * @param {?string} selector
+ *   The key's canonical relative selector, or null for the root.
+ * @param {object} conditions
+ *   The condition table, as scopeTargets takes it.
+ *
+ * @return {string[]}
+ *   The host selectors, one per @scope target.
+ */
+export const hostTargets = (selector, conditions = {}) => {
+  if (selector === null) {
+    return [':scope'];
+  }
+  const { compounds } = parseSelector(selector);
+  if (!compounds.length) {
+    return [':scope'];
+  }
+  const carrier = lastWeighted(compounds, 0);
+  // A descendant-led chain, or the qualified anchor (which prints as the
+  // :scope link, renderCompound).
+  const main =
+    compounds[0].combinator === CHILD
+      ? `${scopeLink(compounds, carrier === -1, conditions)}${renderTail(compounds, carrier, 0, conditions)}`
+      : `${renderCompound(compounds[0], carrier === 0, conditions)}${renderTail(compounds, carrier, 1, conditions)}`;
+  if (!isPartFirst(selector)) {
+    return [main];
+  }
+  // The part stands first, or right behind the qualified anchor.
+  const part = compounds[0].kind === ANCHOR_KIND ? 1 : 0;
+  if (compounds.length === part + 1) {
+    return [
+      `${scopeLink(compounds, true, conditions)}${compounds[part].name}${renderQualifiers(compounds[part], conditions)}`,
+      main,
+    ];
+  }
+  if (isSibling(compounds[part + 1])) {
+    return [main];
+  }
+  const restCarrier = lastWeighted(compounds, part + 1);
+  const dual = `${scopeLink(compounds, restCarrier === -1, conditions)}:where(${compounds[part].name})${renderQualifiers(compounds[part], conditions)}${renderTail(compounds, restCarrier, part + 1, conditions)}`;
+  return [dual, main];
+};
 
 /**
  * The @scope targets a relative selector prints to: the discipline
@@ -369,66 +539,11 @@ const renderTail = (compounds, carrier, from, conditions) =>
  *   no pseudo-class is a published state and every one prints bare.
  *
  * @return {string[]}
+ *   The whole target selectors, the pseudo-element glued on.
  */
 export const scopeTargets = (selector, conditions = {}) => {
   const pseudo = pseudoTail(selector);
   return hostTargets(selector, conditions).map((host) => `${host}${pseudo}`);
-};
-
-/**
- * The terminal pseudo-element a selector prints, as selector text
- * (CssPrinter::pseudoTail mirror): '::before' / '::after', or '' for an
- * element (null included).
- */
-const pseudoTail = (selector) => {
-  const pseudo = selector === null ? null : parseSelector(selector).pseudo;
-  return pseudo === null ? '' : `${SUFFIX}${pseudo}`;
-};
-
-/**
- * The @scope targets of a selector's HOSTS (CssPrinter::hostTargets
- * mirror): scopeTargets without the pseudo-element, the selectors a
- * condition suffix appends to. The owner's anchor hosts on the scoping
- * root itself. The canvas reads through these (computed-read.js
- * resolveTargets): a generated box has no node, so the DOM twin of a
- * box's rule is its hosts, and the box rides the computed read as
- * getComputedStyle's pseudo argument.
- *
- * @param {?string} selector
- *   The key's canonical relative selector, or null for the root.
- * @param {object} conditions
- *   The condition table, as scopeTargets takes it.
- *
- * @return {string[]}
- */
-export const hostTargets = (selector, conditions = {}) => {
-  if (selector === null) {
-    return [':scope'];
-  }
-  const { compounds } = parseSelector(selector);
-  if (!compounds.length) {
-    return [':scope'];
-  }
-  const carrier = lastWeighted(compounds, 0);
-  // A descendant-led chain, or the qualified anchor (which prints as the
-  // :scope link, renderCompound).
-  const main = compounds[0].combinator === CHILD
-    ? `${scopeLink(compounds, carrier === -1, conditions)}${renderTail(compounds, carrier, 0, conditions)}`
-    : `${renderCompound(compounds[0], carrier === 0, conditions)}${renderTail(compounds, carrier, 1, conditions)}`;
-  if (!isPartFirst(selector)) {
-    return [main];
-  }
-  // The part stands first, or right behind the qualified anchor.
-  const part = compounds[0].kind === ANCHOR_KIND ? 1 : 0;
-  if (compounds.length === part + 1) {
-    return [`${scopeLink(compounds, true, conditions)}${compounds[part].name}${renderQualifiers(compounds[part], conditions)}`, main];
-  }
-  if (isSibling(compounds[part + 1])) {
-    return [main];
-  }
-  const restCarrier = lastWeighted(compounds, part + 1);
-  const dual = `${scopeLink(compounds, restCarrier === -1, conditions)}:where(${compounds[part].name})${renderQualifiers(compounds[part], conditions)}${renderTail(compounds, restCarrier, part + 1, conditions)}`;
-  return [dual, main];
 };
 
 /**
@@ -470,6 +585,12 @@ export const CLAIMS_CONTENT_SELECTOR = `:where([${CLAIMS_CONTENT_ATTRIBUTE}])`;
  * The declarations of a property map that pass the emit gate
  * (CssPrinter::admittedDeclarations mirror): property => trimmed value,
  * stored order kept.
+ *
+ * @param {object} properties
+ *   The property map (property => stored value).
+ *
+ * @return {object}
+ *   The admitted declarations, property => trimmed value.
  */
 const admittedDeclarations = (properties) => {
   const admitted = {};
@@ -486,7 +607,8 @@ const admittedDeclarations = (properties) => {
     if (
       value === '' ||
       !PROPERTY_PATTERN.test(property) ||
-      VALUE_FORBIDDEN.test(value)
+      VALUE_FORBIDDEN.test(value) ||
+      hasControlChar(value, VALUE_WHITESPACE)
     ) {
       return;
     }
@@ -501,6 +623,14 @@ const admittedDeclarations = (properties) => {
  * A motion trigger property (TRIGGER_MARKERS) prints its marker custom
  * property on the next line with the same value, wherever the property
  * prints (CssPrinter::printDeclarations mirror).
+ *
+ * @param {object} properties
+ *   The property map (property => stored value).
+ * @param {string} indent
+ *   The whitespace each line starts with.
+ *
+ * @return {string}
+ *   The declaration lines, newline-joined.
  */
 const printDeclarations = (properties, indent) => {
   const lines = [];
@@ -519,6 +649,12 @@ const printDeclarations = (properties, indent) => {
  * Whether a declaration block binds an animation to a trigger
  * (CssPrinter::holdsAnimation mirror): its admitted `animation-trigger`
  * is present and not `none`.
+ *
+ * @param {object} properties
+ *   The property map (property => stored value).
+ *
+ * @return {boolean}
+ *   True when the block binds an animation to a trigger.
  */
 const holdsAnimation = (properties) => {
   const trigger = admittedDeclarations(properties)['animation-trigger'] ?? null;
@@ -847,6 +983,14 @@ export const printMap = (map, conditions) => {
  * Whether a style map styles anything under a container query condition.
  *
  * Mirrors ConditionTypePluginManager::mapUsesContainerConditions().
+ *
+ * @param {?object} map
+ *   The style map.
+ * @param {?object} conditions
+ *   The condition table (guide.conditions), for compound parsing.
+ *
+ * @return {boolean}
+ *   True when any entry's condition carries a container clause.
  */
 export const mapUsesContainerConditions = (map, conditions) =>
   Object.values(map ?? {}).some((entry) => {

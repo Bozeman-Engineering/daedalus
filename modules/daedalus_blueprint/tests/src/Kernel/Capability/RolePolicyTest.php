@@ -123,7 +123,9 @@ class RolePolicyTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Each of core's three override permissions opens structure; none of them is a content grant.
+   * Each of core's three override permissions opens structure.
+   *
+   * None of them is a content grant.
    */
   public function testCorePermissionsOpenStructure(): void {
     $structure = [
@@ -164,7 +166,9 @@ class RolePolicyTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Without an override permission structure is refused and the host's fields stay open.
+   * Without an override permission structure is refused.
+   *
+   * The host's fields stay open.
    */
   public function testContentPermissionsLeaveStructureClosed(): void {
     [$host, $section_uuid, $block_uuid] = $this->contentHost();

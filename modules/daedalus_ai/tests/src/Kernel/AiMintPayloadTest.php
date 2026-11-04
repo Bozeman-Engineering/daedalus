@@ -45,11 +45,11 @@ class AiMintPayloadTest extends KernelTestBase {
   /**
    * {@inheritdoc}
    *
-   * The AI stack beyond `ai` (agents, assistants) is not needed to build
-   * the turn: the subscriber's dependencies are daedalus_ai's and
-   * daedalus_ui's own; `key` and `ai` ride for the services daedalus_ai's
-   * container autowires; daedalus_stylish supplies the material whose entity hook
-   * feeds the change set.
+   * The AI stack beyond `ai` (agents, assistants) is not needed to build the
+   * turn: the subscriber's dependencies are daedalus_ai's and daedalus_ui's
+   * own; `key` and `ai` ride for the services daedalus_ai's container
+   * autowires; daedalus_stylish supplies the material whose entity hook feeds
+   * the change set.
    */
   protected static $modules = [
     'system',

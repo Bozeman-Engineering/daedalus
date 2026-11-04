@@ -59,8 +59,17 @@ export const clipboardUnavailableText = () =>
  * on it (the refusal, a stub without the method, a producer that throws)
  * is a rejection and never escapes the caller's click handler. The road
  * itself runs synchronously, inside the user's gesture.
+ *
+ * @param {Function} road
+ *   The road to run.
+ *
+ * @return {Promise<*>}
+ *   The road's answer, or its throw as a rejection.
  */
-const settle = (road) => new Promise((resolve) => resolve(road()));
+const settle = (road) =>
+  new Promise((resolve) => {
+    resolve(road());
+  });
 
 /**
  * Reads the system clipboard's text.

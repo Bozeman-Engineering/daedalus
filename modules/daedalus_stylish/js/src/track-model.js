@@ -25,6 +25,7 @@
  *   A stop position (raw, possibly null).
  *
  * @return {?number}
+ *   The percent, or null for any other spelling.
  */
 export const positionPercent = (position) => {
   const text = typeof position === 'string' ? position.trim() : '';
@@ -43,8 +44,10 @@ export const positionPercent = (position) => {
  * track. Pure display math: the stops' raw positions are never touched.
  *
  * @param {Array<{position: ?string}>} stops
+ *   The stops in array order.
  *
  * @return {number[]}
+ *   One display position per stop, 0-100, non-decreasing.
  */
 export const trackPositions = (stops) => {
   const resolved = stops.map((stop) => positionPercent(stop.position));
@@ -60,12 +63,12 @@ export const trackPositions = (stops) => {
   let i = 1;
   while (i < resolved.length - 1) {
     if (resolved[i] !== null) {
-      i++;
+      i += 1;
       continue;
     }
     let j = i;
     while (resolved[j] === null) {
-      j++;
+      j += 1;
     }
     const from = resolved[i - 1];
     const span = j - i + 1;
@@ -85,8 +88,10 @@ export const trackPositions = (stops) => {
  * A percent clamped to the track and spelled with at most one decimal.
  *
  * @param {number} percent
+ *   Any number (a pointer's track position).
  *
  * @return {number}
+ *   The percent within [0, 100], at most one decimal.
  */
 export const trackPercent = (percent) =>
   Number(Math.min(100, Math.max(0, percent)).toFixed(1));
@@ -98,9 +103,12 @@ export const trackPercent = (percent) =>
  * relies on CSS's silent render clamping.
  *
  * @param {Array<{position: ?string}>} stops
+ *   The stops in array order.
  * @param {number} percent
+ *   The track position to place at.
  *
  * @return {number}
+ *   The index to insert at (stops.length when it goes last).
  */
 export const insertionIndex = (stops, percent) => {
   const resolved = trackPositions(stops);
@@ -121,12 +129,14 @@ export const insertionIndex = (stops, percent) => {
  * verbatim.
  *
  * @param {Array<{position: ?string}>} stops
+ *   The stops in array order.
  * @param {number} index
  *   The moved stop.
  * @param {number} percent
  *   The pointer's track position.
  *
  * @return {{stops: Array, selected: number}}
+ *   The reordered stops and the moved stop's new index.
  */
 export const moveStop = (stops, index, percent) => {
   const clamped = trackPercent(percent);
@@ -148,11 +158,14 @@ export const moveStop = (stops, index, percent) => {
  * here as the clamped percent.
  *
  * @param {Array<{position: ?string}>} stops
+ *   The stops in array order.
  * @param {object} shape
  *   The new stop's fields other than `position`.
  * @param {number} percent
+ *   The track position to insert at.
  *
  * @return {{stops: Array, selected: number}}
+ *   The stops with the new one sorted in, and its index.
  */
 export const insertStop = (stops, shape, percent) => {
   const clamped = trackPercent(percent);
@@ -170,6 +183,7 @@ export const insertStop = (stops, shape, percent) => {
  * stop, or the nearest survivor when it was the one removed.
  *
  * @param {Array} stops
+ *   The stops in array order.
  * @param {number} index
  *   The removed stop.
  * @param {number} selected
@@ -178,6 +192,8 @@ export const insertStop = (stops, shape, percent) => {
  *   The fewest stops the consumer's value can hold.
  *
  * @return {?{stops: Array, selected: number}}
+ *   The surviving stops and the surviving selection, or null when the
+ *   floor refuses the removal.
  */
 export const removeStop = (stops, index, selected, minStops) => {
   if (stops.length <= minStops) {

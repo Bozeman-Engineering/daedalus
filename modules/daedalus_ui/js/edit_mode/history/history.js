@@ -33,6 +33,9 @@ const notify = () => listeners.forEach((listener) => listener(state));
 
 /**
  * Replaces the mirrored timeline from a server `history` payload.
+ *
+ * @param {?object} metadata
+ *   The payload's history key ({pointer, can_undo, can_redo, entries}).
  */
 export const historyUpdated = (metadata) => {
   if (!metadata) {
@@ -103,6 +106,9 @@ export const redo = () => {
 
 /**
  * Jumps to a specific entry (a sidebar row click).
+ *
+ * @param {number} seq
+ *   The entry's sequence number.
  */
 export const restoreTo = (seq) => {
   if (state.loaded && state.pointer === seq) {
@@ -139,6 +145,9 @@ export const getState = () => state;
 
 /**
  * Subscribes to timeline changes.
+ *
+ * @param {function(object): void} listener
+ *   Called with the timeline state on every change.
  *
  * @return {Function}
  *   Unsubscribe.

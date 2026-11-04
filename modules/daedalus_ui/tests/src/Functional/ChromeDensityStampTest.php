@@ -12,17 +12,16 @@ use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
 /**
  * The chrome density stamp follows the edit chrome, not the active mode.
  *
- * The per-user "Editing chrome" preference reaches CSS and the reveal engine
- * as one html attribute, data-daedalus-ui-chrome-density, stamped server-side in
- * DaedalusUiHooks::preprocessHtml. The edit chrome (top bar, sidebar panels)
- * is server-rendered present-but-hidden on every page where Edit mode is
- * available, and the client-side toggle reveals it by flipping the mode
- * stamp alone. So the density stamp must be present on that same set of
- * pages, mode active or not: a stamp gated on the active mode is absent
- * after an AJAX entry, and every consumer reads the absence as full density
- * (labeled top bar buttons at minimal, secondary chrome shown at clean)
- * until a reload. This tier sees that failure directly in the served html;
- * no browser is needed.
+ * The per-user "Editing chrome" preference reaches CSS and the reveal engine as
+ * one html attribute, data-daedalus-ui-chrome-density, stamped server-side in
+ * DaedalusUiHooks::preprocessHtml. The edit chrome (top bar, sidebar panels) is
+ * server-rendered present-but-hidden on every page where Edit mode is
+ * available, and the client-side toggle reveals it by flipping the mode stamp
+ * alone. So the density stamp must be present on that same set of pages, mode
+ * active or not: a stamp gated on the active mode is absent after an AJAX
+ * entry, and every consumer reads the absence as full density (labeled top bar
+ * buttons at minimal, secondary chrome shown at clean) until a reload. This
+ * tier sees that failure directly in the served html; no browser is needed.
  *
  * @group daedalus_ui
  */

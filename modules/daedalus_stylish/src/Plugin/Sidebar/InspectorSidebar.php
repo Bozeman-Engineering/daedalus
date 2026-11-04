@@ -35,10 +35,10 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * mode session; selection never opens it). Weight puts its toggle right-most
  * in the top bar's button cluster.
  *
- * The build is only a mount point. Daedalus Stylish's own client bundle renders the
- * panel interior (header, property sections, pop-out controls) so the same
- * component can also render in a popped-out satellite window where none of
- * the server-rendered editing chrome exists.
+ * The build is only a mount point. Daedalus Stylish's own client bundle renders
+ * the panel interior (header, property sections, pop-out controls) so the same
+ * component can also render in a popped-out satellite window where none of the
+ * server-rendered editing chrome exists.
  *
  * The pop-out pair finds each other over daedalus_ui's shared
  * BroadcastChannel wire, under the 'daedalus_stylish' prefix. The channel scope
@@ -94,8 +94,8 @@ final class InspectorSidebar extends SidebarPluginBase implements ContainerFacto
       $container->get('daedalus_blueprint.storage_handler'),
       $container->get('daedalus_blueprint.verdict_stamper'),
       // The opener registers only when media_library is installed
-      // (DaedalusStylishServiceProvider); without it the panel simply attaches no
-      // library URL and pickers degrade to free text.
+      // (DaedalusStylishServiceProvider); without it the panel simply attaches
+      // no library URL and pickers degrade to free text.
       $container->has(DaedalusStylishMediaLibraryOpener::SERVICE_ID) ? $container->get(DaedalusStylishMediaLibraryOpener::SERVICE_ID) : NULL,
     );
   }

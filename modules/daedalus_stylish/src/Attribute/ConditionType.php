@@ -35,10 +35,10 @@ final class ConditionType extends AttributeBase {
    * @param \Drupal\Core\StringTranslation\TranslatableMarkup $label
    *   The condition type's human label ("Container breakpoint").
    * @param string $axis
-   *   The axis this type's conditions live on ("state", "width",
-   *   "scheme", "motion"). A compound condition holds at most one condition per axis,
-   *   and the canonical part order is axis-declaration order — the order
-   *   axes first appear across the (weight, id)-ordered condition types.
+   *   The axis this type's conditions live on ("state", "width", "scheme",
+   *   "motion"). A compound condition holds at most one condition per axis, and
+   *   the canonical part order is axis-declaration order — the order axes first
+   *   appear across the (weight, id)-ordered condition types.
    * @param int $weight
    *   Order among condition types. When two types declare the same condition
    *   name, the first in (weight, id) order owns it.

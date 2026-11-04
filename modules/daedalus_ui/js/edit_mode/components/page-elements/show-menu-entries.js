@@ -57,7 +57,12 @@ export const withShowMenuItem = (items, item) => {
  * @return {Array<object>}
  *   Items in the menu primitive's grammar (js/menu/menu-state.js).
  */
-export const showMenuEntries = (toggles, viewVisibility, setVisibility, items) => {
+export const showMenuEntries = (
+  toggles,
+  viewVisibility,
+  setVisibility,
+  items,
+) => {
   const toggleEntries = toggles.map((toggle) => ({
     label: toggle.label,
     checked: viewVisibility[toggle.id] === true,

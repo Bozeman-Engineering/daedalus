@@ -16,10 +16,10 @@ use PHPUnit\Framework\Attributes\Group;
  * Tests the rename mapping on the strings a migrating site stores.
  *
  * The survey strings are the trial site's (plus-suite-to-daedalus-migration,
- * 2026-09-19): config names, a base field's column, a custom module's import,
- * a stored asset path and role permissions. The table under test is the one
- * the package ships, migrate/plus_suite/mapping.tsv, so this class is also the proof
- * that the PHP reader and the code-rename script agree on its grammar.
+ * 2026-09-19): config names, a base field's column, a custom module's import, a
+ * stored asset path and role permissions. The table under test is the one the
+ * package ships, migrate/plus_suite/mapping.tsv, so this class is also the
+ * proof that the PHP reader and the code-rename script agree on its grammar.
  *
  * @group daedalus
  */

@@ -17,9 +17,9 @@ namespace Drupal\daedalus_blueprint\Result;
  * never be (field names must start with a letter). Consumers use that prefix
  * (see ::isSentinel()) to tell a change-kind marker apart from a real field.
  *
- * These are a contract shared across modules: daedalus_blueprint produces them on
- * targets, and consumers (e.g. daedalus_ai's refresh pipeline) read them to decide
- * how to react. Reference these constants, not the literal strings.
+ * These are a contract shared across modules: daedalus_blueprint produces them
+ * on targets, and consumers (e.g. daedalus_ai's refresh pipeline) read them to
+ * decide how to react. Reference these constants, not the literal strings.
  */
 final class TargetType {
 

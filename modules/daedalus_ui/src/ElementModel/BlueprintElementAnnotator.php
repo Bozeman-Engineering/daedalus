@@ -101,11 +101,11 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  * - composed: TRUE when the block type declares `composed: true`; an
  *   absent key means the sandwich. Compose is a block-TYPE fact, so plugin
  *   components (system/field blocks) never carry it.
- * - fields: {name: {element: false} | {presentation: 'unit'} |
- *   {markup: {instances?, tags?}}}, only non-default facts, so an absent entry
- *   means "exists, presents open". `element: false` is the EXISTENCE axis
- *   (owner declarations plus the registered feeders: display-hidden inference
- *   for inline blocks, root-field nonexistence for roots on LB displays): nothing
+ * - fields: {name: {element: false} | {presentation: 'unit'} | {markup:
+ *   {instances?, tags?}}}, only non-default facts, so an absent entry means
+ *   "exists, presents open". `element: false` is the EXISTENCE axis (owner
+ *   declarations plus the registered feeders: display-hidden inference for
+ *   inline blocks, root-field nonexistence for roots on LB displays): nothing
  *   answers to the key in ANY view, so the projection folds the row
  *   unconditionally. Field presentation cannot ride the field nodes themselves
  *   because scalar field values (a plain string) carry no keys. Inline entities

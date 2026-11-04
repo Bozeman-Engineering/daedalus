@@ -47,6 +47,14 @@ export const REFUSED_TARGET_EXISTS = 'target_exists';
 
 /**
  * A refused plan.
+ *
+ * @param {string} reason
+ *   One of the REFUSED_* reasons.
+ * @param {string} key
+ *   The offending key.
+ *
+ * @return {{moves: null, refusal: {reason: string, key: string}}}
+ *   The plan shape with no moves and the refusal.
  */
 const refuse = (reason, key) => ({ moves: null, refusal: { reason, key } });
 
@@ -68,10 +76,15 @@ const refuse = (reason, key) => ({ moves: null, refusal: { reason, key } });
  *   The candidate relative key.
  *
  * @return {?string}
+ *   The suffix, or null when the key does not continue the rule.
  */
 export const continuationSuffix = (rule, key) => {
   const candidate = canonicalSelector(key);
-  if (candidate === null || candidate === rule || parseSelector(rule).pseudo !== null) {
+  if (
+    candidate === null ||
+    candidate === rule ||
+    parseSelector(rule).pseudo !== null
+  ) {
     return null;
   }
   let suffix;

@@ -16,8 +16,8 @@ use Symfony\Component\DependencyInjection\Reference;
  * uses LayoutEntityHelperTrait), so it must not be registered as a service when
  * layout_builder is absent: the container would try to load the class and fatal
  * with "Trait ... not found". Registering it conditionally here means
- * daedalus_blueprint.storage_handler's optional '@?' reference to it resolves to
- * the helper when layout_builder is present and to NULL otherwise, keeping
+ * daedalus_blueprint.storage_handler's optional '@?' reference to it resolves
+ * to the helper when layout_builder is present and to NULL otherwise, keeping
  * daedalus_blueprint installable on a site without layout_builder.
  */
 class DaedalusBlueprintServiceProvider extends ServiceProviderBase {

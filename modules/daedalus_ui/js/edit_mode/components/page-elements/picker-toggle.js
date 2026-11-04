@@ -1,4 +1,3 @@
-import { h } from 'preact';
 import { useSelector } from 'react-redux';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { togglePicker } from '../../selection/picker';

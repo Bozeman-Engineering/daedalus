@@ -3,10 +3,19 @@
  * AJAX command to show Drupal messages via
  * Drupal.Daedalus.ModeManager.getPlugin('edit').message(message, status).
  */
-Drupal.AjaxCommands.prototype.editModeMessage = function (
+
+/**
+ * AJAX command for showing a message through the Edit mode plugin.
+ *
+ * @param {Drupal.Ajax} ajax
+ *   The Drupal.Ajax object.
+ * @param {object} response
+ *   The server response: message, type, and optionally duration and
+ *   elementId.
+ */
+Drupal.AjaxCommands.prototype.editModeMessage = function editModeMessage(
   ajax,
   response,
-  status,
 ) {
   if (Drupal.Daedalus?.ModeManager?.getPlugin) {
     try {
@@ -26,7 +35,9 @@ Drupal.AjaxCommands.prototype.editModeMessage = function (
         );
       }
     } catch (error) {
-      console.error('Error displaying edit mode message:', error);
+      // The message still lands through core's messenger; the failure
+      // surfaces outside the call stack.
+      Drupal.throwError(error);
       const messageWrapper = document.querySelector('[data-drupal-messages]');
       if (messageWrapper) {
         const drupalMessage = new Drupal.Message(messageWrapper);

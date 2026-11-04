@@ -134,7 +134,7 @@ class VariantConformanceTest extends KernelTestBase {
    *
    * The builder memoizes per request and every material write and law
    * change resets it (the enforcement save among them, through
-   * _daedalus_design_system_change()); the reset here is the request
+   * _daedalus_stylish_design_system_change()); the reset here is the request
    * boundary for a read that follows no write.
    */
   protected function roster(): MaterialsRoster {
@@ -170,16 +170,16 @@ class VariantConformanceTest extends KernelTestBase {
   /**
    * Makes the judge's next read a cold judgement that loads the variants.
    *
-   * The enforcement save is a law change: _daedalus_design_system_change()
-   * resets the roster (the cascade forgets the memo) and recompiles both
-   * stylesheets, and the variants compile judges and persists the verdict
-   * under the new law key before the test reads anything. The legs that
-   * watch the judgement itself want the request after a material write
-   * invalidated that entry, so the memo and the persisted entry go (the
-   * variant list tag, what a variant save busts). The repository memoizes
-   * the published set per request and the storage serves loaded entities
-   * from its static cache, where no load hook fires; both are cleared so
-   * the control module's load hook sees the judge's load.
+   * The enforcement save is a law change:
+   * _daedalus_stylish_design_system_change() resets the roster (the cascade
+   * forgets the memo) and recompiles both stylesheets, and the variants compile
+   * judges and persists the verdict under the new law key before the test reads
+   * anything. The legs that watch the judgement itself want the request after a
+   * material write invalidated that entry, so the memo and the persisted entry
+   * go (the variant list tag, what a variant save busts). The repository
+   * memoizes the published set per request and the storage serves loaded
+   * entities from its static cache, where no load hook fires; both are cleared
+   * so the control module's load hook sees the judge's load.
    */
   protected function coldJudgement(): void {
     $this->container->get('daedalus_blueprint.materials_roster_builder')->reset();
@@ -345,7 +345,7 @@ class VariantConformanceTest extends KernelTestBase {
    * The main flow cannot yield, so it judges again: the same verdict,
    * written twice, and the parked fiber's judgement still completes.
    */
-  public function testMainFlowJudgesBesideAParkedFiber(): void {
+  public function testMainFlowJudgesBesideParkedFiber(): void {
     $this->enforce('strict');
     $judge = $this->container->get('daedalus_stylish.variant_conformance');
     $this->coldJudgement();

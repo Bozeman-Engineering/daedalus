@@ -6,8 +6,10 @@ namespace Drupal\Tests\daedalus_blueprint_ai\Kernel;
 
 use Drupal\block_content\Entity\BlockContent;
 use Drupal\Component\Uuid\Php as PhpUuid;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\daedalus_blueprint_ai\Plugin\AiFunctionCall\PageEdit;
 use Drupal\daedalus_blueprint_test\TestFileDeclarationHandler;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -273,20 +275,27 @@ class PageEditGateTest extends BlueprintKernelTestBase {
 
     $storage = $this->entityTypeManager->getStorage('entity_test');
     $storage->resetCache();
-    $section = $storage->load($page->id())->get('layout_builder__layout')->getSections()[0];
+    $reloaded = $storage->load($page->id());
+    assert($reloaded instanceof FieldableEntityInterface);
+    $layout = $reloaded->get('layout_builder__layout');
+    assert($layout instanceof SectionListInterface);
+    $section = $layout->getSections()[0];
     $block_storage = $this->entityTypeManager->getStorage('block_content');
     $block_storage->resetCache();
     $configuration = $section->getComponent($text_uuid)->get('configuration');
     $this->assertNotEmpty($configuration['block_revision_id'], 'The written block was saved as an entity.');
     $this->assertArrayNotHasKey('block_serialized', array_filter($configuration), 'Nothing is left staged on the component.');
     $written = $block_storage->loadRevision($configuration['block_revision_id']);
+    assert($written instanceof BlockContent);
     $this->assertSame('h3', $written->get('field_text_tag')->value, 'The set landed.');
     $this->assertSame('About', $written->get('field_text_text')->value);
     $this->assertSame('internal:/about', $written->get('field_text_link')->uri, 'The unnamed field keeps its uri.');
     $this->assertSame('About us', $written->get('field_text_link')->title, 'The unnamed field keeps the title the print cannot spell.');
     $card_configuration = $section->getComponent($card_uuid)->get('configuration');
     $this->assertNotEmpty($card_configuration['block_revision_id']);
-    $this->assertSame(['Plans', 'Pricing'], array_column($block_storage->loadRevision($card_configuration['block_revision_id'])->get('field_card_items')->getValue(), 'value'), 'The block beside the write keeps the values the print cannot spell.');
+    $card = $block_storage->loadRevision($card_configuration['block_revision_id']);
+    assert($card instanceof BlockContent);
+    $this->assertSame(['Plans', 'Pricing'], array_column($card->get('field_card_items')->getValue(), 'value'), 'The block beside the write keeps the values the print cannot spell.');
   }
 
 }

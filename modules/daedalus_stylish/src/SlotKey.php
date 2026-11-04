@@ -188,17 +188,17 @@ final class SlotKey {
   /**
    * A variant's styles at one fragment, keyed by part suffix.
    *
-   * The shape a single {variant, fragment} reference delivers to its
-   * carrying element, root ('' fragment) and distributed fragment alike:
-   * the fragment's own entry reads as '' and its suffixed entries (every
-   * '::selector' relative of the fragment) as their suffix, so
-   * "{key}{suffix}" is the map key the styles belong to on the carrier. Deeper slot paths under the fragment
-   * are OTHER fragments (their elements carry their own references) and
-   * never read here. A fragment the variant does not hold reads empty —
-   * valid but inert. The ONE fragment-lookup semantics: detach
-   * materialization (DaedalusStylishOperationHandler) and delivery (CssPrinter)
-   * both read through here, so the two can never disagree about what a
-   * reference delivers.
+   * The shape a single {variant, fragment} reference delivers to its carrying
+   * element, root ('' fragment) and distributed fragment alike: the fragment's
+   * own entry reads as '' and its suffixed entries (every '::selector' relative
+   * of the fragment) as their suffix, so "{key}{suffix}" is the map key the
+   * styles belong to on the carrier. Deeper slot paths under the fragment are
+   * OTHER fragments (their elements carry their own references) and never read
+   * here. A fragment the variant does not hold reads empty — valid but inert.
+   * The ONE fragment-lookup semantics: detach materialization
+   * (DaedalusStylishOperationHandler) and delivery (CssPrinter) both read
+   * through here, so the two can never disagree about what a reference
+   * delivers.
    *
    * @param array $styles
    *   The variant's element-relative styles.

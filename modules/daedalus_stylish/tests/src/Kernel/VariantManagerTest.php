@@ -16,12 +16,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the variant gestures behind the inspector's variant area.
  *
- * Save-as-variant captures scope server-side and validates against the
- * style guide (daedalus_stylish_guide_test: section declares spacing with padding
- * max 4rem); push-update creates a NEW REVISION (the reversibility net)
- * and reports the loud use count; usage counting reads the
- * daedalus_variant_usage table, which the host entity save chokepoint
- * maintains for both reference forms (machine name and uuid).
+ * Save-as-variant captures scope server-side and validates against the style
+ * guide (daedalus_stylish_guide_test: section declares spacing with padding max
+ * 4rem); push-update creates a NEW REVISION (the reversibility net) and reports
+ * the loud use count; usage counting reads the daedalus_variant_usage table,
+ * which the host entity save chokepoint maintains for both reference forms
+ * (machine name and uuid).
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]

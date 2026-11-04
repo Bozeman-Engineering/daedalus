@@ -1,14 +1,10 @@
-import { h, render, createContext, Fragment } from 'preact';
+import { render, createContext, Fragment } from 'preact';
 import { createPortal } from 'preact/compat';
 import { Provider, useSelector, useDispatch } from 'react-redux';
 import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import store from '../../store/store';
 import { setHover, setHoverSelector } from '../../store/slices/selection-slice';
-import {
-  selectKey,
-  selectKeys,
-  toggleKey,
-} from '../../selection/select-door';
+import { selectKey, selectKeys, toggleKey } from '../../selection/select-door';
 import { commitAddress } from '../../selection/commit-address';
 import { projectionIndex, selectorAddress } from './projection-index';
 import { setRenameKey } from '../../store/slices/view-slice';
@@ -49,12 +45,7 @@ import {
 } from '../../blueprint/markup-index';
 import { ShowMenu } from './show-menu';
 import { PickerToggle } from './picker-toggle';
-import {
-  expand,
-  isCollapsed,
-  reveal,
-  toggle,
-} from '../../../outline/collapse';
+import { expand, isCollapsed, reveal, toggle } from '../../../outline/collapse';
 import {
   foldedRowCount,
   modelRow,
@@ -132,8 +123,32 @@ const OutlineContext = createContext(null);
  * page, the pinned head) renders no chevron column and is depth 0 along
  * with the sections directly under it, so every level below steps in from
  * the page's own edge.
+ *
+ * @param {number} depth
+ *   The row's depth in the rendered tree (the root row is 0).
+ *
+ * @return {number}
+ *   The outline depth.
  */
 const outlineDepth = (depth) => Math.max(depth - 1, 0);
+
+/**
+ * The rename input's accessible name: what the row is, by its kind.
+ *
+ * @param {boolean} isRoot
+ *   Whether the row is the page row.
+ * @param {string} kind
+ *   The node's kind ('block', 'container', ...).
+ *
+ * @return {string}
+ *   The translated label.
+ */
+const renameInputLabel = (isRoot, kind) => {
+  if (isRoot) {
+    return Drupal.t('Title');
+  }
+  return kind === 'block' ? Drupal.t('Block name') : Drupal.t('Container name');
+};
 
 /**
  * The voice a model row speaks in, the grammar's modifier by the row's
@@ -165,6 +180,11 @@ const ChevronFootprint = () => (
  * unminted kind), painted by the grammar as a mask in the row's current
  * color, so it reads muted at rest and in the selection color when
  * selected. Decorative: the row's words carry the accessible name.
+ *
+ * @param {object} props
+ *   The zone's props.
+ * @param {?string} props.url
+ *   The glyph's URL, or null for no icon.
  */
 const RowIcon = ({ url }) =>
   url ? (
@@ -184,6 +204,15 @@ const RowIcon = ({ url }) =>
  * angle brackets). Rendered only with something to say, so a bare row's
  * name runs to the edge. A fact's `title` is its words; the spot itself
  * is decorative.
+ *
+ * @param {object} props
+ *   The zone's props.
+ * @param {Array<{mark: string, hue?: string, text?: string, title: string}>} props.facts
+ *   The providers' facts for the row (row-facts-registry.js rowFacts).
+ * @param {?number} [props.count]
+ *   A collapsed rich-text row's direct row count, or null.
+ * @param {?string} props.tag
+ *   The Markup view's tag fact, or null.
  */
 const RowFacts = ({ facts, count = null, tag }) =>
   facts.length > 0 || count !== null || tag ? (
@@ -210,7 +239,11 @@ const RowFacts = ({ facts, count = null, tag }) =>
       {count !== null && (
         <span
           className="daedalus-ui-outline__count"
-          title={Drupal.formatPlural(count, '1 row inside', '@count rows inside')}
+          title={Drupal.formatPlural(
+            count,
+            '1 row inside',
+            '@count rows inside',
+          )}
         >
           {count}
         </span>
@@ -226,6 +259,15 @@ const RowFacts = ({ facts, count = null, tag }) =>
  * blocks hoisting identical shell chains into one region), so their
  * render key includes the owning model key — id is only unique per owner;
  * a shown row is one per door, so the door's key is its render key.
+ *
+ * @param {object} props
+ *   The list's props.
+ * @param {object[]} props.children
+ *   The parent row's child nodes (model, pseudo and shown).
+ * @param {?object} props.provider
+ *   The active view provider, or null for the built-in projection.
+ * @param {number} props.depth
+ *   The children's depth in the rendered tree.
  */
 const ChildRows = ({ children, provider, depth }) => (
   <ul className="daedalus-ui-tree__children" role="group">
@@ -274,6 +316,13 @@ const ChildRows = ({ children, provider, depth }) => (
  * (the claim). The door row above it is the selection; this row says what
  * is behind the door. It stamps data-tree-shown with the door's key so a
  * test can find the row the door grew.
+ *
+ * @param {object} props
+ *   The row's props.
+ * @param {object} props.row
+ *   The shown-document row (shown-rows.js shownRows).
+ * @param {number} props.depth
+ *   The row's depth in the rendered tree.
  */
 const ShownRow = ({ row, depth }) => {
   const { folds } = useContext(OutlineContext);
@@ -355,6 +404,15 @@ const ShownRow = ({ row, depth }) => {
  * the pair to make the shell that claims the root's sections the root
  * flow's drop surface, since the section rows are that row's rows. A
  * slot-less shell carries neither attribute and is no drop surface.
+ *
+ * @param {object} props
+ *   The row's props.
+ * @param {object} props.part
+ *   The pseudo row (a shell, an instance carrier, a generated box).
+ * @param {?object} props.provider
+ *   The active view provider, or null for the built-in projection.
+ * @param {number} props.depth
+ *   The row's depth in the rendered tree.
  */
 const PartRow = ({ part, provider, depth }) => {
   const dispatch = useDispatch();
@@ -543,6 +601,9 @@ const PartRow = ({ part, provider, depth }) => {
  * selection still commits and anchored chrome rides this row instead).
  * The select goes through the selection door (select-door.js): a refused
  * leave moves nothing, so there is nothing to reveal.
+ *
+ * @param {string} key
+ *   The row's element key.
  */
 const activateRow = (key) => {
   if (selectKey(key)) {
@@ -555,6 +616,9 @@ const activateRow = (key) => {
  * clicked row (the list convention: Shift+click ranges). A collapsed
  * row's children don't render, so the DOM order of [data-tree-key] rows
  * IS the visible order; no posture bookkeeping needed.
+ *
+ * @param {string} clickedKey
+ *   The clicked row's element key.
  */
 const selectRowRange = (clickedKey) => {
   const primary = store.getState().selection.selectedKey;
@@ -813,7 +877,11 @@ const TreeRow = ({ node, provider, depth }) => {
     makeDraggable(
       row,
       parts[0] === 'container' ? 'move_section' : 'move_block',
-      () => ({ uuid: parts[1], element: elementForKey(node.key), key: node.key }),
+      () => ({
+        uuid: parts[1],
+        element: elementForKey(node.key),
+        key: node.key,
+      }),
     );
     return () => removeDraggable(row);
   }, [node.key, renaming, inert]);
@@ -998,13 +1066,7 @@ const TreeRow = ({ node, provider, depth }) => {
             type="text"
             defaultValue={isRoot ? (rootTitle ?? '') : (node.customLabel ?? '')}
             placeholder={node.label}
-            aria-label={
-              isRoot
-                ? Drupal.t('Title')
-                : node.kind === 'block'
-                  ? Drupal.t('Block name')
-                  : Drupal.t('Container name')
-            }
+            aria-label={renameInputLabel(isRoot, node.kind)}
             ref={(input) => input?.focus()}
             onFocus={(event) => event.target.select()}
             onMouseDown={(event) => event.stopPropagation()}
@@ -1103,6 +1165,14 @@ const TreeRow = ({ node, provider, depth }) => {
  * same state through the context. Mounted under a key on the view id by
  * the tree, so a view switch is a fresh outline at the new view's
  * defaults.
+ *
+ * @param {object} props
+ *   The owner's props.
+ * @param {object} props.tree
+ *   The rendered tree's root node (projected, pseudo rows appended, reach
+ *   filtered).
+ * @param {?object} props.provider
+ *   The active view provider, or null for the built-in projection.
  */
 const Outline = ({ tree, provider }) => {
   const [folds, setFolds] = useState(null);
@@ -1155,6 +1225,7 @@ const Outline = ({ tree, provider }) => {
  * The tree, with its Show kebab ported into the panel header's slot.
  *
  * @param {object} props
+ *   The tree's props.
  * @param {HTMLElement} props.showMenuSlot
  *   The header's #page-elements-show-menu span (PageElementsSidebar): the
  *   kebab renders there through a portal so it stays a child of this tree
@@ -1211,7 +1282,7 @@ const PageElementsTree = ({ showMenuSlot }) => {
     try {
       tree = provider.projectTree(root, blueprint);
     } catch (error) {
-      console.error('The active tree view provider failed:', error);
+      Drupal.throwError(error);
     }
   }
   const viewProvider = tree ? provider : null;

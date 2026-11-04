@@ -1,7 +1,9 @@
-# The editor chrome colors, under the Daedalus config category's UI
-# sub-category (daedalus.admin_config_ui, the root module's door). The route
-# name and the form id (daedalus_ui_settings) are the contract other modules
-# hang on: bz_render alters the form by id to add its own details.
+# The editor chrome colors. The route sits under the Daedalus config
+# category's UI sub-category (daedalus.admin_config_ui, the door the root
+# module opens). Two names here are a contract: the route name and the form
+# id (daedalus_ui_settings). Modules from outside the package alter the form
+# by that id to add a details element of their own, so neither name changes
+# without a word to them.
 daedalus_ui.settings:
   path: '/admin/config/daedalus/ui/chrome'
   defaults:

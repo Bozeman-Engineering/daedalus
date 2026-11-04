@@ -38,6 +38,11 @@ final class UsageStatusRouteTest extends BrowserTestBase {
   use DaedalusFixtureTrait;
 
   /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
    * The route's path.
    */
   private const PATH = 'daedalus-ai/usage';
@@ -47,6 +52,17 @@ final class UsageStatusRouteTest extends BrowserTestBase {
    */
   protected function installRecipePath(): string {
     return dirname($this->root) . '/recipes/daedalus_recipe/ai';
+  }
+
+  /**
+   * The stub provider's proxy, the one the leg runs through.
+   *
+   * ProviderProxy forwards every operation through __call() and declares
+   * none, so the call site reads it as an object, the way the ledger's
+   * Kernel classes hold theirs.
+   */
+  private function stubProvider(): object {
+    return $this->container->get('ai.provider')->createInstance('daedalus_ai_test_stub');
   }
 
   /**
@@ -91,7 +107,7 @@ final class UsageStatusRouteTest extends BrowserTestBase {
       ->save();
     $switcher = \Drupal::service('account_switcher');
     $switcher->switchTo($editor);
-    \Drupal::service('ai.provider')->createInstance('daedalus_ai_test_stub')->chat(
+    $this->stubProvider()->chat(
       new ChatInput([new ChatMessage('user', 'Hello')]),
       StubProvider::MODEL_ID,
       [UsageLedger::RUNNER_TAG_PREFIX . 'job-route'],

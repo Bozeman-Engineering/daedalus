@@ -1,6 +1,13 @@
 ---
 name: daedalus-design-system
-description: Customize a Daedalus site's look and starting material from disk: the design-system package module (skin, style guide, variants, blueprints, fonts) and the site's default content (site chrome, starter pages, demo media). Use when asked to change colors, type, spacing or dark mode, add or edit a variant or look, add a blueprint or starter page, tighten or loosen the style guide, ship canvas work to disk, sync a package, or export default content for a profile or recipe.
+description: >-
+  Customize a Daedalus site's look and starting material from disk: the
+  design-system package module (skin, style guide, variants, blueprints,
+  fonts) and the site's default content (site chrome, starter pages, demo
+  media). Use when asked to change colors, type, spacing or dark mode, add or
+  edit a variant or look, add a blueprint or starter page, tighten or loosen
+  the style guide, ship canvas work to disk, sync a package, or export
+  default content for a profile or recipe.
 ---
 
 # Daedalus design system and default content
@@ -236,8 +243,10 @@ Export with core's command from the Drupal root, with dependencies when
 the entity references files or media:
 
 ```bash
-php core/scripts/dr content:export node 42 --with-dependencies --dir=/path/to/content
-php core/scripts/dr content:export blueprint 7 --with-dependencies --dir=/path/to/content
+php core/scripts/dr content:export node 42 --with-dependencies \
+  --dir=/path/to/content
+php core/scripts/dr content:export blueprint 7 --with-dependencies \
+  --dir=/path/to/content
 php core/scripts/dr content:export media --bundle=image --dir=/path/to/content
 ```
 

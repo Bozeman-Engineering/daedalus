@@ -133,7 +133,7 @@ class PlaceBlockAppliesTest extends KernelTestBase {
   }
 
   /**
-   * On a page of an overridable bundle, the override permission opens the panel.
+   * On an overridable bundle's page, the override permission opens the panel.
    */
   public function testOwnDocumentFollowsTheOverridePermission(): void {
     $entity = EntityTest::create(['name' => 'Own page']);

@@ -13,7 +13,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * The design skill is the ONE copy of the page design doctrine, shaped in three
  * parts: a thinking step (subject, audience, the one job, the one thing to
- * remember, one direction) with the creative licence (the brand is carried
+ * remember, one direction) with the creative license (the brand is carried
  * by the brief, the skin and the law, so spend nothing on restraint; invent
  * in structure, values from what the brief names); the composition
  * principles (hierarchy, rhythm,
@@ -234,16 +234,16 @@ class DesignSkillTest extends KernelTestBase {
     $this->assertStringContainsString('Commit to one direction', $instructions);
     $this->assertStringContainsString('not a model for a new one', $instructions);
 
-    // The creative licence, kept concise: the brand is carried by the
-    // brief, the skin and the law, so the doctrine spends nothing on
-    // restraint; a material is a shortcut, never a limit; invention goes
-    // into structure, arrangement and selection, and the values are the
-    // brief's (the Law line in the brief says per site what a value may
-    // be; the skill does not restate it). The rest of the old creative-stance and distinctiveness
-    // sections were cut on 2026-10-24: the materials ladder and the
-    // two-outcome placement rule are the brief's and the Page language's,
-    // and the open-vs-strict pair showed the skill's restatements doing
-    // the composing. Their retired spellings stay guarded.
+    // The creative license, kept concise: the brand is carried by the brief,
+    // the skin and the law, so the doctrine spends nothing on restraint; a
+    // material is a shortcut, never a limit; invention goes into structure,
+    // arrangement and selection, and the values are the brief's (the Law line
+    // in the brief says per site what a value may be; the skill does not
+    // restate it). The rest of the old creative-stance and distinctiveness
+    // sections were cut on 2026-10-24: the materials ladder and the two-outcome
+    // placement rule are the brief's and the Page language's, and the
+    // open-vs-strict pair showed the skill's restatements doing the composing.
+    // Their retired spellings stay guarded.
     $this->assertStringContainsString('## Spend it on the page', $instructions);
     $this->assertStringContainsString('spend nothing on restraint and everything on the page', $flat);
     $this->assertStringContainsString('A material is a shortcut, never a limit', $flat);

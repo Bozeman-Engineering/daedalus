@@ -170,16 +170,16 @@
 .daedalus-ui-document-notice {
   margin: 0 0 0.5rem;
   padding: 0.5rem 0.75rem;
+  color: var(--daedalus-text-muted);
   border-radius: var(--daedalus-border-radius);
   background-color: var(--daedalus-selection-background);
-  color: var(--daedalus-text-muted);
   font-size: 0.875rem;
 }
 
 .daedalus-ui-document-notice__line {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
   margin: 0;
   gap: 0.5rem;
 }
@@ -187,10 +187,10 @@
 .daedalus-ui-document-notice__portal {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  text-decoration: none;
   color: var(--daedalus-selection);
   font-weight: 600;
-  text-decoration: none;
+  gap: 0.25rem;
 }
 
 .daedalus-ui-document-notice__portal:hover,

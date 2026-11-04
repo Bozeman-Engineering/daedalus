@@ -13,7 +13,7 @@ use Drupal\daedalus_stylish\Exception\StyleGuideException;
 use Drupal\daedalus_stylish\Vocabulary\WideSelectors;
 
 /**
- * Daedalus Stylish's projection of the page builder declarations: the style guide.
+ * Daedalus Stylish's projection of the page builder declarations.
  *
  * The style guide declares what is stylable: which property groups apply
  * to an element, with what constraints, defaults, and basic-mode
@@ -36,15 +36,15 @@ use Drupal\daedalus_stylish\Vocabulary\WideSelectors;
  * site config; daedalus_stylish.settings holds site mechanics only.
  *
  * Discovery, layering, and the file family are daedalus_ui's
- * (\Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations): styling
- * sections ride the SAME PROVIDER.page_builder.yml /
+ * (\Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations): styling sections
+ * ride the SAME PROVIDER.page_builder.yml /
  * PROVIDER.page_builder.block_type.BUNDLE.yml /
  * PROVIDER.page_builder.layout.LAYOUT_ID.yml files as the anatomy they
  * describe, layered modules → base themes → active theme →
- * hook_page_builder_declarations_alter(). Anatomy (the elements: trees,
- * their labels and contains: slots) is daedalus_ui's owned grammar,
- * validated at the spine; daedalus_stylish contributes these foreign sections over
- * the same declarations:
+ * hook_page_builder_declarations_alter(). Anatomy (the elements: trees, their
+ * labels and contains: slots) is daedalus_ui's owned grammar, validated at the
+ * spine; daedalus_stylish contributes these foreign sections over the same
+ * declarations:
  * - property_groups: group id => optional {constraints, defaults}, on
  *   kinds, block types, layouts, and any part in an elements: tree. A
  *   part's property groups make the part a styling surface; anatomy without
@@ -501,8 +501,8 @@ class StyleGuide {
   /**
    * Themes whose declarations passed control validation this request.
    *
-   * The spine caches the layered declarations; daedalus_stylish only re-checks its
-   * own sections' bindings, so a memo per theme keeps the per-key guide
+   * The spine caches the layered declarations; daedalus_stylish only re-checks
+   * its own sections' bindings, so a memo per theme keeps the per-key guide
    * lookups (one per style map entry) from re-validating.
    *
    * @var array<string, true>
@@ -546,6 +546,9 @@ class StyleGuide {
    *   builder projecting these declarations per address. A closure for
    *   the same reason: the builder injects this guide, and resetCache()
    *   drops its memo beside the declarations it was built from.
+   * @param \Drupal\daedalus_stylish\Vocabulary\WideSelectors $wideSelectors
+   *   The wide selector tier: the pseudo-elements the browser knows, which a
+   *   declaration's pseudo section may key by.
    */
   public function __construct(
     protected PageBuilderDeclarations $declarations,
@@ -750,10 +753,10 @@ class StyleGuide {
    *
    * The spine's `instances:` lane (PageBuilderDeclarations::getInstances()):
    * content-borne identity-class vocabularies keyed by pattern selector
-   * ('.s-*'), each carrying the namespace's label, its declared tags, and
-   * the styling sections daedalus_stylish layers there (property_groups). Instance
-   * parts resolve through these AFTER the owner's own declarations: exact
-   * part, then owner pattern part, then the site instance namespaces.
+   * ('.s-*'), each carrying the namespace's label, its declared tags, and the
+   * styling sections daedalus_stylish layers there (property_groups). Instance
+   * parts resolve through these AFTER the owner's own declarations: exact part,
+   * then owner pattern part, then the site instance namespaces.
    *
    * @return array<string, array>
    *   Instance declarations keyed by pattern selector.
@@ -1161,18 +1164,17 @@ class StyleGuide {
   /**
    * The declaration's root-only axes: those qualified {axis: {depth: root}}.
    *
-   * The depth qualifier's projection for placement-aware consumers: a
-   * root-only axis is offered and defaulted for TOP-LEVEL sections only,
-   * never for sections nested inside another section's region (a nested
-   * section is always constrained by its parent container, so section
-   * axes like width have nothing to say there). This list is the SOURCE
-   * of the depth stamps, never the consumers' read: DaedalusStylishMaterialsProvider
-   * writes it as each variant record's applies.depth
-   * (MaterialRecord::rootOnly()) and VocabularyRosterBuilder as the
-   * roster's per-axis root_only, and the picker, the dialect,
-   * RootOnlyVariantChecker, the validator's owned-property warning and the
-   * move subscriber that strips root-only wear on nest and redresses it at
-   * root (ElementStylesSubscriber::onElementMoved) all read a stamp. Only
+   * The depth qualifier's projection for placement-aware consumers: a root-only
+   * axis is offered and defaulted for TOP-LEVEL sections only, never for
+   * sections nested inside another section's region (a nested section is always
+   * constrained by its parent container, so section axes like width have
+   * nothing to say there). This list is the SOURCE of the depth stamps, never
+   * the consumers' read: DaedalusStylishMaterialsProvider writes it as each
+   * variant record's applies.depth (MaterialRecord::rootOnly()) and
+   * VocabularyRosterBuilder as the roster's per-axis root_only, and the picker,
+   * the dialect, RootOnlyVariantChecker, the validator's owned-property warning
+   * and the move subscriber that strips root-only wear on nest and redresses it
+   * at root (ElementStylesSubscriber::onElementMoved) all read a stamp. Only
    * the birth and defaults paths (ElementStylesSubscriber,
    * LayoutDefaultsSchemaHooks) call this method directly.
    *
@@ -1610,8 +1612,8 @@ class StyleGuide {
   /**
    * Validates the theme's controls once per request.
    *
-   * Anatomy grammar (elements trees, contains slots) is validated at the
-   * spine when the declarations build; this is daedalus_stylish's own layer on top,
+   * Anatomy grammar (elements trees, contains slots) is validated at the spine
+   * when the declarations build; this is daedalus_stylish's own layer on top,
    * checking that every control binding can actually work.
    */
   protected function ensureValidated(?string $theme): void {
@@ -1800,18 +1802,18 @@ class StyleGuide {
    * ever receives them, and an inherited kind control is re-checked
    * against the refinement's effective groups.
    *
-   * Kind controls follow the same rule as the refinements: a part
-   * candidate binds a part the kind's OWN effective declaration declares
-   * (found anywhere in its elements tree), covered by that part's property
-   * groups; the root candidate binds the kind root, covered by the kind's own
-   * groups. Kinds may bind parts because declared anatomy is asserted by
-   * its declarer: the entity kind's layout root is markup daedalus_layout renders
-   * in every template and mode, so a control bound to it renders wherever
-   * the part is present (the client's presence gate) rather than wherever a
-   * theme's template happens to print a class. Instance-namespace controls
-   * are root-bound: a namespace's instances are content carrying their own
-   * markup, so there are no declared parts to bind — each control targets
-   * the instance part itself, covered by the namespace's property groups.
+   * Kind controls follow the same rule as the refinements: a part candidate
+   * binds a part the kind's OWN effective declaration declares (found anywhere
+   * in its elements tree), covered by that part's property groups; the root
+   * candidate binds the kind root, covered by the kind's own groups. Kinds may
+   * bind parts because declared anatomy is asserted by its declarer: the entity
+   * kind's layout root is markup daedalus_layout renders in every template and
+   * mode, so a control bound to it renders wherever the part is present (the
+   * client's presence gate) rather than wherever a theme's template happens to
+   * print a class. Instance-namespace controls are root-bound: a namespace's
+   * instances are content carrying their own markup, so there are no declared
+   * parts to bind — each control targets the instance part itself, covered by
+   * the namespace's property groups.
    *
    * A control whose whole value is FALSE is a tombstone (a higher layer or
    * a block type suppressing an inherited control) and is valid as-is:

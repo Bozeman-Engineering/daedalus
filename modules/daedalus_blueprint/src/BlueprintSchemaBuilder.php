@@ -172,12 +172,12 @@ class BlueprintSchemaBuilder implements BlueprintSchemaBuilderInterface {
     // reserved cache_tags key, so this cache rebuilds when their source does.
     $cache_tags = array_merge($cache_tags, $context['cache_tags'] ?? []);
 
-    // The schema alter seam: contributors of whole capability sections
-    // (the materials fragment from the roster, Hook\MaterialsSchemaHooks;
-    // daedalus_stylish's minting-gate advertisement on it) extend the schema here,
-    // declaring their own invalidation domain through the alter context's
-    // cache_tags. Runs after the context merge so alters see the final
-    // built schema.
+    // The schema alter seam: contributors of whole capability sections (the
+    // materials fragment from the roster, Hook\MaterialsSchemaHooks;
+    // daedalus_stylish's minting-gate advertisement on it) extend the schema
+    // here, declaring their own invalidation domain through the alter context's
+    // cache_tags. Runs after the context merge so alters see the final built
+    // schema.
     $alter_context = [
       'entity_type' => $entity_type,
       'bundle' => $bundle,

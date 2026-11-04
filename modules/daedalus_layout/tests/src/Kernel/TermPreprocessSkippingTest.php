@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_layout\Kernel;
 
+use Drupal\Core\Entity\EntityViewBuilder;
 use Drupal\Core\Routing\RouteObjectInterface;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\taxonomy\Entity\Term;
@@ -118,6 +119,7 @@ class TermPreprocessSkippingTest extends NestedStorageKernelTestBase {
     // main-entity root, hook_entity_view_alter dispatches the
     // EditableUiBuilder event and the canvas takes the fields' place.
     $view_builder = $this->entityTypeManager->getViewBuilder('taxonomy_term');
+    assert($view_builder instanceof EntityViewBuilder);
     $build = $view_builder->build($view_builder->view($this->term, 'full'));
 
     // The render first: core's taxonomy_term preprocess runs inside it, and

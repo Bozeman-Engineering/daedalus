@@ -15,10 +15,11 @@ use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
  * Auto-manages the style map field per bundle.
  *
  * The Layout Builder overrides pattern: a bundle's "Enable styling" setting
- * creates or removes the daedalus_stylish_style_map field, so the field never appears
- * in Field UI and enablement is queryable (the inspector can tell "styling
- * isn't enabled here" apart from "no styles yet"). The field's existence IS
- * the enablement state — there is no parallel setting to drift from it.
+ * creates or removes the daedalus_stylish_style_map field, so the field never
+ * appears in Field UI and enablement is queryable (the inspector can tell
+ * "styling isn't enabled here" apart from "no styles yet"). The field's
+ * existence IS the enablement state — there is no parallel setting to drift
+ * from it.
  *
  * Styling defaults ON for page-builder bundles: whenever a bundle has both
  * Layout Builder and Edit Mode enabled (the gate; a bundle-less type has

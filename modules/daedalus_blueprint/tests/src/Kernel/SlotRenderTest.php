@@ -27,6 +27,7 @@ use Drupal\daedalus_ui\Render\BlockStandIn;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -380,7 +381,9 @@ class SlotRenderTest extends BlueprintKernelTestBase {
     $this->assertSame(0, $xpath->query('.//*[contains(text(), "Powered by")]', $slot)->length, 'The template block is outside the slot.');
     $own = $xpath->query('.//*[@data-selectable="container:' . $section . '"]', $slot);
     $this->assertSame(1, $own->length, "The slot section keeps the page's identity inside the slot: $html");
-    $this->assertSame('0', $own->item(0)->getAttribute('data-layout-builder-section-delta'), 'At the local delta of a one-section list.');
+    $own_element = $own->item(0);
+    assert($own_element instanceof \DOMElement);
+    $this->assertSame('0', $own_element->getAttribute('data-layout-builder-section-delta'), 'At the local delta of a one-section list.');
     $this->assertSame(1, $xpath->query('.//*[@data-selectable="block:' . $block . '"]', $slot)->length, 'And so does its block.');
     $this->assertSame(1, $xpath->query('//*[@data-selectable="container:' . $this->templateSection . '"]')->length, 'The template section keeps its own.');
     $this->assertSame(0, $xpath->query('//*[@data-selectable="container:' . $this->templateSection . '"]//*[@data-selectable="container:' . $this->templateSection . '"]')->length, 'Once.');
@@ -605,8 +608,10 @@ class SlotRenderTest extends BlueprintKernelTestBase {
       ],
     ]);
     $overridable_host = $resolver->fromEntity($overridable);
-    $this->assertTrue($this->innerRender->renderedBySlot($overridable_host, $overridable->get(ContentHost::LAYOUT_FIELD)->getSections()[1]));
-    $this->assertFalse($this->innerRender->renderedBySlot($overridable_host, $overridable->get(ContentHost::LAYOUT_FIELD)->getSections()[2]), 'No door for it: the flow.');
+    $overridable_layout = $overridable->get(ContentHost::LAYOUT_FIELD);
+    assert($overridable_layout instanceof SectionListInterface);
+    $this->assertTrue($this->innerRender->renderedBySlot($overridable_host, $overridable_layout->getSections()[1]));
+    $this->assertFalse($this->innerRender->renderedBySlot($overridable_host, $overridable_layout->getSections()[2]), 'No door for it: the flow.');
     $view = $this->entityTypeManager->getViewBuilder('entity_test')->view($overridable, 'full');
     $view_html = (string) $this->container->get('renderer')->renderInIsolation($view);
     $view_xpath = $this->domXpath($view_html);

@@ -27,9 +27,9 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
  *   MODULE.daedalus_blueprint.skills.ID.yml file (filename suffix is the id),
  *   merges duplicates last-module-wins, runs
  *   hook_daedalus_blueprint_skills_alter, and caches the result behind the
- *   daedalus_blueprint_skills tag. If discovery or the alter merge regressed, the
- *   catalog the AI sees would be wrong; if the cache tag were wrong, runtime
- *   skill edits would never appear.
+ *   daedalus_blueprint_skills tag. If discovery or the alter merge regressed,
+ *   the catalog the AI sees would be wrong; if the cache tag were wrong,
+ *   runtime skill edits would never appear.
  * - SkillTypeManager collects tagged skill type services by type_id and
  *   composes a skill through the type its definition names. The retired
  *   current_entity type (bundle context YAML `skills:` deltas layered onto a

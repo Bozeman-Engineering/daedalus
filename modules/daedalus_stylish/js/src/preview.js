@@ -107,6 +107,23 @@ const SLOT_PREFIX = '--daedalus-stylish-live-';
 export const TOKEN_SCOPE_CLASS = 'daedalus-stylish-token-scope';
 
 /**
+ * Whether a staged value is live (carried inline through a slot).
+ *
+ * Mirrors the printer's own emit gate for a value: null is omission, and a
+ * blank value would not print either, so neither mints a slot (a slot
+ * whose inline value were blank would resolve var() to guaranteed-invalid
+ * and unset the property instead of omitting it).
+ *
+ * @param {*} value
+ *   The staged value.
+ *
+ * @return {boolean}
+ *   Whether the value prints, and so rides a slot.
+ */
+const isLive = (value) =>
+  value !== null && value !== undefined && String(value).trim() !== '';
+
+/**
  * A material value's live entries per condition.
  *
  * A plain string is its 'default' entry; a condition-keyed map is its
@@ -130,19 +147,14 @@ export const scopedEntries = (value) => {
 };
 
 /**
- * Whether a staged value is live (carried inline through a slot).
- *
- * Mirrors the printer's own emit gate for a value: null is omission, and a
- * blank value would not print either, so neither mints a slot (a slot
- * whose inline value were blank would resolve var() to guaranteed-invalid
- * and unset the property instead of omitting it).
- */
-const isLive = (value) =>
-  value !== null && value !== undefined && String(value).trim() !== '';
-
-/**
  * The scope-root key of a style-map key (the part suffix stripped), the
- * same slice printMap takes for the @scope prelude.
+ * same slice printMap takes for the `@scope` prelude.
+ *
+ * @param {string} key
+ *   A style-map key (`element` or `element::part`).
+ *
+ * @return {string}
+ *   The element half.
  */
 const rootKeyOf = (key) => {
   const pos = key.indexOf('::');
@@ -150,7 +162,10 @@ const rootKeyOf = (key) => {
 };
 
 /**
+ * Builds the preview: the live overlay the inspector's gestures stage on.
+ *
  * @param {object} options
+ *   The preview's reads.
  * @param {object} options.guide
  *   The style guide (conditions, container roots).
  * @param {function(): object} options.getBaseMap
@@ -164,6 +179,9 @@ const rootKeyOf = (key) => {
  *   The token scope element lookup (the leader's document query). Absent
  *   or answering null: the scope lane's shape still prints, no inline
  *   write.
+ *
+ * @return {object}
+ *   The preview: stage, release, the scope lane and the delivery writes.
  */
 export const createPreview = ({
   guide,
@@ -245,6 +263,13 @@ export const createPreview = ({
    *
    * Media tokens substitute per value (the same table read the sheet path
    * takes through resolveMapMedia), so a media pick previews inline too.
+   *
+   * @param {string} key
+   *   The style-map key.
+   * @param {string} condition
+   *   The condition the value is staged at.
+   * @param {string} property
+   *   The CSS property name.
    */
   const applyValue = (key, condition, property) => {
     const root = rootOf(key);
@@ -269,6 +294,13 @@ export const createPreview = ({
 
   /**
    * Drops a triple's slot, removing its inline property from the root.
+   *
+   * @param {string} key
+   *   The style-map key.
+   * @param {string} condition
+   *   The condition the value was staged at.
+   * @param {string} property
+   *   The CSS property name.
    *
    * @return {boolean}
    *   Whether a slot existed (a membership change for the sheet).
@@ -304,6 +336,11 @@ export const createPreview = ({
 
   /**
    * Writes a scope slot's literal inline on the token scope element.
+   *
+   * @param {string} property
+   *   The custom property name.
+   * @param {string} condition
+   *   The condition the literal is staged at.
    */
   const applyScoped = (property, condition) => {
     scopeOf()?.style.setProperty(
@@ -319,6 +356,11 @@ export const createPreview = ({
 
   /**
    * Drops a scope slot, removing its inline property from the element.
+   *
+   * @param {string} property
+   *   The custom property name.
+   * @param {string} condition
+   *   The condition the literal was staged at.
    *
    * @return {boolean}
    *   Whether a slot existed (a membership change for the sheet).
@@ -464,6 +506,15 @@ export const createPreview = ({
      * A live value on an already-slotted triple is one inline write; the
      * first live value on a triple mints its slot and re-renders the sheet;
      * a null (or blank) value drops any slot and re-renders (omission).
+     *
+     * @param {string} key
+     *   The style-map key.
+     * @param {string} condition
+     *   The condition to stage at.
+     * @param {string} property
+     *   The CSS property name.
+     * @param {?string} value
+     *   The literal, or null to preview the property unset.
      */
     stage: (key, condition, property, value) => {
       ((staged[key] ??= {})[condition] ??= {})[property] = value;
@@ -493,7 +544,9 @@ export const createPreview = ({
      * spelling would strand the literal in the overlay for good.
      *
      * @param {string} key
+     *   The style-map key.
      * @param {string} condition
+     *   The condition the op writes at.
      * @param {object} properties
      *   The op's property -> value map (null = unset).
      *
@@ -518,6 +571,13 @@ export const createPreview = ({
      * Only entries still holding the settled value are released: a user who
      * kept scrubbing while the op was in flight has re-staged the property,
      * and that newer preview must survive its predecessor's settlement.
+     *
+     * @param {string} key
+     *   The style-map key.
+     * @param {string} condition
+     *   The condition the op wrote at.
+     * @param {object} properties
+     *   Property -> the settled value (settling()'s answer).
      */
     release: (key, condition, properties) => {
       const conditions = staged[key];
@@ -558,6 +618,9 @@ export const createPreview = ({
 
     /**
      * Releases staged entry replacements and re-renders.
+     *
+     * @param {string[]} keys
+     *   The selectable keys whose entries settled.
      */
     releaseEntries: (keys) => {
       keys.forEach((key) => delete stagedEntries[key]);
@@ -608,6 +671,9 @@ export const createPreview = ({
     /**
      * Releases a material's custom property: its slots go and the
      * compiled files' value shows again.
+     *
+     * @param {string} property
+     *   The custom property name.
      */
     releaseScoped: (property) => {
       let released = false;
@@ -651,12 +717,13 @@ export const createPreview = ({
     },
 
     /**
-     * The committed fonts' hand-off: the fonts stylesheet's current
-     * @font-face text (skin-api.js fetchFontStylesheet), stamped whole
-     * after a font joined, left or changed (leader-source.js), so a
+     * The committed fonts' hand-off: the fonts stylesheet's current text,
+     * its `@font-face` rules (skin-api.js fetchFontStylesheet), stamped
+     * whole after a font joined, left or changed (leader-source.js), so a
      * minted family loads before any reload. '' empties the tag.
      *
      * @param {string} css
+     *   The fonts stylesheet's CSS text.
      */
     deliverFonts: (css) => {
       ensureFontsTag().textContent = css === '' ? '' : `\n${css}\n`;
@@ -696,9 +763,7 @@ export const createMaterialDelivery = (preview, roster) => {
   const keyOf = (record) => `${record.kind}:${record.id}`;
   const spelled = (value) => JSON.stringify(value ?? null);
   const delivered = (roster) =>
-    roster
-      .ofKind('token')
-      .filter((record) => customProperty(record) !== null);
+    roster.ofKind('token').filter((record) => customProperty(record) !== null);
   const boot = new Map(
     delivered(roster).map((record) => [keyOf(record), spelled(record.value)]),
   );

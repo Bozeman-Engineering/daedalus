@@ -25,6 +25,7 @@ import {
   detentsFor,
   discreteScrubMove,
   discreteScrubStart,
+  displayAt,
   feelFactor,
   magnetAdvance,
   magneticCapture,
@@ -34,7 +35,6 @@ import {
   valueSpaceFor,
   wearing,
 } from '../../value-space.js';
-import { displayAt } from '../../value-space.js';
 import { useStopMenu } from '../../stop-menu.js';
 
 /**
@@ -49,6 +49,23 @@ import { useStopMenu } from '../../stop-menu.js';
  * beneath a rem field at a 16px root reads `2rem`), and stays whole
  * when it cannot (`50%` beneath rem, or no bases off canvas): the
  * placeholder is a measurement, and the field's unit is the unit.
+ *
+ * @param {?object} guide
+ *   The style guide, or null off the spine.
+ * @param {?object} materials
+ *   The roster the guide's references resolve through, or null.
+ * @param {*} placeholder
+ *   The attributed value: a literal, a reference, or nothing.
+ * @param {string} condition
+ *   The editing condition the reference faces at.
+ * @param {string} unit
+ *   The unit the field works in (contextUnit).
+ * @param {?{rootPx: ?number, fontPx: ?number}} bases
+ *   The canvas's measured bases (readCanvas), null off canvas.
+ *
+ * @return {?string}
+ *   The placeholder's face in the field's unit, whole when it cannot
+ *   convert, or null when there is no placeholder.
  */
 const placeholderText = (
   guide,
@@ -191,6 +208,50 @@ const placeholderText = (
  * conversion bases (readCanvas), through which the placeholder
  * converts into the field's unit for its face and the seed a gesture
  * over the empty field starts from (placeholderText, seedAnchor).
+ *
+ * @param {object} props
+ *   The row's props.
+ * @param {string} props.label
+ *   The scrub label's text.
+ * @param {?string} props.value
+ *   The shown text: the committed value or the consumer's draft echo.
+ * @param {string} props.property
+ *   The CSS property the field edits (its value space's fallback).
+ * @param {?object} props.definition
+ *   The property definition (`negative` opens the floor).
+ * @param {?object} props.constraints
+ *   The style-guide constraints (min, max, units, scale).
+ * @param {?object} props.guide
+ *   The style guide, or null for a free field off the spine.
+ * @param {?object} props.materials
+ *   The roster the guide's references resolve through, or null.
+ * @param {string} props.condition
+ *   The editing condition the worn reference faces at.
+ * @param {boolean} props.invalid
+ *   Whether the server rejected the shown value (the invalid chrome).
+ * @param {*} props.placeholder
+ *   A value attributed from outside the stack, or nothing.
+ * @param {?{rootPx: ?number, fontPx: ?number}} props.bases
+ *   The canvas's measured bases (readCanvas), null off canvas.
+ * @param {?object} props.mark
+ *   The row's Mark vnode leading the scrub label, or null.
+ * @param {?object} props.tools
+ *   A vnode rendered at the label cell's end, or null.
+ * @param {?object} props.leading
+ *   A vnode rendered before the controls cluster, or null.
+ * @param {?object} props.trailing
+ *   A vnode rendered after the controls cluster, or null.
+ * @param {boolean} props.disabled
+ *   Whether the field renders inert.
+ * @param {?string} props.disabledTitle
+ *   The reason for `disabled`, as the field's hover title.
+ * @param {Function} props.onPreview
+ *   Receives each paint-only display value.
+ * @param {Function} props.onSettle
+ *   Receives the commit spelling at gesture end.
+ *
+ * @return {object}
+ *   The closed or open render, by the value space's kind.
  */
 export const DimensionField = ({
   label,
@@ -275,6 +336,14 @@ export const useKachunk = () => {
  * then the CSS fades it back to plain. Gesture-driven only: a selection
  * change, a mount, or a typed value arriving on the system never flashes.
  * Attention at the event, not the state.
+ *
+ * @param {boolean} blessed
+ *   Whether the shown value wears a reference (the blessed chrome).
+ * @param {boolean} chunk
+ *   The ka-chunk's active flag (useKachunk).
+ *
+ * @return {boolean}
+ *   Whether the box is lit, for the beat after a landing.
  */
 const useLanding = (blessed, chunk) => {
   const [landed, setLanded] = useState(false);
@@ -296,6 +365,46 @@ const useLanding = (blessed, chunk) => {
  * committed value its vocabulary no longer offers (or none at all when
  * only a committed value keeps an empty row visible): it renders as an
  * honest extra option, and unset stays available.
+ *
+ * @param {object} props
+ *   DimensionField's shared props plus the derived space.
+ * @param {string} props.label
+ *   The scrub label's text.
+ * @param {?string} props.value
+ *   The shown text.
+ * @param {object} props.space
+ *   The closed value space (value-space.js valueSpaceFor).
+ * @param {?object} props.guide
+ *   The style guide.
+ * @param {?object} props.materials
+ *   The roster the guide's references resolve through.
+ * @param {string} props.condition
+ *   The editing condition the worn reference faces at.
+ * @param {boolean} props.invalid
+ *   Whether the server rejected the shown value.
+ * @param {*} props.placeholder
+ *   A value attributed from outside the stack, or nothing.
+ * @param {?{rootPx: ?number, fontPx: ?number}} props.bases
+ *   The canvas's measured bases, null off canvas.
+ * @param {?object} props.mark
+ *   The row's Mark vnode, or null.
+ * @param {?object} props.tools
+ *   A vnode for the label cell's end, or null.
+ * @param {?object} props.leading
+ *   A vnode before the controls cluster, or null.
+ * @param {?object} props.trailing
+ *   A vnode after the controls cluster, or null.
+ * @param {boolean} props.disabled
+ *   Whether the field renders inert.
+ * @param {?string} props.disabledTitle
+ *   The reason for `disabled`, as the hover title.
+ * @param {Function} props.onPreview
+ *   Receives each paint-only display value.
+ * @param {Function} props.onSettle
+ *   Receives the commit spelling at gesture end.
+ *
+ * @return {object}
+ *   The row's vnode.
  */
 const ClosedField = ({
   label,
@@ -453,7 +562,10 @@ const ClosedField = ({
     .join(' ');
 
   return (
-    <span className={classes} title={disabled ? (disabledTitle ?? undefined) : undefined}>
+    <span
+      className={classes}
+      title={disabled ? (disabledTitle ?? undefined) : undefined}
+    >
       <span className="daedalus-stylish-inspector__widget-label">
         <span
           className={scrubClasses}
@@ -543,6 +655,50 @@ const ClosedField = ({
  * steppers, magnetic capture at every settle, the blessed chrome, the
  * stop picker (stop-menu.js: the chevron after the input, Alt+ArrowDown
  * inside it).
+ *
+ * @param {object} props
+ *   DimensionField's shared props plus the derived space.
+ * @param {string} props.label
+ *   The scrub label's text.
+ * @param {?string} props.value
+ *   The shown text.
+ * @param {object} props.space
+ *   The detented or free value space (value-space.js valueSpaceFor).
+ * @param {?object} props.guide
+ *   The style guide, or null for a free field off the spine.
+ * @param {?object} props.materials
+ *   The roster the guide's references resolve through, or null.
+ * @param {string} props.condition
+ *   The editing condition the worn reference faces at.
+ * @param {?object} props.definition
+ *   The property definition (`negative` opens the clamp's floor).
+ * @param {?object} props.constraints
+ *   The style-guide constraints (min, max, units).
+ * @param {boolean} props.invalid
+ *   Whether the server rejected the shown value.
+ * @param {*} props.placeholder
+ *   A value attributed from outside the stack, or nothing.
+ * @param {?{rootPx: ?number, fontPx: ?number}} props.bases
+ *   The canvas's measured bases, null off canvas.
+ * @param {?object} props.mark
+ *   The row's Mark vnode, or null.
+ * @param {?object} props.tools
+ *   A vnode for the label cell's end, or null.
+ * @param {?object} props.leading
+ *   A vnode before the controls cluster, or null.
+ * @param {?object} props.trailing
+ *   A vnode after the controls cluster, or null.
+ * @param {boolean} props.disabled
+ *   Whether the field renders inert.
+ * @param {?string} props.disabledTitle
+ *   The reason for `disabled`, as the hover title.
+ * @param {Function} props.onPreview
+ *   Receives each paint-only display value.
+ * @param {Function} props.onSettle
+ *   Receives the commit spelling at gesture end.
+ *
+ * @return {object}
+ *   The row's vnode.
  */
 const OpenField = ({
   label,
@@ -605,7 +761,9 @@ const OpenField = ({
     typing: typedRef.current !== null,
   });
   const options =
-    chrome.unit === 'select' ? unitOptions(constraints, currentUnit || null) : [];
+    chrome.unit === 'select'
+      ? unitOptions(constraints, currentUnit || null)
+      : [];
 
   // The select's unit memory: the context survives states that carry
   // none only while typing is in flight, so a field emptied by typing
@@ -1057,15 +1215,15 @@ const OpenField = ({
                 disabled
                   ? (disabledTitle ?? undefined)
                   : blessed
-                  ? Drupal.t(
-                      'Tracks the design system: a skin change restyles it.',
-                    )
-                  : degraded
-                    ? undefined
-                    : Drupal.t(
-                        'Type a value or math (16*2, 4/3em) · arrows step: !grain, Shift 10, Alt !fine, Cmd 100',
-                        { '!grain': grain, '!fine': grain / 10 },
+                    ? Drupal.t(
+                        'Tracks the design system: a skin change restyles it.',
                       )
+                    : degraded
+                      ? undefined
+                      : Drupal.t(
+                          'Type a value or math (16*2, 4/3em) · arrows step: !grain, Shift 10, Alt !fine, Cmd 100',
+                          { '!grain': grain, '!fine': grain / 10 },
+                        )
               }
               onInput={(event) => {
                 pendingRef.current = null;

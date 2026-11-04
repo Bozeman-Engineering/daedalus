@@ -19,11 +19,11 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
 /**
  * Tests the legacy layout-block migration end to end.
  *
- * Covers LayoutBlockToSectionTransform through the real store walkers and
- * the presave safety net, plus the daedalus_layout post_update sequence (orphaned
- * block_content GC, bundle retirement). The daedalus_stylish module rides along for
- * the style-map key migration; daedalus_stylish already reuses this module's kernel
- * test base, so the test-time coupling runs in both directions.
+ * Covers LayoutBlockToSectionTransform through the real store walkers and the
+ * presave safety net, plus the daedalus_layout post_update sequence (orphaned
+ * block_content GC, bundle retirement). The daedalus_stylish module rides along
+ * for the style-map key migration; daedalus_stylish already reuses this
+ * module's kernel test base, so the test-time coupling runs in both directions.
  *
  * @group daedalus_layout
  */

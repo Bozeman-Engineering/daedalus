@@ -13,20 +13,19 @@ use Drupal\daedalus_blueprint\Host\HostInterface;
  * @section hostless_storage The _daedalus_layout_hostless_storage requirement
  *
  * A document Daedalus hosts (an entity's overrides, a saved blueprint's
- * document, a display's defaults) is written through the blueprint op
- * spine alone, where the capability resolver judges every write. LayoutBuilderRouteSubscriber therefore
- * sets the `_daedalus_layout_hostless_storage` requirement
- * (\Drupal\daedalus_layout\Access\HostlessStorageAccessCheck) on core's
- * write routes (block add, choose, remove, move; section add, choose,
- * remove; every storage's revert): forbidden when
- * HostResolver::fromSectionStorage() resolves a host, allowed for a
- * storage no host owns (core's navigation layout), which keeps core's
- * element, forms and contextual links. The overrides and defaults forms
- * drop Save layout and Revert to defaults for a hosted storage
- * (OverridesEntityForm) and keep Discard. A module adding a route that
- * writes a section storage beside the spine puts the same requirement
- * on it; a module that wants the write judged registers an operation
- * handler instead.
+ * document, a display's defaults) is written through the blueprint op spine
+ * alone, where the capability resolver judges every write.
+ * LayoutBuilderRouteSubscriber therefore sets the
+ * `_daedalus_layout_hostless_storage` requirement
+ * (\Drupal\daedalus_layout\Access\HostlessStorageAccessCheck) on core's write
+ * routes (block add, choose, remove, move; section add, choose, remove; every
+ * storage's revert): forbidden when HostResolver::fromSectionStorage() resolves
+ * a host, allowed for a storage no host owns (core's navigation layout), which
+ * keeps core's element, forms and contextual links. The overrides and defaults
+ * forms drop Save layout and Revert to defaults for a hosted storage
+ * (OverridesEntityForm) and keep Discard. A module adding a route that writes a
+ * section storage beside the spine puts the same requirement on it; a module
+ * that wants the write judged registers an operation handler instead.
  *
  * @section render_subject The render follows the host's subject
  *

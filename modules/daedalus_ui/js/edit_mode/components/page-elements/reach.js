@@ -43,6 +43,7 @@ import { selectableIn } from '../../selection/capable-model';
  *   The view visibility map (state.view.views).
  *
  * @return {boolean}
+ *   Whether rows of that source draw.
  */
 export const depicted = (source, visibility) =>
   source === 'element' || source === 'instance' || visibility[source] === true;
@@ -150,6 +151,8 @@ export const reachPredicate = () =>
  *   element, or null for the bare element.
  *
  * @return {string}
+ *   The row's address when the index has it and it is reachable, else the
+ *   key.
  */
 export const seatAddress = (index, reach, key, selector = null) =>
   selector !== null &&
@@ -173,6 +176,7 @@ export const seatAddress = (index, reach, key, selector = null) =>
  *   An index address whose drawn rows to list.
  *
  * @return {string[]}
+ *   The drawn rows' addresses, in panel order.
  */
 export const reachableRows = (index, reach, address) =>
   (index.get(address)?.rows ?? []).flatMap((row) =>
@@ -194,6 +198,7 @@ export const reachableRows = (index, reach, address) =>
  *   An index address whose drawn parent to find.
  *
  * @return {?string}
+ *   The nearest drawn row parent's address, or null at the root.
  */
 export const reachableParent = (index, reach, address) => {
   let above = index.get(address)?.rowParent ?? null;
@@ -213,5 +218,6 @@ export const reachableParent = (index, reach, address) => {
  *   selectorAddress).
  *
  * @return {boolean}
+ *   Whether the address is reachable.
  */
 export const reachable = (address) => reachPredicate()(address);

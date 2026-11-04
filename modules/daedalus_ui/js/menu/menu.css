@@ -191,29 +191,29 @@
 .daedalus-ui-menu__item--meter:hover,
 .daedalus-ui-menu__item--meter:focus-visible {
   display: grid;
-  grid-template-columns: 1rem minmax(4.2rem, max-content) minmax(7rem, 1fr);
   grid-template-rows: auto auto;
-  column-gap: 0.4rem;
-  row-gap: 2px;
+  grid-template-columns: 1rem minmax(4.2rem, max-content) minmax(7rem, 1fr);
   align-items: center;
+  column-gap: 0.4rem;
   cursor: default;
   color: var(--daedalus-text);
   outline: none;
   background: transparent;
+  row-gap: 2px;
 }
 
 .daedalus-ui-menu__item--meter .daedalus-ui-menu__label {
-  grid-column: 2;
   grid-row: 1;
+  grid-column: 2;
   white-space: nowrap;
 }
 
 .daedalus-ui-menu__meter {
   display: block;
-  grid-column: 3;
-  grid-row: 1;
-  height: 6px;
   overflow: hidden;
+  grid-row: 1;
+  grid-column: 3;
+  height: 6px;
   border-radius: 3px;
   background: var(--daedalus-lines);
 }
@@ -226,8 +226,8 @@
 }
 
 .daedalus-ui-menu__item--meter .daedalus-ui-menu__hint {
-  grid-column: 2 / 4;
   grid-row: 2;
+  grid-column: 2 / 4;
   margin: 0;
 }
 

@@ -148,8 +148,8 @@ final class HistoryApiController extends ControllerBase {
     // timeline the restore just moved when the fallback flush fires.
     return $this->historyManager->suppress(function () use ($request, $entity_type, $entity, $restored, $langcode, $view_mode): JsonResponse {
       // The staged state changed outside EntityStorageHandler::persist — fire
-      // the persist hook it would have fired, so listeners (daedalus_edit's cache
-      // tag invalidation) see the restore like any other staged write.
+      // the persist hook it would have fired, so listeners (daedalus_edit's
+      // cache tag invalidation) see the restore like any other staged write.
       foreach ($restored['hosts'] as $restored_host) {
         $this->moduleHandler()->invokeAll('daedalus_blueprint_entity_persisted', [
           $restored_host,

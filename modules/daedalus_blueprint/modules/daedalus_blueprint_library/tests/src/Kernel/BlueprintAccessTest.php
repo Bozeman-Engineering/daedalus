@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint_library\Kernel;
 
+use Drupal\Core\Access\AccessResult;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\daedalus_blueprint_library\Access\BlueprintTypeAccess;
 use Drupal\daedalus_blueprint_library\BlueprintAccessControlHandler;
+use Drupal\daedalus_blueprint_library\BlueprintListBuilder;
 use Drupal\daedalus_blueprint_library\BlueprintPermissions;
 use Drupal\daedalus_blueprint_library\Entity\Blueprint;
 use Drupal\daedalus_blueprint_library\Entity\BlueprintType;
@@ -85,8 +87,16 @@ class BlueprintAccessTest extends KernelTestBase {
     EntityTestBundle::create(['id' => 'page', 'label' => 'Page'])->save();
     // The first created user is uid 1; the personas must not be it.
     $this->createUser([]);
-    $this->editor = $this->createUser(['create section blueprint', 'edit any section blueprint', 'delete any section blueprint']);
-    $this->siteBuilder = $this->createUser(['create site_chrome blueprint', 'edit any site_chrome blueprint', 'delete any site_chrome blueprint']);
+    $this->editor = $this->createUser([
+      'create section blueprint',
+      'edit any section blueprint',
+      'delete any section blueprint',
+    ]);
+    $this->siteBuilder = $this->createUser([
+      'create site_chrome blueprint',
+      'edit any site_chrome blueprint',
+      'delete any site_chrome blueprint',
+    ]);
     $this->viewer = $this->createUser([]);
   }
 
@@ -205,6 +215,7 @@ class BlueprintAccessTest extends KernelTestBase {
     $this->assertTrue($gate->anyType($this->siteBuilder, 'update', 'delete')->isAllowed());
     $this->assertFalse($gate->anyType($this->viewer, 'create', 'update', 'delete')->isAllowed());
     $result = $gate->anyType($this->viewer, 'update');
+    assert($result instanceof AccessResult);
     $this->assertTrue($result->isNeutral(), 'No grant on any type is neutral, never forbidden.');
     $this->assertContains('user.permissions', $result->getCacheContexts());
     $this->assertContains('config:blueprint_type_list', $result->getCacheTags(), 'The answer varies with the set of types.');
@@ -252,6 +263,7 @@ class BlueprintAccessTest extends KernelTestBase {
     $chrome = $this->createBlueprint('site_chrome', ['machine_name' => 'header']);
     $this->container->get('current_user')->setAccount($this->editor);
     $builder = $this->container->get('entity_type.manager')->getListBuilder('blueprint');
+    assert($builder instanceof BlueprintListBuilder);
 
     $this->assertArrayHasKey('type', $builder->buildHeader());
     $this->assertSame('Section', (string) $builder->buildRow($section)['type']);

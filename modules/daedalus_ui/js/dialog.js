@@ -7,18 +7,18 @@
  * ("prevent this page from creating additional dialogs"), and detached
  * from the chrome's palette. Any module's chrome library declares
  * daedalus_ui/dialog as a dependency and awaits these instead:
- * @code
- *   const ok = await Drupal.Daedalus.dialog.confirm({
- *     title: Drupal.t('Delete "CTA"?'),
- *     message: Drupal.t('Worn on 4 pieces of content across the site.'),
- *     confirmLabel: Drupal.t('Delete'),
- *     danger: true,
- *   });
- *   const label = await Drupal.Daedalus.dialog.prompt({
- *     message: Drupal.t('Name for your copy:'),
- *     defaultValue: current,
- *   });
- * @endcode
+ *
+ * @example
+ * const ok = await Drupal.Daedalus.dialog.confirm({
+ *   title: Drupal.t('Delete "CTA"?'),
+ *   message: Drupal.t('Worn on 4 pieces of content across the site.'),
+ *   confirmLabel: Drupal.t('Delete'),
+ *   danger: true,
+ * });
+ * const label = await Drupal.Daedalus.dialog.prompt({
+ *   message: Drupal.t('Name for your copy:'),
+ *   defaultValue: current,
+ * });
  *
  * Built on the native <dialog> element and showModal(): the top layer
  * renders above every chrome z-index without joining the modal-floor
@@ -47,6 +47,16 @@
 
   /**
    * Builds one element with a class and optional text.
+   *
+   * @param {string} tag
+   *   The element's tag name.
+   * @param {string} className
+   *   Its class attribute.
+   * @param {string} [text]
+   *   Its text content, set through textContent.
+   *
+   * @return {Element}
+   *   The element.
    */
   const build = (tag, className, text) => {
     const el = document.createElement(tag);
@@ -169,8 +179,10 @@
      * Asks for one line of text.
      *
      * @param {object} options
-     *   message (required), title, detail, confirmLabel, cancelLabel,
-     *   danger, and defaultValue for the input's initial content.
+     *   message (required), title, detail, confirmLabel, cancelLabel and
+     *   danger, as for confirm.
+     * @param {string} [options.defaultValue]
+     *   The input's initial content.
      *
      * @return {Promise<string|null>}
      *   The entered string when confirmed (possibly empty, exactly like

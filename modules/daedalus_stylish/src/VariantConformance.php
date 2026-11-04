@@ -124,8 +124,8 @@ final class VariantConformance {
    *   Resolves to daedalus_stylish.materials_provider. A closure: the provider
    *   withholds this verdict's names, so it holds the judge.
    * @param \Closure $validator
-   *   Resolves to daedalus_stylish.style_map_validator. A closure: the validator's
-   *   universe is the roster the provider feeds.
+   *   Resolves to daedalus_stylish.style_map_validator. A closure: the
+   *   validator's universe is the roster the provider feeds.
    * @param \Drupal\daedalus_stylish\VariantRepository $variantRepository
    *   The variant repository.
    * @param \Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem $activeDesignSystem

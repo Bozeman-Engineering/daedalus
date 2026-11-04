@@ -63,6 +63,7 @@ export const browserHex = (spelling) => {
  * events the native wheel fires.
  *
  * @param {object} options
+ *   The picker's wiring.
  * @param {?string} options.hex
  *   The picker's face as #rrggbb (color-field-model.js pickerHex), or
  *   null when the current value is beyond the picker: the input then
@@ -124,7 +125,9 @@ export const useNativePicker = ({
  * (.daedalus-stylish-native-picker__glyph), so every color lane reads the same.
  *
  * @param {object} props
+ *   The glyph's props.
  * @param {?string} [props.className]
+ *   An extra class on the glyph's span.
  */
 export const PickerGlyph = ({ className = null }) => (
   <span
@@ -146,6 +149,7 @@ export const PickerGlyph = ({ className = null }) => (
  * the reason on its title.
  *
  * @param {object} options
+ *   The lane's wiring.
  * @param {{kind: string, paint: ?string}} options.face
  *   colorFace's answer for the shown value.
  * @param {boolean} [options.disabled]

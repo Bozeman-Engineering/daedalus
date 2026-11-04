@@ -18,12 +18,11 @@ use Drupal\layout_builder\SectionComponent;
  * option means only that unprovided fields were sample-filled and says
  * nothing about styling.
  *
- * The event fires after the component's configuration is assembled and
- * before it is inserted into its section, so subscribers may adjust the
- * configuration (including a serialized inline block in
- * `configuration['block_serialized']`) via
- * $event->getComponent()->setConfiguration(). daedalus_layout re-fires this as its
- * PlaceBlockEvent so existing block-type subscribers keep working.
+ * The event fires after the component's configuration is assembled and before
+ * it is inserted into its section, so subscribers may adjust the configuration
+ * (including a serialized inline block in `configuration['block_serialized']`)
+ * via $event->getComponent()->setConfiguration(). daedalus_layout re-fires this
+ * as its PlaceBlockEvent so existing block-type subscribers keep working.
  *
  * Field changes a subscriber makes on the root entity here ride the same
  * save as the add itself; the subscriber declares each one with

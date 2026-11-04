@@ -7,20 +7,20 @@ use Drupal\Core\Entity\EntityInterface;
 /**
  * Tracks the root Layout Builder entity for nested inline-block renders.
  *
- * An inline block's content renders through the ordinary entity view
- * pipeline (InlineBlock → BlockContentViewBuilder), which only knows the
- * block_content entity; the root entity the page belongs to is not in scope
- * there. This registry bridges the gap: BEFORE an inline-block component
- * builds inside a host render (BlockComponentRenderArray subscriber, ahead
- * of core's builder, because BlockContentViewBuilder builds eagerly and the
- * nested render happens inside core's listener), the host's root entity is
- * recorded against the block_content UUID. Consumers read it back where the
- * root is otherwise out of scope: getContextsForEntity() on daedalus_layout's
+ * An inline block's content renders through the ordinary entity view pipeline
+ * (InlineBlock → BlockContentViewBuilder), which only knows the block_content
+ * entity; the root entity the page belongs to is not in scope there. This
+ * registry bridges the gap: BEFORE an inline-block component builds inside a
+ * host render (BlockComponentRenderArray subscriber, ahead of core's builder,
+ * because BlockContentViewBuilder builds eagerly and the nested render happens
+ * inside core's listener), the host's root entity is recorded against the
+ * block_content UUID. Consumers read it back where the root is otherwise out of
+ * scope: getContextsForEntity() on daedalus_layout's
  * LayoutBuilderEntityViewDisplay exposes it as
- * NestedSectionStorageInterface::ROOT_ENTITY_CONTEXT_ID when the content's
- * own display renders through Layout Builder, and daedalus_stylish's live-attribution
- * provider resolves the style-map host for any inline block's content.
- * Roots propagate through arbitrary nesting depth because each level
+ * NestedSectionStorageInterface::ROOT_ENTITY_CONTEXT_ID when the content's own
+ * display renders through Layout Builder, and daedalus_stylish's
+ * live-attribution provider resolves the style-map host for any inline block's
+ * content. Roots propagate through arbitrary nesting depth because each level
  * resolves its own root from the same registry before its children build.
  *
  * Keyed by entity UUID, deliberately NOT by object identity or a property on

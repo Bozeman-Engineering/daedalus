@@ -72,6 +72,23 @@ import { documentTree } from '../../../../daedalus_ui/js/edit_mode/blueprint/doc
  * of an apply or detach all log from here (log.js; switch them on with
  * `Drupal.Daedalus.logging.enable('daedalus_stylish')`).
  */
+
+/**
+ * Creates the leader source over the edit-mode app.
+ *
+ * @param {object} app
+ *   The edit-mode app (daedalus_ui): its Blueprint, Selection and
+ *   Materials facades, the change subscriptions and generateUuid.
+ * @param {object} guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide): the
+ *   condition wrapper table, the elements map, the per-layout
+ *   declarations.
+ * @param {Object<string, string>} mediaUrls
+ *   The media uuid → URL table seed, extended in place on a pick.
+ *
+ * @return {object}
+ *   The state source the inspector renders against.
+ */
 export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
   // The uuid → block type and section uuid → layout id tables are derived
   // from the mirror and cached per mirror instance (the mirror is replaced
@@ -180,7 +197,8 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
       return;
     }
     deliveredFonts = signature;
-    const read = ++fontsRead;
+    fontsRead += 1;
+    const read = fontsRead;
     fetchFontStylesheet().then(
       ({ css }) => {
         if (read === fontsRead) {
@@ -302,8 +320,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
   // resolved per call: the facade attaches in its own behavior, so binding
   // at source-creation time would race it. Guarded through globalThis so
   // the source stays node-testable (no Drupal in the test runner).
-  const canvasVector = () =>
-    globalThis.Drupal?.Daedalus?.CanvasVector ?? null;
+  const canvasVector = () => globalThis.Drupal?.Daedalus?.CanvasVector ?? null;
 
   // The canvas-highlight state (transient band chrome for properties whose
   // effect is invisible geometry): null, or a normalized property-keyed
@@ -481,6 +498,15 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      *
      * The optimistic half of an edit: the page's preview <style> tag updates
      * immediately, nothing is queued. Called per keystroke/slider tick.
+     *
+     * @param {string} key
+     *   The style key (an element, or a rule under `::`).
+     * @param {string} condition
+     *   The condition name ('default' for the unconditioned entry).
+     * @param {string} property
+     *   The CSS property.
+     * @param {?string} value
+     *   The value to show, or null to preview the property unset.
      */
     preview: (key, condition, property, value) =>
       preview.stage(key, condition, property, value),
@@ -490,7 +516,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * e.g. typed back to the committed value, then blurred).
      *
      * @param {string} key
+     *   The style key the values were staged under.
      * @param {string} condition
+     *   The condition name they were staged under.
      * @param {object} properties
      *   Property → last staged value; only still-matching stages release.
      */
@@ -507,6 +535,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
 
     /**
      * Releases staged entry replacements (buffer discarded or settled).
+     *
+     * @param {string[]} keys
+     *   The selectable keys whose staged entries release.
      */
     previewEntriesRelease: (keys) => preview.releaseEntries(keys),
 
@@ -562,6 +593,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      *   The fragment.
      *
      * @return {Promise<object>}
+     *   The door's answer: {key, entries, wear, errors}.
      */
     parseCss: (key, css) => {
       const context = app.Blueprint.rootContext();
@@ -681,7 +713,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * it with the token; anything else is a contract violation and throws
      * before the modal opens. Every property of every change stages with
      * the token, so the instant preview already paints cover/no-repeat/
-     * center and the replaced colour gone instead of flashing the tiled
+     * center and the replaced color gone instead of flashing the tiled
      * browser defaults, and the settle releases them all. One change is
      * one update_style op; several are one atomic batch under the one
      * label (compoundOperations, as the pipeline's onCommit spells it), so
@@ -691,8 +723,15 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * relay, so its pick lands identically.
      *
      * @param {object} pick
-     *   {condition, property, label, changes}; condition defaults to
-     *   'default', changes is [{key, properties}].
+     *   The pick, as the widget pipeline routed it.
+     * @param {string} pick.condition
+     *   The condition name the changes land under; defaults to 'default'.
+     * @param {string} pick.property
+     *   The picked property, the one holding MEDIA_PICK_PLACEHOLDER.
+     * @param {?string} pick.label
+     *   The undo label for the settle, or null.
+     * @param {Array<{key: string, properties: object}>} pick.changes
+     *   The routed changes, exactly one carrying the placeholder.
      *
      * @return {boolean}
      *   Whether the library could open (false without a server URL).
@@ -745,7 +784,10 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     /**
      * Subscribes to roster changes (a boot, a delta from any lane: this
      * window's response, the paired window's relay, an AI turn); returns
-     * unsubscribe. The callback receives the new roster.
+     * unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the new roster.
      */
     onMaterialsChange: (callback) => app.Materials.onChange(callback),
 
@@ -762,6 +804,10 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * subscription above, and a payload without blueprint or markup
      * touches nothing else. A satellite applies its own copy and relays
      * the delta itself (satellite-source.js).
+     *
+     * @param {object} payload
+     *   The route's response: its `materials` delta (and `history` where
+     *   a lane records one) beside the lane's own payload.
      */
     applyResponse: (payload) => app.Blueprint.applyResponse(payload),
 
@@ -846,6 +892,13 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * scope check and the one-reference-per-axis rule are enforced
      * server-side.
      *
+     * @param {string} key
+     *   The style key the reference lands on.
+     * @param {string} variant
+     *   The variant's machine name.
+     * @param {?string} label
+     *   The undo label, or null for the server's default.
+     *
      * @return {Promise<object>}
      *   The op-queue promise (rejects on failure; catch it).
      */
@@ -884,6 +937,13 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * element's own properties and drops (per-ref, the explicit unlink
      * gesture) — the element keeps its look but stops following that
      * variant. References on other axes and the element's overrides stay.
+     *
+     * @param {string} key
+     *   The style key carrying the reference.
+     * @param {string} variant
+     *   The variant's machine name.
+     * @param {?string} label
+     *   The undo label, or null for the server's default.
      *
      * @return {Promise<object>}
      *   The op-queue promise (rejects on failure; catch it).
@@ -961,6 +1021,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * the way the page elements row and the breadcrumb do; the satellite's
      * select intent settles through this seam, so a pop-out click scrolls
      * the leader's canvas too.
+     *
+     * @param {string} key
+     *   The selectable key to select.
      */
     select: (key) => {
       app.Selection.select(key);
@@ -976,6 +1039,11 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * key other than the selection (a rule on an ancestor is an address,
      * never a facet). A facet write drops any standing address. The
      * change comes back through onTargetChange.
+     *
+     * @param {string} key
+     *   The selected element's selectable key.
+     * @param {?string} selector
+     *   The relative selector to seat, or null for the whole element.
      */
     target: (key, selector) => app.Selection.target(key, selector),
 
@@ -986,6 +1054,12 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * key that is neither the selection nor an ancestor of it;
      * address(null) drops it. The change comes back through
      * onTargetChange.
+     *
+     * @param {?string} key
+     *   The selectable key the rule hangs on (the selection or an
+     *   ancestor), or null to drop the address.
+     * @param {?string} selector
+     *   The rule's relative selector, or null for the key's own entry.
      */
     address: (key, selector = null) => app.Selection.address(key, selector),
 
@@ -994,6 +1068,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * the selected element changes, never on a target change under the
      * same key, so element-scoped clear-on-change consumers keep meaning
      * "different element".
+     *
+     * @param {Function} callback
+     *   Called with (selectedKey, previousKey); either may be null.
      */
     onSelectionChange: (callback) => app.onSelectionChange(callback),
 
@@ -1002,6 +1079,10 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * target-aware counterpart of onSelectionChange: fires on a
      * selection, facet OR address change, with ({selected, target,
      * address}, previous). Returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with ({selected, target, address}, previous), the current
+     *   facts then the previous ones.
      */
     onTargetChange: (callback) => app.onTargetChange(callback),
 
@@ -1016,12 +1097,18 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * the pointer crossed the element itself — one hover, every surface.
      * Callers follow the panel rows' contract: clear on leave only while
      * the hover is still theirs (getHovered() returns their key).
+     *
+     * @param {?string} key
+     *   The selectable key to hover, or null to clear.
      */
     hover: (key) => app.Selection.hover(key),
 
     /**
      * Subscribes to hover changes; returns unsubscribe. Fires at pointer
      * speed (every boundary crossing), so consumers paint, not recompute.
+     *
+     * @param {Function} callback
+     *   Called with (hoverKey, previousKey); either may be null.
      */
     onHoverChange: (callback) => app.onHoverChange(callback),
 
@@ -1039,6 +1126,11 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * not light its owner's solid outline). hoverSelector(null) clears;
      * callers follow the rows' contract: clear on leave only while the
      * facet is still theirs.
+     *
+     * @param {?string} key
+     *   The part's owner key, or null to clear.
+     * @param {?string} selector
+     *   The part's relative selector; null clears.
      */
     hoverSelector: (key, selector = null) =>
       app.Selection.hoverSelector(key, selector),
@@ -1047,6 +1139,10 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * Subscribes to selector-hover facet changes ({key, selector} | null,
      * value-compared); returns unsubscribe. Pointer-speed like
      * onHoverChange: consumers paint, not recompute.
+     *
+     * @param {Function} callback
+     *   Called with (hoverSelector, previousHoverSelector), each
+     *   {key, selector} or null.
      */
     onHoverSelectorChange: (callback) => app.onHoverSelectorChange(callback),
 
@@ -1058,6 +1154,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     /**
      * Subscribes to style map changes (mirror replacements); returns
      * unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the new style map.
      */
     onStyleMapChange: (callback) =>
       app.onBlueprintChange((blueprint) => callback(styleMapOf(blueprint))),
@@ -1072,6 +1171,11 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * spine's published verdict on a key allows a capability. The
      * inspector asks style of the selection before mounting any write
      * control, in every mode; paste asks it at the target.
+     *
+     * @param {string} key
+     *   The selectable key.
+     * @param {string} capability
+     *   The capability name ('style', 'move', ...).
      */
     capable: (key, capability) => app.Selection.capable(key, capability),
 
@@ -1202,6 +1306,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * the model does not speak for it, the instance model the mirror
      * delivers (what THIS element renders as, minted instance carriers
      * included). Instance-part labels resolve through it (partLabel).
+     *
+     * @param {string} key
+     *   The selectable key.
      */
     getMarkup: (key) => app.Blueprint.markupForKey?.(key) ?? null,
 
@@ -1304,7 +1411,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
       if (!matches.length) {
         return false;
       }
-      matches.forEach((match) => Drupal.Daedalus.Stylish.motionTriggers.replay(match));
+      matches.forEach((match) =>
+        Drupal.Daedalus.Stylish.motionTriggers.replay(match),
+      );
       return true;
     },
 
@@ -1320,6 +1429,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     /**
      * Poses the canvas state vector (a partial over the current state) —
      * the "drive the canvas there" write half. No-op without the facade.
+     *
+     * @param {object} partial
+     *   The axes to pose ({width, scheme, motion}, any subset).
      */
     setCanvasVector: (partial) => {
       canvasVector()?.set(partial);
@@ -1330,6 +1442,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      *
      * A page without the facade returns a no-op unsubscribe — the chips
      * simply never hear a vector.
+     *
+     * @param {Function} callback
+     *   Called with the new vector.
      */
     onCanvasVectorChange: (callback) =>
       canvasVector()?.subscribe(callback) ?? (() => {}),
@@ -1343,6 +1458,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
     /**
      * Sets (or clears, with null) the force state for the CURRENT
      * selection.
+     *
+     * @param {?string} state
+     *   A state-axis condition name ('hover'), or null to clear.
      */
     setForceState: (state) => {
       const next = state || null;
@@ -1355,6 +1473,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
 
     /**
      * Subscribes to force-state changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the new force state (a condition name or null).
      */
     onForceStateChange: (callback) => {
       forceStateListeners.add(callback);
@@ -1374,6 +1495,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * verbatim (machine name or uuid, as the map stores it); whether it
      * names a document the selection actually wears is the panels'
      * honesty to keep, the source just holds the state.
+     *
+     * @param {{place: string, editing: ?string}} next
+     *   The place to set and the edited document reference, or null.
      */
     setPlace: (next) => {
       const value = PLACES.includes(next?.place) ? next.place : 'styles';
@@ -1384,16 +1508,16 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
       if (place.place === value && place.editing === editing) {
         return;
       }
-      log(
-        'place',
-        editing === null ? value : `${value} (editing ${editing})`,
-      );
+      log('place', editing === null ? value : `${value} (editing ${editing})`);
       place = { place: value, editing };
       announcePlace();
     },
 
     /**
      * Subscribes to place changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the new {place, editing}, a fresh copy.
      */
     onPlaceChange: (callback) => {
       placeListeners.add(callback);
@@ -1408,6 +1532,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
 
     /**
      * Subscribes to skin defaults deliveries; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the delivered defaults map.
      */
     onSkinDefaultsChange: (callback) => {
       skinDefaultsListeners.add(callback);
@@ -1455,6 +1582,8 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      * automatically.
      *
      * @param {?{key: string, selector: ?string, properties: string[]}} spec
+     *   The style target and the properties being edited, or null to
+     *   clear.
      */
     setCanvasHighlight: (spec) => {
       const next = spec
@@ -1480,6 +1609,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
 
     /**
      * Subscribes to canvas-highlight changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the new highlight spec, or null.
      */
     onCanvasHighlightChange: (callback) => {
       highlightListeners.add(callback);
@@ -1506,6 +1638,7 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
      *
      * @param {?{layers: Array<{id: string, variant: ?string,
      *   label: ?string, flash: ?boolean}>}} paint
+     *   The layers to paint, or null to clear.
      */
     setCanvasPaint: (paint) => {
       const next =
@@ -1528,6 +1661,9 @@ export const createLeaderSource = (app, guide = {}, mediaUrls = {}) => {
 
     /**
      * Subscribes to canvas-paint changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the new paint spec, or null.
      */
     onCanvasPaintChange: (callback) => {
       paintListeners.add(callback);

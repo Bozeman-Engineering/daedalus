@@ -45,6 +45,11 @@ final class AiContextRoutesTest extends BrowserTestBase {
   use DaedalusFixtureTrait;
 
   /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
    * The JSON route's name.
    */
   private const READING_ROUTE = 'daedalus_blueprint.ai_context_reading';
@@ -157,7 +162,9 @@ final class AiContextRoutesTest extends BrowserTestBase {
   }
 
   /**
-   * The form under the bar lists the full roster: a section per kind, a box per record.
+   * The form under the bar lists the full roster.
+   *
+   * A section per kind, a box per record.
    *
    * A kind with no record has no section; a kind's section is titled by
    * its plural and count and carries one checkbox per record, checked

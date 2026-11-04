@@ -42,6 +42,7 @@ import { collapseAll, expandAll } from './collapse';
  *   The outline's id, e.g. 'page_elements'.
  *
  * @return {{collapseAll: string, expandAll: string}}
+ *   The collapse-all and expand-all binding ids.
  */
 export const collapseHotkeyIds = (id) => ({
   collapseAll: `${id}.collapse_all`,
@@ -52,21 +53,32 @@ export const collapseHotkeyIds = (id) => ({
  * Registers an outline's collapse-all and expand-all bindings.
  *
  * @param {object} spec
- *   - id: the outline's id; the bindings are `${id}.collapse_all` and
- *     `${id}.expand_all`.
- *   - label: the outline's name as the tray lists it ('Page elements'),
- *     since two outlines may register the same pair.
- *   - keys: optional default keys `{ collapseAll, expandAll }`; a missing
- *     one registers unbound (listed in the tray, fires once bound).
- *   - read: function() returning `{ folds, outline }`, the adapter's
- *     current posture and outline.
- *   - apply: function(next, gesture) receiving the next posture and the
- *     gesture name ('collapse_all' or 'expand_all').
+ *   The outline's registration.
+ * @param {string} spec.id
+ *   The outline's id; the bindings are `${id}.collapse_all` and
+ *   `${id}.expand_all`.
+ * @param {string} spec.label
+ *   The outline's name as the tray lists it ('Page elements'), since two
+ *   outlines may register the same pair.
+ * @param {{collapseAll: string, expandAll: string}} [spec.keys]
+ *   Default keys; a missing one registers unbound (listed in the tray,
+ *   fires once bound).
+ * @param {function(): {folds: ?object, outline: Array<object>}} spec.read
+ *   Returns the adapter's current posture and outline.
+ * @param {function(?object, string): void} spec.apply
+ *   Receives the next posture and the gesture name ('collapse_all' or
+ *   'expand_all').
  *
  * @return {Function}
  *   Unregisters both bindings.
  */
-export const registerCollapseHotkeys = ({ id, label, keys = {}, read, apply }) => {
+export const registerCollapseHotkeys = ({
+  id,
+  label,
+  keys = {},
+  read,
+  apply,
+}) => {
   const ids = collapseHotkeyIds(id);
   const gestures = [
     {
@@ -85,19 +97,22 @@ export const registerCollapseHotkeys = ({ id, label, keys = {}, read, apply }) =
     },
   ];
   const registry = Drupal.Daedalus.Hotkeys;
-  gestures.forEach(({ id: bindingId, gesture, key, run, label: bindingLabel }) => {
-    registry.register({
-      id: bindingId,
-      key,
-      when: 'global',
-      label: bindingLabel,
-      section: Drupal.t('Panels'),
-      remappable: true,
-      action: () => {
-        const { folds, outline } = read();
-        apply(run(folds, outline), gesture);
-      },
-    });
-  });
-  return () => gestures.forEach(({ id: bindingId }) => registry.unregister(bindingId));
+  gestures.forEach(
+    ({ id: bindingId, gesture, key, run, label: bindingLabel }) => {
+      registry.register({
+        id: bindingId,
+        key,
+        when: 'global',
+        label: bindingLabel,
+        section: Drupal.t('Panels'),
+        remappable: true,
+        action: () => {
+          const { folds, outline } = read();
+          apply(run(folds, outline), gesture);
+        },
+      });
+    },
+  );
+  return () =>
+    gestures.forEach(({ id: bindingId }) => registry.unregister(bindingId));
 };

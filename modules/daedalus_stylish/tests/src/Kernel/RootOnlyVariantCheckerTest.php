@@ -17,21 +17,20 @@ use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
 /**
  * Tests the depth gate on the apply seam (RootOnlyVariantChecker).
  *
- * Placement curates offers and birth, never legality. The shipped
- * container's width axis is root-only (daedalus_stylish_layouts.page_builder.yml),
- * so its variants carry the roster's applies.depth stamp: a NEW wearing of
- * one on a nested container is refused at the apply_variant gesture with
- * VARIANT_ROOT_ONLY, in the dialect's AXIS_NOT_TOP_LEVEL words, while the
- * same apply at root and any non-root-only apply nested go through. A map
- * that already carries the nested reference validates untouched (a
- * whole-map write cannot tell a new reference from an old one, so the
- * validator stays depth-blind on references) and a re-apply is still the
- * gate; depth itself is settled on the move path: out to root the
- * reference rides along, back inside it is stripped (the whole move
- * lifecycle is SectionMoveWearTest's).
+ * Placement curates offers and birth, never legality. The shipped container's
+ * width axis is root-only (daedalus_stylish_layouts.page_builder.yml), so its
+ * variants carry the roster's applies.depth stamp: a NEW wearing of one on a
+ * nested container is refused at the apply_variant gesture with
+ * VARIANT_ROOT_ONLY, in the dialect's AXIS_NOT_TOP_LEVEL words, while the same
+ * apply at root and any non-root-only apply nested go through. A map that
+ * already carries the nested reference validates untouched (a whole-map write
+ * cannot tell a new reference from an old one, so the validator stays
+ * depth-blind on references) and a re-apply is still the gate; depth itself is
+ * settled on the move path: out to root the reference rides along, back inside
+ * it is stripped (the whole move lifecycle is SectionMoveWearTest's).
  *
- * Real declarations and real shipped variants (daedalus_stylish_layouts installed),
- * so the record's stamp is the production one, not a fixture's.
+ * Real declarations and real shipped variants (daedalus_stylish_layouts
+ * installed), so the record's stamp is the production one, not a fixture's.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -85,16 +84,16 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('block_content');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and the checker reads the roster.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and the checker reads the roster.
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
     $this->installSchema('layout_builder', ['inline_block_usage']);
-    // The daedalus_stylish_layouts install syncs the shipped variants (the entrance
-    // family's motion-* references mirror into the skin material usage table);
-    // the importer switches to an administrative account. A host entity
-    // saved directly (the whole-map lane below) mirrors its variant
-    // references into the variant usage table.
+    // The daedalus_stylish_layouts install syncs the shipped variants (the
+    // entrance family's motion-* references mirror into the skin material usage
+    // table); the importer switches to an administrative account. A host entity
+    // saved directly (the whole-map lane below) mirrors its variant references
+    // into the variant usage table.
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage', 'daedalus_skin_material_usage']);
     $this->setUpCurrentUser([], [], TRUE);
     \Drupal::service('module_installer')->install(['daedalus_stylish_layouts']);
@@ -146,7 +145,7 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
   }
 
   /**
-   * The checker is registered on the seam through daedalus_stylish's own services.
+   * The checker is registered on the seam through the module's own services.
    */
   public function testCheckerRegistered(): void {
     $this->assertInstanceOf(RootOnlyVariantChecker::class, $this->container->get('daedalus_stylish.root_only_variant_checker'));
@@ -268,7 +267,6 @@ class RootOnlyVariantCheckerTest extends KernelTestBase {
     $this->assertArrayNotHasKey($nested_key, $this->styleMap($entity));
     $this->assertSame([], $this->container->get('daedalus_stylish.style_map_validator')->validate($this->styleMap($entity), ['host' => $this->host($entity)]));
   }
-
 
   /**
    * A root-only variant is refused at any rule: matches are never top-level.

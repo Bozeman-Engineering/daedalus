@@ -50,6 +50,7 @@ import { wellFace } from './token-well-model.js';
  * stop tables, so it renders in the satellite unchanged.
  *
  * @param {object} options
+ *   The well's inputs, below.
  * @param {Array} options.stops
  *   The concatenated stop table (stopsFor then gradientStops).
  * @param {{selected: ?string, custom: boolean, value: string,
@@ -79,6 +80,7 @@ import { wellFace } from './token-well-model.js';
  *   property); `disabledTitle` is the reason, riding the well's hover
  *   title. The face still renders honestly.
  * @param {?string} [options.disabledTitle]
+ *   The reason the well is inert, as its hover title.
  *
  * @return {{open: boolean, face: object, well: object, popover: ?object}}
  *   The well button and the (open ? mounted : null) popover, as vnodes

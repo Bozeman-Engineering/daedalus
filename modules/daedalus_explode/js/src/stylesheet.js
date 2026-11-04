@@ -114,6 +114,7 @@ const SHADOW = 'var(--daedalus-explode-shadow, 0 12px 32px rgb(0 0 0 / 0.18))';
  *   The on-screen size in pixels.
  *
  * @return {string}
+ *   The calc() expression.
  */
 const emphasized = (px) => `calc(${px}px * var(--daedalus-explode-emphasis))`;
 
@@ -125,6 +126,7 @@ const emphasized = (px) => `calc(${px}px * var(--daedalus-explode-emphasis))`;
  *   The raw text.
  *
  * @return {string}
+ *   The quoted, escaped CSS string.
  */
 const quoted = (value) =>
   `"${String(value)
@@ -138,6 +140,7 @@ const quoted = (value) =>
  *   An element key.
  *
  * @return {string}
+ *   The gated attribute selector.
  */
 const elementSelector = (key) => `${STAGE} [data-selectable=${quoted(key)}]`;
 
@@ -150,6 +153,7 @@ const elementSelector = (key) => `${STAGE} [data-selectable=${quoted(key)}]`;
  *   The declaration lines (nested rules included), unindented.
  *
  * @return {string}
+ *   The rule's CSS text.
  */
 const rule = (selector, lines) =>
   `${selector} {\n${lines.map((line) => `  ${line}`).join('\n')}\n}`;
@@ -162,6 +166,7 @@ const rule = (selector, lines) =>
  *   The view settings the stage reads.
  *
  * @return {string[]}
+ *   The three rules: the parent, the stage, the neutralizer.
  */
 const stageRules = (settings) => [
   rule(`${VIEW} .dialog-off-canvas-main-canvas`, [
@@ -198,6 +203,7 @@ const stageRules = (settings) => [
  *   The label text.
  *
  * @return {string[]}
+ *   The nested rule's lines.
  */
 const labelLines = (label) => [
   '&::before {',
@@ -236,6 +242,7 @@ const labelLines = (label) => [
  *   read), so the plane needs the translucent surface to read as a slab.
  *
  * @return {string[]}
+ *   The declaration lines, the label's nested rule included.
  */
 const planeLines = (plane, anchored, bare) => {
   const lines = [
@@ -248,7 +255,10 @@ const planeLines = (plane, anchored, bare) => {
   if (anchored) {
     lines.push('position: relative !important;');
   }
-  lines.push(`outline: 1px solid ${MUTED} !important;`, 'outline-offset: -1px !important;');
+  lines.push(
+    `outline: 1px solid ${MUTED} !important;`,
+    'outline-offset: -1px !important;',
+  );
   if (bare) {
     lines.push(
       'background-color: var(--daedalus-explode-surface, rgb(255 255 255 / 0.72)) !important;',
@@ -274,6 +284,7 @@ const planeLines = (plane, anchored, bare) => {
  *   The selection paint.
  *
  * @return {string[]}
+ *   The rules, in that order; none without a selection or a hover.
  */
 const paintRules = (addresses, paint) => {
   const rules = [];
@@ -356,7 +367,11 @@ export const print = (planes, settings, paint = {}, tools = {}) => {
       rules.push(
         rule(
           elementSelector(plane.address),
-          planeLines(plane, anchored.has(plane.address), bare.has(plane.address)),
+          planeLines(
+            plane,
+            anchored.has(plane.address),
+            bare.has(plane.address),
+          ),
         ),
       );
       continue;
@@ -367,7 +382,11 @@ export const print = (planes, settings, paint = {}, tools = {}) => {
     const printed = selectorFor(
       plane.owner,
       plane.selector,
-      planeLines(plane, anchored.has(plane.address), bare.has(plane.address)).join('\n    '),
+      planeLines(
+        plane,
+        anchored.has(plane.address),
+        bare.has(plane.address),
+      ).join('\n    '),
     );
     if (printed !== null) {
       rules.push(printed);

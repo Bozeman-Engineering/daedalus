@@ -109,7 +109,9 @@ const Node = ({ entry, law, focus }) => {
     >
       <h4 className="daedalus-stylish-law__node-label">{entry.label}</h4>
       {sections.length ? (
-        sections.map((section) => <Section key={section.id} section={section} />)
+        sections.map((section) => (
+          <Section key={section.id} section={section} />
+        ))
       ) : (
         <p className="daedalus-stylish-law__empty">
           {Drupal.t('Nothing declared here.')}
@@ -170,7 +172,10 @@ const Scales = ({ law }) => {
 };
 
 /**
+ * The Law tab: the style guide's law projection for one scope.
+ *
  * @param {object} props
+ *   The view's props.
  * @param {object} props.guide
  *   The style guide payload; its `law` is the projection.
  * @param {?string} props.scope

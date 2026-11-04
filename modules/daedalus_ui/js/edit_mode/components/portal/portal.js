@@ -1,8 +1,10 @@
-import { h } from 'preact';
 import { useSelector } from 'react-redux';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import store from '../../store/store';
-import { createGeometryTracker, documentPosition } from '../../utilities/geometry-tracker';
+import {
+  createGeometryTracker,
+  documentPosition,
+} from '../../utilities/geometry-tracker';
 import { resolve, elementForKey } from '../../selection/resolver';
 import { isDoubleClick } from '../../selection/double-click';
 import { chipPlacement } from '../selection-frame/selection-frame-model';
@@ -83,7 +85,8 @@ const Portal = () => {
   const trackerRef = useRef(null);
   if (!trackerRef.current) {
     trackerRef.current = createGeometryTracker({
-      resolve: () => (portalRef.current?.isConnected ? portalRef.current : null),
+      resolve: () =>
+        portalRef.current?.isConnected ? portalRef.current : null,
       validate: (element) => element === portalRef.current,
     });
   }
@@ -239,8 +242,17 @@ const Portal = () => {
 
   return (
     <div ref={rootRef} className="daedalus-ui-portal">
-      <div ref={strokeRef} className="daedalus-ui-frame__stroke daedalus-ui-frame__stroke--hover" aria-hidden="true" hidden />
-      <div ref={anchorRef} className="daedalus-ui-frame__anchor daedalus-ui-frame__anchor--portal" hidden>
+      <div
+        ref={strokeRef}
+        className="daedalus-ui-frame__stroke daedalus-ui-frame__stroke--hover"
+        aria-hidden="true"
+        hidden
+      />
+      <div
+        ref={anchorRef}
+        className="daedalus-ui-frame__anchor daedalus-ui-frame__anchor--portal"
+        hidden
+      >
         {identity && (
           <div
             className="daedalus-ui-frame__chip daedalus-ui-frame__chip--portal"
@@ -261,7 +273,11 @@ const Portal = () => {
                   data-daedalus-ui-tooltip={editLabel}
                   data-daedalus-ui-tooltip-position="top"
                 >
-                  <span className="daedalus-ui-frame__icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: pencilIcon }} />
+                  <span
+                    className="daedalus-ui-frame__icon"
+                    aria-hidden="true"
+                    dangerouslySetInnerHTML={{ __html: pencilIcon }}
+                  />
                   <span className="daedalus-ui-frame__label">{editLabel}</span>
                 </a>
               )}
@@ -279,9 +295,15 @@ const Portal = () => {
                   }}
                 >
                   {action.icon && (
-                    <span className="daedalus-ui-frame__icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: action.icon }} />
+                    <span
+                      className="daedalus-ui-frame__icon"
+                      aria-hidden="true"
+                      dangerouslySetInnerHTML={{ __html: action.icon }}
+                    />
                   )}
-                  <span className="daedalus-ui-frame__label">{action.label}</span>
+                  <span className="daedalus-ui-frame__label">
+                    {action.label}
+                  </span>
                 </button>
               ))}
             </div>

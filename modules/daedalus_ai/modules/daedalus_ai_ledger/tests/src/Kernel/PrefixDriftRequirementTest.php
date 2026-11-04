@@ -9,6 +9,7 @@ use Drupal\ai\OperationType\Chat\ChatInput;
 use Drupal\ai\OperationType\Chat\ChatMessage;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
 use Drupal\Core\Extension\Requirement\RequirementSeverity;
+use Drupal\daedalus_ai_ledger\Entity\AiUsage;
 use Drupal\daedalus_ai_ledger\PrefixReport;
 use Drupal\daedalus_ai_ledger\UsageLedger;
 use Drupal\daedalus_ai_test\Plugin\AiProvider\StubProvider;
@@ -122,6 +123,7 @@ class PrefixDriftRequirementTest extends KernelTestBase {
     $this->assertNotEmpty($ids);
     $old = $this->container->get('datetime.time')->getRequestTime() - UsageLedger::REPORT_WINDOW - 60;
     foreach ($storage->loadMultiple($ids) as $row) {
+      assert($row instanceof AiUsage);
       $row->set('created', $old)->save();
     }
   }
@@ -289,6 +291,7 @@ class PrefixDriftRequirementTest extends KernelTestBase {
     $this->assertCount(3, $ids);
     $old = $this->container->get('datetime.time')->getRequestTime() - UsageLedger::REPORT_WINDOW - 60;
     foreach ($storage->loadMultiple($ids) as $row) {
+      assert($row instanceof AiUsage);
       $row->set('created', $old)->save();
     }
     $entry = $this->requirement();

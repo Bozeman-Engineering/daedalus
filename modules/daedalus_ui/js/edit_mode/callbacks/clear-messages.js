@@ -6,13 +6,8 @@
 ((Drupal) => {
   /**
    * AJAX command for clearing all messages.
-   *
-   * @param {Drupal.Ajax} [ajax]
-   *   The Drupal.Ajax object.
-   * @param {object} response
-   *   Object holding the server response.
    */
-  Drupal.AjaxCommands.prototype.clearMessages = function (ajax, response) {
+  Drupal.AjaxCommands.prototype.clearMessages = function clearMessages() {
     Drupal.Daedalus.messenger.clear();
   };
 })(Drupal);

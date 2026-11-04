@@ -13,7 +13,7 @@ use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * One `style {bundle} {type} elements` permission per bundle with a style store.
+ * A `style {bundle} {type} elements` permission per bundle with a style store.
  *
  * The shape of core's LayoutBuilderOverridesPermissions: the style map
  * field's existence IS a bundle's styling enablement

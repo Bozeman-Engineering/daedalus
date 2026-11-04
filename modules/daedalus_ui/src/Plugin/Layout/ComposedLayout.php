@@ -19,8 +19,8 @@ use Drupal\Core\Layout\LayoutDefault;
  * way composed blocks are swapped at their component build event.
  *
  * The element is returned WITH the regions as children and nothing else:
- * daedalus_layout stamps the section's identity attributes and nested marker onto
- * this same array after build() returns, and the element's pre_render
+ * daedalus_layout stamps the section's identity attributes and nested marker
+ * onto this same array after build() returns, and the element's pre_render
  * reads the completed set (see ComposedContainer).
  */
 class ComposedLayout extends LayoutDefault {

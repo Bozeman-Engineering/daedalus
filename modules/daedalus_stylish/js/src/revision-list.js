@@ -4,6 +4,12 @@ import { h } from 'preact';
  * One revision row's date face: the record's unix seconds in the viewer's
  * locale. The cards' restore confirmations and status lines speak the
  * same face, so the row and the message name one moment the same way.
+ *
+ * @param {number} created
+ *   The revision's creation time in unix seconds.
+ *
+ * @return {string}
+ *   The moment in the viewer's locale.
  */
 export const revisionDate = (created) =>
   new Date(created * 1000).toLocaleString();
@@ -19,6 +25,15 @@ export const revisionDate = (created) =>
  * A history of one is no history: null (not fetched yet) or a single
  * revision renders nothing, so a card mounts the list as soon as it can
  * restore and never repeats the rule.
+ *
+ * @param {object} props
+ *   The list's props.
+ * @param {?Array<object>} props.revisions
+ *   The revisions as the route lists them, or null before the fetch.
+ * @param {boolean} [props.busy]
+ *   Whether a restore is in flight (the chips disable).
+ * @param {Function} props.onRestore
+ *   Called with the revision whose restore chip was pressed.
  */
 export const RevisionList = ({ revisions, busy = false, onRestore }) => {
   if (!revisions || revisions.length < 2) {

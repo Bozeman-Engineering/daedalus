@@ -1,7 +1,12 @@
 # The one front door to every Daedalus setting: a config category of the
 # shape /admin/config/system, rendered by core's own controllers. Settings
 # keep their natural homes (bundle forms, drupal/ai's menu, Appearance); the
-# category lists each a second time, and SETTINGS.md rosters every door.
+# category lists each a second time, and SETTINGS.md rosters every door. The
+# four routes take access administration pages, as core's own category pages
+# do: core's admin-menu-block access check (SystemAdminMenuBlockAccessCheck,
+# added to every such route by AccessRouteAlterSubscriber) refuses a page to
+# an actor who can reach none of its listed links, so no broader gate is
+# needed.
 daedalus.admin_config:
   path: '/admin/config/daedalus'
   defaults:

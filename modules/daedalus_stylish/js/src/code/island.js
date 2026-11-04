@@ -51,6 +51,11 @@ import { blankChunks, structuralChunks } from './paste-door.js';
  * exempt from deletion detection so a half-typed or mid-repair line never
  * reads as "the user deleted this property" (a conservative superset is
  * safe: it can only delay an unset until the island is clean).
+ *
+ * @param {string} slice
+ *   The buffer text of the chunk that could not be committed.
+ * @param {Set<string>} held
+ *   The held names, added to in place.
  */
 const holdTokens = (slice, held) => {
   (slice.match(/[A-Za-z-][A-Za-z0-9-]*/g) ?? []).forEach((token) =>
@@ -87,23 +92,29 @@ const holdTokens = (slice, held) => {
  * @param {string} text
  *   The island's buffer text.
  * @param {object} options
- *   - guide: the style guide payload (drupalSettings.daedalusStylish.guide).
- *   - declaration: the island key's served node (the element's
- *     declarationForKey result, or the part's node for a '::.class'
- *     island): the roster whose grants and value spaces are the law
- *     mirrored here.
- *   - lines: stackLines()'s result the buffer was printed from (an
- *     element island; a document island passes none). The law judges what
- *     an island commits, and a line beneath the own layer (a variant's,
- *     the floor's) is never committed: its text standing or vanishing
- *     changes no own value (islandDelta). So a declaration that still
- *     says such a line verbatim is that layer's own text, not the user's:
- *     not judged, not held, claimed first-fit the way matchLines pairs
- *     it. Without this, a delivered line off the site's law (the declared
- *     tier validates with constraints never law, so a strict guide's
- *     closure can refuse its spelling) would read as the user's error and
- *     hold its property, turning the own line's deletion (an UNSET) into
- *     a SET to the text beneath.
+ *   The law the buffer is judged against.
+ * @param {object} options.guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide).
+ * @param {object} options.materials
+ *   The materials context validate-value's scale and reference checks
+ *   read (the minted tokens and animations).
+ * @param {object} options.declaration
+ *   The island key's served node (the element's declarationForKey
+ *   result, or the part's node for a '::.class' island): the roster
+ *   whose grants and value spaces are the law mirrored here.
+ * @param {Array<object>} options.lines
+ *   stackLines()'s result the buffer was printed from (an element
+ *   island; a document island passes none). The law judges what an
+ *   island commits, and a line beneath the own layer (a variant's, the
+ *   floor's) is never committed: its text standing or vanishing changes
+ *   no own value (islandDelta). So a declaration that still says such a
+ *   line verbatim is that layer's own text, not the user's: not judged,
+ *   not held, claimed first-fit the way matchLines pairs it. Without
+ *   this, a delivered line off the site's law (the declared tier
+ *   validates with constraints never law, so a strict guide's closure
+ *   can refuse its spelling) would read as the user's error and hold its
+ *   property, turning the own line's deletion (an UNSET) into a SET to
+ *   the text beneath.
  *
  * @return {{declarations: Array<object>, held: Set<string>, diagnostics: Array<object>, structural: Array<object>}}
  *   declarations: {property, value, important, from, to, valueFrom,
@@ -438,6 +449,12 @@ export const stackLines = (stack, condition) =>
  * analyzeIsland(printIsland(lines)) reproduces the lines' properties and
  * values (the island half of the round-trip contract), so an untouched
  * (or formatting-only edited) buffer diffs to zero ops.
+ *
+ * @param {Array<{property: string, value: string}>} lines
+ *   The island's lines (stackLines' shape).
+ *
+ * @return {string}
+ *   One `property: value;` per line, newline-joined.
  */
 export const printIsland = (lines) =>
   lines.map((line) => `${line.property}: ${line.value};`).join('\n');

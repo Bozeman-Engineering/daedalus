@@ -10,13 +10,12 @@ use Drupal\daedalus_ui\Presentation\Presentation;
 /**
  * Field config form alter.
  *
- * The site-builder tier of the element model's field presentation decision
- * (see ElementModel::fieldPresentation()): a field-config third-party
- * setting outranks the owner's page_builder declaration, which outranks the
- * field-type derived default. The control lives in the shared "Page
- * builder" section (::ensurePageBuilderSection()) so every page-builder
- * field setting (this one, Daedalus Edit's inline-editing settings) is configured
- * in one place.
+ * The site-builder tier of the element model's field presentation decision (see
+ * ElementModel::fieldPresentation()): a field-config third-party setting
+ * outranks the owner's page_builder declaration, which outranks the field-type
+ * derived default. The control lives in the shared "Page builder" section
+ * (::ensurePageBuilderSection()) so every page-builder field setting (this one,
+ * Daedalus Edit's inline-editing settings) is configured in one place.
  */
 class FieldConfigFormAlter {
 

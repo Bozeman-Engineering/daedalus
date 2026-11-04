@@ -14,6 +14,7 @@ use Drupal\daedalus_blueprint\Plugin\Block\SlotBlock;
 use Drupal\daedalus_blueprint\Slot\SlotRoster;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -164,7 +165,9 @@ class LockUnlockMergeTest extends BlueprintKernelTestBase {
    *   The sections, the blank marker included (the host's reads hide it).
    */
   protected static function rawSections(FieldableEntityInterface $page): array {
-    return $page->get(ContentHost::LAYOUT_FIELD)->getSections();
+    $list = $page->get(ContentHost::LAYOUT_FIELD);
+    assert($list instanceof SectionListInterface);
+    return $list->getSections();
   }
 
   /**

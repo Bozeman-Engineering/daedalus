@@ -36,7 +36,8 @@ let sequence = 0;
 const identities = new WeakMap();
 const identityOf = (element) => {
   if (!identities.has(element)) {
-    identities.set(element, ++sequence);
+    sequence += 1;
+    identities.set(element, sequence);
   }
   return `element|${identities.get(element)}`;
 };
@@ -57,6 +58,7 @@ const identityOf = (element) => {
  *   The drag data, passed to the accepts filter.
  *
  * @return {?Element}
+ *   The enclosing declared element, or null when none qualifies.
  */
 export const matchElementTarget = (target, spec, data) => {
   const face = spec.elements;
@@ -75,9 +77,11 @@ export const matchElementTarget = (target, spec, data) => {
  * the edge bands that yield to gap resolution.
  *
  * @param {Element} element
+ *   The declared landing element.
  * @param {number} x
+ *   The cursor's viewport x coordinate.
  * @param {number} y
- *   Viewport cursor coordinates.
+ *   The cursor's viewport y coordinate.
  * @param {number} grow
  *   Extra pixels the interior extends INTO the band (never past the rect):
  *   the controller passes its hysteresis distance so the current element
@@ -85,6 +89,7 @@ export const matchElementTarget = (target, spec, data) => {
  *   the element face of the gap dead zone.
  *
  * @return {boolean}
+ *   Whether the point sits in the interior.
  */
 export const elementInterior = (element, x, y, grow = 0) => {
   const rect = element.getBoundingClientRect();
@@ -114,8 +119,9 @@ export const elementInterior = (element, x, y, grow = 0) => {
  * @param {EventTarget} target
  *   The drag event's target.
  * @param {number} x
+ *   The cursor's viewport x coordinate.
  * @param {number} y
- *   Viewport cursor coordinates.
+ *   The cursor's viewport y coordinate.
  * @param {Object} spec
  *   The active source spec.
  * @param {Object} data

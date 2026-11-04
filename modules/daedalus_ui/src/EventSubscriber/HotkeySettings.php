@@ -53,8 +53,8 @@ final class HotkeySettings implements EventSubscriberInterface {
         'sidebar' => $id,
       ];
     }
-    // Remaps saved for bindings that register client-side (verbs, the
-    // selection grammar's keys): passed through key-only, so the JS registry can apply
+    // Remaps saved for bindings that register client-side (verbs, the selection
+    // grammar's keys): passed through key-only, so the JS registry can apply
     // them at register() time. No label — the registering code owns that.
     foreach ($user_hotkey_settings as $id => $key) {
       if (!isset($binding_map[$id])) {

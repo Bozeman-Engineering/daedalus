@@ -10,6 +10,7 @@ use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\daedalus_blueprint\NodeTree\DocumentInstantiator;
 use Drupal\daedalus_stylish\CssPrinter;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
@@ -164,7 +165,7 @@ class CssEmissionTest extends KernelTestBase {
   }
 
   /**
-   * Unstyled entities render byte-identical to a world without Daedalus Stylish.
+   * Unstyled entities render byte-identical to a site without Daedalus Stylish.
    */
   public function testUnstyledEntityEmitsNothing(): void {
     $entity = EntityTest::create(['name' => 'plain']);
@@ -422,11 +423,15 @@ class CssEmissionTest extends KernelTestBase {
     $this->assertStringNotContainsString("container:$template_section", $html);
     $this->assertStringNotContainsString($display->uuid(), $html);
 
-    $sections = $entity->get(OverridesSectionStorage::FIELD_NAME)->getSections();
+    $list = $entity->get(OverridesSectionStorage::FIELD_NAME);
+    assert($list instanceof SectionListInterface);
+    $sections = $list->getSections();
     $this->assertCount(1, $sections, 'The render seeded nothing onto the request entity.');
     $this->assertSame('layout_builder_blank', reset($sections)->getLayoutId(), 'The marker is what the field holds.');
     $this->container->get('entity_type.manager')->getStorage('entity_test')->resetCache([$entity->id()]);
-    $reloaded = EntityTest::load($entity->id())->get(OverridesSectionStorage::FIELD_NAME)->getSections();
+    $reloaded_list = EntityTest::load($entity->id())->get(OverridesSectionStorage::FIELD_NAME);
+    assert($reloaded_list instanceof SectionListInterface);
+    $reloaded = $reloaded_list->getSections();
     $this->assertCount(1, $reloaded);
     $this->assertSame('layout_builder_blank', reset($reloaded)->getLayoutId(), 'The marker survives the save: the page stays empty.');
   }

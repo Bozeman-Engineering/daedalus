@@ -94,11 +94,13 @@
   content unsavable. A status report warning lists every enabled format and
   the tags it will not mint. The blueprint error code
   `IDENTITY_UNMINTABLE_FORMAT` is gone with the throw.
-- Inline editors are now registered through `Drupal.Daedalus.Edit.Editors` via the
-  `DaedalusEditQueue` push queue: `(window.DaedalusEditQueue ||= []).push((daedalusEdit) =>
-  daedalusEdit.editors.register(new MyEditor()))`. Plugins extend `FormEditorBase`
-  (entity-form commit path) or `BlueprintEditorBase` (daedalus_blueprint commit
-  path) instead of the old field plugin base class.
+- Inline editors are now registered through `Drupal.Daedalus.Edit.Editors`
+  via the `DaedalusEditQueue` push queue:
+  `(window.DaedalusEditQueue ||= []).push((daedalusEdit) =>
+  daedalusEdit.editors.register(new MyEditor()))`. Plugins extend
+  `FormEditorBase` (entity-form commit path) or `BlueprintEditorBase`
+  (daedalus_blueprint commit path) instead of the old field plugin base
+  class.
 - Removed: the legacy window-event registration seam and the registry's
   pre-split alias and base-class shim. Plugins register through the
   `DaedalusEditQueue` seam above; there is no BC path.

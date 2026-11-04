@@ -52,7 +52,9 @@ class BlueprintOperationsMintedUuidTest extends BlueprintKernelTestBase {
   protected string $rootSectionUuid;
 
   /**
-   * The daedalus_layout UUID of a second root section, for cross-section collisions.
+   * The daedalus_layout UUID of a second root section.
+   *
+   * For cross-section collisions.
    */
   protected string $siblingSectionUuid;
 
@@ -217,7 +219,10 @@ class BlueprintOperationsMintedUuidTest extends BlueprintKernelTestBase {
    * Tests add rejects a malformed component uuid before placing anything.
    */
   public function testAddElementRejectsMalformedUuid(): void {
-    $result = $this->operations->addElement($this->host($this->entity), ['anchor' => $this->rootSectionUuid, 'placement' => 'inside'], [
+    $result = $this->operations->addElement($this->host($this->entity), [
+      'anchor' => $this->rootSectionUuid,
+      'placement' => 'inside',
+    ], [
       'block_type' => 'basic',
       'uuid' => self::BAD_UUID,
     ]);
@@ -334,7 +339,10 @@ class BlueprintOperationsMintedUuidTest extends BlueprintKernelTestBase {
    * silently REPLACES the existing placement and reports success.
    */
   public function testAddElementRejectsUuidOfSameSectionSibling(): void {
-    $result = $this->operations->addElement($this->host($this->entity), ['anchor' => $this->rootSectionUuid, 'placement' => 'inside'], [
+    $result = $this->operations->addElement($this->host($this->entity), [
+      'anchor' => $this->rootSectionUuid,
+      'placement' => 'inside',
+    ], [
       'block_type' => 'basic',
       'uuid' => $this->existingComponentUuid,
     ]);
@@ -373,7 +381,10 @@ class BlueprintOperationsMintedUuidTest extends BlueprintKernelTestBase {
    * unique against each other, not just within their own kind.
    */
   public function testAddElementRejectsUuidOfExistingSection(): void {
-    $result = $this->operations->addElement($this->host($this->entity), ['anchor' => $this->rootSectionUuid, 'placement' => 'inside'], [
+    $result = $this->operations->addElement($this->host($this->entity), [
+      'anchor' => $this->rootSectionUuid,
+      'placement' => 'inside',
+    ], [
       'block_type' => 'basic',
       'uuid' => $this->siblingSectionUuid,
     ]);
@@ -454,7 +465,10 @@ class BlueprintOperationsMintedUuidTest extends BlueprintKernelTestBase {
    */
   public function testFreshMintedUuidStillPlaces(): void {
     $minted = (new PhpUuid())->generate();
-    $result = $this->operations->addElement($this->host($this->entity), ['anchor' => $this->rootSectionUuid, 'placement' => 'inside'], [
+    $result = $this->operations->addElement($this->host($this->entity), [
+      'anchor' => $this->rootSectionUuid,
+      'placement' => 'inside',
+    ], [
       'block_type' => 'basic',
       'uuid' => $minted,
     ]);

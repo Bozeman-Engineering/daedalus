@@ -20,6 +20,7 @@
  *   The lit stop's id, or null.
  *
  * @return {?string}
+ *   The stop id carrying tabindex 0, or null for an empty offer.
  */
 export const listboxHome = (ids, selected = null) =>
   selected !== null && ids.includes(selected) ? selected : (ids[0] ?? null);
@@ -41,6 +42,8 @@ export const listboxHome = (ids, selected = null) =>
  *   The KeyboardEvent key.
  *
  * @return {?string}
+ *   The stop id the key lands on, or null for a key the listbox does not
+ *   own.
  */
 export const listboxTarget = (ids, currentId, key) => {
   if (ids.length === 0) {
@@ -76,6 +79,8 @@ export const listboxTarget = (ids, currentId, key) => {
  *   The concatenated stop table (color stops, then gradient stops).
  *
  * @return {Array<{label: ?string, stops: Array}>}
+ *   The sections in first-seen order, each with its group label (null for
+ *   the ungrouped stops) and its stops.
  */
 export const groupedStops = (stops) => {
   const groups = [];

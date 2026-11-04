@@ -151,6 +151,12 @@ export const registerDragSource = (type, spec) => {
  * A registered drag source's spec, or undefined. The keyboard lift
  * reads a source's targets/acceptsTarget to enumerate the gaps it may step
  * through.
+ *
+ * @param {string} type
+ *   The source type.
+ *
+ * @return {Object|undefined}
+ *   The spec, or undefined for an unregistered type.
  */
 export const getDragSource = (type) => sources.get(type);
 
@@ -291,6 +297,7 @@ export const makeDragDelegate = (delegate, resolve) => {
  *   The drag data.
  *
  * @return {boolean}
+ *   Whether the move is allowed.
  */
 const moveAllowed = (data) => !data.key || capable(data.key, 'arrange');
 
@@ -307,6 +314,7 @@ const moveAllowed = (data) => !data.key || capable(data.key, 'arrange');
  *   A resolved gap target ({location: {anchor, placement}}).
  *
  * @return {boolean}
+ *   Whether the drop is allowed.
  */
 export const dropAllowed = (target) => {
   const container = containerKeyForLocation(target?.location);
@@ -315,6 +323,9 @@ export const dropAllowed = (target) => {
 
 /**
  * Removes a drag handle.
+ *
+ * @param {Element} element
+ *   The element made draggable.
  */
 export const removeDraggable = (element) => {
   element.removeAttribute('draggable');
@@ -414,6 +425,9 @@ const publishDropRow = () => {
  * the caret's target here instead of deriving it from a cursor position;
  * the caret component reads it back through getCurrentDrop() exactly as it
  * does for pointer drags. Ignored when no drag is active.
+ *
+ * @param {?Object} drop
+ *   The drop target (a gap or element target), or null for none.
  */
 export const setCurrentDrop = (drop) => {
   if (activeSource) {
@@ -445,6 +459,13 @@ export const commitCurrentDrop = () => {
 
 /**
  * Resolves and stores the drop target for a cursor position.
+ *
+ * @param {EventTarget} target
+ *   The drag event's target (what the cursor is over).
+ * @param {number} x
+ *   The cursor's viewport x coordinate.
+ * @param {number} y
+ *   The cursor's viewport y coordinate.
  */
 const updateDrop = (target, x, y) => {
   const { spec, data } = activeSource;
@@ -501,6 +522,12 @@ const updateDrop = (target, x, y) => {
  * panel is no canvas surface and the canvas gap is not derivable from a
  * row; the committing caret on the row is the drop feedback until the
  * response's swap lands.
+ *
+ * @param {Object} drop
+ *   A gap target.
+ *
+ * @return {{parent: ?Element, before: ?Node}}
+ *   The insertion point.
  */
 const insertionPoint = (drop) => {
   const connected = (item) => (item?.isConnected ? item : null);
@@ -523,6 +550,12 @@ const insertionPoint = (drop) => {
 
 /**
  * Inserts the placeholder skeleton at a drop target's gap.
+ *
+ * @param {Object} drop
+ *   A gap target.
+ *
+ * @return {?Element}
+ *   The placeholder, or null when the gap has no connected parent.
  */
 const insertPlaceholder = (drop) => {
   const { parent, before } = insertionPoint(drop);
@@ -541,8 +574,16 @@ const insertPlaceholder = (drop) => {
  * The dragged node's markup already exists and only its position changes
  * (the moved-markup class of drop), so apply() moves the real node into
  * the gap the placeholder would occupy and rollback() puts it back. The
- * response's
- * authoritative subtree swap replaces the affected regions when it lands.
+ * response's authoritative subtree swap replaces the affected regions
+ * when it lands.
+ *
+ * @param {Object} drop
+ *   A gap target.
+ * @param {Object} data
+ *   The drag data: the moved node as `element`.
+ *
+ * @return {?{apply: Function, rollback: Function}}
+ *   The hooks, or null when the drop cannot be optimistic.
  */
 const optimisticMove = (drop, data) => {
   const element = data.element;
@@ -591,6 +632,12 @@ const optimisticMove = (drop, data) => {
  * and the selection belongs on what was just put there. After a pointer
  * drop keyboard focus follows too (releaseChromeFocus), so the keys act
  * on the placed element rather than on the control that dragged it.
+ *
+ * @param {Object[]} operations
+ *   The drop's operation batch.
+ *
+ * @return {?string}
+ *   The landed element's uuid, or null when no operation names one.
  */
 const landedUuid = (operations) => {
   const landed = [...operations]
@@ -605,6 +652,9 @@ const landedUuid = (operations) => {
  * Idempotent with commitDrop's finally block: an optimistic drop releases
  * the caret at apply — the moved node is the drop feedback — instead of
  * holding the committing style through the server round trip.
+ *
+ * @param {Object} drop
+ *   The drop whose commit is done.
  */
 const releaseCaret = (drop) => {
   if (committingDrop === drop) {
@@ -676,6 +726,12 @@ const commitDrop = () => {
 /**
  * The commit pipeline for a gated drop: source ops → placeholder → op
  * queue, failure display on the way out.
+ *
+ * @param {Object} drop
+ *   The drop target being committed.
+ * @param {?Object} context
+ *   The blueprint root context (Blueprint.rootContext), null for an
+ *   element drop on a page with no blueprint root.
  */
 const runCommit = async (drop, context) => {
   const { spec, data } = activeSource;

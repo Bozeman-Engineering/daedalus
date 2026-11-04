@@ -303,7 +303,7 @@ CSS;
    * entry's condition suffix, and every pseudo-class condition the
    * printer meets prints the dual: there is no bare print left.
    */
-  public function testPositionIsNeverACondition(): void {
+  public function testPositionIsNeverCondition(): void {
     $css = $this->printer->printMap([
       "container:{$this->uuid}::> *:first-child" => ['default' => ['margin-top' => '0']],
       "container:{$this->uuid}::> *:nth-child(odd)" => ['default' => ['background-color' => '#f5f5f5']],
@@ -444,12 +444,12 @@ CSS;
   /**
    * Section keys print as donuts: limited at nested section and block roots.
    *
-   * The daedalus_layout nests sections (containers embed sections at any depth) and
-   * every layout template repeats the same part classes, so a section
+   * The daedalus_layout nests sections (containers embed sections at any depth)
+   * and every layout template repeats the same part classes, so a section
    * block's scope stops at nested section roots — an outer section's styles
-   * never restyle an inner section's identical markup. Nested layout markup
-   * can also hide under a block root (a collapsed block's composed markup),
-   * so the limit stops at nested block roots too.
+   * never restyle an inner section's identical markup. Nested layout markup can
+   * also hide under a block root (a collapsed block's composed markup), so the
+   * limit stops at nested block roots too.
    */
   public function testSectionScopeLimit(): void {
     $css = $this->printer->printMap([
@@ -659,8 +659,9 @@ CSS;
   }
 
   /**
-   * A position qualifier prints inside :where() at its compound; the
-   * qualified anchor prints on the scope root.
+   * A position qualifier prints inside :where() at its compound.
+   *
+   * The qualified anchor prints on the scope root.
    *
    * Position is structure (the WHERE), selector text the markup decides,
    * and a position pseudo-class weighs 0-1-0 on its own; the discipline
@@ -681,15 +682,31 @@ CSS;
       ['> *:not(:last-child)', '> *', [':scope > *:not(:where(:last-child))']],
       ['> *:first-child', '> *', [':scope > *:where(:first-child)']],
       ['li:nth-child(2n+1)', 'li', ['li:where(:nth-child(2n+1))']],
-      ['> d-text:first-of-type', '> d-text', [':where(:scope) > [data-element="block_type:text"]:where(:first-of-type)']],
+      [
+        '> d-text:first-of-type',
+        '> d-text',
+        [':where(:scope) > [data-element="block_type:text"]:where(:first-of-type)'],
+      ],
       ['&:first-child', NULL, [':scope:where(:first-child)']],
       ['&:not(:last-child) > *', '> *', [':scope:not(:where(:last-child)) > *']],
       ['&:first-child > d-text', '> d-text', [':where(:scope):where(:first-child) > [data-element="block_type:text"]']],
       ['&:only-child > *:nth-last-child(-n+3)', '> *', [':scope:where(:only-child) > *:where(:nth-last-child(-n+3))']],
       ['&:first-child::before', '&::before', [':scope:where(:first-child)::before']],
-      ['&:first-child .quote', '.quote', [':scope:where(:first-child).quote', ':where(:scope):where(:first-child) .quote']],
-      ['&:first-child .quote > *', '.quote > *', [':scope:where(:first-child):where(.quote) > *', ':where(:scope):where(:first-child) .quote > *']],
-      ['.section:not(:first-child) > *', '.section > *', [':scope:where(.section):not(:where(:first-child)) > *', '.section:not(:where(:first-child)) > *']],
+      [
+        '&:first-child .quote',
+        '.quote',
+        [':scope:where(:first-child).quote', ':where(:scope):where(:first-child) .quote'],
+      ],
+      [
+        '&:first-child .quote > *',
+        '.quote > *',
+        [':scope:where(:first-child):where(.quote) > *', ':where(:scope):where(:first-child) .quote > *'],
+      ],
+      [
+        '.section:not(:first-child) > *',
+        '.section > *',
+        [':scope:where(.section):not(:where(:first-child)) > *', '.section:not(:where(:first-child)) > *'],
+      ],
     ];
     foreach ($cases as [$qualified, $plain, $targets]) {
       $this->assertSame($targets, CssPrinter::scopeTargets(RelativeSelector::parse($qualified)), $qualified);
@@ -771,12 +788,32 @@ CSS;
     $focus = ':is(:focus-within, [data-force-state~="focus-within"])';
     $either = ":is($focus, $hover)";
     $cases = [
-      ['.menu-item:is(:focus-within, :hover) > ul', '.menu-item > ul', [":where(:scope):where(.menu-item):where($either) > ul", ":where(.menu-item):where($either) > ul"]],
-      ['> d-text:is(:focus-within, :hover) a', '> d-text a', [":where(:scope) > :where([data-element=\"block_type:text\"]):where($either) a"]],
-      ['> *:is(d-image, d-text)', '> *', [':scope > *:where(:is([data-element="block_type:image"], [data-element="block_type:text"]))']],
-      ['> d-text:has(*:is(a, button))', '> d-text', [':where(:scope) > [data-element="block_type:text"]:has(*:where(:is(a, button)))']],
+      [
+        '.menu-item:is(:focus-within, :hover) > ul',
+        '.menu-item > ul',
+        [":where(:scope):where(.menu-item):where($either) > ul", ":where(.menu-item):where($either) > ul"],
+      ],
+      [
+        '> d-text:is(:focus-within, :hover) a',
+        '> d-text a',
+        [":where(:scope) > :where([data-element=\"block_type:text\"]):where($either) a"],
+      ],
+      [
+        '> *:is(d-image, d-text)',
+        '> *',
+        [':scope > *:where(:is([data-element="block_type:image"], [data-element="block_type:text"]))'],
+      ],
+      [
+        '> d-text:has(*:is(a, button))',
+        '> d-text',
+        [':where(:scope) > [data-element="block_type:text"]:has(*:where(:is(a, button)))'],
+      ],
       ['li:hover > ul', 'li > ul', [":where(li):where($hover) > ul"]],
-      ['> d-text:hover a', '> d-text a', [":where(:scope) > :where([data-element=\"block_type:text\"]):where($hover) a"]],
+      [
+        '> d-text:hover a',
+        '> d-text a',
+        [":where(:scope) > :where([data-element=\"block_type:text\"]):where($hover) a"],
+      ],
       ['li.active > ul', 'li > ul', [':where(li):where(.active) > ul']],
       ['li[aria-current="page"] > a', 'li > a', [':where(li):where([aria-current="page"]) > a']],
       ['*[aria-expanded="true"] > ul', '> ul', ['*:where([aria-expanded="true"]) > ul']],
@@ -785,16 +822,26 @@ CSS;
       ['&.open', NULL, [':scope:where(.open)']],
       ['a:visited', 'a', ['a:where(:visited)']],
       ['> *:not(:hover)', '> *', [":scope > *:not(:where($hover))"]],
-      ['> d-text:has(a:hover)', '> d-text', [":where(:scope) > [data-element=\"block_type:text\"]:has(:where(a):where($hover))"]],
+      [
+        '> d-text:has(a:hover)',
+        '> d-text',
+        [":where(:scope) > [data-element=\"block_type:text\"]:has(:where(a):where($hover))"],
+      ],
       ['.featured.quote', '.featured', [':scope.featured:where(.quote)', '.featured:where(.quote)']],
-      ['li.active:hover[aria-current="page"] > a', 'li > a', [":where(li):where(.active):where($hover):where([aria-current=\"page\"]) > a"]],
+      [
+        'li.active:hover[aria-current="page"] > a',
+        'li > a',
+        [":where(li):where(.active):where($hover):where([aria-current=\"page\"]) > a"],
+      ],
     ];
     $conditions = $this->container->get('plugin.manager.daedalus_stylish_condition_type')->getConditions();
     foreach ($cases as [$qualified, $plain, $targets]) {
       $this->assertSame($targets, CssPrinter::scopeTargets(RelativeSelector::parse($qualified), $conditions), $qualified);
       $plain_targets = CssPrinter::scopeTargets($plain === NULL ? NULL : RelativeSelector::parse($plain), $conditions);
       $this->assertSame(array_map(self::specificity(...), $plain_targets), array_map(self::specificity(...), $targets), sprintf('%s weighs what %s weighs.', $qualified, $plain ?? 'the root'));
-      $css = $this->printer->printMap(["container:{$this->uuid}::$qualified" => ['default' => ['color' => 'red'], 'hover' => ['color' => 'blue']]]);
+      $css = $this->printer->printMap([
+        "container:{$this->uuid}::$qualified" => ['default' => ['color' => 'red'], 'hover' => ['color' => 'blue']],
+      ]);
       $this->assertStringContainsString("\n  " . implode(', ', $targets) . " {\n    color: red;\n  }\n", $css, $qualified);
       $this->assertStringContainsString("\n  " . implode(', ', array_map(static fn (string $target): string => $target . $hover, $targets)) . " {\n    color: blue;\n  }\n", $css, $qualified);
     }
@@ -816,7 +863,10 @@ CSS;
     // same qualifier prints bare, which is what makes the dual the
     // table's verdict and not the grammar's, inside :is() too.
     $this->assertSame([':where(li):where(:hover) > ul'], CssPrinter::scopeTargets(RelativeSelector::parse('li:hover > ul')));
-    $this->assertSame([':where(:scope):where(.menu-item):where(:is(:focus-within, :hover)) > ul', ':where(.menu-item):where(:is(:focus-within, :hover)) > ul'], CssPrinter::scopeTargets(RelativeSelector::parse('.menu-item:is(:focus-within, :hover) > ul')));
+    $this->assertSame([
+      ':where(:scope):where(.menu-item):where(:is(:focus-within, :hover)) > ul',
+      ':where(.menu-item):where(:is(:focus-within, :hover)) > ul',
+    ], CssPrinter::scopeTargets(RelativeSelector::parse('.menu-item:is(:focus-within, :hover) > ul')));
     // The algorithm sees a bare qualifier weigh, so the equalities above
     // are not vacuous.
     $this->assertSame([0, 1, 2], self::specificity('li.active > ul'));
@@ -828,7 +878,10 @@ CSS;
     // The box and the condition suffix compose after the qualified chain,
     // the state qualifier at its compound and the condition on the host.
     $css = $this->printer->printMap([
-      "container:{$this->uuid}::li:hover > ul::before" => ['default' => ['content' => '""'], 'hover' => ['color' => 'blue']],
+      "container:{$this->uuid}::li:hover > ul::before" => [
+        'default' => ['content' => '""'],
+        'hover' => ['color' => 'blue'],
+      ],
     ]);
     $expected = <<<CSS
 @scope ([data-selectable="container:{$this->uuid}"]) {
@@ -1000,11 +1053,20 @@ CSS;
     // as its host does, so it takes no donut.
     $cases = [
       "container:{$this->uuid}::> d-text::before" => [':where(:scope) > [data-element="block_type:text"]', '::before'],
-      "container:{$this->uuid}::> d-text:has(a)::after" => [':where(:scope) > [data-element="block_type:text"]:has(:where(a))', '::after'],
+      "container:{$this->uuid}::> d-text:has(a)::after" => [
+        ':where(:scope) > [data-element="block_type:text"]:has(:where(a))',
+        '::after',
+      ],
       "container:{$this->uuid}::> p + p::before" => [':where(:scope) > :where(p) + p', '::before'],
       "container:{$this->uuid}::> *::after" => [':scope > *', '::after'],
-      "container:{$this->uuid}::d-block::before" => [':is([data-element^="block_type:"], [data-element^="block_plugin:"])', '::before'],
-      "container:{$this->uuid}::> d-text .link::after" => [':where(:scope) > :where([data-element="block_type:text"]) .link', '::after'],
+      "container:{$this->uuid}::d-block::before" => [
+        ':is([data-element^="block_type:"], [data-element^="block_plugin:"])',
+        '::before',
+      ],
+      "container:{$this->uuid}::> d-text .link::after" => [
+        ':where(:scope) > :where([data-element="block_type:text"]) .link',
+        '::after',
+      ],
       "block:{$this->uuid}::p::before" => ['p', '::before'],
       "block:{$this->uuid}::&::after" => [':scope', '::after'],
     ];
@@ -1382,16 +1444,16 @@ CSS;
    * Motion triggers print their markers and the polyfill hold.
    *
    * `timeline-trigger` / `animation-trigger` say WHEN an animation plays;
-   * browsers without the Animation Triggers draft drop them at parse time.
-   * So each prints its marker custom property beside it (the runtime reads
-   * the effective pair off computed style, through the same cascade), and
-   * a block binding an animation to a trigger gets the hold: a sibling
-   * `@supports not (animation-trigger: none)` after the rule and its
-   * co-target companion, inside the same condition wrappers, pausing the
-   * block's own targets (pseudo suffixes kept, part dual and children
-   * extension each :not-extended) until the runtime stamps
-   * `data-daedalus-stylish-triggered`. A `none` binding and a lone timeline-trigger
-   * print their marker and no hold: nothing is bound, so nothing holds.
+   * browsers without the Animation Triggers draft drop them at parse time. So
+   * each prints its marker custom property beside it (the runtime reads the
+   * effective pair off computed style, through the same cascade), and a block
+   * binding an animation to a trigger gets the hold: a sibling `@supports not
+   * (animation-trigger: none)` after the rule and its co-target companion,
+   * inside the same condition wrappers, pausing the block's own targets (pseudo
+   * suffixes kept, part dual and children extension each :not-extended) until
+   * the runtime stamps `data-daedalus-stylish-triggered`. A `none` binding and
+   * a lone timeline-trigger print their marker and no hold: nothing is bound,
+   * so nothing holds.
    */
   public function testTriggerHold(): void {
     $this->assertSame([
@@ -1578,7 +1640,6 @@ CSS;
       ],
     ]));
   }
-
 
   /**
    * A fragment printed under a rule continues every suffix by descent.

@@ -1,6 +1,19 @@
 import { h } from 'preact';
 
 /**
+ * The usage display's URL, or null when the user may not read it.
+ *
+ * Read at render (never grabbed at bundle load): the settings land with
+ * the surface that attaches the bundle, and the satellite window carries
+ * its own copy.
+ *
+ * @return {?string}
+ *   The URL, or null without the permission.
+ */
+export const aiContextUrl = () =>
+  window.drupalSettings?.daedalusStylish?.aiContext?.url ?? null;
+
+/**
  * The "Offer to the AI" toggle: one material's AI opt-out, the same
  * control on every mint and edit surface (the save session's draft, the
  * variant card, the animation and palette mint cards and cards).
@@ -27,9 +40,11 @@ import { h } from 'preact';
  * hint; the link is where the user sees why.
  *
  * @param {object} props
+ *   The toggle's props.
  * @param {?boolean} props.offered
  *   The record's flag; anything but false reads as offered.
  * @param {boolean} [props.disabled]
+ *   Whether the control is inert (a save in flight).
  * @param {Function} props.onChange
  *   Called with the next boolean.
  * @param {string} [props.className]
@@ -89,18 +104,12 @@ export const AiOfferToggle = ({
 };
 
 /**
- * The usage display's URL, or null when the user may not read it.
- *
- * Read at render (never grabbed at bundle load): the settings land with
- * the surface that attaches the bundle, and the satellite window carries
- * its own copy.
- *
- * @return {?string}
- */
-export const aiContextUrl = () =>
-  window.drupalSettings?.daedalusStylish?.aiContext?.url ?? null;
-
-/**
  * A record's offered flag: an absent key reads as offered, the default.
+ *
+ * @param {?{offered?: boolean}} record
+ *   A material record, or nothing.
+ *
+ * @return {boolean}
+ *   Whether the record is offered to the AI.
  */
 export const isOffered = (record) => record?.offered !== false;

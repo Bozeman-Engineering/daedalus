@@ -117,7 +117,8 @@ export const runLabel = (label, color, layer) => {
  */
 export const winnerChip = (label, color) => {
   const chip = document.createElement('span');
-  chip.className = 'daedalus-stylish-island__winner daedalus-ui-chip daedalus-ui-chip--muted';
+  chip.className =
+    'daedalus-stylish-island__winner daedalus-ui-chip daedalus-ui-chip--muted';
   chip.title = Drupal.t(
     'Shadowed: a higher layer sets this property. The dot names the winner.',
   );
@@ -211,7 +212,8 @@ const printedOffset = (container, texts, x, y) => {
       : node.nodeType === Node.TEXT_NODE
         ? node.parentElement
         : node;
-  const lineElement = element?.closest?.('.daedalus-stylish-island__line') ?? null;
+  const lineElement =
+    element?.closest?.('.daedalus-stylish-island__line') ?? null;
   if (lineElement && container.contains(lineElement)) {
     const index = Number(lineElement.dataset.line ?? 0);
     const within =
@@ -222,7 +224,9 @@ const printedOffset = (container, texts, x, y) => {
           : lineLength(index);
     return lineStart(index) + within;
   }
-  for (const el of container.querySelectorAll('.daedalus-stylish-island__line')) {
+  for (const el of container.querySelectorAll(
+    '.daedalus-stylish-island__line',
+  )) {
     const rect = el.getBoundingClientRect();
     const index = Number(el.dataset.line ?? 0);
     if (y < rect.top) {
@@ -269,21 +273,28 @@ const freshLine = (state) => {
  * @param {HTMLElement} container
  *   The island's `.daedalus-stylish-island__editor` element.
  * @param {object} config
- *   - buildState(): the island's EditorState over its printed text (no
- *     selection; wake places the caret before the view exists).
- *   - buildView(state): the EditorView over that state (the island wires
- *     its extensions in the state and its decorations here).
- *   - resolveAnchor(state, placement): a stitch placement resolved to an
- *     offset against the freshly built state (every placement but the
- *     fresh line, which the surface resolves itself, below).
- *   - onPark(view): derives the parked print from the dying view; returns
- *     {texts, marks} (or null to re-print the last print unchanged).
- *   - onPendingRun(id): the printed pending mark's gesture handler.
- *   - onPosture(live): told after every posture swap (true once the
- *     editor is mounted, false once the print is back or the surface is
- *     destroyed), the island's one hook to wear the posture as a class
- *     (`daedalus-stylish-island--live`, the lifted island) without
- *     reaching into the container this surface owns.
+ *   The island's hooks into the surface.
+ * @param {function(): object} config.buildState
+ *   The island's EditorState over its printed text (no selection; wake
+ *   places the caret before the view exists).
+ * @param {function(object): object} config.buildView
+ *   The EditorView over that state (the island wires its extensions in
+ *   the state and its decorations here).
+ * @param {function(object, object): number} config.resolveAnchor
+ *   A stitch placement resolved to an offset against the freshly built
+ *   state (every placement but the fresh line, which the surface
+ *   resolves itself, below).
+ * @param {?function(object): ?{texts: string[], marks: Array<object>}} config.onPark
+ *   Derives the parked print from the dying view; null re-prints the
+ *   last print unchanged.
+ * @param {?function(string): void} config.onPendingRun
+ *   The printed pending mark's gesture handler, given the mark's id.
+ * @param {?function(boolean): void} config.onPosture
+ *   Told after every posture swap (true once the editor is mounted,
+ *   false once the print is back or the surface is destroyed), the
+ *   island's one hook to wear the posture as a class
+ *   (`daedalus-stylish-island--live`, the lifted island) without
+ *   reaching into the container this surface owns.
  *
  * @return {object}
  *   {print(texts, marks), wake({anchor|placement}), park(), live,
@@ -312,7 +323,8 @@ export const createIslandSurface = (
     const empty = texts.length === 0 || (texts.length === 1 && texts[0] === '');
     if (empty) {
       const line = document.createElement('div');
-      line.className = 'daedalus-stylish-island__line daedalus-stylish-island__line--placeholder';
+      line.className =
+        'daedalus-stylish-island__line daedalus-stylish-island__line--placeholder';
       line.dataset.line = '0';
       line.textContent = Drupal.t('property: value;');
       print.append(line);
@@ -320,7 +332,9 @@ export const createIslandSurface = (
       texts.forEach((text, index) => {
         const mark = marks[index] ?? null;
         if (mark?.run) {
-          print.append(runLabel(mark.run.label, mark.run.color, mark.run.layer));
+          print.append(
+            runLabel(mark.run.label, mark.run.color, mark.run.layer),
+          );
         }
         const line = document.createElement('div');
         line.className = [
@@ -361,15 +375,16 @@ export const createIslandSurface = (
       }
     },
     wake({ anchor = 0, placement = null } = {}) {
-      const spec = placement?.edge === FRESH_LINE
-        ? freshLine
-        : (state) => ({
-            selection: {
-              anchor: placement
-                ? resolveAnchor(state, placement)
-                : Math.min(anchor, state.doc.length),
-            },
-          });
+      const spec =
+        placement?.edge === FRESH_LINE
+          ? freshLine
+          : (state) => ({
+              selection: {
+                anchor: placement
+                  ? resolveAnchor(state, placement)
+                  : Math.min(anchor, state.doc.length),
+              },
+            });
       if (view) {
         view.focus();
         view.dispatch({ ...spec(view.state), scrollIntoView: true });

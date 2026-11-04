@@ -18,21 +18,21 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Tests the nested declaration grammar through daedalus_stylish's guide projection.
+ * Tests the nested declaration grammar through the guide projection.
  *
  * Parts nest (a part declaration carries its own elements: map) and declare
  * contains: slots naming which model children mount inside them, in every
- * declaration dimension (kinds, block types, layouts). Style map keys stay
- * flat ({key}::.class), so lookups search the whole tree (findElement/
- * flattenElements) and a class must be unique within one declaration tree.
- * The contains grammar and the uniqueness rule are enforced loudly at the
+ * declaration dimension (kinds, block types, layouts). Style map keys stay flat
+ * ({key}::.class), so lookups search the whole tree (findElement/
+ * flattenElements) and a class must be unique within one declaration tree. The
+ * contains grammar and the uniqueness rule are enforced loudly at the
  * declaration spine (daedalus_ui's PageBuilderDeclarations, throwing
  * DeclarationException) when the declarations build; control bindings stay
- * daedalus_stylish's own validation (StyleGuideException). The fixture declarations
- * come from daedalus_stylish_nested_test: a field kind shell (.field__items >
- * .field__item contains value), a card block type (.block__content contains
- * fields > .card__header contains field:field_title > .card__kicker,
- * .card__body), and a layout_onecol shell (.section-content
+ * daedalus_stylish's own validation (StyleGuideException). The fixture
+ * declarations come from daedalus_stylish_nested_test: a field kind shell
+ * (.field__items > .field__item contains value), a card block type
+ * (.block__content contains fields > .card__header contains field:field_title >
+ * .card__kicker, .card__body), and a layout_onecol shell (.section-content
  * contains regions).
  */
 #[Group('daedalus_stylish')]
@@ -106,9 +106,9 @@ class NestedStyleGuideTest extends KernelTestBase {
   /**
    * Layers declarations over a guide dimension and rebuilds the guide.
    *
-   * The daedalus_stylish_nested_test alter hook merges state-injected declarations as
-   * the highest layer, so failure cases never live in YAML that would break
-   * every other guide build.
+   * The daedalus_stylish_nested_test alter hook merges state-injected
+   * declarations as the highest layer, so failure cases never live in YAML that
+   * would break every other guide build.
    */
   protected function layer(string $dimension, array $declarations): void {
     $state = $this->container->get('state');
@@ -423,13 +423,13 @@ class NestedStyleGuideTest extends KernelTestBase {
     // NULL noise).
     $this->assertArrayNotHasKey('contains', $header['elements']['.card__kicker']);
 
-    // The style guide: flat labels in the map's own key grammar carrying
-    // prose phrases, no tree vocabulary. The fixture withdraws the suite's
-    // dimension and type bindings in its site section (the one binding
-    // line left is daedalus_stylish's shipped font-family -> font scale), so each
-    // constraint block reads as its own node's deviations line at that
-    // node's flat label; a cap authored on a shorthand reads as one phrase
-    // per served value space, the family expanded at the source.
+    // The style guide: flat labels in the map's own key grammar carrying prose
+    // phrases, no tree vocabulary. The fixture withdraws the suite's dimension
+    // and type bindings in its site section (the one binding line left is
+    // daedalus_stylish's shipped font-family -> font scale), so each constraint
+    // block reads as its own node's deviations line at that node's flat label;
+    // a cap authored on a shorthand reads as one phrase per served value space,
+    // the family expanded at the source.
     $this->enforce('strict');
     $definition = $this->container->get('entity_field.manager')
       ->getFieldDefinitions('entity_test', 'entity_test')[DaedalusStylishFieldManager::FIELD_NAME];

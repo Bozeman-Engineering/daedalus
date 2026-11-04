@@ -19,6 +19,9 @@ use PHPUnit\Framework\Attributes\Group;
  * installed container: enabling every daedalus module in one kernel test is
  * the expensive path, and the file set is what the roster is checked against.
  *
+ * Only the repo's own trees are walked (its root `config/` and `modules/`):
+ * drupal.org's CI builds the Drupal site inside the checkout, under `web/`,
+ * so a walk from the root would roster every contrib module's settings.
  * Test fixture modules (under any `tests/` directory) are skipped: a config
  * object a fixture declares for one test is not a product setting.
  *
@@ -62,15 +65,24 @@ final class SettingsRosterTest extends UnitTestCase {
    */
   private function configObjects(string $root): array {
     $objects = [];
-    $iterator = new \RecursiveIteratorIterator(
-      new \RecursiveCallbackFilterIterator(
-        new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
-        static fn (\SplFileInfo $file): bool => !$file->isDir()
-          || !in_array($file->getFilename(), ['node_modules', 'tests'], TRUE),
-      ),
-    );
+    $files = [];
+    foreach (['config', 'modules'] as $tree) {
+      if (!is_dir("$root/$tree")) {
+        continue;
+      }
+      $iterator = new \RecursiveIteratorIterator(
+        new \RecursiveCallbackFilterIterator(
+          new \RecursiveDirectoryIterator("$root/$tree", \FilesystemIterator::SKIP_DOTS),
+          static fn (\SplFileInfo $file): bool => !$file->isDir()
+            || !in_array($file->getFilename(), ['node_modules', 'tests'], TRUE),
+        ),
+      );
+      foreach ($iterator as $file) {
+        $files[] = $file;
+      }
+    }
     /** @var \SplFileInfo $file */
-    foreach ($iterator as $file) {
+    foreach ($files as $file) {
       if (!str_ends_with($file->getFilename(), '.schema.yml') || basename($file->getPath()) !== 'schema' || basename(dirname($file->getPath())) !== 'config') {
         continue;
       }

@@ -59,7 +59,9 @@ const ANATOMY = glyph(
 const BOX = glyph(
   '<rect x="2.5" y="2.5" width="11" height="11" rx="1" stroke-dasharray="2 1.5"/><path d="M8 5.5v5M5.5 8h5"/>',
 );
-const PAGE = glyph('<path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/>');
+const PAGE = glyph(
+  '<path d="M4 1.5h5.5L13 5v9.5H4z"/><path d="M9.5 1.5V5H13"/>',
+);
 const CONTAINER = glyph('<rect x="2" y="3" width="12" height="10" rx="1"/>');
 const BLOCK = glyph('<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/>');
 const FIELD = glyph('<path d="M5.5 3H3v10h2.5M10.5 3H13v10h-2.5"/>');

@@ -141,12 +141,12 @@ scope, a root, and the fit of `BlueprintRequirements`: the subject bundle
 has the fields the tree spells, the site has its block types, plugins and
 layouts, the allow-list admits the bundle), on page load and in every
 mutation response's delta alike, and a field block in the placed tree is
-spelled by field name, so the host supplies the derivative. The capture verbs and the save dialog need
-the create permission of some blueprint type (`create section blueprint`
-for the type a capture mints by default; `PlaceBlock::canSaveBlueprints`
-is the library's any-type gate); composing on a blueprint's canvas
-follows core's grammar on the type's display, `configure editable section
-blueprint layout overrides`.
+spelled by field name, so the host supplies the derivative. The capture verbs
+and the save dialog need the create permission of some blueprint type (`create
+section blueprint` for the type a capture mints by default;
+`PlaceBlock::canSaveBlueprints` is the library's any-type gate); composing on a
+blueprint's canvas follows core's grammar on the type's display, `configure
+editable section blueprint layout overrides`.
 
 The `layout_builder_plus` element wraps the layout in the canvas root
 itself wherever no entity view supplies one (core's manage-display and
@@ -239,7 +239,7 @@ they say what kind of thing a block is and stay as the kinds under All.
   nothing. The mark is the creator's alone: the record's own `favorite`
   stays false, and the site default is opt-in through "Favorite for
   everyone" or the details dialog's "Favorite" box. The star wears the
-  icons' grey in both states, on and off differing by fill alone.
+  icons' gray in both states, on and off differing by fill alone.
 - **"Favorite for everyone"** in the row menu ("Remove favorite for
   everyone" once it is one) writes the face itself, so it shows only
   where there is a face and the actor may edit it (the face's `editable`,
@@ -285,7 +285,7 @@ they say what kind of thing a block is and stay as the kinds under All.
   Escape or a drag start. A row whose drop the client would refuse (a
   block blueprint's canvas with its one root placed) peeks nothing and
   asks nothing: the peek is composed under the same gates as a click.
-- **What carries over as behaviour**: the three drag sources
+- **What carries over as behavior**: the three drag sources
   (`new_block`, `new_section`, `new_blueprint_section`) and the one
   caret; the Insert verb's pending anchor with click-to-place and its
   arrow-key highlight; the root armed on an empty canvas; roving focus

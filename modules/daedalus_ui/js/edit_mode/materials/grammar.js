@@ -69,6 +69,14 @@ export const SLOT = Object.freeze({
  * and on the block kind are two slots, so a look name may repeat across
  * scopes. The scope is the variant's own; a consumer resolves against the
  * scope the element's axis view names.
+ *
+ * @param {string} scope
+ *   The printed scope ("kind:container").
+ * @param {string} attribute
+ *   The axis attribute's name ("width").
+ *
+ * @return {string}
+ *   The slot name.
  */
 export const attrSlot = (scope, attribute) =>
   `${SLOT.ATTR_PREFIX}${scope}:${attribute}`;
@@ -76,6 +84,12 @@ export const attrSlot = (scope, attribute) =>
 /**
  * [scope, attribute] of a scoped attribute slot, or null for any other
  * (the unscoped "attr:width" included; there is no site-wide slot).
+ *
+ * @param {*} slot
+ *   A slot name.
+ *
+ * @return {?Array<string>}
+ *   [scope, attribute], or null.
  */
 const attrSlotParts = (slot) => {
   if (typeof slot !== 'string' || !slot.startsWith(SLOT.ATTR_PREFIX)) {
@@ -97,16 +111,34 @@ const attrSlotParts = (slot) => {
 
 /**
  * The attribute an axis slot names, or null for any other slot.
+ *
+ * @param {*} slot
+ *   A slot name.
+ *
+ * @return {?string}
+ *   The attribute, or null.
  */
 export const slotAttribute = (slot) => attrSlotParts(slot)?.[1] ?? null;
 
 /**
  * The scope an axis slot names, or null for any other slot.
+ *
+ * @param {*} slot
+ *   A slot name.
+ *
+ * @return {?string}
+ *   The scope, or null.
  */
 export const slotScope = (slot) => attrSlotParts(slot)?.[0] ?? null;
 
 /**
  * Whether a slot name is one the grammar resolves.
+ *
+ * @param {*} slot
+ *   A slot name.
+ *
+ * @return {boolean}
+ *   Whether the grammar resolves it.
  */
 export const isSlot = (slot) =>
   slot === SLOT.STYLE ||
@@ -118,6 +150,12 @@ export const isSlot = (slot) =>
 
 /**
  * Whether a value kind references a rostered material.
+ *
+ * @param {string} kind
+ *   A value kind (KIND).
+ *
+ * @return {boolean}
+ *   Whether the kind is a material's.
  */
 export const isMaterialKind = (kind) =>
   kind === KIND.TOKEN ||
@@ -128,6 +166,12 @@ export const isMaterialKind = (kind) =>
 
 /**
  * Whether a value kind is an inline value (spelled without a mint).
+ *
+ * @param {string} kind
+ *   A value kind (KIND).
+ *
+ * @return {boolean}
+ *   Whether the kind is inline.
  */
 export const isInlineKind = (kind) =>
   kind === KIND.MEDIA ||
@@ -168,23 +212,47 @@ const reference = (slot, spelling, name, roster) => {
 
 /**
  * The canonical spelling of a media reference: url('media:<uuid>').
+ *
+ * @param {string} uuid
+ *   The media entity's uuid.
+ *
+ * @return {string}
+ *   The spelling.
  */
 export const spellMedia = (uuid) =>
   `url('media:${String(uuid).trim().toLowerCase()}')`;
 
 /**
  * The canonical spelling of a generation request: url('generate:…').
+ *
+ * @param {string} prompt
+ *   The generation prompt.
+ *
+ * @return {string}
+ *   The spelling.
  */
 export const spellGenerate = (prompt) =>
   `url('generate:${String(prompt).trim()}')`;
 
 /**
  * The canonical spelling of a file reference: url('file:<name>').
+ *
+ * @param {string} name
+ *   The file's name.
+ *
+ * @return {string}
+ *   The spelling.
  */
 export const spellFile = (name) => `url('file:${String(name).trim()}')`;
 
 /**
  * The inline reference a url() argument names, or null for any other.
+ *
+ * @param {string} argument
+ *   The url() argument, unquoted.
+ *
+ * @return {?{kind: string, id: string, spelling: string, record: null}}
+ *   The media, generate or file reference, or null.
  */
 const urlReference = (argument) => {
   const trimmed = argument.trim();
@@ -233,10 +301,15 @@ const urlReference = (argument) => {
  * in every slot.
  *
  * @param {string} value
+ *   The value as written.
  * @param {string} slot
+ *   The slot the value sits in (SLOT, or an attrSlot).
  * @param {object} roster
  *   A roster from createRoster().
+ *
  * @return {{kind: string, id: string|null, spelling: string, record: object|null}}
+ *   What the value is: its kind, the material's id (null for a literal),
+ *   the canonical spelling and the record (null unless rostered).
  */
 export const resolveValue = (value, slot, roster) => {
   assertSlot(slot);
@@ -263,12 +336,20 @@ export const resolveValue = (value, slot, roster) => {
  *
  * A style value yields each var() reference (with or without a fallback)
  * and each media, generate or file url() inside it; a plain url() (a
- * path, an external URL) is no reference. A class list yields one reference per token. An
- * attribute value, a blueprint name or an animation name yields its one
- * reference. Literals
- * never appear: the list is what must resolve for the value to be legal.
+ * path, an external URL) is no reference. A class list yields one
+ * reference per token. An attribute value, a blueprint name or an
+ * animation name yields its one reference. Literals never appear: the
+ * list is what must resolve for the value to be legal.
+ *
+ * @param {string} value
+ *   The value as written.
+ * @param {string} slot
+ *   The slot the value sits in (SLOT, or an attrSlot).
+ * @param {object} roster
+ *   A roster from createRoster().
  *
  * @return {Array<{kind: string, id: string|null, spelling: string, record: object|null}>}
+ *   The references in source order (resolveValue's shape).
  */
 export const references = (value, slot, roster) => {
   assertSlot(slot);
@@ -304,12 +385,20 @@ export const references = (value, slot, roster) => {
  * In a style value each var() head is normalized (whitespace dropped, a
  * fallback left untouched) and each media, generate or file url() is
  * respelled single-quoted with a lowercased uuid, a trimmed prompt or a
- * trimmed name; everything else stays byte-identical. A class list canonicalizes to its tokens
- * joined by one space; an attribute value, a blueprint name or an
- * animation name to its trimmed self. Unknown references keep their
- * spelling.
+ * trimmed name; everything else stays byte-identical. A class list
+ * canonicalizes to its tokens joined by one space; an attribute value, a
+ * blueprint name or an animation name to its trimmed self. Unknown
+ * references keep their spelling.
+ *
+ * @param {string} value
+ *   The value as written.
+ * @param {string} slot
+ *   The slot the value sits in (SLOT, or an attrSlot).
+ * @param {object} roster
+ *   A roster from createRoster().
  *
  * @return {string}
+ *   The canonical value.
  */
 export const canonical = (value, slot, roster) => {
   assertSlot(slot);
@@ -338,7 +427,10 @@ export const canonical = (value, slot, roster) => {
  * @param {object} record
  *   A record in the delivery shape.
  * @param {string} slot
+ *   The slot to spell in (SLOT, or an attrSlot).
+ *
  * @return {string}
+ *   The spelling.
  */
 export const spell = (record, slot) => {
   assertSlot(slot);

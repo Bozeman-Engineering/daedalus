@@ -91,11 +91,11 @@ class LabelAttributionTest extends KernelTestBase {
     $this->container->get('theme_installer')->install(['olivero']);
     $this->config('system.theme')->set('default', 'olivero')->save();
     // With no system config installed the defaults stylesheet compiles (at
-    // installConfig(['daedalus_stylish']) and again inside hook_themes_installed(),
-    // which core fires after its active-theme reset) for the request's
-    // active theme, memoizing core's pseudo-theme in the theme manager
-    // before olivero is the default; a config save never resets that memo,
-    // so it is dropped here for the render to negotiate olivero.
+    // installConfig(['daedalus_stylish']) and again inside
+    // hook_themes_installed(), which core fires after its active-theme reset)
+    // for the request's active theme, memoizing core's pseudo-theme in the
+    // theme manager before olivero is the default; a config save never resets
+    // that memo, so it is dropped here for the render to negotiate olivero.
     $this->container->get('theme.manager')->resetActiveTheme();
     $this->setUpCurrentUser([], ['view test entity']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');

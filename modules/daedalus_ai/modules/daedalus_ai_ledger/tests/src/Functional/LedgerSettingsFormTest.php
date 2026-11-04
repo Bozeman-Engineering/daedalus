@@ -34,6 +34,11 @@ final class LedgerSettingsFormTest extends BrowserTestBase {
   use DaedalusFixtureTrait;
 
   /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
    * The form's path.
    */
   private const PATH = '/admin/config/ai/usage-ledger';
@@ -147,7 +152,8 @@ final class LedgerSettingsFormTest extends BrowserTestBase {
     $assert->fieldExists('caps[0][period]');
     $assert->fieldExists('caps[0][usd]');
     $assert->fieldExists('caps[0][anchor]');
-    $assert->pageTextNotContains('uncached input tokens', 'No window, no token line.');
+    // No window, no token line.
+    $assert->pageTextNotContains('uncached input tokens');
 
     $this->submitForm([
       'caps[0][scope]' => Window::SCOPE_SITE,
@@ -162,7 +168,8 @@ final class LedgerSettingsFormTest extends BrowserTestBase {
     $assert->fieldValueEquals('caps[0][scope]', Window::SCOPE_SITE);
     $assert->fieldValueEquals('caps[0][period]', 'P1M');
     $assert->fieldValueEquals('caps[0][anchor]', '2026-01-01');
-    $assert->fieldExists('caps[1][period]', NULL, 'A blank row follows the saved one.');
+    // A blank row follows the saved one.
+    $assert->fieldExists('caps[1][period]');
     $default = $this->container->get('ai.provider')->getDefaultProviderForOperationType('chat');
     $this->assertSame('claude-opus-5-5', $default['model_id'], 'The recipe\'s chat default is the model the token line is computed for.');
     $assert->pageTextContains('20 USD is about 5 million uncached input tokens of claude-opus-5-5');

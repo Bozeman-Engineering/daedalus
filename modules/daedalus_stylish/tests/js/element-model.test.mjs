@@ -20,6 +20,8 @@ import { ELEMENT_LAYER, variantLayerId } from '../../js/src/code/layers.js';
 import { buildStack } from '../../js/src/style-stack.js';
 import { widePseudoElements } from '../../js/src/wide-selectors.js';
 
+// cspell:ignore phover
+
 // The island's lines: the key's stack at one condition, the map's layers
 // alone (the roster and cadence reads never print the floor).
 const linesOf = (map, key, condition, variants) =>
@@ -1189,7 +1191,7 @@ test('a typed brace inside a rule island mints the composed selector', () => {
   assert.equal(brace('color: red', '', 'p'), null);
   assert.equal(brace('&::after', '', 'p::before'), null);
   assert.equal(brace('&', '', 'p'), null);
-  // No rule: the owner's behaviour, unchanged.
+  // No rule: the owner's behavior, unchanged.
   assert.deepEqual(brace('&::before', '', null), row('&::before'));
   assert.deepEqual(brace('&::before', '', ''), row('&::before'));
 });

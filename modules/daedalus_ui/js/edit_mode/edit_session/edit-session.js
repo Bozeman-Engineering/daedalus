@@ -221,8 +221,7 @@ const editChanged = (item, key) => {
  * Whether an edit is open: the store's editingKey, the one reactive
  * truth the editChanged report writes.
  */
-export const isEditing = () =>
-  store.getState().selection.editingKey !== null;
+export const isEditing = () => store.getState().selection.editingKey !== null;
 
 /**
  * The op queue's report that a mutation response has been FULLY applied
@@ -253,6 +252,7 @@ export const mutationApplied = (payload) => {
  * leaves the universe.
  *
  * @return {{item: Element, key: string, panel: boolean}[]}
+ *   The session's entries in Tab order.
  */
 const items = () =>
   sessionItems(engine.items(), {
@@ -270,6 +270,7 @@ const items = () =>
  *   A panel widget item.
  *
  * @return {Element[]}
+ *   The widget's focusable controls.
  */
 const focusablesIn = (item) =>
   Array.from(
@@ -280,10 +281,15 @@ const focusablesIn = (item) =>
 
 /**
  * The panel entry whose widget contains an element, or null.
+ *
+ * @param {Element} element
+ *   The element.
+ *
+ * @return {?{item: Element, key: string, panel: boolean}}
+ *   The containing panel entry, or null.
  */
 const panelEntryAt = (element) =>
-  items().find((entry) => entry.panel && entry.item.contains(element)) ??
-  null;
+  items().find((entry) => entry.panel && entry.item.contains(element)) ?? null;
 
 /**
  * The panel entry holding keyboard focus, or null. A focused widget is
@@ -318,6 +324,7 @@ const focusedPanelEntry = () => {
  *   1 (default) or -1 for entering backwards.
  *
  * @return {Promise}
+ *   Resolves once the editor opened, or at once when the select refused.
  */
 const editItem = (entry, direction = 1) => {
   const { item, key } = entry;
@@ -341,6 +348,14 @@ const editItem = (entry, direction = 1) => {
 /**
  * The entry `direction` steps from an item in session order, or the first
  * / last entry when there is no reference point.
+ *
+ * @param {?Element} from
+ *   The item to step from.
+ * @param {number} direction
+ *   1 or -1.
+ *
+ * @return {?{item: Element, key: string, panel: boolean}}
+ *   The neighbor entry, or null past either end.
  */
 const neighbor = (from, direction) => neighborEntry(items(), from, direction);
 
@@ -355,6 +370,12 @@ const neighbor = (from, direction) => neighborEntry(items(), from, direction);
  * that leaf commits the root key, see rootKeyForEditTarget, but sits
  * outside the entity wrapper, so only a pointer gesture reaches it,
  * entryAt; the row itself owns nothing).
+ *
+ * @param {string} key
+ *   A selectable key.
+ *
+ * @return {?Element}
+ *   The editable leaf, or null.
  */
 const itemForKey = (key) => {
   const wrapper = elementForKey(key);
@@ -389,6 +410,12 @@ const itemForKey = (key) => {
  * container, a region, or a foreign host's leaf yields null. The frame's
  * dash reads the store's editingKey instead (the LIVE edit, never a
  * prediction).
+ *
+ * @param {?string} key
+ *   A selectable key.
+ *
+ * @return {?{item: Element, key: string, panel: boolean}}
+ *   The entry, or null.
  */
 const entryForKey = (key) => {
   if (engine === null || !key) {
@@ -410,6 +437,12 @@ const entryForKey = (key) => {
  * boundary: the innermost of the engine's canvas leaves containing the
  * target, or null when the pointer hit none (a wrapper's padding, a
  * section, chrome).
+ *
+ * @param {EventTarget} target
+ *   The pointer target.
+ *
+ * @return {?Element}
+ *   The editable leaf, or null.
  */
 const itemAt = (target) => {
   const hits = engine
@@ -433,6 +466,14 @@ const itemAt = (target) => {
  * row's editor by design, Enter's road), while the pointer on the H1
  * edits the title in place. A multi-value field's deltas share a key
  * the same way: the pointer edits the delta it hit.
+ *
+ * @param {?EventTarget} target
+ *   The pointer target.
+ * @param {?string} key
+ *   The selectable key the gesture named.
+ *
+ * @return {?{item: Element, key: string, panel: boolean}}
+ *   The entry, or null.
  */
 const entryAt = (target, key) => {
   if (engine === null || !key || !(target instanceof Element)) {
@@ -447,9 +488,16 @@ const entryAt = (target, key) => {
 /**
  * The entry a press or double-click on a key lands on: the leaf under the
  * pointer when it commits the key, else the leaf the key owns.
+ *
+ * @param {?EventTarget} target
+ *   The pointer target, or null for a keyless gesture.
+ * @param {?string} key
+ *   The selectable key.
+ *
+ * @return {?{item: Element, key: string, panel: boolean}}
+ *   The entry, or null.
  */
-const entryForPress = (target, key) =>
-  entryAt(target, key) ?? entryForKey(key);
+const entryForPress = (target, key) => entryAt(target, key) ?? entryForKey(key);
 
 /**
  * The one editor door (see the module docblock). A key that owns a canvas
@@ -490,7 +538,7 @@ export const openEditor = (key, target = null) => {
         return first ? editItem(first).then(() => true) : true;
       });
   return opening.catch((error) => {
-    console.error('Cannot edit element:', error);
+    Drupal.throwError(error);
     return false;
   });
 };
@@ -548,7 +596,7 @@ export const leaveEdit = () => {
     return false;
   }
   engine.endEdit({ cancel: false }).catch((error) => {
-    console.error('Cannot end the edit the selection is leaving:', error);
+    Drupal.throwError(error);
   });
   return true;
 };
@@ -594,6 +642,12 @@ const onTab = (direction) => (stroke) => {
  * Escape cancels the open edit, and only that: the global ladder
  * (selector-events.js onEscape) is the next press's. Typing with no edit
  * open (the AI chat, a rename input) is not ours.
+ *
+ * @param {object} stroke
+ *   The keystroke (hotkeys/keyboard-sensor.js).
+ *
+ * @return {boolean|undefined}
+ *   False when not handled.
  */
 const onEscape = (stroke) => {
   if (engine === null || stroke.consumed || !engine.isEditing()) {
@@ -610,6 +664,12 @@ const onEscape = (stroke) => {
  * editor, CKEditor loses its caret on the rebuild, and an edit that stays
  * open gives no sign the commit happened. A widget that consumed the
  * keystroke wins, as for Tab.
+ *
+ * @param {object} stroke
+ *   The keystroke (hotkeys/keyboard-sensor.js).
+ *
+ * @return {boolean|undefined}
+ *   False when not handled.
  */
 const onCommit = (stroke) => {
   if (
@@ -671,6 +731,9 @@ const onCommit = (stroke) => {
  * follows the press or the keyless clear empties it, and outside the
  * canvas (the AI chat, the page tree, chrome) the selection stays. There
  * is no session to leave.
+ *
+ * @param {MouseEvent} event
+ *   The capture-phase click.
  */
 const onClick = (event) => {
   if (engine === null) {
@@ -684,7 +747,7 @@ const onClick = (event) => {
       return;
     }
     editItem(panelEntry).catch((error) => {
-      console.error('Cannot edit element:', error);
+      Drupal.throwError(error);
     });
     return;
   }
@@ -728,7 +791,7 @@ const onClick = (event) => {
       // re-resolves the same key after this and finds it committed
       // already.
       editItem(entry).catch((error) => {
-        console.error('Cannot edit element:', error);
+        Drupal.throwError(error);
       });
       return;
     }

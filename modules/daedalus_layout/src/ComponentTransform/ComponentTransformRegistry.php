@@ -18,20 +18,20 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * Three transform kinds share one spine (walkers, presave net):
  * - Component transforms (tag daedalus_layout.component_transform) rewrite one
  *   component shape in place.
- * - Section transforms (tag daedalus_layout.section_transform) rewrite one section
- *   shape, returning the section to keep (core sections cannot change
- *   layout id in place); the registry writes replacements back into the
- *   holding list or embedded container configuration.
+ * - Section transforms (tag daedalus_layout.section_transform) rewrite one
+ *   section shape, returning the section to keep (core sections cannot change
+ *   layout id in place); the registry writes replacements back into the holding
+ *   list or embedded container configuration.
  * - Host transforms (tag daedalus_layout.host_transform) run once per host (a
  *   content entity revision or translation, a Layout Builder enabled
  *   display) after its section walk, for host-level state (e.g. style
  *   maps), addressed through the host object the resolver answers.
  *
- * Tagged services are collected by DaedalusLayoutServiceProvider in tag priority
- * order (higher first) and injected here as service IDs. Transforms are
- * lazy-loaded from the container so a registered transform costs nothing
- * until a spine walk or the presave safety net actually runs (same pattern
- * as daedalus_tempstore strategies).
+ * Tagged services are collected by DaedalusLayoutServiceProvider in tag
+ * priority order (higher first) and injected here as service IDs. Transforms
+ * are lazy-loaded from the container so a registered transform costs nothing
+ * until a spine walk or the presave safety net actually runs (same pattern as
+ * daedalus_tempstore strategies).
  */
 class ComponentTransformRegistry {
 

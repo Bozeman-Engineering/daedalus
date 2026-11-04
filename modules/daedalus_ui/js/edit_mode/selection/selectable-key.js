@@ -51,5 +51,12 @@ export const parseKey = (key) => {
 
 /**
  * The semantic kind of a selectable key, or null.
+ *
+ * @param {?string} key
+ *   The selectable key.
+ *
+ * @return {?string}
+ *   One of entity, field, container or block, or null for a key the
+ *   grammar does not parse.
  */
 export const kindOf = (key) => parseKey(key)?.kind ?? null;

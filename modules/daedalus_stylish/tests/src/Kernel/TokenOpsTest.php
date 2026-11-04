@@ -305,7 +305,7 @@ class TokenOpsTest extends KernelTestBase {
   }
 
   /**
-   * A removal on a shipped skin takes the site's record: reveal, delete, refuse.
+   * Removal on a shipped skin takes the site's record: reveal, delete, refuse.
    *
    * A site override removed reveals the package's token whole (the result
    * still carries the skin, the delta upserts the token), a site-minted
@@ -436,7 +436,10 @@ class TokenOpsTest extends KernelTestBase {
     // refuses, at group, naming the scales.
     $this->gesture('capture', ['label' => 'inferred', 'value' => '1rem']);
     $this->assertSame('1rem', $this->loadSkin('mine')->packageTokens()['space']['inferred']['value'], 'the scale is inferred from the shape');
-    $this->assertSame(['group' => 'STYLE_TOKEN_SCALE_UNFIT'], $this->refusal('capture', ['label' => 'x', 'value' => '1px solid red']));
+    $this->assertSame(['group' => 'STYLE_TOKEN_SCALE_UNFIT'], $this->refusal('capture', [
+      'label' => 'x',
+      'value' => '1px solid red',
+    ]));
     $this->assertSame(['label' => 'MISSING_PARAMETER'], $this->refusal('capture', [
       'group' => 'space',
       'value' => '1rem',
@@ -483,7 +486,10 @@ class TokenOpsTest extends KernelTestBase {
 
     $this->assertSame(['value' => 'INVALID_STYLE_VALUE'], $this->mintRefusal('gradient', 'flat', '#1a1a2e'));
     $this->assertSame(['value' => 'INVALID_STYLE_VALUE'], $this->mintRefusal('gradient', 'photo', 'url(x.png), linear-gradient(#000, #fff)'));
-    $this->assertSame(['value.dark' => 'INVALID_STYLE_VALUE'], $this->mintRefusal('gradient', 'dusk', ['default' => 'linear-gradient(#000, #fff)', 'dark' => 'red']));
+    $this->assertSame(['value.dark' => 'INVALID_STYLE_VALUE'], $this->mintRefusal('gradient', 'dusk', [
+      'default' => 'linear-gradient(#000, #fff)',
+      'dark' => 'red',
+    ]));
 
     // The entity kind grants the background group, so background-image is
     // a property the strict closed world knows; the reference resolves

@@ -41,6 +41,7 @@ import { skinScopeLabel } from './provenance-model.js';
  *   The panel's parked flag.
  *
  * @return {?string}
+ *   'editing', 'creating', 'parked', or null when nothing mounts.
  */
 export const framePosture = (session, editing, parked = false) => {
   if (!session) {
@@ -66,6 +67,7 @@ export const framePosture = (session, editing, parked = false) => {
  * displacement).
  *
  * @return {{editing: null, parked: true}}
+ *   The session fields the park writes.
  */
 export const parkTransition = () => ({ editing: null, parked: true });
 
@@ -82,6 +84,8 @@ export const parkTransition = () => ({ editing: null, parked: true });
  *   The parked session.
  *
  * @return {{editing: ?string, parked: false}}
+ *   The session fields the resume writes: `editing` the session's
+ *   reference when it stages lines, null otherwise.
  */
 export const resumeTransition = (session) => ({
   editing: stagesLines(session) ? session.reference : null,
@@ -174,6 +178,8 @@ export const sessionHeader = (session, variants, guide = null) => {
  *   The materials roster.
  *
  * @return {?{blueprint: string, label: string}}
+ *   The owning blueprint's id and label, or null when no consent chip
+ *   renders.
  */
 export const mintConsent = (session, provenance, materials) => {
   if (
@@ -184,7 +190,10 @@ export const mintConsent = (session, provenance, materials) => {
   ) {
     return null;
   }
-  return { blueprint: provenance, label: blueprintLabel(provenance, materials) };
+  return {
+    blueprint: provenance,
+    label: blueprintLabel(provenance, materials),
+  };
 };
 
 /**
@@ -212,6 +221,8 @@ export const mintConsent = (session, provenance, materials) => {
  *
  * @return {Array<{reference: string, fragment: string, label: string,
  *   axis: string, current: boolean}>}
+ *   One row per resolved document in delivery order, the edited one
+ *   marked `current`.
  */
 export const switcherRoster = (
   entry,
@@ -259,6 +270,7 @@ export const switcherRoster = (
  *   The style guide (a skin session's scope words).
  *
  * @return {?{kind: string, label: string, count: number}}
+ *   The chip's facts, or null without a session.
  */
 export const resumeChip = (session, variants, capture = null, guide = null) => {
   if (!session) {

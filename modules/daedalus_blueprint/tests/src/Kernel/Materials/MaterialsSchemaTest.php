@@ -522,7 +522,9 @@ HTML;
   }
 
   /**
-   * The default listing is every shared block blueprint; the index is the vocabulary with counts.
+   * The default listing is every shared block blueprint.
+   *
+   * The index is the vocabulary with counts.
    *
    * The blueprints group prints every offered block blueprint, favorite
    * or not (sharing is the one lever; the favorite flag is the Add
@@ -554,7 +556,9 @@ HTML;
   }
 
   /**
-   * One group alone, after the cache: the listing replaces the whole set in place.
+   * One group alone, after the cache.
+   *
+   * The listing replaces the whole set in place.
    *
    * Narrowing takes the fragment as built (what the schema cache holds)
    * and swaps its blueprints group for the group's shared block
@@ -592,7 +596,9 @@ HTML;
   }
 
   /**
-   * The dialect door's narrowing: what the brief does not carry, its own guidance.
+   * The dialect door's narrowing.
+   *
+   * What the brief does not carry, its own guidance.
    *
    * The narrowing takes the fragment as cached and keeps DIALECT_KEYS alone
    * (the tokens and variants are the brief's on that door),

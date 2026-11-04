@@ -51,7 +51,8 @@ function daedalus_stylish_discover_page_builder_declarations_alter(array &$decla
  * Turns a discovered shell tree into unlabeled guide part declarations.
  *
  * @param array $tree
- *   A discovered tree (\Drupal\daedalus_stylish_discover\ElementDiscovery::discover).
+ *   A discovered tree
+ *   (\Drupal\daedalus_stylish_discover\ElementDiscovery::discover).
  * @param array $groups
  *   Every installed property group a real element may name,
  *   unconstrained, keyed by id.

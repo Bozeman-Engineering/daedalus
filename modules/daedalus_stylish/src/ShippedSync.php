@@ -183,26 +183,24 @@ final class ShippedSync {
   /**
    * Reacts to a design system becoming the active one: every module syncs.
    *
-   * The sweep exists for the incoming package: the importers defer a
-   * package whole while its system is inactive (install, the system's
-   * config landing, every rebuild in between: nothing of it is read,
-   * because its variants' axes and parts are the system's own stratum,
-   * layered only while it is active), so the activation is what lands
-   * it, under its own law, in the activation itself and with no cache
-   * rebuild (a recipe's activation action lands a fresh site's package
-   * this way; an install from exported config writes the pointer before
-   * the system's entity imports, so there the entity's landing is the
-   * activation and lands it). Nothing else needs the sweep: the globals
-   * landed with their batches, and the ones the outgoing law could not offer were
-   * never refused by the sync, only withheld by the roster's verdict,
+   * The sweep exists for the incoming package: the importers defer a package
+   * whole while its system is inactive (install, the system's config landing,
+   * every rebuild in between: nothing of it is read, because its variants' axes
+   * and parts are the system's own stratum, layered only while it is active),
+   * so the activation is what lands it, under its own law, in the activation
+   * itself and with no cache rebuild (a recipe's activation action lands a
+   * fresh site's package this way; an install from exported config writes the
+   * pointer before the system's entity imports, so there the entity's landing
+   * is the activation and lands it). Nothing else needs the sweep: the globals
+   * landed with their batches, and the ones the outgoing law could not offer
+   * were never refused by the sync, only withheld by the roster's verdict,
    * which re-judges them under the incoming law on its own. Every enabled
-   * module syncs because the package's provider is not known here; a
-   * converged definition is unchanged and silent, so a later activation
-   * of an already landed site logs nothing. The caller has reset the
-   * declarations before this runs (DesignSystemSwitchSubscriber). A
-   * site-built system packages nothing of its own; the outgoing system's
-   * members are not touched (their entities stay, the roster simply
-   * stops offering them). Outcomes are logged.
+   * module syncs because the package's provider is not known here; a converged
+   * definition is unchanged and silent, so a later activation of an already
+   * landed site logs nothing. The caller has reset the declarations before this
+   * runs (DesignSystemSwitchSubscriber). A site-built system packages nothing
+   * of its own; the outgoing system's members are not touched (their entities
+   * stay, the roster simply stops offering them). Outcomes are logged.
    */
   public function onDesignSystemActivated(): void {
     $this->log($this->sync());

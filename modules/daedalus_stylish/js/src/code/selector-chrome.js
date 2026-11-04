@@ -15,7 +15,13 @@ import {
 } from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 import { isDoubleClick } from '../../../../daedalus_ui/js/edit_mode/selection/double-click.js';
 import { COMBINATOR, WRAPPER, preludeParts } from './prelude.js';
-import { POSITION, PSEUDO, QUALIFIER, STATE, selectorGestureOptions } from './element-model.js';
+import {
+  POSITION,
+  PSEUDO,
+  QUALIFIER,
+  STATE,
+  selectorGestureOptions,
+} from './element-model.js';
 import { tooltipParent } from './island-surface.js';
 import { boxWord } from '../parts.js';
 import { notify } from '../notify.js';
@@ -33,6 +39,12 @@ import {
 /**
  * The words of the `:` lane's position pseudo-classes and open
  * qualifiers, in the reader's terms.
+ *
+ * @param {string} name
+ *   The pseudo-class name without its colon (`first-child`, `not`).
+ *
+ * @return {string}
+ *   The reader's sentence, or the name itself when none is known.
  */
 const positionWord = (name) => {
   const words = {
@@ -58,6 +70,13 @@ const positionWord = (name) => {
  * The sentence a selector completion's detail reads: what the rule
  * addresses, in the reader's words. One sentence for both surfaces the
  * selector completion opens on: an island's line and the prelude editor.
+ *
+ * @param {{kind: string, name: string, label?: string}} option
+ *   One option of a selector offer (element-model.js
+ *   selectorGestureOptions): its lane kind, its name and its label.
+ *
+ * @return {string}
+ *   The detail sentence.
  */
 export const selectorDetail = (option) => {
   const lower = (label) =>
@@ -69,16 +88,22 @@ export const selectorDetail = (option) => {
       return Drupal.t('Children');
     case TYPE:
       return option.name === TYPE_CONTAINER || option.name === TYPE_BLOCK
-        ? Drupal.t('Every !label here', { '!label': lower(option.label ?? option.name) })
+        ? Drupal.t('Every !label here', {
+            '!label': lower(option.label ?? option.name),
+          })
         : Drupal.t('Every !label block here', {
             '!label': lower(option.label ?? option.name),
           });
     case TAG:
-      return Drupal.t('Every !label here', { '!label': lower(option.label ?? option.name) });
+      return Drupal.t('Every !label here', {
+        '!label': lower(option.label ?? option.name),
+      });
     case PSEUDO:
       return boxWord(option.name);
     case STATE:
-      return Drupal.t('While !label', { '!label': lower(option.label ?? option.name) });
+      return Drupal.t('While !label', {
+        '!label': lower(option.label ?? option.name),
+      });
     case POSITION:
     case QUALIFIER:
       return positionWord(option.name);
@@ -99,13 +124,29 @@ export const selectorDetail = (option) => {
  * finish, through the caller's `insert`, which defaults to `apply`.
  *
  * @param {{options: Array<object>, create: ?string}} offer
+ *   The selector offer: its options and the undeclared class a pick
+ *   would create, or null.
  * @param {{label: (selector: string) => string,
  *   apply: (selector: string) => Function,
  *   insert?: (text: string) => Function}} spelling
+ *   How the caller words an item's label and what picking it does
+ *   (`apply` for a whole selector, `insert` for an open qualifier's
+ *   text; `insert` defaults to `apply`).
+ *
+ * @return {Array<object>}
+ *   CodeMirror completion items (label, type, detail, apply; the create
+ *   item carries `boost: -1`).
  */
-export const selectorCompletionItems = (offer, { label, apply, insert = apply }) => {
+export const selectorCompletionItems = (
+  offer,
+  { label, apply, insert = apply },
+) => {
   const typeOf = (kind) =>
-    kind === UNIVERSAL || kind === PSEUDO || kind === STATE || kind === POSITION || kind === QUALIFIER
+    kind === UNIVERSAL ||
+    kind === PSEUDO ||
+    kind === STATE ||
+    kind === POSITION ||
+    kind === QUALIFIER
       ? 'keyword'
       : kind === TYPE
         ? 'type'
@@ -154,7 +195,8 @@ export const selectorOfferValidity = (typed) => {
   const token = /(?::[A-Za-z-]*|[A-Za-z0-9_.*-]*)$/.exec(typed)?.[0] ?? '';
   const stem = typed.slice(0, typed.length - token.length);
   return (text) =>
-    text.startsWith(stem) && /^(?::[A-Za-z-]*|[A-Za-z0-9_.*-]*)$/.test(text.slice(stem.length));
+    text.startsWith(stem) &&
+    /^(?::[A-Za-z-]*|[A-Za-z0-9_.*-]*)$/.test(text.slice(stem.length));
 };
 
 /**
@@ -186,6 +228,14 @@ export const selectorHeaderClick = (event, { seat, edit }) => {
  * option rewrites the editor's text to the option's canonical selector
  * and leaves the cursor at its end, so a chain goes on compound by
  * compound; committing stays the designer's Enter or `{`.
+ *
+ * @param {object} context
+ *   CodeMirror's completion context (the state and the cursor position).
+ * @param {?object} gesture
+ *   The row's selector gesture context, or null for no completion.
+ *
+ * @return {?{from: number, options: Array<object>, validFor: RegExp}}
+ *   The completion result, or null when nothing is offered.
  */
 const editorCompletions = (context, gesture) => {
   if (!gesture) {
@@ -211,7 +261,10 @@ const editorCompletions = (context, gesture) => {
     });
   // Picking rewrites the text to the option's spelling, a state's
   // included (`a:hover`): the digester judges at the commit.
-  const options = selectorCompletionItems(offer, { label: (selector) => selector, apply: pick });
+  const options = selectorCompletionItems(offer, {
+    label: (selector) => selector,
+    apply: pick,
+  });
   if (!options.length) {
     return null;
   }
@@ -233,14 +286,22 @@ const editorCompletions = (context, gesture) => {
  * newline is never accepted: the selector is one line.
  *
  * @param {object} props
- *   - selector: the row's canonical selector.
- *   - className: the prelude's class, worn with its `--editing` state.
- *   - completions: the selector gesture context, or null.
- *   - conditions: the published condition table (guide.conditions), the
- *     digester's roster for the peel; the gesture context's when omitted.
- *   - onPreview: (canonical | null) => void, per keystroke.
- *   - onMove: (from, to) => void, on a commit.
- *   - onClose: () => void, on a cancel or a no-op.
+ *   The editor's props.
+ * @param {string} props.selector
+ *   The row's canonical selector.
+ * @param {string} props.className
+ *   The prelude's class, worn with its `--editing` state.
+ * @param {?object} props.completions
+ *   The selector gesture context, or null.
+ * @param {?object} props.conditions
+ *   The published condition table (guide.conditions), the digester's
+ *   roster for the peel; the gesture context's when omitted.
+ * @param {function(?string): void} props.onPreview
+ *   Receives the typed text's canonical reach (or null) per keystroke.
+ * @param {function(string, string): void} props.onMove
+ *   Receives (from, to) on a commit.
+ * @param {function(): void} props.onClose
+ *   Called on a cancel or a no-op.
  */
 export const SelectorEditor = ({
   selector,
@@ -258,7 +319,10 @@ export const SelectorEditor = ({
     let edit = openSelectorEdit(selector);
     let settled = false;
     const options = () => ({
-      conditions: propsRef.current.conditions ?? propsRef.current.completions?.conditions ?? {},
+      conditions:
+        propsRef.current.conditions ??
+        propsRef.current.completions?.conditions ??
+        {},
     });
     const dispatch = (outcome) => {
       if (settled) {
@@ -291,7 +355,8 @@ export const SelectorEditor = ({
           return false;
       }
     };
-    const gesture = (name) => () => dispatch(selectorEditOutcome(edit, name, options()));
+    const gesture = (name) => () =>
+      dispatch(selectorEditOutcome(edit, name, options()));
     const view = new EditorView({
       parent: hostRef.current,
       state: EditorState.create({
@@ -304,7 +369,10 @@ export const SelectorEditor = ({
           EditorView.lineWrapping,
           tooltips({ parent: tooltipParent(hostRef.current.ownerDocument) }),
           autocompletion({
-            override: [(context) => editorCompletions(context, propsRef.current.completions)],
+            override: [
+              (context) =>
+                editorCompletions(context, propsRef.current.completions),
+            ],
           }),
           EditorView.inputHandler.of((editorView, from, to, inserted) =>
             inserted === '{' ? gesture('{')() : false,
@@ -316,7 +384,9 @@ export const SelectorEditor = ({
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
               edit = typedSelectorEdit(edit, update.state.doc.toString());
-              propsRef.current.onPreview?.(selectorEditPreview(edit, options()));
+              propsRef.current.onPreview?.(
+                selectorEditPreview(edit, options()),
+              );
             }
           }),
           EditorView.domEventHandlers({
@@ -334,7 +404,9 @@ export const SelectorEditor = ({
       propsRef.current.onPreview?.(null);
     };
   }, []);
-  return <span className={`${className} ${className}--editing`} ref={hostRef} />;
+  return (
+    <span className={`${className} ${className}--editing`} ref={hostRef} />
+  );
 };
 
 /**
@@ -365,16 +437,30 @@ export const SelectorEditor = ({
  * passing null again once the editor reports (onMove, onClose).
  *
  * @param {object} props
- *   - selector: the canonical relative selector, or null for the element.
- *   - condition: the row's condition ('default' when omitted).
- *   - guide: the style guide payload (the condition wrappers).
- *   - className: the `<code>` element's class.
- *   - edit: null for the code face, else the editor's props past the
- *     selector and class ({completions, onPreview, onMove, onClose}).
+ *   The row's props.
+ * @param {?string} props.selector
+ *   The canonical relative selector, or null for the element.
+ * @param {string} props.condition
+ *   The row's condition ('default' when omitted).
+ * @param {?object} props.guide
+ *   The style guide payload (the condition wrappers).
+ * @param {string} props.className
+ *   The `<code>` element's class.
+ * @param {?object} props.edit
+ *   Null for the code face, else the editor's props past the selector
+ *   and class ({completions, onPreview, onMove, onClose}).
  */
-export const Prelude = ({ selector, condition = 'default', guide = null, className, edit = null }) => {
+export const Prelude = ({
+  selector,
+  condition = 'default',
+  guide = null,
+  className,
+  edit = null,
+}) => {
   if (edit !== null) {
-    return <SelectorEditor selector={selector} className={className} {...edit} />;
+    return (
+      <SelectorEditor selector={selector} className={className} {...edit} />
+    );
   }
   const titles = {
     [CHILD]: Drupal.t('Direct children only'),
@@ -395,7 +481,10 @@ export const Prelude = ({ selector, condition = 'default', guide = null, classNa
     }
     if (part.kind === WRAPPER) {
       return (
-        <span key={`wrapper-${index}`} className="daedalus-stylish-islands__wrapper">
+        <span
+          key={`wrapper-${index}`}
+          className="daedalus-stylish-islands__wrapper"
+        >
           {part.text}
         </span>
       );

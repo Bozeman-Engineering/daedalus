@@ -19,7 +19,7 @@ import {
 } from './gradient-builder-model.js';
 import { paletteFallback, stopsFor } from './widget-values.js';
 import { usePalettePopover } from './palette-picker.js';
-import { customProperty, paintValue, styleReference } from './materials.js';
+import { paintValue, styleReference } from './materials.js';
 import { editableValue, mergedValue, tokenNameError } from './skin-model.js';
 import { fetchMaterialUsage } from './skin-api.js';
 import { saveMaterial, updateMaterial } from './material-gestures.js';
@@ -32,12 +32,32 @@ import { browserHex } from './native-picker.js';
  * scope); everything else paints as itself. The one face-paint rule
  * (materials.js paintValue), shared with the palette's color editor and
  * the palette card faces.
+ *
+ * @param {?object} guide
+ *   The style guide payload.
+ * @param {object} materials
+ *   The materials roster.
+ * @param {*} color
+ *   A stop's color: a string paints, anything else passes through.
+ *
+ * @return {*}
+ *   The face paint, or the non-string color as given.
  */
 export const paintColor = (guide, materials, color) =>
   typeof color === 'string' ? paintValue(guide, materials, color) : color;
 
 /**
  * The preview strip's layer: the gradient with every stop painted.
+ *
+ * @param {?object} guide
+ *   The style guide payload.
+ * @param {object} materials
+ *   The materials roster.
+ * @param {object} gradient
+ *   The parsed gradient (gradient-model.js parseGradient's shape).
+ *
+ * @return {string}
+ *   The serialized gradient with painted stops.
  */
 const paintedLayer = (guide, materials, gradient) =>
   serializeGradient({
@@ -57,6 +77,20 @@ const paintedLayer = (guide, materials, gradient) =>
  *   layer edits as free text, the others still preserved verbatim.
  * - 'opaque': the whole value would not even split into layers
  *   (unbalanced parentheses); it edits whole, as free text.
+ *
+ * @param {?string} value
+ *   The property value (null reads as empty).
+ * @param {object} guide
+ *   The style guide payload (the seed's stop vocabulary).
+ * @param {object} materials
+ *   The materials roster (the seed's stop colors).
+ * @param {?object} constraints
+ *   The bound property's guide constraints, or null.
+ *
+ * @return {{kind: string, layers?: string[], index?: number,
+ *   gradient?: object}}
+ *   The working state: the kind, and for 'gradient' and 'raw' the split
+ *   layers with the edited layer's index (-1 for a seeded prepend).
  */
 const derive = (value, guide, materials, constraints) => {
   const layers = splitLayers(value ?? '');
@@ -119,10 +153,13 @@ const derive = (value, guide, materials, constraints) => {
  * custom property already know it.
  *
  * @param {object} props
+ *   The builder's props.
  * @param {string} props.value
  *   The row's current (draft-layered) value.
  * @param {object} props.guide
  *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials roster (stop faces, the stop vocabulary, the mint).
  * @param {?object} [props.constraints]
  *   The bound property's guide constraints — the stop vocabulary inherits
  *   them (stopsFor), exactly like a color row would.
@@ -609,7 +646,9 @@ export const GradientBuilder = ({
                 <div
                   key={i}
                   className={`daedalus-stylish-gradient__handle${
-                    i === sel ? ' daedalus-stylish-gradient__handle--selected' : ''
+                    i === sel
+                      ? ' daedalus-stylish-gradient__handle--selected'
+                      : ''
                   }`}
                   style={{
                     left: `${display[i]}%`,
@@ -767,7 +806,9 @@ export const GradientBuilder = ({
                     ? Drupal.t(
                         'Lowercase letters, digits and inner hyphens ("hero-fade"); the name becomes the tail of the custom property.',
                       )
-                    : Drupal.t('The tail of the custom property: --gradient-name')
+                    : Drupal.t(
+                        'The tail of the custom property: --gradient-name',
+                      )
                 }
                 value={mintLabel}
                 onInput={(event) => setMintLabel(event.target.value)}
@@ -849,6 +890,7 @@ export const GradientBuilder = ({
  * carries the seam.
  *
  * @param {object} props
+ *   The session's props.
  * @param {object} props.token
  *   The token as a picker entry (materials.js gradientTokenOf's answer:
  *   {scale, scaleLabel, shape, name, ref, value, valueDark, record}).

@@ -127,16 +127,16 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   feeding one map, and the painted face reading back from the map, only
  *   exist in a browser.
  * - Duplicate lands a styled clone without reload (seam: the duplicate
- *   response's targets -> the whole-entity swap -> the clone's @scope rule
- *   in the browser cascade): daedalus_stylish's lifecycle subscriber copies the
+ *   response's targets -> the whole-entity swap -> the clone's @scope rule in
+ *   the browser cascade): daedalus_stylish's lifecycle subscriber copies the
  *   source's style map entry onto the clone and declares the root
- *   daedalus_stylish_styles field as a target beside the op's ADDED clone, which
- *   forces the response to swap the whole entity, the one subtree that
- *   holds the entity-level style tag. Kernel tests pin the declared target
- *   and the rendered markup; only a browser proves the clone WEARS the
- *   source's computed styles the moment it lands, with the page never
- *   reloading. Browser smoke caught the unstyled-until-reload clone, so
- *   the step accretes here (regression accretion).
+ *   daedalus_stylish_styles field as a target beside the op's ADDED clone,
+ *   which forces the response to swap the whole entity, the one subtree that
+ *   holds the entity-level style tag. Kernel tests pin the declared target and
+ *   the rendered markup; only a browser proves the clone WEARS the source's
+ *   computed styles the moment it lands, with the page never reloading. Browser
+ *   smoke caught the unstyled-until-reload clone, so the step accretes here
+ *   (regression accretion).
  * - Every settled write released its preview (seam: the settle path's
  *   release bound at dispatch, preview.settling): the Size capture
  *   previews the stop's literal and commits the token's reference, and
@@ -197,24 +197,24 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   outlines, mounts. The gate is a one-line model read; that the row
  *   appears through the settle-to-mirror-to-re-render round trip is
  *   wiring.
- * - The page spaces its sections through the layout root (two seams). First,
- *   an element-bound kind control gating on the bound part's live child
- *   count: daedalus_edit binds the entity kind's `gap` control to
- *   `.daedalus-layout-layout`, the one element daedalus_layout renders around the root
- *   sections in every mode, and the widget's gate reads that part's OWN
- *   child boxes (self.partChildCount, the canvas's answer), never the
- *   entity root's (whose one child box is the layout root itself). The
- *   binding in the payload, the part's presence, the count read off the
- *   rendered wrapper and the registry's gate are four layers that only
- *   agree in a browser: with two sections on the page the Gap row is offered
- *   on the Page. Second, a part-keyed write landing through the
- *   entity's @scope tag onto a module-rendered element: a real stop
- *   pick commits `gap` at `entity:{uuid}::.daedalus-layout-layout` in one op,
- *   the entity root's own style tag prints the part rule, and the layout
- *   root's computed `row-gap` changes on the canvas without reload, the
- *   sections moving that far apart. The gate and the count are node-tested
- *   and the binding Kernel-pinned; the declared flex column laying the gap out
- *   on the edit canvas exists only here.
+ * - The page spaces its sections through the layout root (two seams). First, an
+ *   element-bound kind control gating on the bound part's live child count:
+ *   daedalus_edit binds the entity kind's `gap` control to
+ *   `.daedalus-layout-layout`, the one element daedalus_layout renders around
+ *   the root sections in every mode, and the widget's gate reads that part's
+ *   OWN child boxes (self.partChildCount, the canvas's answer), never the
+ *   entity root's (whose one child box is the layout root itself). The binding
+ *   in the payload, the part's presence, the count read off the rendered
+ *   wrapper and the registry's gate are four layers that only agree in a
+ *   browser: with two sections on the page the Gap row is offered on the Page.
+ *   Second, a part-keyed write landing through the entity's @scope tag onto a
+ *   module-rendered element: a real stop pick commits `gap` at
+ *   `entity:{uuid}::.daedalus-layout-layout` in one op, the entity root's own
+ *   style tag prints the part rule, and the layout root's computed `row-gap`
+ *   changes on the canvas without reload, the sections moving that far apart.
+ *   The gate and the count are node-tested and the binding Kernel-pinned; the
+ *   declared flex column laying the gap out on the edit canvas exists only
+ *   here.
  * - The write address: one link, every link in its section (seam: the
  *   address switcher over addressSet -> the spine's styling target
  *   seated on the section's rule -> the canvas paint slot,
@@ -438,18 +438,17 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
   /**
    * {@inheritdoc}
    *
-   * The scenario picks its law by picking a design system: the recipe's
-   * olivero ships open, and the closed-phase claims need strict law, so
-   * after the fixture install the site switches to guide_example, the
-   * strict reference the package above ships (the activation syncs the
-   * package's skin and members under its own law, the way a recipe's
-   * activation action does). The open phase switches back to olivero
-   * in-scenario. Neither system's mode is set by the test. The fixture
-   * is whole as installed: every install batch syncs as it installs and
-   * every activation syncs every module's shipped definitions, so the
-   * globals (daedalus_stylish_layouts' `row`, the Layout axis the nested-container
-   * leg reads, among them) landed with their batches, withheld until the
-   * recipe's olivero activation minted the gutter they name.
+   * The scenario picks its law by picking a design system: the recipe's olivero
+   * ships open, and the closed-phase claims need strict law, so after the
+   * fixture install the site switches to guide_example, the strict reference
+   * the package above ships (the activation syncs the package's skin and
+   * members under its own law, the way a recipe's activation action does). The
+   * open phase switches back to olivero in-scenario. Neither system's mode is
+   * set by the test. The fixture is whole as installed: every install batch
+   * syncs as it installs and every activation syncs every module's shipped
+   * definitions, so the globals (daedalus_stylish_layouts' `row`, the Layout
+   * axis the nested-container leg reads, among them) landed with their batches,
+   * withheld until the recipe's olivero activation minted the gutter they name.
    */
   protected function setUp(): void {
     $this->daedalusSetUp();
@@ -744,8 +743,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
   }
 
   /**
-   * Picks an option in a panel's closed dimension select by its face,
-   * scrolled into the viewport.
+   * Picks a closed dimension select's option by face, scrolled into view.
    *
    * The driver's own selectOption: a real click on the option (the
    * browser selects it and fires 'change' on the select; ClosedField
@@ -1809,7 +1807,9 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
         'label' => $link_variant['label'],
         'scope' => 'base:a',
       ]);
-      $variant->setStyles(['' => ['default' => ['color' => $link_variant['color'], 'letter-spacing' => $link_variant['letter-spacing']]]]);
+      $variant->setStyles([
+        '' => ['default' => ['color' => $link_variant['color'], 'letter-spacing' => $link_variant['letter-spacing']]],
+      ]);
       $variant->save();
     }
     // One gradient token on the olivero skin for the Background
@@ -2068,20 +2068,18 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     );
 
     // The well IS the control: its popover carries the palette, then the
-    // self-labelled lane row, and the color lane closes the popover and
-    // opens the native chooser in the same click (the well row is the
-    // hidden picker's positioned mount). The chooser cannot be driven
-    // headlessly, so its two events are dispatched on the hidden picker:
-    // input stages the widget draft (the well repaints its literal face
-    // live, nothing committed), change settles through the widget's pick
-    // path (the explicit replacement over the trio) and the map, the well
-    // and the canvas follow.
-    // The popover floats: its content portals into the shared surface
-    // (.daedalus-ui-popover, a body child, never a descendant of the inspector),
-    // and the rows below stay put (the widget's own height does not
-    // grow). Seam: the Preact-to-plain-DOM portal across separately
-    // built bundles; representative of the class (the choice well, the
-    // color field and the variant picker ride the same hook).
+    // self-labelled lane row, and the color lane closes the popover and opens
+    // the native chooser in the same click (the well row is the hidden picker's
+    // positioned mount). The chooser cannot be driven headlessly, so its two
+    // events are dispatched on the hidden picker: input stages the widget draft
+    // (the well repaints its literal face live, nothing committed), change
+    // settles through the widget's pick path (the explicit replacement over the
+    // trio) and the map, the well and the canvas follow. The popover floats:
+    // its content portals into the shared surface (.daedalus-ui-popover, a body
+    // child, never a descendant of the inspector), and the rows below stay put
+    // (the widget's own height does not grow). Seam: the Preact-to-plain-DOM
+    // portal across separately built bundles; representative of the class (the
+    // choice well, the color field and the variant picker ride the same hook).
     $widget_height_js = 'document.querySelector(' . json_encode($widget) . ').getBoundingClientRect().height';
     $widget_height = (float) $session->evaluateScript($widget_height_js);
     $this->clickPanel($well);
@@ -2136,13 +2134,13 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       'Reopening the well offered the save-as-token mint row over the worn literal.',
     );
 
-    // ----- shift+v opens the variant picker for the selection. -----
-    // Seam: daedalus_ui's hotkey dispatcher (the keydown on document,
-    // the selection context) -> daedalus_stylish's opener seam -> the mounted wear
-    // bar's add row. Escape first closes the well's popover (the floating
-    // surface consumes the press at document capture, so it is dispatched
-    // on the focused chip as a keyboard would, never on document), so one
-    // popover is open at a time.
+    // ----- shift+v opens the variant picker for the selection. ----- Seam:
+    // daedalus_ui's hotkey dispatcher (the keydown on document, the selection
+    // context) -> daedalus_stylish's opener seam -> the mounted wear bar's add
+    // row. Escape first closes the well's popover (the floating surface
+    // consumes the press at document capture, so it is dispatched on the
+    // focused chip as a keyboard would, never on document), so one popover is
+    // open at a time.
     $this->pressKeyOnFocused('Escape');
     $this->assertJsCondition(
       "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-token-popover')",
@@ -2303,9 +2301,9 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
 
     // ----- Duplicate lands a styled clone without reload. -----
     // Seam: the duplicate response's targets (daedalus_stylish's subscriber
-    // declares the root daedalus_stylish_styles field beside the op's ADDED clone)
-    // -> the whole-entity swap -> the entity-level style tag carrying the
-    // clone's @scope rule entering the browser cascade. Block B is the
+    // declares the root daedalus_stylish_styles field beside the op's ADDED
+    // clone) -> the whole-entity swap -> the entity-level style tag carrying
+    // the clone's @scope rule entering the browser cascade. Block B is the
     // source: it wears the captured font-size and the picker-committed
     // color, both read back COMPUTED from the canvas so the clone claim
     // is about worn styles, never the map alone.
@@ -2712,18 +2710,18 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       'The canvas clone wears the solid 2px outline without reload.',
     );
 
-    // ----- The page spaces its sections through the layout root. -----
-    // Seam one: an element-bound kind control gating on the bound part's
-    // live child count. daedalus_edit binds the entity kind's `gap` control
-    // to `.daedalus-layout-layout`, the layout root daedalus_layout renders around the
-    // root sections (the view render's wrapper and the edit canvas's
-    // #layout-builder are the same declared part), and the gap widget's
-    // gate reads that part's OWN child boxes (self.partChildCount), never
-    // the entity root's, whose one child box is the layout root itself.
-    // The page holds two sections: section A from the strict phase, staged
-    // in tempstore across the enforcement reload, and section B. Pinned
-    // first, so the row's presence below is the gate opening on a real
-    // count and never an unknown context degrading to an offer.
+    // ----- The page spaces its sections through the layout root. ----- Seam
+    // one: an element-bound kind control gating on the bound part's live child
+    // count. daedalus_edit binds the entity kind's `gap` control to
+    // `.daedalus-layout-layout`, the layout root daedalus_layout renders around
+    // the root sections (the view render's wrapper and the edit canvas's
+    // #layout-builder are the same declared part), and the gap widget's gate
+    // reads that part's OWN child boxes (self.partChildCount), never the entity
+    // root's, whose one child box is the layout root itself. The page holds two
+    // sections: section A from the strict phase, staged in tempstore across the
+    // enforcement reload, and section B. Pinned first, so the row's presence
+    // below is the gate opening on a real count and never an unknown context
+    // degrading to an offer.
     $entity_key = "entity:{$node->uuid()}";
     $layout_root = "[data-selectable='$entity_key'] .daedalus-layout-layout";
     $section_a = "[data-selectable='container:$section_a_uuid']";
@@ -3832,19 +3830,18 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
       'Write address: the first anchor computes its own 24px and its two siblings keep the section\'s 30px: the child\'s own entry wins on that anchor only.',
     );
 
-    // ----- Wear at the rule: the wear bar and a card apply at the target. -----
-    // Seam: the styling target seated on the section's `a` rule -> the
-    // wear bar (wear-bar.js, its `target` the rule) and the Materials
-    // card (library.js, applyDoorway over the same target) -> ONE
-    // apply_variant at the RULE key -> the server's rule-wear lane
-    // (VariantStylesheet::ruleWearCss, the printer twin on the client)
-    // printing the variant inside the section's @scope, so every anchor
-    // computes it and no element carries a variant class. The landing
-    // pairing, the reference placement and the printed lane are
-    // Kernel-pinned; the gestures aimed at the target and the delivered
-    // wear on the canvas exist only here. The rule is re-seated as the
-    // write address through the facade, the road the switcher's pick
-    // took above (the link part stays the subject).
+    // ----- Wear at the rule: the wear bar and a card apply at the target.
+    // ----- Seam: the styling target seated on the section's `a` rule -> the
+    // wear bar (wear-bar.js, its `target` the rule) and the Materials card
+    // (library.js, applyDoorway over the same target) -> ONE apply_variant at
+    // the RULE key -> the server's rule-wear lane
+    // (VariantStylesheet::ruleWearCss, the printer twin on the client) printing
+    // the variant inside the section's @scope, so every anchor computes it and
+    // no element carries a variant class. The landing pairing, the reference
+    // placement and the printed lane are Kernel-pinned; the gestures aimed at
+    // the target and the delivered wear on the canvas exist only here. The rule
+    // is re-seated as the write address through the facade, the road the
+    // switcher's pick took above (the link part stays the subject).
     $wear_bar = '#daedalus_stylish_inspector .daedalus-stylish-wear-bar';
     $wear_rows = "document.querySelectorAll('$wear_bar .daedalus-stylish-wear-bar__row')";
     $picker_labels_js = "Array.from(document.querySelectorAll('.daedalus-ui-popover .daedalus-stylish-variant-picker__option .daedalus-stylish-variant-picker__label')).map((label) => label.textContent.trim())";
@@ -3868,7 +3865,10 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     );
     $this->clickPanel("$wear_bar .daedalus-stylish-wear-bar__add");
     $this->assertJsCondition(
-      "(() => { const labels = $picker_labels_js; labels.sort(); return JSON.stringify(labels) === " . json_encode(json_encode(['Accent link', 'Quiet link'])) . '; })()',
+      "(() => { const labels = $picker_labels_js; labels.sort(); return JSON.stringify(labels) === " . json_encode(json_encode([
+        'Accent link',
+        'Quiet link',
+      ])) . '; })()',
       20000,
       'Rule wear: the picker offers exactly the two base:a variants (the rule\'s landing is the tag `a`; nothing element-scoped offers at it).',
     );
@@ -4507,6 +4507,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     \Drupal::service('daedalus_blueprint_library.manager')->adoptVariants($owner_section, ['owned_look']);
     $owned_look = \Drupal::entityTypeManager()->getStorage('daedalus_variant')->loadByProperties(['machine_name' => 'owned_look']);
     $owned_look = reset($owned_look);
+    assert($owned_look instanceof DaedalusStylishVariant);
     $this->assertSame(
       (int) $owner_section->id(),
       (int) $owned_look->get(BlueprintInterface::OWNER_FIELD)->target_id,
@@ -4584,7 +4585,7 @@ class BasicStylingBehaviorTest extends WebDriverTestBase {
     $this->assertSame(['Owned look'], $groups[0]['options'], 'Owner heading: the Owner section group holds exactly the one adopted look (ownershipOffers: the selection\'s provenance IS the owner).');
     $this->assertContains('Plain look', $groups[1]['options'], 'Owner heading: the Style group holds the unowned sibling (an unowned variant offers wherever its scope matches).');
     $this->assertNotContains('Owned look', $groups[1]['options'], 'Owner heading: the Style group never lists the owned look (one group per record: the owner heading is where it lives).');
-    $this->assertSame(1, count(array_filter($groups, static fn (array $group) => $group['label'] === 'Owner section')), 'Owner heading: one owner group (the group key is axis:owner, unique per owner).');
+    $this->assertCount(1, array_filter($groups, static fn (array $group) => $group['label'] === 'Owner section'), 'Owner heading: one owner group (the group key is axis:owner, unique per owner).');
     $this->pressKeyOnFocused('Escape');
     $this->assertJsCondition(
       "!document.querySelector('.daedalus-ui-popover .daedalus-stylish-variant-picker')",

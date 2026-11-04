@@ -73,20 +73,22 @@ export const mintedMaterial = (payload, kind, before) =>
 const submit = (source, operation, label) => {
   const before =
     operation.op === 'save_material' ? source.getMaterials() : null;
-  return source.commitBatch({ operations: [operation], label }).then((payload) => {
-    const record =
-      operation.op === 'save_material'
-        ? mintedMaterial(payload, operation.kind, before)
-        : respondedMaterial(payload, operation.kind, operation.id);
-    if (!record) {
-      // A settled write always answers its record: the change set is fed by
-      // the entity hooks every material save runs. Loud, like assertDelta.
-      throw new Error(
-        `${operation.op} (${operation.kind}) settled without its record in the materials delta.`,
-      );
-    }
-    return record;
-  });
+  return source
+    .commitBatch({ operations: [operation], label })
+    .then((payload) => {
+      const record =
+        operation.op === 'save_material'
+          ? mintedMaterial(payload, operation.kind, before)
+          : respondedMaterial(payload, operation.kind, operation.id);
+      if (!record) {
+        // A settled write always answers its record: the change set is fed by
+        // the entity hooks every material save runs. Loud, like assertDelta.
+        throw new Error(
+          `${operation.op} (${operation.kind}) settled without its record in the materials delta.`,
+        );
+      }
+      return record;
+    });
 };
 
 /**

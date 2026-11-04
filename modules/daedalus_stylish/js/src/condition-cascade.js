@@ -24,6 +24,14 @@ import { compoundParts } from '../../../daedalus_ui/js/edit_mode/materials/condi
  * 'default' applies everywhere; any other block applies when its parts
  * are a subset of the compound's ("narrow" applies at "narrow+dark").
  * At the default pose nothing but default applies.
+ *
+ * @param {string} condition
+ *   A condition block's key.
+ * @param {string} compound
+ *   The posed compound.
+ *
+ * @return {boolean}
+ *   Whether the block applies at the pose.
  */
 export const appliesWithin = (condition, compound) => {
   if (condition === 'default') {
@@ -42,6 +50,14 @@ export const appliesWithin = (condition, compound) => {
  * ("Narrow + Dark"). 'default' has no site label and reads as its key;
  * a view that wants "Base" for it says so itself (translation is the
  * view's business, not this vocabulary's).
+ *
+ * @param {string} condition
+ *   A condition key, simple or compound.
+ * @param {?Object} conditions
+ *   guide.conditions: name -> {label, wrapper, axis}.
+ *
+ * @return {string}
+ *   The label.
  */
 export const compoundLabel = (condition, conditions) =>
   compoundParts(condition)
@@ -147,10 +163,12 @@ const isBlock = (block) =>
  * @param {?object} entry
  *   A condition-keyed entry.
  * @param {string} property
+ *   The property.
  * @param {object} [conditions]
  *   The condition table (guide.conditions), for ordering.
  *
  * @return {Array<{condition: string, value: string}>}
+ *   The rows, Base first.
  */
 export const propertyValues = (entry, property, conditions = {}) => {
   const order = ['default', ...Object.keys(conditions ?? {})];
@@ -185,6 +203,7 @@ export const propertyValues = (entry, property, conditions = {}) => {
  * @param {?object} entry
  *   A condition-keyed entry.
  * @param {string} property
+ *   The property.
  * @param {string} compound
  *   The editing compound.
  * @param {object} [conditions]

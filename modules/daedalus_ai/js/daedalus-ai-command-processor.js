@@ -27,6 +27,27 @@
 (($, Drupal, once) => {
   const { log } = Drupal.Daedalus.logger('daedalus_ai');
 
+  /**
+   * Applies a turn's blueprint responses through the app, one after another.
+   *
+   * @param {function(object): Promise} applyResponse
+   *   The edit-mode app's applyResponse facade.
+   * @param {object[]} payloads
+   *   The mutation-response payloads, in the order the tools produced them.
+   *
+   * @return {Promise<void>}
+   *   Settled once every payload is applied; a failure is logged.
+   */
+  const applyPayloads = (applyResponse, payloads) =>
+    payloads
+      .reduce(
+        (chain, payload) => chain.then(() => applyResponse(payload)),
+        Promise.resolve(),
+      )
+      .catch((error) => {
+        log('commands', 'Applying a blueprint response failed', error);
+      });
+
   Drupal.Daedalus.AiCommands = {
     installed: false,
 
@@ -69,18 +90,7 @@
               log('commands', 'Applying blueprint_responses from response', {
                 count: payloads.length,
               });
-              payloads
-                .reduce(
-                  (chain, payload) => chain.then(() => applyResponse(payload)),
-                  Promise.resolve(),
-                )
-                .catch((error) => {
-                  log(
-                    'commands',
-                    'Applying a blueprint response failed',
-                    error,
-                  );
-                });
+              applyPayloads(applyResponse, payloads);
             }
           }
           const result = existingInterceptor(response);

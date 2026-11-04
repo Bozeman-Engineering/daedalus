@@ -45,6 +45,7 @@ export const { log } = logger;
  * every mutation of every editing session.
  *
  * @return {boolean}
+ *   Whether the logger is enabled.
  */
 export const logEnabled = () => logger.enabled;
 
@@ -59,6 +60,14 @@ const refId = (ref) => `${ref.variant}#${ref.fragment}`;
  * Everything in an entry except the `variants` list is a condition-keyed
  * block of overrides, so the names ARE the condition axis,
  * exactly what a reader wants to see changed.
+ *
+ * @param {*} before
+ *   The entry before the mutation (a non-object reads as empty).
+ * @param {*} after
+ *   The entry after it.
+ *
+ * @return {string[]}
+ *   The condition names whose blocks differ.
  */
 const changedConditions = (before, after) => {
   const previous = isEntryObject(before) ? before : {};
@@ -132,6 +141,11 @@ export const styleMapDelta = (previous, next) => {
  * carriers are the honest picture of its reach on this page: the root
  * wearer (fragment '') plus each dressed descendant.
  *
+ * @param {*} map
+ *   The style map (a non-object reads as empty).
+ * @param {string} variant
+ *   The variant id whose carriers are read.
+ *
  * @return {Object<string, string[]>}
  *   Selectable key → the fragments it holds of that variant.
  */
@@ -155,7 +169,14 @@ export const variantCarriers = (map, variant) => {
  * distribution), which lost them (a root detach's group gesture over the
  * current subtree), and how many carry it now.
  *
+ * @param {Object<string, string[]>} before
+ *   The carriers before the gesture (variantCarriers' shape).
+ * @param {Object<string, string[]>} after
+ *   The carriers after it.
+ *
  * @return {{gained: object, lost: object, carriers: number}}
+ *   The keys gained, the keys lost (each with their fragments), and the
+ *   carrier count now.
  */
 export const carrierDelta = (before, after) => {
   const gained = {};

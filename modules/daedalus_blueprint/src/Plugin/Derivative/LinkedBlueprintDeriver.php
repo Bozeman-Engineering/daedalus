@@ -6,6 +6,7 @@ namespace Drupal\daedalus_blueprint\Plugin\Derivative;
 
 use Drupal\Component\Plugin\Derivative\DeriverBase;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Plugin\Discovery\ContainerDeriverInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\daedalus_blueprint\Host\BlueprintHost;
@@ -55,6 +56,7 @@ final class LinkedBlueprintDeriver extends DeriverBase implements ContainerDeriv
       BlueprintHost::SCOPE_FIELD => MaterialRecord::SCOPE_BLOCK,
     ]);
     foreach ($blueprints as $blueprint) {
+      assert($blueprint instanceof FieldableEntityInterface);
       $machine_name = (string) $blueprint->get('machine_name')->value;
       if ($machine_name === '') {
         continue;

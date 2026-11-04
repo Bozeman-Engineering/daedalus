@@ -6,6 +6,7 @@ namespace Drupal\daedalus_ai;
 
 use Drupal\ai\AiProviderPluginManager;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Config\Entity\ConfigEntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\daedalus_ui\EditorSettings;
@@ -111,6 +112,7 @@ final class ModelChoice {
     $assistant = is_string($assistant_id) && $assistant_id !== ''
       ? $this->entityTypeManager->getStorage('ai_assistant')->load($assistant_id)
       : NULL;
+    assert($assistant === NULL || $assistant instanceof ConfigEntityInterface);
     $provider = $assistant?->get('llm_provider');
     if (is_string($provider) && $provider !== '' && $provider !== self::DEFAULT_PROVIDER) {
       return $provider;

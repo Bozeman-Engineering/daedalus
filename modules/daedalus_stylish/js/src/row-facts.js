@@ -54,6 +54,14 @@ export const VARIANTS_PROVIDER_ID = 'daedalus_stylish.variants';
 /**
  * A variant's label from the roster, its record id when the roster does
  * not carry it (a stale wearing still reads as something).
+ *
+ * @param {Array<object>} variants
+ *   The variant records.
+ * @param {string} reference
+ *   The variant's record id.
+ *
+ * @return {string}
+ *   The label.
  */
 const labelOf = (variants, reference) =>
   findVariant(variants, reference)?.label ?? reference;
@@ -68,6 +76,7 @@ const labelOf = (variants, reference) =>
  *   The variant's record id.
  *
  * @return {boolean}
+ *   Whether the reference is outlined.
  */
 export const outlinedIn = (paint, reference) =>
   (paint?.layers ?? []).some(
@@ -87,6 +96,7 @@ export const outlinedIn = (paint, reference) =>
  *   The variant records (the materials roster's variants).
  *
  * @return {Array<{mark: string, hue: string, title: string}>}
+ *   The facts, in wearing order, the element's own dot last.
  */
 export const variantFacts = (map, address, variants) => {
   const { count, worn } = foldSummary(map, address);
@@ -130,6 +140,7 @@ export const variantFacts = (map, address, variants) => {
  *   - showCode: function(key), the element's own styles in code mode.
  *
  * @return {Array<object>}
+ *   The menu items.
  */
 export const variantDoorways = (map, address, variants, doors) => {
   const { count, worn } = foldSummary(map, address);
@@ -162,7 +173,7 @@ export const variantDoorways = (map, address, variants, doors) => {
     items.push({
       label: Drupal.t('Show its own styles in code'),
       title: Drupal.t(
-        "Select this element and open the styling panel in code mode, where its own declarations print as editable CSS.",
+        'Select this element and open the styling panel in code mode, where its own declarations print as editable CSS.',
       ),
       run: () => doors.showCode(address),
     });
@@ -183,17 +194,28 @@ export const variantDoorways = (map, address, variants, doors) => {
  * so it needs no route: in-page it also opens the panel.
  *
  * @param {object} deps
- *   - source: the leader source (select, getPlace, setPlace).
- *   - popout: the pop-out leader (isPoppedOut, openDoor), or null when
- *     this route has no pop-out.
- *   - mode: the UI mode store (ui-mode.js uiMode).
- *   - openPanel: function(): Promise<boolean>, opens the inspector's
- *     sidebar panel and resolves whether it is open (false when the slot's
- *     current panel refused to close).
+ *   The hosts' seams.
+ * @param {object} deps.source
+ *   The leader source (select, getPlace, setPlace).
+ * @param {?object} [deps.popout]
+ *   The pop-out leader (isPoppedOut, openDoor), or null when this route
+ *   has no pop-out.
+ * @param {object} deps.mode
+ *   The UI mode store (ui-mode.js uiMode).
+ * @param {Function} deps.openPanel
+ *   function(): Promise<boolean>, opens the inspector's sidebar panel and
+ *   resolves whether it is open (false when the slot's current panel
+ *   refused to close).
  *
  * @return {{edit: Function, outline: Function, showCode: Function}}
+ *   The doors.
  */
-export const createVariantDoors = ({ source, popout = null, mode, openPanel }) => ({
+export const createVariantDoors = ({
+  source,
+  popout = null,
+  mode,
+  openPanel,
+}) => ({
   edit: (reference, key) => {
     if (popout?.isPoppedOut()) {
       popout.openDoor({ door: DOOR_EDIT, reference, key });
@@ -230,11 +252,15 @@ export const createVariantDoors = ({ source, popout = null, mode, openPanel }) =
  * shape.
  *
  * @param {object} deps
- *   - source: the leader source (getStyleMap, getMaterials, getCanvasPaint,
- *     onStyleMapChange, onMaterialsChange).
- *   - doors: createVariantDoors()' doors.
+ *   The provider's dependencies.
+ * @param {object} deps.source
+ *   The leader source (getStyleMap, getMaterials, getCanvasPaint,
+ *   onStyleMapChange, onMaterialsChange).
+ * @param {object} deps.doors
+ *   createVariantDoors()' doors.
  *
  * @return {{id: string, facts: Function, doorways: Function, subscribe: Function}}
+ *   The provider.
  */
 export const createVariantRowFacts = ({ source, doors }) => {
   const variants = () => source.getMaterials().ofKind('variant');

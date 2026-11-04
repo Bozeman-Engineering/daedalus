@@ -11,42 +11,41 @@ use Drupal\daedalus_blueprint\DesignSystem\ShipReport;
 use Drupal\daedalus_stylish\Exception\VariantValidationException;
 
 /**
- * The materials lane of a package ship: the site OUT to a module's per-id files.
+ * The materials lane of a package ship: site OUT to a module's per-id files.
  *
- * ShippedSync brings a module's MODULE.daedalus_stylish.<kind>*.yml INTO the site;
- * this orchestrator runs the kind shippers (ShippedDefinitionsShipper's
- * subclasses, one per kind: skins and
- * variants) over ONE module and answers with a ShipReport. It is the lane
- * the package author uses from a development site: change a shipped
- * material on the site (the distro lock lifted by the daedalus_blueprint
- * developer gate), then ship the design system
- * (`drush daedalus-blueprint:design-system:ship`), and disk follows the
- * site. That command runs this lane as a tagged package shipper
- * (PackageShipperInterface): shipPackage() rebuilds every per-id file of
- * the module AND adopts every member of the system nothing ships yet
- * (each kind's unshippedMembers()), so one gesture carries the whole
- * system; the two module-scoped gestures below are what it composes.
+ * ShippedSync brings a module's MODULE.daedalus_stylish.<kind>*.yml INTO the
+ * site; this orchestrator runs the kind shippers (ShippedDefinitionsShipper's
+ * subclasses, one per kind: skins and variants) over ONE module and answers
+ * with a ShipReport. It is the lane the package author uses from a development
+ * site: change a shipped material on the site (the distro lock lifted by the
+ * daedalus_blueprint developer gate), then ship the design system (`drush
+ * daedalus-blueprint:design-system:ship`), and disk follows the site. That
+ * command runs this lane as a tagged package shipper (PackageShipperInterface):
+ * shipPackage() rebuilds every per-id file of the module AND adopts every
+ * member of the system nothing ships yet (each kind's unshippedMembers()), so
+ * one gesture carries the whole system; the two module-scoped gestures below
+ * are what it composes.
  *
- * With no names, every per-id file of the module is rebuilt whole from
- * the current entities: each entry's definition comes from the entity
- * (the shipper's definition()), keys the shipper does not emit are carried
- * from the existing entry (the variants file's `blueprint:` key belongs to
- * whoever owns blueprints; this module never learns what it means), and an
- * entry whose entity no longer exists is dropped from the file. Entries
- * of the hand-authored single file (MODULE.daedalus_stylish.<kind>.yml) are read,
- * never written: one the site edited is reported MODIFIED so the author
- * edits the file by hand; a machine never touches a human's file.
+ * With no names, every per-id file of the module is rebuilt whole from the
+ * current entities: each entry's definition comes from the entity (the
+ * shipper's definition()), keys the shipper does not emit are carried from the
+ * existing entry (the variants file's `blueprint:` key belongs to whoever owns
+ * blueprints; this module never learns what it means), and an entry whose
+ * entity no longer exists is dropped from the file. Entries of the
+ * hand-authored single file (MODULE.daedalus_stylish.<kind>.yml) are read,
+ * never written: one the site edited is reported MODIFIED so the author edits
+ * the file by hand; a machine never touches a human's file.
  *
- * With names (per kind), the named site materials are adopted into the
- * module: a name already in one of the module's per-id files rebuilds that
- * file (a per-id file is always written whole, so the rule is one rule);
- * a new name lands in MODULE.daedalus_stylish.<kind>.NAME.yml, joining that file's
- * entries if it exists. A name with no entity, shipped by another module,
- * or living in the module's single file is refused with the shipper's
- * own error (SHIPPED_<KIND>_ABSENT, SHIPPED_<KIND>_CONFLICT), and the
- * refusal fails the file it would have written while the rest of the run
- * proceeds. Nothing the lane can refuse throws out of here; the command
- * prints the report and exits non-zero on failures.
+ * With names (per kind), the named site materials are adopted into the module:
+ * a name already in one of the module's per-id files rebuilds that file (a
+ * per-id file is always written whole, so the rule is one rule); a new name
+ * lands in MODULE.daedalus_stylish.<kind>.NAME.yml, joining that file's entries
+ * if it exists. A name with no entity, shipped by another module, or living in
+ * the module's single file is refused with the shipper's own error
+ * (SHIPPED_<KIND>_ABSENT, SHIPPED_<KIND>_CONFLICT), and the refusal fails the
+ * file it would have written while the rest of the run proceeds. Nothing the
+ * lane can refuse throws out of here; the command prints the report and exits
+ * non-zero on failures.
  *
  * After a ship the site is consistent with disk: every shipped entity is
  * re-stamped with the module as provider and the written payload as its
@@ -147,7 +146,7 @@ final class Ship implements PackageShipperInterface {
   }
 
   /**
-   * The system's members nothing ships yet, keyed by kind: the package's adoption set.
+   * The system's unshipped members by kind: the package's adoption set.
    *
    * @return array<string, string[]>
    *   Machine names keyed by kind, in the shippers' order.

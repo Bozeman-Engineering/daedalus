@@ -60,6 +60,35 @@ import { layoutOf } from '../../../daedalus_ui/js/edit_mode/blueprint/document-t
  */
 
 /**
+ * Whether a stack read's winner is a MAP layer: the element's own entry
+ * or a worn variant, the layers an author put there. A skin or declared
+ * winner is a default beneath the map.
+ *
+ * @param {?{winner: ?{tier: string}}} read
+ *   A stack read (stackAt).
+ *
+ * @return {boolean}
+ *   Whether the winner is a map layer.
+ */
+const mapWinner = (read) =>
+  read?.winner != null &&
+  (read.winner.tier === TIER_ELEMENT || read.winner.tier === TIER_VARIANT);
+
+/**
+ * Whether any of a model's reads has a map-layer winner at the pose: the
+ * registry's value-set test (offered), and any widget's "is anything of
+ * mine set" question.
+ *
+ * @param {Object<string, {winner: ?object}>} reads
+ *   A control model's `reads`.
+ *
+ * @return {boolean}
+ *   Whether a map layer delivers any of the reads.
+ */
+export const styledAt = (reads) =>
+  Object.values(reads ?? {}).some((read) => mapWinner(read));
+
+/**
  * Builds a control-widget component registry.
  *
  * The registry maps ControlWidget plugin ids ('position') to the
@@ -83,6 +112,15 @@ export const createControlWidgetRegistry = () => {
      * child count off self.partChildCount, the selection's own off
      * self.childCount when root-bound). Consulted only when the control
      * has nothing set (see offered()); omitted means always applicable.
+     *
+     * @param {string} id
+     *   The ControlWidget plugin id.
+     * @param {Function} component
+     *   The preact component that renders the widget.
+     * @param {object} [options]
+     *   The registration's options.
+     * @param {?Function} [options.applicable]
+     *   The dynamic gate (above), or null for always applicable.
      */
     register: (id, component, { applicable = null } = {}) => {
       entries.set(id, { component, applicable });
@@ -92,6 +130,12 @@ export const createControlWidgetRegistry = () => {
      * The registered component, or null — a declared binding whose widget
      * has no JS component cannot render (it does NOT fall back to raw
      * rows; the curated-surface promise).
+     *
+     * @param {string} id
+     *   The ControlWidget plugin id.
+     *
+     * @return {?Function}
+     *   The component, or null.
      */
     get: (id) => entries.get(id)?.component ?? null,
 
@@ -127,6 +171,16 @@ export const createControlWidgetRegistry = () => {
      * fact for the selector — a satellite pre-broadcast) degrades to
      * offering, matching the gates' own unknown-context posture; only a
      * positive absence fact on every candidate hides.
+     *
+     * @param {string} id
+     *   The ControlWidget plugin id.
+     * @param {object} model
+     *   The control model being offered (controlModels).
+     * @param {?object} layout
+     *   The selection's layout context, or null when unknown.
+     *
+     * @return {boolean}
+     *   Whether the control renders.
      */
     offered: (id, model, layout) => {
       if (
@@ -163,6 +217,7 @@ const isPlainObject = (value) =>
  * fact is unknown (null), and the root is always on the page.
  *
  * @param {?{self: ?{parts: Object<string, boolean>}}} context
+ *   The selection's layout context (source.getLayoutContext()), or null.
  *
  * @return {Function}
  *   (element) → true | false | null.
@@ -222,28 +277,6 @@ const rulePresence = (document, key, selector) => {
 };
 
 /**
- * Whether a stack read's winner is a MAP layer: the element's own entry
- * or a worn variant, the layers an author put there. A skin or declared
- * winner is a default beneath the map.
- */
-const mapWinner = (read) =>
-  read?.winner != null &&
-  (read.winner.tier === TIER_ELEMENT || read.winner.tier === TIER_VARIANT);
-
-/**
- * Whether any of a model's reads has a map-layer winner at the pose: the
- * registry's value-set test (offered), and any widget's "is anything of
- * mine set" question.
- *
- * @param {Object<string, {winner: ?object}>} reads
- *   A control model's `reads`.
- *
- * @return {boolean}
- */
-export const styledAt = (reads) =>
-  Object.values(reads ?? {}).some((read) => mapWinner(read));
-
-/**
  * The values a widget shows: each owned property's WINNER at the pose,
  * whichever layer delivers it (the display rule: the shown value is
  * always the winner's, lit), keyed by property; a property no layer
@@ -254,6 +287,7 @@ export const styledAt = (reads) =>
  *   A control model's `reads`.
  *
  * @return {Object<string, string>}
+ *   The winner's value per delivered property.
  */
 export const litValues = (reads) =>
   Object.fromEntries(
@@ -274,6 +308,7 @@ export const litValues = (reads) =>
  *   The editing compound (the pose).
  *
  * @return {boolean}
+ *   Whether the own entry delivers at the pose.
  */
 export const ownAtPose = (read, condition) =>
   read?.own != null && read.own.condition === condition;
@@ -297,6 +332,18 @@ export const ownAtPose = (read, condition) =>
  * on a linked block is a pill unless the root's background was authored).
  * resolveCandidates asks per property (a set of one: the row's read),
  * resolveGroup for a gesture's whole set (the write).
+ *
+ * @param {Array<{stack: object}>} present
+ *   The binding's present candidates.
+ * @param {string[]} properties
+ *   The property set.
+ * @param {string} condition
+ *   The editing compound (the pose).
+ * @param {Object} conditions
+ *   guide.conditions.
+ *
+ * @return {Array<{candidate: object, reads: Array<object>}>}
+ *   Each candidate with its posed reads of the set, in list order.
  */
 const addressReadings = (present, properties, condition, conditions) =>
   present.map((candidate) => ({
@@ -377,9 +424,7 @@ export const resolveCandidates = (
   condition,
   conditions = {},
 ) => {
-  const present = candidates.filter(
-    (candidate) => candidate.present !== false,
-  );
+  const present = candidates.filter((candidate) => candidate.present !== false);
   const keys = {};
   const stacks = {};
   const reads = {};
@@ -408,7 +453,10 @@ export const resolveCandidates = (
       alsoOn:
         other === null
           ? null
-          : { label: other.candidate.label, value: other.reads[0].winner.value },
+          : {
+              label: other.candidate.label,
+              value: other.reads[0].winner.value,
+            },
     };
   });
   return { keys, stacks, reads };
@@ -467,8 +515,9 @@ export const resolveGroup = (
   if (writable.length === 0 || properties.length === 0) {
     return null;
   }
-  return pickAddress(addressReadings(writable, properties, condition, conditions))
-    .candidate.write;
+  return pickAddress(
+    addressReadings(writable, properties, condition, conditions),
+  ).candidate.write;
 };
 
 /**
@@ -762,6 +811,7 @@ export const compoundOperations = (changes) =>
  *   propertyDefinitions: Object<string, object>, granted: string[],
  *   withheld: Object<string, string>, styledElsewhere: boolean,
  *   section: ?string}>}
+ *   The control models, in declaration order.
  */
 export const controlModels = (
   guide,
@@ -858,7 +908,9 @@ export const controlModels = (
       : null;
   const rootKey = splitKey(key)?.root ?? key;
   const matcher =
-    address !== null && Array.isArray(document) ? createMatcher(document) : null;
+    address !== null && Array.isArray(document)
+      ? createMatcher(document)
+      : null;
   // A candidate's REBASED key under the address: the address itself for
   // the facet's own box, the address continued by descent for another
   // part when the grammar admits it and the rebased rule reaches that
@@ -986,8 +1038,9 @@ export const controlModels = (
       );
       const { stacks, reads } = resolved;
       const candidateFor = (property) =>
-        candidates.find((candidate) => candidate.key === resolved.keys[property]) ??
-        candidates[0];
+        candidates.find(
+          (candidate) => candidate.key === resolved.keys[property],
+        ) ?? candidates[0];
       // Write where you read: the resolved candidate's key, rebased to the
       // address when one is set.
       const keys = Object.fromEntries(
@@ -1134,6 +1187,7 @@ export const controlModels = (
  *   The properties the row writes.
  *
  * @return {?string}
+ *   The first withheld property's reason, or null.
  */
 export const withheldReasonFor = (model, properties) => {
   const withheld = isPlainObject(model?.withheld) ? model.withheld : {};
@@ -1152,7 +1206,11 @@ export const withheldReasonFor = (model, properties) => {
  * malformed roster is an empty list: nothing to file under, so every
  * control trails unheaded (groupControls).
  *
+ * @param {?object} guide
+ *   The style guide payload.
+ *
  * @return {Array<{id: string, label: string, weight: number}>}
+ *   The sections, lightest first.
  */
 export const controlSections = (guide) => {
   const roster = guide?.controlSections;
@@ -1197,6 +1255,8 @@ export const controlSections = (guide) => {
  *   Roster section ids a host supplies: they survive empty and lead.
  *
  * @return {Array<{id: string, label: ?string, models: Array<object>}>}
+ *   The groups: hosted first, then the roster's, the unheaded trailer
+ *   last.
  */
 export const groupControls = (models, sections, keep = []) => {
   const groups = sections.map((section) => ({

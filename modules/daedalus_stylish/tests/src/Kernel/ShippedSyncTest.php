@@ -31,40 +31,38 @@ use Symfony\Component\Console\Tester\CommandTester;
 /**
  * Tests the orchestrated sync of shipped definitions and its entries.
  *
- * The daedalus_stylish_shipped_sync_test module ships one self-referencing package: a
- * font, a skin (a token the variant wears, a color token it wears too, a
- * font token naming the font's family, and the animation the variant
- * wears), and a variant wearing the other two. On a strict
- * site the variant lands only after the materials it names are published,
- * so the package proves the orchestrator's order (fonts, skins,
- * variants) the way the old per-kind order failed. The
- * daedalus_stylish_design_system_test module packages the aurora design system (the same
- * kinds as members, plus a variant on an axis only aurora's own law
- * declares) and proves the package rule: the package is deferred whole while
- * aurora is not the active system (install, the system's config landing, a
- * rebuild in between), and its activation lands it under its own law; when
- * the pointer named aurora before its config landed (config import's
- * order), the landing itself is the activation and lands it. The
+ * The daedalus_stylish_shipped_sync_test module ships one self-referencing
+ * package: a font, a skin (a token the variant wears, a color token it wears
+ * too, a font token naming the font's family, and the animation the variant
+ * wears), and a variant wearing the other two. On a strict site the variant
+ * lands only after the materials it names are published, so the package proves
+ * the orchestrator's order (fonts, skins, variants) the way the old per-kind
+ * order failed. The daedalus_stylish_design_system_test module packages the
+ * aurora design system (the same kinds as members, plus a variant on an axis
+ * only aurora's own law declares) and proves the package rule: the package is
+ * deferred whole while aurora is not the active system (install, the system's
+ * config landing, a rebuild in between), and its activation lands it under its
+ * own law; when the pointer named aurora before its config landed (config
+ * import's order), the landing itself is the activation and lands it. The
  * rebuild entry is proven the way it failed on a pulled site: a per-id variants
  * file dropped beside an already installed module goes live on a cache rebuild
  * alone. That module is created under the test's own real site directory
  * (sites/simpletest/ID), never a real module directory, and removed on teardown
  * (the VariantShipperTest pattern). The install and activation entries are
  * proven on the recipe's own shape with the real modules, twice: a site
- * install, where the batch syncs inside the installer on a site with no
- * system and no skin (daedalus_stylish_layouts' gutter globals land withheld,
- * the olivero package deferred); and a recipe applied to an existing site,
- * where the same skinless batch lands the Columns variant withheld under
- * the suite's gap binding and the activation of the olivero package mints
- * the gutter, so the roster's verdict offers it with no re-sync and no
- * rebuild. A sync never fails a definition for law: structure alone is
- * the sync's refusal, and the verdict (VariantConformance) withholds what
- * the law of the day refuses. Skins wait for one more thing than
- * variants: the default theme, whose chain is the guide their defaults
- * validate against, so while system.theme names a theme that is not
- * installed (the installer's window) the skins kind defers every shipping
- * module and the theme landing (its install, or the default's save) syncs
- * it.
+ * install, where the batch syncs inside the installer on a site with no system
+ * and no skin (daedalus_stylish_layouts' gutter globals land withheld, the
+ * olivero package deferred); and a recipe applied to an existing site, where
+ * the same skinless batch lands the Columns variant withheld under the suite's
+ * gap binding and the activation of the olivero package mints the gutter, so
+ * the roster's verdict offers it with no re-sync and no rebuild. A sync never
+ * fails a definition for law: structure alone is the sync's refusal, and the
+ * verdict (VariantConformance) withholds what the law of the day refuses. Skins
+ * wait for one more thing than variants: the default theme, whose chain is the
+ * guide their defaults validate against, so while system.theme names a theme
+ * that is not installed (the installer's window) the skins kind defers every
+ * shipping module and the theme landing (its install, or the default's save)
+ * syncs it.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -136,7 +134,7 @@ class ShippedSyncTest extends KernelTestBase {
   protected string $targetPath;
 
   /**
-   * What the daedalus_stylish channel logged: [RfcLogLevel, rendered message] pairs.
+   * The daedalus_stylish channel's log: [RfcLogLevel, rendered message] pairs.
    */
   protected array $log = [];
 
@@ -342,7 +340,7 @@ class ShippedSyncTest extends KernelTestBase {
   }
 
   /**
-   * One kind alone lands the variant withheld; the orchestrator's order offers it.
+   * One kind alone lands the variant withheld; the orchestrator offers it.
    *
    * The site is strict, so every reference must name a published material
    * for the roster to offer the variant: the variant importer on its own
@@ -838,7 +836,8 @@ class ShippedSyncTest extends KernelTestBase {
     $this->log = [];
     $this->config(ActiveDesignSystem::CONFIG_NAME)->set(ActiveDesignSystem::KEY, 'aurora')->save();
     $this->assertSame('aurora', $active->activeId());
-    $this->assertNull($active->load(), 'A pointer at an unlanded system is no active system.');
+    $unlanded = $active->load();
+    $this->assertNull($unlanded, 'A pointer at an unlanded system is no active system.');
     $this->assertSame([], $this->logged(RfcLogLevel::ERROR));
 
     // The module's install batch: the package waits for its system.
@@ -1123,21 +1122,20 @@ class ShippedSyncTest extends KernelTestBase {
   /**
    * An install batch syncs inside the installer with no system active.
    *
-   * `drush si recipes/daedalus_recipe` installs daedalus_stylish, daedalus_stylish_layouts and
-   * the olivero package in one batch (hook_modules_installed() with
-   * daedalus_stylish in it sweeps every enabled module) on a site that has
-   * no design system and no skin yet; the recipe's activation action
-   * gives it olivero afterwards, and the installer ends with no cache
-   * rebuild. The batch used to wait for the installer, because the
-   * suite's gap binding refused the Columns variant (gap
-   * var(--space-gutter)) with nothing minted and a refusal the same
-   * install resolves was not a failure `drush si` should report. Law is
-   * the verdict's now, so the batch syncs inside the installer
-   * (install_state set) like any other: the layouts' globals land with
-   * nothing failed and no error line, the two carrying the gutter gap
-   * withheld (STYLE_VALUE_NOT_ON_SCALE on gap, nothing minted) and the
-   * width family offered, the olivero package is deferred whole (its
-   * system is not active), and the batch logs its info lines.
+   * `drush si recipes/daedalus_recipe` installs daedalus_stylish,
+   * daedalus_stylish_layouts and the olivero package in one batch
+   * (hook_modules_installed() with daedalus_stylish in it sweeps every enabled
+   * module) on a site that has no design system and no skin yet; the recipe's
+   * activation action gives it olivero afterwards, and the installer ends with
+   * no cache rebuild. The batch used to wait for the installer, because the
+   * suite's gap binding refused the Columns variant (gap var(--space-gutter))
+   * with nothing minted and a refusal the same install resolves was not a
+   * failure `drush si` should report. Law is the verdict's now, so the batch
+   * syncs inside the installer (install_state set) like any other: the layouts'
+   * globals land with nothing failed and no error line, the two carrying the
+   * gutter gap withheld (STYLE_VALUE_NOT_ON_SCALE on gap, nothing minted) and
+   * the width family offered, the olivero package is deferred whole (its system
+   * is not active), and the batch logs its info lines.
    */
   public function testInstallBatchSyncsInsideTheInstaller(): void {
     $this->enableModules(['daedalus_stylish_layouts', 'daedalus_stylish_olivero_skin']);
@@ -1271,7 +1269,7 @@ class ShippedSyncTest extends KernelTestBase {
   }
 
   /**
-   * Install syncs the batch; daedalus_stylish in the batch sweeps every provider.
+   * Install syncs the batch; the module in the batch sweeps every provider.
    *
    * The batch entry syncs only the installed modules (the target's dropped
    * variants file stays absent), and daedalus_stylish's own install syncs

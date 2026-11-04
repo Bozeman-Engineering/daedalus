@@ -160,8 +160,8 @@ class ChatSidebarTest extends KernelTestBase {
     $this->installEntitySchema('ai_usage');
     $this->installConfig(['daedalus_ai_ledger']);
 
-    // A real assistant the sidebar loads by id (matches daedalus_ai.settings). Any
-    // non-'none' allow_history keeps the history path active. AiAssistant
+    // A real assistant the sidebar loads by id (matches daedalus_ai.settings).
+    // Any non-'none' allow_history keeps the history path active. AiAssistant
     // declares several typed non-nullable properties with no default, so they
     // must be seeded or the config save fails on a null assignment.
     $this->assistant = AiAssistant::create([
@@ -179,8 +179,9 @@ class ChatSidebarTest extends KernelTestBase {
     ]);
     $this->assistant->save();
 
-    // The sidebar reads its assistant id from config; daedalus_ai is not enabled so
-    // its default config is seeded directly (as the gate/handler tests do).
+    // The sidebar reads its assistant id from config; daedalus_ai is not
+    // enabled so its default config is seeded directly (as the gate/handler
+    // tests do).
     $this->config('daedalus_ai.settings')
       ->set('assistant_id', 'chatbot')
       ->save();
@@ -345,7 +346,10 @@ class ChatSidebarTest extends KernelTestBase {
     // installed) and the client reads the same formats and the lane's size
     // ceiling from drupalSettings for its pre-upload refusal.
     $attributes = $build['chat']['deep_chat']['#attributes'];
-    $expected_formats = implode(',', array_map(static fn (string $extension): string => ".$extension", [...FileLane::TEXTUAL_EXTENSIONS, ...FileLane::FONT_EXTENSIONS]));
+    $expected_formats = implode(',', array_map(static fn (string $extension): string => ".$extension", [
+      ...FileLane::TEXTUAL_EXTENSIONS,
+      ...FileLane::FONT_EXTENSIONS,
+    ]));
     $mixed_files = Json::decode($attributes['mixedfiles']);
     $this->assertSame($expected_formats, $mixed_files['files']['acceptedFormats'], 'The attach button accepts exactly what the lane accepts.');
     $this->assertSame('inside-left', $mixed_files['button']['position']);

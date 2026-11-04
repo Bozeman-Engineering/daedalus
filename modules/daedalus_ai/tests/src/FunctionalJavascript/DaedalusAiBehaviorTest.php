@@ -8,7 +8,9 @@ use Drupal\block_content\Entity\BlockContentType;
 use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\file\FileInterface;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
+use Drupal\media\MediaInterface;
 use Drupal\Tests\daedalus_layout\Traits\PlaceBlockTrait;
 use Drupal\Tests\daedalus\Traits\EditModeTrait;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
@@ -39,8 +41,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * and costly. What it proves is everything up to the network boundary: the page
  * builder builds a page, daedalus_ai's tool joins Edit Mode, and selecting an
  * element produces the visual feedback AND the request context that a real chat
- * turn would carry. Asserting Drupal.Daedalus.AiContext.collect() is the closest we
- * can get to "what we would send" without sending it.
+ * turn would carry. Asserting Drupal.Daedalus.AiContext.collect() is the
+ * closest we can get to "what we would send" without sending it.
  *
  * One fixture, one scenario. A full site install from the umbrella is by far
  * the most expensive part of a run (the framework installs and tears down
@@ -182,8 +184,8 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
   /**
    * Selecting a placed block feeds it into the AI request context.
    *
-   * One fixture (the applied umbrella) drives the full chain daedalus_ai depends
-   * on:
+   * One fixture (the applied umbrella) drives the full chain daedalus_ai
+   * depends on:
    * - Composition: the umbrella applied in setUp() without error, so the page
    *   builder and the AI layer are both installed and wired.
    * - Page builder: a page enters Edit Mode and daedalus_layout places a block
@@ -192,18 +194,17 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
    *   the same path daedalus_layout's and daedalus_ui's own tests prove on this
    *   fixture.
    * - daedalus_ai chat sidebar: the always-on chat panel opens through
-   *   daedalus_ui's SidebarManager (the deterministic equivalent of its
-   *   toggle button; there is no DaedalusAi TOOL, no tool opens the chat).
-   *   The #daedalus_ai panel renders a single long-lived <deep-chat> element plus
+   *   daedalus_ui's SidebarManager (the deterministic equivalent of its toggle
+   *   button; there is no DaedalusAi TOOL, no tool opens the chat). The
+   *   #daedalus_ai panel renders a single long-lived <deep-chat> element plus
    *   the header chrome (title, options menu button with its Clear History
-   *   item, close).
-   *   This is real cross-module DOM wiring (daedalus_ui Sidebar plugin +
-   *   ai_chatbot deep-chat element) reachable only in a browser. It
-   *   deliberately stops at the DOM: it does not type a message, assert
-   *   any AI response or restored history content, or exercise the Clear
-   *   History action, because the stub provider returns a tool-free response
-   *   in-process and
-   *   cannot drive the drupal_commands pipeline across the WebDriver boundary.
+   *   item, close). This is real cross-module DOM wiring (daedalus_ui Sidebar
+   *   plugin + ai_chatbot deep-chat element) reachable only in a browser. It
+   *   deliberately stops at the DOM: it does not type a message, assert any AI
+   *   response or restored history content, or exercise the Clear History
+   *   action, because the stub provider returns a tool-free response in-process
+   *   and cannot drive the drupal_commands pipeline across the WebDriver
+   *   boundary.
    * - the kebab's "Design system size" row (seam: daedalus_blueprint's
    *   materials budget reached through the chat): the sidebar hands the
    *   kebab the spine's dialog route for a user holding "view ai context
@@ -221,11 +222,12 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
    *   marks it data-address-key/-selector, and rides the context as
    *   `address` {key, selector} with `key` still the element; a bare
    *   select drops both and restores the bare chip and key.
-   * - daedalus_ai context: the selection is exposed through Drupal.Daedalus.AiContext as
-   *   a 'selected_elements' provider emitting SPINE KEYS (+ labels projected
-   *   from the blueprint mirror), which is what the context manager injects
-   *   into every DeepChat request body. This is the headline: the selection
-   *   does not just decorate the page, it becomes scope the AI would receive.
+   * - daedalus_ai context: the selection is exposed through
+   *   Drupal.Daedalus.AiContext as a 'selected_elements' provider emitting
+   *   SPINE KEYS (+ labels projected from the blueprint mirror), which is what
+   *   the context manager injects into every DeepChat request body. This is the
+   *   headline: the selection does not just decorate the page, it becomes scope
+   *   the AI would receive.
    */
   public function testAiSelectionFeedsContext(): void {
     $this->loginAsEditor();
@@ -243,9 +245,10 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
     $this->drupalGet($node->toUrl());
     $this->enterEditMode();
 
-    // daedalus_layout: place a block. daedalus_ui attributes the rendered component
-    // with data-layout-builder-block-uuid (LayoutBuilderBlockAttributes), which
-    // is exactly the hook daedalus_ai's selection manager keys off.
+    // daedalus_layout: place a block. daedalus_ui attributes the rendered
+    // component with data-layout-builder-block-uuid
+    // (LayoutBuilderBlockAttributes), which is exactly the hook daedalus_ai's
+    // selection manager keys off.
     $this->placeBlockViaTool('inline_block:basic');
     $block = $assert_session->waitForElement('css', '#layout-builder [data-layout-builder-block-uuid]');
     $this->assertNotNull($block, 'daedalus_layout rendered the placed block in the layout.');
@@ -1149,8 +1152,10 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
     $minted = $media_storage->loadByProperties(['name' => 'Dark forest']);
     $this->assertCount(1, $minted, 'The _generate value minted exactly one media entity.');
     $minted = reset($minted);
+    assert($minted instanceof MediaInterface);
     $media_uuid = $minted->uuid();
     $placeholder = $minted->get('field_media_image')->entity;
+    assert($placeholder instanceof FileInterface);
     $this->assertStringContainsString('image-placeholder', (string) $placeholder->getFileUri(), 'The minted media carries the placeholder file while pixels are pending.');
 
     // The placeholder PAINTS: reloading the edit-mode page (the Edit Mode
@@ -1268,8 +1273,11 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
     // the stored CSS never moved.
     $media_storage->resetCache([$minted->id()]);
     $filled = $media_storage->load($minted->id());
+    assert($filled instanceof MediaInterface);
     $this->assertSame($media_uuid, $filled->uuid());
-    $this->assertStringContainsString('daedalus-ai-test-generated', (string) $filled->get('field_media_image')->entity->getFileUri(), 'The batch swapped the file behind the media uuid.');
+    $filled_file = $filled->get('field_media_image')->entity;
+    assert($filled_file instanceof FileInterface);
+    $this->assertStringContainsString('daedalus-ai-test-generated', (string) $filled_file->getFileUri(), 'The batch swapped the file behind the media uuid.');
 
     // Durability: the media's cache tags invalidated the host render, so a
     // fresh load's background also resolves the unchanged token to the

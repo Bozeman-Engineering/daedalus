@@ -244,7 +244,7 @@ export class EditorPluginBase {
    * End the current edit: commit through blurElement(), or discard through
    * cancelElement() when the edit is being canceled.
    *
-   * @param e
+   * @param {?Event} e
    *   The event, if any.
    */
   async blur(e = null) {
@@ -288,7 +288,7 @@ export class EditorPluginBase {
    * inside the item's form-item wrapper (a rebuilt form carrying errors)
    * and HTML5 validity over the editor's inputs.
    *
-   * @param e
+   * @param {?Event} e
    *   The event if any. Its default is prevented because the mousedown
    *   event doesn't work well with validity checking.
    *
@@ -367,10 +367,10 @@ export class EditorPluginBase {
   /**
    * Clear validation message on user input.
    *
-   * @param validationMessageHandle
+   * @param {Element} validationMessageHandle
    *   The validation message handle.
    *   @see this.validationMessageHandle
-   * @param removeClientsideValidationMessage
+   * @param {?Function} removeClientsideValidationMessage
    *   Optional function to call to remove validation messages.
    *   Defaults to removeClientsideValidationMessage for HTML5 validation.
    */
@@ -414,7 +414,7 @@ export class EditorPluginBase {
   /**
    * Remove client-side HTML5 validation message.
    *
-   * @param inputElement
+   * @param {Element} inputElement
    *   The invalid input element with the validation message.
    */
   removeClientsideValidationMessage(inputElement) {
@@ -463,7 +463,7 @@ export class EditorPluginBase {
   /**
    * Generate unique ID.
    *
-   * @param element
+   * @param {Element} element
    *   The element that needs a unique ID.
    *
    * @return {*|string}
@@ -565,7 +565,9 @@ export class EditorPluginBase {
    */
   snapshot(item) {
     const surface = () => this.readProperties(item);
-    return structuredClone(item.committedValues(Object.keys(surface()), surface));
+    return structuredClone(
+      item.committedValues(Object.keys(surface()), surface),
+    );
   }
 
   /**
@@ -854,13 +856,18 @@ export class EditorPluginBase {
    * Cancel edit.
    *
    * Give users a way to bail on the current edit.
+   *
+   * @param {object} item
+   *   The item being edited.
+   * @param {?Event} e
+   *   The event, if any.
    */
   cancelEdit(item, e = null) {
     item.isCancelingEdit = true;
 
     return item.plugin.blur(e).catch((error) => {
       if (error !== 'HTML validation failed') {
-        console.error(error);
+        Drupal.throwError(error);
       }
     });
   }

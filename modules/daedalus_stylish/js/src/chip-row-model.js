@@ -19,8 +19,8 @@
  * chip entry on its axis (a `@container (min-width: 500px)` row's band
  * on the width menu, a `:checked` row's state on the state menu), faced
  * by its own canonical text, so it can be posed and lit like a
- * reference; a literal the canvas cannot pose (a @media width, a
- * @supports test, `:visited`) is never a chip (condition-clause.js
+ * reference; a literal the canvas cannot pose (a @media width, an
+ * `@supports` test, `:visited`) is never a chip (condition-clause.js
  * clausePosable), and the stamp word a literal state poses is
  * clauseStamp's, never the text.
  *
@@ -54,6 +54,12 @@ import {
 /**
  * The literal width bands in use: the literal clauses deriving a band,
  * map order (editing-at.js literalClauses).
+ *
+ * @param {?Array<{band: ?object}>} literals
+ *   The literal clauses in use.
+ *
+ * @return {Array<object>}
+ *   The clauses deriving a band.
  */
 const literalBands = (literals) =>
   (literals ?? []).filter((clause) => clause.band !== null);
@@ -61,6 +67,12 @@ const literalBands = (literals) =>
 /**
  * The literal states in use the stamp can pose: the posable pseudo-class
  * literals, map order.
+ *
+ * @param {?Array<object>} literals
+ *   The literal clauses in use.
+ *
+ * @return {Array<object>}
+ *   The posable pseudo-class clauses.
  */
 const literalStates = (literals) =>
   (literals ?? []).filter(
@@ -96,6 +108,16 @@ const conditionLabel = compoundLabel;
  * condition name (its guide label) or a posable literal state in use
  * whose stamp word the force state carries (faced by the literal's own
  * text, `:checked`); null for anything else.
+ *
+ * @param {?string} forceState
+ *   The selection-scoped force state.
+ * @param {?Object} conditions
+ *   guide.conditions.
+ * @param {?Array<object>} literals
+ *   The literal clauses in use (editing-at.js literalClauses).
+ *
+ * @return {?{name: string, label: string}}
+ *   The face, or null.
  */
 const forcedState = (forceState, conditions, literals) => {
   if (!forceState) {
@@ -125,6 +147,16 @@ const forcedState = (forceState, conditions, literals) => {
  * (and writes) the band it actually renders. An unmeasured canvas (no
  * facade, a satellite before its first snapshot) degrades to Base, the
  * unconditioned layer.
+ *
+ * @param {?number} width
+ *   The effective canvas width, px (editing-at.js effectiveWidth).
+ * @param {?Object} conditions
+ *   guide.conditions.
+ * @param {Array<object>} literals
+ *   The literal clauses in use (editing-at.js literalClauses).
+ *
+ * @return {{face: object, lit: boolean}}
+ *   The chip's face and whether it is lit.
  */
 const widthFace = (width, conditions, literals) => {
   const active = widthConditionFor(width, conditions, literals);
@@ -169,6 +201,7 @@ const widthFace = (width, conditions, literals) => {
  *
  * @return {Array<{axis: string, face: Object, lit: boolean,
  *   disabled: boolean}>}
+ *   The chips, in row order.
  */
 export const chipFaces = (vector, forceState, conditions, options = {}) => {
   const { scheme = 'light', hasSelection = true, literals = [] } = options;
@@ -246,6 +279,7 @@ export const chipFaces = (vector, forceState, conditions, options = {}) => {
  *   boolean}.
  *
  * @return {Array<Object>}
+ *   The axis menu's items (chip-row.js maps them to text).
  */
 export const chipMenuItems = (axis, options = {}) => {
   const {
@@ -294,7 +328,11 @@ export const chipMenuItems = (axis, options = {}) => {
   }
   if (axis === 'width') {
     const stops = stopsFromConditions(conditions);
-    const active = widthConditionFor(effectiveWidth(pose), conditions, literals);
+    const active = widthConditionFor(
+      effectiveWidth(pose),
+      conditions,
+      literals,
+    );
     const items = [
       // The un-pose entry wears Base and returns the canvas to its
       // natural width. Its checkmark tracks the WRITE TARGET like every

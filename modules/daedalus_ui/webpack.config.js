@@ -24,7 +24,13 @@ module.exports = (env, argv) => {
             options: {
               presets: [
                 '@babel/preset-env',
-                ['@babel/preset-react', { pragma: 'h' }],
+                // The automatic JSX runtime: the compiler imports preact's
+                // jsx() itself, so no source file imports an `h` it never
+                // reads.
+                [
+                  '@babel/preset-react',
+                  { runtime: 'automatic', importSource: 'preact' },
+                ],
               ],
             },
           },

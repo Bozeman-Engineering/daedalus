@@ -7,16 +7,17 @@ namespace Drupal\daedalus_stylish_layers;
 use Drupal\Core\Config\ConfigFactoryInterface;
 
 /**
- * Names and emits the cascade layers that make unlayered Daedalus Stylish CSS win.
+ * Names and emits the cascade layers so unlayered Daedalus Stylish CSS wins.
  *
  * The contract (see README.md):
  * - All pipeline CSS (core, contrib, theme) is wrapped in the WRAPPER layer.
- * - Daedalus Stylish's own emitted CSS stays UNLAYERED, so for normal declarations it
- *   beats every wrapped rule regardless of specificity.
+ * - Daedalus Stylish's own emitted CSS stays UNLAYERED, so for normal
+ *   declarations it beats every wrapped rule regardless of specificity.
  * - The FORCE layer is declared FIRST and ships EMPTY. Importance reverses
  *   layer order, so `!important` in the earliest layer beats `!important`
- *   everywhere else — the force layer is the escape hatch Daedalus Stylish routes
- *   must-win `!important` declarations into. Nothing else may write to it.
+ *   everywhere else — the force layer is the escape hatch Daedalus Stylish
+ *   routes must-win `!important` declarations into. Nothing else may write to
+ *   it.
  * - The layer-order statement below must be the FIRST occurrence of either
  *   layer name in the document, otherwise a later occurrence would establish
  *   a different order. It is emitted as a html_head element, which renders

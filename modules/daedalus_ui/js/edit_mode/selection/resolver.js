@@ -112,6 +112,7 @@ export const setEditableItems = (provider) => {
  * The engine's canvas leaves, or null before an engine registers.
  *
  * @return {?Element[]}
+ *   The editable canvas leaves in document order, or null.
  */
 const canvasItems = () => (editableItems ? editableItems() : null);
 
@@ -133,6 +134,7 @@ const canvasItems = () => (editableItems ? editableItems() : null);
  *   The element whose presentation boundary is wanted.
  *
  * @return {?Element}
+ *   The outermost presentation root, or null outside any.
  */
 const outermostPresentationRoot = (element) => {
   let root = null;
@@ -158,6 +160,7 @@ const outermostPresentationRoot = (element) => {
  *   in one pass; built from the provider when omitted.
  *
  * @return {Element}
+ *   The item that edits for this one.
  */
 export const presentationBoundaryItem = (item, items = null) => {
   const root = outermostPresentationRoot(item);
@@ -199,6 +202,12 @@ export const presentationBoundaryItem = (item, items = null) => {
  * so this reads the mirror where that one reads the DOM. Both run BEFORE
  * the projection gate, which is why the absorbed label leaf stays
  * selectable and editable: the key it commits is the root row's.
+ *
+ * @param {string} key
+ *   A selectable key.
+ *
+ * @return {string}
+ *   The root's key for its label leaf, else the key itself.
  */
 const rootKeyForEditTarget = (key) => {
   const state = store.getState();
@@ -318,6 +327,9 @@ export const selectableChain = (target) => {
  * a selection from it must go through representedChainKeys (the projection
  * filter) instead.
  *
+ * @param {EventTarget} target
+ *   The pointer event target.
+ *
  * @return {string[]}
  *   Selectable keys, innermost first.
  */
@@ -340,6 +352,9 @@ export const chainKeys = (target) => {
  * leaf has no row of its own, but the row it presents under does.
  * Unfiltered before the mirror boots.
  *
+ * @param {EventTarget} target
+ *   The pointer event target.
+ *
  * @return {string[]}
  *   Presented selectable keys, innermost first.
  */
@@ -360,14 +375,18 @@ export const representedChainKeys = (target) => {
  *
  * @param {EventTarget} target
  *   The pointer event target.
- * @param {Object} options
- *   - policy: one of POLICY (default BOUNDARY).
- *   - drillKey: the current drill context key, or null for the page root.
- *     Only the BOUNDARY policy uses it.
- *   - selectedKeys: the committed selection set. Only the BOUNDARY policy
- *     uses it: pointing at a selected element resolves to it (innermost
- *     selected member of the chain) when that deepens the drill/boundary
- *     stop — never when it would coarsen it.
+ * @param {object} options
+ *   The policy and its context.
+ * @param {string} options.policy
+ *   One of POLICY (default BOUNDARY).
+ * @param {?string} options.drillKey
+ *   The current drill context key, or null for the page root. Only the
+ *   BOUNDARY policy uses it.
+ * @param {string[]} options.selectedKeys
+ *   The committed selection set. Only the BOUNDARY policy uses it:
+ *   pointing at a selected element resolves to it (innermost selected
+ *   member of the chain) when that deepens the drill/boundary stop —
+ *   never when it would coarsen it.
  *
  * @return {?string}
  *   The resolved selectable key, or null when nothing selectable is under
@@ -424,6 +443,7 @@ export const resolve = (
  *   The selectable key.
  *
  * @return {?Element}
+ *   The element carrying the key, or null.
  */
 export const elementForKey = (key) => {
   // Keys contain no quotes or backslashes, so they are safe in a quoted

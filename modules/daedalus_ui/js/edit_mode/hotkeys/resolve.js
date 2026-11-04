@@ -31,11 +31,14 @@ export const CONTEXT_PRIORITY = {
  * only the 'typing' context applies, and vice versa.
  *
  * @param {object} binding
+ *   A registered binding, with `when`.
  * @param {boolean} typing
+ *   The keystroke's typing fact.
  * @param {Function} isActive
  *   (context, binding) => boolean for every context but 'typing'.
  *
  * @return {string[]}
+ *   The live contexts.
  */
 const liveContexts = (binding, typing, isActive) =>
   binding.when.filter((context) =>
@@ -66,6 +69,7 @@ const liveContexts = (binding, typing, isActive) =>
  *   (context, binding) => boolean for every context but 'typing'.
  *
  * @return {object[]}
+ *   The matching bindings, winner first.
  */
 export const candidates = (bindings, desc, typing, isActive) => {
   const ranked = [];
@@ -81,9 +85,7 @@ export const candidates = (bindings, desc, typing, isActive) => {
     }
     ranked.push({
       binding,
-      priority: Math.max(
-        ...active.map((context) => CONTEXT_PRIORITY[context]),
-      ),
+      priority: Math.max(...active.map((context) => CONTEXT_PRIORITY[context])),
       specificity: specificity(binding.parsed),
       index,
     });
@@ -102,11 +104,16 @@ export const candidates = (bindings, desc, typing, isActive) => {
  * The binding a keystroke resolves to (the first candidate), or null.
  *
  * @param {Iterable<object>} bindings
+ *   Registered bindings in registration order.
  * @param {{key: string, modifiers: object}} desc
+ *   The keystroke's descriptor (binding.js normalizeEvent).
  * @param {boolean} typing
+ *   The keystroke's typing fact.
  * @param {Function} isActive
+ *   (context, binding) => boolean for every context but 'typing'.
  *
  * @return {object|null}
+ *   The winning binding, or null.
  */
 export const resolve = (bindings, desc, typing, isActive) =>
   candidates(bindings, desc, typing, isActive)[0] ?? null;
@@ -118,6 +125,7 @@ export const resolve = (bindings, desc, typing, isActive) =>
  * swallows a browser default only for a combo in this set.
  *
  * @param {Iterable<object>} bindings
+ *   Registered bindings in registration order.
  * @param {Function} isActive
  *   (context, binding) => boolean for every context but 'typing'.
  *

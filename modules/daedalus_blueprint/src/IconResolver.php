@@ -15,14 +15,14 @@ use Drupal\media\MediaInterface;
 /**
  * Resolves stored icon values to URLs: the one icon value seam.
  *
- * THE ICON VALUE GRAMMAR. Everything page-builder chrome stores as "an
- * icon" (block-type icons in `block_content.type.*.third_party.daedalus_layout.icon`,
+ * THE ICON VALUE GRAMMAR. Everything page-builder chrome stores as "an icon"
+ * (block-type icons in `block_content.type.*.third_party.daedalus_layout.icon`,
  * blueprint icons on the blueprint entity and in the blueprint catalog) is one
- * string in exactly one of two spellings, and every consumer resolves it
- * here so the spellings can never fork per surface. It lives on the spine
- * because the spine both produces the grammar (blueprint discovery spells
- * content icons as media references) and projects it (a blueprint material
- * record carries its icon RESOLVED, the client palette paints from it):
+ * string in exactly one of two spellings, and every consumer resolves it here
+ * so the spellings can never fork per surface. It lives on the spine because
+ * the spine both produces the grammar (blueprint discovery spells content icons
+ * as media references) and projects it (a blueprint material record carries its
+ * icon RESOLVED, the client palette paints from it):
  *
  * - `media:<uuid>`: a media entity reference by UUID (lowercase `media:`
  *   prefix; the UUID payload is case-insensitive). The user lane: values
@@ -31,11 +31,11 @@ use Drupal\media\MediaInterface;
  *   icons render as inert chrome (background-image / <img>) at icon size
  *   and the shipped values are SVGs no image style can process.
  * - anything else: a root-relative URL path (e.g.
- *   `/modules/contrib/daedalus/modules/daedalus_layout/assets/image.svg`). The shipped lane: values
- *   from configs and recipes, returned verbatim. Producers that accept
- *   friendlier spellings (the blueprint YAML lane's module-relative `icon`
- *   key) resolve them to root-relative BEFORE storage; the resolver never
- *   sees a relative path.
+ *   `/modules/contrib/daedalus/modules/daedalus_layout/assets/image.svg`). The
+ *   shipped lane: values from configs and recipes, returned verbatim. Producers
+ *   that accept friendlier spellings (the blueprint YAML lane's module-relative
+ *   `icon` key) resolve them to root-relative BEFORE storage; the resolver
+ *   never sees a relative path.
  *
  * An empty value and a dangling reference (media deleted, media without a
  * file-backed source) both resolve to NULL: "no icon" is a legitimate

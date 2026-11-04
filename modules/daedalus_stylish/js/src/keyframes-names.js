@@ -48,6 +48,14 @@ const IDENT = /^-?[A-Za-z_][A-Za-z0-9_-]*$/;
 /**
  * Splits a value at top-level separators; parentheses and quotes stay
  * intact, empty pieces are dropped.
+ *
+ * @param {string} value
+ *   The value to split.
+ * @param {string} separators
+ *   The separator characters, one per character of the string.
+ *
+ * @return {string[]}
+ *   The non-empty pieces.
  */
 const split = (value, separators) => {
   const pieces = [];
@@ -82,6 +90,14 @@ const split = (value, separators) => {
 
 /**
  * Reads one token as a keyframes name, or null when it is not one.
+ *
+ * @param {string} token
+ *   One whitespace-free token of the value.
+ * @param {string[]} excluded
+ *   Lowercased keywords that are never a name in this position.
+ *
+ * @return {?string}
+ *   The name (unquoted), or null.
  */
 const nameComponent = (token, excluded) => {
   if (token === '') {
@@ -99,6 +115,12 @@ const nameComponent = (token, excluded) => {
 
 /**
  * The name component of one animation shorthand layer, or null.
+ *
+ * @param {string} layer
+ *   One comma-separated layer of an animation shorthand value.
+ *
+ * @return {?string}
+ *   The layer's keyframes name, or null when it names none.
  */
 const shorthandName = (layer) => {
   for (const token of split(layer, ' \t\n\r\f')) {

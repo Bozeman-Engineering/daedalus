@@ -77,15 +77,24 @@ use PHPUnit\Framework\Attributes\Group;
 #[Group('daedalus_ui')]
 class PopoutDocumentTest extends BrowserTestBase {
 
-  use DaedalusFixtureTrait {
-    setUp as daedalusSetUp;
-  }
+  use DaedalusFixtureTrait;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = '';
 
   /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
-    $this->daedalusSetUp();
+    parent::setUp();
+    $this->installFixture();
     \Drupal::service('module_installer')->install(['daedalus_ui_bare_test']);
     $this->rebuildContainer();
   }
@@ -203,7 +212,9 @@ class PopoutDocumentTest extends BrowserTestBase {
     // skin: a tool window is outside the skin's reach. The scope the opener
     // forwarded arrives as the pop-out document's session identity, and the
     // shell's own setting carries none.
-    $this->drupalGet('/daedalus-ui/responsive-preview', ['query' => ['url' => $node->toUrl()->toString(), 'scope' => 'probe']]);
+    $this->drupalGet('/daedalus-ui/responsive-preview', [
+      'query' => ['url' => $node->toUrl()->toString(), 'scope' => 'probe'],
+    ]);
     $assert_session->statusCodeEquals(200);
     $assert_session->elementExists('css', '#daedalus-ui-responsive-preview-root');
     $this->assertPageChrome(FALSE);

@@ -100,6 +100,32 @@ const PADDING_LONGHANDS = sideLonghands('padding', SIDES);
  * refused. What the own key never grants stays hidden (the grant read
  * above), never disabled.
  */
+
+/**
+ * The row.
+ *
+ * @param {object} props
+ *   The widget contract's props (basic-controls.js renderControl).
+ * @param {object} props.model
+ *   The control model (controls.js controlModels): the owned
+ *   properties' keys, stacks and reads at the editing compound, the
+ *   constraints, the grant and what the write address withholds.
+ * @param {object} props.guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide).
+ * @param {object} props.materials
+ *   The materials roster the stop vocabularies derive from.
+ * @param {object} props.styleMap
+ *   The root entity's style map, the write layer's seam
+ *   (lib/write-layer.js); read-only.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {Function} props.onPreview
+ *   `(properties)`: previews the set on the canvas, routed per key.
+ * @param {Function} props.onRelease
+ *   `(properties)`: releases the preview.
+ * @param {Function} props.onCommit
+ *   `(properties)`: commits the set through the op queue.
+ */
 export const PaddingRow = ({
   model,
   guide,
@@ -190,8 +216,8 @@ export const PaddingRow = ({
   );
   const fieldText = uniformFieldText(
     uniform,
-    stackAt(model.stacks.padding, 'padding', model.condition, conditions)
-      .winner?.value,
+    stackAt(model.stacks.padding, 'padding', model.condition, conditions).winner
+      ?.value,
   );
   // The mark's origin over the offered sides (sidesOrigin's facts, the
   // sentence over them); the uniform value's face leads the sentence

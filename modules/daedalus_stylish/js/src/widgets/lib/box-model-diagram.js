@@ -137,9 +137,13 @@ import {
  * on unmount.
  *
  * @param {object} props
+ *   The diagram's props.
  * @param {?object} props.guide
  *   The style guide payload (drupalSettings.daedalusStylish.guide) — the value
  *   spaces derive from it.
+ * @param {?object} props.materials
+ *   The materials roster, for a cell's worn face and the side editor's
+ *   token items; null without one.
  * @param {string} props.condition
  *   The editing compound (model.condition); reference displays resolve
  *   here.
@@ -255,8 +259,7 @@ export const BoxModelDiagram = ({
   // (the element's own blue, a variant's hash, the floor tiers' teal:
   // the one identity system the property rows' marks read); a computed
   // cell carries none (the stylesheet's muted ink).
-  const originColor = (prov) =>
-    prov.id === null ? null : layerColor(prov.id);
+  const originColor = (prov) => (prov.id === null ? null : layerColor(prov.id));
   // An own shorthand the expansion cannot split (calc(), a
   // multi-component var(); a lone token reference splits) blocks EVERY
   // per-side write (sideCommit's whole-patch contract), so the diagram
@@ -858,7 +861,9 @@ export const BoxModelDiagram = ({
           ]
             .filter(Boolean)
             .join(' ')}
-          style={cell.color ? { '--daedalus-stylish-origin': cell.color } : undefined}
+          style={
+            cell.color ? { '--daedalus-stylish-origin': cell.color } : undefined
+          }
           title={cellTitle(cell)}
           aria-label={Drupal.t('!label !side: !value (not stylable here)', {
             '!label': ringLabel,
@@ -889,7 +894,9 @@ export const BoxModelDiagram = ({
         type="button"
         className={classes}
         aria-pressed={selected === cell.side}
-        style={cell.color ? { '--daedalus-stylish-origin': cell.color } : undefined}
+        style={
+          cell.color ? { '--daedalus-stylish-origin': cell.color } : undefined
+        }
         aria-label={Drupal.t('!label !side: !value (!state)', {
           '!label': ringLabel,
           '!side': sideLabels[cell.side],
@@ -970,7 +977,10 @@ export const BoxModelDiagram = ({
             {ringName}
           </button>
         ) : (
-          <span className="daedalus-stylish-boxmodel__ring-label" aria-hidden="true">
+          <span
+            className="daedalus-stylish-boxmodel__ring-label"
+            aria-hidden="true"
+          >
             {ringName}
           </span>
         )}
@@ -1021,6 +1031,13 @@ export const BoxModelDiagram = ({
  * bare number to keep the cramped cells readable; any other unit stays
  * spelled out. Exported for a consumer's own face to compose with (the
  * border ring draws its glyph beside it).
+ *
+ * @param {object} cell
+ *   The side's cell record (sideCells): `shown` is its value text,
+ *   `opaque` whether a shorthand hides the side.
+ *
+ * @return {string}
+ *   The face text.
  */
 export const cellText = (cell) => {
   if (cell.shown === null || cell.shown === undefined) {
@@ -1046,6 +1063,39 @@ export const cellText = (cell) => {
  * side, and what is typed here writes the physical longhand over it.
  * Right-click opens the shared row menu (use-row-menu.js) over the
  * side's token items, the advanced rows' token half.
+ *
+ * @param {object} props
+ *   The editor's props.
+ * @param {object} props.cell
+ *   The selected side's cell record: its longhand, value space, value,
+ *   measured and ownAtPose flags.
+ * @param {string} props.label
+ *   The field's accessible name (the side's label).
+ * @param {?object} props.guide
+ *   The style guide payload.
+ * @param {?object} props.materials
+ *   The materials roster.
+ * @param {string} props.condition
+ *   The editing compound.
+ * @param {object} props.definition
+ *   The longhand's property definition.
+ * @param {object} props.constraints
+ *   The longhand's constraints (its unit options).
+ * @param {?{rootPx: ?number, fontPx: ?number}} props.bases
+ *   The canvas's conversion bases, for the placeholder's unit.
+ * @param {?string} props.placeholder
+ *   A measured side's computed value, shown in the empty field.
+ * @param {Function} props.patchFor
+ *   (value) => patch | null — the one-side commit shape.
+ * @param {Function} props.onPreview
+ *   The widget contract's preview handler.
+ * @param {Function} props.onRelease
+ *   The widget contract's release handler.
+ * @param {Function} props.onCommit
+ *   The widget contract's commit handler (properties → Promise).
+ *
+ * @return {object}
+ *   The editor element.
  */
 const SideDimensionEditor = ({
   cell,

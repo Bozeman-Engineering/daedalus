@@ -722,7 +722,7 @@ test('ownerName reads the node\'s minted name, else the generic word; addressLab
   assert.equal(label('d-container > *'), 'Containers › Children in Welcome');
   assert.equal(label(`d-text ${LINK}`), 'Text block links in Welcome');
   assert.equal(label('d-text a'), 'Text block links in Welcome');
-  // The child-combinated type reads "directly in", so the two shapes the
+  // The child-combinator type reads "directly in", so the two shapes the
   // set offers side by side never share a label.
   assert.equal(label(`> d-text ${LINK}`), 'Text block links directly in Welcome');
   assert.equal(label('> d-text a'), 'Text block links directly in Welcome');

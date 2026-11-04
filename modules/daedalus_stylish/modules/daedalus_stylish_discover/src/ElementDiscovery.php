@@ -34,13 +34,14 @@ use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
  *   discovered selectors into the page builder declarations for block
  *   types with no authored elements — unlabeled but functional
  *   stylability without YAML.
- * - `drush daedalus_stylish:discover BUNDLE` (base module) prints an authored-YAML
- *   scaffold from the same discovery for a developer to label and commit.
+ * - `drush daedalus_stylish:discover BUNDLE` (base module) prints an
+ *   authored-YAML scaffold from the same discovery for a developer to label and
+ *   commit.
  *
- * Results are cached per (theme, bundle) under the "daedalus_stylish_discover" tag;
- * the .module hooks invalidate it (and the declarations cache, which bakes
- * the merged result in) when block_content displays, fields, or bundles
- * change. Template-only changes need a cache rebuild, like any theme edit.
+ * Results are cached per (theme, bundle) under the "daedalus_stylish_discover"
+ * tag; the .module hooks invalidate it (and the declarations cache, which bakes
+ * the merged result in) when block_content displays, fields, or bundles change.
+ * Template-only changes need a cache rebuild, like any theme edit.
  */
 class ElementDiscovery {
 

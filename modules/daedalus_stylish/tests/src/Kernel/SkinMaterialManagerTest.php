@@ -6,7 +6,6 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_blueprint\Materials\MaterialGestureException;
-use Drupal\daedalus_blueprint\Materials\MaterialGestureOperationHandler;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_stylish\Controller\SkinMaterialApiController;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
@@ -14,6 +13,7 @@ use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\Exception\SkinMaterialValidationException;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 use Drupal\daedalus_stylish\SkinMaterialDeleteBatch;
 use Drupal\daedalus_stylish\SkinMaterialManager;
 use Drupal\daedalus_stylish\SkinMaterialUsage;
@@ -353,11 +353,17 @@ class SkinMaterialManagerTest extends KernelTestBase {
     // the roster record are gone.
     $storage = $this->container->get('entity_type.manager')->getStorage('entity_test');
     $storage->resetCache([$host->id()]);
-    $map = $storage->load($host->id())->get(DaedalusStylishFieldManager::FIELD_NAME)->first()->getStyleMap();
+    $styled = $storage->load($host->id());
+    assert($styled instanceof EntityTest);
+    $styled_item = $styled->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
+    assert($styled_item instanceof StyleMapItem);
+    $map = $styled_item->getStyleMap();
     $this->assertSame('calc(1rem + var(--space-8))', $map[$key]['default']['padding']);
     $variant_storage = $this->container->get('entity_type.manager')->getStorage('daedalus_variant');
     $variant_storage->resetCache([$variant->id()]);
-    $this->assertSame(['' => ['default' => ['gap' => '1rem']]], $variant_storage->load($variant->id())->getStyles());
+    $fresh_variant = $variant_storage->load($variant->id());
+    assert($fresh_variant instanceof DaedalusStylishVariant);
+    $this->assertSame(['' => ['default' => ['gap' => '1rem']]], $fresh_variant->getStyles());
     $fresh = $this->loadSkin('mine');
     $this->assertSame(['2', '8', 'double'], array_map('strval', array_keys($fresh->packageTokens()['space'])));
     $this->assertSame('calc(1rem * 2)', $fresh->packageTokens()['space']['double']['value']);
@@ -473,7 +479,11 @@ class SkinMaterialManagerTest extends KernelTestBase {
     $this->assertSame('space/base', $results['renamed']);
     $storage = $this->container->get('entity_type.manager')->getStorage('entity_test');
     $storage->resetCache([$host->id()]);
-    $map = $storage->load($host->id())->get(DaedalusStylishFieldManager::FIELD_NAME)->first()->getStyleMap();
+    $styled = $storage->load($host->id());
+    assert($styled instanceof EntityTest);
+    $styled_item = $styled->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
+    assert($styled_item instanceof StyleMapItem);
+    $map = $styled_item->getStyleMap();
     $this->assertSame('calc(var(--space-base, 1rem) + var(--space-40, 0))', $map[$key]['default']['padding']);
     $renamed = $this->loadSkin('mine');
     $this->assertSame(['2', 'base', 'wide', 'double'], array_map('strval', array_keys($renamed->packageTokens()['space'])));
@@ -484,7 +494,7 @@ class SkinMaterialManagerTest extends KernelTestBase {
   }
 
   /**
-   * A package token cannot be renamed on a consuming site; a site-minted one can.
+   * A consuming site cannot rename a package token; a site-minted one it can.
    */
   public function testRenameUnderTheLock(): void {
     $this->activateSkin('aurora');

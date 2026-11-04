@@ -8,7 +8,11 @@ import {
   ancestorWearLayerId,
   isAncestorLayer,
 } from './layers.js';
-import { buildStack, deliveredEntry, selectorSuffixes } from '../style-stack.js';
+import {
+  buildStack,
+  deliveredEntry,
+  selectorSuffixes,
+} from '../style-stack.js';
 import { parseKey } from '../style-guide.js';
 import { createMatcher, presentRoster } from '../selector-matcher.js';
 import { axisVocabulary } from '../variant-scope.js';
@@ -35,9 +39,15 @@ import {
   parseSelector,
   printSelector,
 } from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
-import { OWNER, digest, reach } from '../../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
+import {
+  OWNER,
+  digest,
+  reach,
+} from '../../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
 import { widePseudoElements } from '../wide-selectors.js';
 import { vocabularyPseudos } from '../pseudo-vocabularies.js';
+
+// cspell:ignore phover
 
 /**
  * The offer kind of a generated box option (`&::before`,
@@ -132,12 +142,144 @@ export const islandConditions = (entry, guide) => {
  * The map layers' conditions at one island key (the element's own and
  * its worn references', through the stack), never the floor's: a
  * skin's narrow block is not an island of the element.
+ *
+ * @param {?object} map
+ *   The root entity's style map.
+ * @param {string} key
+ *   The island key.
+ * @param {Array<object>} variants
+ *   The store's variant records.
+ * @param {?Array<string>} axes
+ *   The root scope's axis vocabulary (delivery order), or null.
+ * @param {object} guide
+ *   The style guide payload (the condition order).
+ *
+ * @return {string[]}
+ *   Condition names, 'default' first.
  */
 const mapConditions = (map, key, variants, axes, guide) =>
   islandConditions(
     deliveredEntry(buildStack({ map, key, variants, axes, floor: false })),
     guide,
   );
+
+/**
+ * The ancestor rules reaching one island key, as rule rows: DevTools'
+ * inherited rules for the element you are inspecting.
+ *
+ * Read off the key's own style stack (buildStack with the floor and the
+ * document: the ancestor tier lists every rule position the selector
+ * matcher says reaches the key, farthest ancestor first, a GROUP of
+ * layers per position), one row per position, the group's own layer
+ * naming it (layers.js ancestorRule), re-ordered NEAREST ancestor first
+ * (the subject line's address set reads the same way; per owner the
+ * tier's own position order holds). Each row is an island of the rule's
+ * own key (`{owner}::{selector}`): its conditions are the rule's own map
+ * layers' (mapConditions at the rule key, the owner's axis vocabulary
+ * ordering the owner's wear), never the merged read this element gets,
+ * because the island EDITS the rule and a write lands at the condition
+ * the rule stores. `existing` says whether the map carries the rule
+ * (its entry, or a worn layer delivering at the position: a
+ * continuation); under a write address naming a rule nobody wrote yet
+ * (`editable`) the stack places a virtual empty own layer at the rule's
+ * delivery position (style-stack.js placeEditable), and the row lists
+ * there with `existing` false: the seat's type-here surface.
+ *
+ * @param {object} args
+ *   buildStack's arguments for the island key plus the write address.
+ * @param {object} args.guide
+ *   The style guide payload.
+ * @param {?object} args.map
+ *   The root entity's style map.
+ * @param {string} args.key
+ *   The island key whose reaching rules are listed.
+ * @param {Array<object>} args.variants
+ *   The store's variant records.
+ * @param {?Array<string>} args.axes
+ *   The root scope's axis vocabulary (delivery order), or null.
+ * @param {object} args.blockTypes
+ *   The block types table (a rule's landing vocabulary).
+ * @param {object} args.sectionLayouts
+ *   The section layouts table (a rule's landing vocabulary).
+ * @param {?Array} args.document
+ *   The document tree the selector matcher walks; null lists nothing.
+ * @param {?{key: string, selector: string}} args.editable
+ *   The write address to place when it names this key's facet, or null.
+ *
+ * @return {Array<{owner: string, selector: string, key: string,
+ *   conditions: string[], existing: boolean}>}
+ *   Nearest ancestor first; [] without a document or when nothing
+ *   reaches.
+ */
+export const ancestorIslands = ({
+  guide,
+  map,
+  key,
+  variants,
+  axes = null,
+  blockTypes = {},
+  sectionLayouts = {},
+  document,
+  editable = null,
+}) => {
+  const stack = buildStack({
+    guide,
+    map,
+    key,
+    variants,
+    axes,
+    blockTypes,
+    sectionLayouts,
+    document,
+    editable,
+  });
+  // Each owner's axis vocabulary reads its depth off the LAYOUT (the
+  // sections at the top), never off the document, under whose root
+  // every section would read as nested.
+  const layout = layoutOf(document);
+  const groups = [];
+  stack.layers.forEach((layer) => {
+    if (layer.tier !== TIER_ANCESTOR) {
+      return;
+    }
+    const rule = ancestorRule(layer.id);
+    if (rule === null) {
+      return;
+    }
+    const ruleKey = `${rule.key}::${rule.selector}`;
+    let group = groups.find((candidate) => candidate.key === ruleKey);
+    if (!group) {
+      group = {
+        owner: rule.key,
+        selector: rule.selector,
+        key: ruleKey,
+        worn: 0,
+      };
+      groups.push(group);
+    }
+    if (ancestorVariant(layer.id) !== null) {
+      group.worn += 1;
+    }
+  });
+  // The tier walks farthest ancestor first, owners contiguous; the rows
+  // read nearest first, each owner's positions in the tier's order.
+  const owners = [...new Set(groups.map((group) => group.owner))].reverse();
+  return owners
+    .flatMap((owner) => groups.filter((group) => group.owner === owner))
+    .map((group) => ({
+      owner: group.owner,
+      selector: group.selector,
+      key: group.key,
+      conditions: mapConditions(
+        map,
+        group.key,
+        variants,
+        axisVocabulary(guide, group.owner, blockTypes, sectionLayouts, layout),
+        guide,
+      ),
+      existing: group.worn > 0 || isEntryObject(map?.[group.key]),
+    }));
+};
 
 /**
  * The island roster for one selected element.
@@ -209,6 +351,9 @@ const mapConditions = (map, key, variants, axes, guide) =>
  *   ancestors: Array<object>}>, ancestors: Array<{owner: string,
  *   selector: string, key: string, conditions: string[],
  *   existing: boolean}>}}
+ *   The element's own conditions, its part rows (each with its own
+ *   conditions and the ancestor rules reaching the part) and the
+ *   ancestor rules reaching the element itself.
  */
 export const elementIslands = (
   map,
@@ -266,104 +411,6 @@ export const elementIslands = (
   });
 
   return { conditions, parts, ancestors: ancestorsOf(key) };
-};
-
-/**
- * The ancestor rules reaching one island key, as rule rows: DevTools'
- * inherited rules for the element you are inspecting.
- *
- * Read off the key's own style stack (buildStack with the floor and the
- * document: the ancestor tier lists every rule position the selector
- * matcher says reaches the key, farthest ancestor first, a GROUP of
- * layers per position), one row per position, the group's own layer
- * naming it (layers.js ancestorRule), re-ordered NEAREST ancestor first
- * (the subject line's address set reads the same way; per owner the
- * tier's own position order holds). Each row is an island of the rule's
- * own key (`{owner}::{selector}`): its conditions are the rule's own map
- * layers' (mapConditions at the rule key, the owner's axis vocabulary
- * ordering the owner's wear), never the merged read this element gets,
- * because the island EDITS the rule and a write lands at the condition
- * the rule stores. `existing` says whether the map carries the rule
- * (its entry, or a worn layer delivering at the position: a
- * continuation); under a write address naming a rule nobody wrote yet
- * (`editable`) the stack places a virtual empty own layer at the rule's
- * delivery position (style-stack.js placeEditable), and the row lists
- * there with `existing` false: the seat's type-here surface.
- *
- * @param {object} args
- *   buildStack's arguments for the island key (guide, map, key,
- *   variants, axes, blockTypes, sectionLayouts, document) plus
- *   `editable`, the write address to place when it names this key's
- *   facet, or null.
- *
- * @return {Array<{owner: string, selector: string, key: string,
- *   conditions: string[], existing: boolean}>}
- *   Nearest ancestor first; [] without a document or when nothing
- *   reaches.
- */
-export const ancestorIslands = ({
-  guide,
-  map,
-  key,
-  variants,
-  axes = null,
-  blockTypes = {},
-  sectionLayouts = {},
-  document,
-  editable = null,
-}) => {
-  const stack = buildStack({
-    guide,
-    map,
-    key,
-    variants,
-    axes,
-    blockTypes,
-    sectionLayouts,
-    document,
-    editable,
-  });
-  // Each owner's axis vocabulary reads its depth off the LAYOUT (the
-  // sections at the top), never off the document, under whose root
-  // every section would read as nested.
-  const layout = layoutOf(document);
-  const groups = [];
-  stack.layers.forEach((layer) => {
-    if (layer.tier !== TIER_ANCESTOR) {
-      return;
-    }
-    const rule = ancestorRule(layer.id);
-    if (rule === null) {
-      return;
-    }
-    const ruleKey = `${rule.key}::${rule.selector}`;
-    let group = groups.find((candidate) => candidate.key === ruleKey);
-    if (!group) {
-      group = { owner: rule.key, selector: rule.selector, key: ruleKey, worn: 0 };
-      groups.push(group);
-    }
-    if (ancestorVariant(layer.id) !== null) {
-      group.worn += 1;
-    }
-  });
-  // The tier walks farthest ancestor first, owners contiguous; the rows
-  // read nearest first, each owner's positions in the tier's order.
-  const owners = [...new Set(groups.map((group) => group.owner))].reverse();
-  return owners
-    .flatMap((owner) => groups.filter((group) => group.owner === owner))
-    .map((group) => ({
-      owner: group.owner,
-      selector: group.selector,
-      key: group.key,
-      conditions: mapConditions(
-        map,
-        group.key,
-        variants,
-        axisVocabulary(guide, group.owner, blockTypes, sectionLayouts, layout),
-        guide,
-      ),
-      existing: group.worn > 0 || isEntryObject(map?.[group.key]),
-    }));
 };
 
 /**
@@ -653,6 +700,12 @@ export const QUALIFIER = 'qualifier';
  * root first (when it carries a key), then the sections and what they
  * hold. The one consumer is the descendant offer below, whose owner
  * filter (`matches(key, …, node)` from the owner) never admits the root.
+ *
+ * @param {?Array} document
+ *   The document tree (the host entity above its sections).
+ *
+ * @return {string[]}
+ *   Selectable keys (`{kind}:{uuid}`) in document order.
  */
 const documentOrder = (document) => {
   const keys = [];
@@ -661,8 +714,17 @@ const documentOrder = (document) => {
       if (node === null || typeof node !== 'object') {
         return;
       }
-      const kind = typeof node.kind === 'string' ? node.kind : 'layout_id' in node ? 'container' : 'block';
-      if (typeof node.uuid === 'string' && node.uuid !== '' && kind !== 'region') {
+      const kind =
+        typeof node.kind === 'string'
+          ? node.kind
+          : 'layout_id' in node
+            ? 'container'
+            : 'block';
+      if (
+        typeof node.uuid === 'string' &&
+        node.uuid !== '' &&
+        kind !== 'region'
+      ) {
         keys.push(`${kind}:${node.uuid}`);
       }
       walk(node.children);
@@ -677,6 +739,12 @@ const documentOrder = (document) => {
  * unclosed qualifier or attribute, where the completion offers nothing
  * (a relation is typed whole; the `{` mint reads it through the
  * digester).
+ *
+ * @param {string} text
+ *   The typed selector text.
+ *
+ * @return {number}
+ *   Opened minus closed parens and brackets.
  */
 const openDepth = (text) => {
   let depth = 0;
@@ -694,6 +762,9 @@ const openDepth = (text) => {
  * A settled prefix read the digester's way: `&` alone is the owner (''),
  * `& > p` is `> p`, `&:hover > ul` keeps the qualified anchor, and a `&`
  * anywhere but first is no selector.
+ *
+ * @param {string} text
+ *   The settled part of the typed selector line.
  *
  * @return {?{prefix: string, landing: ?object, partsOwner: ?string}}
  *   The canonical prefix ('' at the owner), its last compound (null at
@@ -731,6 +802,9 @@ const settledPrefix = (text) => {
 /**
  * Splits a typed selector line into its settled prefix and the token
  * being completed.
+ *
+ * @param {*} typed
+ *   The typed selector line; anything but a string splits to null.
  *
  * @return {?{prefix: string, child: boolean, last: string,
  *   landing: ?object, box: boolean, lane: string, partsOwner: ?string}}
@@ -786,7 +860,13 @@ const splitTyped = (typed) => {
     if (settled === null) {
       return null;
     }
-    return { ...settled, child: false, last: pseudo[1], box: false, lane: 'pseudo' };
+    return {
+      ...settled,
+      child: false,
+      last: pseudo[1],
+      box: false,
+      lane: 'pseudo',
+    };
   }
   // A class glued to a tag (`li.act`): the tag's markup classes.
   const glued = TAG_CLASS_TAIL.exec(text);
@@ -795,7 +875,13 @@ const splitTyped = (typed) => {
     if (settled === null || settled.landing?.kind !== TAG) {
       return null;
     }
-    return { ...settled, child: false, last: glued[2], box: false, lane: 'tag-class' };
+    return {
+      ...settled,
+      child: false,
+      last: glued[2],
+      box: false,
+      lane: 'tag-class',
+    };
   }
   const open = /\s$/.test(text);
   const tokens = text.trim().split(/\s+/);
@@ -809,13 +895,30 @@ const splitTyped = (typed) => {
   if (head === '' && last === ANCHOR) {
     // The anchor alone: the owner, whose only continuations here are its
     // boxes (its states and classes are the `:` and `.` lanes).
-    return { prefix: '', child: false, last, landing: null, box: true, lane: 'box', partsOwner: null };
+    return {
+      prefix: '',
+      child: false,
+      last,
+      landing: null,
+      box: true,
+      lane: 'box',
+      partsOwner: null,
+    };
   }
-  const settled = head === '' ? { prefix: '', landing: null, partsOwner: null } : settledPrefix(head);
+  const settled =
+    head === ''
+      ? { prefix: '', landing: null, partsOwner: null }
+      : settledPrefix(head);
   if (settled === null) {
     return null;
   }
-  return { ...settled, child, last, box: false, lane: last.startsWith('.') ? 'class' : 'compound' };
+  return {
+    ...settled,
+    child,
+    last,
+    box: false,
+    lane: last.startsWith('.') ? 'class' : 'compound',
+  };
 };
 
 /**
@@ -930,7 +1033,9 @@ export const selectorGestureOptions = (typed, context = {}) => {
     conditions = {},
   } = context;
   const mint = (name) =>
-    canonicalSelector([prefix, child ? '>' : '', name].filter(Boolean).join(' '));
+    canonicalSelector(
+      [prefix, child ? '>' : '', name].filter(Boolean).join(' '),
+    );
   const options = [];
   const seen = new Set();
   const offer = (kind, name, label, selector = mint(name)) => {
@@ -953,25 +1058,50 @@ export const selectorGestureOptions = (typed, context = {}) => {
     // their own, then every other the browser knows (the wide tier; the
     // completion filters by the typed tail). Whether this site admits one
     // is the validator's verdict at the write.
-    [...GENERATED_BOXES, ...vocabularyPseudos(), ...widePseudoElements()].forEach((pseudo) => {
-      offer(PSEUDO, pseudo, null, canonicalSelector(`${subject}${SUFFIX}${pseudo}`));
+    [
+      ...GENERATED_BOXES,
+      ...vocabularyPseudos(),
+      ...widePseudoElements(),
+    ].forEach((pseudo) => {
+      offer(
+        PSEUDO,
+        pseudo,
+        null,
+        canonicalSelector(`${subject}${SUFFIX}${pseudo}`),
+      );
     });
     return { options, create: null };
   }
 
   if (lane === 'pseudo') {
-    const table = conditions !== null && typeof conditions === 'object' ? conditions : {};
+    const table =
+      conditions !== null && typeof conditions === 'object' ? conditions : {};
     Object.entries(table).forEach(([name, definition]) => {
       const wrapper = definition?.wrapper;
       if (typeof wrapper === 'string' && /^:[A-Za-z-]+$/.test(wrapper)) {
-        offer(STATE, name, definition?.label ?? name, canonicalSelector(`${subject}${wrapper}`));
+        offer(
+          STATE,
+          name,
+          definition?.label ?? name,
+          canonicalSelector(`${subject}${wrapper}`),
+        );
       }
     });
     POSITIONS.forEach((position) => {
-      offer(POSITION, position, null, canonicalSelector(`${subject}:${position}`));
+      offer(
+        POSITION,
+        position,
+        null,
+        canonicalSelector(`${subject}:${position}`),
+      );
     });
     [...NTH_POSITIONS, NOT, HAS, IS].forEach((name) => {
-      options.push({ insert: `${subject}:${name}(`, kind: QUALIFIER, name, label: null });
+      options.push({
+        insert: `${subject}:${name}(`,
+        kind: QUALIFIER,
+        name,
+        label: null,
+      });
     });
     return { options, create: null };
   }
@@ -997,13 +1127,17 @@ export const selectorGestureOptions = (typed, context = {}) => {
             : typeParts(partsOwner)
           : [];
     declared.forEach((part) =>
-      offer(CLASS_PART, part.id, part.label, glued ? canonicalSelector(`${prefix}${part.id}`) : mint(part.id)),
+      offer(
+        CLASS_PART,
+        part.id,
+        part.label,
+        glued ? canonicalSelector(`${prefix}${part.id}`) : mint(part.id),
+      ),
     );
     const wellFormed = CLASS_PATTERN.test(last);
-    const isDeclared =
-      atOwner
-        ? (Array.isArray(parts) ? parts : []).some((part) => part.id === last)
-        : declared.some((part) => part.id === last);
+    const isDeclared = atOwner
+      ? (Array.isArray(parts) ? parts : []).some((part) => part.id === last)
+      : declared.some((part) => part.id === last);
     const create =
       !closed && wellFormed && !isDeclared && (atOwner || landing.kind === TYPE)
         ? mint(last)
@@ -1014,10 +1148,17 @@ export const selectorGestureOptions = (typed, context = {}) => {
   if (child) {
     offer(UNIVERSAL, '*', null);
   }
-  const matcher = document === null || typeof key !== 'string' ? null : createMatcher(document, map);
+  const matcher =
+    document === null || typeof key !== 'string'
+      ? null
+      : createMatcher(document, map);
   if (matcher === null) {
-    Object.entries(typeTable).forEach(([name, label]) => offer(TYPE, name, label));
-    Object.entries(vocabulary).forEach(([tag, label]) => offer(TAG, tag, label));
+    Object.entries(typeTable).forEach(([name, label]) =>
+      offer(TYPE, name, label),
+    );
+    Object.entries(vocabulary).forEach(([tag, label]) =>
+      offer(TAG, tag, label),
+    );
   } else {
     // Descendants are the two kind families' matches merged back into
     // document order (the document walk), the owner itself never among
@@ -1027,8 +1168,16 @@ export const selectorGestureOptions = (typed, context = {}) => {
       : documentOrder(document).filter(
           (node) =>
             node !== key &&
-            (matcher.matches(key, prefix ? `${prefix} ${TYPE_BLOCK}` : TYPE_BLOCK, node) ||
-              matcher.matches(key, prefix ? `${prefix} ${TYPE_CONTAINER}` : TYPE_CONTAINER, node)),
+            (matcher.matches(
+              key,
+              prefix ? `${prefix} ${TYPE_BLOCK}` : TYPE_BLOCK,
+              node,
+            ) ||
+              matcher.matches(
+                key,
+                prefix ? `${prefix} ${TYPE_CONTAINER}` : TYPE_CONTAINER,
+                node,
+              )),
         );
     // The set's types and tags (the matcher's presentRoster, the one
     // "what is here" derivation): root tags only after `>`, the tags
@@ -1038,11 +1187,13 @@ export const selectorGestureOptions = (typed, context = {}) => {
       { inner: !child },
     );
     if (!child && prefix === '') {
-      (Array.isArray(present) ? present : Object.keys(vocabulary)).forEach((tag) => {
-        if (tag && !tagNames.includes(tag)) {
-          tagNames.push(tag);
-        }
-      });
+      (Array.isArray(present) ? present : Object.keys(vocabulary)).forEach(
+        (tag) => {
+          if (tag && !tagNames.includes(tag)) {
+            tagNames.push(tag);
+          }
+        },
+      );
     }
     typeNames.forEach((name) => offer(TYPE, name, typeTable[name] ?? name));
     Object.keys(vocabulary)
@@ -1101,7 +1252,9 @@ export const nestUnder = (rule, typed) => {
   if (text.startsWith(':')) {
     return `${rule}${text}`;
   }
-  return typed.includes(ANCHOR) ? typed.replaceAll(ANCHOR, rule) : `${rule} ${text}`;
+  return typed.includes(ANCHOR)
+    ? typed.replaceAll(ANCHOR, rule)
+    : `${rule} ${text}`;
 };
 
 /**
@@ -1291,6 +1444,13 @@ export const previewReach = (typed, options = {}) => {
  * values resurface (restoredLines() reports them), and the row honestly
  * stays until the variant is detached.
  *
+ * @param {?object} map
+ *   The root entity's style map.
+ * @param {string} key
+ *   The island's full style-map key.
+ * @param {string} condition
+ *   The island's condition.
+ *
  * @return {Array<object>}
  *   Zero or one update_style op ([] when the own layer holds nothing —
  *   removing a draft row is pure view state).
@@ -1325,6 +1485,11 @@ export const conditionRemovalOps = (map, key, condition) => {
  * survive (only detach removes a variant's delivery), so a
  * variant-styled part's row remains, showing its variant lines.
  *
+ * @param {?object} map
+ *   The root entity's style map.
+ * @param {string} key
+ *   The part row's full style-map key.
+ *
  * @return {Array<object>}
  *   update_style ops, [] when the part has no own entry (a draft row).
  */
@@ -1346,6 +1511,14 @@ export const partRemovalOps = (map, key) => {
 /**
  * Whether an object carries a key of its own (a plan's moves map is a
  * plain object keyed by selectors, read without the prototype's words).
+ *
+ * @param {object} object
+ *   The plain object.
+ * @param {string} key
+ *   The key to look for.
+ *
+ * @return {boolean}
+ *   True when the object has the key as its own property.
  */
 const owns = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 
@@ -1357,6 +1530,16 @@ const owns = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
  * designer can see, so a landing on one refuses like a landing on a
  * stored key (the plan's collision rule); a draft keyed to the moved
  * rule itself is a source the rename carries along.
+ *
+ * @param {?object} map
+ *   The root entity's style map.
+ * @param {{for: string, conditions: object, parts: string[]}} drafts
+ *   The view's drafts.
+ * @param {string} owner
+ *   The moved rule's owner key.
+ *
+ * @return {string[]}
+ *   The relative keys under the owner, stored and drafted, each once.
  */
 const ruleMoveKeys = (map, drafts, owner) => {
   const prefix = `${owner}${SUFFIX}`;
@@ -1425,7 +1608,13 @@ export const ruleMovePlan = (map, drafts, owner, from, to) => {
     refusal: null,
     moves: plan.moves,
     operations: stored
-      ? [{ op: 'move_style', key: `${owner}${SUFFIX}${rule}`, to: plan.moves[rule] }]
+      ? [
+          {
+            op: 'move_style',
+            key: `${owner}${SUFFIX}${rule}`,
+            to: plan.moves[rule],
+          },
+        ]
       : [],
   };
 };
@@ -1446,6 +1635,7 @@ export const ruleMovePlan = (map, drafts, owner, from, to) => {
  *   ruleMovePlan()'s moves (relative source to relative landing).
  *
  * @return {{for: string, conditions: object, parts: string[], focus: ?string}}
+ *   The drafts with the carried rows and focus at their landings.
  */
 export const renameDrafts = (drafts, owner, moves) => {
   const prefix = `${owner}${SUFFIX}`;
@@ -1457,7 +1647,10 @@ export const renameDrafts = (drafts, owner, moves) => {
     return owns(moves, relative) ? `${prefix}${moves[relative]}` : key;
   };
   const conditions = Object.fromEntries(
-    Object.entries(drafts.conditions ?? {}).map(([key, names]) => [rekey(key), names]),
+    Object.entries(drafts.conditions ?? {}).map(([key, names]) => [
+      rekey(key),
+      names,
+    ]),
   );
   const parts =
     drafts.for === owner
@@ -1468,7 +1661,10 @@ export const renameDrafts = (drafts, owner, moves) => {
   let { focus } = drafts;
   if (typeof focus === 'string') {
     const at = focus.lastIndexOf('|');
-    focus = at === -1 ? rekey(focus) : `${rekey(focus.slice(0, at))}${focus.slice(at)}`;
+    focus =
+      at === -1
+        ? rekey(focus)
+        : `${rekey(focus.slice(0, at))}${focus.slice(at)}`;
   }
   return { ...drafts, conditions, parts, focus };
 };
@@ -1480,6 +1676,17 @@ export const renameDrafts = (drafts, owner, moves) => {
  * their override unsets). The view uses this for variant-restore honesty:
  * a non-empty result means the removal gesture cannot empty the row, only
  * strip the element's own layer.
+ *
+ * @param {?object} map
+ *   The root entity's style map.
+ * @param {string} key
+ *   The island's full style-map key.
+ * @param {string} condition
+ *   The island's condition.
+ * @param {Array<object>} variants
+ *   The store's variant records.
+ * @param {?Array<string>} axes
+ *   The root scope's axis vocabulary (delivery order), or null.
  *
  * @return {Array<object>}
  *   The variant-layer subset of stackLines() over the key's stack built
@@ -1568,9 +1775,12 @@ export const shouldRestoreTinted = (key, condition, analysis, lines) => {
  * @param {Array<{property: string, value: string, variant: ?string}>} lines
  *   The island's baseline lines (stackLines()).
  * @param {object} options
- *   - cursor: the cursor offset in the buffer, or null (no active line).
- *   - includeActive: commit the cursor's declaration too (';' just typed,
- *     or the island blurred).
+ *   The cadence options.
+ * @param {?number} options.cursor
+ *   The cursor offset in the buffer, or null (no active line).
+ * @param {boolean} options.includeActive
+ *   Commit the cursor's declaration too (';' just typed, or the island
+ *   blurred).
  *
  * @return {Array<object>}
  *   The settled subset of islandOps(), same op shapes.

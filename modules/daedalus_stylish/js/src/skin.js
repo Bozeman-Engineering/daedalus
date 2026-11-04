@@ -43,6 +43,12 @@ import {
 
 /**
  * A refused member's reason, in the card's words.
+ *
+ * @param {{reason: string, lacks: ?object}} row
+ *   A member skin row with its refusal (skin-card-model.js).
+ *
+ * @return {string}
+ *   The reason, translated.
  */
 export const reasonText = (row) => {
   switch (row.reason) {
@@ -90,6 +96,17 @@ export const reasonText = (row) => {
  * touches the skin, so a material editor sees which skin they edit; the
  * gestures are the administer grade's alone (each restyles the whole
  * site), and without it the card is the worn skin's name and standing.
+ */
+
+/**
+ * Renders the skin card.
+ *
+ * @param {object} props
+ *   The component's props.
+ * @param {object} props.skin
+ *   The skin gesture gates (drupalSettings.daedalusStylish.skin).
+ * @param {object} props.source
+ *   The state source (applyResponse and refreshDefaults after a gesture).
  */
 const SkinCard = ({ skin: skinConfig, source }) => {
   const [read, setRead] = useState(null);
@@ -324,7 +341,9 @@ const SkinCard = ({ skin: skinConfig, source }) => {
                       'The active design system wears no skin: nothing it names is a published, conforming member.',
                     )
               : worn.provider == null
-                ? Drupal.t('A skin this site made; every edit lands on it directly.')
+                ? Drupal.t(
+                    'A skin this site made; every edit lands on it directly.',
+                  )
                 : worn.site_layer
                   ? Drupal.t(
                       "Shipped by !provider; the site's additions and changes are a layer over it, and an update to the package shows through.",
@@ -421,7 +440,9 @@ const SkinCard = ({ skin: skinConfig, source }) => {
                       {group.skins.map((skin) => (
                         <option key={skin.reference} value={skin.reference}>
                           {skin.worn
-                            ? Drupal.t('!label (worn)', { '!label': skin.label })
+                            ? Drupal.t('!label (worn)', {
+                                '!label': skin.label,
+                              })
                             : skin.label}
                         </option>
                       ))}
@@ -506,6 +527,12 @@ const SkinCard = ({ skin: skinConfig, source }) => {
 
 /**
  * Why a token name cannot go, phrased.
+ *
+ * @param {?string} error
+ *   The tokenNameError() code, or null.
+ *
+ * @return {string}
+ *   The sentence, or '' for no error.
  */
 const tokenNameText = (error) =>
   ({
@@ -530,6 +557,24 @@ const tokenNameText = (error) =>
  * delta on the store before the promise resolves, so the token is a stop
  * on every basic row bound to its scale, in every picker of both windows,
  * and its custom property resolves on the canvas before any reload.
+ */
+
+/**
+ * Renders the token mint card.
+ *
+ * @param {object} props
+ *   The component's props.
+ * @param {object} props.guide
+ *   The style guide payload (tokenScales, the scheme condition).
+ * @param {object} props.materials
+ *   The materials store's records.
+ * @param {object} props.source
+ *   The state source (the batch commit).
+ * @param {?object} [props.seed]
+ *   A copied token's seed (skin-model.js copySeed: scale, value,
+ *   description), or null for a blank draft.
+ * @param {Function} props.onClose
+ *   Closes the card (Cancel and a successful mint alike).
  */
 const TokenMintCard = ({ guide, materials, source, seed = null, onClose }) => {
   const scales = Object.entries(guide?.tokenScales ?? {}).map(
@@ -573,7 +618,11 @@ const TokenMintCard = ({ guide, materials, source, seed = null, onClose }) => {
         kind: 'token',
         group: scale,
         label: name.trim(),
-        value: mergedPair(value, { draft: value, darkDraft: darkValue, scheme }),
+        value: mergedPair(value, {
+          draft: value,
+          darkDraft: darkValue,
+          scheme,
+        }),
         description: description.trim() === '' ? undefined : description.trim(),
         offered: offered ? undefined : false,
       },
@@ -609,7 +658,9 @@ const TokenMintCard = ({ guide, materials, source, seed = null, onClose }) => {
           title={Drupal.t('The scale the token is minted on')}
           aria-label={Drupal.t('Scale')}
           onChange={(event) => {
-            const next = scales.find((entry) => entry.id === event.target.value);
+            const next = scales.find(
+              (entry) => entry.id === event.target.value,
+            );
             setScale(event.target.value);
             // A scale flip re-seeds the draft: the old shape's value means
             // nothing to the new shape's editor.
@@ -713,11 +764,37 @@ const TokenMintCard = ({ guide, materials, source, seed = null, onClose }) => {
  * completes on every motion row of both windows and the leader's preview
  * sheet carries its @keyframes before any reload.
  */
-const AnimationMintCard = ({ guide, materials, source, seed = null, onClose }) => {
+
+/**
+ * Renders the animation mint card.
+ *
+ * @param {object} props
+ *   The component's props.
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials store's records.
+ * @param {object} props.source
+ *   The state source (the batch commit).
+ * @param {?object} [props.seed]
+ *   A copied animation's seed (steps, description), or null for the
+ *   fade.
+ * @param {Function} props.onClose
+ *   Closes the card (Cancel and a successful mint alike).
+ */
+const AnimationMintCard = ({
+  guide,
+  materials,
+  source,
+  seed = null,
+  onClose,
+}) => {
   const [label, setLabel] = useState('');
   const [description, setDescription] = useState(seed?.description ?? '');
   const [offered, setOffered] = useState(true);
-  const [stops, setStops] = useState(() => keyedStops(seed?.steps ?? SEED_STEPS));
+  const [stops, setStops] = useState(() =>
+    keyedStops(seed?.steps ?? SEED_STEPS),
+  );
   const [selected, setSelected] = useState(0);
   const [lint, setLint] = useState(() => new Map());
   const [minting, setMinting] = useState(false);
@@ -799,7 +876,7 @@ const AnimationMintCard = ({ guide, materials, source, seed = null, onClose }) =
           className="daedalus-ui-pill-button daedalus-stylish-library-card__action daedalus-stylish-skin-mint__save"
           disabled={minting || invalid || label.trim() === ''}
           title={Drupal.t(
-            "Mint the animation: named keyframes on the active skin; any element can wear it.",
+            'Mint the animation: named keyframes on the active skin; any element can wear it.',
           )}
           onClick={mint}
         >
@@ -830,6 +907,17 @@ const AnimationMintCard = ({ guide, materials, source, seed = null, onClose }) =
  * store before the promise resolves, so the family joins the stack
  * editor's chips in both windows and the leader's font delivery loads
  * its faces before any reload.
+ */
+
+/**
+ * Renders the font mint card.
+ *
+ * @param {object} props
+ *   The component's props.
+ * @param {object} props.source
+ *   The state source (the batch commit).
+ * @param {Function} props.onClose
+ *   Closes the card (Cancel and a successful mint alike).
  */
 const FontMintCard = ({ source, onClose }) => {
   const [label, setLabel] = useState('');
@@ -902,8 +990,12 @@ const FontMintCard = ({ source, onClose }) => {
         type="text"
         className="daedalus-ui-input daedalus-stylish-skin-mint__family"
         aria-label={Drupal.t('Font family')}
-        placeholder={Drupal.t('Family name, when it differs from the label (optional)…')}
-        title={Drupal.t('The name font-family stacks reference; the label unless you say otherwise.')}
+        placeholder={Drupal.t(
+          'Family name, when it differs from the label (optional)…',
+        )}
+        title={Drupal.t(
+          'The name font-family stacks reference; the label unless you say otherwise.',
+        )}
         value={family}
         onInput={(event) => setFamily(event.target.value)}
       />
@@ -947,13 +1039,20 @@ const FontMintCard = ({ source, onClose }) => {
  *   A skinSections() section.
  *
  * @return {{label: string, hint: ?string}}
+ *   The heading's label and its hint, null for a scale.
  */
 export const sectionHeading = (section) => {
   if (section.kind === 'animation') {
-    return { label: Drupal.t('Animations'), hint: Drupal.t('what motion-* names') };
+    return {
+      label: Drupal.t('Animations'),
+      hint: Drupal.t('what motion-* names'),
+    };
   }
   if (section.kind === 'font') {
-    return { label: Drupal.t('Fonts'), hint: Drupal.t('what a family stack names') };
+    return {
+      label: Drupal.t('Fonts'),
+      hint: Drupal.t('what a family stack names'),
+    };
   }
   return { label: section.label ?? '', hint: null };
 };
@@ -962,8 +1061,10 @@ export const sectionHeading = (section) => {
  * The kind picker's words: what "+ New" offers.
  *
  * @param {string} kind
+ *   'token', 'animation' or 'font'.
  *
  * @return {string}
+ *   The kind's label, translated.
  */
 export const kindLabel = (kind) =>
   ({
@@ -987,12 +1088,19 @@ export const kindLabel = (kind) =>
  * card needs beyond its record are its own per-open read.
  *
  * @param {object} props
+ *   The component's props.
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials store's records.
  * @param {object} props.skinMaterials
  *   The skin material gesture gates
  *   (drupalSettings.daedalusStylish.skinMaterials).
  * @param {object} props.skin
  *   The skin gesture gates (drupalSettings.daedalusStylish.skin): the
  *   skin card's lifecycle is the administer grade's.
+ * @param {object} props.source
+ *   The state source.
  */
 export const SkinView = ({
   guide,

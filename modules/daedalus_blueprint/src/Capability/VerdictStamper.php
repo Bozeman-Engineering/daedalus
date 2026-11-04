@@ -268,6 +268,7 @@ final class VerdictStamper {
    * The targets of a host, lazily: the root, then every element uuid.
    *
    * @return \Generator<string>
+   *   The host's uuid, then every element uuid in tree order.
    */
   private function targets(HostInterface $host): \Generator {
     yield $host->uuid();
@@ -278,6 +279,7 @@ final class VerdictStamper {
    * The uuids of every container and block node of a lean tree, in order.
    *
    * @return \Generator<string>
+   *   The uuids, in tree order.
    */
   private function elementUuids(array $nodes): \Generator {
     foreach ($nodes as $node) {

@@ -18,13 +18,13 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
  * Tests the move_element operation.
  *
  * Moves reuse the anchor-relative placement grammar. This kernel test covers
- * component moves within and across root-level sections, the grammar's
- * error cases, and the root-anchored section move (the root entity with
- * 'inside' appends a section to the end of the top-level flow), which
- * needs daedalus_layout section UUIDs and so runs the daedalus_layout stack for those
- * cases only. Anchor-relative section moves and the FieldBlock context
- * remap are covered by BlueprintOperationsSectionEventsTest and the
- * functional assembled-stack tests.
+ * component moves within and across root-level sections, the grammar's error
+ * cases, and the root-anchored section move (the root entity with 'inside'
+ * appends a section to the end of the top-level flow), which needs
+ * daedalus_layout section UUIDs and so runs the daedalus_layout stack for those
+ * cases only. Anchor-relative section moves and the FieldBlock context remap
+ * are covered by BlueprintOperationsSectionEventsTest and the functional
+ * assembled-stack tests.
  */
 #[RunTestsInSeparateProcesses]
 #[CoversClass(BlueprintOperations::class)]
@@ -49,7 +49,9 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   protected BlueprintOperations $operations;
 
   /**
-   * The daedalus_layout UUID of the nested section (and its container component).
+   * The daedalus_layout UUID of the nested section.
+   *
+   * Shared with its container component.
    */
   protected string $nestedSectionUuid;
 
@@ -77,12 +79,12 @@ class BlueprintOperationsMoveTest extends BlueprintKernelTestBase {
   /**
    * Creates an daedalus_layout entity holding a nested-section container.
    *
-   * Runs the real daedalus_layout stack: sections are only addressable by UUID (an
-   * daedalus_layout third-party setting) and nested section lists only resolve
-   * through NestedAwareSectionStorage when daedalus_layout is installed. Structure:
-   * root section (daedalus_layout UUID) > container component (uuid == embedded
-   * section uuid) > embedded section (daedalus_layout UUID). Moved events are
-   * collected on $this->movedEvents.
+   * Runs the real daedalus_layout stack: sections are only addressable by UUID
+   * (an daedalus_layout third-party setting) and nested section lists only
+   * resolve through NestedAwareSectionStorage when daedalus_layout is
+   * installed. Structure: root section (daedalus_layout UUID) > container
+   * component (uuid == embedded section uuid) > embedded section
+   * (daedalus_layout UUID). Moved events are collected on $this->movedEvents.
    *
    * @return \Drupal\Core\Entity\FieldableEntityInterface
    *   The saved root entity.

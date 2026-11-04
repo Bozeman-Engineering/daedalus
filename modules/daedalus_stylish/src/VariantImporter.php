@@ -14,14 +14,13 @@ use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_stylish\Exception\ShippedVariantException;
 use Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider;
-use Drupal\daedalus_stylish\StyleGuide;
 use Drupal\workspaces\WorkspaceManagerInterface;
 
 /**
  * Imports and syncs module-shipped style variants: the disk lane.
  *
- * A module ships default variants in a MODULE.daedalus_stylish.variants.yml at its
- * root (next to its style guide YAML), keyed by machine name:
+ * A module ships default variants in a MODULE.daedalus_stylish.variants.yml at
+ * its root (next to its style guide YAML), keyed by machine name:
  * @code
  * card_left:
  *   label: 'Card left'
@@ -78,8 +77,8 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * - Machine name collides with a variant this module does not ship: loud
  *   failure; machine names are the site-wide reference vocabulary.
  *
- * Activation runs through ShippedSync: every cache rebuild (`drush cr`),
- * module install, and `drush daedalus_stylish:sync [MODULE]` sync the variants after
+ * Activation runs through ShippedSync: every cache rebuild (`drush cr`), module
+ * install, and `drush daedalus_stylish:sync [MODULE]` sync the variants after
  * the fonts, animations, and skins they may reference.
  */
 class VariantImporter extends ShippedDefinitionsImporter {
@@ -143,7 +142,7 @@ class VariantImporter extends ShippedDefinitionsImporter {
   /**
    * The owner key: the owning blueprint's machine name.
    *
-   * daedalus_blueprint_library's shipper writes it beside the blueprint
+   * `daedalus_blueprint_library`'s shipper writes it beside the blueprint
    * file; this module reads it onto the ownership fields that module
    * provides.
    */

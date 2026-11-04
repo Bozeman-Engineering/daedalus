@@ -16,9 +16,9 @@ namespace Drupal\daedalus_ai\ImageDimension;
  * AI's response are expressed in the same terms, so there is nothing to
  * translate or guess.
  *
- * Adapters are tagged services (daedalus_ai.image_dimension_adapter) collected by
- * ImageDimensionAdapterManager, which selects the one matching the configured
- * provider.
+ * Adapters are tagged services (daedalus_ai.image_dimension_adapter) collected
+ * by ImageDimensionAdapterManager, which selects the one matching the
+ * configured provider.
  */
 interface ImageDimensionAdapterInterface {
 

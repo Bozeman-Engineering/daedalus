@@ -390,8 +390,8 @@ element kind, plus the reserved `site` key for site-scope vocabulary),
 (anatomy follows templates), and `hook_page_builder_declarations_alter()`
 has final say. Sections daedalus_ui owns: `elements` (the markup-shell
 anatomy tree), `fields` (existence + presentation per field),
-`presentation`, and `collapsed`. Foreign sections (e.g. Daedalus Stylish's styling
-vocabulary) ride the same files untouched. See
+`presentation`, and `collapsed`. Foreign sections (e.g. Daedalus Stylish's
+styling vocabulary) ride the same files untouched. See
 `\Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations` for the
 format and `daedalus_ui.api.php` for the alter hook.
 
@@ -433,7 +433,7 @@ fields. The contract is `daedalus_ui.api.php`, "Element icon providers".
 
 The client boots its blueprint mirror from `drupalSettings.daedalusUi.blueprint`
 (`BlueprintMirror::envelope()`, one JSON string so core's settings merge can
-never franken-merge two deliveries): `entityType`, `entityId`, `uuid`,
+never patchwork-merge two deliveries): `entityType`, `entityId`, `uuid`,
 `label`, `langcode`, `viewMode`, the host-level `verdict` (the root's
 explained refusals with the owner and the portal), and `blueprint`, the
 spine's read annotated. `blueprint.layout` IS daedalus_blueprint's lean node
@@ -472,7 +472,7 @@ collection.
 
 The lane also names the file. A saved filename is a handle the model echoes
 back to open an attachment, that CSS carries in `url('file:...')` and that
-HTML attributes and media labels repeat, so the lane canonicalises every
+HTML attributes and media labels repeat, so the lane canonicalizes every
 incoming filename itself with core's full sanitization posture (transliterated,
 whitespace and anything outside `[0-9A-Za-z_.-]` to `-`, the extension
 lowercased), independent of `file.settings.filename_sanitization`, which is off
@@ -494,10 +494,10 @@ Daedalus UI chrome resolves through it like every other consumer:
   by media library pickers; resolves to the media source file's URL
   (original file, no image style).
 - anything else: a root-relative URL path such as
-  `/modules/contrib/daedalus/modules/daedalus_layout/assets/image.svg`. The shipped lane for configs
-  and recipes, returned verbatim. Producers with friendlier spellings (e.g.
-  a module-relative path in a YAML definition) must resolve them to
-  root-relative before storage.
+  `/modules/contrib/daedalus/modules/daedalus_layout/assets/image.svg`. The
+  shipped lane for configs and recipes, returned verbatim. Producers with
+  friendlier spellings (e.g. a module-relative path in a YAML definition) must
+  resolve them to root-relative before storage.
 
 Empty values and dangling media references resolve to NULL, and each
 consumer renders its own default icon; the resolver never imposes one. See

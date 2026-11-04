@@ -34,12 +34,18 @@ export const UI_MODE_STORAGE_KEY = STORAGE_KEY;
  *
  * Basic is the default for everything unknown — a missing key, a removed
  * key (storage events deliver null), or a garbage write.
+ *
+ * @param {*} value
+ *   The stored or received value.
  */
 export const normalizeUiMode = (value) =>
   value === 'advanced' || value === 'code' ? value : 'basic';
 
 /**
  * Builds a mode store over a Storage-shaped backend (null for none).
+ *
+ * @param {?Storage} storage
+ *   The backend (window.localStorage), or null for session-only state.
  */
 export const createUiModeStore = (storage) =>
   createPreferenceStore(storage, STORAGE_KEY, normalizeUiMode);

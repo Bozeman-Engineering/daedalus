@@ -21,13 +21,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the variant shipper (the disk lane's site-to-disk direction).
  *
- * A ship writes MODULE.daedalus_stylish.variants.FILE_ID.yml into the target module
- * and adopts the shipped variants in place (same entity, provider stamped,
- * source hash set, published), so the importer's sync right after reports
- * UNCHANGED: the round trip is the lock. The target module is created
- * under the test's own site directory (sites/simpletest/ID, a root
- * extension discovery scans), never a real module directory, and removed
- * on teardown.
+ * A ship writes MODULE.daedalus_stylish.variants.FILE_ID.yml into the target
+ * module and adopts the shipped variants in place (same entity, provider
+ * stamped, source hash set, published), so the importer's sync right after
+ * reports UNCHANGED: the round trip is the lock. The target module is created
+ * under the test's own site directory (sites/simpletest/ID, a root extension
+ * discovery scans), never a real module directory, and removed on teardown.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -289,10 +288,11 @@ class VariantShipperTest extends KernelTestBase {
   /**
    * A name shipped elsewhere is planned as such and refused by ship().
    *
-   * Two shippers count as elsewhere: another module (daedalus_stylish_variants_test
-   * ships testimonial_bold) and another file of the target module itself
-   * (its hand-authored single file), since discovery would refuse the
-   * duplicate anyway. Nothing is written when any name conflicts.
+   * Two shippers count as elsewhere: another module
+   * (daedalus_stylish_variants_test ships testimonial_bold) and another file of
+   * the target module itself (its hand-authored single file), since discovery
+   * would refuse the duplicate anyway. Nothing is written when any name
+   * conflicts.
    */
   public function testShippedElsewhereRefused(): void {
     \Drupal::service('module_installer')->install(['daedalus_stylish_variants_test']);

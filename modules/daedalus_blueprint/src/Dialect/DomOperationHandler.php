@@ -783,7 +783,13 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
           }
         }
         if ($matched === []) {
-          $errors[] = new BlueprintError($path, 'BAD_OP', sprintf('The rule #%s %s wears no %s variant to remove.', $id, substr($local, 2), $name === 'class' ? 'class' : $name), ['property' => $name, 'worn' => array_column($worn, 'variant')], 'Remove names "class" (every style class the rule wears) or an axis attribute name the rule wears a value on.');
+          $errors[] = new BlueprintError(
+            $path,
+            'BAD_OP',
+            sprintf('The rule #%s %s wears no %s variant to remove.', $id, substr($local, 2), $name === 'class' ? 'class' : $name),
+            ['property' => $name, 'worn' => array_column($worn, 'variant')],
+            'Remove names "class" (every style class the rule wears) or an axis attribute name the rule wears a value on.',
+          );
           continue;
         }
         foreach ($matched as $variant) {
@@ -1034,8 +1040,8 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       ], 'Set it on the outermost container.');
       return;
     }
-    // apply_variant replaces the same-axis reference (daedalus_stylish's contract),
-    // so no explicit remove is needed.
+    // apply_variant replaces the same-axis reference (daedalus_stylish's
+    // contract), so no explicit remove is needed.
     $ops[] = ['op' => 'apply_variant', 'key' => $key, 'variant' => $reference->id];
   }
 

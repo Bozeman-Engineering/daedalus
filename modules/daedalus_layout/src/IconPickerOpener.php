@@ -23,25 +23,25 @@ use Drupal\daedalus_blueprint\IconResolver;
  * Core's media library has a designed form-free seam: an opener service
  * interacts with the library on behalf of whatever opened it (the daedalus_edit
  * and daedalus_stylish openers are the precedents). This opener serves the
- * daedalus_layout_icon_picker form element: the picker renders the media_library.ui
- * URL built here as a use-ajax modal link, and the user's selection returns
- * as AJAX commands that write the canonical icon value `media:<uuid>` (the
- * icon grammar's user lane, see IconResolver) into the picker's hidden input
- * and refresh its preview. No host form round-trip is involved: the value
- * only persists when the host form is saved.
+ * daedalus_layout_icon_picker form element: the picker renders the
+ * media_library.ui URL built here as a use-ajax modal link, and the user's
+ * selection returns as AJAX commands that write the canonical icon value
+ * `media:<uuid>` (the icon grammar's user lane, see IconResolver) into the
+ * picker's hidden input and refresh its preview. No host form round-trip is
+ * involved: the value only persists when the host form is saved.
  *
  * Access: the opener parameters carry the host config entity whose icon the
  * picker edits (a block type today; hash-covered, so the client cannot
  * retarget the library), and the library is offered to whoever may update
  * that host — the same gate as the form the picker sits on.
  *
- * The allowed media types are the types whose source field holds an image
- * or a vector (SOURCE_FIELD_TYPES, the same capability gate as daedalus_stylish's
- * MediaValueResolver::SOURCE_FIELD_TYPES): icons are visual by definition,
- * so the picker offers only visual media. The resolver deliberately accepts
- * any file-backed media (pickers constrain the offer, not the grammar).
- * Icons render as inert chrome (background-image / <img>), so vectors stay
- * sealed from page CSS and scripts here.
+ * The allowed media types are the types whose source field holds an image or a
+ * vector (SOURCE_FIELD_TYPES, the same capability gate as daedalus_stylish's
+ * MediaValueResolver::SOURCE_FIELD_TYPES): icons are visual by definition, so
+ * the picker offers only visual media. The resolver deliberately accepts any
+ * file-backed media (pickers constrain the offer, not the grammar). Icons
+ * render as inert chrome (background-image / <img>), so vectors stay sealed
+ * from page CSS and scripts here.
  *
  * @see \Drupal\daedalus_layout\Element\IconPicker
  * @see \Drupal\daedalus_blueprint\IconResolver
@@ -120,8 +120,8 @@ class IconPickerOpener implements MediaLibraryOpenerInterface {
   /**
    * Builds the media_library.ui URL an icon picker opens as a modal.
    *
-   * The CKEditor precedent (and daedalus_edit's, daedalus_stylish's): the state is
-   * constructed server-side, hash included, and the ready-made URL renders
+   * The CKEditor precedent (and daedalus_edit's, daedalus_stylish's): the state
+   * is constructed server-side, hash included, and the ready-made URL renders
    * into the picker as a use-ajax link — no client-side state construction.
    *
    * @param \Drupal\Core\Entity\EntityInterface $host
@@ -174,8 +174,8 @@ class IconPickerOpener implements MediaLibraryOpenerInterface {
    *
    * Gated on the source FIELD TYPE, not the source plugin class, so custom
    * sources with a qualifying source field count (the same shape as
-   * daedalus_stylish's gate; the constant is not shared because daedalus_layout does not
-   * depend on daedalus_stylish).
+   * daedalus_stylish's gate; the constant is not shared because daedalus_layout
+   * does not depend on daedalus_stylish).
    *
    * @return string[]
    *   The media type ids.

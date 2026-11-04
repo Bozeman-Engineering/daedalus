@@ -57,16 +57,16 @@ Settings live on the AI chat form at `/admin/config/daedalus/ai/chat`
 Configuration » AI » Tools & Automation, and rostered in the daedalus repo's
 `SETTINGS.md`): choose the AI assistant, turn image generation on or off and
 name the placeholder image shown while generated images are produced, and
-curate the models users may choose. A user with the "Choose the AI model the chat
-runs on" permission picks one of the curated models from the chat's menu
+curate the models users may choose. A user with the "Choose the AI model the
+chat runs on" permission picks one of the curated models from the chat's menu
 (stored as an editor preference, `daedalus_ai` / `model`, in drupal/ai's
 `provider__model` grammar); an empty list hides the choice, and the site's
 default chat model stays the fallback. Every curated model is a model of the
-provider the chat runs on without a choice (the assistant's own provider,
-else the site's default chat provider): the table offers that provider's
-models only, and a choice switches the model, never the provider. A row on
-another provider is refused when the list is read; the update hook that
-introduced this rule dropped such rows on existing sites, logging each.
+provider the chat runs on without a choice (the assistant's own provider, else
+the site's default chat provider): the table offers that provider's models only,
+and a choice switches the model, never the provider. A row on another provider
+is refused when the list is read; the update hook that introduced this rule
+dropped such rows on existing sites, logging each.
 
 ## Debugging
 

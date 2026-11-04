@@ -12,9 +12,10 @@
  * in view, centered in its nearest scrollport when it fits with its scroll
  * margins, its top edge aligned under the fixed chrome when it does not,
  * and never moved when it is already fully in view.
- * @code
- *   Drupal.Daedalus.scrollReveal(element, { behavior: 'smooth' });
- * @endcode
+ *
+ * @example
+ * Drupal.Daedalus.scrollReveal(element, { behavior: 'smooth' });
+ *
  * `behavior` is scrollIntoView's; omitted, the browser's default applies.
  * List rovings (a picker's option, a menu's row) are not selection reveals
  * and keep their own `nearest` scroll.
@@ -87,7 +88,10 @@ const scrollerOf = (element) => {
  */
 const scrollportOf = (element, scroller) => {
   if (!scroller) {
-    return { top: 0, height: element.ownerDocument.documentElement.clientHeight };
+    return {
+      top: 0,
+      height: element.ownerDocument.documentElement.clientHeight,
+    };
   }
   const rect = scroller.getBoundingClientRect();
   return { top: rect.top + scroller.clientTop, height: scroller.clientHeight };

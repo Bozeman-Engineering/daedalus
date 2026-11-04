@@ -112,9 +112,9 @@ class ImageBlockComposedRenderTest extends BlueprintKernelTestBase {
     $this->enableLayoutBuilder();
     // This module DECLARES defaults, and every defaults compile builds the
     // style guide, which validates them through a validator whose materials
-    // roster reads all four daedalus_stylish storages. Compiles fire on config saves
-    // (system.theme below, daedalus_stylish.settings in the guide test), so the
-    // schemas must exist before the first such save.
+    // roster reads all four daedalus_stylish storages. Compiles fire on config
+    // saves (system.theme below, daedalus_stylish.settings in the guide test),
+    // so the schemas must exist before the first such save.
     $this->installEntitySchema('daedalus_skin');
     $this->installEntitySchema('daedalus_variant');
     // The composed render derives its src through an image style, and

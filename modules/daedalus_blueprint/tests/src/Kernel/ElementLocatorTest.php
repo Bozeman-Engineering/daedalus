@@ -248,9 +248,9 @@ class ElementLocatorTest extends BlueprintKernelTestBase {
   /**
    * Tests that nested layout components are not found without daedalus_layout.
    *
-   * Nested layouts are an daedalus_layout feature. Without daedalus_layout, the flat
-   * section search cannot traverse into nested block_content layouts,
-   * so the nested component should not be found.
+   * Nested layouts are an daedalus_layout feature. Without daedalus_layout, the
+   * flat section search cannot traverse into nested block_content layouts, so
+   * the nested component should not be found.
    */
   public function testLocateNestedLayoutComponent(): void {
     $this->enableLayoutBuilder();

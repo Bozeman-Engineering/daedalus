@@ -8,7 +8,6 @@ import {
   panelItems,
   formFieldKeys,
   isPanelItem,
-  presentSubject,
   hasCanvasLeaf,
 } from './panel-items.js';
 import { targetedKeys } from './field-state.js';
@@ -72,6 +71,7 @@ let deferredRefresh = null;
  * mount (a widget's own entity preview) is not the canvas.
  *
  * @return {Element[]}
+ *   The leaves, in document order.
  */
 const canvasLeaves = () => {
   const mount = formCacheMount();
@@ -83,6 +83,13 @@ const canvasLeaves = () => {
 /**
  * Commits any current edit, then opens an item's edit. An invalid widget
  * keeps its edit; the new one stays closed.
+ *
+ * @param {Function} open
+ *   Opens the new edit; runs once the current edit has committed.
+ *
+ * @return {Promise<void>}
+ *   Resolves once the new edit is open, or once an invalid widget kept
+ *   its own.
  */
 const openAfterCurrent = (open) => {
   const current = Drupal.Daedalus.Edit.CurrentlyEditingElement;
@@ -103,6 +110,12 @@ const openAfterCurrent = (open) => {
 /**
  * Opens the declared editor for a blueprint-edited leaf: no form fetch,
  * straight to the plugin's edit().
+ *
+ * @param {Element} item
+ *   The blueprint-edited leaf ([data-daedalus-edit-editor]).
+ *
+ * @return {Promise<void>}
+ *   Resolves once the leaf is editing.
  */
 const beginBlueprintEdit = (item) => {
   const current = Drupal.Daedalus.Edit.CurrentlyEditingElement;
@@ -116,6 +129,12 @@ const beginBlueprintEdit = (item) => {
 
 /**
  * Opens a panel widget's edit: the widget is the editor, already visible.
+ *
+ * @param {Element} item
+ *   The revealed widget's form-item wrapper.
+ *
+ * @return {Promise<void>}
+ *   Resolves once the widget is editing.
  */
 const beginPanelEdit = (item) => {
   const current = Drupal.Daedalus.Edit.CurrentlyEditingElement;
@@ -134,7 +153,7 @@ const flushDeferredRefresh = () => {
   deferredRefresh = null;
   if (form?.isConnected) {
     entityForm.refetchForm(form).catch((error) => {
-      console.error('Daedalus Edit: the deferred panel refresh failed.', error);
+      Drupal.throwError(error);
     });
   }
 };
@@ -188,6 +207,93 @@ const refreshFromTargets = async (payload) => {
   }
 };
 
+/**
+ * Shows the subject a selectable key names in the panel.
+ *
+ * The root entity (its own key or one of its field keys) is the panel's
+ * top-level subject; a block placement (`block:{uuid}` or one of its
+ * field keys) is the placement's content entity, whose form is fetched
+ * through the block-form endpoint when it is not cached yet; a field
+ * block placement (stamped with the root field it presents,
+ * data-presented-field) is the root's. The panel opens on the subject
+ * through the sidebar plugin's form-path door (openOn), which is a no-op
+ * when it already shows it.
+ *
+ * @param {string} key
+ *   A selectable key.
+ *
+ * @return {Promise<boolean>}
+ *   True when the panel shows the subject; false when the key names no
+ *   subject the panel can show (a section, a region, a foreign key, a
+ *   placement rendering no addressable entity), or when the panel's
+ *   (side, slot) refused to free up.
+ */
+const presentSubject = async (key) => {
+  const { SidebarManager, SidebarPluginBase, Blueprint } = Drupal.Daedalus;
+  const plugin = SidebarManager.getPlugin('daedalus_edit_form');
+  const [kind, uuid] = key.split(':');
+  const root = Blueprint.getRoot();
+  // A root whose blueprint carries no `fields` (a template host: the
+  // display's canvas) has no entity form; its door is inert.
+  const rootHasForm = Blueprint.getBlueprint()?.fields !== undefined;
+  try {
+    if (root && (kind === 'entity' || kind === 'field') && uuid === root.uuid) {
+      if (!rootHasForm) {
+        return false;
+      }
+      await plugin.ensureTopLevelSubject();
+      await plugin.openOn(plugin.subjectForm());
+      return true;
+    }
+    if (kind !== 'block') {
+      return false;
+    }
+    const placement = document.querySelector(
+      `[data-selectable="block:${uuid}"]`,
+    );
+    const presented = placement?.getAttribute('data-presented-field');
+    if (presented) {
+      // A field block presents a root field: the root is its subject.
+      return presentSubject(presented);
+    }
+    const wrapper = placement?.matches('[data-daedalus-ui-entity-wrapper]')
+      ? placement
+      : placement?.querySelector('[data-daedalus-ui-entity-wrapper]');
+    if (!wrapper) {
+      return false;
+    }
+    const [entityTypeId, entityId] =
+      wrapper.dataset.daedalusUiEntityWrapper.split('::');
+    const formId = `${entityTypeId}::${entityId}`;
+    let cached = formCacheMount()?.querySelector(
+      `:scope > [data-daedalus-edit-form-id="${formId}"]`,
+    );
+    if (!cached) {
+      await entityForm.fetchBlockForm(
+        placement,
+        wrapper.dataset.daedalusUiViewMode,
+      );
+      cached = formCacheMount()?.querySelector(
+        `:scope > [data-daedalus-edit-form-id="${formId}"]`,
+      );
+      if (!cached) {
+        throw new Error(
+          'Daedalus Edit: the fetched block form did not arrive in the form cache.',
+        );
+      }
+    }
+    await plugin.openOn(cached);
+    return true;
+  } catch (error) {
+    if (error === SidebarPluginBase.CLOSE_BLOCKED) {
+      // The same-(side, slot) panel refused to close (an invalid form
+      // item); it stays open and surfaces its own feedback.
+      return false;
+    }
+    throw error;
+  }
+};
+
 const engine = {
   /**
    * The engine's items: the canvas leaves in document order, and the
@@ -206,6 +312,12 @@ const engine = {
    * Resolves once the widget is editing; resolves without editing when the
    * leaf refuses (already editing as contenteditable, or a pending invalid
    * widget).
+   *
+   * @param {Element} item
+   *   A canvas leaf or a revealed panel widget's wrapper.
+   *
+   * @return {Promise<void>}
+   *   Resolves once the item is editing, or once the leaf refused.
    */
   beginEdit: (item) => {
     if (item.hasAttribute('contenteditable')) {
@@ -240,6 +352,14 @@ const engine = {
    * Ends the current edit: commit on blur, discard on cancel. Rejects with
    * 'HTML validation failed' when the widget is invalid and the edit must
    * stay open. A panel refresh the edit deferred runs once it is over.
+   *
+   * @param {object} options
+   *   The end options.
+   * @param {boolean} options.cancel
+   *   Discard the edit instead of committing it.
+   *
+   * @return {Promise<void>}
+   *   Resolves once the edit is over.
    */
   endEdit: ({ cancel = false } = {}) => {
     const current = Drupal.Daedalus.Edit.CurrentlyEditingElement;
@@ -280,6 +400,12 @@ const engine = {
    * the editor-owned surfaces only (editing element, CK popups,
    * dialogs, media library); chrome that keeps an edit declares
    * data-keeps-edit on its own root, which the session checks itself.
+   *
+   * @param {Element} target
+   *   The pressed element.
+   *
+   * @return {boolean}
+   *   True when the press lands on the current edit's own surface.
    */
   keepsEdit: (target) => {
     const current = Drupal.Daedalus.Edit.CurrentlyEditingElement;
@@ -322,7 +448,7 @@ const engine = {
    */
   mutationApplied: async (payload) => {
     await refreshFromTargets(payload).catch((error) => {
-      console.error('Daedalus Edit: the panel refresh failed.', error);
+      Drupal.throwError(error);
     });
     const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;
     if (!editing) {
@@ -400,6 +526,9 @@ Drupal.behaviors.DaedalusEditDraft = {
  * activation) are taken here in the capture phase. The form transport's
  * own round (transports.js) triggers the button through a custom jQuery
  * event, which no native listener sees.
+ *
+ * @param {object} app
+ *   The Daedalus registration app API; its EditSession commits.
  */
 const bindUpdateButton = (app) => {
   const onPress = (event) => {
@@ -419,6 +548,12 @@ const bindUpdateButton = (app) => {
   document.addEventListener('click', onPress, true);
 };
 
+/**
+ * Registers this engine with the daedalus_ui edit session.
+ *
+ * @param {object} app
+ *   The Daedalus registration app API.
+ */
 export const registerEditSessionEngine = (app) => {
   // The engine contract's reactive half: the one setter
   // (currently-editing.js) reports every edit open/close through

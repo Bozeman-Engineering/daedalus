@@ -37,8 +37,8 @@ use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
  *
  * Styles land through the UNIVERSAL container-kind declaration
  * (daedalus_stylish_layouts.page_builder.yml) and the shipped row variant the
- * daedalus_stylish_layouts install syncs, so the whole batch validates against the
- * real guide and the real variant, not fixtures.
+ * daedalus_stylish_layouts install syncs, so the whole batch validates against
+ * the real guide and the real variant, not fixtures.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]

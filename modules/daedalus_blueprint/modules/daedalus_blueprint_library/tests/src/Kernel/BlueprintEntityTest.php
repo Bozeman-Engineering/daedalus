@@ -11,6 +11,7 @@ use Drupal\daedalus_blueprint_library\Entity\Blueprint;
 use Drupal\entity_test\Entity\EntityTestBundle;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\layout_builder\Section;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -155,10 +156,17 @@ class BlueprintEntityTest extends KernelTestBase {
     $this->assertSame([], \Drupal::entityTypeManager()->getStorage('blueprint')->loadByProperties(['machine_name' => 'footer']), 'Nothing was saved.');
 
     $page = $this->createBlueprint(['machine_name' => 'landing', 'scope' => 'page', 'layout_builder__layout' => $two]);
-    $this->assertCount(2, Blueprint::load($page->id())->get('layout_builder__layout')->getSections(), 'A page blueprint takes several roots.');
+    $page_layout = Blueprint::load($page->id())->get('layout_builder__layout');
+    assert($page_layout instanceof SectionListInterface);
+    $this->assertCount(2, $page_layout->getSections(), 'A page blueprint takes several roots.');
 
-    $one = $this->createBlueprint(['machine_name' => 'section', 'layout_builder__layout' => [new Section('layout_onecol')]]);
-    $this->assertCount(1, Blueprint::load($one->id())->get('layout_builder__layout')->getSections(), 'A block blueprint takes one root.');
+    $one = $this->createBlueprint([
+      'machine_name' => 'section',
+      'layout_builder__layout' => [new Section('layout_onecol')],
+    ]);
+    $one_layout = Blueprint::load($one->id())->get('layout_builder__layout');
+    assert($one_layout instanceof SectionListInterface);
+    $this->assertCount(1, $one_layout->getSections(), 'A block blueprint takes one root.');
     $this->assertSame('block', $one->getScope());
   }
 

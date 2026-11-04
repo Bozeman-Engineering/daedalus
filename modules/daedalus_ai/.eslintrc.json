@@ -1,0 +1,16 @@
+{
+  // Layered over core's .eslintrc.passing.json, which drupal.org's eslint job
+  // links into the directory above the project. The js tree is classic
+  // scripts only (a file docblock, then the IIFE that wraps the script):
+  // no bundle, no native modules. The one entry below exists because of
+  // that shape.
+  "rules": {
+    // A classic script opens with a file docblock (@file) and the IIFE that
+    // wraps it, core's shape; jsdoc attaches that block to the IIFE and
+    // asks it to document the injected globals (Drupal, drupalSettings,
+    // once, jQuery). A block carrying @file describes the file, so it
+    // exempts the function it precedes; the rule's default exemption
+    // (inheritdoc) restated because the list replaces it whole.
+    "jsdoc/require-param": ["warn", { "exemptedBy": ["inheritdoc", "file"] }]
+  }
+}

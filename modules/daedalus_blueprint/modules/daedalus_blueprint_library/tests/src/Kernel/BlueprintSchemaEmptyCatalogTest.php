@@ -12,7 +12,9 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Zero blueprints means NO blueprints group and no blueprint prose: empty is absent.
+ * Zero blueprints means NO blueprints group and no blueprint prose.
+ *
+ * Empty is absent.
  *
  * Grows-by-data: the AI projection grows only with materials and never
  * carries teaching prose for materials that do not exist, so a site with

@@ -136,7 +136,21 @@ class StubProvider extends AiProviderClientBase implements ChatInterface, Contex
   }
 
   /**
-   * {@inheritdoc}
+   * Answers a chat leg with the capture's scripted reply.
+   *
+   * Its own docblock rather than the interface's: ChatInterface names the
+   * input class under Drupal\ai\Operation\Chat, a namespace that does not
+   * exist, so an inherited docblock types the parameter as a missing class.
+   *
+   * @param array|string|\Drupal\ai\OperationType\Chat\ChatInput $input
+   *   The chat array, string or ChatInput.
+   * @param string $model_id
+   *   The model id to use.
+   * @param array $tags
+   *   Extra tags to set.
+   *
+   * @return \Drupal\ai\OperationType\Chat\ChatOutput
+   *   The scripted output.
    */
   public function chat(array|string|ChatInput $input, string $model_id, array $tags = []): ChatOutput {
     $reply = NULL;

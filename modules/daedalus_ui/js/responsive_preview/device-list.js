@@ -27,9 +27,14 @@ export const MAX_DIMENSION = 10000;
 /**
  * Validates a candidate device.
  *
- * @param {Object} device
- *   The candidate ({label, width, height}); dimensions may still be
- *   strings fresh from form inputs.
+ * @param {object} device
+ *   The candidate; dimensions may still be strings fresh from form inputs.
+ * @param {string} device.label
+ *   The device's name.
+ * @param {string|number} device.width
+ *   The viewport width in CSS pixels.
+ * @param {string|number} device.height
+ *   The viewport height in CSS pixels.
  *
  * @return {string|null}
  *   A human-readable problem, or null when the device is valid.
@@ -53,7 +58,8 @@ export const validateDevice = ({ label, width, height }) => {
 /**
  * Creates the device list state.
  *
- * @param {Object} options
+ * @param {object} options
+ *   The two device sources and the persistence hook.
  * @param {Array} options.defaults
  *   The shipped default devices ({label, width, height}).
  * @param {Array} options.custom
@@ -91,6 +97,13 @@ export const createDeviceList = ({ defaults, custom, persist }) => {
 
     /**
      * Adds a user device; returns {key, persisted} or {error}.
+     *
+     * @param {object} device
+     *   The candidate, in validateDevice's shape.
+     *
+     * @return {object}
+     *   The new entry's key and the persistence promise, or the validation
+     *   error.
      */
     add: (device) => {
       const error = validateDevice(device);
@@ -113,6 +126,12 @@ export const createDeviceList = ({ defaults, custom, persist }) => {
      *
      * The returned key is the entry to select next: the one that slid into
      * the removed slot, or the last remaining entry.
+     *
+     * @param {string} key
+     *   The entry's key ('custom:N'); a default's key is refused.
+     *
+     * @return {object}
+     *   The next entry's key and the persistence promise, or the error.
      */
     remove: (key) => {
       const index = Number(key.split(':')[1]);

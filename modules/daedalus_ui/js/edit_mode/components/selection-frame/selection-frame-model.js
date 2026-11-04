@@ -27,18 +27,26 @@ import { groupVerbs } from '../../verbs/verb-groups.js';
  * rail is pulled back into the canvas so its verbs stay reachable.
  *
  * @param {object} args
- *   - rect: the anchor's viewport rect {top, left, bottom, right}.
- *   - chip: the chip's measured {width, height}.
- *   - viewport: {width, height}.
- *   - offsets: Drupal.displace-style {top, right, bottom, left} of the
- *     fixed rails (defaults to none).
- *   - stroke: the stroke's outline width (default 2, matching
- *     .daedalus-ui-frame__stroke--primary in selection-frame.css); the chip
- *     offsets by it so it sits on the outline, not the rect.
- *   - gap: breathing room between the right rail and a pulled-back chip
- *     (default 4).
+ *   The geometry the placement reads.
+ * @param {{top: number, left: number, bottom: number, right: number}} args.rect
+ *   The anchor's viewport rect.
+ * @param {{width: number, height: number}} args.chip
+ *   The chip's measured size.
+ * @param {{width: number, height: number}} args.viewport
+ *   The viewport's size.
+ * @param {{top?: number, right?: number, bottom?: number, left?: number}} [args.offsets]
+ *   Drupal.displace-style offsets of the fixed rails (defaults to none).
+ * @param {number} [args.stroke]
+ *   The stroke's outline width (default 2, matching
+ *   .daedalus-ui-frame__stroke--primary in selection-frame.css); the chip
+ *   offsets by it so it sits on the outline, not the rect.
+ * @param {number} [args.gap]
+ *   Breathing room between the right rail and a pulled-back chip
+ *   (default 4).
  *
  * @return {{left: number, top: number, below: boolean}}
+ *   The chip's viewport-space position and whether it flipped below the
+ *   stroke.
  */
 export const chipPlacement = ({
   rect,
@@ -68,10 +76,14 @@ export const chipPlacement = ({
  * registry's applies gate swaps its verbs instead (chipFace).
  *
  * @param {object} args
- *   - editingKey: the key the live edit lands on (null: no open edit).
- *   - primary: the primary member's key (null: no selection).
+ *   The store's reading.
+ * @param {?string} args.editingKey
+ *   The key the live edit lands on (null: no open edit).
+ * @param {?string} args.primary
+ *   The primary member's key (null: no selection).
  *
  * @return {boolean}
+ *   Whether the primary is the live edit's element.
  */
 export const frameEditing = ({ editingKey = null, primary = null }) =>
   primary !== null && editingKey === primary;
@@ -111,15 +123,24 @@ export const frameEditing = ({ editingKey = null, primary = null }) =>
  * hides what you can do.
  *
  * @param {object} args
- *   - key: the member this chip is for.
- *   - keys: the ordered selection set.
- *   - primary: the primary member's key.
- *   - verbs: the set's applicable verbs (verbsForSet), menu-ordered;
- *     the registry has already scoped them to the live edit state.
- *   - density: the chrome-density tier (full | minimal | clean;
- *     absent reads as full, like the html attribute).
+ *   The chip's member and the set it sits in.
+ * @param {string} args.key
+ *   The member this chip is for.
+ * @param {string[]} args.keys
+ *   The ordered selection set.
+ * @param {?string} args.primary
+ *   The primary member's key.
+ * @param {object[]} args.verbs
+ *   The set's applicable verbs (verbsForSet), menu-ordered; the registry
+ *   has already scoped them to the live edit state.
+ * @param {string} args.density
+ *   The chrome-density tier (full | minimal | clean; absent reads as
+ *   full, like the html attribute).
  *
  * @return {{number: ?number, primary: boolean, labels: boolean, faceVerbs: Array<{verb: object}|{group: string, primary: object, rest: object[]}>, overflow: object[]}}
+ *   The set-order number, whether this is the primary's chip, whether
+ *   verbs show their text labels, the face entries and the verbs behind
+ *   the chevron.
  */
 export const chipFace = ({
   key,

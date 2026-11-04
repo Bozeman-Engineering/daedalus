@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\RevisionableStorageInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 
@@ -257,6 +258,7 @@ class FactConditionConvergence implements StyleStoreConvergenceInterface {
   public function convergeVariants(): array {
     $lines = [];
     $storage = $this->entityTypeManager->getStorage('daedalus_variant');
+    assert($storage instanceof RevisionableStorageInterface);
     $ids = $storage->getQuery()->accessCheck(FALSE)->execute();
     foreach ($storage->loadMultiple($ids) as $variant) {
       /** @var \Drupal\daedalus_stylish\DaedalusStylishVariantInterface $variant */
@@ -285,6 +287,7 @@ class FactConditionConvergence implements StyleStoreConvergenceInterface {
   public function convergeSkins(): array {
     $lines = [];
     $storage = $this->entityTypeManager->getStorage('daedalus_skin');
+    assert($storage instanceof RevisionableStorageInterface);
     $ids = $storage->getQuery()->accessCheck(FALSE)->execute();
     foreach ($storage->loadMultiple($ids) as $skin) {
       /** @var \Drupal\daedalus_stylish\DaedalusStylishSkinInterface $skin */

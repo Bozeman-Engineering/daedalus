@@ -51,6 +51,14 @@ const notify = () => listeners.forEach((listener) => listener());
  * the store's reactive editingKey (the engine's editChanged report is
  * its only writer); the capability is asked of the key, or of its
  * projection parent, through the one client gate (selection/capable.js).
+ *
+ * @param {object} verb
+ *   A registered verb.
+ * @param {?string} key
+ *   The selectable key.
+ *
+ * @return {boolean}
+ *   Whether the verb applies to the key.
  */
 const appliesTo = (verb, key) =>
   verbApplies(verb, key, {
@@ -64,6 +72,11 @@ const appliesTo = (verb, key) =>
  * Runs a verb against a multi-select set: runMany when the verb provides
  * it (one atomic batch — one mutation, one history entry), otherwise once
  * per member in selection order.
+ *
+ * @param {object} verb
+ *   A registered verb.
+ * @param {string[]} keys
+ *   The selection set's selectable keys.
  */
 const runOnKeys = (verb, keys) => {
   if (verb.runMany) {
@@ -78,6 +91,11 @@ const runOnKeys = (verb, keys) => {
  * a real set runs the multi path (runOnKeys, runMany's atomic batch when
  * the verb has one). The ONE verbs-to-run wire every face (menu, context
  * menu, canvas chrome) uses; nobody re-derives the size branch.
+ *
+ * @param {object} verb
+ *   A registered verb.
+ * @param {string[]} keys
+ *   The selection set's selectable keys.
  */
 const runVerbOn = (verb, keys) => {
   if (keys.length > 1) {
@@ -92,6 +110,12 @@ const runVerbOn = (verb, keys) => {
  * Returns false (do not handle) when the verb does not apply to it.
  * With a multi-select set, only multi-capable verbs that apply to
  * EVERY member run, and they run against the whole set.
+ *
+ * @param {object} verb
+ *   A registered verb.
+ *
+ * @return {boolean}
+ *   Whether the verb ran.
  */
 const runOnSelection = (verb) => {
   const { selectedKey, selectedKeys } = store.getState().selection;
@@ -266,6 +290,7 @@ const unregister = (id) => {
  *   The selectable key.
  *
  * @return {object[]}
+ *   The verbs, menu-ordered.
  */
 const verbsFor = (key) =>
   Array.from(verbs.values())
@@ -281,6 +306,7 @@ const verbsFor = (key) =>
  *   The selection set's selectable keys.
  *
  * @return {object[]}
+ *   The verbs, menu-ordered.
  */
 const verbsForSet = (keys) => {
   if (!keys || keys.length === 0) {
@@ -296,6 +322,9 @@ const verbsForSet = (keys) => {
 
 /**
  * Subscribes to registry changes (for the menu's re-render).
+ *
+ * @param {Function} listener
+ *   Called after every registration change.
  *
  * @return {Function}
  *   Unsubscribe.

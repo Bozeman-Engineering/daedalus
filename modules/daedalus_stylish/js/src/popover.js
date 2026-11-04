@@ -130,6 +130,13 @@ export const usePopover = () => {
  * consumers (a mode switch swaps the head's filler): preact unmounts
  * the leaving subtree, and so runs this cleanup, before it diffs the
  * arriving one, so the newcomer's render into the root lands last.
+ *
+ * @param {object} props
+ *   The portal's props.
+ * @param {Element} props.root
+ *   The DOM element the children render into.
+ * @param {*} props.children
+ *   The vnode tree to render there.
  */
 export function Portal({ root, children }) {
   const rendered = useRef(null);

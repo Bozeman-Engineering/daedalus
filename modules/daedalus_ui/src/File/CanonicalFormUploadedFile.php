@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  *
  * Core's upload handler reads the name it saves under from
  * getClientOriginalName(); this wrapper answers the name FileLane
- * canonicalised and forwards everything else to core's FormUploadedFile. It
+ * canonicalized and forwards everything else to core's FormUploadedFile. It
  * extends FormUploadedFile rather than implementing the interface beside it
  * because the handler routes the move by `instanceof FormUploadedFile`: a
  * sibling wrapper would silently fall to FileSystem::move() and lose the

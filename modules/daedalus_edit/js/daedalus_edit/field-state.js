@@ -82,6 +82,7 @@ export const WIDGET_SAMPLE = 'widget-sample';
  *   A mirror value.
  *
  * @return {boolean}
+ *   True for a form-only stub.
  */
 const isStub = (value) =>
   !!value &&

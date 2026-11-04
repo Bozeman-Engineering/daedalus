@@ -16,19 +16,19 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the module-shipped skins importer (the skins disk lane).
  *
- * The daedalus_stylish_skins_test module ships a MODULE.daedalus_stylish.skins.yml with two
- * skins, validated against the token scales and base-tag vocabulary the
- * test injects as the site declaration. The tests drive the importer's
- * sync() directly; on a site it runs through ShippedSync (cache rebuild,
- * install, `drush daedalus_stylish:sync`). Every definition rides the blueprint
- * deserializer through the skin field handlers (the same validation an AI-
- * or UI-authored skin gets), and the importer itself saves, live and
- * published. Sync writes the PACKAGE layer only and hashes it, the keyed
- * {tokens, defaults} shape; the site layer is never on the lane, so a new
- * payload on disk always lands (no KEPT outcome for skins: the distro lock
- * keeps a consuming site out of the package layer, SkinDistroLockTest) and
- * the site's layer rides the new revision untouched. The active pointer
- * is never touched.
+ * The daedalus_stylish_skins_test module ships a
+ * MODULE.daedalus_stylish.skins.yml with two skins, validated against the token
+ * scales and base-tag vocabulary the test injects as the site declaration. The
+ * tests drive the importer's sync() directly; on a site it runs through
+ * ShippedSync (cache rebuild, install, `drush daedalus_stylish:sync`). Every
+ * definition rides the blueprint deserializer through the skin field handlers
+ * (the same validation an AI- or UI-authored skin gets), and the importer
+ * itself saves, live and published. Sync writes the PACKAGE layer only and
+ * hashes it, the keyed {tokens, defaults} shape; the site layer is never on the
+ * lane, so a new payload on disk always lands (no KEPT outcome for skins: the
+ * distro lock keeps a consuming site out of the package layer,
+ * SkinDistroLockTest) and the site's layer rides the new revision untouched.
+ * The active pointer is never touched.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -107,8 +107,8 @@ class SkinImporterTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
-    // The materials roster's daedalus_stylish provider reads all four storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all four storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');
     $this->installConfig(['daedalus_stylish']);
     // Activating a design system syncs every enabled module's shipped
@@ -171,7 +171,12 @@ class SkinImporterTest extends KernelTestBase {
     $this->assertTrue($aurora->isShipped());
     $this->assertSame('daedalus_stylish_skins_test', $aurora->getProvider());
     $this->assertFalse($aurora->isModified());
-    $this->assertFalse($aurora->hasNewDefaults(['tokens' => self::AURORA_TOKENS, 'animations' => [], 'fonts' => [], 'defaults' => self::AURORA_DEFAULTS]));
+    $this->assertFalse($aurora->hasNewDefaults([
+      'tokens' => self::AURORA_TOKENS,
+      'animations' => [],
+      'fonts' => [],
+      'defaults' => self::AURORA_DEFAULTS,
+    ]));
 
     // A tier-less skin imports too: label only, both data tiers empty.
     $bare = $this->loadSkin('bare');

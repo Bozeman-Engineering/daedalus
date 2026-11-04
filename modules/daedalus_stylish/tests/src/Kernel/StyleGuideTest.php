@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
+// cspell:ignore linee
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
@@ -112,17 +113,18 @@ class StyleGuideTest extends KernelTestBase {
     $this->assertArrayNotHasKey('color', $field['property_groups']);
     $this->assertArrayHasKey('color', $this->styleGuide->getKind('field', self::BASE_THEME)['property_groups']);
 
-    // The shipped field shell (daedalus_ui.page_builder.yml) is the
-    // layer everything above merged over: the core markup chain with the
-    // value slot on the item, with daedalus_stylish's property groups riding the
-    // same parts (daedalus_stylish.page_builder.yml).
+    // The shipped field shell (daedalus_ui.page_builder.yml) is the layer
+    // everything above merged over: the core markup chain with the value slot
+    // on the item, with daedalus_stylish's property groups riding the same
+    // parts (daedalus_stylish.page_builder.yml).
     $this->assertSame('Label', $field['elements']['.field__label']['label']);
     $this->assertSame('value', $field['elements']['.field__items']['elements']['.field__item']['contains']);
     $this->assertArrayHasKey('typography', $field['elements']['.field__label']['property_groups']);
 
     // Styling sections coexist with the spine's own owned sections in one
-    // declaration: the entity kind carries daedalus_stylish's existence declaration
-    // for the style map field, a foreign section from the guide's view.
+    // declaration: the entity kind carries daedalus_stylish's existence
+    // declaration for the style map field, a foreign section from the guide's
+    // view.
     $entity = $this->styleGuide->getKind('entity', self::THEME);
     $this->assertFalse($entity['fields']['daedalus_stylish_styles']['element']);
   }

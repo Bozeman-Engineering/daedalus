@@ -4,10 +4,10 @@
  * display any window hosts.
  *
  * A gesture's outcome (a write succeeded, failed, landed with warnings) is
- * reported here and nowhere else:
- * @code
- *   Drupal.Daedalus.messenger.message('Saving failed.', 'error', { target: key });
- * @endcode
+ * reported here and nowhere else.
+ *
+ * @example
+ * Drupal.Daedalus.messenger.message('Saving failed.', 'error', { target: key });
  *
  * The messenger shows a transient toast in the document's
  * [data-drupal-messages] wrapper (core's status_messages wrapper when the
@@ -160,8 +160,7 @@ const restart = (element) => {
   // re-adding the class replays it without touching the toast's own
   // entrance animation; the reflow between the two makes the removal take.
   element.classList.remove('is-repeated');
-  // eslint-disable-next-line no-void
-  void element.offsetWidth;
+  element.getBoundingClientRect();
   element.classList.add('is-repeated');
   setTimeout(() => element.classList.remove('is-repeated'), PULSE_MS);
 };
@@ -207,13 +206,16 @@ const history = () => parseHistory(localStorage.getItem(STORAGE_KEY));
  *   The message text (HTML is rendered, as core's Drupal.Message does).
  * @param {string} type
  *   'status', 'warning' or 'error' (core's toast types).
- * @param {object} options
- *   - duration: milliseconds the toast shows; -1 keeps it until cleared.
- *     Defaults per type (status 6s, warning 8s, error 10s).
- *   - scroll: whether to bring the toast into view in the list (default
- *     true).
- *   - target: an element id or selectable key the outcome concerns; the
- *     history's entry links back to it.
+ * @param {object} [options]
+ *   How the toast shows.
+ * @param {number} [options.duration]
+ *   Milliseconds the toast shows; -1 keeps it until cleared. Defaults per
+ *   type (status 6s, warning 8s, error 10s).
+ * @param {boolean} [options.scroll]
+ *   Whether to bring the toast into view in the list (default true).
+ * @param {?string} [options.target]
+ *   An element id or selectable key the outcome concerns; the history's
+ *   entry links back to it.
  *
  * @return {string}
  *   The toast id: the same text and type is the same id.

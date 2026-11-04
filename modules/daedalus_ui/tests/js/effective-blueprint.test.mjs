@@ -52,7 +52,9 @@ registerHooks({
   },
 });
 
-const { effectiveBlueprint } = await import('../../js/edit_mode/blueprint/effective-blueprint.js');
+const { effectiveBlueprint } = await import(
+  '../../js/edit_mode/blueprint/effective-blueprint.js'
+);
 const {
   default: reducer,
   blueprintBooted,
@@ -80,100 +82,149 @@ const mirrorFixture = () => ({
   _element: {
     name: 'Hello',
     type: 'Page',
-    markup: { tag: 'article', classes: ['node'], hoisted: [], parts: {}, slots: [] },
-  },
-  layout: [{
-    kind: 'container',
-    uuid: OUTER,
-    layout_id: 'layout_onecol',
-    _element: {
-      name: 'Section',
-      markup: { tag: 'section', classes: [], hoisted: [], parts: {}, slots: [] },
+    markup: {
+      tag: 'article',
+      classes: ['node'],
+      hoisted: [],
+      parts: {},
+      slots: [],
     },
-    children: [{
-      kind: 'region',
-      region: 'content',
+  },
+  layout: [
+    {
+      kind: 'container',
+      uuid: OUTER,
+      layout_id: 'layout_onecol',
+      _element: {
+        name: 'Section',
+        markup: {
+          tag: 'section',
+          classes: [],
+          hoisted: [],
+          parts: {},
+          slots: [],
+        },
+      },
       children: [
         {
-          kind: 'block',
-          uuid: IMAGE,
-          block_type: 'image',
-          _element: {
-            name: 'Image',
-            markup: { tag: 'img', classes: ['image-block'], hoisted: [], parts: {}, slots: [] },
-          },
-        },
-        {
-          kind: 'container',
-          uuid: INNER,
-          layout_id: 'layout_onecol',
-          _element: {
-            name: 'Inner',
-            markup: { tag: 'div', classes: ['inner'], hoisted: [], parts: {}, slots: [] },
-          },
-          children: [{
-            kind: 'region',
-            region: 'content',
-            children: [
-              {
-                kind: 'block',
-                uuid: TEXT,
-                block_type: 'text',
-                _element: {
-                  name: 'Some words',
-                  type: 'Text',
-                  markup: {
-                    tag: 'div',
-                    classes: ['text-block'],
-                    hoisted: [],
-                    parts: {},
-                    slots: [],
-                    instances: [
-                      { class: 's-ef', tag: 'p', label: 'Paragraph', children: [] },
-                    ],
-                    tags: ['p'],
-                  },
-                  fields: { field_text_text: { markup: { instances: [] } } },
+          kind: 'region',
+          region: 'content',
+          children: [
+            {
+              kind: 'block',
+              uuid: IMAGE,
+              block_type: 'image',
+              _element: {
+                name: 'Image',
+                markup: {
+                  tag: 'img',
+                  classes: ['image-block'],
+                  hoisted: [],
+                  parts: {},
+                  slots: [],
                 },
               },
-              { kind: 'block', uuid: PLUGIN, block_type: 'plugin', _element: {} },
-            ],
-          }],
+            },
+            {
+              kind: 'container',
+              uuid: INNER,
+              layout_id: 'layout_onecol',
+              _element: {
+                name: 'Inner',
+                markup: {
+                  tag: 'div',
+                  classes: ['inner'],
+                  hoisted: [],
+                  parts: {},
+                  slots: [],
+                },
+              },
+              children: [
+                {
+                  kind: 'region',
+                  region: 'content',
+                  children: [
+                    {
+                      kind: 'block',
+                      uuid: TEXT,
+                      block_type: 'text',
+                      _element: {
+                        name: 'Some words',
+                        type: 'Text',
+                        markup: {
+                          tag: 'div',
+                          classes: ['text-block'],
+                          hoisted: [],
+                          parts: {},
+                          slots: [],
+                          instances: [
+                            {
+                              class: 's-ef',
+                              tag: 'p',
+                              label: 'Paragraph',
+                              children: [],
+                            },
+                          ],
+                          tags: ['p'],
+                        },
+                        fields: {
+                          field_text_text: { markup: { instances: [] } },
+                        },
+                      },
+                    },
+                    {
+                      kind: 'block',
+                      uuid: PLUGIN,
+                      block_type: 'plugin',
+                      _element: {},
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
         },
       ],
-    }],
-  }],
+    },
+  ],
 });
 
 const booted = (blueprint = mirrorFixture()) =>
-  reducer(undefined, blueprintBooted({
-    entityType: 'node',
-    entityId: '1',
-    uuid: ROOT,
-    label: 'Page',
-    langcode: 'en',
-    viewMode: 'full',
-    blueprint,
-  }));
+  reducer(
+    undefined,
+    blueprintBooted({
+      entityType: 'node',
+      entityId: '1',
+      uuid: ROOT,
+      label: 'Page',
+      langcode: 'en',
+      viewMode: 'full',
+      blueprint,
+    }),
+  );
 
 const wrap = (slice) => ({ blueprint: slice });
 
-const LINK = { '.text-block-link': { tag: 'a', attributes: { href: '/x' }, parts: {} } };
+const LINK = {
+  '.text-block-link': { tag: 'a', attributes: { href: '/x' }, parts: {} },
+};
 
-const textNode = (blueprint) => blueprint.layout[0].children[0].children[1].children[0].children[0];
-const pluginNode = (blueprint) => blueprint.layout[0].children[0].children[1].children[0].children[1];
+const textNode = (blueprint) =>
+  blueprint.layout[0].children[0].children[1].children[0].children[0];
+const pluginNode = (blueprint) =>
+  blueprint.layout[0].children[0].children[1].children[0].children[1];
 const innerNode = (blueprint) => blueprint.layout[0].children[0].children[1];
 const imageNode = (blueprint) => blueprint.layout[0].children[0].children[0];
 
-// Captures console.warn for one call.
+// Captures the warnings one call rethrows outside the stack
+// (Drupal.throwError), as their messages.
 const capturingWarn = (fn) => {
   const warnings = [];
-  const original = console.warn;
-  console.warn = (message) => warnings.push(message);
+  globalThis.Drupal = { throwError: (error) => warnings.push(error.message) };
   try {
     fn();
   } finally {
-    console.warn = original;
+    delete globalThis.Drupal;
   }
   return warnings;
 };
@@ -183,7 +234,10 @@ const capturingWarn = (fn) => {
 // ---------------------------------------------------------------------------
 
 test('before boot the effective blueprint is null', () => {
-  assert.equal(effectiveBlueprint(wrap(reducer(undefined, { type: '@@init' }))), null);
+  assert.equal(
+    effectiveBlueprint(wrap(reducer(undefined, { type: '@@init' }))),
+    null,
+  );
 });
 
 test('with no draft the effective blueprint IS the mirror reference', () => {
@@ -197,7 +251,10 @@ test('with no draft the effective blueprint IS the mirror reference', () => {
 // ---------------------------------------------------------------------------
 
 test('a drafted root overlays the root _element.markup and shares the layout', () => {
-  const slice = reducer(booted(), markupDrafted({ key: `entity:${ROOT}`, markup: { tag: 'main' } }));
+  const slice = reducer(
+    booted(),
+    markupDrafted({ key: `entity:${ROOT}`, markup: { tag: 'main' } }),
+  );
   const effective = effectiveBlueprint(wrap(slice));
   assert.notEqual(effective, slice.blueprint);
   assert.equal(effective._element.markup.tag, 'main');
@@ -232,11 +289,17 @@ test('a drafted block at nesting depth two is path-copied, siblings shared, the 
   assert.equal(effective.fields, mirror.fields);
   // The mirror did not move.
   assert.equal(textNode(mirror)._element.markup.tag, 'div');
-  assert.equal(textNode(mirror)._element.markup.parts.hasOwnProperty('.text-block-link'), false);
+  assert.equal(
+    textNode(mirror)._element.markup.parts.hasOwnProperty('.text-block-link'),
+    false,
+  );
 });
 
 test('a drafted container overlays its own node and shares its children', () => {
-  const slice = reducer(booted(), markupDrafted({ key: `container:${INNER}`, markup: { tag: 'aside' } }));
+  const slice = reducer(
+    booted(),
+    markupDrafted({ key: `container:${INNER}`, markup: { tag: 'aside' } }),
+  );
   const mirror = slice.blueprint;
   const effective = effectiveBlueprint(wrap(slice));
   const drafted = innerNode(effective);
@@ -248,10 +311,16 @@ test('a drafted container overlays its own node and shares its children', () => 
 });
 
 test('the merge is shallow over _element.markup only: committed instances, name and fields survive', () => {
-  const slice = reducer(booted(), markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h2', parts: LINK } }));
+  const slice = reducer(
+    booted(),
+    markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h2', parts: LINK } }),
+  );
   const drafted = textNode(effectiveBlueprint(wrap(slice)));
   const committed = textNode(slice.blueprint);
-  assert.deepEqual(drafted._element.markup.instances, committed._element.markup.instances);
+  assert.deepEqual(
+    drafted._element.markup.instances,
+    committed._element.markup.instances,
+  );
   assert.deepEqual(drafted._element.markup.tags, ['p']);
   assert.equal(drafted._element.name, 'Some words');
   assert.equal(drafted._element.type, 'Text');
@@ -259,8 +328,13 @@ test('the merge is shallow over _element.markup only: committed instances, name 
 });
 
 test('a node without an annotation takes the draft as its markup', () => {
-  const slice = reducer(booted(), markupDrafted({ key: `block:${PLUGIN}`, markup: { tag: 'div' } }));
-  assert.deepEqual(pluginNode(effectiveBlueprint(wrap(slice)))._element, { markup: { tag: 'div' } });
+  const slice = reducer(
+    booted(),
+    markupDrafted({ key: `block:${PLUGIN}`, markup: { tag: 'div' } }),
+  );
+  assert.deepEqual(pluginNode(effectiveBlueprint(wrap(slice)))._element, {
+    markup: { tag: 'div' },
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -268,13 +342,19 @@ test('a node without an annotation takes the draft as its markup', () => {
 // ---------------------------------------------------------------------------
 
 test('an unchanged (mirror, draft) pair answers the same reference; a new draft a new one', () => {
-  const slice = reducer(booted(), markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h2' } }));
+  const slice = reducer(
+    booted(),
+    markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h2' } }),
+  );
   const first = effectiveBlueprint(wrap(slice));
   assert.equal(effectiveBlueprint(wrap(slice)), first);
   // A new root state object around the same slice references is the same
   // input (useSelector's strict equality sees no change).
   assert.equal(effectiveBlueprint({ blueprint: { ...slice } }), first);
-  const next = reducer(slice, markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h3' } }));
+  const next = reducer(
+    slice,
+    markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h3' } }),
+  );
   const second = effectiveBlueprint(wrap(next));
   assert.notEqual(second, first);
   assert.equal(textNode(second)._element.markup.tag, 'h3');
@@ -286,35 +366,56 @@ test('an unchanged (mirror, draft) pair answers the same reference; a new draft 
 // ---------------------------------------------------------------------------
 
 test('blueprintReplaced clears the draft and the effective tree is the new mirror', () => {
-  const drafted = reducer(booted(), markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h2' } }));
-  assert.deepEqual(drafted.draft, { key: `block:${TEXT}`, markup: { tag: 'h2' } });
+  const drafted = reducer(
+    booted(),
+    markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h2' } }),
+  );
+  assert.deepEqual(drafted.draft, {
+    key: `block:${TEXT}`,
+    markup: { tag: 'h2' },
+  });
   const replacement = mirrorFixture();
-  const replaced = reducer(drafted, blueprintReplaced({ blueprint: replacement }));
+  const replaced = reducer(
+    drafted,
+    blueprintReplaced({ blueprint: replacement }),
+  );
   assert.equal(replaced.draft, null);
   assert.equal(replaced.blueprint, replacement);
   assert.equal(effectiveBlueprint(wrap(replaced)), replacement);
 });
 
 test('blueprintBooted and draftCleared reset the draft', () => {
-  const drafted = reducer(booted(), markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h2' } }));
+  const drafted = reducer(
+    booted(),
+    markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h2' } }),
+  );
   const cleared = reducer(drafted, draftCleared());
   assert.equal(cleared.draft, null);
   assert.equal(effectiveBlueprint(wrap(cleared)), cleared.blueprint);
-  const rebooted = reducer(drafted, blueprintBooted({
-    entityType: 'node',
-    entityId: '1',
-    uuid: ROOT,
-    label: 'Page',
-    langcode: 'en',
-    viewMode: 'full',
-    blueprint: mirrorFixture(),
-  }));
+  const rebooted = reducer(
+    drafted,
+    blueprintBooted({
+      entityType: 'node',
+      entityId: '1',
+      uuid: ROOT,
+      label: 'Page',
+      langcode: 'en',
+      viewMode: 'full',
+      blueprint: mirrorFixture(),
+    }),
+  );
   assert.equal(rebooted.draft, null);
 });
 
 test('a later draft on any key overwrites the earlier one', () => {
-  const first = reducer(booted(), markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h2' } }));
-  const second = reducer(first, markupDrafted({ key: `container:${INNER}`, markup: { tag: 'aside' } }));
+  const first = reducer(
+    booted(),
+    markupDrafted({ key: `block:${TEXT}`, markup: { tag: 'h2' } }),
+  );
+  const second = reducer(
+    first,
+    markupDrafted({ key: `container:${INNER}`, markup: { tag: 'aside' } }),
+  );
   const effective = effectiveBlueprint(wrap(second));
   assert.equal(innerNode(effective)._element.markup.tag, 'aside');
   assert.equal(textNode(effective)._element.markup.tag, 'div');
@@ -325,7 +426,10 @@ test('a later draft on any key overwrites the earlier one', () => {
 // ---------------------------------------------------------------------------
 
 test('a draft whose key the tree does not hold yields the mirror reference and warns once', () => {
-  const slice = reducer(booted(), markupDrafted({ key: 'block:not-on-the-page', markup: { tag: 'h2' } }));
+  const slice = reducer(
+    booted(),
+    markupDrafted({ key: 'block:not-on-the-page', markup: { tag: 'h2' } }),
+  );
   let effective;
   const warnings = capturingWarn(() => {
     effective = effectiveBlueprint(wrap(slice));
@@ -345,7 +449,10 @@ test('a key family mismatch, a foreign root, or a field key is unknown too', () 
     `field:${ROOT}:body`,
   ];
   for (const key of unknown) {
-    const slice = reducer(booted(), markupDrafted({ key, markup: { tag: 'h2' } }));
+    const slice = reducer(
+      booted(),
+      markupDrafted({ key, markup: { tag: 'h2' } }),
+    );
     let effective;
     const warnings = capturingWarn(() => {
       effective = effectiveBlueprint(wrap(slice));

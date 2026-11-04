@@ -19,8 +19,8 @@ use Drupal\user\EntityOwnerInterface;
  * design TOKENS (per name a record of value, description and offered),
  * ANIMATIONS (per name a record of keyframe steps, description and
  * offered, delivered as @keyframes motion-{name}), FONTS (per name a
- * record of family, faces, description and offered, delivered as one
- * @font-face per face) and SITE ELEMENT
+ * record of family, faces, description and offered, delivered as
+ * one @font-face per face) and SITE ELEMENT
  * DEFAULTS (live per-scope styles like "sections constrain to 80rem",
  * overridden by any per-entity map by cascade). Each tier is two layers:
  * the PACKAGE layer a module ships (tokens, animations, fonts, defaults:
@@ -177,10 +177,10 @@ interface DaedalusStylishSkinInterface extends ShippedSourceInterface, ContentEn
   /**
    * Returns the skin's animations as worn: the site layer over the package's.
    *
-   * The read of every consumer but the disk lane (the compiled skin file's
-   * @keyframes blocks, the roster, the reference universe). Records merge
-   * per key; see SkinAnimationsItem::mergeLayers() for the rule and the
-   * order.
+   * The read of every consumer but the disk lane (the compiled skin
+   * file's @keyframes blocks, the roster, the reference universe). Records
+   * merge per key; see SkinAnimationsItem::mergeLayers() for the rule and
+   * the order.
    *
    * @return array
    *   Full records in the packageAnimations() shape.
@@ -239,9 +239,9 @@ interface DaedalusStylishSkinInterface extends ShippedSourceInterface, ContentEn
   /**
    * Returns the skin's fonts as worn: the site layer over the package's.
    *
-   * The read of every consumer but the disk lane (the compiled skin file's
-   * @font-face blocks, the roster, the file hold). Records merge per key;
-   * see SkinFontsItem::mergeLayers() for the rule and the order.
+   * The read of every consumer but the disk lane (the compiled skin
+   * file's @font-face blocks, the roster, the file hold). Records merge per
+   * key; see SkinFontsItem::mergeLayers() for the rule and the order.
    *
    * @return array
    *   Full records in the packageFonts() shape.

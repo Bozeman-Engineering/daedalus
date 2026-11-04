@@ -22,6 +22,7 @@ import { tokenNameError } from './skin-model.js';
  * checked before the round trip (skin-model.js tokenNameError).
  *
  * @param {object} options
+ *   The hook's options.
  * @param {?object} options.space
  *   The value space (null while the consumer mounts no color field:
  *   the row then renders nothing).

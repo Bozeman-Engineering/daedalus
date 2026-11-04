@@ -76,7 +76,9 @@ final class AiContextFormTest extends KernelTestBase {
   }
 
   /**
-   * The built form: a section per kind, a box per record, weights and disabling.
+   * The built form.
+   *
+   * A section per kind, a box per record, weights and disabling.
    */
   public function testBuildListsEveryRecord(): void {
     $reading = $this->reading();
@@ -132,7 +134,9 @@ final class AiContextFormTest extends KernelTestBase {
   }
 
   /**
-   * Unticking a record writes `offered` false through its provider; the reading shrinks.
+   * Unticking a record writes `offered` false through its provider.
+   *
+   * The reading shrinks.
    */
   public function testUntickWritesThroughTheProvider(): void {
     $before = $this->reading();
@@ -144,7 +148,15 @@ final class AiContextFormTest extends KernelTestBase {
     // first kind, and the second record is not updatable.
     $form_state = (new FormState())->setRequestMethod('POST')->setValues([
       'kinds' => [
-        'token' => ['scales' => ['color' => ['color/accent' => 'color/accent', 'color/lime-green' => NULL, 'color/sky-blue' => 'color/sky-blue']]],
+        'token' => [
+          'scales' => [
+            'color' => [
+              'color/accent' => 'color/accent',
+              'color/lime-green' => NULL,
+              'color/sky-blue' => 'color/sky-blue',
+            ],
+          ],
+        ],
         'animation' => ['records' => ['fade_in' => NULL]],
         'blueprint' => ['records' => ['hero' => NULL]],
       ],
@@ -206,7 +218,15 @@ final class AiContextFormTest extends KernelTestBase {
     assert($form_object instanceof AiContextForm);
     $form_state = (new FormState())->setRequestMethod('POST')->setValues([
       'kinds' => [
-        'token' => ['scales' => ['color' => ['color/accent' => 'color/accent', 'color/lime-green' => NULL, 'color/sky-blue' => 'color/sky-blue']]],
+        'token' => [
+          'scales' => [
+            'color' => [
+              'color/accent' => 'color/accent',
+              'color/lime-green' => NULL,
+              'color/sky-blue' => 'color/sky-blue',
+            ],
+          ],
+        ],
       ],
     ]);
     $this->container->get('form_builder')->submitForm($form_object, $form_state);
@@ -218,7 +238,9 @@ final class AiContextFormTest extends KernelTestBase {
   }
 
   /**
-   * A share past a tiny budget is refused as a message; the withhold beside it stands.
+   * A share past a tiny budget is refused as a message.
+   *
+   * The withhold beside it stands.
    */
   public function testFullSiteRefusesTheShareAndKeepsTheRest(): void {
     $this->container->get('daedalus_blueprint.materials_roster_builder')
@@ -233,7 +255,15 @@ final class AiContextFormTest extends KernelTestBase {
     // first, the share is refused.
     $form_state = (new FormState())->setRequestMethod('POST')->setValues([
       'kinds' => [
-        'token' => ['scales' => ['color' => ['color/accent' => 'color/accent', 'color/lime-green' => 'color/lime-green', 'color/sky-blue' => NULL]]],
+        'token' => [
+          'scales' => [
+            'color' => [
+              'color/accent' => 'color/accent',
+              'color/lime-green' => 'color/lime-green',
+              'color/sky-blue' => NULL,
+            ],
+          ],
+        ],
       ],
     ]);
     $this->container->get('form_builder')->submitForm(AiContextForm::class, $form_state);
@@ -274,7 +304,9 @@ final class AiContextFormTest extends KernelTestBase {
   }
 
   /**
-   * The figure a record's label carries: "about n tokens" at the reading's ratio.
+   * The figure a record's label carries.
+   *
+   * "about n tokens" at the reading's ratio.
    */
   private function figure(BudgetReading $reading, MaterialKind $kind, string $id): string {
     $characters = $reading->record($kind, $id);

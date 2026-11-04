@@ -10,9 +10,22 @@
   <rule ref="Drupal"/>
   <rule ref="DrupalPractice"/>
 
+  <!-- The four config category routes in daedalus.routing.yml take access
+       administration pages, the gate core's own category pages carry: they
+       are route attributes on SystemController with that very permission,
+       and AccessRouteAlterSubscriber adds the admin-menu-block access check
+       to each, which refuses the page to an actor who can reach none of its
+       listed links. The sniff flags the literal, not a risk, so it is
+       excluded for that one file. -->
+  <rule ref="DrupalPractice.Yaml.RoutingAccess">
+    <exclude-pattern>*/daedalus\.routing\.yml</exclude-pattern>
+  </rule>
+
   <!-- Ignore third-party code and the webpack bundles. -->
   <exclude-pattern>vendor/</exclude-pattern>
   <exclude-pattern>node_modules/</exclude-pattern>
+  <exclude-pattern>modules/daedalus_explode/js/dist/</exclude-pattern>
+  <exclude-pattern>modules/daedalus_layout/js/dist/</exclude-pattern>
   <exclude-pattern>modules/daedalus_stylish/js/dist/</exclude-pattern>
   <exclude-pattern>modules/daedalus_ui/js/edit_mode/dist/</exclude-pattern>
 </ruleset>

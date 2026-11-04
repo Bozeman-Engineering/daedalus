@@ -18,6 +18,16 @@
  *
  * `normalize` collapses any stored/received value (null included) onto
  * the preference's value space; its answer for garbage IS the default.
+ *
+ * @param {?Storage} storage
+ *   The backend (window.localStorage), or null for session-only state.
+ * @param {string} key
+ *   The storage key the preference persists under.
+ * @param {Function} normalize
+ *   function(value): string, the preference's value space.
+ *
+ * @return {{get: Function, set: Function, receiveExternal: Function, subscribe: Function}}
+ *   The store.
  */
 export const createPreferenceStore = (storage, key, normalize) => {
   const listeners = new Set();
@@ -35,6 +45,9 @@ export const createPreferenceStore = (storage, key, normalize) => {
 
     /**
      * Sets and persists the value; listeners hear real changes only.
+     *
+     * @param {*} next
+     *   The value to set, normalized before it is compared and stored.
      */
     set: (next) => {
       const normalized = normalize(next);
@@ -52,6 +65,9 @@ export const createPreferenceStore = (storage, key, normalize) => {
 
     /**
      * Applies a change another window persisted — no write-back.
+     *
+     * @param {?string} external
+     *   The storage event's new value.
      */
     receiveExternal: (external) => {
       const normalized = normalize(external);
@@ -81,6 +97,11 @@ export const windowStorage = () =>
 
 /**
  * Wires a singleton store to the cross-window storage event.
+ *
+ * @param {object} store
+ *   The preference store (createPreferenceStore()).
+ * @param {string} key
+ *   The storage key the store persists under.
  */
 export const bindStorageSync = (store, key) => {
   if (typeof window === 'undefined') {

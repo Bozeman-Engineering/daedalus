@@ -252,12 +252,12 @@ abstract class NestedStorageKernelTestBase extends KernelTestBase {
   /**
    * Creates a nested-section container component embedding a section.
    *
-   * The component uuid IS the section's daedalus_layout uuid (one identity); address
-   * the nested section by that uuid everywhere.
+   * The component uuid IS the section's daedalus_layout uuid (one identity);
+   * address the nested section by that uuid everywhere.
    *
    * @param \Drupal\layout_builder\Section $section
-   *   The section to embed. Create it with createSection(); its daedalus_layout uuid
-   *   becomes the container identity (one is minted if absent).
+   *   The section to embed. Create it with createSection(); its daedalus_layout
+   *   uuid becomes the container identity (one is minted if absent).
    * @param string $region
    *   The region name.
    * @param int $weight

@@ -18,25 +18,23 @@ use Drupal\Core\Render\Element\RenderElementBase;
  * ComposedLayout is the layout plugin class that builds this element).
  *
  * The element IS the section build: the layout plugin returns it with the
- * regions as children, and everything daedalus_layout stamps on the section build
- * after the plugin returns — the section attribute bag
+ * regions as children, and everything daedalus_layout stamps on the section
+ * build after the plugin returns — the section attribute bag
  * (getSectionAttributes) and the nested marker
- * (NestedSectionRenderArray::NESTED_BUILD_KEY) — rides the same array.
- * Only at render time is that set complete, so the swap happens in
- * pre_render: the regions move into the composed tree as its children,
- * the attribute bag hoists onto the composed root (the root IS the
- * section element), and the nested marker decides the depth the
- * declaration resolves at.
+ * (NestedSectionRenderArray::NESTED_BUILD_KEY) — rides the same array. Only at
+ * render time is that set complete, so the swap happens in pre_render: the
+ * regions move into the composed tree as its children, the attribute bag hoists
+ * onto the composed root (the root IS the section element), and the nested
+ * marker decides the depth the declaration resolves at.
  *
  * Properties:
  * - #layout_id: the layout plugin id whose effective declaration renders.
- * - #attributes: the section's stamped attribute bag, hoisted onto the
- *   composed root. This bag is the one seam for anything that must land
- *   on every section root regardless of how the section renders: a
- *   module stamping it (daedalus_stylish's container defaults stamp) prepends its
- *   own pre_render through hook_element_info_alter() and writes here,
- *   ahead of the hoist, the pre_render twin of a layout template's
- *   preprocess.
+ * - #attributes: the section's stamped attribute bag, hoisted onto the composed
+ *   root. This bag is the one seam for anything that must land on every section
+ *   root regardless of how the section renders: a module stamping it
+ *   (daedalus_stylish's container defaults stamp) prepends its own pre_render
+ *   through hook_element_info_alter() and writes here, ahead of the hoist, the
+ *   pre_render twin of a layout template's preprocess.
  */
 #[RenderElement('composed_container')]
 final class ComposedContainer extends RenderElementBase {
@@ -73,10 +71,11 @@ final class ComposedContainer extends RenderElementBase {
       (string) $element['#layout_id'],
       $regions,
       $element['#attributes'] ?? [],
-      // daedalus_layout's nested marker, read by its literal string so this module
-      // keeps no daedalus_layout dependency (the same seam daedalus_stylish_layouts read;
-      // without daedalus_layout no nesting exists and the marker is never
-      // present). See NestedSectionRenderArray::NESTED_BUILD_KEY.
+      // daedalus_layout's nested marker, read by its literal string so this
+      // module keeps no daedalus_layout dependency (the same seam
+      // daedalus_stylish_layouts read; without daedalus_layout no nesting
+      // exists and the marker is never present). See
+      // NestedSectionRenderArray::NESTED_BUILD_KEY.
       !empty($element['#daedalus_layout_nested']),
     );
     return $element;

@@ -16,7 +16,6 @@ use Drupal\daedalus_blueprint_api\Event\BlueprintMutationResponseEvent;
 use Drupal\daedalus_blueprint_api\Render\SelectableKey;
 use Drupal\daedalus_blueprint_api\Render\SubtreeRenderer;
 use Drupal\daedalus_blueprint_api\Render\TargetKeyMapper;
-use Drupal\daedalus_edit\EditIdentity;
 use Drupal\daedalus_ui\ElementModel\ElementModel;
 use Drupal\daedalus_ui\Event\LoadEditablePageEvent;
 use Drupal\daedalus_ui\DaedalusUi;
@@ -58,8 +57,8 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * construction.
  *
  * The rule is currently daedalus_edit-only vocabulary (leaf ids, field-value
- * wrappers). If a second consumer needs "does the root label render outside
- * the entity" (e.g. Daedalus Stylish styling the H1), promote outsideLabelField()
+ * wrappers). If a second consumer needs "does the root label render outside the
+ * entity" (e.g. Daedalus Stylish styling the H1), promote outsideLabelField()
  * into daedalus_ui's element model rather than duplicating it.
  */
 final class PageTitleEditing implements EventSubscriberInterface {

@@ -25,14 +25,14 @@ use Drupal\user\Entity\User;
  * Base for the image-generation handler and gate kernel tests.
  *
  * These two scenarios share an identical, non-trivial fixture (a media:image
- * bundle, an existing media entity, an entity_test field referencing media,
- * the daedalus_ai default config, and a created user whose per-user preference can
+ * bundle, an existing media entity, an entity_test field referencing media, the
+ * daedalus_ai default config, and a created user whose per-user preference can
  * be flipped). Reinstalling Drupal once per test METHOD is the dominant cost of
  * a kernel run, so the related gate/handler scenarios share this single setUp
  * rather than each paying for its own install.
  *
- * The daedalus_ai MODULE is deliberately NOT enabled: its info.yml hard-depends on
- * the full AI stack (ai_assistant_api, ai_agents, modeler_api,
+ * The daedalus_ai MODULE is deliberately NOT enabled: its info.yml hard-depends
+ * on the full AI stack (ai_assistant_api, ai_agents, modeler_api,
  * daedalus_blueprint_ai), none of which the units under test (the field handler
  * and the gate) actually need. Enabling that chain would multiply the install
  * cost and add unrelated fragility. Instead the handler and gate are
@@ -80,9 +80,9 @@ abstract class DaedalusAiKernelTestBase extends KernelTestBase {
     'daedalus_blueprint',
     // daedalus_ui provides EditorSettings (the per-user gate level) and the
     // daedalus_ui_settings base field it reads. Its own dependency chain
-    // (navigation, twig_events, daedalus_tempstore) must be listed explicitly: the
-    // activation voter service fails to compile if daedalus_tempstore
-    // is not enabled first. The core navigation module's renderer in turn pulls
+    // (navigation, twig_events, daedalus_tempstore) must be listed explicitly:
+    // the activation voter service fails to compile if daedalus_tempstore is
+    // not enabled first. The core navigation module's renderer in turn pulls
     // layout_builder, so layout_builder/layout_discovery are listed too.
     'layout_discovery',
     'layout_builder',

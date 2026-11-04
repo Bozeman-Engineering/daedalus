@@ -77,6 +77,14 @@ export const generatedRows = (key) => {
  * selector (the row id the click commits as the target), label its words,
  * icon the box glyph (row-glyphs.js: a box has no tag of its own), source
  * the Markup view (the origin reach.js gates on).
+ *
+ * @param {{id: string, label: string}} box
+ *   A generated box (generatedRows): its selector and its words.
+ * @param {string} ownerKey
+ *   The model key of the row the box sits under.
+ *
+ * @return {object}
+ *   The pseudo row.
  */
 const toGeneratedRow = (box, ownerKey) => ({
   pseudo: true,
@@ -99,7 +107,7 @@ const toGeneratedRow = (box, ownerKey) => ({
  * @param {object} node
  *   A view tree node (projection.js projectTree output, or a view
  *   provider's tree in the seam's vocabulary).
- * @param {function} generated
+ * @param {function(string): Array<{id: string, label: string}>} generated
  *   The box source (generatedRows above), keyed by model key.
  *
  * @return {object}

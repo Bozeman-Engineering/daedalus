@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
+use Drupal\daedalus_stylish\Exception\ShippedSkinException;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_blueprint\Materials\MaterialGestureException;
 use Drupal\daedalus_blueprint\Materials\MaterialGestureOperationHandler;
@@ -20,7 +21,6 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinSiteAnimationsItem;
 use Drupal\daedalus_stylish\SkinMaterialDeleteBatch;
 use Drupal\daedalus_stylish\SkinMaterialManager;
 use Drupal\daedalus_stylish\SkinStylesheet;
-use Drupal\daedalus_stylish\StyleGuide;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
@@ -165,7 +165,7 @@ class SkinAnimationsTest extends KernelTestBase {
   /**
    * Drives the staged batch's operations by hand and returns the context.
    *
-   * batch_process() (the route lane) has moved the operations into the
+   * `batch_process()` (the route lane) has moved the operations into the
    * set's queue; the op lane's batch_set() leaves them on the set. Either
    * way the last operation is the tail named.
    *
@@ -181,6 +181,7 @@ class SkinAnimationsTest extends KernelTestBase {
     if ($operations === [] && isset($set['queue'])) {
       $queue = _batch_queue($set);
       while ($item = $queue->claimItem()) {
+        assert(is_object($item));
         $operations[] = $item->data;
         $queue->deleteItem($item);
       }
@@ -216,11 +217,18 @@ class SkinAnimationsTest extends KernelTestBase {
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora', 'status' => 1]);
     $skin->setPackageAnimations([
       'fade_in' => self::FADE,
-      'pulse' => ['steps' => ['50%' => ['transform' => 'scale(1.05)'], '0%' => ['transform' => 'scale(1)']], 'description' => 'A heartbeat.', 'offered' => FALSE],
+      'pulse' => [
+        'steps' => ['50%' => ['transform' => 'scale(1.05)'], '0%' => ['transform' => 'scale(1)']],
+        'description' => 'A heartbeat.',
+        'offered' => FALSE,
+      ],
     ]);
     $skin->setSiteAnimations([
       'fade_in' => ['description' => 'Described by the site.'],
-      'rise' => ['from' => ['opacity' => '0', 'transform' => 'translateY(1rem)'], 'to' => ['opacity' => '1', 'transform' => 'none']],
+      'rise' => [
+        'from' => ['opacity' => '0', 'transform' => 'translateY(1rem)'],
+        'to' => ['opacity' => '1', 'transform' => 'none'],
+      ],
     ]);
     $skin->save();
     $skin = $this->loadSkin('aurora');
@@ -240,7 +248,11 @@ class SkinAnimationsTest extends KernelTestBase {
     $this->assertSame(['steps' => self::FADE_CANONICAL, 'description' => 'Described by the site.', 'offered' => TRUE], $worn['fade_in'], 'A site fact replaces, the rest show through.');
     $this->assertSame('', $worn['rise']['description']);
     $this->assertTrue($worn['rise']['offered']);
-    $this->assertSame(['fade_in' => self::FADE_CANONICAL, 'pulse' => $package['pulse']['steps'], 'rise' => $worn['rise']['steps']], SkinAnimationsItem::steps($worn));
+    $this->assertSame([
+      'fade_in' => self::FADE_CANONICAL,
+      'pulse' => $package['pulse']['steps'],
+      'rise' => $worn['rise']['steps'],
+    ], SkinAnimationsItem::steps($worn));
 
     // The shipped payload carries the animations tier beside the others;
     // the site layer is outside it.
@@ -264,28 +276,49 @@ class SkinAnimationsTest extends KernelTestBase {
     $codes = static fn (array $errors): array => array_combine(array_map(static fn ($e) => $e->getPath(), $errors), array_map(static fn ($e) => $e->getCode(), $errors));
 
     $this->assertSame([], $validator->validateAnimations(SkinAnimationsItem::canonicalizeAnimations(['fade_in' => self::FADE])));
-    $this->assertSame(['Fade In' => 'INVALID_ANIMATION_NAME'], $codes($validator->validateAnimations(['Fade In' => ['steps' => self::FADE_CANONICAL, 'description' => '', 'offered' => TRUE]])));
+    $this->assertSame(['Fade In' => 'INVALID_ANIMATION_NAME'], $codes($validator->validateAnimations([
+      'Fade In' => ['steps' => self::FADE_CANONICAL, 'description' => '', 'offered' => TRUE],
+    ])));
     $this->assertSame(['fade' => 'INVALID_ANIMATION_RECORD'], $codes($validator->validateAnimations(['fade' => 'nope'])));
-    $this->assertSame(['fade' => 'INVALID_ANIMATION_RECORD'], $codes($validator->validateAnimations(['fade' => ['steps' => self::FADE_CANONICAL, 'description' => '', 'offered' => TRUE, 'label' => 'Fade']])), 'The record carries steps, description and offered and nothing else.');
+    $this->assertSame(['fade' => 'INVALID_ANIMATION_RECORD'], $codes($validator->validateAnimations([
+      'fade' => ['steps' => self::FADE_CANONICAL, 'description' => '', 'offered' => TRUE, 'label' => 'Fade'],
+    ])), 'The record carries steps, description and offered and nothing else.');
     $this->assertSame([
       'fade.description' => 'INVALID_ANIMATION_RECORD',
       'fade.offered' => 'INVALID_ANIMATION_RECORD',
-    ], $codes($validator->validateAnimations(['fade' => ['steps' => self::FADE_CANONICAL, 'description' => 3, 'offered' => 'yes']])));
-    $this->assertSame(['broken.steps.0%.animation-duration' => 'INVALID_ANIMATION_STEP_PROPERTY'], $codes($validator->validateAnimations(['broken' => ['steps' => ['0%' => ['animation-duration' => '1s']], 'description' => '', 'offered' => TRUE]])), 'The steps seam\'s errors re-root under the name.');
-    $this->assertSame(['empty.steps' => 'INVALID_ANIMATION_STEPS'], $codes($validator->validateAnimations(['empty' => ['steps' => [], 'description' => '', 'offered' => TRUE]])));
+    ], $codes($validator->validateAnimations([
+      'fade' => ['steps' => self::FADE_CANONICAL, 'description' => 3, 'offered' => 'yes'],
+    ])));
+    $this->assertSame(['broken.steps.0%.animation-duration' => 'INVALID_ANIMATION_STEP_PROPERTY'], $codes($validator->validateAnimations([
+      'broken' => ['steps' => ['0%' => ['animation-duration' => '1s']], 'description' => '', 'offered' => TRUE],
+    ])), 'The steps seam\'s errors re-root under the name.');
+    $this->assertSame(['empty.steps' => 'INVALID_ANIMATION_STEPS'], $codes($validator->validateAnimations([
+      'empty' => ['steps' => [], 'description' => '', 'offered' => TRUE],
+    ])));
 
     // Self-containment: under strict law a step's var() resolves against
     // the skin the animations ride with, never the active skin.
     $this->enforce('strict');
     $this->container->get('daedalus_stylish.style_guide')->resetCache();
-    $slide = ['slide' => ['steps' => ['0%' => ['transform' => 'translateY(var(--space-4))'], '100%' => ['transform' => 'none']], 'description' => '', 'offered' => TRUE]];
-    $this->assertSame([], $validator->validateAnimations($slide, ['skin_tokens' => ['space' => ['4' => ['value' => '1rem', 'description' => '', 'offered' => TRUE]]]]));
+    $slide = [
+      'slide' => [
+        'steps' => ['0%' => ['transform' => 'translateY(var(--space-4))'], '100%' => ['transform' => 'none']],
+        'description' => '',
+        'offered' => TRUE,
+      ],
+    ];
+    $this->assertSame([], $validator->validateAnimations($slide, [
+      'skin_tokens' => ['space' => ['4' => ['value' => '1rem', 'description' => '', 'offered' => TRUE]]],
+    ]));
     $this->assertSame(['slide.steps.0%.transform' => 'STYLE_TOKEN_NOT_MINTED'], $codes($validator->validateAnimations($slide, ['skin_tokens' => []])));
 
     // A skin's defaults may wear the skin's own motion.
     $defaults = ['kind:container' => ['' => ['default' => ['animation-name' => 'motion-slide']]]];
     $this->assertSame([], $validator->validateDefaults($defaults, ['skin_tokens' => [], 'skin_animations' => $slide]));
-    $this->assertSame(['kind:container.default.animation-name' => 'STYLE_ANIMATION_NOT_PUBLISHED'], $codes($validator->validateDefaults($defaults, ['skin_tokens' => [], 'skin_animations' => []])));
+    $this->assertSame(['kind:container.default.animation-name' => 'STYLE_ANIMATION_NOT_PUBLISHED'], $codes($validator->validateDefaults($defaults, [
+      'skin_tokens' => [],
+      'skin_animations' => [],
+    ])));
   }
 
   /**
@@ -305,7 +338,23 @@ class SkinAnimationsTest extends KernelTestBase {
     $roster = $this->container->get('daedalus_blueprint.materials_roster_builder')->build();
     $this->assertSame(['fade_in', 'rise'], array_keys($roster->animations()));
     $record = $roster->animations()['rise'];
-    $this->assertSame(['rise', 'rise', 'Lift.', self::FADE_CANONICAL, MaterialRecord::ORIGIN_USER, TRUE, $skin->getDesignSystem()], [$record->id, $record->label, $record->description, $record->value, $record->origin, $record->updatable, $record->designSystem]);
+    $this->assertSame([
+      'rise',
+      'rise',
+      'Lift.',
+      self::FADE_CANONICAL,
+      MaterialRecord::ORIGIN_USER,
+      TRUE,
+      $skin->getDesignSystem(),
+    ], [
+      $record->id,
+      $record->label,
+      $record->description,
+      $record->value,
+      $record->origin,
+      $record->updatable,
+      $record->designSystem,
+    ]);
     $this->assertSame(['animation' => 'motion-rise'], $record->spellings);
     $css = file_get_contents(\Drupal::state()->get(SkinStylesheet::STATE_KEY));
     $this->assertStringContainsString('@keyframes motion-rise {', $css);
@@ -322,7 +371,11 @@ class SkinAnimationsTest extends KernelTestBase {
     // Update: steps and facts, each a revisioned save.
     $manager->updateAnimation($skin, 'rise', ['0%' => ['opacity' => '0.2'], '100%' => ['opacity' => '1']], NULL, FALSE);
     $skin = $this->loadSkin('mine');
-    $this->assertSame(['steps' => ['0%' => ['opacity' => '0.2'], '100%' => ['opacity' => '1']], 'description' => 'Lift.', 'offered' => FALSE], $skin->animations()['rise']);
+    $this->assertSame([
+      'steps' => ['0%' => ['opacity' => '0.2'], '100%' => ['opacity' => '1']],
+      'description' => 'Lift.',
+      'offered' => FALSE,
+    ], $skin->animations()['rise']);
     $this->assertStringContainsString('opacity: 0.2;', file_get_contents(\Drupal::state()->get(SkinStylesheet::STATE_KEY)));
 
     // Rename an unworn animation: the record moves in this request.
@@ -354,7 +407,9 @@ class SkinAnimationsTest extends KernelTestBase {
       'machine_name' => 'entrance',
       'scope' => 'kind:container',
     ]);
-    $variant->setStyles(['' => ['default' => ['animation-name' => 'motion-fade_in'], 'reduced-motion' => ['animation' => 'none']]]);
+    $variant->setStyles([
+      '' => ['default' => ['animation-name' => 'motion-fade_in'], 'reduced-motion' => ['animation' => 'none']],
+    ]);
     $variant->save();
     $this->assertSame(3, $manager->animationUsages('fade_in'), 'Two hosts and a variant wear it; a name the skin mints nothing under (motion-other) is tracked as a reference form and resolves to nothing.');
     $this->assertSame(1, $manager->animationUsages('other'), 'A motion-namespace name the skin mints nothing under is tracked verbatim; it simply matches no material.');
@@ -372,7 +427,16 @@ class SkinAnimationsTest extends KernelTestBase {
     $controller = SkinMaterialApiController::create($this->container);
     $this->assertSame(404, $controller->usage('animations', 'ghost')->getStatusCode());
     $read = json_decode((string) $controller->usage('animations', 'fade_in')->getContent(), TRUE);
-    $this->assertSame(['fade_in', 'fade_in', 'motion-fade_in', 3, 'package', FALSE, NULL, NULL], [$read['id'], $read['name'], $read['keyframes'], $read['usages'], $read['layer'], $read['locked'], $read['provider'], $read['shipped_state']]);
+    $this->assertSame(['fade_in', 'fade_in', 'motion-fade_in', 3, 'package', FALSE, NULL, NULL], [
+      $read['id'],
+      $read['name'],
+      $read['keyframes'],
+      $read['usages'],
+      $read['layer'],
+      $read['locked'],
+      $read['provider'],
+      $read['shipped_state'],
+    ]);
 
     $response = $controller->rename('animations', 'fade_in', Request::create('/', 'POST', [], [], [], [], json_encode(['label' => 'appear'])));
     $this->assertSame(202, $response->getStatusCode());
@@ -388,7 +452,10 @@ class SkinAnimationsTest extends KernelTestBase {
     $this->assertSame(['appear'], array_keys($skin->animations()));
     $hosts = EntityTest::loadMultiple();
     $values = array_map(static fn (EntityTest $host): array => array_values(json_decode($host->get(DaedalusStylishFieldManager::FIELD_NAME)->value, TRUE))[0]['default'], $hosts);
-    $this->assertSame([['animation-name' => 'motion-appear'], ['animation' => 'motion-appear 600ms ease-out both, motion-other 1s']], array_values($values), 'Every reference is respelled in place, the rest of the value untouched.');
+    $this->assertSame([
+      ['animation-name' => 'motion-appear'],
+      ['animation' => 'motion-appear 600ms ease-out both, motion-other 1s'],
+    ], array_values($values), 'Every reference is respelled in place, the rest of the value untouched.');
     $variant = DaedalusStylishVariant::load($variant->id());
     $this->assertSame('motion-appear', $variant->getStyles()['']['default']['animation-name']);
     $this->assertSame(3, $manager->animationUsages('appear'));
@@ -411,7 +478,7 @@ class SkinAnimationsTest extends KernelTestBase {
   /**
    * The gestures on a shipped skin: the site layer, the lock, revert.
    */
-  public function testGesturesOnAShippedSkin(): void {
+  public function testGesturesOnShippedSkin(): void {
     \Drupal::service('module_installer')->install(['daedalus_stylish_skins_test']);
     $aurora = $this->loadSkin('aurora');
     $this->activateSkin($aurora);
@@ -441,10 +508,17 @@ class SkinAnimationsTest extends KernelTestBase {
     $provider = $this->container->get('daedalus_stylish.materials_provider');
     $provider->capture(MaterialKind::Animation, ['label' => 'glide', 'steps' => self::FADE, 'description' => 'Glide.'], NULL, [MaterialGestureOperationHandler::ORIGIN_OPTION => MaterialRecord::ORIGIN_AI]);
     $this->assertSame(['steps' => self::FADE_CANONICAL, 'description' => 'Glide.', 'offered' => TRUE], $this->loadSkin('aurora')->siteAnimations()['glide']);
-    $this->assertSame(['global' => 'INVALID_PARAMETER'], $this->refusal(fn () => $provider->capture(MaterialKind::Animation, ['label' => 'x', 'steps' => self::FADE, 'global' => TRUE], NULL, [])));
+    $this->assertSame(['global' => 'INVALID_PARAMETER'], $this->refusal(fn () => $provider->capture(MaterialKind::Animation, [
+      'label' => 'x',
+      'steps' => self::FADE,
+      'global' => TRUE,
+    ], NULL, [])));
     $this->assertSame(['label' => 'MISSING_PARAMETER'], $this->refusal(fn () => $provider->capture(MaterialKind::Animation, ['steps' => self::FADE], NULL, [])));
     $this->config('daedalus_stylish.settings')->set('ai_minting', FALSE)->save();
-    $this->assertSame(['steps' => 'STYLE_ANIMATION_AI_MINTING_DISABLED'], $this->refusal(fn () => $provider->capture(MaterialKind::Animation, ['label' => 'y', 'steps' => self::FADE], NULL, [MaterialGestureOperationHandler::ORIGIN_OPTION => MaterialRecord::ORIGIN_AI])));
+    $this->assertSame(['steps' => 'STYLE_ANIMATION_AI_MINTING_DISABLED'], $this->refusal(fn () => $provider->capture(MaterialKind::Animation, [
+      'label' => 'y',
+      'steps' => self::FADE,
+    ], NULL, [MaterialGestureOperationHandler::ORIGIN_OPTION => MaterialRecord::ORIGIN_AI])));
     $provider->capture(MaterialKind::Animation, ['label' => 'y', 'steps' => self::FADE], NULL, []);
     $this->assertArrayHasKey('y', $this->loadSkin('aurora')->animations(), 'A person mints past the AI gate.');
     $provider->update(MaterialKind::Animation, 'glide', ['offered' => FALSE, 'description' => 'Quiet.'], NULL, []);
@@ -474,7 +548,7 @@ class SkinAnimationsTest extends KernelTestBase {
     // seam refuses fails the import loudly at its path.
     $good = ['label' => 'Aurora', 'tokens' => [], 'animations' => ['fade_in' => self::FADE]];
     $importer->checkDefinitionShape('x', 'aurora', $good);
-    $this->expectException(\Drupal\daedalus_stylish\Exception\ShippedSkinException::class);
+    $this->expectException(ShippedSkinException::class);
     $importer->checkDefinitionShape('x', 'aurora', ['label' => 'Aurora', 'animations' => ['fade_in']]);
   }
 
@@ -498,7 +572,10 @@ class SkinAnimationsTest extends KernelTestBase {
     $this->assertSame(MaterialRecord::ORIGIN_USER, $this->container->get('daedalus_blueprint.materials_roster_builder')->build()->animations()['fade_in']->origin);
     // The usage mirror reads the skin's own steps too: a step's var() is
     // a token reference of the skin.
-    $manager->updateAnimation($skin, 'fade_in', ['0%' => ['opacity' => '0', 'transform' => 'translateY(var(--space-4))'], '100%' => ['opacity' => '1']]);
+    $manager->updateAnimation($skin, 'fade_in', [
+      '0%' => ['opacity' => '0', 'transform' => 'translateY(var(--space-4))'],
+      '100%' => ['opacity' => '1'],
+    ]);
     $this->assertSame(1, $this->container->get('daedalus_stylish.skin_material_usage')->countReferencesTo('--space-4'));
     // Deleting the referenced token rewrites the step to the literal.
     $this->setUpCurrentUser([], ['delete skin materials in use']);

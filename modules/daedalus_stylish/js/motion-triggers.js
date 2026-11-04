@@ -116,6 +116,9 @@ const observe = (el, binding) => {
 /**
  * Binds one element from its effective markers; rebinds when the pair
  * changed since the last scan, leaves a bound element alone otherwise.
+ *
+ * @param {Element} el
+ *   The element to bind.
  */
 const bind = (el) => {
   const [timelineValue, animationValue] = readMarkers(el);
@@ -150,6 +153,9 @@ const scan = (root) => {
  * every animation, and observes afresh, so the entrance plays again when
  * its range point is met, at once when the element is already in view.
  * Natively, where nothing is held or observed, rewinds and plays now.
+ *
+ * @param {Element} el
+ *   The bound element to re-arm.
  */
 const replay = (el) => {
   if (NATIVE) {

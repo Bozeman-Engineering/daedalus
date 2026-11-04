@@ -66,6 +66,9 @@ export const initPopoutRelay = () => {
   /** @type {Set<string>} */
   const present = new Set();
   let published = null;
+  // Assigned below: the channel's handlers publish, and publish posts on
+  // the channel.
+  let channel = null;
 
   const publish = (force = false) => {
     if (!present.size) {
@@ -79,7 +82,7 @@ export const initPopoutRelay = () => {
     }
   };
 
-  const channel = openChannel('daedalus_ui', scope, {
+  channel = openChannel('daedalus_ui', scope, {
     hello: ({ id }) => {
       present.add(id);
       // A pop-out that just said hello has no set, whatever this page

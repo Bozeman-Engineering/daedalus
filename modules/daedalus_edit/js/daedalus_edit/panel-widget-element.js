@@ -106,6 +106,7 @@ export class PanelWidgetElement {
    *   The editor's readProperties() over this item.
    *
    * @return {Object<string, *>}
+   *   The widget's current property values, keyed by name.
    */
   committedValues(names, surface) {
     return surface();
@@ -115,6 +116,7 @@ export class PanelWidgetElement {
    * The selectable key for the mutation-failure display: the field's.
    *
    * @return {?string}
+   *   The session key.
    */
   get selectableKey() {
     return this.sessionKey;
@@ -124,6 +126,7 @@ export class PanelWidgetElement {
    * The widget's form-item wrapper, re-resolved by identity.
    *
    * @return {?Element}
+   *   The wrapper, or null once the form is gone.
    */
   getFormItemWrapper() {
     return document.querySelector(
@@ -136,6 +139,7 @@ export class PanelWidgetElement {
    * has no separate form item to reveal.
    *
    * @return {?Element}
+   *   The wrapper, or null once the form is gone.
    */
   getFormItemHandle() {
     return this.getFormItemWrapper();
@@ -150,6 +154,7 @@ export class PanelWidgetElement {
    * question.
    *
    * @return {?Element}
+   *   The wrapper, or null once the form is gone.
    */
   getPageElement() {
     return this.getFormItemWrapper();
@@ -164,6 +169,7 @@ export class PanelWidgetElement {
    * shows it.
    *
    * @return {null}
+   *   Always null.
    */
   getPageElementHandle() {
     return null;
@@ -173,6 +179,7 @@ export class PanelWidgetElement {
    * The cached form the wrapper belongs to.
    *
    * @return {?Element}
+   *   The form element, or null once it is gone.
    */
   getForm() {
     return this.getFormItemWrapper()?.closest('.daedalus-edit-form') ?? null;
@@ -182,6 +189,7 @@ export class PanelWidgetElement {
    * The widget's focusable controls, document order.
    *
    * @return {Element[]}
+   *   The enabled controls, in document order; empty without a wrapper.
    */
   getFormItemInputs() {
     const wrapper = this.getFormItemWrapper();

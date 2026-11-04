@@ -11,12 +11,12 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
 /**
  * Kernel tests for add_section's explicit birth layout at every depth.
  *
- * Change_section_layout is retired: a section is born with its real layout
- * and keeps it for life. The explicit "layout" (+ "layout_settings") on
- * add_section is the birth-layout door — the blueprint expansion and any
- * named-slot layout use it — so these tests cover the happy paths that
- * need daedalus_layout section UUIDs: root placement, nesting, deep nesting, the
- * batch wire grammar, and pinned layout settings.
+ * Change_section_layout is retired: a section is born with its real layout and
+ * keeps it for life. The explicit "layout" (+ "layout_settings") on add_section
+ * is the birth-layout door — the blueprint expansion and any named-slot layout
+ * use it — so these tests cover the happy paths that need daedalus_layout
+ * section UUIDs: root placement, nesting, deep nesting, the batch wire grammar,
+ * and pinned layout settings.
  *
  * @see \Drupal\daedalus_blueprint\BlueprintOperations::addSection()
  */

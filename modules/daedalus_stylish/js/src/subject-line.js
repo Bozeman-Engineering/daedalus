@@ -50,6 +50,37 @@ import { elementIcon, elementWord, subjectChip } from './subject-model.js';
  * is the only road to the key and nothing on the line can wear the
  * reason before the click.
  */
+
+/**
+ * Renders the subject line for the selection.
+ *
+ * @param {object} props
+ *   The component's props.
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.source
+ *   The state source (select, address and target are the writes).
+ * @param {string} props.selected
+ *   The selected element's key.
+ * @param {string} props.targetKey
+ *   The full compound key the panel targets ("Copy key").
+ * @param {?Array} props.document
+ *   The lean document tree, or null while none is loaded.
+ * @param {{key: string, selector: ?string}} props.own
+ *   The selected facet's own address.
+ * @param {Array<object>} props.addresses
+ *   The facet's address set (subject-model.js addressSet).
+ * @param {?{key: string, selector: string}} props.address
+ *   The write address the rows write at, or null on the own key.
+ * @param {object} props.blockTypes
+ *   The block type labels by bundle.
+ * @param {object} props.sectionLayouts
+ *   The section layout labels by id.
+ * @param {?object} props.markup
+ *   The selected key's `_element.markup` annotation, or null.
+ * @param {boolean} [props.boxes]
+ *   Whether the panel's mode can style a generated box.
+ */
 export const SubjectLine = ({
   guide,
   source,

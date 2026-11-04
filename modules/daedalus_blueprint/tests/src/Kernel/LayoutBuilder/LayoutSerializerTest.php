@@ -238,14 +238,24 @@ class LayoutSerializerTest extends BlueprintKernelTestBase {
           'label' => 'Name',
           'label_display' => 'visible',
           'context_mapping' => ['entity' => 'layout_builder.entity'],
-          'formatter' => ['type' => 'string', 'label' => 'inline', 'settings' => ['link_to_entity' => FALSE], 'third_party_settings' => []],
+          'formatter' => [
+            'type' => 'string',
+            'label' => 'inline',
+            'settings' => ['link_to_entity' => FALSE],
+            'third_party_settings' => [],
+          ],
         ],
       ],
       [
         'uuid' => 'a1b2c3d4-0000-4000-8000-000000000002',
         'region' => 'content',
         'weight' => 1,
-        'configuration' => ['id' => 'system_powered_by_block', 'provider' => 'system', 'label' => '', 'label_display' => '0'],
+        'configuration' => [
+          'id' => 'system_powered_by_block',
+          'provider' => 'system',
+          'label' => '',
+          'label_display' => '0',
+        ],
       ],
     ]);
     $entity->get('layout_builder__layout')->appendSection($section);

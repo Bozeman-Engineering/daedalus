@@ -10,8 +10,8 @@ use Drupal\ai\AiProviderPluginManager;
  * Collects image-dimension adapters and picks the one for the active provider.
  *
  * Adapters are registered (highest priority first) via the
- * daedalus_ai.image_dimension_adapter service collector. The manager resolves the
- * configured text_to_image provider once and returns the first adapter that
+ * daedalus_ai.image_dimension_adapter service collector. The manager resolves
+ * the configured text_to_image provider once and returns the first adapter that
  * supports it; a default adapter (registered at the lowest priority with a
  * catch-all supports()) handles every provider that has no dedicated adapter.
  */

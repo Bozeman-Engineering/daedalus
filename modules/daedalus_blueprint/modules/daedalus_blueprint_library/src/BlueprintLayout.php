@@ -221,6 +221,9 @@ final class BlueprintLayout {
    *   Lean nodes (a tree, or any node list).
    * @param string $uuid
    *   The element uuid.
+   * @param string|null $parent
+   *   The uuid of the container the nodes sit in, NULL at the root: the
+   *   recursion's carry, never passed by a caller.
    *
    * @return string|null
    *   The parent container's uuid, or NULL when the element is a root or

@@ -36,7 +36,8 @@ class SectionCreatedEvent extends LifecycleEventBase {
    * @param \Drupal\layout_builder\Section $section
    *   The inserted section.
    * @param string|null $sectionUuid
-   *   The section's daedalus_layout UUID, or NULL when daedalus_layout is not installed.
+   *   The section's daedalus_layout UUID, or NULL when daedalus_layout is not
+   *   installed.
    * @param bool $dressed
    *   Whether the section arrived dressed (its batch declares its styles);
    *   see LifecycleEventBase::dressed().

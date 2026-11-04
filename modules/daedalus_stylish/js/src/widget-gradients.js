@@ -27,11 +27,7 @@
  * gesture, beside the media stop it lands as.
  */
 
-import {
-  gradientFallback,
-  normalizeValue,
-  stopsFor,
-} from './widget-values.js';
+import { gradientFallback, normalizeValue, stopsFor } from './widget-values.js';
 import { entryAtPose } from './condition-cascade.js';
 import { mediaTokenUuid } from './media-token.js';
 import { isGradientLayer, splitLayers } from './gradient-model.js';
@@ -81,6 +77,17 @@ export const singleGradient = (guide, materials, value) => {
  * gradient function paints as itself. Everything else in the list ('none',
  * a url() pattern, a color) is background-image vocabulary but not a
  * gradient stop, so it derives nothing here.
+ *
+ * @param {object} guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide).
+ * @param {object} materials
+ *   The materials roster.
+ * @param {*} raw
+ *   One entry of the `allowed:` list, verbatim.
+ *
+ * @return {?{id: string, value: string, matches: string[], label: string,
+ *   paint: string, paintDark: ?string}}
+ *   The stop, or null when the entry is not gradient-shaped.
  */
 const allowedGradientStop = (guide, materials, raw) => {
   const value = String(raw ?? '').trim();
@@ -147,6 +154,7 @@ const allowedGradientStop = (guide, materials, raw) => {
  *
  * @return {Array<{id: string, value: string, matches: string[],
  *   label: string, paint: string, paintDark: ?string}>}
+ *   The gradient stops in offer order, [] when the property offers none.
  */
 export const gradientStops = (guide, materials, constraints) => {
   const allowed = Array.isArray(constraints?.allowed)
@@ -314,6 +322,19 @@ export const MEDIA_COMPANIONS = {
  * and a seed written there would bury it. A block at any OTHER
  * condition does not answer here: it neither delivers at the write
  * condition nor is buried by a seed written there.
+ *
+ * @param {?object} entry
+ *   The stack's delivered condition-keyed entry (deliveredEntry), or
+ *   null.
+ * @param {string} property
+ *   The companion property.
+ * @param {string} condition
+ *   The editing compound the pick writes at.
+ * @param {object} conditions
+ *   The guide's condition table (guide.conditions).
+ *
+ * @return {boolean}
+ *   Whether a block at or under the write condition already sets it.
  */
 const answersCompanion = (entry, property, condition, conditions) =>
   normalizeValue(
@@ -333,6 +354,20 @@ const answersCompanion = (entry, property, condition, conditions) =>
  * validators, the stopsFor rule), no match means no seed. A `scale:`
  * constraint without a match beside it closes the property to minted
  * tokens, and no keyword is one.
+ *
+ * @param {object} guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide).
+ * @param {?object} declaration
+ *   The bound target's effective declaration (the elements entry for a
+ *   part binding).
+ * @param {string} property
+ *   The companion property.
+ * @param {string} value
+ *   The companion keyword (MEDIA_COMPANIONS).
+ *
+ * @return {?string}
+ *   The spelling to seed, or null when the guide refuses the property or
+ *   the value.
  */
 const sanctionedCompanion = (guide, declaration, property, value) => {
   if (!propertyGranted(declaration, property)) {
@@ -457,6 +492,14 @@ export const mediaPickReplacements = (values, siblings = null) => ({
 /**
  * The raw committed compound for the custom pill (the strokeState shape):
  * every set part in the widget's owned-property order.
+ *
+ * @param {Object<string, string>} values
+ *   The widget's (draft-layered) values.
+ * @param {string[]} properties
+ *   The owned properties in the widget's order.
+ *
+ * @return {string}
+ *   The set parts joined by a space.
  */
 const rawValue = (values, properties) =>
   properties
@@ -482,6 +525,7 @@ const rawValue = (values, properties) =>
  *   null when the entry has none.
  *
  * @return {boolean}
+ *   Whether background-clip reads `text`.
  */
 export const textRecipeOccupies = (siblings) =>
   normalizeValue(siblings?.['background-clip']) === 'text';
@@ -514,6 +558,8 @@ export const textRecipeOccupies = (siblings) =>
  *
  * @param {object} guide
  *   The style guide payload.
+ * @param {object} materials
+ *   The materials roster (the gradient tokens and inline literals).
  * @param {Object<string, string>} values
  *   The widget's (draft-layered) values.
  * @param {Array<{id: string, value: string, matches: string[]}>} colorStops
@@ -621,6 +667,8 @@ export const backgroundState = (
  *
  * @param {object} guide
  *   The style guide payload.
+ * @param {object} materials
+ *   The materials roster (the gradient tokens and inline literals).
  * @param {Object<string, string>} values
  *   The widget's (draft-layered) values.
  * @param {Array<{id: string, value: string, matches: string[]}>} colorStops

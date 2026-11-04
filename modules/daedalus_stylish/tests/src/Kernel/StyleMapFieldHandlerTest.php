@@ -23,11 +23,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the style map's daedalus_blueprint field handler and validator.
  *
- * The style guide in play comes from daedalus_stylish_guide_test (modules-only — no
- * test theme installed): section declares spacing with padding max 4rem,
- * field declares typography, block declares spacing, and the testimonial
- * block type declares typography (font-family allowed [Inter, Georgia],
- * font-size max 2rem) plus a .testimonial__quote sub-element.
+ * The style guide in play comes from daedalus_stylish_guide_test (modules-only
+ * — no test theme installed): section declares spacing with padding max 4rem,
+ * field declares typography, block declares spacing, and the testimonial block
+ * type declares typography (font-family allowed [Inter, Georgia], font-size max
+ * 2rem) plus a .testimonial__quote sub-element.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]

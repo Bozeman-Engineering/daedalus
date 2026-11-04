@@ -78,6 +78,12 @@ import { shownRows } from './shown-rows.js';
  * The vocabulary for rows the annotator does not name: a field row's
  * machine name, a region's, an inline entity's bundle (paragraphs carry
  * no `_element`). Never an annotated node's word.
+ *
+ * @param {string} machineName
+ *   A machine name (`field_body`, `content`).
+ *
+ * @return {string}
+ *   The words, capitalized.
  */
 const humanize = (machineName) => {
   const words = String(machineName)
@@ -91,6 +97,12 @@ const humanize = (machineName) => {
  * An inline-serialized entity (a paragraph or other owned reference):
  * distinguishable from shared-reference values ({target_id, _label}) by
  * carrying its own uuid.
+ *
+ * @param {*} value
+ *   A field value entry.
+ *
+ * @return {boolean}
+ *   Whether the value is an inline entity.
  */
 const isInlineEntity = (value) =>
   !!value && typeof value === 'object' && !Array.isArray(value) && !!value.uuid;
@@ -99,6 +111,12 @@ const isInlineEntity = (value) =>
  * An inline entity row. Inline entities carry no `_element` (the
  * annotator walks owning nodes of the root's layout, not paragraphs), so
  * their words are the entity's own label and its humanized bundle.
+ *
+ * @param {object} entity
+ *   The inline-serialized entity (uuid, type, label, fields).
+ *
+ * @return {object}
+ *   The entity row, its fields as children.
  */
 const inlineEntityNode = (entity) => {
   const type = humanize(entity.type ?? 'entity');
@@ -125,6 +143,20 @@ const inlineEntityNode = (entity) => {
  * (annotation absent = open); 'unit' rows start collapsed in the tree. A
  * field is what it is called: its one word is both its label and its
  * type.
+ *
+ * @param {string} key
+ *   The field's model key (`field:<owner uuid>:<name>`).
+ * @param {string} name
+ *   The field's machine name.
+ * @param {*} value
+ *   The field's value: a scalar, a form-only stub, a shared reference,
+ *   an inline entity or a list of either.
+ * @param {string} [presentation]
+ *   The field's presentation mode from the owner's annotation ('open' or
+ *   'unit').
+ *
+ * @return {object}
+ *   The field row.
  */
 const fieldNode = (key, name, value, presentation = 'open') => {
   if (isFormOnlyStub(value)) {
@@ -209,6 +241,14 @@ export const mergedTarget = (component, rootFields) => {
  * outline, no styling surface, no edit path. Its row would be a
  * mirror-only selectable in ANY view — the projection renders capability,
  * not data.
+ *
+ * @param {Object<string, {element?: boolean}>} facts
+ *   The owner's `_element.fields` map.
+ * @param {string} name
+ *   The field's machine name.
+ *
+ * @return {boolean}
+ *   Whether the field renders as an element.
  */
 const fieldExists = (facts, name) => facts[name]?.element !== false;
 
@@ -315,6 +355,17 @@ const componentNode = (component, rootFields = {}, fillsOf = () => []) => {
  * A lean-tree child's row: containers recurse as SECTIONS — one node shape
  * at every depth — anything else is a component. (Region nodes never reach
  * here; sectionNode unwraps them.)
+ *
+ * @param {object} child
+ *   A lean tree node (a container or a block).
+ * @param {object} rootFields
+ *   The root's field map (`blueprint.fields`): a field-block placement's
+ *   merged row labels itself from the root field it presents.
+ * @param {function(object): Array} fillsOf
+ *   A door's fills (slot-fills.js pairSlotFills).
+ *
+ * @return {object}
+ *   The child's row.
  */
 const treeChildNode = (child, rootFields, fillsOf) =>
   child.kind === 'container'
@@ -340,6 +391,16 @@ const treeChildNode = (child, rootFields, fillsOf) =>
  * ("Section" at page depth, "Container" nested). The row also carries the
  * raw custom label (customLabel) so the tree's rename affordance can seed
  * its input with what is actually stored, not the minted fallback.
+ *
+ * @param {object} section
+ *   A lean container node.
+ * @param {object} [rootFields]
+ *   The root's field map (`blueprint.fields`).
+ * @param {function(object): Array} [fillsOf]
+ *   A door's fills (slot-fills.js pairSlotFills).
+ *
+ * @return {object}
+ *   The section row.
  */
 const sectionNode = (section, rootFields = {}, fillsOf = () => []) => {
   const element = section._element ?? {};

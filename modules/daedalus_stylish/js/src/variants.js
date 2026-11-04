@@ -19,7 +19,11 @@ import {
   isOrphaned,
   isShipped,
 } from './variant-scope.js';
-import { doorRequest, entriesToOps, structuralChunks } from './code/paste-door.js';
+import {
+  doorRequest,
+  entriesToOps,
+  structuralChunks,
+} from './code/paste-door.js';
 
 const SaveVariantIcon = () => (
   <svg
@@ -102,6 +106,27 @@ const PasteStylesIcon = () => (
  * in place of the label; the eye is already on the button); failures go
  * to the edit-mode messenger (source.notify), which has room for a
  * server corrective's sentence.
+ *
+ * @param {object} props
+ *   The component props.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {string} props.selected
+ *   The selected element's selectable key (Save acts here).
+ * @param {string} props.target
+ *   The styling target's key (Copy and Paste act here).
+ * @param {object} props.styleMap
+ *   The root entity's style map.
+ * @param {?object} props.config
+ *   The variant grants ({canCreate, canUpdate, ...}), or null.
+ * @param {?Function} props.onSaveVariant
+ *   Opens the editing session in its creating posture; null withholds
+ *   the Save icon.
+ *
+ * @return {object}
+ *   The rendered action cluster.
  */
 export const StyleActions = ({
   source,
@@ -264,6 +289,12 @@ export const StyleActions = ({
  * state ("shipped, as the provider ships it", the distro-lock steady
  * state) renders nothing: no banner, no row marker — shipped-ness surfaces
  * only where it gates a gesture (the row menu's read-only hint, the fork).
+ *
+ * @param {{shipped_state: string, provider: string}} management
+ *   The usage route's management read for the variant.
+ *
+ * @return {string}
+ *   The sentence.
  */
 const shippedText = (management) => {
   if (management.shipped_state === 'defaults_changed') {
@@ -321,12 +352,21 @@ export const confirmRevertToDefaults = (variant) =>
  * viewer can act on it (the update grant is also the route's permission,
  * so a viewer without it is never asked to fetch what it could not use).
  *
+ * @param {object[]} worn
+ *   The worn shipped variant records.
+ * @param {boolean} enabled
+ *   Whether the viewer holds the update grant (the route's permission).
+ * @param {object[]} variants
+ *   The store's variant records; a change re-reads.
+ *
  * @return {Object<string, object>}
  *   Management payloads keyed by variant id, for the reads that answered.
  */
 const useWornManagement = (worn, enabled, variants) => {
   const [management, setManagement] = useState({});
   const ids = worn.map((variant) => variant.id).join('\n');
+  const remember = (id, body) =>
+    setManagement((previous) => ({ ...previous, [id]: body }));
   useEffect(() => {
     setManagement({});
     if (!enabled || !worn.length) {
@@ -335,9 +375,7 @@ const useWornManagement = (worn, enabled, variants) => {
     let alive = true;
     worn.forEach((variant) => {
       fetchUsage(variant.id).then(
-        (body) =>
-          alive &&
-          setManagement((previous) => ({ ...previous, [variant.id]: body })),
+        (body) => alive && remember(variant.id, body),
         () => {},
       );
     });
@@ -393,6 +431,52 @@ const useWornManagement = (worn, enabled, variants) => {
  * gesture: the shipped-state lines keep their notice and lose the
  * revert button, and the wear bar takes its read-only posture
  * (wear-bar.js).
+ *
+ * @param {object} props
+ *   The component props.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials roster (the ownership reads need the blueprints).
+ * @param {string} props.target
+ *   The styling target's key, where the wearings are read and land.
+ * @param {object} props.styleMap
+ *   The root entity's style map.
+ * @param {object[]} props.variants
+ *   The store's variant records.
+ * @param {Object<string, ?string>} props.blockTypes
+ *   Component uuid → inline block type.
+ * @param {Object<string, string>} props.sectionLayouts
+ *   Section uuid → layout plugin id.
+ * @param {?object} props.config
+ *   The variant grants ({canCreate, canUpdate, ...}), or null.
+ * @param {string[]} props.claimedAxes
+ *   The axes a mounted section claims for the current mode; their rows
+ *   are withheld from the wear bar.
+ * @param {string} props.condition
+ *   The editing compound ('default', a single, or 'a+b').
+ * @param {boolean} props.readOnly
+ *   Whether the target can wear nothing (a part or the children): the
+ *   area keeps its notices and drops every wear gesture.
+ * @param {?{toggle: Function, isOn: Function}} props.outline
+ *   The Inspector's Outline Variant state, keyed by variant reference,
+ *   or null.
+ * @param {?Function} props.onFlash
+ *   Called with {variant} on a row hover and null on leave: the
+ *   transient coverage flash on the canvas.
+ * @param {?Function} props.onOpenDocument
+ *   Called with (reference, posedCondition | null): the editing-session
+ *   doorway at this target.
+ * @param {?Function} props.onUpdateFromElement
+ *   Called with (reference): pre-stages the wearer's diff as pending
+ *   lines in the variant's session.
+ * @param {?Function} props.onVariantSettings
+ *   Called with (reference): opens the variant's library card.
+ *
+ * @return {object}
+ *   The rendered variant area.
  */
 export const VariantArea = ({
   source,

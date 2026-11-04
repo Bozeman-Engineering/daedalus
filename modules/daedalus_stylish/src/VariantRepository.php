@@ -26,7 +26,7 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * right after; each must see its own window's revisions.
  *
  * Staleness contract: the memo lives until a variant is saved or deleted.
- * _daedalus_variant_change() resets it from the variant entity's own
+ * _daedalus_stylish_variant_change() resets it from the variant entity's own
  * insert/update/delete hooks (before the recompile, which reads through
  * it), and VariantWorkspaceSubscriber resets it on workspace publish (which
  * fires no per-entity hooks), so a gesture that writes a variant and

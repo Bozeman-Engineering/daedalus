@@ -12,11 +12,11 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
- * Tests the daedalus_stylish:discover command without its optional rendering half.
+ * Tests the daedalus_stylish:discover command without its rendering half.
  *
  * The command lives in the base module but renders through the optional
- * daedalus_stylish_discover sub-module; with it absent the command must fail with
- * instructions, not a container crash. The happy path is covered in
+ * daedalus_stylish_discover sub-module; with it absent the command must fail
+ * with instructions, not a container crash. The happy path is covered in
  * daedalus_stylish_discover's ElementDiscoveryTest.
  */
 #[Group('daedalus_stylish')]

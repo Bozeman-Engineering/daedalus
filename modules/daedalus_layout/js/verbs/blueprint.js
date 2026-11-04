@@ -98,16 +98,30 @@ let pendingGesture = null;
  * Whether the user may save blueprints (the Add panel's grant; chrome
  * only, absent off blueprint-aware pages).
  */
-const canSave = () => !!window.drupalSettings?.daedalusLayout?.canSaveBlueprints;
+const canSave = () =>
+  !!window.drupalSettings?.daedalusLayout?.canSaveBlueprints;
 
 /**
  * The UUID a selectable key qualifies: the component for a block, the
  * section for a container, the host for the root entity.
+ *
+ * @param {string} key
+ *   The selectable key (`block:<uuid>`, `container:<uuid>` or
+ *   `entity:<uuid>`).
+ *
+ * @return {string}
+ *   The UUID after the kind.
  */
 const uuidOf = (key) => key.split(':')[1];
 
 /**
  * Whether a key is the page root's: the host entity the mirror booted on.
+ *
+ * @param {string} key
+ *   The selectable key.
+ *
+ * @return {boolean}
+ *   TRUE when the key names the root entity.
  */
 const isRootKey = (key) => {
   const root = Drupal.Daedalus.Blueprint.getRoot();
@@ -131,10 +145,18 @@ const hostIsPage = () => {
 
 /**
  * The mirror node behind a selectable key, else null.
+ *
+ * @param {string} key
+ *   The selectable key.
+ *
+ * @return {?object}
+ *   The lean node, or null when the mirror holds no element by that uuid.
  */
 const nodeOf = (key) => {
   const { Blueprint } = Drupal.Daedalus;
-  return Blueprint.componentForUuid(Blueprint.getBlueprint(), uuidOf(key)) ?? null;
+  return (
+    Blueprint.componentForUuid(Blueprint.getBlueprint(), uuidOf(key)) ?? null
+  );
 };
 
 /**
@@ -143,6 +165,12 @@ const nodeOf = (key) => {
  * A blueprint's root is always a container: a node carrying layout_id IS
  * a section, at any depth. Blocks are not capturable (capture the
  * container they sit in).
+ *
+ * @param {string} key
+ *   The selectable key.
+ *
+ * @return {?object}
+ *   The container node, or null for a block or an unknown key.
  */
 const capturableElement = (key) => {
   const node = nodeOf(key);
@@ -159,7 +187,12 @@ const capturableElement = (key) => {
  * means the blueprint is gone, unpublished, or file-shipped, all just "not
  * updatable", never an error.
  *
+ * @param {string} key
+ *   The selectable key of the placement.
+ *
  * @return {?{id: string, label: string, url: ?string}}
+ *   The blueprint's id, label and canvas url, or null when the key's
+ *   provenance resolves to no updatable record.
  */
 const updatableBlueprint = (key) => {
   const id = nodeOf(key)?.blueprint;
@@ -177,7 +210,11 @@ const updatableBlueprint = (key) => {
  * actor who may update the shown blueprint, the portal with its canvas
  * url. A detached placement is a copy and carries none.
  *
+ * @param {string} key
+ *   The selectable key.
+ *
  * @return {?Object}
+ *   The annotator's showing ({document, portal, ...}), or null off a join.
  */
 const showingOf = (key) => nodeOf(key)?._element?.showing ?? null;
 
@@ -189,7 +226,11 @@ const showingOf = (key) => nodeOf(key)?._element?.showing ?? null;
  * `url`, offered under the Update verb's own gate (the grant and an
  * updatable record), the split control's two halves agreeing.
  *
+ * @param {string} key
+ *   The selectable key.
+ *
  * @return {?string}
+ *   The blueprint canvas URL, or null when there is none to offer.
  */
 const openUrl = (key) => {
   const url =
@@ -201,7 +242,11 @@ const openUrl = (key) => {
 /**
  * The label of the blueprint the Open verb would open from a key, else null.
  *
+ * @param {string} key
+ *   The selectable key.
+ *
  * @return {?string}
+ *   The shown document's label on a join, else the provenance record's.
  */
 const openLabel = (key) =>
   showingOf(key)?.document?.label ?? updatableBlueprint(key)?.label ?? null;
@@ -248,19 +293,26 @@ const submitGesture = async (operation, label) => {
 /**
  * Reports through the one edit-mode message display (toast + notifications
  * sidebar), keyed to the element so the sidebar entry can scroll back.
+ *
+ * @param {string} text
+ *   The message.
+ * @param {string} type
+ *   The message type (status, warning or error).
+ * @param {?string} key
+ *   The selectable key the message is about, when there is one.
  */
 const report = (text, type, key = null) => {
-  Drupal.Daedalus.ModeManager.getPlugin('edit').message(
-    text,
-    type,
-    {},
-    key,
-  );
+  Drupal.Daedalus.ModeManager.getPlugin('edit').message(text, type, {}, key);
 };
 
 /**
  * Surfaces a gesture's capture warnings (inexpressible style keys the
  * capture dropped).
+ *
+ * @param {?string[]} warnings
+ *   The warning messages the gesture's response carried.
+ * @param {string} key
+ *   The selectable key the gesture captured.
  */
 const reportWarnings = (warnings, key) => {
   (warnings ?? []).forEach((warning) => report(warning, 'warning', key));
@@ -274,6 +326,9 @@ const reportWarnings = (warnings, key) => {
  * can offer ADOPTION: the unowned style variants the captured subtree
  * references render as checked checkboxes (data-blueprint-adopt), and
  * commitSave() folds the picked ones into the op's adopt_variants.
+ *
+ * @param {string} key
+ *   The selectable key of the element to capture.
  */
 const openSaveDialog = (key) => {
   const { ModePluginBase, Blueprint } = Drupal.Daedalus;
@@ -298,6 +353,10 @@ const openSaveDialog = (key) => {
  * offers the same ADOPTION checkboxes (update is when new looks usually
  * arrive on a blueprint), plus the target blueprint reference so the
  * confirm copy names it.
+ *
+ * @param {string} key
+ *   The selectable key of the placement whose provenance names the
+ *   blueprint to update.
  */
 const openUpdateDialog = (key) => {
   const target = updatableBlueprint(key);
@@ -350,7 +409,11 @@ const closeDialog = () => {
  * on its placements from now on.
  */
 const adoptPicks = () =>
-  [...document.querySelectorAll('.daedalus-layout-blueprint-save [data-blueprint-adopt]')]
+  [
+    ...document.querySelectorAll(
+      '.daedalus-layout-blueprint-save [data-blueprint-adopt]',
+    ),
+  ]
     .filter((input) => input.checked)
     .map((input) => input.getAttribute('data-blueprint-adopt'));
 
@@ -379,20 +442,27 @@ const offeredPick = () => {
  */
 const iconPick = () =>
   document
-    .querySelector('.daedalus-layout-blueprint-save [data-daedalus-layout-icon-picker-value]')
+    .querySelector(
+      '.daedalus-layout-blueprint-save [data-daedalus-layout-icon-picker-value]',
+    )
     ?.value.trim() ?? '';
 
 /**
  * Commits the save dialog: submit the save_material op, close on success,
  * report the refusal through the one message display on failure (the
  * dialog stays open for the correction).
+ *
+ * @param {HTMLButtonElement} button
+ *   The dialog's submit button, disabled while the op is in flight.
  */
 const commitSave = (button) => {
   const key = pendingGesture?.key;
   if (!key || !inputsValid()) {
     return;
   }
-  const label = document.getElementById('daedalus-layout-blueprint-label').value.trim();
+  const label = document
+    .getElementById('daedalus-layout-blueprint-label')
+    .value.trim();
   const description = document
     .getElementById('daedalus-layout-blueprint-description')
     .value.trim();
@@ -447,6 +517,9 @@ const commitSave = (button) => {
  * Commits the update dialog: push the captured element into the content
  * blueprint as a new revision (one revert away; workspace-staged on
  * workspace sites), adopting the picked variants alongside.
+ *
+ * @param {HTMLButtonElement} button
+ *   The dialog's submit button, disabled while the op is in flight.
  */
 const commitUpdate = (button) => {
   const { key, target } = pendingGesture ?? {};
@@ -540,6 +613,12 @@ const icons = {
 /**
  * Whether a key is a linked placement: a block node showing a blueprint
  * by reference (the mirror's `{kind: linked}`).
+ *
+ * @param {string} key
+ *   The selectable key.
+ *
+ * @return {boolean}
+ *   TRUE for a linked placement.
  */
 const isLinkedNode = (key) =>
   key.startsWith('block:') && nodeOf(key)?.kind === 'linked';
@@ -595,7 +674,9 @@ export const registerBlueprintVerbs = (app) => {
     label: Drupal.t('Detach'),
     menuLabel: (key) => {
       const name = nodeOf(key)?.blueprint;
-      const record = name ? Drupal.Daedalus.Materials.get('blueprint', name) : null;
+      const record = name
+        ? Drupal.Daedalus.Materials.get('blueprint', name)
+        : null;
       return record
         ? Drupal.t("Detach from blueprint '@label'", { '@label': record.label })
         : Drupal.t('Detach');

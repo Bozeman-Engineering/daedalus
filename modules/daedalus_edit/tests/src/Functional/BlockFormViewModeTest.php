@@ -6,6 +6,7 @@ namespace Drupal\Tests\daedalus_edit\Functional;
 
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use Drupal\layout_builder\SectionComponent;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\node\Entity\Node;
 use Drupal\Tests\BrowserTestBase;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
@@ -42,6 +43,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 class BlockFormViewModeTest extends BrowserTestBase {
 
   use DaedalusFixtureTrait;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
 
   /**
    * A `full` placement's block form is 200, as `default` is.
@@ -110,8 +116,10 @@ class BlockFormViewModeTest extends BrowserTestBase {
    */
   private function inlineBlockComponent(int $nid): SectionComponent {
     $node = Node::load($nid);
+    $sections = $node->get(OverridesSectionStorage::FIELD_NAME);
+    assert($sections instanceof SectionListInterface);
     $components = [];
-    foreach ($node->get(OverridesSectionStorage::FIELD_NAME)->getSections() as $section) {
+    foreach ($sections->getSections() as $section) {
       foreach ($section->getComponents() as $component) {
         if (str_starts_with($component->getPluginId(), 'inline_block:')) {
           $components[] = $component;

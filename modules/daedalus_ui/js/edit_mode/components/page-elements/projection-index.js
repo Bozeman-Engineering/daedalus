@@ -104,6 +104,12 @@ let index = null;
  * mirror read is the EFFECTIVE tree (effective-blueprint.js): a
  * composed-edit preview drafts its resolved markup beside the mirror, and
  * the index re-derives on it exactly as on a mutation response.
+ *
+ * @param {object} state
+ *   The store state.
+ *
+ * @return {{mirror: ?object, records: object, behavior: ?object}}
+ *   The three inputs, by reference.
  */
 const indexSourceOf = (state) => ({
   mirror: effectiveBlueprint(state),
@@ -122,6 +128,7 @@ const indexSourceOf = (state) => ({
  *   The selector ('.image-block-image', '.s-ab').
  *
  * @return {string}
+ *   The address.
  */
 export const selectorAddress = (key, selector) => `${key}::${selector}`;
 
@@ -137,6 +144,7 @@ export const selectorAddress = (key, selector) => `${key}::${selector}`;
  *   An index address (`key` or `key::selector`).
  *
  * @return {{key: string, selector: ?string}}
+ *   The element key and the selector, null for an element address.
  */
 export const splitAddress = (address) => {
   const at = address.indexOf('::');
@@ -150,6 +158,14 @@ export const splitAddress = (address) => {
  *
  * Pre-order: an owner's entry is set before its subtree walks, so a part
  * row can ask whether its owner is presented by the time it is reached.
+ *
+ * @param {object} root
+ *   The root identity envelope from the blueprint slice.
+ * @param {object} blueprint
+ *   The effective blueprint mirror of the root entity.
+ *
+ * @return {Map<string, object>}
+ *   The index, address to entry (see projectionIndex for the entry).
  */
 const buildIndex = (root, blueprint) => {
   const map = new Map();
@@ -242,6 +258,7 @@ const buildIndex = (root, blueprint) => {
  * The memoized projection index, or null before the mirror boots.
  *
  * @return {?Map<string, {label: string, elementType?: ?string, kind: string, bundle: ?string, parent: ?string, rowParent: ?string, children: string[], rows: string[], tier: 'element'|'part', source: string, can: ?Object<string, boolean>, owner?: string, tag?: ?string}>}
+ *   The index, or null before the mirror boots.
  */
 export const projectionIndex = () => {
   const state = store.getState();

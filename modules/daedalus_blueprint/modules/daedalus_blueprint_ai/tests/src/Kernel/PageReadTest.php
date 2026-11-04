@@ -85,7 +85,12 @@ class PageReadTest extends BlueprintKernelTestBase {
     // leaves it, is one container-layout section holding two text blocks
     // (saved block_content entities, the content persistence a blueprint
     // shares with a page).
-    $title = BlockContent::create(['type' => 'text', 'info' => 'Text', 'field_text_tag' => 'h2', 'field_text_text' => 'Card title']);
+    $title = BlockContent::create([
+      'type' => 'text',
+      'info' => 'Text',
+      'field_text_tag' => 'h2',
+      'field_text_text' => 'Card title',
+    ]);
     $title->save();
     $link = BlockContent::create(['type' => 'text', 'info' => 'Text', 'field_text_text' => 'Read more & learn']);
     $link->save();
@@ -203,7 +208,12 @@ class PageReadTest extends BlueprintKernelTestBase {
           'label' => 'Name',
           'label_display' => '0',
           'context_mapping' => ['entity' => 'layout_builder.entity'],
-          'formatter' => ['type' => 'string', 'label' => 'hidden', 'settings' => ['link_to_entity' => FALSE], 'third_party_settings' => []],
+          'formatter' => [
+            'type' => 'string',
+            'label' => 'hidden',
+            'settings' => ['link_to_entity' => FALSE],
+            'third_party_settings' => [],
+          ],
         ],
       ],
     ]);
@@ -235,13 +245,26 @@ class PageReadTest extends BlueprintKernelTestBase {
     $this->createBlockField('field_card_items', 'string', 'card', ['max_length' => 255], ['cardinality' => -1]);
     $card = BlockContent::create(['type' => 'card', 'info' => 'Card', 'field_card_items' => ['Plans', 'Pricing']]);
     $card->save();
-    $right = BlockContent::create(['type' => 'text', 'info' => 'Text', 'field_text_tag' => 'h2', 'field_text_text' => 'Right']);
+    $right = BlockContent::create([
+      'type' => 'text',
+      'info' => 'Text',
+      'field_text_tag' => 'h2',
+      'field_text_text' => 'Right',
+    ]);
     $right->save();
     $card_uuid = '7a1e2b3c-0000-4000-8000-000000000011';
     $right_uuid = '7a1e2b3c-0000-4000-8000-000000000012';
     $section = $this->createSection('layout_twocol_section', [
-      ['uuid' => $card_uuid, 'region' => 'first', 'configuration' => $this->createInlineBlockConfiguration('card', $card)],
-      ['uuid' => $right_uuid, 'region' => 'second', 'configuration' => $this->createInlineBlockConfiguration('text', $right)],
+      [
+        'uuid' => $card_uuid,
+        'region' => 'first',
+        'configuration' => $this->createInlineBlockConfiguration('card', $card),
+      ],
+      [
+        'uuid' => $right_uuid,
+        'region' => 'second',
+        'configuration' => $this->createInlineBlockConfiguration('text', $right),
+      ],
     ], [], ['daedalus_layout' => ['uuid' => $this->container->get('uuid')->generate()]]);
     $page = $this->createTestEntity(['name' => 'Two columns', 'layout_builder__layout' => [$section]]);
     $output = $this->read(['entity_type' => 'entity_test', 'entity_id' => (string) $page->id()]);
@@ -328,7 +351,10 @@ class PageReadTest extends BlueprintKernelTestBase {
    * A blueprint id the site does not hold is refused as any page would be.
    */
   public function testUnknownBlueprintIsRefused(): void {
-    $this->assertSame('Entity blueprint:999 not found.', $this->read(['entity_type' => 'blueprint', 'entity_id' => '999']));
+    $this->assertSame('Entity blueprint:999 not found.', $this->read([
+      'entity_type' => 'blueprint',
+      'entity_id' => '999',
+    ]));
   }
 
   /**

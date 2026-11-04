@@ -16,7 +16,11 @@
  * the element alone, with no store lookup.
  */
 
-import { CONTAINER_ID, blueprintRecordId, isBlueprintId } from './model/faces.js';
+import {
+  CONTAINER_ID,
+  blueprintRecordId,
+  isBlueprintId,
+} from './model/faces.js';
 
 /**
  * The panel's own id (the Sidebar plugin id): its DOM id and cookie
@@ -102,6 +106,12 @@ export const mountElement = () => document.getElementById(MOUNT_ID);
 
 /**
  * A face's row kind.
+ *
+ * @param {string} faceId
+ *   The face id a row carries (ATTR.row).
+ *
+ * @return {string}
+ *   ROW_KIND.container, ROW_KIND.blueprint or ROW_KIND.block.
  */
 export const rowKindOf = (faceId) => {
   if (faceId === CONTAINER_ID) {
@@ -127,6 +137,8 @@ export const rowKindOf = (faceId) => {
  *   linked: place the blueprint by reference instead of as a copy.
  *
  * @return {{source: string, data: object, placingSection: boolean}}
+ *   The drag source's name, the data it carries, and whether the drop
+ *   places a section (the Container, or a blueprint copied in).
  */
 export const rowSource = (row, { linked = false } = {}) => {
   const id = row.getAttribute(ATTR.row);

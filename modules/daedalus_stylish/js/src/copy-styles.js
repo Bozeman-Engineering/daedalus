@@ -83,7 +83,9 @@ export const targetKeyOf = (selected, target) => {
   if (!target?.key) {
     return selected;
   }
-  return target.selector ? `${target.key}${SUFFIX}${target.selector}` : target.key;
+  return target.selector
+    ? `${target.key}${SUFFIX}${target.selector}`
+    : target.key;
 };
 
 /**
@@ -102,6 +104,7 @@ export const targetKeyOf = (selected, target) => {
  *   An element or rule key.
  *
  * @return {{entries: Object<string, object>, wear: Object<string, string[]>}}
+ *   The key's entries and its worn references, by relative selector.
  */
 export const documentOf = (map, key) => {
   const entries = {};
@@ -144,14 +147,17 @@ const declarationCount = (entry) =>
  * references, the number the toasts speak.
  *
  * @param {{entries: object, wear: object}} copied
+ *   A copied document (documentOf).
  *
  * @return {number}
+ *   The count.
  */
 export const documentSize = (copied) =>
   Object.values(copied.entries).reduce(
     (count, entry) => count + declarationCount(entry),
     0,
-  ) + Object.values(copied.wear).reduce((count, refs) => count + refs.length, 0);
+  ) +
+  Object.values(copied.wear).reduce((count, refs) => count + refs.length, 0);
 
 /**
  * Plans a paste: the batch that lands a document at a target key.
@@ -160,15 +166,20 @@ export const documentSize = (copied) =>
  *   A copied document (documentOf).
  * @param {string} targetKey
  *   The key to paste at (targetKeyOf), an element or a rule.
- * @param {object} context
- *   - guide: the style guide payload (the enforcement read, the landing
- *     walk on a strict site).
- *   - blockTypes, sectionLayouts: the uuid tables the landing and the
- *     scope pairing resolve by (source.getBlockTypes(),
- *     source.getSectionLayouts()).
- *   - variants: the roster's variant records (materials.ofKind('variant')),
- *     so a reference's scope can be paired before the send; a reference
- *     the roster does not carry is sent as it is, for the server to judge.
+ * @param {object} [context]
+ *   The landing's lookups.
+ * @param {object} [context.guide]
+ *   The style guide payload (the enforcement read, the landing walk on a
+ *   strict site).
+ * @param {object} [context.blockTypes]
+ *   component uuid → bundle, the table the landing and the scope pairing
+ *   resolve by (source.getBlockTypes()).
+ * @param {object} [context.sectionLayouts]
+ *   section uuid → layout id, likewise (source.getSectionLayouts()).
+ * @param {Array<object>} [context.variants]
+ *   The roster's variant records (materials.ofKind('variant')), so a
+ *   reference's scope can be paired before the send; a reference the
+ *   roster does not carry is sent as it is, for the server to judge.
  *
  * @return {{operations: object[], count: number, skipped: {properties: number, variants: number}}}
  *   The batch (update_style ops first, then apply_variant, the shape
@@ -296,7 +307,10 @@ export const pasteStyles = (source, guide) => {
   // The one gate: style of the target's element, as every other write
   // control of the inspector asks before it mounts.
   if (!source.capable(key, 'style')) {
-    notify('warning', Drupal.t('Nothing pasted: this element cannot be styled here.'));
+    notify(
+      'warning',
+      Drupal.t('Nothing pasted: this element cannot be styled here.'),
+    );
     return true;
   }
   const plan = pastePlan(clipboard, key, {
@@ -314,7 +328,10 @@ export const pasteStyles = (source, guide) => {
     return true;
   }
   source
-    .commitBatch({ operations: plan.operations, label: Drupal.t('Paste styles') })
+    .commitBatch({
+      operations: plan.operations,
+      label: Drupal.t('Paste styles'),
+    })
     .then(() => {
       const landed = Drupal.formatPlural(
         plan.count,

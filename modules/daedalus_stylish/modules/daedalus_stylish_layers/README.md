@@ -2,9 +2,9 @@
 
 Makes user-authored Daedalus Stylish CSS **structurally** win the cascade — no
 specificity hacks, no `!important` arms race — by wrapping everything else
-(core, contrib, theme) in a CSS cascade layer while Daedalus Stylish's own output
-stays unlayered. For normal declarations, unlayered author styles beat ALL
-layered author styles regardless of specificity.
+(core, contrib, theme) in a CSS cascade layer while Daedalus Stylish's own
+output stays unlayered. For normal declarations, unlayered author styles beat
+ALL layered author styles regardless of specificity.
 
 ## The layer contract
 
@@ -27,10 +27,10 @@ The resulting cascade, weakest to strongest, for **normal** declarations:
 
 1. `daedalus_stylish_force` layer (ships empty)
 2. `site` wrapper layer — ALL pipeline CSS: core, contrib, theme
-3. Unlayered styles — Daedalus Stylish's emitted `@scope` styles (and any pipeline
-   escapees: other modules' inline `<style>` tags, JS-injected stylesheets,
-   `html_head` links — those never pass through the asset pipeline and keep
-   competing on raw specificity)
+3. Unlayered styles — Daedalus Stylish's emitted `@scope` styles (and any
+   pipeline escapees: other modules' inline `<style>` tags, JS-injected
+   stylesheets, `html_head` links — those never pass through the asset pipeline
+   and keep competing on raw specificity)
 
 ### `daedalus_stylish_force`: the empty `!important` escape hatch
 
@@ -42,8 +42,8 @@ beats everything else. Without the force layer, layering would make a theme
 `daedalus_stylish_force` is declared first and **ships empty**. Its contract:
 
 - It exists solely so Daedalus Stylish can route rare must-win `!important`
-  declarations into it (`@layer daedalus_stylish_force { ... !important }`) — those
-  then outrank every other declaration on the page, layered or not.
+  declarations into it (`@layer daedalus_stylish_force { ... !important }`) —
+  those then outrank every other declaration on the page, layered or not.
 - Nothing else may add rules to it, and normal (non-`!important`)
   declarations must never be placed in it — as the earliest layer it is the
   WEAKEST place for normal declarations.
@@ -64,8 +64,8 @@ accepted; rename via settings if it ever bites.
 
 Config never reaches the asset decorators directly. `hook_css_alter()` stamps
 every non-exempt CSS asset with the wrapper layer name
-(`$asset['daedalus_stylish_layers'] = 'site'`), and everything downstream keys on that
-stamp alone:
+(`$asset['daedalus_stylish_layers'] = 'site'`), and everything downstream keys
+on that stamp alone:
 
 - the **grouper** decorator splits aggregate groups so each is entirely
   stamped or entirely unstamped;
@@ -107,13 +107,13 @@ css:
 
 Use this for editor/admin chrome that must never lose to page CSS, or for a
 stylesheet whose own `@layer` usage must keep page-level meaning (wrapped, it
-would become a sub-layer). Daedalus Stylish's inspector chrome is exempt this way, and
-so is the compiled variant stylesheet — user-authored CSS delivered as a file
-must compete unlayered exactly like the inline output. The key works the same
-in dynamic definitions from `hook_library_info_build()`. Modules can also set
-`daedalus_stylish_layers_exempt` on assets from their own `hook_css_alter()` to exempt
-stylesheets they don't define — stamping is forced to run after all other
-modules' css alters.
+would become a sub-layer). Daedalus Stylish's inspector chrome is exempt this
+way, and so is the compiled variant stylesheet — user-authored CSS delivered as
+a file must compete unlayered exactly like the inline output. The key works the
+same in dynamic definitions from `hook_library_info_build()`. Modules can also
+set `daedalus_stylish_layers_exempt` on assets from their own `hook_css_alter()`
+to exempt stylesheets they don't define — stamping is forced to run after all
+other modules' css alters.
 
 Links carrying extra attributes (`integrity`, `crossorigin`, ...) are never
 rewritten — `@import` cannot express them — so such stylesheets stay
@@ -121,8 +121,8 @@ unlayered as well.
 
 ## Runtime switch
 
-`daedalus_stylish_layers.settings.enabled` (default TRUE — installing the module is
-the switch). Disabling stops emitting the statement and, by withholding the
+`daedalus_stylish_layers.settings.enabled` (default TRUE — installing the module
+is the switch). Disabling stops emitting the statement and, by withholding the
 stamps, all wrapping/rewriting.
 
 ## Settings
@@ -138,6 +138,6 @@ pages (the config's own cache tag), so the next page render wears the change.
 
 ## Scope
 
-This module is generic — it does not depend on the parent `daedalus_stylish` module —
-so extraction to standalone contrib (or upstreaming) stays cheap. The Daedalus Stylish
-recipe enables it by default.
+This module is generic — it does not depend on the parent `daedalus_stylish`
+module — so extraction to standalone contrib (or upstreaming) stays cheap. The
+Daedalus Stylish recipe enables it by default.

@@ -117,6 +117,14 @@ export const parseSlotKey = (key, rootKind = null) => {
  * The serializer for key BUILDERS (capture walking a staged subtree);
  * parseSlotKey stays the one validator, so builders producing structural
  * nonsense find out at the parse/validate seam, not here.
+ *
+ * @param {Array<{type: string, name?: string, index?: number}>} segments
+ *   The parsed slot segments, root first.
+ * @param {?string} [selector]
+ *   The relative selector after the `::`, or null for the path alone.
+ *
+ * @return {string}
+ *   The canonical slot key.
  */
 export const formatSlotKey = (segments, selector = null) => {
   const path = (segments ?? [])
@@ -144,6 +152,14 @@ export const formatSlotKey = (segments, selector = null) => {
  * behind every surface that walks a variant's key space as a tree
  * (pending.js payloadRows, the variant document's slot tree), so they can
  * never disagree about the order the tree reads.
+ *
+ * @param {Array<object>} a
+ *   The first key's parsed segments.
+ * @param {Array<object>} b
+ *   The second key's parsed segments.
+ *
+ * @return {number}
+ *   Negative when `a` reads first, positive when `b` does, 0 when equal.
  */
 export const compareSegments = (a, b) => {
   const length = Math.min(a.length, b.length);
@@ -200,7 +216,8 @@ export const fragmentStyles = (styles, fragment) => {
     // through the carrier's fragment lookup. The read is values-only;
     // entryRefs() is the one structured read for the list (PHP mirror:
     // SlotKey::fragmentStyles strips RESERVED_ENTRY_KEYS the same way).
-    const { variants, ...values } = entry;
+    const values = { ...entry };
+    delete values.variants;
     if (!Object.keys(values).length) {
       return;
     }
@@ -218,6 +235,9 @@ export const fragmentStyles = (styles, fragment) => {
  *
  * Layout scopes are container roots; every bundle is a block root; kinds
  * map to themselves.
+ *
+ * @param {*} scope
+ *   The variant scope string (`layout:*`, `block_type:*`, `kind:*`).
  *
  * @return {?string}
  *   One of ROOT_KINDS, or null when the string is not a variant scope

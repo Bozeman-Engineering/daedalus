@@ -28,8 +28,8 @@ use Drupal\daedalus_blueprint\Host\HostInterface;
  *   host's document door seeds an empty override, and a migration never
  *   instantiates documents).
  *
- * Register with the daedalus_layout.host_transform service tag (optional priority,
- * higher first).
+ * Register with the daedalus_layout.host_transform service tag (optional
+ * priority, higher first).
  */
 interface HostTransformInterface {
 

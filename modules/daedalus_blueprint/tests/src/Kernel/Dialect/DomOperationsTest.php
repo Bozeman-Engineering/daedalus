@@ -114,8 +114,8 @@ class DomOperationsTest extends BlueprintKernelTestBase {
   /**
    * The test site vocabulary: the eb_test_container layout, one block type.
    *
-   * No variant axes and no class variants: the variant halves execute
-   * through daedalus_stylish's registered ops and are covered where daedalus_stylish is
+   * No variant axes and no class variants: the variant halves execute through
+   * daedalus_stylish's registered ops and are covered where daedalus_stylish is
    * installed (DomStyleOperationsTest).
    */
   protected function catalog(): DialectCatalog {
@@ -533,7 +533,11 @@ class DomOperationsTest extends BlueprintKernelTestBase {
     $this->assertSame(['class', 'name', 'style'], $bad->getErrors()[0]->getContext()['legal']);
 
     $insert = $this->operations->batchOperations($this->host($this->entity), [
-      ['op' => 'insert', 'html' => '<d-basic id="card" heading="A">x</d-basic>', 'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend']],
+      [
+        'op' => 'insert',
+        'html' => '<d-basic id="card" heading="A">x</d-basic>',
+        'at' => ['ref' => $this->rootUuid, 'position' => 'beforeend'],
+      ],
     ], $this->options);
     $block = $this->operations->batchOperations($this->host($this->entity), [
       ['op' => 'set', 'ref' => $insert->getAliases()['card'], 'attrs' => ['name' => 'Card']],

@@ -7,7 +7,7 @@ namespace Drupal\daedalus_stylish;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 
 /**
- * The rewrite-then-delete and rewrite-then-rename batches behind a skin material.
+ * The rewrite-then-delete and rewrite-then-rename batches of a skin material.
  *
  * ValueDeleteBatchBase's twin for the materials that are facts of a skin,
  * all three sections: staged by SkinMaterialManager::deleteToken() /
@@ -94,7 +94,12 @@ final class SkinMaterialDeleteBatch extends ValueDeleteBatchBase {
    */
   public static function parseBatchId(string $id): ?array {
     $parts = explode(':', $id);
-    if (count($parts) < 3 || count($parts) > 4 || !ctype_digit($parts[0]) || !in_array($parts[1], [SkinMaterialManager::TOKENS, SkinMaterialManager::ANIMATIONS, SkinMaterialManager::FONTS], TRUE) || $parts[2] === '') {
+    $sections = [
+      SkinMaterialManager::TOKENS,
+      SkinMaterialManager::ANIMATIONS,
+      SkinMaterialManager::FONTS,
+    ];
+    if (count($parts) < 3 || count($parts) > 4 || !ctype_digit($parts[0]) || !in_array($parts[1], $sections, TRUE) || $parts[2] === '') {
       return NULL;
     }
     return [(int) $parts[0], $parts[1], $parts[2], $parts[3] ?? NULL];

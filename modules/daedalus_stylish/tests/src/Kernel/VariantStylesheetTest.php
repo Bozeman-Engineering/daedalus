@@ -27,11 +27,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests variant CSS delivery.
  *
  * Compile-on-save into one shared, hash-busted stylesheet file; the
- * "daedalus_stylish/variants" library resolving the current file at discovery time;
- * variant classes stamped at render on the elements whose map entries
+ * "daedalus_stylish/variants" library resolving the current file at discovery
+ * time; variant classes stamped at render on the elements whose map entries
  * reference a variant; and the workspace-preview edge — staged variant
- * revisions inline into the entity's own style tag while the shared file
- * keeps the live CSS until the workspace publishes.
+ * revisions inline into the entity's own style tag while the shared file keeps
+ * the live CSS until the workspace publishes.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -182,7 +182,11 @@ class VariantStylesheetTest extends KernelTestBase {
     // file through the roster (the key grammar is law under any mode, so
     // the conformance judge withholds it: testWithheldVariantLeavesDelivery),
     // so the gate is exercised on the seam itself with an unsaved variant.
-    $unsaved = DaedalusStylishVariant::create(['label' => 'Unsaved', 'machine_name' => 'unsaved', 'scope' => 'kind:block']);
+    $unsaved = DaedalusStylishVariant::create([
+      'label' => 'Unsaved',
+      'machine_name' => 'unsaved',
+      'scope' => 'kind:block',
+    ]);
     $unsaved->setStyles([
       '' => ['default' => ['padding' => '2rem']],
       '::.bad{selector}' => ['default' => ['color' => 'red']],
@@ -376,8 +380,8 @@ class VariantStylesheetTest extends KernelTestBase {
     $this->assertCount(1, $library['css']);
     $this->assertStringContainsString(basename($this->stylesheetUri()), $library['css'][0]['data']);
     // User-authored CSS competes unlayered: the compiled stylesheet must be
-    // exempt from the daedalus_stylish_layers wrapper layer or theme specificity
-    // beats it again inside the layer.
+    // exempt from the daedalus_stylish_layers wrapper layer or theme
+    // specificity beats it again inside the layer.
     $this->assertTrue($library['css'][0]['daedalus_stylish_layers_exempt'] ?? FALSE);
   }
 
@@ -1045,7 +1049,6 @@ class VariantStylesheetTest extends KernelTestBase {
     $css = (string) $this->container->get('daedalus_stylish.style_backend')->build($this->host($entity), $map)['#value'];
     $this->assertLessThan(strpos($css, 'padding: 2rem;'), strpos($css, 'padding: 5rem;'));
   }
-
 
   /**
    * Wear at a rule delivers inside the rule owner's @scope in every mode.

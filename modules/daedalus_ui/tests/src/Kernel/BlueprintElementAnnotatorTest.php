@@ -436,17 +436,17 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
   /**
    * The root's derived rule: its label field presents AS the entity row.
    *
-   * The fixture is a Layout-Builder-enabled node bundle — the product's
-   * root case. A node root's title is the entity type's label key and a
-   * real field, so the root presentation names it (edit_target) while
-   * staying OPEN: the panel folds the title row into the root row. Entity-kind `element: false` declarations surface as
-   * root field facts, so their rows fold in every view. That covers title
-   * itself (daedalus_ui's own universal declaration, since preprocess
-   * lifts it out of the entity render and nothing inside the entity
+   * The fixture is a Layout-Builder-enabled node bundle — the product's root
+   * case. A node root's title is the entity type's label key and a real field,
+   * so the root presentation names it (edit_target) while staying OPEN: the
+   * panel folds the title row into the root row. Entity-kind `element: false`
+   * declarations surface as root field facts, so their rows fold in every view.
+   * That covers title itself (daedalus_ui's own universal declaration, since
+   * preprocess lifts it out of the entity render and nothing inside the entity
    * answers to its key) alongside styling infrastructure like a style map
-   * field. A DECLARED element: false never vetoes the derived edit_target,
-   * so title editing keeps routing through the root row: an LB node
-   * bundle's annotation carries BOTH `fields.title.element: false` and
+   * field. A DECLARED element: false never vetoes the derived edit_target, so
+   * title editing keeps routing through the root row: an LB node bundle's
+   * annotation carries BOTH `fields.title.element: false` and
    * `presentation.edit_target: title`.
    */
   public function testRootAnnotation(): void {
@@ -551,8 +551,19 @@ class BlueprintElementAnnotatorTest extends KernelTestBase {
                 ['kind' => 'block', 'uuid' => 'summary-block-uuid', 'field' => 'field_summary'],
                 ['kind' => 'block', 'uuid' => 'missing-field-uuid', 'field' => 'field_nope'],
                 ['kind' => 'block', 'uuid' => 'plugin-uuid', 'plugin_id' => 'system_powered_by_block'],
-                ['kind' => 'block', 'uuid' => 'named-plugin-uuid', 'plugin_id' => 'system_powered_by_block', 'label' => 'Footer credits'],
-                ['kind' => 'block', 'uuid' => 'headed-plugin-uuid', 'plugin_id' => 'system_powered_by_block', 'label' => 'Footer credits', 'label_rendered' => TRUE],
+                [
+                  'kind' => 'block',
+                  'uuid' => 'named-plugin-uuid',
+                  'plugin_id' => 'system_powered_by_block',
+                  'label' => 'Footer credits',
+                ],
+                [
+                  'kind' => 'block',
+                  'uuid' => 'headed-plugin-uuid',
+                  'plugin_id' => 'system_powered_by_block',
+                  'label' => 'Footer credits',
+                  'label_rendered' => TRUE,
+                ],
               ],
             ],
           ],

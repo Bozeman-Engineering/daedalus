@@ -67,7 +67,9 @@ final class Requirement {
   }
 
   /**
-   * Insert on the destination a placement location (an operation parameter) resolves to.
+   * Insert on the destination a placement location resolves to.
+   *
+   * The location is an operation parameter.
    */
   public static function destination(string $parameter = 'location'): self {
     return new self(Capability::Insert, self::DESTINATION, $parameter, "$parameter.anchor");

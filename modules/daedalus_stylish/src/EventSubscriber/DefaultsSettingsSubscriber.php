@@ -35,7 +35,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * sweep, the sync included, and recompiles both files among the rest.
  * The active unit's OWN save changing its default_skin or its
  * enforcement is the third way the law changes;
- * _daedalus_design_system_change() reacts to that.) Reacting at the
+ * _daedalus_stylish_design_system_change() reacts to that.) Reacting at the
  * config save event covers every writer (admin form, the choose route
  * and command, drush config-set, config sync) through one seam.
  * Recompiling both files on any daedalus_stylish.settings save is

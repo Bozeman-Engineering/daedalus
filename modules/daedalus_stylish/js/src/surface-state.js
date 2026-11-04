@@ -66,6 +66,7 @@ export const PLACES = ['styles', 'materials'];
  *   The stored place value.
  *
  * @return {string}
+ *   The place, styles when the value is unknown.
  */
 export const normalizePlace = (place) =>
   PLACES.includes(place) ? place : 'styles';
@@ -95,9 +96,12 @@ export const DEFAULT_CATALOG_SECTION = 'skin';
  *   The law gate (drupalSettings.daedalusStylish.law.canView === true).
  *
  * @return {string[]}
+ *   The offered tabs, in tab order.
  */
 export const catalogSectionsFor = (lawOffered) =>
-  CATALOG_SECTIONS.filter((section) => section !== 'law' || lawOffered === true);
+  CATALOG_SECTIONS.filter(
+    (section) => section !== 'law' || lawOffered === true,
+  );
 
 /**
  * Whether a wear key's entry wears the edited document.
@@ -119,6 +123,7 @@ export const catalogSectionsFor = (lawOffered) =>
  *   The scopes whose skin block the read subject's stack carries.
  *
  * @return {boolean}
+ *   Whether the entry wears the document.
  */
 export const wearsDocument = (entry, reference, skinScopes = []) => {
   if (reference == null) {
@@ -153,6 +158,7 @@ export const wearsDocument = (entry, reference, skinScopes = []) => {
  *   The current place and the edited document's reference (null = no
  *   editing session mounted).
  * @param {object} context
+ *   The new wear key's facts.
  * @param {?object} context.entry
  *   The NEW wear key's style entry (the selected element's, or the
  *   rule the target names).
@@ -165,6 +171,7 @@ export const wearsDocument = (entry, reference, skinScopes = []) => {
  *   text block), the wearing fact for a skin document.
  *
  * @return {{place: string, editing: ?string, prompt: boolean}}
+ *   The state after the move, and whether the leave-prompt fires first.
  */
 export const selectionMove = (
   { place, editing = null },
@@ -194,6 +201,7 @@ export const selectionMove = (
  *   The new wearer's key: an element's selectable key or a rule key.
  *
  * @return {?object}
+ *   The re-anchored session, or the same session when nothing changes.
  */
 export const reanchorSession = (session, key) =>
   stagesLines(session) &&
@@ -217,8 +225,7 @@ export const reanchorSession = (session, key) =>
  *   The edited document's reference.
  *
  * @return {boolean}
+ *   Whether the session is the document's update session.
  */
 export const sessionFocuses = (session, reference) =>
-  stagesLines(session) &&
-  reference != null &&
-  session.reference === reference;
+  stagesLines(session) && reference != null && session.reference === reference;

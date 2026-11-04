@@ -25,6 +25,7 @@ import { POLICY } from './resolver';
  *   The selection slice's pickerArmed flag.
  *
  * @return {boolean}
+ *   Whether a modifier is held or the picker is armed.
  */
 export const isDeep = (event, pickerArmed = false) =>
   Boolean(event?.metaKey || event?.ctrlKey || pickerArmed);

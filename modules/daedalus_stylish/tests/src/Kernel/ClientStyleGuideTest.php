@@ -74,8 +74,8 @@ class ClientStyleGuideTest extends KernelTestBase {
     // The user schema backs the importers' administrative account switch.
     $this->installEntitySchema('user');
     $this->installEntitySchema('block_content');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
     $this->installConfig(['daedalus_stylish']);
@@ -112,7 +112,7 @@ class ClientStyleGuideTest extends KernelTestBase {
   /**
    * The payload serves one word per closed base tag, declared labels applied.
    *
-   * tagLabels covers EVERY BASE_TAGS entry, declared or not (a label
+   * `tagLabels` covers EVERY BASE_TAGS entry, declared or not (a label
    * read never falls through to the tag itself for a closed tag), in
    * vocabulary order: the shipped word (StyleGuide::BASE_TAG_LABELS)
    * unless the site's base declaration carries a `label:` for the tag,
@@ -198,7 +198,7 @@ class ClientStyleGuideTest extends KernelTestBase {
     $this->assertSame(['label', 'properties', 'pseudo'], array_keys($payload['groups']['generated_content']));
     $this->assertTrue($payload['groups']['generated_content']['pseudo']);
     $this->assertSame(['content'], array_keys($payload['groups']['generated_content']['properties']));
-    // content is media-capable (one media reference is its third
+    // `content` is media-capable (one media reference is its third
     // spelling): the definition is served whole, so the flag the picker
     // and the client offers read reaches the client with the keywords.
     $this->assertTrue($payload['groups']['generated_content']['properties']['content']['media']);
@@ -243,13 +243,12 @@ class ClientStyleGuideTest extends KernelTestBase {
     // the page-container rule exactly when the backend would.
     $this->assertTrue($payload['containerRoots']);
 
-    // Kind nodes carry the merged declaration's riding sections (the
-    // entity kind carries daedalus_stylish's own spine declaration, the style map
-    // field's existence fact, even though no fixture declares styling for
-    // it) and the ROSTER's answers in place of the authored styling: the
-    // node's `grants` (group id => granted names) and `valueSpaces`
-    // (property => the effective block), never the authored
-    // property_groups wire.
+    // Kind nodes carry the merged declaration's riding sections (the entity
+    // kind carries daedalus_stylish's own spine declaration, the style map
+    // field's existence fact, even though no fixture declares styling for it)
+    // and the ROSTER's answers in place of the authored styling: the node's
+    // `grants` (group id => granted names) and `valueSpaces` (property => the
+    // effective block), never the authored property_groups wire.
     $section = $payload['kinds']['container'];
     $this->assertArrayHasKey('spacing', $section['grants']);
     $this->assertContains('padding', $section['grants']['spacing']);
@@ -539,7 +538,11 @@ class ClientStyleGuideTest extends KernelTestBase {
           '.menu-item' => ['property_groups' => ['layout' => []]],
         ],
         'controls' => [
-          'item_alignment' => ['label' => 'Item alignment', 'widget' => 'test_alignment', 'element' => ['.menu-item', '']],
+          'item_alignment' => [
+            'label' => 'Item alignment',
+            'widget' => 'test_alignment',
+            'element' => ['.menu-item', ''],
+          ],
           'alignment' => ['label' => 'Alignment', 'widget' => 'test_alignment'],
         ],
       ],
@@ -596,10 +599,9 @@ class ClientStyleGuideTest extends KernelTestBase {
       $this->assertArrayNotHasKey('negative', $spacing[$side], $side);
     }
 
-    // A constraint authored on a longhand (daedalus_stylish_guide_test_extra caps
-    // padding-left) rides the served container node's value spaces
-    // beside the shorthand's cap, where the client resolves per-property
-    // constraints.
+    // A constraint authored on a longhand (daedalus_stylish_guide_test_extra
+    // caps padding-left) rides the served container node's value spaces beside
+    // the shorthand's cap, where the client resolves per-property constraints.
     $spaces = $payload['kinds']['container']['valueSpaces'];
     $this->assertSame('6rem', $spaces['padding']['max']);
     $this->assertSame('3rem', $spaces['padding-left']['max']);
@@ -684,7 +686,11 @@ class ClientStyleGuideTest extends KernelTestBase {
       'testimonial' => [
         'elements' => [
           '.testimonial__quote' => ['pseudo' => ['after' => ['property_groups' => ['border' => []]]]],
-          '.t-*' => ['label' => 'Owner namespace', 'property_groups' => ['background' => []], 'pseudo' => ['before' => ['property_groups' => ['shadow' => []]]]],
+          '.t-*' => [
+            'label' => 'Owner namespace',
+            'property_groups' => ['background' => []],
+            'pseudo' => ['before' => ['property_groups' => ['shadow' => []]]],
+          ],
         ],
       ],
     ]);
@@ -926,12 +932,12 @@ class ClientStyleGuideTest extends KernelTestBase {
   /**
    * The entity's layout root serves as a part node of the entity kind.
    *
-   * daedalus_layout declares the anatomy (label, tag) and its flex column;
-   * daedalus_stylish layers spacing and layout over the part. The payload serves
-   * the merged part as a roster node, the twin of the roster at
+   * `daedalus_layout` declares the anatomy (label, tag) and its flex column;
+   * daedalus_stylish layers spacing and layout over the part. The payload
+   * serves the merged part as a roster node, the twin of the roster at
    * kind:entity::.daedalus-layout-layout, so the inspector's Spacing and Layout
-   * sections on the part, the code view's completions and the page-level
-   * Gap control read one truth. daedalus_layout is enabled inside the case so the
+   * sections on the part, the code view's completions and the page-level Gap
+   * control read one truth. daedalus_layout is enabled inside the case so the
    * class's other payloads stay as the module list declares them.
    */
   public function testEntityLayoutRootPart(): void {
@@ -955,15 +961,16 @@ class ClientStyleGuideTest extends KernelTestBase {
     $this->assertSame($roster->grants(), $part['grants']);
     $this->assertSame($roster->valueSpaces(), $part['valueSpaces']);
 
-    // The declared tier carries daedalus_layout's box fact for the part: code, no
-    // skin, the mechanic a gap needs (a flex column, the container kind's
+    // The declared tier carries daedalus_layout's box fact for the part: code,
+    // no skin, the mechanic a gap needs (a flex column, the container kind's
     // own stacking model, so the sections pack instead of stretching).
     $this->assertSame(['default' => ['display' => 'flex', 'flex-direction' => 'column']], $payload['declaredDefaults']['kind:entity']['::.daedalus-layout-layout']);
   }
 
   /**
-   * The enforcement mode and the system's identity are the active design
-   * system's: the Design system place heads itself with both.
+   * The enforcement mode and the system's identity are the active system's.
+   *
+   * The Design system place heads itself with both.
    */
   public function testEnforcement(): void {
     $id = $this->enforce('strict');

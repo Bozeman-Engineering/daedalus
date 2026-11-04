@@ -188,7 +188,9 @@ class SlotSectionsTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * A slot section is born tagged and serializes as a slot-tagged top-level container.
+   * A slot section is born tagged.
+   *
+   * It serializes as a slot-tagged top-level container.
    */
   public function testSlotSectionSerializes(): void {
     [$host, $first] = $this->page();
@@ -196,8 +198,18 @@ class SlotSectionsTest extends BlueprintKernelTestBase {
     $block = (new PhpUuid())->generate();
     $nested = (new PhpUuid())->generate();
     $result = $this->apply($host, [
-      ['op' => 'add_section', 'location' => ['anchor' => $host->uuid(), 'placement' => 'inside'], 'uuid' => $hero, 'slot' => 'hero'],
-      ['op' => 'add_element', 'location' => ['anchor' => $hero, 'placement' => 'inside'], 'uuid' => $block, 'plugin_id' => 'system_powered_by_block'],
+      [
+        'op' => 'add_section',
+        'location' => ['anchor' => $host->uuid(), 'placement' => 'inside'],
+        'uuid' => $hero,
+        'slot' => 'hero',
+      ],
+      [
+        'op' => 'add_element',
+        'location' => ['anchor' => $hero, 'placement' => 'inside'],
+        'uuid' => $block,
+        'plugin_id' => 'system_powered_by_block',
+      ],
       ['op' => 'add_section', 'location' => ['anchor' => $hero, 'placement' => 'inside'], 'uuid' => $nested],
     ]);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
@@ -221,7 +233,10 @@ class SlotSectionsTest extends BlueprintKernelTestBase {
     $inner = $this->ownSection((new PhpUuid())->generate(), 'inner');
     $own_hero = $this->ownSection($page_hero, 'hero');
     $own_hero->appendComponent($this->container->get('daedalus_blueprint.daedalus_layout_adapter')->createSectionComponent($inner, 'content'));
-    $locked = $this->host($this->createRevEntity(['name' => 'Locked', ContentHost::LAYOUT_FIELD => [$this->ownSection($page_main, 'main'), $own_hero]]));
+    $locked = $this->host($this->createRevEntity([
+      'name' => 'Locked',
+      ContentHost::LAYOUT_FIELD => [$this->ownSection($page_main, 'main'), $own_hero],
+    ]));
     $tree = $this->serializer->serialize($locked);
     $this->assertSame([$this->templateSection, $page_main, $page_hero], array_column($tree, 'uuid'));
     $this->assertSame(['main', 'main', 'hero'], array_column($tree, 'slot'), 'The template fills the frame\'s main; the page fills its template\'s main and hero.');
@@ -236,12 +251,19 @@ class SlotSectionsTest extends BlueprintKernelTestBase {
     [$host, $first] = $this->page();
     $root = ['anchor' => $host->uuid(), 'placement' => 'inside'];
     $hero = (new PhpUuid())->generate();
-    $this->assertTrue($this->apply($host, [['op' => 'add_section', 'location' => $root, 'uuid' => $hero, 'slot' => 'hero']])->isSuccess());
+    $this->assertTrue($this->apply($host, [
+      ['op' => 'add_section', 'location' => $root, 'uuid' => $hero, 'slot' => 'hero'],
+    ])->isSuccess());
 
     // The same id again on this document is refused, naming the section
     // that fills it, and the batch leaves the document as it was.
-    [$code, $path, $context] = $this->refusal($this->apply($host, [['op' => 'add_section', 'location' => $root, 'slot' => 'hero']]));
-    $this->assertSame(['BLUEPRINT_SLOT_DUPLICATE', 'slot', ['slot' => 'hero', 'section' => $hero]], [$code, $path, $context]);
+    [$code, $path, $context] = $this->refusal($this->apply($host, [
+      ['op' => 'add_section', 'location' => $root, 'slot' => 'hero'],
+    ]));
+    $this->assertSame(
+      ['BLUEPRINT_SLOT_DUPLICATE', 'slot', ['slot' => 'hero', 'section' => $hero]],
+      [$code, $path, $context],
+    );
     $this->assertSame([$first => NULL, $hero => 'hero'], $this->ownSlots($host));
     [$code] = $this->refusal($this->apply($host, [
       ['op' => 'add_section', 'location' => $root, 'slot' => 'aside'],
@@ -251,48 +273,76 @@ class SlotSectionsTest extends BlueprintKernelTestBase {
     $this->assertSame([$first => NULL, $hero => 'hero'], $this->ownSlots($host));
 
     // The id is a machine name.
-    [$code, $path] = $this->refusal($this->apply($host, [['op' => 'add_section', 'location' => $root, 'slot' => 'Hero section']]));
+    [$code, $path] = $this->refusal($this->apply($host, [
+      ['op' => 'add_section', 'location' => $root, 'slot' => 'Hero section'],
+    ]));
     $this->assertSame(['INVALID_SLOT', 'slot'], [$code, $path]);
     [$code] = $this->refusal($this->apply($host, [['op' => 'add_section', 'location' => $root, 'slot' => '']]));
     $this->assertSame('INVALID_SLOT', $code);
 
     // A slot section lands at the root only: nested inside a section, or
     // beside one, is refused before anything is written.
-    [$code, $path] = $this->refusal($this->apply($host, [['op' => 'add_section', 'location' => ['anchor' => $hero, 'placement' => 'inside'], 'slot' => 'aside']]));
+    [$code, $path] = $this->refusal($this->apply($host, [
+      ['op' => 'add_section', 'location' => ['anchor' => $hero, 'placement' => 'inside'], 'slot' => 'aside'],
+    ]));
     $this->assertSame(['BLUEPRINT_SLOT_NESTED', 'location'], [$code, $path]);
     $this->assertSame([$first => NULL, $hero => 'hero'], $this->ownSlots($host));
 
     // Duplicating a slot section would fill its slot twice.
     [$code, $path, $context] = $this->refusal($this->apply($host, [['op' => 'duplicate_element', 'element' => $hero]]));
-    $this->assertSame(['BLUEPRINT_SLOT_DUPLICATE', 'element', ['slot' => 'hero', 'section' => $hero]], [$code, $path, $context]);
+    $this->assertSame(
+      ['BLUEPRINT_SLOT_DUPLICATE', 'element', ['slot' => 'hero', 'section' => $hero]],
+      [$code, $path, $context],
+    );
     $this->assertTrue($this->apply($host, [['op' => 'duplicate_element', 'element' => $first]])->isSuccess(), 'A plain section duplicates as before.');
     $this->assertSame([NULL, NULL, 'hero'], array_values($this->ownSlots($host)));
 
     // A slot section moves within the root flow and nowhere else.
-    [$code, $path] = $this->refusal($this->apply($host, [['op' => 'move_element', 'element' => $hero, 'location' => ['anchor' => $first, 'placement' => 'inside']]]));
+    [$code, $path] = $this->refusal($this->apply($host, [
+      ['op' => 'move_element', 'element' => $hero, 'location' => ['anchor' => $first, 'placement' => 'inside']],
+    ]));
     $this->assertSame(['BLUEPRINT_SLOT_NESTED', 'location'], [$code, $path]);
-    $this->assertTrue($this->apply($host, [['op' => 'move_element', 'element' => $hero, 'location' => ['anchor' => $first, 'placement' => 'before']]])->isSuccess(), 'Reordering among top-level sections is fine.');
+    $this->assertTrue($this->apply($host, [
+      ['op' => 'move_element', 'element' => $hero, 'location' => ['anchor' => $first, 'placement' => 'before']],
+    ])->isSuccess(), 'Reordering among top-level sections is fine.');
     $this->assertSame(['hero', NULL, NULL], array_values($this->ownSlots($host)));
     $this->assertTrue($this->apply($host, [['op' => 'move_element', 'element' => $hero, 'location' => $root]])->isSuccess(), 'And so is moving last.');
     $this->assertSame([NULL, NULL, 'hero'], array_values($this->ownSlots($host)));
     $nested = (new PhpUuid())->generate();
-    $this->assertTrue($this->apply($host, [['op' => 'add_section', 'location' => ['anchor' => $first, 'placement' => 'inside'], 'uuid' => $nested]])->isSuccess());
-    [$code] = $this->refusal($this->apply($host, [['op' => 'move_element', 'element' => $hero, 'location' => ['anchor' => $nested, 'placement' => 'before']]]));
+    $this->assertTrue($this->apply($host, [
+      ['op' => 'add_section', 'location' => ['anchor' => $first, 'placement' => 'inside'], 'uuid' => $nested],
+    ])->isSuccess());
+    [$code] = $this->refusal($this->apply($host, [
+      ['op' => 'move_element', 'element' => $hero, 'location' => ['anchor' => $nested, 'placement' => 'before']],
+    ]));
     $this->assertSame('BLUEPRINT_SLOT_NESTED', $code, 'Beside a nested section is nested.');
 
     // Removing the section frees the slot.
     $this->assertTrue($this->apply($host, [['op' => 'remove_element', 'element' => $hero]])->isSuccess());
     $again = (new PhpUuid())->generate();
-    $this->assertTrue($this->apply($host, [['op' => 'add_section', 'location' => $root, 'uuid' => $again, 'slot' => 'hero']])->isSuccess(), 'A removed slot section leaves its slot free.');
+    $this->assertTrue($this->apply($host, [
+      ['op' => 'add_section', 'location' => $root, 'uuid' => $again, 'slot' => 'hero'],
+    ])->isSuccess(), 'A removed slot section leaves its slot free.');
 
     // Beside a top-level section is the root flow too; beside a nested
     // one is not.
     $aside = (new PhpUuid())->generate();
-    $this->assertTrue($this->apply($host, [['op' => 'add_section', 'location' => ['anchor' => $again, 'placement' => 'before'], 'uuid' => $aside, 'slot' => 'aside']])->isSuccess());
+    $this->assertTrue($this->apply($host, [
+      [
+        'op' => 'add_section',
+        'location' => ['anchor' => $again, 'placement' => 'before'],
+        'uuid' => $aside,
+        'slot' => 'aside',
+      ],
+    ])->isSuccess());
     $this->assertSame([NULL, NULL, 'aside', 'hero'], array_values($this->ownSlots($host)));
-    [$code] = $this->refusal($this->apply($host, [['op' => 'add_section', 'location' => ['anchor' => $nested, 'placement' => 'after'], 'slot' => 'deep']]));
+    [$code] = $this->refusal($this->apply($host, [
+      ['op' => 'add_section', 'location' => ['anchor' => $nested, 'placement' => 'after'], 'slot' => 'deep'],
+    ]));
     $this->assertSame('BLUEPRINT_SLOT_NESTED', $code);
-    [$code] = $this->refusal($this->apply($host, [['op' => 'add_section', 'location' => ['anchor' => $again, 'placement' => 'after'], 'slot' => 'aside']]));
+    [$code] = $this->refusal($this->apply($host, [
+      ['op' => 'add_section', 'location' => ['anchor' => $again, 'placement' => 'after'], 'slot' => 'aside'],
+    ]));
     $this->assertSame('BLUEPRINT_SLOT_DUPLICATE', $code, 'The fill rule holds beside a section as at the root.');
     $this->assertSame([NULL, NULL, 'aside', 'hero'], array_values($this->ownSlots($host)));
   }
@@ -328,14 +378,19 @@ class SlotSectionsTest extends BlueprintKernelTestBase {
     // A slot on a nested container is a grammar error at its path; a
     // slot that is not a non-empty string too.
     $expansion = $instantiator->expand($host, [
-      ['kind' => 'container', 'layout_id' => 'eb_test_container', 'children' => [
-        ['kind' => 'container', 'layout_id' => 'eb_test_container', 'slot' => 'inner', 'children' => []],
-      ],
+      [
+        'kind' => 'container',
+        'layout_id' => 'eb_test_container',
+        'children' => [
+          ['kind' => 'container', 'layout_id' => 'eb_test_container', 'slot' => 'inner', 'children' => []],
+        ],
       ],
     ], ['anchor' => $host->uuid(), 'placement' => 'inside']);
     $this->assertSame(['nodes.children[0].slot'], array_map(static fn ($e) => $e->getPath(), $expansion->errors));
     $this->assertSame('Only a top-level section fills a slot.', $expansion->errors[0]->getMessage());
-    $expansion = $instantiator->expand($host, [['kind' => 'container', 'layout_id' => 'eb_test_container', 'slot' => '', 'children' => []]], ['anchor' => $host->uuid(), 'placement' => 'inside']);
+    $expansion = $instantiator->expand($host, [
+      ['kind' => 'container', 'layout_id' => 'eb_test_container', 'slot' => '', 'children' => []],
+    ], ['anchor' => $host->uuid(), 'placement' => 'inside']);
     $this->assertSame(['nodes.slot'], array_map(static fn ($e) => $e->getPath(), $expansion->errors));
   }
 
@@ -345,9 +400,11 @@ class SlotSectionsTest extends BlueprintKernelTestBase {
   public function testDialectRoundTrip(): void {
     $hero = (new PhpUuid())->generate();
     $block = (new PhpUuid())->generate();
-    $locked = $this->host($this->createRevEntity(['name' => 'Locked', ContentHost::LAYOUT_FIELD => [
-      $this->ownSection($hero, 'hero', [['uuid' => $block, 'configuration' => ['id' => 'system_powered_by_block']]]),
-    ],
+    $locked = $this->host($this->createRevEntity([
+      'name' => 'Locked',
+      ContentHost::LAYOUT_FIELD => [
+        $this->ownSection($hero, 'hero', [['uuid' => $block, 'configuration' => ['id' => 'system_powered_by_block']]]),
+      ],
     ]));
 
     $catalog = $this->catalog();
@@ -375,9 +432,26 @@ HTML;
     // A slot section carrying a label prints no name of its own: the
     // slot is the word it is called by. A plain container still prints
     // its label as name.
-    $labelled = [['kind' => 'container', 'layout_id' => 'eb_test_container', 'uuid' => $hero, 'label' => 'Welcome', 'slot' => 'hero', 'children' => []]];
+    $labelled = [
+      [
+        'kind' => 'container',
+        'layout_id' => 'eb_test_container',
+        'uuid' => $hero,
+        'label' => 'Welcome',
+        'slot' => 'hero',
+        'children' => [],
+      ],
+    ];
     $this->assertSame("<d-slot id=\"$hero\" name=\"hero\">\n</d-slot>\n", $printer->print($labelled, $catalog)->text);
-    $plain = [['kind' => 'container', 'layout_id' => 'eb_test_container', 'uuid' => $hero, 'label' => 'Welcome', 'children' => []]];
+    $plain = [
+      [
+        'kind' => 'container',
+        'layout_id' => 'eb_test_container',
+        'uuid' => $hero,
+        'label' => 'Welcome',
+        'children' => [],
+      ],
+    ];
     $this->assertSame("<d-container id=\"$hero\" name=\"Welcome\">\n</d-container>\n", $printer->print($plain, $catalog)->text);
 
     // The grammar: top level only, name required, the fragment door the same.
@@ -398,18 +472,31 @@ HTML;
   }
 
   /**
-   * The DOM ops keep a slot whole: replace refills it once, set cannot rename it.
+   * The DOM ops keep a slot whole.
+   *
+   * Replace refills it once, set cannot rename it.
    */
   public function testDomOpsKeepTheSlot(): void {
     [$host, $first] = $this->page();
     $hero = (new PhpUuid())->generate();
     $options = ['dialect_catalog' => $this->catalog(), 'conversation' => 'conv-1'];
-    $this->assertTrue($this->apply($host, [['op' => 'add_section', 'location' => ['anchor' => $host->uuid(), 'placement' => 'inside'], 'uuid' => $hero, 'slot' => 'hero']])->isSuccess());
+    $this->assertTrue($this->apply($host, [
+      [
+        'op' => 'add_section',
+        'location' => ['anchor' => $host->uuid(), 'placement' => 'inside'],
+        'uuid' => $hero,
+        'slot' => 'hero',
+      ],
+    ])->isSuccess());
 
     // Replacing the slot section with the slot written again is one fill:
     // the old section goes, the new one carries the slot.
     $result = $this->apply($host, [
-      ['op' => 'replace', 'ref' => $hero, 'html' => '<d-slot name="hero"><d-block plugin="system_powered_by_block" /></d-slot>'],
+      [
+        'op' => 'replace',
+        'ref' => $hero,
+        'html' => '<d-slot name="hero"><d-block plugin="system_powered_by_block" /></d-slot>',
+      ],
     ], $options);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $slots = $this->ownSlots($host);
@@ -428,16 +515,30 @@ HTML;
     $this->assertSame([NULL, 'hero'], array_values($this->ownSlots($host)), 'The refused batch rolled back.');
 
     // The slot id is fixed for the section's life.
-    [$code, $path] = $this->refusal($this->apply($host, [['op' => 'set', 'ref' => $filled, 'attrs' => ['name' => 'aside']]], $options));
+    [$code, $path] = $this->refusal($this->apply($host, [
+      ['op' => 'set', 'ref' => $filled, 'attrs' => ['name' => 'aside']],
+    ], $options));
     $this->assertSame(['READONLY_ATTR', 'attrs.name'], [$code, $path]);
     $this->assertTrue($this->apply($host, [['op' => 'set', 'ref' => $first, 'attrs' => ['name' => 'Intro']]], $options)->isSuccess(), 'A plain container still renames.');
 
     // An insert at the root takes a slot section like a container; inside
     // a container it is refused by the grammar.
-    $result = $this->apply($host, [['op' => 'insert', 'at' => ['ref' => 'root', 'position' => 'beforeend'], 'html' => '<d-slot name="aside"></d-slot>']], $options);
+    $result = $this->apply($host, [
+      [
+        'op' => 'insert',
+        'at' => ['ref' => 'root', 'position' => 'beforeend'],
+        'html' => '<d-slot name="aside"></d-slot>',
+      ],
+    ], $options);
     $this->assertTrue($result->isSuccess(), print_r($result->toArray()['errors'] ?? [], TRUE));
     $this->assertSame([NULL, 'hero', 'aside'], array_values($this->ownSlots($host)));
-    [$code] = $this->refusal($this->apply($host, [['op' => 'insert', 'at' => ['ref' => $first, 'position' => 'beforeend'], 'html' => '<d-slot name="deep"></d-slot>']], $options));
+    [$code] = $this->refusal($this->apply($host, [
+      [
+        'op' => 'insert',
+        'at' => ['ref' => $first, 'position' => 'beforeend'],
+        'html' => '<d-slot name="deep"></d-slot>',
+      ],
+    ], $options));
     $this->assertSame('ILLEGAL_CONTAINMENT', $code);
   }
 

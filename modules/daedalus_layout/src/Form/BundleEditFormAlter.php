@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_layout\Form;
 
 use Drupal\Core\Entity\BundleEntityFormBase;
+use Drupal\Core\Entity\EntityFormInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Link;
 use Drupal\Core\Routing\RouteProviderInterface;
@@ -139,8 +140,10 @@ final class BundleEditFormAlter {
    * Submit handler.
    */
   public function submit(array &$form, FormStateInterface $form_state): void {
+    $form_object = $form_state->getFormObject();
+    assert($form_object instanceof EntityFormInterface);
     /** @var \Drupal\Core\Config\Entity\ConfigEntityBundleBase $bundle_entity */
-    $bundle_entity = $form_state->getFormObject()->getEntity();
+    $bundle_entity = $form_object->getEntity();
     $bundle_entity->setThirdPartySetting('daedalus_layout', self::SETTING, (bool) $form_state->getValue(self::CONTROL));
   }
 

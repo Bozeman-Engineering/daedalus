@@ -9,14 +9,14 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 /**
  * A group of related CSS properties: definitions and validation.
  *
- * Values everywhere in Daedalus Stylish are semantic CSS ("padding: 2rem"), so a
- * group's job is to say which properties it owns, whether a given value is
- * structurally valid CSS for that property, and whether it satisfies the
- * style guide's constraints for the element being styled. The AI fragment
- * serves only the group IDS a declaration references (the stylable
- * section's set names): a model knows CSS, so the definitions' property
- * lists, types, enums, and examples stay server-side, enforced by
- * validate() and taught lazily by its corrective errors.
+ * Values everywhere in Daedalus Stylish are semantic CSS ("padding: 2rem"), so
+ * a group's job is to say which properties it owns, whether a given value is
+ * structurally valid CSS for that property, and whether it satisfies the style
+ * guide's constraints for the element being styled. The AI fragment serves only
+ * the group IDS a declaration references (the stylable section's set names): a
+ * model knows CSS, so the definitions' property lists, types, enums, and
+ * examples stay server-side, enforced by validate() and taught lazily by its
+ * corrective errors.
  *
  * Constraints arrive from the style guide YAML (per element, per property):
  * - allowed: exhaustive list of permitted values, matched verbatim. This is

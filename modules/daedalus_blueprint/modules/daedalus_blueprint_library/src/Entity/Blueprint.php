@@ -26,6 +26,7 @@ use Drupal\daedalus_blueprint_library\BlueprintListBuilder;
 use Drupal\daedalus_blueprint_library\Form\BlueprintAddForm;
 use Drupal\daedalus_blueprint_library\Form\BlueprintForm;
 use Drupal\daedalus_blueprint_library\Routing\BlueprintHtmlRouteProvider;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\media\MediaInterface;
 use Drupal\user\EntityOwnerTrait;
 
@@ -50,14 +51,14 @@ use Drupal\user\EntityOwnerTrait;
  * otherwise, and the type is identity like the machine name and the scope
  * (what a blueprint is for does not change with its content).
  *
- * The admin UI here (listing, the add page and the per-type add form that
- * lands on the canvas, the details form) manages CONTENT blueprints only.
- * File-shipped blueprints are read-only everywhere by design: no shadowing, no override-with-revert, and they never appear in
- * these forms because they are not entities at all. Who changes one follows
- * the distro lock (DistroLock): on a consuming site an editor forks a file
- * blueprint into a new content blueprint; on the package author's site the
- * blueprint's document is the input of the ship command, which rewrites
- * the file in its module.
+ * The admin UI here (listing, the add page and the per-type add form that lands
+ * on the canvas, the details form) manages CONTENT blueprints only.
+ * File-shipped blueprints are read-only everywhere by design: no shadowing, no
+ * override-with-revert, and they never appear in these forms because they are
+ * not entities at all. Who changes one follows the distro lock (DistroLock): on
+ * a consuming site an editor forks a file blueprint into a new content
+ * blueprint; on the package author's site the blueprint's document is the input
+ * of the ship command, which rewrites the file in its module.
  */
 #[ContentEntityType(
   id: 'blueprint',
@@ -87,6 +88,12 @@ use Drupal\user\EntityOwnerTrait;
     'list_builder' => BlueprintListBuilder::class,
     'form' => [
       'add' => BlueprintAddForm::class,
+      // The details form is the type's `default` form as well as its
+      // `edit` form (core's convention, node's inline form is its
+      // `default`): daedalus_edit's entity-form door builds an entity's
+      // `default` form in the panel on the entity's own canvas, and a
+      // blueprint composed on its canvas is a host of that door.
+      'default' => BlueprintForm::class,
       'edit' => BlueprintForm::class,
       'delete' => ContentEntityDeleteForm::class,
     ],
@@ -213,9 +220,9 @@ class Blueprint extends EditorialContentEntityBase implements BlueprintInterface
         'weight' => 4,
       ]);
 
-    // The groups the blueprint is filed under: filter categories on an
-    // offering surface, ids of the site's group vocabulary (the dialect
-    // catalog's groups, BlueprintInterface::GROUP_ID_PATTERN). Shape-checked where it is
+    // The groups the blueprint is filed under: filter categories on an offering
+    // surface, ids of the site's group vocabulary (the dialect catalog's
+    // groups, BlueprintInterface::GROUP_ID_PATTERN). Shape-checked where it is
     // written as the allow-list is; a surface ignores an undeclared id.
     $fields['groups'] = BaseFieldDefinition::create('string')
       ->setLabel(new TranslatableMarkup('Groups'))
@@ -369,7 +376,9 @@ class Blueprint extends EditorialContentEntityBase implements BlueprintInterface
     // canvas, and this is the storage door, the one core's default-content
     // importer writes through with no op and no entity validation.
     if ($this->getScope() === self::SCOPE_BLOCK && $this->hasField(ContentHost::LAYOUT_FIELD)) {
-      $roots = count($this->get(ContentHost::LAYOUT_FIELD)->getSections());
+      $layout = $this->get(ContentHost::LAYOUT_FIELD);
+      assert($layout instanceof SectionListInterface);
+      $roots = count($layout->getSections());
       if ($roots > 1) {
         throw new EntityMalformedException(sprintf('The block blueprint "%s" holds %d root containers; a block-scope blueprint is one container placed into a page and its document holds exactly one root. A document of several roots is a page-scope blueprint.', $this->getMachineName(), $roots));
       }

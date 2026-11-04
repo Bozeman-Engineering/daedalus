@@ -103,7 +103,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   WRITE ADDRESS alone (the selection and the minted paragraph's SUBJECT
  *   facet stay), the chip lights at container::p, the paragraph's
  *   curated controls stay the rows, a typed Size lands ONE update_style
- *   at the section's rule key, the canvas delivers it to the neighbour
+ *   at the section's rule key, the canvas delivers it to the neighbor
  *   block's paragraph while block A's keep the nearer tier's size, and
  *   the own entry drops the address alone. The node suites pin the
  *   slice, the chip model and the rebased control models; only a
@@ -911,7 +911,7 @@ class FormattedTextStylingBehaviorTest extends WebDriverTestBase {
     // controls stay mounted (nothing derives the subject from the rule,
     // so the minted element keeps its own rows), and a typed Size
     // settles as ONE update_style at the SECTION's rule key, which the
-    // canvas delivers to the neighbouring block's paragraph while block
+    // canvas delivers to the neighboring block's paragraph while block
     // A's paragraphs keep the nearer block tier's lead size (the
     // document-order cascade's proximity, a browser fact). The node
     // suites pin the slice, the chip model and the rebased control

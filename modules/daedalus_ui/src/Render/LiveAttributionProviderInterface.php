@@ -12,10 +12,10 @@ use Drupal\Core\Entity\EntityInterface;
  * Selection identity (data-selectable, see SelectableKey) is stamped for
  * editors only: it exists to make the page editable, and unconditionally
  * attributing anonymous renders would change cache-shared markup for no
- * consumer. Some modules, though, publish artifacts that target selectable
- * keys on the live page — Daedalus Stylish's CSS uses them as @scope roots — so the
- * markup a visitor sees must carry exactly the keys those artifacts target,
- * and no more.
+ * consumer. Some modules, though, publish artifacts that target selectable keys
+ * on the live page — Daedalus Stylish's CSS uses them as @scope roots — so the
+ * markup a visitor sees must carry exactly the keys those artifacts target, and
+ * no more.
  *
  * A provider answers that demand from its own data (e.g. "this entity's
  * style map has entries for this key"). The attribution seams consult the

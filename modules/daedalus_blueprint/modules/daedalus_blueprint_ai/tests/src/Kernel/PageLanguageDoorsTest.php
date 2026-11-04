@@ -18,6 +18,7 @@ use Drupal\daedalus_blueprint_ai\Plugin\AiFunctionCall\ReadEntity;
 use Drupal\daedalus_blueprint_ai\Plugin\AiFunctionCall\ValidateBlueprint;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -223,13 +224,17 @@ class PageLanguageDoorsTest extends BlueprintKernelTestBase {
    */
   protected function createCoreLayoutPage(): FieldableEntityInterface {
     $page = $this->createOwningPage('layout_onecol');
-    $page->get('layout_builder__layout')->appendSection($this->poweredBySection('layout_twocol_section', self::COLUMN_BLOCK_UUID, 'first'));
+    $layout = $page->get('layout_builder__layout');
+    assert($layout instanceof SectionListInterface);
+    $layout->appendSection($this->poweredBySection('layout_twocol_section', self::COLUMN_BLOCK_UUID, 'first'));
     $page->save();
     return $page;
   }
 
   /**
-   * A page carrying the empty override field: never edited, renders its template.
+   * A page carrying the empty override field.
+   *
+   * Never edited, renders its template.
    *
    * @return \Drupal\Core\Entity\FieldableEntityInterface
    *   The saved page.
@@ -745,7 +750,11 @@ class PageLanguageDoorsTest extends BlueprintKernelTestBase {
 
     $storage = $this->entityTypeManager->getStorage('entity_test');
     $uuids = [];
-    foreach ($storage->load($page->id())->get('layout_builder__layout')->getSections() as $section) {
+    $reloaded = $storage->load($page->id());
+    assert($reloaded instanceof FieldableEntityInterface);
+    $layout = $reloaded->get('layout_builder__layout');
+    assert($layout instanceof SectionListInterface);
+    foreach ($layout->getSections() as $section) {
       foreach ($section->getComponents() as $uuid => $component) {
         $uuids[] = $uuid;
       }
@@ -794,6 +803,7 @@ class PageLanguageDoorsTest extends BlueprintKernelTestBase {
     $entities = $storage->loadMultiple();
     $this->assertCount(1, $entities);
     $entity = reset($entities);
+    assert($entity instanceof FieldableEntityInterface);
     $this->assertSame('Born', $entity->get('name')->value, 'The create landed.');
     $this->assertFalse($entity->hasField('layout_builder__layout'), 'The page owns no document.');
     $this->assertStringContainsString("entity_id: '" . $entity->id() . "'", $output, 'The result reports the landed page.');

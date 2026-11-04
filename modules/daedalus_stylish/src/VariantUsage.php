@@ -39,10 +39,10 @@ use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
  * Tracked against DEFAULT revisions only, matching what a push affects: the
  * compiled stylesheet live pages load. Workspace publish promotes staged
  * revisions without firing per-entity update hooks, so
- * VariantWorkspaceSubscriber resyncs the published hosts (resyncHosts()) —
- * the delete batch's work list must be exact. One accepted staleness edge
- * remains, repaired by rebuild() (drush daedalus_stylish:variant-usage:rebuild):
- * writes that bypass the entity save API are invisible to any hook.
+ * VariantWorkspaceSubscriber resyncs the published hosts (resyncHosts()) — the
+ * delete batch's work list must be exact. One accepted staleness edge remains,
+ * repaired by rebuild() (drush daedalus_stylish:variant-usage:rebuild): writes
+ * that bypass the entity save API are invisible to any hook.
  */
 class VariantUsage {
 
@@ -61,7 +61,8 @@ class VariantUsage {
   /**
    * Syncs a saved map host's rows with its style map (the chokepoint).
    *
-   * Called from daedalus_stylish_entity_insert()/daedalus_stylish_entity_update() for every
+   * Called from
+   * daedalus_stylish_entity_insert()/daedalus_stylish_entity_update() for every
    * saved host with a style store. Non-default revision saves (workspace
    * staging, pending revisions) are skipped: the table mirrors the default
    * revision the compiled stylesheet serves. Saves that neither carry nor
@@ -199,14 +200,14 @@ class VariantUsage {
   /**
    * Rebuilds the whole table from the saved default-revision style maps.
    *
-   * The repair path (drush daedalus_stylish:variant-usage:rebuild) for the staleness
-   * edges the class docblock names, and the seed for sites updating into
-   * the table. Every host store is enumerated: the entity types carrying
-   * the auto-managed map field, then every Layout Builder enabled display
-   * (a template's map lives on its display), then every site frame (a
-   * frame's map lives on its config entity). Runs in a transaction so
-   * readers never see a half-built table (delete, not truncate: truncate
-   * commits implicitly on MySQL).
+   * The repair path (drush daedalus_stylish:variant-usage:rebuild) for the
+   * staleness edges the class docblock names, and the seed for sites updating
+   * into the table. Every host store is enumerated: the entity types carrying
+   * the auto-managed map field, then every Layout Builder enabled display (a
+   * template's map lives on its display), then every site frame (a frame's map
+   * lives on its config entity). Runs in a transaction so readers never see a
+   * half-built table (delete, not truncate: truncate commits implicitly on
+   * MySQL).
    *
    * @return int
    *   The number of reference-carrying hosts tracked.

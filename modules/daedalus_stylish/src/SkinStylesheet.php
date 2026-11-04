@@ -112,18 +112,17 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * admin-theme pages are outside the file's reach anyway.
  *
  * THE TOKEN SCOPE ELEMENT (.daedalus-stylish-token-scope): tokens deliver on a
- * dedicated wrapper element daedalus_stylish stamps just inside the off-canvas page
- * canvas (daedalus_stylish_preprocess_off_canvas_page_wrapper()), never on :root.
- * The file's ONE :root rule is not a token: the scheme declaration
- * (CssPrinter::COLOR_SCHEME_RULE, `color-scheme: light dark`), appended
- * on demand when any condition on the skin's tokens or the skin's
- * defaults is a scheme condition, so the UA's own chrome (the viewport
- * scrollbar, native form controls) follows the scheme the skin's values
- * follow; the viewport reads color-scheme from the root element alone,
- * which the scope element cannot reach. The declared tier does not feed
- * that detection (a module's dark-conditioned box fact says nothing about
- * the SITE's scheme), and neither do variants (a dark palette
- * face does not flip the page floor).
+ * dedicated wrapper element daedalus_stylish stamps just inside the off-canvas
+ * page canvas (daedalus_stylish_preprocess_off_canvas_page_wrapper()), never on
+ * :root. The file's ONE :root rule is not a token: the scheme declaration
+ * (CssPrinter::COLOR_SCHEME_RULE, `color-scheme: light dark`), appended on
+ * demand when any condition on the skin's tokens or the skin's defaults is a
+ * scheme condition, so the UA's own chrome (the viewport scrollbar, native form
+ * controls) follows the scheme the skin's values follow; the viewport reads
+ * color-scheme from the root element alone, which the scope element cannot
+ * reach. The declared tier does not feed that detection (a module's
+ * dark-conditioned box fact says nothing about the SITE's scheme), and neither
+ * do variants (a dark palette face does not flip the page floor).
  * Width-conditioned token values compile as @container queries, NEVER
  *
  * @media, because the edit-mode responsive canvas is a constrained div
@@ -141,16 +140,15 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  *   (js/src/canvas-stops.js registers them on DaedalusUiCanvasStops
  *   from the guide payload), so token flip points need no registration of
  *   their own.
- * - Live: no stage exists, so when any tier holds width-conditioned values
- *   the compiled file ships the shared page-container rule making the
- *   off-canvas canvas the page-level width container
- *   (CssPrinter::PAGE_CONTAINER_RULE; the constant's docblock owns the
- *   canvas-not-body reasoning). Emission is demand-driven (only when
- *   width-conditioned values exist) and honors the kill switch
- *   (daedalus_stylish.settings container_roots) for themes that manage containment
- *   themselves. The canvas width is the page's true available width (core's
- *   toolbar displacement is a margin on it), which is what tokens should
- *   answer to.
+ * - Live: no stage exists, so when any tier holds width-conditioned values the
+ *   compiled file ships the shared page-container rule making the off-canvas
+ *   canvas the page-level width container (CssPrinter::PAGE_CONTAINER_RULE; the
+ *   constant's docblock owns the canvas-not-body reasoning). Emission is
+ *   demand-driven (only when width-conditioned values exist) and honors the
+ *   kill switch (daedalus_stylish.settings container_roots) for themes that
+ *   manage containment themselves. The canvas width is the page's true
+ *   available width (core's toolbar displacement is a margin on it), which is
+ *   what tokens should answer to.
  *
  * Scheme/motion-conditioned values stay @media (user-preference axes); the
  * canvas vector's emulation rewrites those conditions across all same-origin
@@ -168,22 +166,22 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * and stages nothing; it rides the one print path in the preview too, so
  * the two can never emit different CSS for the same revision.
  *
- * The file mechanics (content-addressed name, state key, cache tag +
- * library reset, media-recompile bookkeeping, the accepted staleness
- * class) live on CompiledStylesheetBase. compile() runs on every event
- * that can change either tier: skin insert/update/delete (daedalus_stylish entity
- * hooks), a design-system switch (DesignSystemSwitchSubscriber: the active
- * skin is the active system's default_skin, and a package's declarations
- * layer only while its system is active), every daedalus_stylish.settings save and
- * a default-theme change (DefaultsSettingsSubscriber: the breakpoint
- * thresholds baked into @container wrappers, the container_roots switch,
- * and the delivery theme), workspace publish (SkinWorkspaceSubscriber),
- * changes to a media entity the compiled skin defaults reference
- * (referencesMedia()), and every declaration change: module install and
- * uninstall, theme install and uninstall, and the cache rebuild
- * (daedalus_stylish.module's extension hooks and daedalus_stylish_rebuild()). Each resets
- * what it invalidates (the roster, the guide) before compiling, and the
- * content-addressed name makes an unchanged recompile idempotent.
+ * The file mechanics (content-addressed name, state key, cache tag + library
+ * reset, media-recompile bookkeeping, the accepted staleness class) live on
+ * CompiledStylesheetBase. compile() runs on every event that can change either
+ * tier: skin insert/update/delete (daedalus_stylish entity hooks), a
+ * design-system switch (DesignSystemSwitchSubscriber: the active skin is the
+ * active system's default_skin, and a package's declarations layer only while
+ * its system is active), every daedalus_stylish.settings save and a
+ * default-theme change (DefaultsSettingsSubscriber: the breakpoint thresholds
+ * baked into @container wrappers, the container_roots switch, and the delivery
+ * theme), workspace publish (SkinWorkspaceSubscriber), changes to a media
+ * entity the compiled skin defaults reference (referencesMedia()), and every
+ * declaration change: module install and uninstall, theme install and
+ * uninstall, and the cache rebuild (daedalus_stylish.module's extension hooks
+ * and daedalus_stylish_rebuild()). Each resets what it invalidates (the roster,
+ * the guide) before compiling, and the content-addressed name makes an
+ * unchanged recompile idempotent.
  */
 class SkinStylesheet extends CompiledStylesheetBase {
 
@@ -209,8 +207,9 @@ class SkinStylesheet extends CompiledStylesheetBase {
   /**
    * The token scope element's class.
    *
-   * Stamped on the wrapper daedalus_stylish_preprocess_off_canvas_page_wrapper()
-   * renders around the page, and the selector every token block scopes to.
+   * Stamped on the wrapper
+   * daedalus_stylish_preprocess_off_canvas_page_wrapper() renders around the
+   * page, and the selector every token block scopes to.
    */
   public const SCOPE_CLASS = 'daedalus-stylish-token-scope';
 

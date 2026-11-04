@@ -4,8 +4,8 @@ This is the pathway for a site running the latest releases of the old Plus
 Suite modules (Layout Builder+ `lb_plus` 3.6.x, Navigation+
 `navigation_plus` 2.3.x, Edit+ `edit_plus` 2.3.x, Tempstore+
 `tempstore_plus` 1.0.x, with `section_library` and the Edit+ example block
-modules) to move onto Daedalus 1.0.x in one hop. It ships inside the
-`daedalus` package from `1.0.0-alpha1` on, in this `migrate/plus_suite/` directory:
+modules) to move onto Daedalus 1.0.x in one hop. It ships inside the `daedalus`
+package from `1.0.0-alpha1` on, in this `migrate/plus_suite/` directory:
 
 | File | Role |
 |---|---|
@@ -42,8 +42,9 @@ Check, by hand:
 - Drupal 11.3 or later, composer and a working drush (`drush status`
   succeeds).
 - Every enabled text format (the site's `filter.format.*` config) that
-  restricts HTML (the `Limit allowed HTML tags` filter) allows the `class` attribute on each of these tags it
-  allows at all: `p`, `h2`, `h3`, `h4`, `blockquote`, `ul`, `ol`, `li`.
+  restricts HTML (the `Limit allowed HTML tags` filter) allows the `class`
+  attribute on each of these tags it allows at all: `p`, `h2`, `h3`, `h4`,
+  `blockquote`, `ul`, `ol`, `li`.
   They are Daedalus's identity vocabulary: `daedalus_edit` mints `s-*`
   identity classes onto them at every save of formatted text and refuses a
   save through a format that would strip them, so the update run would
@@ -58,8 +59,8 @@ Check, by hand:
 - A backup of the database and the code:
   `drush sql:dump --result-file=/path/outside/the/site/before-daedalus.sql`,
   and a clean git tree (`git status` shows nothing) so the code swap is one
-  reviewable diff. `migrate.sh` takes its own dump too; this one is yours, taken before
-  anything changes.
+  reviewable diff. `migrate.sh` takes its own dump too; this one is yours,
+  taken before anything changes.
 - A maintenance window. Between the composer swap and the rename phase the
   site's pages return 500 (the modules `core.extension` names are gone from
   disk), and the run is not something to do on a live site with editors in
@@ -81,7 +82,8 @@ Check, by hand:
 From the project root:
 
 ```
-composer remove drupal/lb_plus drupal/navigation_plus drupal/edit_plus drupal/tempstore_plus
+composer remove drupal/lb_plus drupal/navigation_plus drupal/edit_plus \
+  drupal/tempstore_plus
 composer require drupal/daedalus:^1.0@alpha
 ```
 
@@ -120,8 +122,8 @@ Read every step's output. The steps, in order, and why the order:
    (`drush sql:drop -y && drush sql:query --file=<dump>`); the code is
    restored with git.
 3. **Audit (opening).** `drush php:script
-   web/modules/contrib/daedalus/migrate/plus_suite/translate.php -- audit`. Read-only.
-   Lists what the site stores in the old vocabulary: the old modules'
+   web/modules/contrib/daedalus/migrate/plus_suite/translate.php -- audit`.
+   Read-only. Lists what the site stores in the old vocabulary: the old modules'
    schema versions, every config object, key_value entry and layout section
    naming an old module, the heading components the content phase will
    rewrite, roles carrying old permission strings, and every file under
@@ -147,7 +149,7 @@ Read every step's output. The steps, in order, and why the order:
    stay. Then it flushes the caches. A failure inside the pass leaves the phase
    unrecorded, so a rerun repeats it after you have fixed the cause.
 5. **Updates.** `drush updatedb -y`. Daedalus's own hooks now see a site
-   they recognise and do the semantic work: `daedalus_layout_post_update_0001`
+   they recognize and do the semantic work: `daedalus_layout_post_update_0001`
    to `0005` (layout blocks become nested sections, the per-display block
    icons become per-block-type icons), `daedalus_ui_update_10401` and
    `10402` (the permission renames) and `daedalus_ui_update_10403` (the
@@ -366,8 +368,8 @@ would have no templates to read.
 
 1. On this environment (the first one migrated), delete the section
    library templates (rebuild what you need as saved blueprints first; see
-   "What does not carry over") and uninstall the module, in this order: core refuses to uninstall a module while content
-   of its entity type exists.
+   "What does not carry over") and uninstall the module, in this order: core
+   refuses to uninstall a module while content of its entity type exists.
 
    ```
    drush entity:delete section_library_template -y

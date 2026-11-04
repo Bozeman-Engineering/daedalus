@@ -234,6 +234,41 @@ import './widgets/index.js';
  * there says nothing about the vocabulary (advanced and code read the
  * property groups and style the same landing); the sentence points
  * there.
+ *
+ * @param {object} props
+ *   The panel's props.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {object} props.guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide).
+ * @param {object} props.materials
+ *   The materials roster the widgets read their vocabularies from.
+ * @param {string} props.selected
+ *   The target's key (an element key, or a rule key when `rule`).
+ * @param {object} props.styleMap
+ *   The style map (source.getStyleMap()).
+ * @param {Array<object>} [props.variants]
+ *   The roster's variant records.
+ * @param {string} [props.condition]
+ *   The editing compound (the pose).
+ * @param {object} [props.skinMaterials]
+ *   The active skin's materials, by kind.
+ * @param {?Function} [props.onPickCondition]
+ *   Poses the canvas at a condition (the rows' "Also set at" entries).
+ * @param {?Function} [props.onOpenDocument]
+ *   Opens a variant's document (the worn rows' doorway).
+ * @param {object} [props.law]
+ *   The law gate ({canView}, drupalSettings.daedalusStylish.law).
+ * @param {?string} [props.targetSelector]
+ *   The subject facet's relative selector; null for the element itself.
+ * @param {object} [props.leading]
+ *   The hosted structural sections' content, by section id.
+ * @param {boolean} [props.rule]
+ *   Whether the target is a RULE key (above).
+ * @param {boolean} [props.box]
+ *   Whether the rule target is a generated box (above).
+ * @param {?{key: string, selector: string}} [props.writeAddress]
+ *   The panel's write address (above); null for the own key.
  */
 export const BasicControls = ({
   source,
@@ -325,9 +360,7 @@ export const BasicControls = ({
       const changes = new Map();
       entries.forEach(([property, value]) => {
         const key =
-          value === null
-            ? (model.keys[property] ?? model.home.key)
-            : groupKey;
+          value === null ? (model.keys[property] ?? model.home.key) : groupKey;
         if (!changes.has(key)) {
           changes.set(key, {});
         }
@@ -403,8 +436,7 @@ export const BasicControls = ({
             condition,
             property,
             label:
-              label ??
-              Drupal.t('Styled !control', { '!control': model.label }),
+              label ?? Drupal.t('Styled !control', { '!control': model.label }),
             changes: route({
               [property]: MEDIA_PICK_PLACEHOLDER,
               ...companions,

@@ -24,11 +24,13 @@ function daedalus_blueprint_ai_update_11101(): void {
 /**
  * Remove the two retired observability modules from the site.
  *
- * daedalus_blueprint_ai_dev_tools and daedalus_blueprint_ai_log_repair left
- * the package for bz_diagnostics with no update path, so a site that
- * enabled them still lists two modules missing from disk, and every module
- * install (the ledger's, for one) fails on them. Take them out of the
- * extension registry and the schema registry the way an uninstall does.
+ * The modules daedalus_blueprint_ai_dev_tools and
+ * daedalus_blueprint_ai_log_repair are no longer part of this package: what
+ * they did now ships in a diagnostics module of its own, and no update path
+ * carried a site across. A site that had enabled them therefore lists two
+ * modules missing from disk, and every later module install (the ledger's, for
+ * one) fails on them. This hook takes them out of the extension registry and
+ * the schema registry, the same two writes an uninstall would make.
  */
 function daedalus_blueprint_ai_update_11102(): void {
   \Drupal::configFactory()->getEditable('core.extension')

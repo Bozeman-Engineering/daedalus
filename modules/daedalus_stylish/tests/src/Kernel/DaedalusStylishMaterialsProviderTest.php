@@ -26,22 +26,20 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the materials provider: tokens, animations, fonts, variants.
  *
- * Pins what the roster carries for each of daedalus_stylish's kinds and where it
- * comes from: tokens from the active skin on declared scales (undeclared
- * scales dropped, no skin means no tokens; a capture with no scale named
- * lands on the first declared scale whose shape fits the value), variants
- * from the published set weight-then-label
- * with spellings derived from the declarations (class for the style
- * axis, an attribute on the element's tag for a declared axis of the
- * container kind, the block kind, a block type or a block plugin, none
- * for a layout's or a base tag's axes), the root-only depth fact,
- * animations from the active skin in stored order spelled in the
- * animation slot, and the provider's cache domain; and that a material
- * write mid-request resets the memo. The AI context budget's guard on
- * the gestures: while the site is full, an offered mint of any kind and
- * an update turning `offered` on are refused with the one wording, and
- * a mint withheld from the AI, a face edit, and a flag re-stated go
- * through.
+ * Pins what the roster carries for each of daedalus_stylish's kinds and where
+ * it comes from: tokens from the active skin on declared scales (undeclared
+ * scales dropped, no skin means no tokens; a capture with no scale named lands
+ * on the first declared scale whose shape fits the value), variants from the
+ * published set weight-then-label with spellings derived from the declarations
+ * (class for the style axis, an attribute on the element's tag for a declared
+ * axis of the container kind, the block kind, a block type or a block plugin,
+ * none for a layout's or a base tag's axes), the root-only depth fact,
+ * animations from the active skin in stored order spelled in the animation
+ * slot, and the provider's cache domain; and that a material write mid-request
+ * resets the memo. The AI context budget's guard on the gestures: while the
+ * site is full, an offered mint of any kind and an update turning `offered` on
+ * are refused with the one wording, and a mint withheld from the AI, a face
+ * edit, and a flag re-stated go through.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -253,10 +251,20 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     $provider = $this->container->get('daedalus_stylish.materials_provider');
     $tokens = $this->container->get('daedalus_stylish.skin_material_manager');
 
-    $this->assertSame('color/brand-red', $provider->capture(MaterialKind::Token, ['label' => 'brand-red', 'value' => '#b91c1c'], NULL, [])->id);
-    $this->assertSame('gradient/hero-fade', $provider->capture(MaterialKind::Token, ['label' => 'hero-fade', 'value' => 'linear-gradient(90deg, #b91c1c, #fbbf24)'], NULL, [])->id);
+    $this->assertSame('color/brand-red', $provider->capture(MaterialKind::Token, [
+      'label' => 'brand-red',
+      'value' => '#b91c1c',
+    ], NULL, [])->id);
+    $this->assertSame('gradient/hero-fade', $provider->capture(MaterialKind::Token, [
+      'label' => 'hero-fade',
+      'value' => 'linear-gradient(90deg, #b91c1c, #fbbf24)',
+    ], NULL, [])->id);
     $this->assertSame('space/8', $provider->capture(MaterialKind::Token, ['label' => '8', 'value' => '2rem'], NULL, [])->id);
-    $this->assertSame('color/signal', $provider->capture(MaterialKind::Token, ['group' => 'color', 'label' => 'signal', 'value' => '#ff5500'], NULL, [])->id);
+    $this->assertSame('color/signal', $provider->capture(MaterialKind::Token, [
+      'group' => 'color',
+      'label' => 'signal',
+      'value' => '#ff5500',
+    ], NULL, [])->id);
     $active = $tokens->activeSkin();
     $this->assertSame('#b91c1c', $tokens->resolve($active, 'color', 'brand-red')->record['value']);
     $this->assertSame('linear-gradient(90deg, #b91c1c, #fbbf24)', $tokens->resolve($active, 'gradient', 'hero-fade')->record['value']);
@@ -280,13 +288,17 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
   }
 
   /**
-   * Animations: the active skin's records in stored order, the motion namespace.
+   * Animations: the active skin's records in stored order, motion namespace.
    */
   public function testAnimations(): void {
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora']);
     $skin->setPackageAnimations([
       'rise' => ['steps' => ['to' => ['opacity' => '1'], 'from' => ['opacity' => '0']], 'description' => 'Rise motion.'],
-      'fade_in' => ['steps' => ['to' => ['opacity' => '1'], 'from' => ['opacity' => '0']], 'description' => 'Fade in motion.', 'offered' => FALSE],
+      'fade_in' => [
+        'steps' => ['to' => ['opacity' => '1'], 'from' => ['opacity' => '0']],
+        'description' => 'Fade in motion.',
+        'offered' => FALSE,
+      ],
     ]);
     $skin->save();
     $this->assertSame([], array_keys($this->roster()->animations()), 'An inactive skin\'s animations are not materials.');
@@ -561,7 +573,12 @@ class DaedalusStylishMaterialsProviderTest extends KernelTestBase {
     $shipped_variant->save();
     $shipped_skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora']);
     $shipped_skin->setPackageAnimations(['fade_in' => ['from' => ['opacity' => '0'], 'to' => ['opacity' => '1']]]);
-    $shipped_skin->setShippedSource('daedalus_stylish', ['tokens' => [], 'animations' => $shipped_skin->packageAnimations(), 'fonts' => [], 'defaults' => []]);
+    $shipped_skin->setShippedSource('daedalus_stylish', [
+      'tokens' => [],
+      'animations' => $shipped_skin->packageAnimations(),
+      'fonts' => [],
+      'defaults' => [],
+    ]);
     $shipped_skin->save();
     $this->activateSkin($shipped_skin);
 

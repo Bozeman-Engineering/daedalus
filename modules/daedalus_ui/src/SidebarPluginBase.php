@@ -46,13 +46,13 @@ abstract class SidebarPluginBase extends PluginBase implements SidebarInterface 
   /**
    * Builds the panel header: the one header grammar every rail panel wears.
    *
-   * The row is the shared .daedalus-ui-panel__header anatomy (title left, action
-   * cluster right; panel-controls.css owns the look, sidebar.css the rail
-   * anatomy). The title is an h3 built from a string, or the given render
-   * array when a plugin needs its own heading element (an id the client
-   * writes into, a local class). The .daedalus-ui-panel__actions cluster holds the
-   * plugin's actions in the order given, followed always by the close
-   * control, so every panel closes from the same corner.
+   * The row is the shared .daedalus-ui-panel__header anatomy (title left,
+   * action cluster right; panel-controls.css owns the look, sidebar.css the
+   * rail anatomy). The title is an h3 built from a string, or the given render
+   * array when a plugin needs its own heading element (an id the client writes
+   * into, a local class). The .daedalus-ui-panel__actions cluster holds the
+   * plugin's actions in the order given, followed always by the close control,
+   * so every panel closes from the same corner.
    *
    * @param array|string|\Drupal\Core\StringTranslation\TranslatableMarkup $title
    *   The title text, or a render array for the heading element.

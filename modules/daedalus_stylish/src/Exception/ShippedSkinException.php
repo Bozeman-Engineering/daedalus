@@ -7,11 +7,11 @@ namespace Drupal\daedalus_stylish\Exception;
 /**
  * A module-shipped skin definition cannot be imported or synced.
  *
- * Same structured blueprint errors as every other Daedalus Stylish write path, plus
- * the disk-lane coordinates: which module's MODULE.daedalus_stylish.skins.yml and
- * which skin entry. Import failures are always loud: a shipped skin that
- * cannot import is a developer error in the shipping module, never
- * something to skip quietly.
+ * Same structured blueprint errors as every other Daedalus Stylish write path,
+ * plus the disk-lane coordinates: which module's
+ * MODULE.daedalus_stylish.skins.yml and which skin entry. Import failures are
+ * always loud: a shipped skin that cannot import is a developer error in the
+ * shipping module, never something to skip quietly.
  *
  * Extends VariantValidationException for its structured-errors API (the
  * base is named for its first user; the error-carrying contract is

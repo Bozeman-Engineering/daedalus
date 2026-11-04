@@ -82,17 +82,17 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * (LayoutDefaultsSchemaHooks serializes each layout's declared defaults
  * with the stamp-on-add fact onto its available_layouts entry).
  *
- * Seam choice: the daedalus_blueprint lifecycle events. They are the
- * only placement seams that carry both the host and the identity
- * the map key needs — daedalus_layout's PlaceBlockEvent sees only the block
- * plugin, and the field handler never sees layout operations.
- * ElementCreatedEvent fires for every block add; `populate: 'sample'` on
- * an add means field sampling only and says nothing about styling.
- * Every map write here is declared as a target on the event (the host's
- * style store, named by its definition): the mutation response re-renders only the
- * targets the result names, and the entity-level style tag that carries
- * the written CSS rides a whole-entity swap only, so an undeclared write
- * would land in the saved entity and reach the page on reload alone.
+ * Seam choice: the daedalus_blueprint lifecycle events. They are the only
+ * placement seams that carry both the host and the identity the map key needs —
+ * daedalus_layout's PlaceBlockEvent sees only the block plugin, and the field
+ * handler never sees layout operations. ElementCreatedEvent fires for every
+ * block add; `populate: 'sample'` on an add means field sampling only and says
+ * nothing about styling. Every map write here is declared as a target on the
+ * event (the host's style store, named by its definition): the mutation
+ * response re-renders only the targets the result names, and the entity-level
+ * style tag that carries the written CSS rides a whole-entity swap only, so an
+ * undeclared write would land in the saved entity and reach the page on reload
+ * alone.
  *
  * A placement must never fail because of styling: every guard here skips
  * silently — a missing/unpublished/mis-scoped default variant degrades to
@@ -162,8 +162,8 @@ class ElementStylesSubscriber implements EventSubscriberInterface {
     if (!$host->hasStyleStore()) {
       return;
     }
-    // Style map keys address sections by their daedalus_layout UUID; without one
-    // the section is not styleable at all.
+    // Style map keys address sections by their daedalus_layout UUID; without
+    // one the section is not styleable at all.
     $section_uuid = $event->getSectionUuid();
     if ($section_uuid === NULL) {
       return;

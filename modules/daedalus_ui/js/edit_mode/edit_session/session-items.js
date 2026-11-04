@@ -44,7 +44,10 @@
  * @return {{item: Element, key: string, panel: boolean}[]}
  *   The ordered, keyed entries.
  */
-export const sessionItems = ({ canvas = [], panel = [] } = {}, { boundary, keyFor }) => {
+export const sessionItems = (
+  { canvas = [], panel = [] } = {},
+  { boundary, keyFor },
+) => {
   const entries = [];
   const canvasKeys = new Set();
   canvas.forEach((item) => {
@@ -69,6 +72,14 @@ export const sessionItems = ({ canvas = [], panel = [] } = {}, { boundary, keyFo
 
 /**
  * The entry for an item, or null when the item is no stop.
+ *
+ * @param {{item: Element, key: string, panel: boolean}[]} entries
+ *   The session's item list.
+ * @param {Element} item
+ *   The item.
+ *
+ * @return {?{item: Element, key: string, panel: boolean}}
+ *   The entry, or null.
  */
 export const entryFor = (entries, item) =>
   entries.find((entry) => entry.item === item) ?? null;
@@ -86,6 +97,7 @@ export const entryFor = (entries, item) =>
  *   1 or -1.
  *
  * @return {?{item: Element, key: string, panel: boolean}}
+ *   The neighbor entry, or null.
  */
 export const neighborEntry = (entries, from, direction) => {
   if (!entries.length) {

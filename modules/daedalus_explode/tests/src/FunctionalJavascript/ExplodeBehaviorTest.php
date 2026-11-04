@@ -102,7 +102,7 @@ class ExplodeBehaviorTest extends WebDriverTestBase {
    * A transform is computed as a matrix; translateZ lands in the 3D
    * matrix's fifteenth value (m43). A 2D matrix or none reads 0.
    */
-  private function translateZJs(string $selector): string {
+  private function zTranslationJs(string $selector): string {
     $selector_json = json_encode($selector);
     return "(() => { const t = getComputedStyle(document.querySelector($selector_json)).transform;"
       . " return t.startsWith('matrix3d(') ? parseFloat(t.slice(9).split(',')[14]) : 0; })()";
@@ -128,8 +128,9 @@ class ExplodeBehaviorTest extends WebDriverTestBase {
   }
 
   /**
-   * The JS expression for a custom property the sheet prints on the
-   * canvas parent, trimmed.
+   * The JS expression for a custom property on the canvas parent, trimmed.
+   *
+   * The property is one the sheet prints there.
    */
   private function canvasParentPropertyJs(string $property): string {
     return "getComputedStyle(document.querySelector('.dialog-off-canvas-main-canvas')).getPropertyValue('$property').trim()";
@@ -343,12 +344,12 @@ class ExplodeBehaviorTest extends WebDriverTestBase {
       'The stage computes a 3D transform under preserve-3d with its isolation released.',
     );
     $this->assertJsCondition(
-      $this->translateZJs($block_selector) . ' > 0',
+      $this->zTranslationJs($block_selector) . ' > 0',
       10000,
       'The block\'s own computed transform is a matrix3d with a positive Z translation (its lift).',
     );
     $this->assertJsCondition(
-      $this->translateZJs("[data-selectable='container:$section_uuid']") . ' > 0',
+      $this->zTranslationJs("[data-selectable='container:$section_uuid']") . ' > 0',
       10000,
       'The section\'s own computed transform lifts it too (each plane lifts one step above its plane parent).',
     );

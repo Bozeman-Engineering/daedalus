@@ -15,13 +15,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the one-box container's composed shapes and style delivery.
  *
- * A container is ONE element at every depth: the declaration's root forms
- * swap a real <section> (a top-level section) for a plain <div> (nested, the depth
+ * A container is ONE element at every depth: the declaration's root forms swap
+ * a real <section> (a top-level section) for a plain <div> (nested, the depth
  * fact traveling from daedalus_layout's NestedSectionRenderArray into the
- * composed_container element), and the section's identity attributes ride
- * that same root — there is no inner part element and never was a second
- * box. The single "content" region is a storage vestige and renders no
- * wrapper at either depth.
+ * composed_container element), and the section's identity attributes ride that
+ * same root — there is no inner part element and never was a second box. The
+ * single "content" region is a storage vestige and renders no wrapper at either
+ * depth.
  *
  * Styling addresses the root key ('') and the '::> *' children pseudo-part;
  * the printer's donut rules scope-limit at nested section and block
@@ -59,9 +59,9 @@ class ContainerLayoutTest extends NestedStorageKernelTestBase {
   /**
    * Builds an entity: a container root section embedding a nested container.
    *
-   * Both sections use the daedalus_stylish_container layout; the nested one holds a
-   * field block so its element has real children. Key placeholders in the
-   * map: {root} and {nested}.
+   * Both sections use the daedalus_stylish_container layout; the nested one
+   * holds a field block so its element has real children. Key placeholders in
+   * the map: {root} and {nested}.
    *
    * @return array{0: \Drupal\entity_test\Entity\EntityTest, 1: string, 2: string}
    *   The entity, the root section uuid, the nested section uuid.

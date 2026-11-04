@@ -63,6 +63,8 @@ import { labelFor, targetLabel } from './label-for-key';
  *   label seam by default, injectable for the node suite.
  *
  * @return {Array<{address: string, key: string, selector: ?string, label: string}>}
+ *   The crumbs, outermost first; each carries its seat address, the
+ *   element key it selects, the selector it targets and its label.
  */
 export const ancestryOf = (
   index,

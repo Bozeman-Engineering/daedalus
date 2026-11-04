@@ -224,7 +224,9 @@ final class AiContextForm extends FormBase {
   }
 
   /**
-   * The box's label: the record's, with "about n tokens" while its own lines render.
+   * The box's label.
+   *
+   * The record's, with "about n tokens" while its own lines render.
    */
   private function optionLabel(MaterialRecord $record, BudgetReading $reading): \Stringable|string {
     $characters = $reading->record($record->kind, $record->id);

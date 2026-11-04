@@ -130,10 +130,6 @@ const discard = () => {
   // Drupal.Ajax calls the instance's error() when the response completes,
   // so the handler lands on the executed instance.
   ajax.error = (error) => {
-    console.error(
-      'Unable to discard changes: ',
-      error.responseText || error,
-    );
     Drupal.Daedalus.ModeManager.getPlugin('edit').handleError(
       error,
       'Unable to discard changes.',
@@ -144,18 +140,21 @@ const discard = () => {
 /**
  * Opens or closes a panel through the sidebar manager, the road the
  * hotkeys take for a panel without a toggle button.
+ *
+ * @param {string} id
+ *   The panel id.
+ * @param {boolean} open
+ *   True to open the panel, false to close it.
  */
 const togglePanel = (id, open) => {
   const manager = Drupal.Daedalus.SidebarManager;
-  (open ? manager.openSidebar(id) : manager.closeSidebar(id)).catch(
-    (error) => {
-      // A refused close (an invalid daedalus_edit form) is expected and
-      // already shown to the user; anything else is a bug.
-      if (error !== Drupal.Daedalus.SidebarPluginBase.CLOSE_BLOCKED) {
-        console.error('Cannot toggle sidebar:', error);
-      }
-    },
-  );
+  (open ? manager.openSidebar(id) : manager.closeSidebar(id)).catch((error) => {
+    // A refused close (an invalid daedalus_edit form) is expected and
+    // already shown to the user; anything else is a bug.
+    if (error !== Drupal.Daedalus.SidebarPluginBase.CLOSE_BLOCKED) {
+      Drupal.throwError(error);
+    }
+  });
 };
 
 /**
@@ -212,9 +211,7 @@ const facts = () => {
       (panel) => panel.id,
     ),
     hotKeys: drupalSettings.daedalusUi.hotKeys ?? {},
-    previewAvailable: Boolean(
-      drupalSettings.daedalusUi.responsivePreview?.url,
-    ),
+    previewAvailable: Boolean(drupalSettings.daedalusUi.responsivePreview?.url),
     documentItems: verbMenuItems(documentVerbKeys(), (verb) => verb.document),
     settingsUrl: topBar.settingsUrl,
     density:
@@ -229,7 +226,7 @@ export const initTopBar = () => {
    * Save: the commit, and the unsaved indicator.
    */
   Drupal.behaviors.DaedalusUiSave = {
-    attach: (context, settings) => {
+    attach: (context) => {
       once('DaedalusUiSave', '#daedalus-ui-save', context).forEach(
         (saveButton) => {
           const label = saveButton.querySelector('.daedalus-ui-save__label');
@@ -274,37 +271,35 @@ export const initTopBar = () => {
    * The Daedalus menu trigger.
    */
   Drupal.behaviors.DaedalusUiMenu = {
-    attach: (context, settings) => {
-      once('DaedalusUiMenu', '#daedalus-ui-menu', context).forEach(
-        (button) => {
-          // Whether OUR menu is the open one (aria-expanded); the
-          // primitive's onClose clears it however the menu closes.
-          let expanded = false;
-          const setExpanded = (open) => {
-            expanded = open;
-            button.setAttribute('aria-expanded', open ? 'true' : 'false');
-          };
+    attach: (context) => {
+      once('DaedalusUiMenu', '#daedalus-ui-menu', context).forEach((button) => {
+        // Whether OUR menu is the open one (aria-expanded); the
+        // primitive's onClose clears it however the menu closes.
+        let expanded = false;
+        const setExpanded = (open) => {
+          expanded = open;
+          button.setAttribute('aria-expanded', open ? 'true' : 'false');
+        };
 
-          // The trigger toggles: the anchor counts as inside the menu's
-          // dismissal boundary, so a click on it while open closes rather
-          // than reopens.
-          button.addEventListener('click', (event) => {
-            event.preventDefault();
-            if (expanded) {
-              Drupal.Daedalus.menu.close();
-              return;
-            }
-            setExpanded(
-              Drupal.Daedalus.menu.open({
-                anchor: button,
-                align: 'start',
-                items: topBarMenuItems(facts(), actions),
-                onClose: () => setExpanded(false),
-              }),
-            );
-          });
-        },
-      );
+        // The trigger toggles: the anchor counts as inside the menu's
+        // dismissal boundary, so a click on it while open closes rather
+        // than reopens.
+        button.addEventListener('click', (event) => {
+          event.preventDefault();
+          if (expanded) {
+            Drupal.Daedalus.menu.close();
+            return;
+          }
+          setExpanded(
+            Drupal.Daedalus.menu.open({
+              anchor: button,
+              align: 'start',
+              items: topBarMenuItems(facts(), actions),
+              onClose: () => setExpanded(false),
+            }),
+          );
+        });
+      });
     },
   };
 };

@@ -32,7 +32,11 @@ class BlueprintGestureAliasTest extends BlueprintKernelTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static array $permissions = ['create section blueprint', 'edit any section blueprint', 'delete any section blueprint'];
+  protected static array $permissions = [
+    'create section blueprint',
+    'edit any section blueprint',
+    'delete any section blueprint',
+  ];
 
   /**
    * An inserted element is captured by its alias in the same batch.
@@ -78,7 +82,13 @@ class BlueprintGestureAliasTest extends BlueprintKernelTestBase {
 
     // A later turn pushes the same element by alias into the blueprint.
     $update = $this->operations()->batchOperations($this->host($entity), [
-      ['op' => 'update_material', 'kind' => 'blueprint', 'id' => $blueprint->uuid(), 'element' => 'hero', 'offered' => TRUE],
+      [
+        'op' => 'update_material',
+        'kind' => 'blueprint',
+        'id' => $blueprint->uuid(),
+        'element' => 'hero',
+        'offered' => TRUE,
+      ],
     ], $this->dialectOptions());
     $this->assertBatchSuccess($update);
     $this->assertTrue($this->loadBlueprint('hero')->isOffered(), 'The update gesture flips the AI opt-out.');

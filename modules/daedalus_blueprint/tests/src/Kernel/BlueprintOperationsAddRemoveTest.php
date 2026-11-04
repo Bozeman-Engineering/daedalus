@@ -28,9 +28,9 @@ class BlueprintOperationsAddRemoveTest extends BlueprintKernelTestBase {
   /**
    * The seed component LB placements anchor beside.
    *
-   * Section anchors require daedalus_layout section UUIDs (absent in this kernel
-   * env), so LB fixtures ship one component and the anchor grammar places
-   * after it.
+   * Section anchors require daedalus_layout section UUIDs (absent in this
+   * kernel env), so LB fixtures ship one component and the anchor grammar
+   * places after it.
    */
   protected const SEED_UUID = '52d6ac74-31e5-4b78-9d1c-2a86f0c53b6e';
 

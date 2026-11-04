@@ -37,7 +37,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * service, rather than the site's: a transform tagged on the site would
  * make daedalus_layout's presave safety net rewrite any inline_block:heading
  * component on every site forever, and the pathway adds no runtime
- * behaviour. Only the overrides field (layout_builder__layout) is walked:
+ * behavior. Only the overrides field (layout_builder__layout) is walked:
  * it is the one layout field the inline-block presave machinery persists
  * serialized replacements in; any other layout_section field (a section
  * library template's, which nothing carries forward) is named in the

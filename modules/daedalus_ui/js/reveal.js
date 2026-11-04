@@ -8,16 +8,17 @@
  * (hidden at minimal and clean) or data-daedalus-ui-conceal="clean" (hidden only at
  * clean), and hides until the pointer approaches it. The normal opt-in is
  * declarative, no JS at all:
- * @code
- *   <button data-daedalus-ui-conceal="clean" data-daedalus-ui-reveal-near="120">
- * @endcode
+ *
+ * @example
+ * <button data-daedalus-ui-conceal="clean" data-daedalus-ui-reveal-near="120">
+ *
  * A behavior registers every [data-daedalus-ui-conceal] element automatically, and
  * css/reveal.css owns the hiding. JS-created chrome can register
  * explicitly instead:
- * @code
- *   Drupal.Daedalus.reveal.register(handle, { near: 80 });
- *   Drupal.Daedalus.reveal.unregister(handle);
- * @endcode
+ *
+ * @example
+ * Drupal.Daedalus.reveal.register(handle, { near: 80 });
+ * Drupal.Daedalus.reveal.unregister(handle);
  *
  * One rAF-throttled pointermove loop measures the distance from the pointer
  * to each registered element's rect and toggles data-daedalus-ui-revealed on
@@ -81,6 +82,16 @@
   /**
    * Distance from a point to a rect: 0 inside, straight-line to the nearest
    * edge or corner outside.
+   *
+   * @param {DOMRect} rect
+   *   The element's rect.
+   * @param {number} x
+   *   The point's x, in the rect's coordinate space.
+   * @param {number} y
+   *   The point's y.
+   *
+   * @return {number}
+   *   The distance in pixels.
    */
   const distanceTo = (rect, x, y) => {
     const dx = Math.max(rect.left - x, 0, x - rect.right);
@@ -230,9 +241,11 @@
     },
     detach(context, settings, trigger) {
       if (trigger === 'unload' && context.querySelectorAll) {
-        once.remove('daedalus-ui-conceal', `[${CONCEAL}]`, context).forEach((el) => {
-          Drupal.Daedalus.reveal.unregister(el);
-        });
+        once
+          .remove('daedalus-ui-conceal', `[${CONCEAL}]`, context)
+          .forEach((el) => {
+            Drupal.Daedalus.reveal.unregister(el);
+          });
       }
     },
   };

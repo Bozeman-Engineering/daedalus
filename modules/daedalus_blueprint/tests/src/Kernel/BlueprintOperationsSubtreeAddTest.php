@@ -100,7 +100,10 @@ class BlueprintOperationsSubtreeAddTest extends BlueprintKernelTestBase {
    * Tests data.layout on a block add is refused.
    */
   public function testSubtreeDataKeyRefused(): void {
-    $result = $this->operations->addElement($this->host($this->entity), ['anchor' => $this->rootSectionUuid, 'placement' => 'inside'], [
+    $result = $this->operations->addElement($this->host($this->entity), [
+      'anchor' => $this->rootSectionUuid,
+      'placement' => 'inside',
+    ], [
       'block_type' => 'basic',
       'layout' => [
         ['layout_id' => 'layout_twocol_section', 'regions' => []],
@@ -119,7 +122,10 @@ class BlueprintOperationsSubtreeAddTest extends BlueprintKernelTestBase {
    * Tests data.section_uuid on a block add is refused.
    */
   public function testSectionUuidDataKeyRefused(): void {
-    $result = $this->operations->addElement($this->host($this->entity), ['anchor' => $this->rootSectionUuid, 'placement' => 'inside'], [
+    $result = $this->operations->addElement($this->host($this->entity), [
+      'anchor' => $this->rootSectionUuid,
+      'placement' => 'inside',
+    ], [
       'block_type' => 'basic',
       'section_uuid' => (new PhpUuid())->generate(),
     ]);
@@ -135,7 +141,10 @@ class BlueprintOperationsSubtreeAddTest extends BlueprintKernelTestBase {
    * Tests layout inside the property bag is refused.
    */
   public function testSubtreeInPropertiesRefused(): void {
-    $result = $this->operations->addElement($this->host($this->entity), ['anchor' => $this->rootSectionUuid, 'placement' => 'inside'], [
+    $result = $this->operations->addElement($this->host($this->entity), [
+      'anchor' => $this->rootSectionUuid,
+      'placement' => 'inside',
+    ], [
       'block_type' => 'basic',
       'block_fields' => [
         'layout' => [],

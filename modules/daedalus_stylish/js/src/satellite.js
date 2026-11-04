@@ -11,6 +11,24 @@ import { createSatelliteSource } from './sources/satellite-source.js';
  * can be orphaned (leader closed for good) in a way the in-page inspector
  * cannot. While disconnected the last-known state stays visible — a leader
  * refresh resolves itself via the snapshot/hello handshake within a beat.
+ *
+ * @param {object} props
+ *   The component props.
+ * @param {object} props.source
+ *   The satellite source (sources/satellite-source.js).
+ * @param {object} props.guide
+ *   The style guide (drupalSettings.daedalusStylish.guide).
+ * @param {object} props.variants
+ *   The variant records.
+ * @param {object} props.skinMaterials
+ *   The skin's materials.
+ * @param {object} props.skin
+ *   The skin settings.
+ * @param {object} props.law
+ *   The law settings (the gate and its document).
+ *
+ * @return {object}
+ *   The rendered host.
  */
 const SatelliteHost = ({
   source,

@@ -9,11 +9,11 @@ use Drupal\daedalus_layout\ComponentTransform\SectionTransformInterface;
 /**
  * Rewrites layout_twocol_section sections flagged 'convert' to layout_onecol.
  *
- * The replacement pattern under test: core sections cannot change layout id
- * in place, so the transform builds a new Section, keeps the daedalus_layout uuid,
+ * The replacement pattern under test: core sections cannot change layout id in
+ * place, so the transform builds a new Section, keeps the daedalus_layout uuid,
  * and moves every component into layout_onecol's content region in region
- * order. The 'convert' third-party flag keeps the transform surgical so
- * other spine tests' twocol fixtures are untouched.
+ * order. The 'convert' third-party flag keeps the transform surgical so other
+ * spine tests' twocol fixtures are untouched.
  */
 class LegacySectionTransform implements SectionTransformInterface {
 

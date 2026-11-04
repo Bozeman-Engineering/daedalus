@@ -9,14 +9,14 @@ use Drupal\Core\Field\FieldItemListInterface;
 /**
  * A field value the caller already extracted and validated in-process.
  *
- * The blueprint grammar carries field values as JSON-shaped data that a
- * field handler deserializes and that the processable filter admits. Some
- * values never take that road: a Drupal widget's submitted input is turned
- * into a field item list by the entity form itself (widget extraction and
- * validation, site form alters, every widget that exists or will exist),
- * and the resulting item list is the value, already spelled the way the
- * field stores it. An ExtractedValue is how such a caller hands that item
- * list to the spine: `update_element` with `properties: {field: ExtractedValue}`.
+ * The blueprint grammar carries field values as JSON-shaped data that a field
+ * handler deserializes and that the processable filter admits. Some values
+ * never take that road: a Drupal widget's submitted input is turned into a
+ * field item list by the entity form itself (widget extraction and validation,
+ * site form alters, every widget that exists or will exist), and the resulting
+ * item list is the value, already spelled the way the field stores it. An
+ * ExtractedValue is how such a caller hands that item list to the spine:
+ * `update_element` with `properties: {field: ExtractedValue}`.
  *
  * On the write path (BlueprintOperations::validateAndApplyFields()) an
  * ExtractedValue is applied directly: no handler deserialize, and no

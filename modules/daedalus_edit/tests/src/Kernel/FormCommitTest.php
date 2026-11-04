@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_edit\Kernel;
 
+// cspell:ignore cambiado guardado
 use Drupal\Core\Form\FormState;
 use Drupal\daedalus_blueprint_api\Ajax\BlueprintApplyResponseCommand;
 use Drupal\daedalus_blueprint_api\Render\SelectableKey;

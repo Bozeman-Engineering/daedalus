@@ -77,19 +77,18 @@ use Drupal\daedalus_blueprint_library\BlueprintTypeInterface;
  * id itself: <d-blueprint name="id">.
  *
  * The blueprint gestures (save_material / update_material / remove_material
- * with kind blueprint) dispatch here from the op spine; the palette's Save
- * as blueprint and Update blueprint verbs submit the same ops, and the
- * details and delete routes (BlueprintApiController) are adapters over the
- * same methods. Capture is a SPINE OP so the AI can compose a subtree with
- * ordinary operations and save it as a blueprint in the SAME batch: the
- * capture reads the batch's live entity, exactly what the preceding
- * operations staged. Every verb needs the blueprint entity's own create or update access
- * (capability parity never means validation
- * exemption): blueprints are site-wide content, a stricter surface than the
- * staged-entity mutations the batch permission covers, and the entity's
- * own access handler stays the single authority, judging by the
- * blueprint's TYPE (a capture names its type, `section` unless told
- * otherwise, and needs that type's create permission; update and remove
+ * with kind blueprint) dispatch here from the op spine; the palette's Save as
+ * blueprint and Update blueprint verbs submit the same ops, and the details and
+ * delete routes (BlueprintApiController) are adapters over the same methods.
+ * Capture is a SPINE OP so the AI can compose a subtree with ordinary
+ * operations and save it as a blueprint in the SAME batch: the capture reads
+ * the batch's live entity, exactly what the preceding operations staged. Every
+ * verb needs the blueprint entity's own create or update access (capability
+ * parity never means validation exemption): blueprints are site-wide content, a
+ * stricter surface than the staged-entity mutations the batch permission
+ * covers, and the entity's own access handler stays the single authority,
+ * judging by the blueprint's TYPE (a capture names its type, `section` unless
+ * told otherwise, and needs that type's create permission; update and remove
  * ask the saved blueprint, whose type decides).
  *
  * The container a block-scope blueprint is saved from is that blueprint's
@@ -372,26 +371,24 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
    * {@inheritdoc}
    *
    * Update_material {kind: blueprint, id, element?, label?, description?,
-   * icon?, offered?, subject?, bundles?, groups?, favorite?,
-   * adopt_variants?}: one
-   * revisioned write of whatever is present (a bad update is one revert
-   * away, workspace-staged inside a workspace).
-   * `element` pushes a fresh capture of the subtree (future placements stamp
-   * it; existing placements never re-sync); label, description and icon rewrite
-   * the palette face (icon PRESENT writes, NULL or '' clearing back to the
-   * default; ABSENT leaves the stored icon standing); offered flips the AI
-   * opt-out (offeredFlag()); subject and bundles rewrite what the
-   * blueprint is material for (BlueprintSubjects); groups refiles it under
-   * the site's groups (filters only); favorite (a boolean) marks
-   * or unmarks it as a site favorite (the Add panel's listing fact, which
-   * no AI surface reads). Turning offered on where it was off answers the
-   * AI context budget (requireRoom()); re-stating it on is no share. Only content blueprints
-   * update: file-shipped blueprints refuse with their own error, never a bare not-found.
-   * A push from an UNSTAMPED container makes that container a placement of
-   * the blueprint (stampSource()): the pushed-from container is where the
-   * editor works on the blueprint next. A container stamped for another
-   * blueprint keeps its stamp: pushing a placement of A into B does not
-   * re-own it.
+   * icon?, offered?, subject?, bundles?, groups?, favorite?, adopt_variants?}:
+   * one revisioned write of whatever is present (a bad update is one revert
+   * away, workspace-staged inside a workspace). `element` pushes a fresh
+   * capture of the subtree (future placements stamp it; existing placements
+   * never re-sync); label, description and icon rewrite the palette face (icon
+   * PRESENT writes, NULL or '' clearing back to the default; ABSENT leaves the
+   * stored icon standing); offered flips the AI opt-out (offeredFlag());
+   * subject and bundles rewrite what the blueprint is material for
+   * (BlueprintSubjects); groups refiles it under the site's groups (filters
+   * only); favorite (a boolean) marks or unmarks it as a site favorite (the Add
+   * panel's listing fact, which no AI surface reads). Turning offered on where
+   * it was off answers the AI context budget (requireRoom()); re-stating it on
+   * is no share. Only content blueprints update: file-shipped blueprints refuse
+   * with their own error, never a bare not-found. A push from an UNSTAMPED
+   * container makes that container a placement of the blueprint
+   * (stampSource()): the pushed-from container is where the editor works on the
+   * blueprint next. A container stamped for another blueprint keeps its stamp:
+   * pushing a placement of A into B does not re-own it.
    */
   public function update(MaterialKind $kind, string $id, array $operation, ?HostInterface $host, array $options): MaterialGestureResult {
     $blueprint = $this->manager()->resolveUpdatable($id);
@@ -567,8 +564,8 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
   /**
    * The `global` opt-out: TRUE mints a blueprint that belongs to no system.
    *
-   * The same spelling daedalus_stylish's capture ops read: absent means the mint
-   * joins the active design system.
+   * The same spelling daedalus_stylish's capture ops read: absent means the
+   * mint joins the active design system.
    *
    * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
    */
@@ -585,11 +582,11 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
   /**
    * The AI opt-out an operation carries, or NULL when it names none.
    *
-   * The same spelling daedalus_stylish's material ops read: "offered": false keeps
-   * the blueprint for the palette only (the roster's offered view omits it;
-   * legality never reads it); true, or an absent key on a save, shares
-   * it, the default every material has (MaterialRecord::$offered). An
-   * update passes NULL through to leave the stored flag alone.
+   * The same spelling daedalus_stylish's material ops read: "offered": false
+   * keeps the blueprint for the palette only (the roster's offered view omits
+   * it; legality never reads it); true, or an absent key on a save, shares it,
+   * the default every material has (MaterialRecord::$offered). An update passes
+   * NULL through to leave the stored flag alone.
    *
    * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
    *   When the key is present and not a boolean.

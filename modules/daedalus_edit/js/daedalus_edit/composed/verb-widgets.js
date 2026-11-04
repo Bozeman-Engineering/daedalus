@@ -169,12 +169,17 @@ export function togglePopover(EditableElement, name, open = null) {
  *   The element being edited.
  * @param {Element} container
  *   The frame's widget slot container.
- * @param {Object} options
- *   - {string} name: the popover it controls.
- *   - {string} label: the accessible label.
- *   - {string} icon: the inline SVG markup.
- *   - {boolean} showLabel: whether the entry renders its text label
- *     (the frame's density ladder, passed through the widget context).
+ * @param {object} options
+ *   The toggle's bindings.
+ * @param {string} options.name
+ *   The popover it controls.
+ * @param {string} options.label
+ *   The accessible label.
+ * @param {string} options.icon
+ *   The inline SVG markup.
+ * @param {boolean} options.showLabel
+ *   Whether the entry renders its text label (the frame's density ladder,
+ *   passed through the widget context).
  *
  * @return {Element}
  *   The button.
@@ -240,10 +245,11 @@ export function buildWidgetToggle(
  *   The element being edited.
  * @param {string} name
  *   The popover name its toggle addresses it by.
- * @param {Object} options
- *   - {Function} returnFocus: (EditableElement) => ?Element — the
- *     element focus returns to when the surface closes with focus inside
- *     the popover (the editing surface).
+ * @param {object} options
+ *   The popover's bindings.
+ * @param {Function} options.returnFocus
+ *   (EditableElement) => ?Element — the element focus returns to when the
+ *   surface closes with focus inside the popover (the editing surface).
  *
  * @return {Element}
  *   The content node.

@@ -86,6 +86,14 @@ const round2 = (value) => Math.round(value * 100) / 100;
 
 /**
  * Finds a container node by uuid, at any depth.
+ *
+ * @param {Array} nodes
+ *   The nodes to search (the lean tree, or a node's children).
+ * @param {string} uuid
+ *   The container's section uuid.
+ *
+ * @return {?object}
+ *   The container node, or null.
  */
 const findSection = (nodes, uuid) => {
   for (const node of Array.isArray(nodes) ? nodes : []) {
@@ -212,6 +220,16 @@ const isBlock = (value) =>
  * An element's own layers for one property: every condition block of its
  * entry carrying the property, as {condition, value} rows (the row shape
  * condition-cascade's reads take). The reference list is not a layer.
+ *
+ * @param {object} map
+ *   The style map.
+ * @param {string} target
+ *   The element's selectable key.
+ * @param {string} property
+ *   The CSS property name.
+ *
+ * @return {Array<{condition: string, value: string}>}
+ *   The own layers, one per condition block carrying the property.
  */
 const ownLayers = (map, target, property) =>
   Object.entries(map?.[target] ?? {})
@@ -242,6 +260,7 @@ const ownLayers = (map, target, property) =>
  *   The editing compound.
  *
  * @return {?string}
+ *   The own value at the compound, or null.
  */
 export const ownAt = (map, target, property, condition) => {
   const value = map?.[target]?.[condition]?.[property];
@@ -257,7 +276,19 @@ export const ownAt = (map, target, property, condition) => {
  * "who shows through at this pose" read). Null when no own layer reaches
  * the pose.
  *
+ * @param {object} map
+ *   The style map.
+ * @param {string} target
+ *   The element's selectable key.
+ * @param {string} property
+ *   The CSS property name.
+ * @param {string} condition
+ *   The editing compound.
+ * @param {object} conditions
+ *   The condition table (guide.conditions), for cascade order.
+ *
  * @return {?{condition: string, value: string}}
+ *   The delivering own layer, or null.
  */
 const ownAtPose = (map, target, property, condition, conditions) =>
   valueAtPose(ownLayers(map, target, property), condition, conditions);
@@ -266,6 +297,16 @@ const ownAtPose = (map, target, property, condition, conditions) =>
  * The worn arrangement-axis reference on a container, or null: the
  * reference whose variant the store's records resolve to the axis (the
  * two shipped names are the fallback for a record the store lacks).
+ *
+ * @param {object} map
+ *   The style map.
+ * @param {string} key
+ *   The container's selectable key.
+ * @param {Array<object>} variants
+ *   The store's variant records.
+ *
+ * @return {?object}
+ *   The worn reference, or null.
  */
 const arrangementRef = (map, key, variants) => {
   const byName = Object.fromEntries(
@@ -291,6 +332,18 @@ const arrangementRef = (map, key, variants) => {
  * cascade's posedBlock, so every block the compound covers lands in
  * structural order and the later wins. Nothing is posed at the default
  * compound, and an unresolved wearing stacks nothing.
+ *
+ * @param {?object} ref
+ *   The worn arrangement reference (arrangementRef()), or null.
+ * @param {Array<object>} variants
+ *   The store's variant records.
+ * @param {string} condition
+ *   The editing compound.
+ * @param {object} conditions
+ *   The condition table (guide.conditions).
+ *
+ * @return {boolean}
+ *   Whether the wear stacks the children at the compound.
  */
 const stacksAtPose = (ref, variants, condition, conditions) => {
   if (ref === null || condition === 'default') {
@@ -357,6 +410,7 @@ const stacksAtPose = (ref, variants, condition, conditions) => {
  * @return {{mode: string, wearing: ?string, via: ?{variant: string,
  *   condition: string}, customKeys: string[], carriers: {display:
  *   ?string, direction: ?string, tracks: ?string}}}
+ *   The arrangement state.
  */
 export const arrangementState = (
   map,
@@ -408,15 +462,30 @@ export const arrangementState = (
  * spellings a stop honestly represents (an AI or advanced-mode write of
  * the modern start/end alias lights the button, clicking never rewrites
  * it).
+ *
+ * @param {string} start
+ *   The start stop's label.
+ * @param {string} center
+ *   The center stop's label.
+ * @param {string} end
+ *   The end stop's label.
+ *
+ * @return {Array<{id: string, value: string, matches: string[], label: string}>}
+ *   The three stops.
  */
-const flexStops = ([start, center, end]) => [
-  { id: 'start', value: 'flex-start', matches: ['flex-start', 'start'], label: start },
+const flexStops = (start, center, end) => [
+  {
+    id: 'start',
+    value: 'flex-start',
+    matches: ['flex-start', 'start'],
+    label: start,
+  },
   { id: 'center', value: 'center', matches: ['center'], label: center },
   { id: 'end', value: 'flex-end', matches: ['flex-end', 'end'], label: end },
 ];
 
-const HORIZONTAL_STOPS = flexStops(['Left', 'Center', 'Right']);
-const VERTICAL_STOPS = flexStops(['Top', 'Middle', 'Bottom']);
+const HORIZONTAL_STOPS = flexStops('Left', 'Center', 'Right');
+const VERTICAL_STOPS = flexStops('Top', 'Middle', 'Bottom');
 
 /**
  * The fourth stop a Row's main axis earns: the children pushed to both
@@ -455,6 +524,7 @@ const ROW_HORIZONTAL_STOPS = [...HORIZONTAL_STOPS, SPREAD_STOP];
  *
  * @return {Array<{orientation: string, label: string, property: string,
  *   stops: Array}>}
+ *   The mode's axes, in render order.
  */
 export const alignmentAxes = (mode) => {
   if (mode === 'stack') {
@@ -525,6 +595,7 @@ export const alignmentAxes = (mode) => {
  *   An alignmentAxes() axis.
  *
  * @return {{selected: ?string, custom: boolean, value: ?string}}
+ *   The lit stop, whether the value is unrepresentable, and that value.
  */
 export const alignmentState = (read, axis) => {
   const value = read?.winner?.value ?? null;
@@ -553,6 +624,7 @@ export const alignmentState = (read, axis) => {
  *   The editing compound ('default' when unposed).
  *
  * @return {Object[]}
+ *   The update_style operations.
  */
 export const alignOps = (map, key, axis, value, condition = 'default') => {
   if (value === null && ownAt(map, key, axis.property, condition) === null) {
@@ -566,6 +638,18 @@ export const alignOps = (map, key, axis, value, condition = 'default') => {
 /**
  * A child's own flex-grow as the posed compound delivers it (its own
  * layers through the condition cascade), or null (unset = equal).
+ *
+ * @param {object} map
+ *   The style map.
+ * @param {string} childKey
+ *   The child's selectable key.
+ * @param {string} condition
+ *   The editing compound ('default' when unposed).
+ * @param {object} conditions
+ *   The condition table (guide.conditions).
+ *
+ * @return {?number}
+ *   The grow weight, or null when unset.
  */
 export const growOf = (
   map,
@@ -581,6 +665,18 @@ export const growOf = (
 /**
  * The children's effective grow weights at the posed compound (unset
  * reads as 1, the `> *` rule's equal fill).
+ *
+ * @param {object} map
+ *   The style map.
+ * @param {string[]} childKeys
+ *   The children's keys, in order.
+ * @param {string} condition
+ *   The editing compound ('default' when unposed).
+ * @param {object} conditions
+ *   The condition table (guide.conditions).
+ *
+ * @return {number[]}
+ *   One weight per child.
  */
 export const childGrows = (
   map,
@@ -591,6 +687,12 @@ export const childGrows = (
 
 /**
  * The strip's percent labels for a weight list.
+ *
+ * @param {number[]} grows
+ *   The effective weights.
+ *
+ * @return {string[]}
+ *   One rounded percent label per weight.
  */
 export const percentLabels = (grows) => {
   const total = grows.reduce((sum, grow) => sum + grow, 0) || 1;
@@ -599,6 +701,12 @@ export const percentLabels = (grows) => {
 
 /**
  * Snaps a drag fraction to the nearest scale stop.
+ *
+ * @param {number} fraction
+ *   The pointer's fraction of the pair's span (0..1).
+ *
+ * @return {number}
+ *   The nearest SNAP_STOPS entry.
  */
 export const snapFraction = (fraction) =>
   SNAP_STOPS.reduce(
@@ -642,7 +750,19 @@ export const dragPair = (grows, leftIndex, fraction) => {
  * values write as strings (the map's value shape). `next` entries are
  * numbers, or null for "equal".
  *
+ * @param {string[]} childKeys
+ *   The children's keys, in order.
+ * @param {object} map
+ *   The style map.
+ * @param {Array<?number>} next
+ *   The desired weight per child, null for equal.
+ * @param {string} condition
+ *   The editing compound ('default' when unposed).
+ * @param {object} conditions
+ *   The condition table (guide.conditions).
+ *
  * @return {Object[]}
+ *   The update_style operations for the children that change.
  */
 export const growOps = (
   childKeys,
@@ -685,7 +805,11 @@ export const growOps = (
  * columns in one click); shorter defs reset the trailing children to
  * equal.
  *
+ * @param {number} count
+ *   The container's current child count.
+ *
  * @return {Array<{weights: number[], equal: boolean}>}
+ *   The recipes, in offer order.
  */
 export const presetDefs = (count) => {
   const defs = [];
@@ -720,6 +844,14 @@ export const presetDefs = (count) => {
 
 /**
  * Whether the current weights match a preset's ratios (within 1%).
+ *
+ * @param {number[]} grows
+ *   The effective weights (childGrows()).
+ * @param {number[]} weights
+ *   The preset's weights.
+ *
+ * @return {boolean}
+ *   Whether the preset is the current proportion.
  */
 export const presetActive = (grows, weights) => {
   if (weights.length !== grows.length) {
@@ -741,7 +873,9 @@ export const presetActive = (grows, weights) => {
  * children are keyed by their minted uuids.
  *
  * @param {Object} options
+ *   The pick.
  * @param {string} options.containerUuid
+ *   The container's section uuid (the anchor minted columns land inside).
  * @param {string[]} options.childKeys
  *   The current children's keys, in order.
  * @param {Object} options.map
@@ -749,12 +883,14 @@ export const presetActive = (grows, weights) => {
  * @param {number[]} options.weights
  *   The preset's weights.
  * @param {() => string} options.generateUuid
+ *   Mints a uuid for each column the recipe adds.
  * @param {string} [options.condition]
  *   The editing compound the grow writes land at ('default' when unposed).
  * @param {Object} [options.conditions]
  *   The condition table (guide.conditions).
  *
  * @return {{operations: Object[], minted: string[]}}
+ *   The batch and the uuids it mints.
  */
 export const presetPlan = ({
   containerUuid,
@@ -816,6 +952,7 @@ export const presetPlan = ({
  *   'stack', 'row' or 'columns'.
  *
  * @return {Object[]}
+ *   The batch, empty when the click changes nothing.
  */
 export const modeOps = (key, state, mode) => {
   const changes = [];
@@ -869,6 +1006,7 @@ export const modeOps = (key, state, mode) => {
  *   The selection's key.
  *
  * @return {boolean}
+ *   Whether the Layout section renders the gap row for this selection.
  */
 export const layoutOwnsGap = (tree, key) => {
   const parsed = parseKey(key);
@@ -899,6 +1037,7 @@ export const layoutOwnsGap = (tree, key) => {
  *   The editing compound ('default' when unposed).
  *
  * @return {Object[]}
+ *   The update_style operations.
  */
 export const gapValueOps = (key, value, condition = 'default') =>
   compoundOperations([{ key, condition, properties: { gap: value } }]);
@@ -929,6 +1068,7 @@ export const gapValueOps = (key, value, condition = 'default') =>
  *   The blueprint's section layouts (source.getSectionLayouts()).
  *
  * @return {{definition: Object, constraints: Object}}
+ *   The guide's definition and the root's resolved constraints.
  */
 export const rootField = (
   guide,
@@ -958,7 +1098,13 @@ export const rootField = (
  * write — the minted column joins at grow 1 purely by CSS (a child added
  * to a 67/33 row lands 50/25/25 with nothing written).
  *
+ * @param {string} containerUuid
+ *   The container's section uuid.
+ * @param {() => string} generateUuid
+ *   Mints the new column's uuid.
+ *
  * @return {{operations: Object[], minted: string}}
+ *   The batch and the minted uuid.
  */
 export const addColumnPlan = (containerUuid, generateUuid) => {
   const minted = generateUuid();
@@ -984,6 +1130,7 @@ export const addColumnPlan = (containerUuid, generateUuid) => {
  *   The container's children (containerChildren()).
  *
  * @return {?{key: string, uuid: string, empty: boolean, operations: Object[]}}
+ *   The trailing child and the batch removing it, or null.
  */
 export const removalPlan = (children) => {
   if (!Array.isArray(children) || children.length <= 1) {

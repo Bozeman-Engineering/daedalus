@@ -38,6 +38,7 @@ const INLINE_BLOCK_PREFIX = 'inline_block:';
  *   The block type's id.
  *
  * @return {string}
+ *   The path Drupal.url takes, the bundle encoded.
  */
 export const blockTypeFavoritePath = (bundle) =>
   `daedalus-layout/block-type/${encodeURIComponent(bundle)}/favorite`;
@@ -53,6 +54,7 @@ export const blockTypeFavoritePath = (bundle) =>
  *   A face (model/faces.js).
  *
  * @return {boolean}
+ *   True when a change to the face's site default would be accepted.
  */
 export const canEditFace = (face) =>
   face.kind === KIND_BLUEPRINT

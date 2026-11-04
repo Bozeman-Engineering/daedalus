@@ -23,6 +23,14 @@ import { generateUuid } from '../utilities/uuid';
 
 /**
  * Wraps a block operation in a new section when the target asks for one.
+ *
+ * @param {Object} target
+ *   The resolved drop target; its location addresses the section gap.
+ * @param {Object} blockOperation
+ *   The block operation to place inside the new section.
+ *
+ * @return {Object[]}
+ *   The [add_section, place-inside-it] batch.
  */
 const inNewSection = (target, blockOperation) => {
   const sectionUuid = generateUuid();
@@ -49,6 +57,7 @@ const inNewSection = (target, blockOperation) => {
  *   fields, so both compose.
  *
  * @return {Object[]}
+ *   The operation batch.
  */
 export const newBlock = (target, data) => {
   const operation = {
@@ -77,8 +86,13 @@ export const newBlock = (target, data) => {
 /**
  * Moves an existing block placement.
  *
+ * @param {Object} target
+ *   The resolved drop target.
  * @param {Object} data
  *   The drag data: {uuid} of the moved component.
+ *
+ * @return {Object[]}
+ *   The operation batch.
  */
 export const moveBlock = (target, data) => {
   const operation = {
@@ -91,6 +105,12 @@ export const moveBlock = (target, data) => {
 
 /**
  * Adds a new (default-layout) section.
+ *
+ * @param {Object} target
+ *   The resolved drop target.
+ *
+ * @return {Object[]}
+ *   The operation batch.
  */
 export const newSection = (target) => [
   { op: 'add_section', uuid: generateUuid(), location: target.location },
@@ -99,8 +119,13 @@ export const newSection = (target) => [
 /**
  * Moves an existing section.
  *
+ * @param {Object} target
+ *   The resolved drop target.
  * @param {Object} data
  *   The drag data: {uuid} of the moved section.
+ *
+ * @return {Object[]}
+ *   The operation batch.
  */
 export const moveSection = (target, data) => [
   { op: 'move_element', element: data.uuid, location: target.location },

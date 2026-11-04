@@ -182,7 +182,7 @@ class CoreLayoutRoutesClosedTest extends KernelTestBase {
   }
 
   /**
-   * An entity's overrides storage: the element routes and the revert are closed.
+   * An entity's overrides storage: the element routes and revert are closed.
    */
   public function testOverridesStorageIsClosed(): void {
     $this->assertStorageClosed('overrides', 'node.' . $this->node->id(), 'the overrides storage');
@@ -210,7 +210,9 @@ class CoreLayoutRoutesClosedTest extends KernelTestBase {
   }
 
   /**
-   * The overrides form loses Save and Revert for its hosted storage; Discard stays.
+   * The overrides form loses Save and Revert for its hosted storage.
+   *
+   * Discard stays.
    */
   public function testOverridesFormLosesSaveAndRevert(): void {
     $storage = $this->container->get('plugin.manager.layout_builder.section_storage')->load('overrides', [

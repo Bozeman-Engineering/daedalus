@@ -18,14 +18,13 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
 /**
  * Tests Tier-A stamping at the container render seam.
  *
- * A nested section is an ordinary section whose identity stamps at its OWN
- * root at every depth (collapse translation is dead): the section selectable
- * key, its regions' keys, and the local delta the editing JS reads —
- * rendered by NestedSectionRenderArray with no block sandwich and no
- * block-key aliasing. Emptiness is NOT an daedalus_layout stamp: it is a root-form
- * fact the element resolver answers ({empty: true}) and the composed
- * container render prints (daedalus_ui ComposedLayoutRenderTest locks
- * that side).
+ * A nested section is an ordinary section whose identity stamps at its OWN root
+ * at every depth (collapse translation is dead): the section selectable key,
+ * its regions' keys, and the local delta the editing JS reads — rendered by
+ * NestedSectionRenderArray with no block sandwich and no block-key aliasing.
+ * Emptiness is NOT an daedalus_layout stamp: it is a root-form fact the element
+ * resolver answers ({empty: true}) and the composed container render prints
+ * (daedalus_ui ComposedLayoutRenderTest locks that side).
  *
  * @see \Drupal\daedalus_layout\EventSubscriber\NestedSectionRenderArray
  */
@@ -101,10 +100,10 @@ class NestedSectionStampingTest extends NestedStorageKernelTestBase {
     $this->assertSame(1, $first->length, 'The populated nested region stamps its name.');
     $this->assertStringNotContainsString('data-region-empty', $html);
 
-    // An empty section still renders its own attributed root, and daedalus_layout
-    // stamps NO emptiness fact anywhere: emptiness is the element
-    // resolver's {empty: true} root-form answer, printed by the composed
-    // container render via the declaration's own attributes — never a
+    // An empty section still renders its own attributed root, and
+    // daedalus_layout stamps NO emptiness fact anywhere: emptiness is the
+    // element resolver's {empty: true} root-form answer, printed by the
+    // composed container render via the declaration's own attributes — never a
     // second stamp at this seam.
     $empty_section = $xpath->query(sprintf('//*[@data-selectable="%s"]', SelectableKey::container($empty_uuid)));
     $this->assertSame(1, $empty_section->length, 'The empty nested section renders its own root.');

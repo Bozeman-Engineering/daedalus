@@ -14,11 +14,7 @@
       ).forEach((checkbox) => {
         checkbox.addEventListener('change', (event) => {
           const value = event.target.checked ? '1' : '0';
-          Drupal.Daedalus.saveSetting(
-            'daedalus_ai',
-            'generate_images',
-            value,
-          );
+          Drupal.Daedalus.saveSetting('daedalus_ai', 'generate_images', value);
         });
       });
     },

@@ -114,7 +114,7 @@ abstract class ValueUsageBase {
   /**
    * The material names a skin's animation steps reference.
    *
-   * scanTokens()'s twin for the skin's motion section: a keyframe step's
+   * `scanTokens()`'s twin for the skin's motion section: a keyframe step's
    * values may reference a token through var(); the skeleton reads none.
    *
    * @return string[]
@@ -127,12 +127,13 @@ abstract class ValueUsageBase {
   /**
    * Syncs a saved source entity's rows with its values (the chokepoint).
    *
-   * Called from daedalus_stylish_entity_insert()/daedalus_stylish_entity_update() for every
+   * Called from
+   * daedalus_stylish_entity_insert()/daedalus_stylish_entity_update() for every
    * source entity: map hosts, variants, and skins (one dispatcher, three
-   * stores). Non-default revision saves (workspace staging, pending
-   * revisions) are skipped: the table mirrors the default revisions the
-   * live delivery serves. Saves that neither carry nor previously carried
-   * references never touch the database.
+   * stores). Non-default revision saves (workspace staging, pending revisions)
+   * are skipped: the table mirrors the default revisions the live delivery
+   * serves. Saves that neither carry nor previously carried references never
+   * touch the database.
    */
   public function track(EntityInterface $entity): void {
     if ($entity instanceof RevisionableInterface && !$entity->isDefaultRevision()) {
@@ -408,9 +409,10 @@ abstract class ValueUsageBase {
   /**
    * The source kind of an entity, or NULL for non-source entities.
    *
-   * The one dispatch rule behind the three-store chokepoint: variants and
-   * skins by interface, map hosts by keeping a style store (HostResolver).
-   * _daedalus_stylish_value_usage_source() mirrors it as the cheap pre-service gate.
+   * The one dispatch rule behind the three-store chokepoint: variants and skins
+   * by interface, map hosts by keeping a style store (HostResolver).
+   * _daedalus_stylish_value_usage_source() mirrors it as the cheap pre-service
+   * gate.
    */
   protected function sourceKind(EntityInterface $entity): ?string {
     if ($entity instanceof DaedalusStylishVariantInterface) {
@@ -438,19 +440,25 @@ abstract class ValueUsageBase {
    *   The material names, sorted.
    */
   protected function sourceNames(EntityInterface $entity): array {
-    $names = match ($this->sourceKind($entity)) {
-      self::SOURCE_VARIANT => $this->scanEntries($entity->getStyles()),
-      self::SOURCE_SKIN => [
+    if ($entity instanceof DaedalusStylishVariantInterface) {
+      $names = $this->scanEntries($entity->getStyles());
+    }
+    elseif ($entity instanceof DaedalusStylishSkinInterface) {
+      $names = [
         ...$this->scanTokens($entity->packageTokens()),
         ...$this->scanTokens($entity->siteTokens()),
         ...$this->scanAnimations($entity->packageAnimations()),
         ...$this->scanAnimations($entity->siteAnimations()),
         ...$this->scanDefaults($entity->packageDefaults()),
         ...$this->scanDefaults($entity->siteDefaults()),
-      ],
-      self::SOURCE_MAP => $this->scanEntries($this->hostMap($entity)),
-      default => [],
-    };
+      ];
+    }
+    elseif ($this->sourceKind($entity) === self::SOURCE_MAP) {
+      $names = $this->scanEntries($this->hostMap($entity));
+    }
+    else {
+      $names = [];
+    }
     $names = array_keys(array_flip($names));
     sort($names);
     return $names;

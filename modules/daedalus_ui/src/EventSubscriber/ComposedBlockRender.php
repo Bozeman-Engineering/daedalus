@@ -37,9 +37,9 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * label field wrapper has nowhere to live. Blocks that need any of those
  * should not compose.
  *
- * The swap happens at render time (#pre_render), not at the event: daedalus_layout
- * stamps its edit-chrome classes on the build after the event returns, so
- * only at render is the stamped attribute set complete.
+ * The swap happens at render time (#pre_render), not at the event:
+ * daedalus_layout stamps its edit-chrome classes on the build after the event
+ * returns, so only at render is the stamped attribute set complete.
  */
 final class ComposedBlockRender implements EventSubscriberInterface, TrustedCallbackInterface {
 
@@ -85,13 +85,13 @@ final class ComposedBlockRender implements EventSubscriberInterface, TrustedCall
   /**
    * Replaces the block sandwich with the composed render element.
    *
-   * Runs when the component build renders — after daedalus_layout has stamped its
-   * post-event classes — so the hoisted bag is the complete final
-   * attribute set. Unsetting #theme kills the block template (wrapper,
-   * block__content, label, title_prefix) in one move; the entity view
-   * builder's stub is replaced wholesale (composed bundles render no
-   * fields through their display), keeping its cache metadata minus the
-   * render-cache keys, which addressed a build that no longer happens.
+   * Runs when the component build renders — after daedalus_layout has stamped
+   * its post-event classes — so the hoisted bag is the complete final attribute
+   * set. Unsetting #theme kills the block template (wrapper, block__content,
+   * label, title_prefix) in one move; the entity view builder's stub is
+   * replaced wholesale (composed bundles render no fields through their
+   * display), keeping its cache metadata minus the render-cache keys, which
+   * addressed a build that no longer happens.
    */
   public static function preRenderComposed(array $build): array {
     if (($build['#theme'] ?? NULL) !== 'block') {

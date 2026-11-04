@@ -13,13 +13,13 @@ use Drupal\daedalus_stylish\StyleMapValidator;
 /**
  * The container-model data migration: one grammar, every store.
  *
- * The four multi-region layouts (daedalus_stylish_onecol..fourcol) retire in favor
- * of the one container layout, and the style grammar renamed section: keys
- * to container: keys and the width-axis vocabulary to narrow/wide (a
+ * The four multi-region layouts (daedalus_stylish_onecol..fourcol) retire in
+ * favor of the one container layout, and the style grammar renamed section:
+ * keys to container: keys and the width-axis vocabulary to narrow/wide (a
  * vocabulary WidthBandMigration has since folded to narrow/medium). This
  * service owns every data rewrite that follows from that, so the section
- * transform, the host sweep, the post_update hooks, and the drush command
- * all speak through one implementation:
+ * transform, the host sweep, the post_update hooks, and the drush command all
+ * speak through one implementation:
  * - Style maps: section:{uuid} -> container:{uuid}; region:{uuid}:{name}
  *   entries move to the minted child container's key (the section
  *   transform's mapping) or are dropped loudly when no element exists for
@@ -29,8 +29,8 @@ use Drupal\daedalus_stylish\StyleMapValidator;
  * - Variant entities: kind:section and layout:daedalus_stylish_* scopes ->
  *   kind:container; slot-path style keys lose their region()/section()
  *   segments; conditions rewrite like maps. Unmodified shipped
- *   daedalus_stylish_layouts variants are left alone: references re-point away from
- *   them and they retire with the four layouts.
+ *   daedalus_stylish_layouts variants are left alone: references re-point away
+ *   from them and they retire with the four layouts.
  * - Proportions retirement (mode + share): worn split_* references and
  *   stepper-written explicit track overrides convert to the one `columns`
  *   arrangement reference plus per-child flex-grow overrides; track styles
@@ -41,8 +41,8 @@ use Drupal\daedalus_stylish\StyleMapValidator;
  *   (migrateContainerLayoutAxis()); style maps store axis-less references,
  *   so no map rewrite exists.
  *
- * Every lossy or notable rewrite is reported: returned as lines to the
- * caller AND logged to the daedalus_stylish_layouts channel, so batched post_update
+ * Every lossy or notable rewrite is reported: returned as lines to the caller
+ * AND logged to the daedalus_stylish_layouts channel, so batched post_update
  * runs stay loud in watchdog while the drush command prints everything.
  */
 class ContainerMigration {
@@ -306,9 +306,9 @@ class ContainerMigration {
   /**
    * Decides where a variant reference by this name should point now.
    *
-   * Only unmodified shipped daedalus_stylish_layouts variants re-point: a modified
-   * or user-owned variant keeps its references and migrates as an entity
-   * instead (migrateVariants()), so user tweaks are never silently
+   * Only unmodified shipped daedalus_stylish_layouts variants re-point: a
+   * modified or user-owned variant keeps its references and migrates as an
+   * entity instead (migrateVariants()), so user tweaks are never silently
    * replaced by the shipped generic. A missing variant re-points too - the
    * reference was already dangling.
    *
@@ -489,12 +489,11 @@ class ContainerMigration {
   /**
    * Migrates every daedalus_variant entity to the container grammar.
    *
-   * Unmodified shipped daedalus_stylish_layouts variants are skipped: the generic
-   * families replace them (references re-point) and they retire with the
-   * four layouts. Everything else rewrites in place across ALL revisions
-   * (workspace-staged and draft revisions included), mirroring the host
-   * walk's in-place posture: a grammar migration is not an editorial
-   * change.
+   * Unmodified shipped daedalus_stylish_layouts variants are skipped: the
+   * generic families replace them (references re-point) and they retire with
+   * the four layouts. Everything else rewrites in place across ALL revisions
+   * (workspace-staged and draft revisions included), mirroring the host walk's
+   * in-place posture: a grammar migration is not an editorial change.
    *
    * @return string[]
    *   Report lines.
@@ -605,11 +604,11 @@ class ContainerMigration {
    * Whether a reference by this split_* name converts to the columns variant.
    *
    * The repointTarget() decision gate, applied to the split families: only
-   * unmodified shipped daedalus_stylish_layouts variants convert (a missing variant
-   * converts too - the reference was already dangling, and on a site that
-   * never shipped the family the frozen ratios are still the reference's
-   * one meaning). A modified or user-owned variant keeps its references
-   * and survives as an ordinary variant.
+   * unmodified shipped daedalus_stylish_layouts variants convert (a missing
+   * variant converts too - the reference was already dangling, and on a site
+   * that never shipped the family the frozen ratios are still the reference's
+   * one meaning). A modified or user-owned variant keeps its references and
+   * survives as an ordinary variant.
    */
   public function splitConverts(string $name): bool {
     if (!isset(self::SPLIT_GROWS[$name])) {
@@ -1012,10 +1011,5 @@ class ContainerMigration {
     }
     return $lines;
   }
-
-
-
-
-
 
 }

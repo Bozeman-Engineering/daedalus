@@ -38,9 +38,9 @@ const PANEL_ID = 'daedalus_explode';
  * inline-SVG convention (fill="currentColor"; the menu sizes it).
  */
 const STACK_ICON =
-  '<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 256 256">'
-  + '<path d="M230.91,172A8,8,0,0,1,228,182.91l-96,56a8,8,0,0,1-8.06,0l-96-56A8,8,0,0,1,36,169.09l92,53.65,92-53.65A8,8,0,0,1,230.91,172ZM220,121.09l-92,53.65L36,121.09A8,8,0,0,0,28,134.91l96,56a8,8,0,0,0,8.06,0l96-56A8,8,0,1,0,220,121.09ZM24,80a8,8,0,0,1,4-6.91l96-56a8,8,0,0,1,8.06,0l96,56a8,8,0,0,1,0,13.82l-96,56a8,8,0,0,1-8.06,0l-96-56A8,8,0,0,1,24,80Zm23.88,0L128,126.74,208.12,80,128,33.26Z"></path>'
-  + '</svg>';
+  '<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 256 256">' +
+  '<path d="M230.91,172A8,8,0,0,1,228,182.91l-96,56a8,8,0,0,1-8.06,0l-96-56A8,8,0,0,1,36,169.09l92,53.65,92-53.65A8,8,0,0,1,230.91,172ZM220,121.09l-92,53.65L36,121.09A8,8,0,0,0,28,134.91l96,56a8,8,0,0,0,8.06,0l96-56A8,8,0,1,0,220,121.09ZM24,80a8,8,0,0,1,4-6.91l96-56a8,8,0,0,1,8.06,0l96,56a8,8,0,0,1,0,13.82l-96,56a8,8,0,0,1-8.06,0l-96-56A8,8,0,0,1,24,80Zm23.88,0L128,126.74,208.12,80,128,33.26Z"></path>' +
+  '</svg>';
 
 (window.DaedalusUiQueue ||= []).push((app) => {
   const { DefaultSidebar, SidebarManager } = Drupal.Daedalus;
@@ -121,7 +121,8 @@ const STACK_ICON =
   // own. run() toggles through the manager by that same state, the
   // policy a toggle button's click applies (sidebar-buttons.js): a
   // refused close (an invalid daedalus_edit form) is expected and already
-  // shown to the user; anything else is a bug.
+  // shown to the user; anything else is a bug, raised through
+  // Drupal.throwError so it surfaces without stopping the menu.
   app.tree.registerShowMenuItem({
     id: PANEL_ID,
     label: Drupal.t('Explode'),
@@ -133,7 +134,7 @@ const STACK_ICON =
         : SidebarManager.openSidebar(PANEL_ID);
       toggled.catch((error) => {
         if (error !== Drupal.Daedalus.SidebarPluginBase.CLOSE_BLOCKED) {
-          console.error('Cannot toggle the Explode panel:', error);
+          Drupal.throwError(error);
         }
       });
     },

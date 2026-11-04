@@ -27,14 +27,15 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * by its attribution (see BlockFormEndpoint); entity-form.js routes here
  * for leaves whose placement declares the block-form kind.
  *
- * The route carries placement identity only (storage + component uuid):
- * the section delta and region are derived from the storage, so the URL
- * cannot disagree with where the component actually lives. For nested
- * placements daedalus_layout's NestedRouteEnhancer has already scoped the storage
- * before this controller runs, so the uuid resolves within the scoped
- * sections at its local delta.
+ * The route carries placement identity only (storage + component uuid): the
+ * section delta and region are derived from the storage, so the URL cannot
+ * disagree with where the component actually lives. For nested placements
+ * daedalus_layout's NestedRouteEnhancer has already scoped the storage before
+ * this controller runs, so the uuid resolves within the scoped sections at its
+ * local delta.
  *
- * Registered via DaedalusLayoutRouteSubscriber only when daedalus_layout is available.
+ * Registered via DaedalusLayoutRouteSubscriber only when daedalus_layout is
+ * available.
  */
 final class BlockFormController extends ControllerBase {
 

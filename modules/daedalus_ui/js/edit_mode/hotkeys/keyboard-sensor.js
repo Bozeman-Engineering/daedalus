@@ -17,6 +17,12 @@ const unmodified = (desc) =>
 /**
  * Whether a keystroke's target sits on a native control outside a tree
  * widget: the stroke's `control` fact.
+ *
+ * @param {EventTarget|null} target
+ *   The keystroke's target.
+ *
+ * @return {boolean}
+ *   Whether a native control outside a tree has focus.
  */
 export const isControlTarget = (target) =>
   isElement(target) &&
@@ -67,13 +73,19 @@ export const isControlTarget = (target) =>
  * dispatcher ignores one with no active hold).
  *
  * @param {object} options
- *   - document: the document to listen on (keydown/keyup at bubble phase:
- *     a surface that owns a key, the add panel, the popover, takes it at
- *     capture and stops it before the sensor sees it).
- *   - window: the window whose blur releases holds.
- *   - claims: (descriptor, typing) => boolean, synchronous.
- *   - isTyping: (target) => boolean, the typing fact for a target.
- *   - onKey: (stroke) => the verdict; false means "did not handle".
+ *   The sensor's document and its inputs.
+ * @param {Document} options.document
+ *   The document to listen on (keydown/keyup at bubble phase: a surface
+ *   that owns a key, the add panel, the popover, takes it at capture and
+ *   stops it before the sensor sees it).
+ * @param {Window} options.window
+ *   The window whose blur releases holds.
+ * @param {function(object, boolean): boolean} options.claims
+ *   (descriptor, typing) => whether the app claims the combo, synchronous.
+ * @param {function(EventTarget): boolean} options.isTyping
+ *   The typing fact for a target.
+ * @param {Function} options.onKey
+ *   (stroke) => the verdict; false means "did not handle".
  *
  * @return {Function}
  *   Stops sensing.

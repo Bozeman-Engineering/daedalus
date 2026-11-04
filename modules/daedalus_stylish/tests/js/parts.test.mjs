@@ -10,6 +10,8 @@ import { partsForKey, selectorLabel, findInstancePart, PART_SELECTOR, INSTANCE_P
 import { parseKey, declarationForKey, findElement, findPatternElement, flattenElements, componentBlockTypes, PART_PATTERN } from '../../js/src/style-guide.js';
 import { addressLabel } from '../../js/src/write-address.js';
 
+// cspell:ignore featureds
+
 const UUID_A = 'aaaaaaaa-1111-2222-3333-444444444444';
 const UUID_B = 'bbbbbbbb-1111-2222-3333-444444444444';
 const UUID_C = 'cccccccc-1111-2222-3333-444444444444';

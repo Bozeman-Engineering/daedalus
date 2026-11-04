@@ -14,12 +14,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * The panel header contract over the module's own sidebar panels.
  *
  * Every rail panel wears the one header grammar
- * (SidebarPluginBase::buildPanelHeader): a .daedalus-ui-panel__header row holding
- * the title and a .daedalus-ui-panel__actions cluster whose last member is the
- * close control (data-sidebar-close, concealed at clean density only,
+ * (SidebarPluginBase::buildPanelHeader): a .daedalus-ui-panel__header row
+ * holding the title and a .daedalus-ui-panel__actions cluster whose last member
+ * is the close control (data-sidebar-close, concealed at clean density only,
  * the pack's minus glyph). This is the server contract the FJS round trip
- * (EditModeBehaviorTest's History leg) rides; the cheapest tier that sees
- * a plugin dropping the helper.
+ * (EditModeBehaviorTest's History leg) rides; the cheapest tier that sees a
+ * plugin dropping the helper.
  */
 #[Group('daedalus_ui')]
 #[RunTestsInSeparateProcesses]

@@ -91,21 +91,19 @@ export const openMediaLibrary = (onSelect) => {
 // The command handler registers at bundle load (guarded: the satellite
 // bundle shares widget modules but loads without the AJAX stack). A
 // selection with no picker waiting for it is an integration bug (the picker
-// cleared underneath the open modal); silence would be an invisible lost
-// pick.
+// cleared underneath the open modal); it throws, the module's shape for a
+// broken contract, so the lost pick surfaces as an error instead of
+// vanishing.
 if (typeof Drupal !== 'undefined' && Drupal.AjaxCommands) {
-  Drupal.AjaxCommands.prototype.daedalusStylishMediaLibrarySelection = function (
-    ajax,
-    response,
-  ) {
-    const picker = activePicker;
-    activePicker = null;
-    if (typeof picker !== 'function') {
-      console.warn(
-        'Daedalus Stylish received a media library selection but no picker was waiting; the selection was dropped.',
-      );
-      return;
-    }
-    picker({ uuid: response.uuid, token: response.token, url: response.url });
-  };
+  Drupal.AjaxCommands.prototype.daedalusStylishMediaLibrarySelection =
+    function daedalusStylishMediaLibrarySelection(ajax, response) {
+      const picker = activePicker;
+      activePicker = null;
+      if (typeof picker !== 'function') {
+        throw new Error(
+          'Daedalus Stylish received a media library selection but no picker was waiting; the selection was dropped.',
+        );
+      }
+      picker({ uuid: response.uuid, token: response.token, url: response.url });
+    };
 }

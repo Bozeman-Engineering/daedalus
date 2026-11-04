@@ -26,11 +26,12 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
    * The class of the layout root, the one element the root sections render in.
    *
    * Declared as entity anatomy in daedalus_layout.page_builder.yml
-   * (entity.elements.'.daedalus-layout-layout'); the string here and the key there
-   * are one fact. Two renders wear it, one per mode: buildSections() below
-   * (the view render) and the layout_builder_plus element's container
-   * (the edit canvas, \Drupal\daedalus_layout\Element\LayoutBuilderPlus::layout()),
-   * so the page's arranging box is the same element live and edit.
+   * (entity.elements.'.daedalus-layout-layout'); the string here and the key
+   * there are one fact. Two renders wear it, one per mode: buildSections()
+   * below (the view render) and the layout_builder_plus element's container
+   * (the edit canvas,
+   * \Drupal\daedalus_layout\Element\LayoutBuilderPlus::layout()), so the page's
+   * arranging box is the same element live and edit.
    */
   public const LAYOUT_ROOT_CLASS = 'daedalus-layout-layout';
 
@@ -42,15 +43,15 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
    * This is the VIEW render's root; on the edit canvas the route entity's
    * sections render through the layout_builder_plus element instead
    * (daedalus_ui's EditableUiBuilder event, daedalus_layout's subscriber
-   * swapping this list out), whose container wears the same class.
-   * Core returns the sections as bare siblings keyed by delta and the
-   * theme's entity template wraps {{ content }} however it likes, so
-   * nothing the suite owned was the box that lays out the page's sections: a
-   * gap between them (the container model's "a box arranges its children",
-   * reaching the page) had no element to act on. The section list is
-   * markup daedalus_layout builds, so daedalus_layout gives it its box: the list itself
-   * becomes a container element wearing the class, the deltas staying its
-   * children (getSectionAttributes() and core's shape are untouched).
+   * swapping this list out), whose container wears the same class. Core returns
+   * the sections as bare siblings keyed by delta and the theme's entity
+   * template wraps {{ content }} however it likes, so nothing the suite owned
+   * was the box that lays out the page's sections: a gap between them (the
+   * container model's "a box arranges its children", reaching the page) had no
+   * element to act on. The section list is markup daedalus_layout builds, so
+   * daedalus_layout gives it its box: the list itself becomes a container
+   * element wearing the class, the deltas staying its children
+   * (getSectionAttributes() and core's shape are untouched).
    *
    * Only while sections exist: an empty list stays the bare `#cache`-only
    * array core returns, so Element::isEmpty() in core's buildMultiple()
@@ -315,9 +316,9 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
    * @param array $build
    *   The section's layout render array.
    * @param mixed $storage
-   *   The section storage, when available. NULL at the container render
-   *   seam: the storage type/id attributes describe the ROOT storage and the
-   *   JS reads them from drupalSettings['Daedalus Layout'] anyway, so nested sections
+   *   The section storage, when available. NULL at the container render seam:
+   *   the storage type/id attributes describe the ROOT storage and the JS reads
+   *   them from drupalSettings['Daedalus Layout'] anyway, so nested sections
    *   carry only the delta.
    * @param \Drupal\layout_builder\Section|null $section
    *   The section, when available. Enables selection-identity stamping.
@@ -332,8 +333,8 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
    *   The section build with its data attributes set.
    */
   public static function getSectionAttributes(int|string $delta, array &$build, $storage = NULL, ?Section $section = NULL, ?EntityInterface $entity = NULL): array {
-    // Attribute the rendered sections so that the Daedalus Edit JS can make sense
-    // of the page.
+    // Attribute the rendered sections so that the Daedalus Edit JS can make
+    // sense of the page.
     $build['#attributes']['data-layout-builder-section-delta'] = $delta;
     if ($storage !== NULL) {
       $build['#attributes']['data-layout-builder-section-storage-type'] = $storage->getStorageType();
@@ -357,8 +358,8 @@ class LayoutBuilderEntityViewDisplay extends BaseEntityViewDisplay {
     if ($section_uuid) {
       $editable = \Drupal::currentUser()->hasPermission('use daedalus ui edit mode');
       $edit_mode = $editable && \Drupal::service('daedalus_ui.mode_state')->getMode() === 'edit';
-      // Outside the editing permission, keys are stamped per demand: only
-      // where live-page consumers (e.g. Daedalus Stylish CSS @scope roots) target
+      // Outside the editing permission, keys are stamped per demand: only where
+      // live-page consumers (e.g. Daedalus Stylish CSS @scope roots) target
       // them. Attributes ride existing elements — bytes only, no structure
       // change; unstyled renders stay byte-identical.
       $demand = $editable || $entity === NULL ? NULL : \Drupal::service('daedalus_ui.live_attribution_demand');

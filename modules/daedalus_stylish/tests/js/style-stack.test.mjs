@@ -544,7 +544,7 @@ test('deliveredEntry projects layersAt per stored condition: the winning value p
   };
   // The advanced rows' roster: a style that applies shows, whichever
   // layer sets it (the declared margin, the skin's background, Sleek's
-  // hover colour), and the winner's value is the one carried.
+  // hover color), and the winner's value is the one carried.
   assert.deepEqual(deliveredEntry(build({ map })), {
     default: {
       margin: '0',
@@ -639,11 +639,11 @@ test('stackAt cascades within each layer: a posed compound reads subset blocks, 
   const medium = stackAt(stack, 'padding', 'medium', CONDITIONS);
   assert.deepEqual(medium.own, { layer: 6, id: 'element', tier: 'element', variant: null, condition: 'medium', value: '2.5rem' });
   // A compound pose reads its subset blocks: Narrow + Dark still sees
-  // Loud's dark colour and the skin's narrow padding.
+  // Loud's dark color and the skin's narrow padding.
   const color = stackAt(stack, 'color', 'narrow+dark', CONDITIONS);
   assert.deepEqual(color.winner, { layer: 5, id: 'variant:loud', tier: 'variant', variant: 'loud', condition: 'dark', value: '#eee' });
   assert.deepEqual(color.beneath.map((entry) => [entry.id, entry.condition, entry.value]), [['variant:sleek', 'default', '#111']]);
-  // Hover is not a subset of Narrow: Sleek's hover colour never reaches it.
+  // Hover is not a subset of Narrow: Sleek's hover color never reaches it.
   assert.equal(stackAt(stack, 'color', 'narrow', CONDITIONS).winner.value, '#111');
   assert.equal(stackAt(stack, 'color', 'hover', CONDITIONS).winner.value, '#333');
 });

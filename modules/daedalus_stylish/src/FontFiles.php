@@ -6,6 +6,7 @@ namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityRepositoryInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\RevisionableStorageInterface;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinFontsItem;
 use Drupal\daedalus_ui\File\FileLane;
 use Drupal\file\FileInterface;
@@ -206,6 +207,7 @@ final class FontFiles {
       ...SkinFontsItem::fileUuids($skin->siteFonts()),
     ];
     $storage = $this->entityTypeManager->getStorage('daedalus_skin');
+    assert($storage instanceof RevisionableStorageInterface);
     $revision_ids = $storage->getQuery()
       ->accessCheck(FALSE)
       ->allRevisions()

@@ -79,9 +79,9 @@
 }
 
 .daedalus-explode__range.daedalus-explode__range:focus-visible {
+  border-radius: var(--daedalus-border-radius);
   outline: 2px solid var(--daedalus-selection);
   outline-offset: 2px;
-  border-radius: var(--daedalus-border-radius);
 }
 
 /* Zoom's scrub row: the minus and plus pills flank the slider, which

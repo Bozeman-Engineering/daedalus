@@ -72,13 +72,21 @@ export const LEAVE_GESTURES = Object.freeze(['Escape', 'blur']);
  */
 export const openSelectorEdit = (selector) => {
   if (typeof selector !== 'string' || selector === '') {
-    throw new TypeError('A selector edit opens on a row\'s selector.');
+    throw new TypeError("A selector edit opens on a row's selector.");
   }
   return { from: selector, text: selector };
 };
 
 /**
  * The state after a keystroke: the text as it now reads.
+ *
+ * @param {{from: string, text: string}} state
+ *   The edit state (openSelectorEdit's shape).
+ * @param {string} text
+ *   The text as typed; anything else reads as empty.
+ *
+ * @return {{from: string, text: string}}
+ *   The state carrying the new text.
  */
 export const typedSelectorEdit = (state, text) => ({
   ...state,
@@ -94,12 +102,17 @@ export const typedSelectorEdit = (state, text) => ({
  * hands it to the host's `preview` callback.
  *
  * @param {{from: string, text: string}} state
+ *   The edit state (openSelectorEdit's shape).
  * @param {{conditions: ?Object, posable: ?string[]}} options
  *   The digester's options (the guide's condition table).
  */
 export const selectorEditPreview = (state, options = {}) => {
   const answer = digest(state.text, options);
-  if (answer.refusal !== null || answer.selector === null || answer.selector === OWNER) {
+  if (
+    answer.refusal !== null ||
+    answer.selector === null ||
+    answer.selector === OWNER
+  ) {
     return null;
   }
   return reach(answer.selector, options);
@@ -110,6 +123,7 @@ export const selectorEditPreview = (state, options = {}) => {
  * ordinary typing.
  *
  * @param {{from: string, text: string}} state
+ *   The edit state (openSelectorEdit's shape).
  * @param {string} gesture
  *   'Enter' or '{' (settle), 'Escape' or 'blur' (leave), anything else
  *   edits.
@@ -128,7 +142,12 @@ export const selectorEditOutcome = (state, gesture, options = {}) => {
   if (!SETTLE_GESTURES.includes(gesture)) {
     return null;
   }
-  const refused = (reason) => ({ kind: REFUSED, from: state.from, text: state.text, reason });
+  const refused = (reason) => ({
+    kind: REFUSED,
+    from: state.from,
+    text: state.text,
+    reason,
+  });
   const answer = digest(state.text, options);
   if (answer.refusal !== null) {
     return refused(`${answer.refusal.message}. ${answer.refusal.hint}`.trim());
@@ -136,10 +155,14 @@ export const selectorEditOutcome = (state, gesture, options = {}) => {
   const to = answer.selector;
   if (to === null) {
     // A wrapper alone: a condition, which a row's selector never is.
-    return refused(`"${state.text}" is a condition, not a selector; a row's selector addresses something under the element (a condition nests inside the rule as its own block).`);
+    return refused(
+      `"${state.text}" is a condition, not a selector; a row's selector addresses something under the element (a condition nests inside the rule as its own block).`,
+    );
   }
   if (to === OWNER) {
-    return refused(`"${state.text}" is the element itself; a row's selector addresses something under it.`);
+    return refused(
+      `"${state.text}" is the element itself; a row's selector addresses something under it.`,
+    );
   }
   if (answer.condition !== null) {
     // The nesting the corrective names is the peeled clauses' own CSS

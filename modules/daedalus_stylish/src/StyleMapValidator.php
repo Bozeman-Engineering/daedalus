@@ -13,7 +13,6 @@ use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
-use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
@@ -108,20 +107,19 @@ use Drupal\daedalus_stylish\Vocabulary\WideSelectors;
  *
  * Every material universe here is the site's materials roster's
  * (MaterialsRosterBuilder): the minted tokens var() references and scale
- * constraints resolve against, the published variants a reference may wear and the
- * candidates a corrective offers. The validator projects the roster and
- * never walks the skin or the storages itself, so what it accepts is
- * exactly what the dialect catalog, the cached prompt, the schema and the
- * delivery CSS carry; the exceptions are a skin validated for
- * self-containment, whose own tokens stand in (withMintedUniverse()), a
- * design system's MEMBER, which validates in its own system's universe
- * whether or not that system is active (withMemberUniverse(): the
- * system's roster partition and its default skin's tokens), because a
- * member's values only ever resolve there, and the conformance judge
- * (VariantConformance), which validates every offered variant against
- * the provider's own unjudged records (withUniverse()) because the
- * roster it would otherwise read is built FROM its verdict. A global
- * material validates in the roster, the active system's universe.
+ * constraints resolve against, the published variants a reference may wear and
+ * the candidates a corrective offers. The validator projects the roster and
+ * never walks the skin or the storages itself, so what it accepts is exactly
+ * what the dialect catalog, the cached prompt, the schema and the delivery CSS
+ * carry; the exceptions are a skin validated for self-containment, whose own
+ * tokens stand in (withMintedUniverse()), a design system's MEMBER, which
+ * validates in its own system's universe whether or not that system is active
+ * (withMemberUniverse(): the system's roster partition and its default skin's
+ * tokens), because a member's values only ever resolve there, and the
+ * conformance judge (VariantConformance), which validates every offered variant
+ * against the provider's own unjudged records (withUniverse()) because the
+ * roster it would otherwise read is built FROM its verdict. A global material
+ * validates in the roster, the active system's universe.
  *
  * Two posture lanes stand beside the site's enforcement mode, each a flag
  * set for the duration of one door and read through propertiesClosed()
@@ -382,6 +380,9 @@ class StyleMapValidator {
    * @param \Drupal\daedalus_stylish\Vocabulary\WideSelectors $wideSelectors
    *   The wide selector tier: the pseudo-classes a pseudo-class literal
    *   clause is judged against (the roster walk reads it for qualifiers).
+   * @param \Drupal\daedalus_stylish\Vocabulary\PseudoVocabularies $pseudoVocabularies
+   *   The per-pseudo-element vocabularies: the properties the browser styles
+   *   on a table pseudo-element, a law of the browser in every mode.
    */
   public function __construct(
     protected PropertyGroupPluginManager $propertyGroups,
@@ -1618,7 +1619,11 @@ class StyleMapValidator {
     $skin_tokens = $context['skin_tokens'] ?? NULL;
     if (is_array($skin_tokens)) {
       $skin_animations = $context['skin_animations'] ?? NULL;
-      return $this->withMintedUniverse($skin_tokens, $theme, fn (): array => $this->validateDefaults($defaults, ['theme' => $theme] + array_diff_key($context, ['skin_tokens' => TRUE, 'skin_animations' => TRUE])), is_array($skin_animations) ? $skin_animations : NULL);
+      $inner_context = ['theme' => $theme] + array_diff_key($context, [
+        'skin_tokens' => TRUE,
+        'skin_animations' => TRUE,
+      ]);
+      return $this->withMintedUniverse($skin_tokens, $theme, fn (): array => $this->validateDefaults($defaults, $inner_context), is_array($skin_animations) ? $skin_animations : NULL);
     }
     $errors = [];
     foreach ($defaults as $scope => $styles) {
@@ -1975,20 +1980,20 @@ class StyleMapValidator {
    * records, and a nested reference inside a variant is what to
    * distribute, never who distributed it.
    *
-   * Applicability is axis-aware: every variant lives on one axis, an
-   * element wears at most one variant per axis, and composition happens
-   * ACROSS axes — with ONE within-axis exception, the composition pair.
-   * Within an axis, two references of the same KIND conflict (two roots,
-   * or two fragments), but a ROOT ('' fragment) reference and a FRAGMENT
-   * reference COMPOSE: apply distributes a fragment's nested root
-   * references beside the fragment reference itself, and the fragment's
-   * values (the captured overrides of the element it dressed) deliver over
-   * the nested variant (orderedEntryRefs()). Fragment references still
-   * occupy their variant's axis in the gesture rules — a direct same-axis
-   * apply replaces BOTH halves of the pair (partial-wearing honesty is
-   * enforced by placement, DaedalusStylishOperationHandler::placeReference()). The
-   * single-slot behavior is the degenerate case of a scope whose only axis
-   * is the built-in "style" axis.
+   * Applicability is axis-aware: every variant lives on one axis, an element
+   * wears at most one variant per axis, and composition happens ACROSS axes —
+   * with ONE within-axis exception, the composition pair. Within an axis, two
+   * references of the same KIND conflict (two roots, or two fragments), but a
+   * ROOT ('' fragment) reference and a FRAGMENT reference COMPOSE: apply
+   * distributes a fragment's nested root references beside the fragment
+   * reference itself, and the fragment's values (the captured overrides of the
+   * element it dressed) deliver over the nested variant (orderedEntryRefs()).
+   * Fragment references still occupy their variant's axis in the gesture rules
+   * — a direct same-axis apply replaces BOTH halves of the pair
+   * (partial-wearing honesty is enforced by placement,
+   * DaedalusStylishOperationHandler::placeReference()). The single-slot
+   * behavior is the degenerate case of a scope whose only axis is the built-in
+   * "style" axis.
    *
    * The variant styles lane additionally RESERVES the saved variant's own
    * axis at its root entry ($reserved_axis): apply places that variant's
@@ -2211,6 +2216,9 @@ class StyleMapValidator {
    *   The referenced variant's machine name or uuid, as stored.
    * @param \Drupal\daedalus_blueprint\Materials\Address $carrier
    *   The address of the slot's element scope, the carrier.
+   * @param string $relative
+   *   The slot's relative selector suffix, named by the messages when the
+   *   rule lands on no element scope.
    *
    * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
    *   Errors at that path.
@@ -2468,7 +2476,7 @@ class StyleMapValidator {
   }
 
   /**
-   * Renders slot paths as prose: "block(text,1)", "block(text,1) and container(1)".
+   * Slot paths as prose: "block(text,1)", "block(text,1) and container(1)".
    *
    * @param string[] $paths
    *   The paths.

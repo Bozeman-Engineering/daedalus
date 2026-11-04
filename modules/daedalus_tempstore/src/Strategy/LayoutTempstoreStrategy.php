@@ -84,11 +84,11 @@ class LayoutTempstoreStrategy implements TempstoreStrategyInterface {
    *   entity answers that host's entity. Required at runtime; nullable so
    *   direct construction keeps working.
    * @param \Drupal\daedalus_layout\ComponentTransform\PresaveSafetyNet|null $staleSessionNet
-   *   daedalus_layout's deprecation-window safety net, or NULL when daedalus_layout is not
-   *   enabled. get() runs its load-time half on every staged envelope it
-   *   deserializes: a session staged before a structural migration ran may
-   *   reference RETIRED plugins and would crash its own edit-mode render,
-   *   never reaching the save-time net.
+   *   daedalus_layout's deprecation-window safety net, or NULL when
+   *   daedalus_layout is not enabled. get() runs its load-time half on every
+   *   staged envelope it deserializes: a session staged before a structural
+   *   migration ran may reference RETIRED plugins and would crash its own
+   *   edit-mode render, never reaching the save-time net.
    */
   public function __construct(
     protected SharedTempStoreFactory $tempStoreFactory,
@@ -168,13 +168,13 @@ class LayoutTempstoreStrategy implements TempstoreStrategyInterface {
         throw new \UnexpectedValueException(sprintf('The entry with storage type "%s" and ID "%s" is invalid', $storage_type, $key));
       }
 
-      // The load-time half of daedalus_layout's deprecation-window safety net: a
-      // session staged BEFORE a migration ran still holds retired shapes and
-      // may not even render (PluginNotFoundException on a deleted layout),
-      // so it must converge here, not just at save. When anything was
-      // rewritten, the upgraded envelope is persisted in place so the
-      // session is converged once. Deliberately NOT recorded in history:
-      // undo must never restore a state that cannot render.
+      // The load-time half of daedalus_layout's deprecation-window safety net:
+      // a session staged BEFORE a migration ran still holds retired shapes and
+      // may not even render (PluginNotFoundException on a deleted layout), so
+      // it must converge here, not just at save. When anything was rewritten,
+      // the upgraded envelope is persisted in place so the session is converged
+      // once. Deliberately NOT recorded in history: undo must never restore a
+      // state that cannot render.
       if ($this->staleSessionNet?->convergeStagedStorage($stored_section_storage)) {
         $this->getTempstore($section_storage)
           ->set($key, ['section_storage' => $stored_section_storage]);
@@ -359,11 +359,11 @@ class LayoutTempstoreStrategy implements TempstoreStrategyInterface {
   /**
    * Gets section storage for an entity.
    *
-   * Delegates to the storage spine's one defaults->overrides upgrade helper
-   * so the tempstore write path and the render path (daedalus_layout) resolve the
-   * SAME storage and therefore the same tempstore key. The storage's
-   * IDENTITY only: a key lookup, a has() or a get() seeds nothing; set()
-   * stages the editable (seeded) storage.
+   * Delegates to the storage spine's one defaults->overrides upgrade helper so
+   * the tempstore write path and the render path (daedalus_layout) resolve the
+   * SAME storage and therefore the same tempstore key. The storage's IDENTITY
+   * only: a key lookup, a has() or a get() seeds nothing; set() stages the
+   * editable (seeded) storage.
    *
    * @param \Drupal\Core\Entity\EntityInterface $entity
    *   The layout builder managed entity.

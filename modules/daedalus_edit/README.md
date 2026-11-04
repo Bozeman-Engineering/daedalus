@@ -1,10 +1,10 @@
 # Daedalus Edit
 
-Daedalus Edit adds inline editing functionality. It does so by loading the entity
-form in the sidebar. When you open a page element's edit (double-click it, or
-select it and press Enter), it is replaced by the hidden form element. Doing it
-in this way means that all the back end is the same as the `/node/1/edit` page,
-so form_alters and what not still work.
+Daedalus Edit adds inline editing functionality. It does so by loading the
+entity form in the sidebar. When you open a page element's edit (double-click
+it, or select it and press Enter), it is replaced by the hidden form element.
+Doing it in this way means that all the back end is the same as the
+`/node/1/edit` page, so form_alters and what not still work.
 
 ## One transport, every host
 
@@ -49,22 +49,21 @@ adding schema is how it joins.
 
 The entity's label field presents AS the page row in the element model, but
 on most sites the label never renders inside the entity: the H1 is the
-theme's page-title block. Daedalus Edit attributes that render as the title field's
-editable leaf (`PageTitleEditing`, mirroring the inline-block label
-attribution), so the H1 is the title's editable leaf with the same pointer
-door as any leaf: hovering it names the page row, a click selects the page
-row, a double-click edits the title in place, staged to tempstore like any
-field, and the Tab walk reaches it as the page row's leaf. The page row's
-own Enter and Edit verb are a different door: they open the Page form in
-the sidebar on every theme (the panel is the root's editor, whether or not
-a page-title block is placed) and never route to the H1; the panel's Title
-widget and the page elements tree's root rename are the title's other two
-doors, and all three commit the same `update_element` on the label. A
-label write from any road (the form, an AI turn, undo) re-renders the H1
-by its key through the mutation response. Attribution only happens when the page title is
-provably the label's ONE render (a node's non-configurable title, or a
-label on a Layout Builder display); anything ambiguous stays
-inert so leaf identities never duplicate.
+theme's page-title block. Daedalus Edit attributes that render as the title
+field's editable leaf (`PageTitleEditing`, mirroring the inline-block label
+attribution), so the H1 is the title's editable leaf with the same pointer door
+as any leaf: hovering it names the page row, a click selects the page row, a
+double-click edits the title in place, staged to tempstore like any field, and
+the Tab walk reaches it as the page row's leaf. The page row's own Enter and
+Edit verb are a different door: they open the Page form in the sidebar on every
+theme (the panel is the root's editor, whether or not a page-title block is
+placed) and never route to the H1; the panel's Title widget and the page
+elements tree's root rename are the title's other two doors, and all three
+commit the same `update_element` on the label. A label write from any road (the
+form, an AI turn, undo) re-renders the H1 by its key through the mutation
+response. Attribution only happens when the page title is provably the label's
+ONE render (a node's non-configurable title, or a label on a Layout Builder
+display); anything ambiguous stays inert so leaf identities never duplicate.
 
 # Troubleshooting
 
@@ -87,10 +86,10 @@ it inherits whatever the sidebar z-index is.
 
 ### Field templates
 
-In order for Daedalus Edit to be able to edit a field, the field template must have
-the wrapper and item attributes printed to the page. All core field templates
-do something like this to include the wrapper and item attributes. Ensure your
-field templates do too if you want them to be inline editable.
+In order for Daedalus Edit to be able to edit a field, the field template must
+have the wrapper and item attributes printed to the page. All core field
+templates do something like this to include the wrapper and item attributes.
+Ensure your field templates do too if you want them to be inline editable.
 
 ```twig
 <div{{ attributes }}>
@@ -121,8 +120,8 @@ If you need to access the things inside the item you need a little ternary.
 ```
 
 Going into a node template and directly outputting a field with twig like the
-following will prevent the Daedalus Edit UI from working since the field markup will
-not be attributed.
+following will prevent the Daedalus Edit UI from working since the field markup
+will not be attributed.
 
 ```twig
 # Don't do this! Use a field template instead.

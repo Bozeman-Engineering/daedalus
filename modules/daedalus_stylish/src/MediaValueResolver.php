@@ -335,8 +335,9 @@ class MediaValueResolver {
    * The image style a property's tokens resolve through, or NULL for original.
    *
    * Guide constraint (the property's image_style key in the roster's value
-   * space, the effective constraint validation binds) -> daedalus_stylish.settings
-   * media_image_style site default -> NULL (the original file).
+   * space, the effective constraint validation binds) ->
+   * daedalus_stylish.settings media_image_style site default -> NULL (the
+   * original file).
    */
   protected function imageStyleFor(string $property, ?VocabularyRoster $roster): ?string {
     $style = $roster?->valueSpace($property)['image_style'] ?? NULL;

@@ -7,11 +7,11 @@ namespace Drupal\daedalus_stylish\Exception;
 /**
  * A module-shipped variant definition cannot be imported or synced.
  *
- * Same structured blueprint errors as every other Daedalus Stylish write path, plus
- * the disk-lane coordinates: which module's MODULE.daedalus_stylish.variants.yml and
- * which variant entry. Import failures are always loud: a shipped variant
- * that cannot import is a developer error in the shipping module, never
- * something to skip quietly.
+ * Same structured blueprint errors as every other Daedalus Stylish write path,
+ * plus the disk-lane coordinates: which module's
+ * MODULE.daedalus_stylish.variants.yml and which variant entry. Import failures
+ * are always loud: a shipped variant that cannot import is a developer error in
+ * the shipping module, never something to skip quietly.
  */
 class ShippedVariantException extends VariantValidationException {
 

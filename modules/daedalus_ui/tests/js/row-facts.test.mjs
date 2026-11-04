@@ -86,11 +86,19 @@ test('a key no provider speaks about, and a keyless row, answer nothing', () => 
 });
 
 test('a provider may offer facts alone or doorways alone, and may answer nothing', () => {
-  register({ id: 'facts-only', facts: () => [{ mark: 'text', text: '3', title: '3 rows' }] });
+  register({
+    id: 'facts-only',
+    facts: () => [{ mark: 'text', text: '3', title: '3 rows' }],
+  });
   register({ id: 'doorways-only', doorways: () => [doorway('Open')] });
   register({ id: 'silent', facts: () => undefined, doorways: () => null });
-  assert.deepEqual(rowFacts(BLOCK), [{ mark: 'text', text: '3', title: '3 rows' }]);
-  assert.deepEqual(rowDoorways(BLOCK).map((item) => item.label), ['Open']);
+  assert.deepEqual(rowFacts(BLOCK), [
+    { mark: 'text', text: '3', title: '3 rows' },
+  ]);
+  assert.deepEqual(
+    rowDoorways(BLOCK).map((item) => item.label),
+    ['Open'],
+  );
 });
 
 test('doorways lead the row menu ahead of the verbs, behind one separator', () => {
@@ -129,12 +137,18 @@ test('unregister removes the provider; it is a no-op once another registration r
   const second = register({ id: 'a', facts: () => [dot('a2', 'a2')] });
   // The replaced registration's unregister does not take the replacement.
   first();
-  assert.deepEqual(rowFacts(BLOCK).map((fact) => fact.hue), ['a2', 'b1']);
+  assert.deepEqual(
+    rowFacts(BLOCK).map((fact) => fact.hue),
+    ['a2', 'b1'],
+  );
   second();
-  assert.deepEqual(rowFacts(BLOCK).map((fact) => fact.hue), ['b1']);
+  assert.deepEqual(
+    rowFacts(BLOCK).map((fact) => fact.hue),
+    ['b1'],
+  );
 });
 
-test('the registry announces a registration, an unregistration and a provider\'s own change', () => {
+test("the registry announces a registration, an unregistration and a provider's own change", () => {
   let announced = 0;
   const unsubscribe = subscribeRowFacts(() => {
     announced += 1;
@@ -163,16 +177,26 @@ test('the registry announces a registration, an unregistration and a provider\'s
 test('a malformed provider is refused at registration', () => {
   assert.throws(() => registerRowFacts(), /requires a string id/);
   assert.throws(() => registerRowFacts({ id: '' }), /requires a string id/);
-  assert.throws(() => registerRowFacts({ id: 'x', facts: [] }), /names facts but it is not a function/);
-  assert.throws(() => registerRowFacts({ id: 'x', doorways: 'Edit' }), /names doorways but it is not a function/);
-  assert.throws(() => registerRowFacts({ id: 'x', subscribe: true }), /names subscribe but it is not a function/);
+  assert.throws(
+    () => registerRowFacts({ id: 'x', facts: [] }),
+    /names facts but it is not a function/,
+  );
+  assert.throws(
+    () => registerRowFacts({ id: 'x', doorways: 'Edit' }),
+    /names doorways but it is not a function/,
+  );
+  assert.throws(
+    () => registerRowFacts({ id: 'x', subscribe: true }),
+    /names subscribe but it is not a function/,
+  );
   assert.deepEqual(rowFacts(BLOCK), []);
 });
 
 test('a throwing provider is contained for the read; the others still answer', () => {
+  // The failure is rethrown outside the call stack (Drupal.throwError),
+  // never swallowed.
   const errors = [];
-  const { error } = console;
-  console.error = (...args) => errors.push(args);
+  globalThis.Drupal = { throwError: (error) => errors.push(error) };
   try {
     register({
       id: 'broken',
@@ -183,8 +207,8 @@ test('a throwing provider is contained for the read; the others still answer', (
     register({ id: 'fine', facts: () => [dot('blue', 'Styled on itself')] });
     assert.deepEqual(rowFacts(BLOCK), [dot('blue', 'Styled on itself')]);
     assert.equal(errors.length, 1);
-    assert.match(errors[0][0], /"broken" failed answering facts/);
+    assert.equal(errors[0].message, 'boom');
   } finally {
-    console.error = error;
+    delete globalThis.Drupal;
   }
 });

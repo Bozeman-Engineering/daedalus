@@ -174,16 +174,15 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
   /**
    * The corrective a JSON read door answers for a page.
    *
-   * The two JSON read doors (eb_read_entity, eb_read_element) refuse a
-   * page (PageHosts::isPage()) toward page_read, whole, in every mode: a page's own
-   * fields ride before its document print and the print carries every
-   * element by id, so nothing a page knows needs the JSON road (the
-   * per-turn print carries the current page itself, not through a
-   * tool). The refusal sits before any read of the
-   * document, so a never-edited page's template seed is no longer a side
-   * effect of a read. A template has no fields, so its corrective names
-   * the print alone. One spelling for both doors, so the model learns one
-   * route.
+   * The two JSON read doors (eb_read_entity, eb_read_element) refuse a page
+   * (PageHosts::isPage()) toward page_read, whole, in every mode: a page's own
+   * fields ride before its document print and the print carries every element
+   * by id, so nothing a page knows needs the JSON road (the per-turn print
+   * carries the current page itself, not through a tool). The refusal sits
+   * before any read of the document, so a never-edited page's template seed is
+   * no longer a side effect of a read. A template has no fields, so its
+   * corrective names the print alone. One spelling for both doors, so the model
+   * learns one route.
    *
    * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
    *   The page host.
@@ -209,13 +208,12 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
   /**
    * The corrective a JSON create door answers for a page bundle.
    *
-   * The two JSON create doors (eb_create_entity, eb_validate) refuse a
-   * page bundle (PageHosts::isPageBundle()) toward page_create before the deserializer
-   * runs: a page is born through the page language, its fields and its
-   * document in one gesture, and page_create judges the whole page before
-   * anything is built, so the judged create (eb_validate) has nothing to
-   * add either. One spelling for both doors, so the model learns one
-   * route.
+   * The two JSON create doors (eb_create_entity, eb_validate) refuse a page
+   * bundle (PageHosts::isPageBundle()) toward page_create before the
+   * deserializer runs: a page is born through the page language, its fields and
+   * its document in one gesture, and page_create judges the whole page before
+   * anything is built, so the judged create (eb_validate) has nothing to add
+   * either. One spelling for both doors, so the model learns one route.
    *
    * @param string $entity_type
    *   The entity type ID as the model passed it.

@@ -56,9 +56,9 @@ export default store;
  *   active => console.log('drag active ', active)
  * );
  *
- * @param selector
+ * @param {function(object): *} selector
  *   The redux state selector.
- * @param callback
+ * @param {function(*): void} callback
  *   The callback for when the state changes.
  *
  * @return {Function}
@@ -104,9 +104,9 @@ window.listenToStateChange = listenToStateChange;
  *   }
  * );
  *
- * @param selectors
+ * @param {Array<function(object): *>} selectors
  *   An array of redux state selectors.
- * @param callback
+ * @param {Function} callback
  *   The callback for when the state changes.
  */
 window.listenToMultipleStates = (selectors, callback) => {

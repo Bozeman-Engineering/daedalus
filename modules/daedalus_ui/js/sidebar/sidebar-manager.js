@@ -218,7 +218,6 @@
       // panel gone.
       for (const panel of this.getOpenPanels()) {
         if (panel.element.classList.contains(`${side}-sidebar`)) {
-          // eslint-disable-next-line no-await-in-loop
           await panel.plugin.close(panel.id);
         }
       }
@@ -283,7 +282,6 @@
         if (panel.element.hasAttribute('data-sidebar-persistent')) {
           continue;
         }
-        // eslint-disable-next-line no-await-in-loop
         await panel.plugin.close(panel.id);
       }
       // Leaving the mode reverts every default-open panel's (side, slot) to

@@ -680,7 +680,7 @@
               'error',
               { duration: 5000, scroll: false },
             );
-            console.error(error);
+            Drupal.throwError(error);
           });
       }
 
@@ -771,7 +771,7 @@
         });
       }
 
-      commitLabel(EditableElement, properties) {
+      commitLabel() {
         return Drupal.t('Edited formatted text');
       }
     }

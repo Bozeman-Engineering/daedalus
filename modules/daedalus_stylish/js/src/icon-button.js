@@ -16,6 +16,21 @@ import { h } from 'preact';
  * `tooltip` overrides the label as the pill's text and `show` forces the
  * pill visible — together they carry transient gesture feedback ("CSS
  * copied") in place, instead of a message line the eye must go find.
+ *
+ * @param {object} props
+ *   The button's props.
+ * @param {string} props.label
+ *   The accessible name, and the pill's text unless `tooltip` is set.
+ * @param {?string} [props.tooltip]
+ *   Text that replaces the label in the pill (transient feedback).
+ * @param {boolean} [props.show]
+ *   Whether the pill is forced visible.
+ * @param {boolean} [props.disabled]
+ *   Whether the button is disabled.
+ * @param {Function} props.onClick
+ *   The click handler.
+ * @param {*} props.children
+ *   The icon markup.
  */
 export const IconButton = ({
   label,

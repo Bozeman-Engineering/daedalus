@@ -184,10 +184,10 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     $styled = ['default' => ['padding' => '1rem']];
     $alignment = ['default' => ['justify-content' => 'center']];
     [$entity, $ids] = $this->buildComposition([
-      // The target's own styles survive as overrides. (No container part
-      // entry: the one-box hoist sweep converges any stored
-      // '::.daedalus-stylish-layout-container' key onto the root at staging; part
-      // survival is covered by the block's '::.quote' entry below.)
+      // The target's own styles survive as overrides. (No container part entry:
+      // the one-box hoist sweep converges any stored
+      // '::.daedalus-stylish-layout-container' key onto the root at staging;
+      // part survival is covered by the block's '::.quote' entry below.)
       'container:{sec}' => $styled,
       // The original bug's shape: a child block's hand-set alignment.
       'block:{b1}' => $alignment,
@@ -369,13 +369,21 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
    * down. One apply semantics at every depth.
    */
   public function testNestedCompositionAppliesRecursively(): void {
-    $inner = DaedalusStylishVariant::create(['label' => 'Inner', 'machine_name' => 'inner_comp', 'scope' => 'kind:container']);
+    $inner = DaedalusStylishVariant::create([
+      'label' => 'Inner',
+      'machine_name' => 'inner_comp',
+      'scope' => 'kind:container',
+    ]);
     $inner->setStyles([
       '' => ['default' => ['gap' => '1px']],
       'block(basic,1)' => ['default' => ['margin' => '2px']],
     ]);
     $inner->save();
-    $outer = DaedalusStylishVariant::create(['label' => 'Outer', 'machine_name' => 'outer_comp', 'scope' => 'kind:container']);
+    $outer = DaedalusStylishVariant::create([
+      'label' => 'Outer',
+      'machine_name' => 'outer_comp',
+      'scope' => 'kind:container',
+    ]);
     $outer->setStyles([
       '' => ['default' => ['padding' => '2rem']],
       'container(1)' => ['variants' => [['variant' => 'inner_comp', 'fragment' => '']]],
@@ -445,7 +453,11 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     $this->assertSame([], $this->styleMap($entity));
 
     // Dangling: the reference names no variant at all.
-    $hero = DaedalusStylishVariant::create(['label' => 'Hero', 'machine_name' => 'hero_dangling', 'scope' => 'kind:container']);
+    $hero = DaedalusStylishVariant::create([
+      'label' => 'Hero',
+      'machine_name' => 'hero_dangling',
+      'scope' => 'kind:container',
+    ]);
     $hero->setStyles([
       'block(basic,1)' => ['variants' => [['variant' => 'ghost', 'fragment' => '']], 'default' => ['margin' => '1px']],
     ]);
@@ -456,7 +468,11 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     // A root-entry reference on the variant's own axis could only replace
     // the variant itself on every wearer.
     DaedalusStylishVariant::create(['label' => 'Look', 'machine_name' => 'other_look', 'scope' => 'kind:container'])->save();
-    $selfish = DaedalusStylishVariant::create(['label' => 'Selfish', 'machine_name' => 'selfish', 'scope' => 'kind:container']);
+    $selfish = DaedalusStylishVariant::create([
+      'label' => 'Selfish',
+      'machine_name' => 'selfish',
+      'scope' => 'kind:container',
+    ]);
     $selfish->setStyles([
       '' => ['variants' => [['variant' => 'other_look', 'fragment' => '']], 'default' => ['padding' => '2px']],
     ]);
@@ -836,7 +852,12 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     ]);
     $half->setStyles(['' => ['default' => ['gap' => '2rem']]]);
     $half->save();
-    DaedalusStylishVariant::create(['label' => 'Glow', 'machine_name' => 'glow', 'scope' => 'kind:container', 'axis' => 'hover'])->save();
+    DaedalusStylishVariant::create([
+      'label' => 'Glow',
+      'machine_name' => 'glow',
+      'scope' => 'kind:container',
+      'axis' => 'hover',
+    ])->save();
     $card_left = DaedalusStylishVariant::create([
       'label' => 'Card Left',
       'machine_name' => 'card_left',
@@ -847,7 +868,11 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'container(1)' => ['variants' => [['variant' => 'row', 'fragment' => '']], 'default' => ['margin' => '1px']],
     ]);
     $card_left->save();
-    $stacked = DaedalusStylishVariant::create(['label' => 'Stacked', 'machine_name' => 'stacked', 'scope' => 'kind:container']);
+    $stacked = DaedalusStylishVariant::create([
+      'label' => 'Stacked',
+      'machine_name' => 'stacked',
+      'scope' => 'kind:container',
+    ]);
     $stacked->setStyles([
       '' => ['default' => ['padding' => '1rem']],
       'container(1)' => ['default' => ['margin' => '0']],
@@ -943,13 +968,21 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       'scope' => 'block_type:basic',
       'axis' => 'hover',
     ])->save();
-    $inner = DaedalusStylishVariant::create(['label' => 'Inner', 'machine_name' => 'inner_comp', 'scope' => 'kind:container']);
+    $inner = DaedalusStylishVariant::create([
+      'label' => 'Inner',
+      'machine_name' => 'inner_comp',
+      'scope' => 'kind:container',
+    ]);
     $inner->setStyles([
       '' => ['default' => ['gap' => '1px']],
       'block(basic,1)' => ['variants' => [['variant' => 'card', 'fragment' => '']], 'default' => ['margin' => '2px']],
     ]);
     $inner->save();
-    $outer = DaedalusStylishVariant::create(['label' => 'Outer', 'machine_name' => 'outer_comp', 'scope' => 'kind:container']);
+    $outer = DaedalusStylishVariant::create([
+      'label' => 'Outer',
+      'machine_name' => 'outer_comp',
+      'scope' => 'kind:container',
+    ]);
     $outer->setStyles([
       '' => ['default' => ['padding' => '2rem']],
       'container(1)' => ['variants' => [['variant' => 'inner_comp', 'fragment' => '']]],
@@ -1109,7 +1142,11 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
    * it with the root reference.
    */
   public function testDetachOnBlockRootMaterializesFieldFragments(): void {
-    $variant = DaedalusStylishVariant::create(['label' => 'Card', 'machine_name' => 'card', 'scope' => 'block_type:basic']);
+    $variant = DaedalusStylishVariant::create([
+      'label' => 'Card',
+      'machine_name' => 'card',
+      'scope' => 'block_type:basic',
+    ]);
     $variant->setStyles([
       '' => ['default' => ['padding' => '2rem']],
       'field(field_x)' => ['default' => ['margin' => '1rem']],
@@ -1165,7 +1202,6 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
     $this->assertFalse($validator->scopeMatches('layout:daedalus_stylish_container', "block:{$ids['img']}", $context));
   }
 
-
   /**
    * A rule wears flat variants only, and distributes nothing.
    *
@@ -1180,7 +1216,11 @@ class VariantApplySubtreeTest extends NestedStorageKernelTestBase {
       '' => ['default' => ['padding' => '1rem']],
       '::> *' => ['default' => ['margin' => '0']],
     ])->save();
-    $card = DaedalusStylishVariant::create(['label' => 'Card', 'machine_name' => 'card', 'scope' => 'layout:daedalus_stylish_container']);
+    $card = DaedalusStylishVariant::create([
+      'label' => 'Card',
+      'machine_name' => 'card',
+      'scope' => 'layout:daedalus_stylish_container',
+    ]);
     $card->setStyles([
       '' => ['default' => ['padding' => '0']],
       'container(1)' => ['default' => ['gap' => '2rem']],

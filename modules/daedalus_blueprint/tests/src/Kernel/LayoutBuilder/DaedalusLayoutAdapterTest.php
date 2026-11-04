@@ -16,16 +16,16 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Tests the DaedalusLayoutAdapter flat walk, the path taken without daedalus_layout.
+ * Tests the DaedalusLayoutAdapter flat walk, the path without daedalus_layout.
  *
- * The site here has layout_builder but not daedalus_layout, so locateElement() and
- * getBlockContentEntities() both ride the one flat walk of the root
+ * The site here has layout_builder but not daedalus_layout, so locateElement()
+ * and getBlockContentEntities() both ride the one flat walk of the root
  * sections of the host's storage. The cases pin what that walk promises:
- * positional component indexes per section, plugin blocks counted but
- * never yielded as block content, and one path string for the same
- * component on both reads. The host's own two section reads (its own
- * storage's sections, and the sections a reader sees) are pinned here
- * too, since the adapter's walk stands on them.
+ * positional component indexes per section, plugin blocks counted but never
+ * yielded as block content, and one path string for the same component on both
+ * reads. The host's own two section reads (its own storage's sections, and the
+ * sections a reader sees) are pinned here too, since the adapter's walk stands
+ * on them.
  */
 #[CoversClass(DaedalusLayoutAdapter::class)]
 #[Group('daedalus_blueprint')]

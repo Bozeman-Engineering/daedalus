@@ -154,7 +154,7 @@ class ElementStylesTest extends KernelTestBase {
   }
 
   /**
-   * The daedalus_layout UUID of the default host section (the placement anchor).
+   * The daedalus_layout UUID of the default host section, the placement anchor.
    */
   protected const HOST_SECTION_UUID = 'aaaaaaaa-0000-4000-8000-000000000000';
 
@@ -500,12 +500,12 @@ class ElementStylesTest extends KernelTestBase {
   /**
    * Section keys resolve their layout: declaration, scope, and constraints.
    *
-   * The layout plugin id is to sections what the bundle is to inline
-   * blocks: with the host entity in context, a container:{uuid} key validates
-   * against its layout's guide declaration (daedalus_stylish_guide_test declares
-   * layout_twocol_section with a .section-content part capped at
-   * max-width 80rem) and captures a "layout:{layout_id}" variant scope,
-   * degrading to the universal section kind without context.
+   * The layout plugin id is to sections what the bundle is to inline blocks:
+   * with the host entity in context, a container:{uuid} key validates against
+   * its layout's guide declaration (daedalus_stylish_guide_test declares
+   * layout_twocol_section with a .section-content part capped at max-width
+   * 80rem) and captures a "layout:{layout_id}" variant scope, degrading to the
+   * universal section kind without context.
    */
   public function testSectionLayoutResolution(): void {
     $section_uuid = 'aaaaaaaa-1111-2222-3333-444444444444';

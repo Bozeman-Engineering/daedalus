@@ -95,9 +95,17 @@ class SelectorMatcherTest extends UnitTestCase {
             'uuid' => 'sec-x',
             'layout_id' => 'daedalus_stylish_container',
             '_element' => $markup('section'),
-            'children' => [['kind' => 'block', 'uuid' => 'tx', 'block_type' => 'text', '_element' => $markup('p', ['a'])]],
+            'children' => [
+              ['kind' => 'block', 'uuid' => 'tx', 'block_type' => 'text', '_element' => $markup('p', ['a'])],
+            ],
           ],
-          ['kind' => 'container', 'uuid' => 'sec-y', 'layout_id' => 'daedalus_stylish_container', '_element' => $markup('div'), 'children' => []],
+          [
+            'kind' => 'container',
+            'uuid' => 'sec-y',
+            'layout_id' => 'daedalus_stylish_container',
+            '_element' => $markup('div'),
+            'children' => [],
+          ],
         ],
       ],
     ];
@@ -126,13 +134,23 @@ class SelectorMatcherTest extends UnitTestCase {
             '_element' => [
               'markup' => ['tag' => 'div'],
               'fields' => [
-                'body' => ['markup' => ['tags' => ['em'], 'instances' => [['class' => 's-o1', 'tag' => 'p', 'label' => 'Paragraph', 'children' => []]]]],
+                'body' => [
+                  'markup' => [
+                    'tags' => ['em'],
+                    'instances' => [['class' => 's-o1', 'tag' => 'p', 'label' => 'Paragraph', 'children' => []]],
+                  ],
+                ],
                 'title' => ['presentation' => 'unit'],
                 'hidden' => ['element' => FALSE],
               ],
             ],
           ],
-          ['kind' => 'block', 'uuid' => NULL, 'block_type' => 'text', '_element' => ['fields' => ['body' => ['markup' => ['tags' => ['p']]]]]],
+          [
+            'kind' => 'block',
+            'uuid' => NULL,
+            'block_type' => 'text',
+            '_element' => ['fields' => ['body' => ['markup' => ['tags' => ['p']]]]],
+          ],
         ],
       ],
     ];
@@ -152,7 +170,13 @@ class SelectorMatcherTest extends UnitTestCase {
         // The annotator's minted words ride the node beside its markup.
         '_element' => ['name' => 'Hero', 'type' => 'Section', 'icon' => '/icons/section.svg'] + $markup('section'),
         'children' => [
-          ['kind' => 'block', 'uuid' => 't1', 'block_type' => 'text', 'label' => 'Intro', '_element' => $markup('p', ['a', 'strong'])],
+          [
+            'kind' => 'block',
+            'uuid' => 't1',
+            'block_type' => 'text',
+            'label' => 'Intro',
+            '_element' => $markup('p', ['a', 'strong']),
+          ],
           ['kind' => 'block', 'uuid' => 't2', 'block_type' => 'text', '_element' => $markup('h2')],
           [
             'kind' => 'block',
@@ -183,7 +207,13 @@ class SelectorMatcherTest extends UnitTestCase {
             'children' => [
               ['kind' => 'block', 'uuid' => 't3', 'block_type' => 'text', '_element' => $markup('p', ['em'])],
               ['kind' => 'block', 'uuid' => 'img', 'block_type' => 'image', '_element' => $markup('figure')],
-              ['kind' => 'container', 'uuid' => 'sec-d', 'layout_id' => 'daedalus_stylish_container', '_element' => $markup('div'), 'children' => []],
+              [
+                'kind' => 'container',
+                'uuid' => 'sec-d',
+                'layout_id' => 'daedalus_stylish_container',
+                '_element' => $markup('div'),
+                'children' => [],
+              ],
             ],
           ],
           ['kind' => 'block', 'uuid' => 'p', 'plugin_id' => 'system_menu_block:main'],
@@ -195,7 +225,11 @@ class SelectorMatcherTest extends UnitTestCase {
         'layout_id' => 'layout_twocol_section',
         '_element' => $markup('div'),
         'children' => [
-          ['kind' => 'region', 'region' => 'first', 'children' => [['kind' => 'block', 'uuid' => 't4', 'block_type' => 'text', '_element' => $markup('p')]]],
+          [
+            'kind' => 'region',
+            'region' => 'first',
+            'children' => [['kind' => 'block', 'uuid' => 't4', 'block_type' => 'text', '_element' => $markup('p')]],
+          ],
           [
             'kind' => 'region',
             'region' => 'second',
@@ -238,7 +272,10 @@ class SelectorMatcherTest extends UnitTestCase {
                 'tag' => 'h6',
                 'hoisted' => ['.text-block'],
                 'parts' => [
-                  '.text-block-link' => ['tag' => 'a', 'parts' => ['.text-block-link__icon' => ['tag' => 'svg', 'parts' => []]]],
+                  '.text-block-link' => [
+                    'tag' => 'a',
+                    'parts' => ['.text-block-link__icon' => ['tag' => 'svg', 'parts' => []]],
+                  ],
                   '.text-block-note' => ['tag' => NULL, 'parts' => []],
                 ],
               ],
@@ -250,7 +287,14 @@ class SelectorMatcherTest extends UnitTestCase {
             'layout_id' => 'daedalus_stylish_container',
             '_element' => $markup('div'),
             'children' => [
-              ['kind' => 'block', 'uuid' => 't8', 'block_type' => 'text', '_element' => ['markup' => ['tag' => 'p', 'tags' => ['strong'], 'parts' => ['.text-block-link' => ['tag' => 'a']]]]],
+              [
+                'kind' => 'block',
+                'uuid' => 't8',
+                'block_type' => 'text',
+                '_element' => [
+                  'markup' => ['tag' => 'p', 'tags' => ['strong'], 'parts' => ['.text-block-link' => ['tag' => 'a']]],
+                ],
+              ],
             ],
           ],
         ],
@@ -263,8 +307,18 @@ class SelectorMatcherTest extends UnitTestCase {
         '_element' => $markup('section'),
         'children' => [
           ['kind' => 'block', 'uuid' => 't9', 'block_type' => 'text', '_element' => $markup('p')],
-          ['kind' => 'block', 'uuid' => 't10', 'block_type' => 'text', '_element' => ['markup' => ['tag' => 'p', 'parts' => ['.text-block-link' => ['tag' => 'a']]]]],
-          ['kind' => 'block', 'uuid' => 't11', 'block_type' => 'text', '_element' => ['markup' => ['tag' => 'h3', 'hoisted' => ['.featured']]]],
+          [
+            'kind' => 'block',
+            'uuid' => 't10',
+            'block_type' => 'text',
+            '_element' => ['markup' => ['tag' => 'p', 'parts' => ['.text-block-link' => ['tag' => 'a']]]],
+          ],
+          [
+            'kind' => 'block',
+            'uuid' => 't11',
+            'block_type' => 'text',
+            '_element' => ['markup' => ['tag' => 'h3', 'hoisted' => ['.featured']]],
+          ],
           ['kind' => 'block', 'uuid' => 'img2', 'block_type' => 'image', '_element' => $markup('figure')],
           [
             'kind' => 'container',
@@ -362,7 +416,12 @@ class SelectorMatcherTest extends UnitTestCase {
       'address' => 'block_type:text',
       'tag' => 'h6',
       'tags' => ['a', 'svg', 'h6'],
-      'parts' => ['.text-block-link' => 'a', '.text-block-link__icon' => 'svg', '.text-block-note' => NULL, '.text-block' => 'h6'],
+      'parts' => [
+        '.text-block-link' => 'a',
+        '.text-block-link__icon' => 'svg',
+        '.text-block-note' => NULL,
+        '.text-block' => 'h6',
+      ],
       'wear' => [],
       'name' => NULL,
       'type' => NULL,
@@ -446,7 +505,11 @@ class SelectorMatcherTest extends UnitTestCase {
         'uuid' => 'host',
         '_element' => [
           'markup' => ['tag' => 'article', 'tags' => ['span']],
-          'fields' => ['title' => ['markup' => ['tags' => ['h1'], 'instances' => [['class' => 's-t1', 'tag' => 'h1', 'children' => []]]]]],
+          'fields' => [
+            'title' => [
+              'markup' => ['tags' => ['h1'], 'instances' => [['class' => 's-t1', 'tag' => 'h1', 'children' => []]]],
+            ],
+          ],
         ],
         'children' => [],
       ],
@@ -622,7 +685,16 @@ class SelectorMatcherTest extends UnitTestCase {
     $this->assertSame(['block:t1', 'block:t2', 'block:t3'], $matcher->matching($a, 'd-text'));
     $this->assertSame(['block:t1', 'block:t3'], $matcher->matching($a, 'p'));
     $this->assertSame(['block:t1', 'block:t2', 'block:f', 'block:t3', 'block:img', 'block:p'], $matcher->matching($a, 'd-block'));
-    $this->assertSame(['block:t1', 'block:t2', 'block:f', 'container:sec-b', 'block:t3', 'block:img', 'container:sec-d', 'block:p'], $matcher->matching($a, 'd-container > *'));
+    $this->assertSame([
+      'block:t1',
+      'block:t2',
+      'block:f',
+      'container:sec-b',
+      'block:t3',
+      'block:img',
+      'container:sec-d',
+      'block:p',
+    ], $matcher->matching($a, 'd-container > *'));
     $this->assertTrue($matcher->matches($a, 'd-container', $a));
     $this->assertFalse($matcher->matches($a, '> d-text', 'block:t3'));
     $this->assertTrue($matcher->matches('container:sec-b', '> d-text', 'block:t3'));
@@ -1102,7 +1174,7 @@ class SelectorMatcherTest extends UnitTestCase {
   }
 
   /**
-   * The `:is()` qualifier: any member matches the node, judged as `:not()`'s is.
+   * The `:is()` qualifier: any member matches the node, judged as `:not()`'s.
    */
   public function testIs(): void {
     $matcher = SelectorMatcher::fromTree(static::tree(), static::map());
@@ -1235,23 +1307,45 @@ class SelectorMatcherTest extends UnitTestCase {
     ] as $selector) {
       $queries[] = ['op' => 'matching', 'args' => [$a, $selector]];
     }
-    foreach (['> *:empty', '> *:not(:empty)', '&:empty', '&:first-child > *', '&:nth-child(4) > *', '&:nth-child(4) > *:not(:last-child)'] as $selector) {
+    foreach ([
+      '> *:empty',
+      '> *:not(:empty)',
+      '&:empty',
+      '&:first-child > *',
+      '&:nth-child(4) > *',
+      '&:nth-child(4) > *:not(:last-child)',
+    ] as $selector) {
       $queries[] = ['op' => 'matching', 'args' => ['container:sec-b', $selector]];
     }
     foreach (['> * > *:only-child', '> * > *:not(:only-child)'] as $selector) {
       $queries[] = ['op' => 'matching', 'args' => ['container:sec-c', $selector]];
     }
     foreach ([
-      ['block:t1', '&:first-child'], ['block:t2', '&:first-child'], ['block:t2', '&:nth-child(even)'], ['block:p', '&:last-child'],
-      ['block:t4', '&:only-child'], ['block:t5', '&:not(:only-child)'], ['container:sec-d', '&:empty'], ['container:sec-d', '&:last-child'],
-      ['block:t1', '&:empty'], ['block:t1', '&:not(:empty)'], ['block:t1', '&:nth-child(3n+1)'], ['block:t1', '&:not(:nth-child(3n+1))'],
-      ['block:t8', '&:first-of-type'], ['block:ghost', '&:first-child'], ['block:t1', '&:first-child::before'], ['block:t2', '&:first-child::before'],
+      ['block:t1', '&:first-child'],
+      ['block:t2', '&:first-child'],
+      ['block:t2', '&:nth-child(even)'],
+      ['block:p', '&:last-child'],
+      ['block:t4', '&:only-child'],
+      ['block:t5', '&:not(:only-child)'],
+      ['container:sec-d', '&:empty'],
+      ['container:sec-d', '&:last-child'],
+      ['block:t1', '&:empty'],
+      ['block:t1', '&:not(:empty)'],
+      ['block:t1', '&:nth-child(3n+1)'],
+      ['block:t1', '&:not(:nth-child(3n+1))'],
+      ['block:t8', '&:first-of-type'],
+      ['block:ghost', '&:first-child'],
+      ['block:t1', '&:first-child::before'],
+      ['block:t2', '&:first-child::before'],
     ] as $args) {
       $queries[] = ['op' => 'matching', 'args' => $args];
     }
     foreach ([
-      ['block:t1', '&:first-child', 'block:t1'], ['block:t2', '&:first-child', 'block:t2'], [$a, '&:first-child', 'block:t1'],
-      [$a, '&:not(:last-child) > *', 'block:t1'], [$g, '&:not(:last-child) > *', 'block:t9'],
+      ['block:t1', '&:first-child', 'block:t1'],
+      ['block:t2', '&:first-child', 'block:t2'],
+      [$a, '&:first-child', 'block:t1'],
+      [$a, '&:not(:last-child) > *', 'block:t1'],
+      [$g, '&:not(:last-child) > *', 'block:t9'],
     ] as $args) {
       $queries[] = ['op' => 'matches', 'args' => $args];
     }
@@ -1280,69 +1374,134 @@ class SelectorMatcherTest extends UnitTestCase {
     $queries[] = ['op' => 'matches', 'args' => [$g, '> p + p', 'block:t10']];
     $queries[] = ['op' => 'matches', 'args' => [$g, '> p + p', 'block:t9']];
     foreach ([
-      [$a, 'p', 'block:t1', NULL], [$a, 'p', 'block:f', NULL], [$a, 'p', 'block:f', 'p'], [$a, '> p', 'block:f', 'p'],
-      [$a, 'a', 'block:t1', 'a'], [$a, 'a', 'block:t2', 'a'], [$a, 'd-text a', 'block:t1', 'a'],
-      [$a, '> d-text em', 'block:t3', 'em'], [$a, 'd-text em', 'block:t3', 'em'], [$a, 'd-formatted-text p', 'block:f', 'p'],
-      ['container:sec-b', 'p', 'block:f', 'p'], ['container:sec-c', 'a', 'block:t6', 'a'],
-      [$e, '> d-text .text-block-link', 'block:t7', '.text-block-link'], [$e, '> d-text .text-block-link', 'block:t8', '.text-block-link'],
-      [$e, 'd-text > .text-block-link', 'block:t8', '.text-block-link'], [$e, '.text-block-link', 'block:t7', '.text-block-link'],
-      [$e, 'a', 'block:t7', '.text-block-link'], [$e, '> a', 'block:t7', '.text-block-link'],
-      [$e, '> d-text a', 'block:t7', '.text-block-link'], [$e, '> d-text > a', 'block:t7', '.text-block-link'],
-      [$e, 'a', 'block:t8', '.text-block-link'], [$e, '> d-text a', 'block:t8', '.text-block-link'],
-      [$e, 'd-container a', 'block:t8', '.text-block-link'], [$e, '> d-container a', 'block:t8', '.text-block-link'],
-      [$e, '> d-container a', 'block:t7', '.text-block-link'], ['container:sec-f', 'a', 'block:t7', '.text-block-link'],
-      [$e, 'small', 'block:t7', '.text-block-note'], [$e, 'a', 'block:t7', '.text-block-note'],
-      [$e, 'svg', 'block:t7', '.text-block-link'], [$e, 'svg', 'block:t7', '.text-block-link__icon'],
-      [$e, 'h6', 'block:t7', '.text-block'], [$e, 'a', 'block:t7', '.ghost'],
-      [$e, 'a', 'block:t7', 'a'], [$e, 'd-text a', 'block:t8', 'a'], [$e, '> d-text a', 'block:t8', 'a'], [$e, 'em', 'block:t7', 'em'],
+      [$a, 'p', 'block:t1', NULL],
+      [$a, 'p', 'block:f', NULL],
+      [$a, 'p', 'block:f', 'p'],
+      [$a, '> p', 'block:f', 'p'],
+      [$a, 'a', 'block:t1', 'a'],
+      [$a, 'a', 'block:t2', 'a'],
+      [$a, 'd-text a', 'block:t1', 'a'],
+      [$a, '> d-text em', 'block:t3', 'em'],
+      [$a, 'd-text em', 'block:t3', 'em'],
+      [$a, 'd-formatted-text p', 'block:f', 'p'],
+      ['container:sec-b', 'p', 'block:f', 'p'],
+      ['container:sec-c', 'a', 'block:t6', 'a'],
+      [$e, '> d-text .text-block-link', 'block:t7', '.text-block-link'],
+      [$e, '> d-text .text-block-link', 'block:t8', '.text-block-link'],
+      [$e, 'd-text > .text-block-link', 'block:t8', '.text-block-link'],
+      [$e, '.text-block-link', 'block:t7', '.text-block-link'],
+      [$e, 'a', 'block:t7', '.text-block-link'],
+      [$e, '> a', 'block:t7', '.text-block-link'],
+      [$e, '> d-text a', 'block:t7', '.text-block-link'],
+      [$e, '> d-text > a', 'block:t7', '.text-block-link'],
+      [$e, 'a', 'block:t8', '.text-block-link'],
+      [$e, '> d-text a', 'block:t8', '.text-block-link'],
+      [$e, 'd-container a', 'block:t8', '.text-block-link'],
+      [$e, '> d-container a', 'block:t8', '.text-block-link'],
+      [$e, '> d-container a', 'block:t7', '.text-block-link'],
+      ['container:sec-f', 'a', 'block:t7', '.text-block-link'],
+      [$e, 'small', 'block:t7', '.text-block-note'],
+      [$e, 'a', 'block:t7', '.text-block-note'],
+      [$e, 'svg', 'block:t7', '.text-block-link'],
+      [$e, 'svg', 'block:t7', '.text-block-link__icon'],
+      [$e, 'h6', 'block:t7', '.text-block'],
+      [$e, 'a', 'block:t7', '.ghost'],
+      [$e, 'a', 'block:t7', 'a'],
+      [$e, 'd-text a', 'block:t8', 'a'],
+      [$e, '> d-text a', 'block:t8', 'a'],
+      [$e, 'em', 'block:t7', 'em'],
       [$a, '> *', 'block:t1', '> *'],
       // The identity: a minted instance by its tag, an identity class by
       // presence on the node, a declared class by anatomy.
-      [$a, 'p', 'block:f', '.s-p1'], [$a, 'd-formatted-text p', 'block:f', '.s-p1'], [$a, 'h2', 'block:f', '.s-p1'],
-      [$a, 'li', 'block:f', '.s-li'], [$a, 'ul', 'block:f', '.s-li'], ['container:sec-c', 'p', 'block:t6', '.s-q1'],
-      [$a, '> d-formatted-text .s-p1', 'block:f', '.s-p1'], [$a, '> d-formatted-text .s-p1', 'block:t1', '.s-p1'],
-      [$a, '> d-block .s-p1', 'block:t1', '.s-p1'], [$a, '> d-formatted-text .s-p9', 'block:f', '.s-p9'],
+      [$a, 'p', 'block:f', '.s-p1'],
+      [$a, 'd-formatted-text p', 'block:f', '.s-p1'],
+      [$a, 'h2', 'block:f', '.s-p1'],
+      [$a, 'li', 'block:f', '.s-li'],
+      [$a, 'ul', 'block:f', '.s-li'],
+      ['container:sec-c', 'p', 'block:t6', '.s-q1'],
+      [$a, '> d-formatted-text .s-p1', 'block:f', '.s-p1'],
+      [$a, '> d-formatted-text .s-p1', 'block:t1', '.s-p1'],
+      [$a, '> d-block .s-p1', 'block:t1', '.s-p1'],
+      [$a, '> d-formatted-text .s-p9', 'block:f', '.s-p9'],
       [$a, '> d-formatted-text .s-li', 'block:f', '.s-li'],
       [$a, '> d-text .text-block-link', 'block:t2', '.text-block-link'],
-      [$g, '> p + p', 'block:t10', 'p'], [$g, 'p:has(a)', 'block:t10', 'p'], [$g, '> p + p', 'block:t10', NULL], [$g, '> p + p', 'block:t9', NULL],
-      [$g, '> p + p a', 'block:t10', '.text-block-link'], [$g, '> p + p a', 'block:t9', '.text-block-link'], [$g, '> p + p a', 'block:t10', 'a'],
-      [$g, '> d-text:has(a) .text-block-link', 'block:t10', '.text-block-link'], [$g, '> d-text:not(:has(a)) .text-block-link', 'block:t10', '.text-block-link'],
-      [$g, '> d-text:has(a) a', 'block:t10', 'a'], [$g, '> d-text:has(a) a', 'block:t9', 'a'],
+      [$g, '> p + p', 'block:t10', 'p'],
+      [$g, 'p:has(a)', 'block:t10', 'p'],
+      [$g, '> p + p', 'block:t10', NULL],
+      [$g, '> p + p', 'block:t9', NULL],
+      [$g, '> p + p a', 'block:t10', '.text-block-link'],
+      [$g, '> p + p a', 'block:t9', '.text-block-link'],
+      [$g, '> p + p a', 'block:t10', 'a'],
+      [$g, '> d-text:has(a) .text-block-link', 'block:t10', '.text-block-link'],
+      [$g, '> d-text:not(:has(a)) .text-block-link', 'block:t10', '.text-block-link'],
+      [$g, '> d-text:has(a) a', 'block:t10', 'a'],
+      [$g, '> d-text:has(a) a', 'block:t9', 'a'],
       // The terminal pseudo-element: agreement by name, then the host.
-      ['block:t1', '&::before', 'block:t1', '&::before'], ['block:t1', '&::before', 'block:t1', '&::after'], ['block:t1', '&::before', 'block:t1', NULL],
+      ['block:t1', '&::before', 'block:t1', '&::before'],
+      ['block:t1', '&::before', 'block:t1', '&::after'],
+      ['block:t1', '&::before', 'block:t1', NULL],
       ['block:t1', '&::before', 'block:t2', '&::before'],
-      [$a, '> d-text::before', 'block:t1', '&::before'], [$a, '> d-text::before', 'block:t1', '&::after'], [$a, '> d-text::before', 'block:t1', NULL],
-      [$a, '> d-text', 'block:t1', '&::before'], [$a, '> d-text::before', 'block:t3', '&::before'], [$a, 'd-text::after', 'block:t3', '&::after'],
-      [$a, '> d-text::before', 'block:f', '&::before'], ['container:sec-b', '> d-text::before', 'block:t1', '&::before'],
-      [$e, '> d-text .text-block-link::before', 'block:t7', '.text-block-link::before'], [$e, '> d-text .text-block-link::before', 'block:t7', '.text-block-link::after'],
-      [$e, '> d-text .text-block-link::before', 'block:t7', '.text-block-link'], [$e, '> d-text .text-block-link', 'block:t7', '.text-block-link::before'],
-      [$e, '> d-text .text-block-link::before', 'block:t8', '.text-block-link::before'], [$e, 'd-text > .text-block-link::after', 'block:t8', '.text-block-link::after'],
-      [$e, 'a::before', 'block:t7', '.text-block-link::before'], [$e, '> a::before', 'block:t7', '.text-block-link::before'],
-      [$e, 'a::before', 'block:t7', '.text-block-note::before'], [$e, 'h6::after', 'block:t7', '.text-block::after'],
-      [$a, 'a::before', 'block:t1', 'a::before'], [$a, 'a::before', 'block:t1', 'a'], [$a, 'a', 'block:t1', 'a::before'],
-      [$a, 'a::before', 'block:t2', 'a::before'], [$a, '> d-text a::before', 'block:t3', 'a::before'],
-      [$g, '> p + p::after', 'block:t10', '&::after'], [$g, '> p + p::after', 'block:t9', '&::after'],
-      [$g, '> d-text:has(a)::before', 'block:t10', '&::before'], [$g, '> d-text:has(a)::before', 'block:t9', '&::before'],
-      [$g, '> p + p a::before', 'block:t10', '.text-block-link::before'], [$g, '> p + p::before', 'block:t10', 'p::before'],
-      [$a, '> *::before', 'block:t1', '> *::before'], [$a, '> d-text::before', 'block:t1', '> d-text::before'],
+      [$a, '> d-text::before', 'block:t1', '&::before'],
+      [$a, '> d-text::before', 'block:t1', '&::after'],
+      [$a, '> d-text::before', 'block:t1', NULL],
+      [$a, '> d-text', 'block:t1', '&::before'],
+      [$a, '> d-text::before', 'block:t3', '&::before'],
+      [$a, 'd-text::after', 'block:t3', '&::after'],
+      [$a, '> d-text::before', 'block:f', '&::before'],
+      ['container:sec-b', '> d-text::before', 'block:t1', '&::before'],
+      [$e, '> d-text .text-block-link::before', 'block:t7', '.text-block-link::before'],
+      [$e, '> d-text .text-block-link::before', 'block:t7', '.text-block-link::after'],
+      [$e, '> d-text .text-block-link::before', 'block:t7', '.text-block-link'],
+      [$e, '> d-text .text-block-link', 'block:t7', '.text-block-link::before'],
+      [$e, '> d-text .text-block-link::before', 'block:t8', '.text-block-link::before'],
+      [$e, 'd-text > .text-block-link::after', 'block:t8', '.text-block-link::after'],
+      [$e, 'a::before', 'block:t7', '.text-block-link::before'],
+      [$e, '> a::before', 'block:t7', '.text-block-link::before'],
+      [$e, 'a::before', 'block:t7', '.text-block-note::before'],
+      [$e, 'h6::after', 'block:t7', '.text-block::after'],
+      [$a, 'a::before', 'block:t1', 'a::before'],
+      [$a, 'a::before', 'block:t1', 'a'],
+      [$a, 'a', 'block:t1', 'a::before'],
+      [$a, 'a::before', 'block:t2', 'a::before'],
+      [$a, '> d-text a::before', 'block:t3', 'a::before'],
+      [$g, '> p + p::after', 'block:t10', '&::after'],
+      [$g, '> p + p::after', 'block:t9', '&::after'],
+      [$g, '> d-text:has(a)::before', 'block:t10', '&::before'],
+      [$g, '> d-text:has(a)::before', 'block:t9', '&::before'],
+      [$g, '> p + p a::before', 'block:t10', '.text-block-link::before'],
+      [$g, '> p + p::before', 'block:t10', 'p::before'],
+      [$a, '> *::before', 'block:t1', '> *::before'],
+      [$a, '> d-text::before', 'block:t1', '> d-text::before'],
       [$a, 'a', 'block:t1', 'a::part(x)'],
       // The position qualifiers: a qualified tag subject never inside,
       // the anchor's box, the tag tier and a part behind the anchor.
-      [$a, 'p:first-child', 'block:f', 'p'], [$a, 'p:first-child', 'block:t1', NULL],
-      ['block:t1', '&:first-child::before', 'block:t1', '&::before'], ['block:t1', '&:first-child::before', 'block:t1', '&::after'],
-      ['block:t2', '&:first-child::before', 'block:t2', '&::before'], ['block:t2', '&:nth-child(even)::before', 'block:t2', '&::before'],
-      [$a, '&:first-child p', 'block:f', 'p'], [$a, '&:first-child p', 'block:t1', NULL], [$g, '&:first-child p', 'block:t9', NULL],
+      [$a, 'p:first-child', 'block:f', 'p'],
+      [$a, 'p:first-child', 'block:t1', NULL],
+      ['block:t1', '&:first-child::before', 'block:t1', '&::before'],
+      ['block:t1', '&:first-child::before', 'block:t1', '&::after'],
+      ['block:t2', '&:first-child::before', 'block:t2', '&::before'],
+      ['block:t2', '&:nth-child(even)::before', 'block:t2', '&::before'],
+      [$a, '&:first-child p', 'block:f', 'p'],
+      [$a, '&:first-child p', 'block:t1', NULL],
+      [$g, '&:first-child p', 'block:t9', NULL],
       [$g, '&:not(:first-child) p', 'block:t9', NULL],
-      ['block:t7', '&:first-child .text-block-link', 'block:t7', '.text-block-link'], ['block:t7', '&:last-child .text-block-link', 'block:t7', '.text-block-link'],
+      ['block:t7', '&:first-child .text-block-link', 'block:t7', '.text-block-link'],
+      ['block:t7', '&:last-child .text-block-link', 'block:t7', '.text-block-link'],
       ['block:t8', '&:only-child .text-block-link', 'block:t8', '.text-block-link'],
-      [$e, '&:nth-child(3) a', 'block:t7', '.text-block-link'], [$e, '&:nth-child(2) a', 'block:t7', '.text-block-link'],
+      [$e, '&:nth-child(3) a', 'block:t7', '.text-block-link'],
+      [$e, '&:nth-child(2) a', 'block:t7', '.text-block-link'],
     ] as $args) {
       $queries[] = ['op' => 'reaches', 'args' => $args];
     }
     foreach ([[$a, '> d-text::before'], ['block:t1', '&::before'], ['block:ghost', '&::before']] as $args) {
       $queries[] = ['op' => 'matching', 'args' => $args];
     }
-    foreach ([['block:t1', '&::after', 'block:t1'], ['block:t1', '&::after', 'block:t2'], [$a, '&::after', 'block:t1'], [$a, '> d-text::before', 'block:t1']] as $args) {
+    foreach ([
+      ['block:t1', '&::after', 'block:t1'],
+      ['block:t1', '&::after', 'block:t2'],
+      [$a, '&::after', 'block:t1'],
+      [$a, '> d-text::before', 'block:t1'],
+    ] as $args) {
       $queries[] = ['op' => 'matches', 'args' => $args];
     }
     // The wear: the facts both twins derive from the map, a variant
@@ -1354,21 +1513,35 @@ class SelectorMatcherTest extends UnitTestCase {
       $queries[] = ['op' => 'facts', 'args' => [$key]];
     }
     foreach ([
-      [$g, "> d-text.$featured"], [$g, "> d-block.$featured"],
+      [$g, "> d-text.$featured"],
+      [$g, "> d-block.$featured"],
       [$g, '> d-text.daedalus-stylish-variant--card--region-first--block-text-1'],
-      [$g, '> d-text.daedalus-stylish-variant--ghost'], [$a, "d-text.$featured"],
-      [$g, "> d-text:not(.$featured)"], [$a, "d-container:has(> d-text.$featured)"],
-      [$g, '> d-text.active'], [$g, "> p.$featured"], [$g, '> d-text[aria-current="page"]'],
-      [$g, '> d-text:hover'], [$g, '> d-text:visited'], [$g, '> *:not(:hover)'], [$g, '> d-text:hover a'],
-      ['container:sec-h', "&.$featured > *"], [$g, "&.$featured > *"], [$g, '&:hover > d-image'],
-      [$g, '&.open > d-image'], [$g, "> .$featured"], [$g, "> d-text:not(d-text.$featured)"],
+      [$g, '> d-text.daedalus-stylish-variant--ghost'],
+      [$a, "d-text.$featured"],
+      [$g, "> d-text:not(.$featured)"],
+      [$a, "d-container:has(> d-text.$featured)"],
+      [$g, '> d-text.active'],
+      [$g, "> p.$featured"],
+      [$g, '> d-text[aria-current="page"]'],
+      [$g, '> d-text:hover'],
+      [$g, '> d-text:visited'],
+      [$g, '> *:not(:hover)'],
+      [$g, '> d-text:hover a'],
+      ['container:sec-h', "&.$featured > *"],
+      [$g, "&.$featured > *"],
+      [$g, '&:hover > d-image'],
+      [$g, '&.open > d-image'],
+      [$g, "> .$featured"],
+      [$g, "> d-text:not(d-text.$featured)"],
       [$g, '> d-text:not(.active)'],
     ] as $args) {
       $queries[] = ['op' => 'matching', 'args' => $args];
     }
     foreach ([
-      [$g, "> d-text.$featured", 'block:t11', NULL], [$g, "> d-text.$featured", 'block:t10', NULL],
-      [$g, "> d-text.$featured a", 'block:t10', 'a'], [$g, '> d-text:hover a', 'block:t10', 'a'],
+      [$g, "> d-text.$featured", 'block:t11', NULL],
+      [$g, "> d-text.$featured", 'block:t10', NULL],
+      [$g, "> d-text.$featured a", 'block:t10', 'a'],
+      [$g, '> d-text:hover a', 'block:t10', 'a'],
       [$g, '> d-text:hover', 'block:t11', NULL],
     ] as $args) {
       $queries[] = ['op' => 'reaches', 'args' => $args];
@@ -1378,21 +1551,38 @@ class SelectorMatcherTest extends UnitTestCase {
     // :has(), on the anchor.
     $card = 'daedalus-stylish-variant--card--region-first--block-text-1';
     foreach ([
-      [$g, '> *:is(d-text, d-image)'], [$g, '> *:is(p, h3)'], [$g, '> *:is(d-text:first-child, d-image)'], [$g, '> *:is(p:first-child, d-image)'],
-      [$a, '*:is(d-text, d-image)'], [$g, '> d-text:is(:hover, :focus-within)'], [$g, '> d-text:is(:hover, :focus-within) a'],
-      [$g, "> *:is(.$featured, .$card)"], [$g, '> *:is(.featured, d-image)'], [$g, '> *:is(.text-block-link, d-image)'],
-      [$g, "> *:is(d-text.$featured, d-image)"], [$g, '> *:is(d-text.active, d-image)'],
-      [$g, '> p:is(:first-child, :last-child)'], [$g, '> *:is(:first-child, :last-child)'], [$g, '> *:is(:has(> d-image), :not(d-text))'],
-      [$g, '> d-container:has(> *:is(d-image, d-text))'], [$a, '> d-container:has(> *:is(d-image, d-text))'],
-      [$page, '> *:has(> *:is(d-image, d-container))'], [$g, '> d-text:has(:is(a, em))'],
-      [$g, '&:is(:first-child, :last-child) > *'], ['container:sec-c', '&:is(:first-child, :last-child) > *'], ['container:sec-h', "&:is(.$featured, .$card) > *"],
+      [$g, '> *:is(d-text, d-image)'],
+      [$g, '> *:is(p, h3)'],
+      [$g, '> *:is(d-text:first-child, d-image)'],
+      [$g, '> *:is(p:first-child, d-image)'],
+      [$a, '*:is(d-text, d-image)'],
+      [$g, '> d-text:is(:hover, :focus-within)'],
+      [$g, '> d-text:is(:hover, :focus-within) a'],
+      [$g, "> *:is(.$featured, .$card)"],
+      [$g, '> *:is(.featured, d-image)'],
+      [$g, '> *:is(.text-block-link, d-image)'],
+      [$g, "> *:is(d-text.$featured, d-image)"],
+      [$g, '> *:is(d-text.active, d-image)'],
+      [$g, '> p:is(:first-child, :last-child)'],
+      [$g, '> *:is(:first-child, :last-child)'],
+      [$g, '> *:is(:has(> d-image), :not(d-text))'],
+      [$g, '> d-container:has(> *:is(d-image, d-text))'],
+      [$a, '> d-container:has(> *:is(d-image, d-text))'],
+      [$page, '> *:has(> *:is(d-image, d-container))'],
+      [$g, '> d-text:has(:is(a, em))'],
+      [$g, '&:is(:first-child, :last-child) > *'],
+      ['container:sec-c', '&:is(:first-child, :last-child) > *'],
+      ['container:sec-h', "&:is(.$featured, .$card) > *"],
     ] as $args) {
       $queries[] = ['op' => 'matching', 'args' => $args];
     }
     foreach ([
-      [$g, '> d-text:is(:hover, :focus-within) a', 'block:t10', 'a'], [$g, '> d-text:is(:hover, :focus-within) a', 'block:t9', 'a'],
-      [$g, '> d-text:is(:hover, :focus-within)', 'block:t11', NULL], [$g, '> *:is(d-text, d-image) a', 'block:t10', 'a'],
-      [$g, '> *:is(d-text, d-image)', 'block:img2', NULL], [$g, '> *:is(d-text, d-image)', 'container:sec-h', NULL],
+      [$g, '> d-text:is(:hover, :focus-within) a', 'block:t10', 'a'],
+      [$g, '> d-text:is(:hover, :focus-within) a', 'block:t9', 'a'],
+      [$g, '> d-text:is(:hover, :focus-within)', 'block:t11', NULL],
+      [$g, '> *:is(d-text, d-image) a', 'block:t10', 'a'],
+      [$g, '> *:is(d-text, d-image)', 'block:img2', NULL],
+      [$g, '> *:is(d-text, d-image)', 'container:sec-h', NULL],
     ] as $args) {
       $queries[] = ['op' => 'reaches', 'args' => $args];
     }
@@ -1411,9 +1601,17 @@ class SelectorMatcherTest extends UnitTestCase {
       $queries[] = ['op' => 'ancestors', 'args' => [$key]];
     }
     foreach ([
-      ['block:t6', 'p', $body, '.s-q1'], [$c, 'p', $body, 'p'], [$c, 'a', $body, 'a'], [$page, 'p', $body, '.s-q1'],
-      [$c, '> * > d-text p', $body, '.s-q1'], [$c, '> * > d-text .s-q1', $body, '.s-q1'], [$c, '> d-text p', $body, 'p'],
-      [$c, 'em', $body, 'em'], [$a, 'p', $body, 'p'], [$c, 'p', $body, NULL], ['block:t6', '&::before', $body, '&::before'],
+      ['block:t6', 'p', $body, '.s-q1'],
+      [$c, 'p', $body, 'p'],
+      [$c, 'a', $body, 'a'],
+      [$page, 'p', $body, '.s-q1'],
+      [$c, '> * > d-text p', $body, '.s-q1'],
+      [$c, '> * > d-text .s-q1', $body, '.s-q1'],
+      [$c, '> d-text p', $body, 'p'],
+      [$c, 'em', $body, 'em'],
+      [$a, 'p', $body, 'p'],
+      [$c, 'p', $body, NULL],
+      ['block:t6', '&::before', $body, '&::before'],
       [$body, 'p', $body, 'p'],
     ] as $args) {
       $queries[] = ['op' => 'reaches', 'args' => $args];

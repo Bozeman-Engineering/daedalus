@@ -65,8 +65,8 @@ use Drupal\daedalus_stylish\VariantRepository;
  *   element-relative style map as stored (the client's layer math resolves a
  *   worn reference through it for live preview; the prompt and the schema never
  *   print it), scope as saved, applies {depth: root} when the axis is root-only
- *   in the scope's declaration, owned_by from the blueprint ownership fields when
- *   that module exists. Spellings derive from the scope's variant_axes
+ *   in the scope's declaration, owned_by from the blueprint ownership fields
+ *   when that module exists. Spellings derive from the scope's variant_axes
  *   declaration through the ONE rule (spellings()), never hand-written, and the
  *   provider validates every published variant's axis against that declaration:
  *   a style-axis variant spells as its machine name in the class slot; a
@@ -423,14 +423,14 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   /**
    * Removes a token (remove_material).
    *
-   * Operation shape: {kind: token, id: "{scale}/{name}"}. On a consuming
-   * site the site's record goes (a site-minted token is deleted, a site
-   * override reveals the package's token); a shipped token the site never
-   * touched refuses. The result carries the skin while the token still
-   * exists (revealed, or its removal staged) and nothing once it is gone.
-   * A REFERENCED token is the usage lane's: the route lane stages the
-   * rewrite-then-delete batch (SkinMaterialManager::deleteToken()), the op spine
-   * refuses with the count.
+   * Operation shape: {kind: token, id: "{scale}/{name}"}. On a consuming site
+   * the site's record goes (a site-minted token is deleted, a site override
+   * reveals the package's token); a shipped token the site never touched
+   * refuses. The result carries the skin while the token still exists
+   * (revealed, or its removal staged) and nothing once it is gone. A REFERENCED
+   * token is the usage lane's: the route lane stages the rewrite-then-delete
+   * batch (SkinMaterialManager::deleteToken()), the op spine refuses with the
+   * count.
    */
   protected function removeToken(string $id, bool $stage_batch): MaterialGestureResult {
     $this->requirePermission('delete skin materials', 'administer skins', 'Deleting tokens requires the "delete skin materials" permission.', 'delete skin materials in use');
@@ -1193,16 +1193,15 @@ final class DaedalusStylishMaterialsProvider implements MaterialsProviderInterfa
   /**
    * The active published skin's minted tokens on declared scales.
    *
-   * A token record is always `updatable`, shipped or not: a consuming
-   * site's write to a shipped token lands in the skin's site layer over
-   * the package's record, never in the package's, so the distro lock
-   * (updatable() for the other kinds) refuses nothing here. What the lock
-   * does refuse for a token is its removal (SkinMaterialManager::deleteToken()).
-   * The origin is per token: shipped when the skin is shipped and its
-   * package layer holds the name (a site override over it keeps the
-   * shipped origin, the package still ships the token), user for a
-   * token the site minted into the site layer and for every token of
-   * the site's own skin.
+   * A token record is always `updatable`, shipped or not: a consuming site's
+   * write to a shipped token lands in the skin's site layer over the package's
+   * record, never in the package's, so the distro lock (updatable() for the
+   * other kinds) refuses nothing here. What the lock does refuse for a token is
+   * its removal (SkinMaterialManager::deleteToken()). The origin is per token:
+   * shipped when the skin is shipped and its package layer holds the name (a
+   * site override over it keeps the shipped origin, the package still ships the
+   * token), user for a token the site minted into the site layer and for every
+   * token of the site's own skin.
    *
    * @return \Drupal\daedalus_blueprint\Materials\MaterialRecord[]
    *   One record per token, declared scale order then stored order.

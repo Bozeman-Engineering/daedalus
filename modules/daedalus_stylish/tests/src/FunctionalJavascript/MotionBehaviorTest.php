@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\FunctionalJavascript;
 
+use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\Tests\daedalus\Traits\EditModeTrait;
@@ -502,9 +503,11 @@ class MotionBehaviorTest extends WebDriverTestBase {
     // payload carries them and the compiled skin file declares them.
     $skin_storage = \Drupal::entityTypeManager()->getStorage('daedalus_skin');
     $worn = $skin_storage->loadByProperties(['machine_name' => 'olivero']);
+    $olivero = reset($worn);
+    assert($olivero instanceof DaedalusStylishSkinInterface);
     $this->assertArrayHasKey(
       'fade_in',
-      reset($worn)->animations(),
+      $olivero->animations(),
       'The recipe install landed the olivero skin with its fade_in animation.',
     );
     $this->assertNotEmpty(
@@ -745,7 +748,9 @@ class MotionBehaviorTest extends WebDriverTestBase {
     // never strict-gated.
     $skin_storage->resetCache();
     $worn = $skin_storage->loadByProperties(['machine_name' => 'olivero']);
-    $this->assertArrayHasKey('wiggle', reset($worn)->animations(), 'The mint persisted on the worn skin (the name is the keyframes ident tail).');
+    $olivero = reset($worn);
+    assert($olivero instanceof DaedalusStylishSkinInterface);
+    $this->assertArrayHasKey('wiggle', $olivero->animations(), 'The mint persisted on the worn skin (the name is the keyframes ident tail).');
 
     // The completion source: back in the styling place in code mode (a
     // mode click always lands in the styling place, so the one click
@@ -859,10 +864,10 @@ class MotionBehaviorTest extends WebDriverTestBase {
     $session->executeScript("Drupal.Daedalus.Selection.select('$block_b_key');");
 
     // The wear bar renders WORN references only: a fresh block shows no
-    // Animation row, just the add row. The picker it opens groups the
-    // offer by axis: the block kind's animation axis (declared by data in
-    // daedalus_stylish.page_builder.yml, labelled through the payload's axisLabels)
-    // heads the shipped family by label.
+    // Animation row, just the add row. The picker it opens groups the offer by
+    // axis: the block kind's animation axis (declared by data in
+    // daedalus_stylish.page_builder.yml, labelled through the payload's
+    // axisLabels) heads the shipped family by label.
     $animation_row = $this->wornRowXpath('Animation');
     $animation_row_js = 'document.evaluate(' . json_encode($animation_row) . ', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue';
     $add_row = '#daedalus_stylish_inspector .daedalus-stylish-wear-bar__add';

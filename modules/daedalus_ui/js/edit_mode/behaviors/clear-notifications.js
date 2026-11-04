@@ -6,7 +6,7 @@
    * from the storage event the write fires.
    */
   Drupal.behaviors.DaedalusUiNotificationsClear = {
-    attach: (context, settings) => {
+    attach: (context) => {
       // Handle clear notifications button.
       once('ClearNotifications', '#clear-notifications', context).forEach(
         (clearButton) => {

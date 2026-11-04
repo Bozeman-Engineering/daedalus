@@ -214,6 +214,4 @@ class RelativeSelectorConvergence implements StyleStoreConvergenceInterface {
     return $lines;
   }
 
-
-
 }

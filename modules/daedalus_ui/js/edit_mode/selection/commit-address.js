@@ -39,10 +39,7 @@ export const commitAddress = (key, selector = null) => {
   }
   const standing = reselect ? null : target;
   const next = selector ? { key, selector } : null;
-  if (
-    standing?.key !== next?.key ||
-    standing?.selector !== next?.selector
-  ) {
+  if (standing?.key !== next?.key || standing?.selector !== next?.selector) {
     store.dispatch(setTarget(next));
   }
 };

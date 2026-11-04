@@ -6,6 +6,7 @@ namespace Drupal\daedalus_stylish\EventSubscriber;
 
 use Drupal\Core\Config\ConfigCrudEvent;
 use Drupal\Core\Config\ConfigEvents;
+use Drupal\Core\Config\Entity\ConfigEntityTypeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\DesignSystem\DesignSystemInterface;
@@ -14,9 +15,9 @@ use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialsChangeSet;
 use Drupal\daedalus_blueprint\Materials\MaterialsRosterBuilder;
 use Drupal\daedalus_stylish\Materials\DaedalusStylishMaterialsProvider;
-use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\daedalus_stylish\ShippedSync;
 use Drupal\daedalus_stylish\SkinManager;
+use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\daedalus_stylish\StyleGuide;
 use Drupal\daedalus_stylish\VariantStylesheet;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -175,7 +176,9 @@ final class DesignSystemSwitchSubscriber implements EventSubscriberInterface {
    * The config name a design system entity saves under.
    */
   protected function systemConfigName(string $id): string {
-    return $this->entityTypeManager->getDefinition(DesignSystem::ENTITY_TYPE_ID)->getConfigPrefix() . '.' . $id;
+    $definition = $this->entityTypeManager->getDefinition(DesignSystem::ENTITY_TYPE_ID);
+    assert($definition instanceof ConfigEntityTypeInterface);
+    return $definition->getConfigPrefix() . '.' . $id;
   }
 
   /**

@@ -11,6 +11,7 @@ use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
 use Drupal\daedalus_blueprint\Plugin\Block\SlotBlock;
 use Drupal\daedalus_blueprint_library\BlueprintInterface;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\node\Entity\Node;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
 use Drupal\Tests\daedalus\Traits\EditModeTrait;
@@ -38,15 +39,14 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * The seams only a browser sees:
  * - THE PORTAL FROM A FRAME HOST: the header door, held by the frame and
  *   showing its default, wears the BLUEPRINT's portal (the door showing a
- *   default reads as the linked placement it is), and the frame's nodes
- *   are outside the page's projection (never selectable). Hovering inside the door paints the
- *   chip with the header's label, an Edit link to its canvas and the
- *   claim; the double-click leaves through Portal.leave() for the
- *   blueprint canvas carrying the page as `destination`, the canvas's
- *   first visit lands in Edit Mode (the server's arming, no cookie of the
- *   page's reaches it), and Save there returns to the page in ITS mode
- *   (the page's own path-scoped edit cookie, untouched by the canvas's
- *   `none`).
+ *   default reads as the linked placement it is), and the frame's nodes are
+ *   outside the page's projection (never selectable). Hovering inside the door
+ *   paints the chip with the header's label, an Edit link to its canvas and the
+ *   claim; the double-click leaves through Portal.leave() for the blueprint
+ *   canvas carrying the page as `destination`, the canvas's first visit lands
+ *   in Edit Mode (the server's arming, no cookie of the page's reaches it), and
+ *   Save there returns to the page in ITS mode (the page's own path-scoped edit
+ *   cookie, untouched by the canvas's `none`).
  * - SLOT CLAIMING ACROSS FRAME AND PAGE IN ONE RENDER: the chip's "Detach
  *   into this slot" sends detach_blueprint {slot} for the page and reloads
  *   (the frame is outside the mutation response); the page's own copy of
@@ -97,6 +97,11 @@ class SiteFrameBehaviorTest extends WebDriverTestBase {
 
   use EditModeTrait;
   use DaedalusFixtureTrait;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
 
   /**
    * The frame's header slot door (daedalus_blueprint.frame.daedalus_theme).
@@ -213,7 +218,9 @@ class SiteFrameBehaviorTest extends WebDriverTestBase {
     $storage = \Drupal::entityTypeManager()->getStorage('node');
     $storage->resetCache([$nid]);
     $slots = [];
-    foreach ($storage->load($nid)->get('layout_builder__layout')->getSections() as $section) {
+    $sections = $storage->load($nid)->get('layout_builder__layout');
+    assert($sections instanceof SectionListInterface);
+    foreach ($sections->getSections() as $section) {
       $slot = LayoutSerializer::slotOf($section);
       if ($slot !== NULL) {
         $slots[$slot] = count($section->getComponents());
@@ -238,7 +245,6 @@ class SiteFrameBehaviorTest extends WebDriverTestBase {
     $frame = Frame::load('daedalus_theme');
     $this->assertNotNull($frame, 'The recipe shipped daedalus_theme\'s site frame.');
     $frame_url = $frame->toUrl()->toString();
-    $frame_label = (string) $frame->label();
 
     $page = Node::create(['type' => 'page', 'title' => 'Framed page']);
     $page->save();

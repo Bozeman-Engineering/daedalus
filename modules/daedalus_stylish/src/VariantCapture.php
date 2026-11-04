@@ -76,7 +76,7 @@ final class VariantCapture {
         continue;
       }
       $own = StyleEntry::stripVariants($entry);
-      $refs = $relative === '' ? [] : $this->travellingRefs($entry);
+      $refs = $relative === '' ? [] : $this->travelingRefs($entry);
       if ($own !== [] || $refs !== []) {
         $entries[$relative] = $refs !== [] ? ['variants' => $refs] + $own : $own;
       }
@@ -95,7 +95,7 @@ final class VariantCapture {
         continue;
       }
       $overrides = StyleEntry::stripVariants($entry);
-      $refs = $this->travellingRefs($entry);
+      $refs = $this->travelingRefs($entry);
       if ($overrides === [] && $refs === []) {
         continue;
       }
@@ -159,7 +159,7 @@ final class VariantCapture {
    * @return array<int, array{variant: string, fragment: string}>
    *   The references, in the entry's application order.
    */
-  protected function travellingRefs(array $entry): array {
+  protected function travelingRefs(array $entry): array {
     return array_values(array_map(static fn (array $ref): array => [
       'variant' => $ref['variant'],
       'fragment' => $ref['fragment'],

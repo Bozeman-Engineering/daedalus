@@ -33,10 +33,10 @@ use Drupal\layout_builder\SectionStorageInterface;
  * memory); resolving the storage's identity alone (a tempstore key) seeds
  * nothing. Nothing is persisted here: the caller decides to stage or save.
  *
- * Consumers: daedalus_layout's render path (DaedalusLayoutEntityHelperTrait), the tempstore
- * write path (LayoutTempstoreStrategy), and daedalus_blueprint's Layout
- * Builder persistence (LayoutTempstoreHelper). Keep them delegating here;
- * a diverging copy of this logic makes the published UI storage and the
+ * Consumers: daedalus_layout's render path (DaedalusLayoutEntityHelperTrait),
+ * the tempstore write path (LayoutTempstoreStrategy), and daedalus_blueprint's
+ * Layout Builder persistence (LayoutTempstoreHelper). Keep them delegating
+ * here; a diverging copy of this logic makes the published UI storage and the
  * tempstore keys disagree.
  */
 class SectionStorageHelper {

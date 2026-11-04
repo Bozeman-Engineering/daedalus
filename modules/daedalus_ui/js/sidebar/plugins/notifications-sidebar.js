@@ -158,7 +158,7 @@
    * Initialize notifications on page load
    */
   Drupal.behaviors.DaedalusUiNotificationsInit = {
-    attach: (context, settings) => {
+    attach: (context) => {
       // If the notifications sidebar is visible on page load, render messages
       once('notifications-init', '#notifications', context).forEach(
         (sidebar) => {
@@ -176,7 +176,7 @@
    * @return {string}
    *   HTML markup for empty state.
    */
-  Drupal.theme.notificationsEmpty = function () {
+  Drupal.theme.notificationsEmpty = function notificationsEmpty() {
     return `<div class="notifications-empty daedalus-ui-panel-empty">${Drupal.t(
       'No notifications yet.',
     )}</div>`;
@@ -193,7 +193,10 @@
    * @return {string}
    *   HTML markup for the notification item.
    */
-  Drupal.theme.notificationItem = function (notification, formattedTime) {
+  Drupal.theme.notificationItem = function notificationItem(
+    notification,
+    formattedTime,
+  ) {
     // A notification with an element target (DOM id or selectable key) is
     // clickable: the list's delegated handler scrolls back to the element.
     const target = notification.target

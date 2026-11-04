@@ -61,6 +61,13 @@ const WRAPPER_TAGS = new Set(['ul', 'ol', 'dl']);
 
 /**
  * One annotation instance as a markup-view row.
+ *
+ * @param {{class: string, tag?: string, label?: string, text?: string, children?: Array}} instance
+ *   An instance of the owner's annotation: its carrier class, the tag it
+ *   rendered as, its words and the instances inside it.
+ *
+ * @return {object}
+ *   The row, its children mapped the same way.
  */
 const toRow = (instance) => {
   const word = instance.label ?? instance.tag ?? instance.class;
@@ -96,6 +103,7 @@ const toRow = (instance) => {
  *
  * @return {Array<{selector: string, label: string, elementType: string,
  *   icon: string, tag?: string, children: Array}>}
+ *   The annotation's instances as rows, empty without an annotation.
  */
 export const instanceRows = (key) => {
   const instances = markupForKey(key)?.instances;

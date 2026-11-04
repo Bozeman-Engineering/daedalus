@@ -45,10 +45,15 @@
    *   A key of the selection set.
    *
    * @return {{target: ?{key: string, selector: string}, address: ?{key: string, selector: string}}}
+   *   The subject facet and the write address riding the key, each null
+   *   when absent or when the key is not the single selection.
    */
   const stylingOf = (key) =>
     key === app.Selection.getSelected()
-      ? { target: app.Selection.getTarget(), address: app.Selection.getAddress() }
+      ? {
+          target: app.Selection.getTarget(),
+          address: app.Selection.getAddress(),
+        }
       : { target: null, address: null };
 
   /**
@@ -61,6 +66,8 @@
    *   A facet or an address.
    *
    * @return {string}
+   *   The rule's words, prefixed by the owner's label when the owner is
+   *   not the selected element.
    */
   const ruleWords = (key, rule) => {
     const words = app.Blueprint.targetLabel(rule.key, rule.selector);
@@ -81,6 +88,7 @@
    *   The write address riding it, if any.
    *
    * @return {string}
+   *   The chip's words.
    */
   const labelOf = (key, target, address) => {
     const label = app.Blueprint.labelForKey(key);
@@ -150,7 +158,8 @@
       const label = labelOf(key, target, address);
 
       const chip = document.createElement('div');
-      chip.className = 'daedalus-ai-context-item daedalus-ui-chip daedalus-ui-chip--tinted';
+      chip.className =
+        'daedalus-ai-context-item daedalus-ui-chip daedalus-ui-chip--tinted';
       chip.setAttribute('data-selection-key', key);
       if (target) {
         chip.setAttribute('data-target-selector', target.selector);
@@ -211,7 +220,10 @@
   Drupal.behaviors.daedalusAiChatChips = {
     attach() {
       if (Drupal.Daedalus.AiContext) {
-        Drupal.Daedalus.AiContext.register('selected_elements', selectedElements);
+        Drupal.Daedalus.AiContext.register(
+          'selected_elements',
+          selectedElements,
+        );
         // The turn's mutation-response payloads diff their asset attachments
         // against the
         // page state (libraries ride compressed, exactly as

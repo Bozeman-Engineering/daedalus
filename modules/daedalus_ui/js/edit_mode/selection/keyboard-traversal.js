@@ -10,10 +10,7 @@ import {
   projectionRoot,
   projectionIndex,
 } from '../components/page-elements/projection-index';
-import {
-  reachPredicate,
-  seatAddress,
-} from '../components/page-elements/reach';
+import { reachPredicate, seatAddress } from '../components/page-elements/reach';
 import { seatOf, siblingOf, parentOf, firstRowOf } from './traversal';
 
 /**
@@ -82,6 +79,10 @@ import { seatOf, siblingOf, parentOf, firstRowOf } from './traversal';
  * label (Raster, List item) from the one label resolver. The panel row
  * reveals (and takes focus when focus is in the panel) through the
  * tree's own selection effects.
+ *
+ * @param {{address: string, key: string, selector: ?string}} step
+ *   The traversal step (traversal.js), the address split into the
+ *   element key and the selector it targets.
  */
 const commit = (step) => {
   commitAddress(step.key, step.selector);
@@ -96,6 +97,12 @@ const commit = (step) => {
  * `control` fact as the keyboard sensor read it in whichever document
  * the key was pressed. Typing (a contenteditable, an open editor's
  * widget) is the dispatcher's typing partition, never reached here.
+ *
+ * @param {{control: boolean}} stroke
+ *   The stroke as the keyboard sensor read it.
+ *
+ * @return {boolean}
+ *   Whether the grammar declines the key.
  */
 const declines = (stroke) => stroke.control;
 

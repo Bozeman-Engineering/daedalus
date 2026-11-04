@@ -224,6 +224,7 @@ class ValueBlockTransformTest extends NestedStorageKernelTestBase {
     $this->assertSame('Hydrated', $saved->get('field_text')->value);
     $this->assertSame($target->id(), $saved->get('field_ref')->entity->id());
     $row = \Drupal::database()->select('inline_block_usage', 'u')->fields('u')->condition('block_content_id', $saved->id())->execute()->fetchObject();
+    assert(is_object($row));
     $this->assertSame('entity_test', $row->layout_entity_type, 'The saved block is used by the content host.');
   }
 

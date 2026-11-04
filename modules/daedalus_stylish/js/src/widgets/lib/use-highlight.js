@@ -9,8 +9,11 @@ import { pseudoOf } from '../../computed-read.js';
  * splits root from selector, the one split every key grammar shares.
  *
  * @param {string} modelKey
+ *   The bound style key (a control model's `keys` entry).
  *
  * @return {{key: string, selector: ?string}}
+ *   The selectable key and the selector after the first `::`, null
+ *   for a plain key.
  */
 export const styleTarget = (modelKey) => {
   const pos = modelKey.indexOf('::');

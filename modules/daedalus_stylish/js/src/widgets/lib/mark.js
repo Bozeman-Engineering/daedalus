@@ -51,6 +51,14 @@ export const markState = (origin, slide = false) => ({
  * The mark element. A dimension field clones the vnode it is handed
  * with `slide` set to its live-scrub fact, so a row renders
  * `<Mark origin={origin} />` and never guesses the shape.
+ *
+ * @param {object} props
+ *   The component's props.
+ * @param {?object} [props.origin]
+ *   The row's origin (choice-row-model.js originFor(), box-model.js
+ *   sidesOrigin()), null for a row with none.
+ * @param {boolean} [props.slide]
+ *   Whether a live scrub is moving the value.
  */
 export const Mark = ({ origin = null, slide = false }) => {
   const state = markState(origin, slide);

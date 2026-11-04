@@ -76,8 +76,13 @@ export const continuedKey = (key, relative) => {
   if (pos === -1) {
     return `${key}${relative}`;
   }
-  const continued = under(key.slice(pos + SUFFIX.length), relative.slice(SUFFIX.length));
-  return continued === null ? null : `${key.slice(0, pos)}${SUFFIX}${continued}`;
+  const continued = under(
+    key.slice(pos + SUFFIX.length),
+    relative.slice(SUFFIX.length),
+  );
+  return continued === null
+    ? null
+    : `${key.slice(0, pos)}${SUFFIX}${continued}`;
 };
 
 /**
@@ -103,6 +108,8 @@ export const continuedKey = (key, relative) => {
  *   Another style-map key.
  *
  * @return {?string}
+ *   The map key's relative under the key ('::...'), or null when it is
+ *   no continuation.
  */
 export const relativeUnder = (key, mapKey) => {
   if (typeof key !== 'string' || typeof mapKey !== 'string' || mapKey === key) {
@@ -134,12 +141,14 @@ export const relativeUnder = (key, mapKey) => {
  * StyleMapValidator::validateAt()'s STYLE_INSTANCE_PART_IN_VARIANT. The
  * styles clipboard (copy-styles.js) leaves them behind for the same
  * reason: a pasted instance part would reach nothing on its new host.
+ *
+ * @param {string} relative
+ *   An element-relative key ('' or '::selector').
  */
 export const isInstanceRelative = (relative) =>
   typeof relative === 'string' &&
   relative.startsWith('::') &&
   selectorClasses(relative.slice(2)).some((name) => INSTANCE_PART.test(name));
-
 
 /**
  * The structured variant references a style entry carries, in list order.
@@ -160,6 +169,10 @@ export const isInstanceRelative = (relative) =>
  * order; delivery emits in axis-declaration order (orderedEntryRefs),
  * so where two axes overlap on a property the rendered winner is the
  * vocabulary order, not this list's.
+ *
+ * @param {?object} entry
+ *   A style entry (condition layers plus the "variants" list), or
+ *   anything else, which carries none.
  *
  * @return {Array<{variant: string, fragment: string, via: (string|null)}>}
  *   The references, [] when the entry carries none.
@@ -198,6 +211,9 @@ export const entryRefs = (entry) => {
  * fragment reference counts as wearing its variant exactly like a root
  * reference does.
  *
+ * @param {?object} entry
+ *   A style entry.
+ *
  * @return {string[]}
  *   The references, [] when the entry carries none.
  */
@@ -206,6 +222,9 @@ export const entryVariants = (entry) =>
 
 /**
  * Whether a style entry references any variant.
+ *
+ * @param {?object} entry
+ *   A style entry.
  */
 export const isVariantRef = (entry) => entryRefs(entry).length > 0;
 
@@ -219,6 +238,11 @@ export const isVariantRef = (entry) => entryRefs(entry).length > 0;
  * The ONE depth read every depth-gated consumer shares, and depth gates
  * offers only (the axis vocabulary's root-only axes): a grant is a
  * function of the declaration alone, so nothing legality-shaped asks here.
+ *
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()).
+ * @param {string} uuid
+ *   The section's uuid.
  */
 export const isNestedSectionUuid = (tree, uuid) => {
   const sections = Array.isArray(tree) ? tree : [];
@@ -264,6 +288,17 @@ export const isNestedSectionUuid = (tree, uuid) => {
  * uuid the tree does not carry, degrades to the ungated root posture,
  * mirroring the server's isNestedSection.
  *
+ * @param {?object} guide
+ *   The style guide (the served declarations and their axes).
+ * @param {string} key
+ *   The selectable key: an element, a part or a rule.
+ * @param {object} blockTypes
+ *   Component uuid to block type (source.getBlockTypes()).
+ * @param {object} sectionLayouts
+ *   Section uuid to layout id (source.getSectionLayouts()).
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()), the depth read's input.
+ *
  * @return {string[]}
  *   The axis names, ['style'] at minimum.
  */
@@ -275,7 +310,8 @@ export const axisVocabulary = (
   tree = [],
 ) => {
   const full = typeof key === 'string' ? parseKey(key) : null;
-  const parsed = full ?? parseKey(typeof key === 'string' ? key.split('::')[0] : key);
+  const parsed =
+    full ?? parseKey(typeof key === 'string' ? key.split('::')[0] : key);
   if (!parsed) {
     return ['style'];
   }
@@ -283,7 +319,8 @@ export const axisVocabulary = (
   // A rule (its landing is an element scope) reads its landing's
   // declaration; every other key its root's.
   const rule =
-    parsed.selector !== null && captureScope(key, blockTypes, sectionLayouts) !== null;
+    parsed.selector !== null &&
+    captureScope(key, blockTypes, sectionLayouts) !== null;
   const declaration = rule
     ? landingForKey(guide, parsed, bundle)
     : declarationForKey(guide, { ...parsed, selector: null }, bundle);
@@ -316,6 +353,11 @@ export const axisVocabulary = (
  * ('style' → 'Style'). The one axis-label rule for every display consumer
  * (wear bar row, save-as-variant axis picker, library axis chip/filter).
  *
+ * @param {?object} guide
+ *   The style guide (its axisLabels map).
+ * @param {string} axis
+ *   The axis machine name.
+ *
  * @return {string}
  *   The label.
  */
@@ -329,6 +371,15 @@ export const axisLabel = (guide, axis) =>
  * The one read behind the axis-fact readers: the root declaration's
  * `axes` map as ClientStyleGuide serves it (axis => {label, root_only,
  * description, owns}). Sub-element keys resolve to their root.
+ *
+ * @param {?object} guide
+ *   The style guide.
+ * @param {string} key
+ *   The selectable key.
+ * @param {object} blockTypes
+ *   Component uuid to block type.
+ * @param {object} sectionLayouts
+ *   Section uuid to layout id.
  */
 const servedAxes = (guide, key, blockTypes = {}, sectionLayouts = {}) => {
   const parsed = parseKey(typeof key === 'string' ? key.split('::')[0] : key);
@@ -350,6 +401,17 @@ const servedAxes = (guide, key, blockTypes = {}, sectionLayouts = {}) => {
  *
  * The client twin of VocabularyRoster::axisDescriptions(): the axis's
  * meaning as the declaration wrote it for a designer.
+ *
+ * @param {?object} guide
+ *   The style guide.
+ * @param {string} key
+ *   The selectable key.
+ * @param {string} axis
+ *   The axis machine name.
+ * @param {object} blockTypes
+ *   Component uuid to block type.
+ * @param {object} sectionLayouts
+ *   Section uuid to layout id.
  *
  * @return {string|null}
  *   The description.
@@ -373,6 +435,17 @@ export const axisDescription = (
  *
  * The client twin of VocabularyRoster::axisOwns(): the properties the
  * axis's values write, which a wear of the axis stands in for.
+ *
+ * @param {?object} guide
+ *   The style guide.
+ * @param {string} key
+ *   The selectable key.
+ * @param {string} axis
+ *   The axis machine name.
+ * @param {object} blockTypes
+ *   Component uuid to block type.
+ * @param {object} sectionLayouts
+ *   Section uuid to layout id.
  *
  * @return {string[]}
  *   The owned property names.
@@ -413,6 +486,14 @@ export const axisOwns = (
  * the target declaration's. With no vocabulary, or fewer than two
  * references, the stored list passes through unchanged.
  *
+ * @param {?object} entry
+ *   A style entry.
+ * @param {object[]} variants
+ *   The variant records the references resolve against.
+ * @param {?string[]} axes
+ *   The scope's axis vocabulary (axisVocabulary()), or null to keep the
+ *   stored order.
+ *
  * @return {Array<{variant: string, fragment: string, via: (string|null)}>}
  *   entryRefs() items in the order delivery layers them (later beats
  *   earlier).
@@ -445,6 +526,13 @@ export const orderedEntryRefs = (entry, variants, axes = null) => {
  * The reference-string projection of orderedEntryRefs(), for consumers
  * that care about the delivery order among variants, not the fragments.
  *
+ * @param {?object} entry
+ *   A style entry.
+ * @param {object[]} variants
+ *   The variant records the references resolve against.
+ * @param {?string[]} axes
+ *   The scope's axis vocabulary, or null to keep the stored order.
+ *
  * @return {string[]}
  *   The references in the order delivery layers them (later beats earlier).
  */
@@ -453,9 +541,13 @@ export const orderedEntryVariants = (entry, variants, axes = null) =>
 
 /**
  * An entry's own (non-reference) layers: the "variants" key stripped.
+ *
+ * @param {object} entry
+ *   A style entry.
  */
 const stripVariants = (entry) => {
-  const { variants, ...own } = entry;
+  const own = { ...entry };
+  delete own.variants;
   return own;
 };
 
@@ -471,6 +563,13 @@ const stripVariants = (entry) => {
  * layout's declaration, nested or top-level — each degrading to its kind
  * exactly as the server does without context; every other element by
  * kind. A rule key ("{key}::{selector}") answers its owner's root.
+ *
+ * @param {object} parsed
+ *   The parsed key (parseKey(): kind, uuid, selector).
+ * @param {object} blockTypes
+ *   Component uuid to block type.
+ * @param {object} sectionLayouts
+ *   Section uuid to layout id.
  */
 const rootAddress = (parsed, blockTypes, sectionLayouts) => {
   if (parsed.kind === 'block') {
@@ -499,6 +598,13 @@ const rootAddress = (parsed, blockTypes, sectionLayouts) => {
  * (a part, the children, a subjectless compound, a generated box behind
  * any of them) captures null: no variant pairs there, and the server
  * refuses a reference with a corrective naming it.
+ *
+ * @param {string} key
+ *   The selectable key: an element or a rule.
+ * @param {object} blockTypes
+ *   Component uuid to block type (source.getBlockTypes()).
+ * @param {object} sectionLayouts
+ *   Section uuid to layout id (source.getSectionLayouts()).
  *
  * @return {?string}
  *   The scope, or null when the key does not parse or its rule lands on
@@ -555,6 +661,15 @@ const SCOPE_FAMILIES = [
  * gate is soft enforcement at OFFER time (applicableVariants' tag filter)
  * — the blueprint-ownership posture: offering filters, worn references
  * always render and stay detachable.
+ *
+ * @param {string} scope
+ *   The variant's scope ('layout:twocol', 'kind:block', 'base:a').
+ * @param {string} key
+ *   The selectable key the variant would be worn at.
+ * @param {object} blockTypes
+ *   Component uuid to block type (source.getBlockTypes()).
+ * @param {object} sectionLayouts
+ *   Section uuid to layout id (source.getSectionLayouts()).
  */
 export const scopeMatches = (
   scope,
@@ -588,6 +703,9 @@ export const scopeMatches = (
  * itself, a base tag): the block the style stack (and, until T5b ports
  * their last consumer, the defaults readers below) layers beneath the
  * captured scope's own, in delivery rank order.
+ *
+ * @param {string} scope
+ *   A variant scope.
  *
  * @return {?string}
  *   The kind scope, or null.
@@ -673,6 +791,7 @@ export const blueprintProvenance = (key, tree = [], self = null) => {
  *   A variant record.
  *
  * @return {boolean}
+ *   Whether the record names an owner the roster no longer holds.
  */
 export const isOrphaned = (materials, variant) =>
   variant?.owned_by != null && !materials.has('blueprint', variant.owned_by);
@@ -686,6 +805,13 @@ export const isOrphaned = (materials, variant) =>
  * qualifier and axis-gone posture: this gates what is OFFERED, existing
  * references always render and stay detachable. Orphaned variants (owner
  * deleted) offer nowhere.
+ *
+ * @param {object} materials
+ *   The materials roster.
+ * @param {?object} variant
+ *   A variant record.
+ * @param {?string} provenance
+ *   The element's blueprint provenance (blueprintProvenance()), or null.
  */
 const ownershipOffers = (materials, variant, provenance) => {
   if (variant?.owned_by == null) {
@@ -706,6 +832,11 @@ const ownershipOffers = (materials, variant, provenance) => {
  * resolved root tag, the same answer on the leader and the satellite);
  * null means unknown, and base variants then do not offer, never
  * over-offering. Element-scoped variants ignore the tag entirely.
+ *
+ * @param {object} variant
+ *   A variant record (its scope).
+ * @param {?string} tag
+ *   The selection's rendered tag, or null when unknown.
  */
 const tagOffers = (variant, tag) =>
   !variant.scope.startsWith('base:') ||
@@ -778,6 +909,11 @@ export const applicableVariants = (
  * target's: an element's parts sit at '::.cls' beneath it, a rule's
  * continuations (relativeUnder: by descent at the same relative, its
  * own box at '::&::before') the same way.
+ *
+ * @param {?object} map
+ *   The style map (selectable key to style entry).
+ * @param {string} key
+ *   The styling target's key: an element or a rule.
  */
 export const elementEntries = (map, key) => {
   const entries = {};
@@ -802,6 +938,11 @@ export const elementEntries = (map, key) => {
 
 /**
  * Whether an element carries custom (non-reference) styles.
+ *
+ * @param {?object} map
+ *   The style map.
+ * @param {string} key
+ *   The styling target's key.
  */
 export const hasCustomStyles = (map, key) =>
   Object.keys(elementEntries(map, key)).length > 0;
@@ -865,6 +1006,11 @@ const findComponent = (nodes, uuid) => {
  *
  * Container and block roots only; every other root kind carries parts
  * only, so the table is empty and capture degrades to elementEntries().
+ *
+ * @param {string} key
+ *   The root element's selectable key (a container or a block).
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()).
  *
  * @return {object}
  *   Full map base keys → slot segment arrays for the root's subtree.
@@ -937,6 +1083,13 @@ export const subtreeSlotTable = (key, tree) => {
  * the root does. Unresolved slots are inert CSS, not breakage — the
  * picker ranks and badges, never hides.
  *
+ * @param {?object} styles
+ *   The variant's styles (its `value`: relative key to style entry).
+ * @param {string} key
+ *   The target element's selectable key.
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()).
+ *
  * @return {{resolved: number, total: number}}
  *   Resolved and total slot counts (a variant with no styles is a full
  *   fit of zero).
@@ -970,6 +1123,13 @@ export const variantFit = (styles, key, tree = []) => {
  * .sort is stable. Nothing is ever dropped: partial application is
  * experimentation, and undo/redo is the net.
  *
+ * @param {object[]} variants
+ *   The variant records to rank (applicableVariants()).
+ * @param {string} key
+ *   The target element's selectable key.
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()).
+ *
  * @return {Array<{variant: object, resolved: number, total: number}>}
  *   One entry per variant, badge-ready.
  */
@@ -986,6 +1146,11 @@ export const rankVariants = (variants, key, tree = []) =>
  * Merges two style entries, the winner's values taking precedence.
  *
  * Condition maps merge per property.
+ *
+ * @param {object} winner
+ *   The style entry whose values win.
+ * @param {?object} loser
+ *   The style entry merged beneath it.
  */
 export const mergeEntry = (winner, loser) => {
   const merged = { ...loser, ...winner };
@@ -1020,6 +1185,13 @@ export const mergeEntry = (winner, loser) => {
  * With no node tree (an out-of-date satellite, a non-layout host) the
  * table is empty and this degrades to elementEntries() — today's
  * single-element capture.
+ *
+ * @param {?object} map
+ *   The style map.
+ * @param {string} key
+ *   The capture root's selectable key.
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()).
  */
 export const captureEntries = (map, key, tree = []) => {
   const sources = captureSources(map, key, tree);
@@ -1040,8 +1212,11 @@ export const captureEntries = (map, key, tree = []) => {
  * references as {variant, fragment} only (the origin stripped; the
  * server's variant-styles lane rejects "via"). A FRAGMENT reference never
  * travels: the composition that distributed it owns it.
+ *
+ * @param {?object} entry
+ *   A style entry.
  */
-const travellingRefs = (entry) =>
+const travelingRefs = (entry) =>
   entryRefs(entry)
     .filter((ref) => ref.fragment === '')
     .map(({ variant, fragment }) => ({ variant, fragment }));
@@ -1090,6 +1265,13 @@ const travellingRefs = (entry) =>
  * anchor exactly as an element. A rule has no subtree slot table (a
  * variant is saved from an element), so 'direct' is empty there.
  *
+ * @param {?object} map
+ *   The style map.
+ * @param {string} key
+ *   The capture root's selectable key: an element or a rule.
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()).
+ *
  * @return {{own: Array, direct: Array}}
  *   Source lists of {key, relative, entry}. 'direct' orders SHALLOW-FIRST
  *   (slot path depth, map order among equals): a captured parent precedes
@@ -1108,7 +1290,7 @@ export const captureSources = (map, key, tree = []) => {
     // The root travels overrides-only (its references are the axis
     // fold's business, saveStyles); a rule entry's root references
     // travel as refs, the same way a child's do.
-    const refs = relative === '' ? [] : travellingRefs(entry);
+    const refs = relative === '' ? [] : travelingRefs(entry);
     if (Object.keys(overrides).length || refs.length) {
       own.push({
         key: continuedKey(key, relative),
@@ -1144,7 +1326,7 @@ export const captureSources = (map, key, tree = []) => {
       return;
     }
     const overrides = stripVariants(entry);
-    const refs = travellingRefs(entry);
+    const refs = travelingRefs(entry);
     if (!Object.keys(overrides).length && !refs.length) {
       return;
     }
@@ -1334,6 +1516,14 @@ export const saveStyles = (
  * unattached element keeps the historic replacement semantics — the
  * variant becomes the captured treatment wholesale, which is also what
  * makes detach-edit-push remove a property from a variant.
+ *
+ * @param {?object} variant
+ *   The variant record pushed into (its id and current `value`).
+ * @param {?object} entry
+ *   The pushing element's own style entry (its references say whether
+ *   it wears the variant).
+ * @param {?object} captured
+ *   The capture (captureEntries()): relative key to style entry.
  */
 export const pushStyles = (variant, entry, captured) => {
   const attached = entryVariants(entry).some(
@@ -1382,6 +1572,17 @@ export const pushStyles = (variant, entry, captured) => {
  *   exactly what the re-attach re-covers. Delivery order between
  *   overlapping variants is the vocabulary's, not ours to guess here, so
  *   overlap keeps the override (the warned cross-axis case).
+ *
+ * @param {?object} map
+ *   The style map.
+ * @param {string} key
+ *   The re-attached element's selectable key.
+ * @param {Array} tree
+ *   The lean node tree (source.getTree()).
+ * @param {?object} variant
+ *   The variant record as saved or pushed (its new `value`).
+ * @param {object[]} variants
+ *   The variant records the competing references resolve against.
  *
  * @return {Array<object>}
  *   update_style operations, empty when nothing shadows.
@@ -1460,6 +1661,11 @@ export const shadowClearingOps = (map, key, tree, variant, variants) => {
  * a reference to an unpublished or deleted variant: it renders as a stale
  * wearing, detachable and removable, never as a document.
  *
+ * @param {?object[]} variants
+ *   The variant records.
+ * @param {string} reference
+ *   The variant's machine name, as the entry stores it.
+ *
  * @return {?object}
  *   The variant record, or null when the records do not carry it.
  */
@@ -1477,6 +1683,9 @@ export const findVariant = (variants, reference) =>
  * (whether the entity diverged from its disk copy is a management fact
  * the usage route answers per open, never a roster fact), and it is the
  * roster rows' `shipped` marker. It is NOT the lock: see locked().
+ *
+ * @param {?object} record
+ *   A material record.
  */
 export const isShipped = (record) => record?.origin === 'shipped';
 
@@ -1493,6 +1702,9 @@ export const isShipped = (record) => record?.origin === 'shipped';
  * view's editability); locked variants are never offered as push targets
  * anywhere. Honest chrome only: the endpoints and the blueprint lane
  * enforce. A record without the flag reads locked (nothing to write).
+ *
+ * @param {?object} record
+ *   A material record.
  */
 export const locked = (record) => record?.updatable !== true;
 
@@ -1504,6 +1716,9 @@ export const locked = (record) => record?.updatable !== true;
  * {variant, fragment} references onto the resolved children, so a worn
  * root reference to one is what the re-apply gesture targets (the variant
  * area's Re-apply button, the page tree's section chrome).
+ *
+ * @param {?object} variant
+ *   A variant record (its `value`).
  */
 export const holdsFragments = (variant) =>
   Object.keys(variant?.value ?? {}).some(

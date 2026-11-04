@@ -108,7 +108,7 @@ class BlueprintAddForm extends ContentEntityForm {
     $form['subject'] = [
       '#type' => 'select',
       '#title' => $this->t('Subject'),
-      '#description' => $this->t('The kind of page the blueprint is material for: its canvas renders against a sample of this bundle, and its field blocks name that bundle\'s fields.'),
+      '#description' => $this->t("The kind of page the blueprint is material for: its canvas renders against a sample of this bundle, and its field blocks name that bundle's fields."),
       '#options' => $options,
       '#required' => TRUE,
       '#empty_option' => $options === [] ? $this->t('- No page-builder bundle on this site -') : $this->t('- Select -'),

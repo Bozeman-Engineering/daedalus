@@ -15,10 +15,10 @@ use PHPUnit\Framework\Attributes\Group;
  *
  * These arrays are the literal contract between the server-side UiCommandQueue
  * and the matching JS command handlers (daedalus-ai-open-link.js,
- * daedalus-ai-trigger-deferred.js, daedalus-ai-followup-chat.js). The client dispatches
- * on the exact 'command' string and, for the deferred/followup commands, builds
- * URLs from entityId expecting it to already be a STRING. Two regressions are
- * invisible to PHP but break the client:
+ * daedalus-ai-trigger-deferred.js, daedalus-ai-followup-chat.js). The client
+ * dispatches on the exact 'command' string and, for the deferred/followup
+ * commands, builds URLs from entityId expecting it to already be a STRING. Two
+ * regressions are invisible to PHP but break the client:
  *
  * - Renaming a 'command' string would leave the JS handler unregistered, so the
  *   command would be silently dropped from the response.
@@ -85,12 +85,13 @@ class AjaxCommandRenderTest extends UnitTestCase {
   }
 
   /**
-   * TriggerFollowupChatCommand renders daedalusAiTriggerFollowup with a string id.
+   * TriggerFollowupChatCommand renders with a string id.
    *
-   * Same integer-entityId cast contract as the deferred command. messageText
-   * (the wire-format LLM message) must pass through unchanged. The command
-   * carries no refresh targets: whatever the follow-up turn mutates rides
-   * the chat response as mutation-response payloads.
+   * Renders daedalusAiTriggerFollowup. Same integer-entityId cast contract as
+   * the deferred command. messageText (the wire-format LLM message) must pass
+   * through unchanged. The command carries no refresh targets: whatever the
+   * follow-up turn mutates rides the chat response as mutation-response
+   * payloads.
    */
   public function testTriggerFollowupChatCommandRender(): void {
     $command = new TriggerFollowupChatCommand(

@@ -401,13 +401,8 @@ export const WearBar = ({
         Boolean(updater) &&
         worn !== null &&
         !locked(worn) &&
-        updateFromElementLines(
-          styleMap ?? {},
-          target,
-          reference,
-          library,
-          tree,
-        ).length > 0,
+        updateFromElementLines(styleMap ?? {}, target, reference, library, tree)
+          .length > 0,
       canEditFull: Boolean(doorway),
       hasSettings: Boolean(onVariantSettings),
     }).map((item) => (item.separator ? item : views[item.type](item)));
@@ -637,7 +632,10 @@ export const WearBar = ({
                 onClick={(event) => openPicker(event.currentTarget, axis)}
               >
                 {reading}
-                <span className="daedalus-stylish-wear-bar__chevron" aria-hidden="true">
+                <span
+                  className="daedalus-stylish-wear-bar__chevron"
+                  aria-hidden="true"
+                >
                   ▾
                 </span>
               </button>
@@ -774,7 +772,10 @@ export const WearBar = ({
           }
           onClick={(event) => openPicker(event.currentTarget, null)}
         >
-          <span className="daedalus-stylish-wear-bar__add-plus" aria-hidden="true">
+          <span
+            className="daedalus-stylish-wear-bar__add-plus"
+            aria-hidden="true"
+          >
             +
           </span>
           <span>{Drupal.t('Apply variant')}</span>

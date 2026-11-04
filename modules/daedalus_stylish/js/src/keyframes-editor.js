@@ -19,8 +19,22 @@ import { KeyframeIsland } from './code/keyframe-island.js';
  * re-renders the offset header and never remounts the editor.
  */
 let nextStepKey = 1;
+
+/**
+ * The steps as track stops, each with a fresh stable key.
+ *
+ * @param {object} steps
+ *   The animation's steps map (offset → declarations).
+ *
+ * @return {Array<object>}
+ *   The stops (skin-model.js stepStops) with a `key` each.
+ */
 export const keyedStops = (steps) =>
-  stepStops(steps).map((stop) => ({ ...stop, key: nextStepKey++ }));
+  stepStops(steps).map((stop) => {
+    const key = nextStepKey;
+    nextStepKey += 1;
+    return { ...stop, key };
+  });
 
 /**
  * The keyframes editor: the offset track over one island per step.
@@ -36,6 +50,27 @@ export const keyedStops = (steps) =>
  * onStops (a track gesture, a settled island; the next stops or an
  * updater over the caller's latest) and decides what to preview and when
  * to commit.
+ *
+ * @param {object} props
+ *   The editor's props.
+ * @param {object} props.guide
+ *   The client style guide, for the islands' vocabulary.
+ * @param {object} props.materials
+ *   The materials, for the islands' token offers.
+ * @param {Array<object>} props.stops
+ *   The keyed stops (keyedStops output), the caller's draft.
+ * @param {number} props.selected
+ *   The selected stop's index.
+ * @param {Function} props.onStops
+ *   Called with the next stops (or an updater over the caller's latest)
+ *   and whether the change settles (true) or is a live drag (false).
+ * @param {Function} props.onSelect
+ *   Called with the index to select.
+ * @param {Function} props.onErrors
+ *   Called with a stop's key and whether its island holds errors.
+ *
+ * @return {object}
+ *   The rendered editor.
  */
 export const KeyframesEditor = ({
   guide,
@@ -256,8 +291,31 @@ export const KeyframesEditor = ({
  * steps. Update waits on a clean editor: an island holding an invalid
  * line cannot commit (the server would refuse the whole save) and an
  * unchanged draft has nothing to commit.
+ *
+ * @param {object} props
+ *   The session's props.
+ * @param {object} props.animation
+ *   The animation material record (id, label, value: the steps map).
+ * @param {object} props.guide
+ *   The client style guide.
+ * @param {object} props.materials
+ *   The materials.
+ * @param {object} props.source
+ *   The state source (leader or satellite): previewAnimation, the op
+ *   queue update_material rides, notify.
+ * @param {Function} props.onClose
+ *   Called when the session closes, after a commit or a discard.
+ *
+ * @return {object}
+ *   The rendered session.
  */
-export const KeyframesSession = ({ animation, guide, materials, source, onClose }) => {
+export const KeyframesSession = ({
+  animation,
+  guide,
+  materials,
+  source,
+  onClose,
+}) => {
   const [original] = useState(animation);
   const [stops, setStops] = useState(() => keyedStops(original.value));
   const [selected, setSelected] = useState(0);

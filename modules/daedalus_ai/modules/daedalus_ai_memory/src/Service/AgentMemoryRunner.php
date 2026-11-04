@@ -421,7 +421,7 @@ class AgentMemoryRunner extends AgentRunner {
    *   The state detected for the record (never Fresh).
    * @param array $persisted
    *   The record from the tempstore.
-   * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
+   * @param \Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface $agent
    *   The agent instance to restore.
    * @param bool $filter_inert
    *   Whether a rendering runs under full trust.
@@ -435,7 +435,7 @@ class AgentMemoryRunner extends AgentRunner {
    * @throws \UnexpectedValueException
    *   When the record carries no transcript.
    */
-  private function readRecord(AgentState $state, array $persisted, AiAgentInterface $agent, bool $filter_inert, LoggerInterface $logger): array {
+  private function readRecord(AgentState $state, array $persisted, ConfigAiAgentInterface $agent, bool $filter_inert, LoggerInterface $logger): array {
     if ($state === AgentState::Stale) {
       throw new \UnexpectedValueException('The record carries no transcript (it predates the context spine).');
     }
@@ -456,14 +456,14 @@ class AgentMemoryRunner extends AgentRunner {
    * start, the record's on a cross turn). The pair the agent ends up on is
    * persisted with the wrapper's state, so the turn's polls run on it.
    *
-   * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
+   * @param \Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface $agent
    *   The agent instance, with its provider and model already set.
    * @param string $job_id
    *   The job id, for the notice.
    * @param \Psr\Log\LoggerInterface $logger
    *   The logger channel.
    */
-  private function applyModelChoice(AiAgentInterface $agent, string $job_id, LoggerInterface $logger): void {
+  private function applyModelChoice(ConfigAiAgentInterface $agent, string $job_id, LoggerInterface $logger): void {
     $choice = $this->modelChoice->current($this->currentUser);
     if ($choice === NULL) {
       return;
@@ -496,7 +496,7 @@ class AgentMemoryRunner extends AgentRunner {
    * The caller's defaults win when they carry a configuration; otherwise the
    * configuration comes from the assistant entity fronting this agent.
    *
-   * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
+   * @param \Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface $agent
    *   The agent instance, with its provider already set.
    * @param string $assistant_id
    *   The agent plugin id the assistant delegates to (the runner receives
@@ -504,7 +504,7 @@ class AgentMemoryRunner extends AgentRunner {
    * @param array $defaults
    *   Provider/model defaults from the caller.
    */
-  private function applyProviderConfiguration(AiAgentInterface $agent, string $assistant_id, array $defaults): void {
+  private function applyProviderConfiguration(ConfigAiAgentInterface $agent, string $assistant_id, array $defaults): void {
     $configuration = $defaults['configuration'] ?? [];
     if (!$configuration && ($assistant = $this->frontingAssistant($assistant_id))) {
       $configuration = array_filter(
@@ -545,7 +545,7 @@ class AgentMemoryRunner extends AgentRunner {
    * so the caller can tag the turn's first leg as a rebuilt record (the
    * ledger keeps it, the status report counts it).
    *
-   * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
+   * @param \Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface $agent
    *   The agent instance.
    * @param \Drupal\daedalus_ai_memory\Transcript\Transcript $transcript
    *   The new transcript.
@@ -560,7 +560,7 @@ class AgentMemoryRunner extends AgentRunner {
    *   TRUE when at least one earlier session message was replayed: the
    *   conversation is rebuilt from the visible chat, not begun.
    */
-  private function initializeFresh(AiAgentInterface $agent, Transcript $transcript, array $chat_history, array $defaults, LoggerInterface $logger): bool {
+  private function initializeFresh(ConfigAiAgentInterface $agent, Transcript $transcript, array $chat_history, array $defaults, LoggerInterface $logger): bool {
     $logger->notice('Fresh start for job. Session has @count messages.', [
       '@count' => count($chat_history),
     ]);
@@ -610,14 +610,14 @@ class AgentMemoryRunner extends AgentRunner {
    * Resets execution counters; the history is the transcript's, rendered
    * once the user's turn is appended.
    *
-   * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
+   * @param \Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface $agent
    *   The agent instance.
    * @param array $persisted
    *   The persisted state from tempstore.
    * @param \Psr\Log\LoggerInterface $logger
    *   The logger channel.
    */
-  private function restoreForCrossTurn(AiAgentInterface $agent, array $persisted, LoggerInterface $logger): void {
+  private function restoreForCrossTurn(ConfigAiAgentInterface $agent, array $persisted, LoggerInterface $logger): void {
     $logger->notice('Cross-turn continuation.');
 
     $agent_data = $persisted['agent_data'];
@@ -637,7 +637,7 @@ class AgentMemoryRunner extends AgentRunner {
    * array fromArray() is handed, so it is handed the transcript's
    * rendering; the same rendering then becomes the wrapper's history.
    *
-   * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
+   * @param \Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface $agent
    *   The agent instance.
    * @param array $persisted
    *   The persisted state from tempstore.
@@ -651,7 +651,7 @@ class AgentMemoryRunner extends AgentRunner {
    * @return \Drupal\daedalus_ai_memory\Transcript\Rendering
    *   The rendering the agent was restored with.
    */
-  private function restoreForSameTurn(AiAgentInterface $agent, array $persisted, Transcript $transcript, bool $filter_inert, LoggerInterface $logger): Rendering {
+  private function restoreForSameTurn(ConfigAiAgentInterface $agent, array $persisted, Transcript $transcript, bool $filter_inert, LoggerInterface $logger): Rendering {
     $agent_data = $persisted['agent_data'];
     $agent_data['tool_results'] = [];
     $agent_data['agent_results'] = [];
@@ -1142,7 +1142,7 @@ class AgentMemoryRunner extends AgentRunner {
    * rejection such as an image over the API's size limit) or, when it
    * recorded none, the plain fact that no reply was produced.
    *
-   * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
+   * @param \Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface $agent
    *   The agent instance.
    * @param string $assistant_id
    *   The agent plugin id the assistant delegates to.
@@ -1152,7 +1152,7 @@ class AgentMemoryRunner extends AgentRunner {
    * @return \Drupal\ai\OperationType\Chat\ChatOutput
    *   The chat output.
    */
-  private function buildResponse(AiAgentInterface $agent, string $assistant_id, LoggerInterface $logger): ChatOutput {
+  private function buildResponse(ConfigAiAgentInterface $agent, string $assistant_id, LoggerInterface $logger): ChatOutput {
     $response = $agent->solve() ?? '';
 
     if ($history = $agent->getChatHistory()) {
@@ -1176,13 +1176,13 @@ class AgentMemoryRunner extends AgentRunner {
    * reachable through getLastError(), which ai_agents keeps on the wrapper
    * class rather than on any agent interface, so it is read by presence.
    *
-   * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
+   * @param \Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface $agent
    *   The agent instance.
    *
    * @return string|null
    *   The distilled failure, or NULL when the agent recorded none.
    */
-  private function recordedFailure(AiAgentInterface $agent): ?string {
+  private function recordedFailure(ConfigAiAgentInterface $agent): ?string {
     if (!method_exists($agent, 'getLastError')) {
       return NULL;
     }
@@ -1193,11 +1193,11 @@ class AgentMemoryRunner extends AgentRunner {
   /**
    * Builds the assistant's reply for a turn that failed or was refused.
    *
-   * The wording is the assistant entity's own error template (ai_assistant_api's
-   * `error_message`, or the `specific_error_messages` entry for the
-   * exception's class when one is set), with its `[error_message]` token
-   * replaced by the reason, so a site phrases failures once for every road:
-   * a thrown turn, a provider's rejection, and the usage gate's refusal.
+   * The wording is the assistant entity's own error template
+   * (ai_assistant_api's `error_message`, or the `specific_error_messages` entry
+   * for the exception's class when one is set), with its `[error_message]`
+   * token replaced by the reason, so a site phrases failures once for every
+   * road: a thrown turn, a provider's rejection, and the usage gate's refusal.
    * Without an assistant, or with an empty template, the reason stands alone.
    *
    * @param string $assistant_id

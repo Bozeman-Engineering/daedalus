@@ -31,6 +31,7 @@
  *   The skin gesture gates (drupalSettings.daedalusStylish.skin).
  *
  * @return {boolean}
+ *   Whether any gate admits the card.
  */
 export const skinCardReadable = (skinMaterials = {}, skin = {}) =>
   Boolean(
@@ -70,8 +71,8 @@ const REASONS = {
 export const wornSkin = (read) =>
   read?.worn == null
     ? null
-    : (read.skins ?? []).find((skin) => skin.machine_name === read.worn) ??
-      null;
+    : ((read.skins ?? []).find((skin) => skin.machine_name === read.worn) ??
+      null);
 
 /**
  * The member roster: every skin the active system carries, in read order.
@@ -92,6 +93,7 @@ export const wornSkin = (read) =>
  *   isDefault: boolean, shipped: boolean, provider: ?string,
  *   published: boolean, choosable: boolean, reason: ?string,
  *   lacks: ?object}>}
+ *   One row per member skin, in read order; [] before the read lands.
  */
 export const skinCardRows = (read) =>
   (read?.skins ?? []).map((skin) => {
@@ -153,7 +155,9 @@ export const copySources = (read) => {
   }
   const hoistWorn = (list, isWorn) => {
     const index = list.findIndex(isWorn);
-    return index > 0 ? [list[index], ...list.filter((_, i) => i !== index)] : list;
+    return index > 0
+      ? [list[index], ...list.filter((_, i) => i !== index)]
+      : list;
   };
   return hoistWorn(
     [...groups.values()].map((group) => ({
@@ -186,14 +190,14 @@ export const copySources = (read) => {
  *
  * @return {{choose: boolean, copy: boolean, revisions: boolean,
  *   revert: boolean}}
+ *   Each gesture's presence on the card.
  */
 export const skinCardGestures = (read, gates = {}) => {
   const admin = Boolean(gates?.canAdminister);
   const worn = wornSkin(read);
   return {
     choose: admin && skinCardRows(read).some((row) => row.choosable),
-    copy:
-      admin && read?.design_system != null && copySources(read).length > 0,
+    copy: admin && read?.design_system != null && copySources(read).length > 0,
     revisions: admin && worn !== null,
     revert:
       admin &&
@@ -216,6 +220,7 @@ export const skinCardGestures = (read, gates = {}) => {
  *   Whether the package layer is locked on this site.
  *
  * @return {'site'|'whole'}
+ *   The layer a restore brings back.
  */
 export const restoreScope = (locked) => (locked ? 'site' : 'whole');
 
@@ -226,5 +231,6 @@ export const restoreScope = (locked) => (locked ? 'site' : 'whole');
  *   The picked source (a copySources() entry).
  *
  * @return {string}
+ *   The source's label with " (copy)" appended.
  */
 export const copyLabel = (source) => `${source.label} (copy)`;

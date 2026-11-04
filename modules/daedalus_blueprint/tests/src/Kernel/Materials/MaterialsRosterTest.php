@@ -414,7 +414,14 @@ class MaterialsRosterTest extends KernelTestBase {
     // Mixed kinds in one slot phrase as materials.
     TestMaterialsProvider::$records = [
       new MaterialRecord(kind: MaterialKind::Token, id: 'color/lime', label: 'lime', spellings: ['style' => 'var(--color-lime)']),
-      new MaterialRecord(kind: MaterialKind::Variant, id: 'lime_card', label: 'Lime card', group: 'style', spellings: ['class' => 'lime_card', 'style' => 'var(--lime-card)'], scope: Address::fromString('kind:container')),
+      new MaterialRecord(
+        kind: MaterialKind::Variant,
+        id: 'lime_card',
+        label: 'Lime card',
+        group: 'style',
+        spellings: ['class' => 'lime_card', 'style' => 'var(--lime-card)'],
+        scope: Address::fromString('kind:container'),
+      ),
     ];
     $this->builder()->reset();
     $roster = $this->builder()->build();
@@ -606,7 +613,14 @@ class MaterialsRosterTest extends KernelTestBase {
   public function testDuplicateSpellingRefused(): void {
     TestMaterialsProvider::$records = [
       new MaterialRecord(kind: MaterialKind::Token, id: 'color/x', label: 'x', spellings: ['style' => 'var(--color-x)']),
-      new MaterialRecord(kind: MaterialKind::Variant, id: 'x', label: 'X', group: 'style', spellings: ['class' => 'x', 'style' => 'var(--color-x)'], scope: Address::fromString('kind:container')),
+      new MaterialRecord(
+        kind: MaterialKind::Variant,
+        id: 'x',
+        label: 'X',
+        group: 'style',
+        spellings: ['class' => 'x', 'style' => 'var(--color-x)'],
+        scope: Address::fromString('kind:container'),
+      ),
     ];
     $this->expectException(\InvalidArgumentException::class);
     $this->expectExceptionMessage('Token "color/x" and variant "x" both spell "var(--color-x)" in the style slot.');

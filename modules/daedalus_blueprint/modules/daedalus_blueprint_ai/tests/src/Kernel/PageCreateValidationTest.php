@@ -9,9 +9,11 @@ use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Plugin\Block\SlotBlock;
 use Drupal\daedalus_blueprint\Slot\SlotRoster;
+use Drupal\daedalus_blueprint_library\BlueprintInterface;
 use Drupal\daedalus_blueprint_test\TestFileDeclarationHandler;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -75,8 +77,8 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
       'daedalus_blueprint_test',
     ]);
     $this->installEntitySchema('block_content');
-    // The catalog build reads the materials roster, whose daedalus_stylish provider
-    // reads all three material tables.
+    // The catalog build reads the materials roster, whose daedalus_stylish
+    // provider reads all three material tables.
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
@@ -294,12 +296,11 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     $map = $style_item ? $style_item->getStyleMap() : [];
     $this->assertSame(['margin' => '3rem'], $map["container:$container_uuid"]['default'] ?? NULL);
 
-    // Exactly ONE usage row, against the real entity id. Two rows would
-    // mean the create saved twice and the defaults-to-overrides transition
-    // duplicated the inline block; a NULL id would mean usage was recorded
-    // at presave time (garbage collection would reap the block). daedalus_layout
-    // records the row post-insert by host uuid, so a one-save create is
-    // whole.
+    // Exactly ONE usage row, against the real entity id. Two rows would mean
+    // the create saved twice and the defaults-to-overrides transition
+    // duplicated the inline block; a NULL id would mean usage was recorded at
+    // presave time (garbage collection would reap the block). daedalus_layout
+    // records the row post-insert by host uuid, so a one-save create is whole.
     $usage = \Drupal::database()->select('inline_block_usage', 'u')
       ->fields('u')->execute()->fetchAll();
     $this->assertCount(1, $usage, print_r($usage, TRUE));
@@ -450,7 +451,9 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * The bundle decides the parameters: an owning bundle takes exactly one source.
+   * The bundle decides the parameters.
+   *
+   * An owning bundle takes exactly one source.
    *
    * The bundle's pages own their layout (the override field is on the
    * bundle), so the new page's first document comes from exactly one of
@@ -584,9 +587,12 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     $blueprints = $blueprint_storage->loadMultiple();
     $this->assertCount(1, $blueprints);
     $blueprint = reset($blueprints);
+    assert($blueprint instanceof BlueprintInterface);
     $this->assertSame('landing', $blueprint->getMachineName());
     $this->assertSame('page', $blueprint->getScope());
-    $blueprint_uuids = array_map(static fn ($section) => $section->getThirdPartySetting('daedalus_layout', 'uuid'), $blueprint->get('layout_builder__layout')->getSections());
+    $layout = $blueprint->get('layout_builder__layout');
+    assert($layout instanceof SectionListInterface);
+    $blueprint_uuids = array_map(static fn ($section) => $section->getThirdPartySetting('daedalus_layout', 'uuid'), $layout->getSections());
     $this->assertCount(2, $blueprint_uuids);
     $block_storage = $this->entityTypeManager->getStorage('block_content');
     $block_storage->resetCache();
@@ -1005,7 +1011,7 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
   /**
    * A saved blueprint is authored from scratch the way a page is.
    *
-   * page_create with entity_type blueprint: the face in fields (label,
+   * A page_create with entity_type blueprint: the face in fields (label,
    * description, scope, subject), the composition in layout, judged by the
    * same spine. A field block names the SUBJECT's field (the blueprint host
    * expands it against the subject bundle, not the blueprint's own fields),
@@ -1041,13 +1047,16 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     $blueprints = $storage->loadMultiple();
     $this->assertCount(1, $blueprints);
     $blueprint = reset($blueprints);
+    assert($blueprint instanceof BlueprintInterface);
     $this->assertSame('Teaser', $blueprint->label());
     $this->assertSame('teaser', $blueprint->getMachineName());
     $this->assertSame('block', $blueprint->getScope());
     $this->assertSame('entity_test', $blueprint->getSubjectType());
     $this->assertSame('entity_test', $blueprint->getSubjectBundle());
     $this->assertTrue($blueprint->isPublished());
-    $sections = $blueprint->get('layout_builder__layout')->getSections();
+    $layout = $blueprint->get('layout_builder__layout');
+    assert($layout instanceof SectionListInterface);
+    $sections = $layout->getSections();
     $this->assertCount(1, $sections);
     $plugins = array_map(static fn ($component) => $component->getPluginId(), array_values($sections[0]->getComponents()));
     $this->assertSame(['field_block:entity_test:entity_test:name', 'inline_block:basic'], $plugins, 'The field block expanded against the subject bundle, never the blueprint\'s own fields.');
@@ -1070,7 +1079,13 @@ class PageCreateValidationTest extends BlueprintKernelTestBase {
     $output = $this->runTool('page_create', [
       'entity_type' => 'blueprint',
       'bundle' => 'section',
-      'fields' => ['label' => 'Two roots', 'description' => 'Two sections in one block blueprint.', 'scope' => 'block', 'subject_type' => 'entity_test', 'subject_bundle' => 'entity_test'],
+      'fields' => [
+        'label' => 'Two roots',
+        'description' => 'Two sections in one block blueprint.',
+        'scope' => 'block',
+        'subject_type' => 'entity_test',
+        'subject_bundle' => 'entity_test',
+      ],
       'layout' => '<d-container id="one"></d-container><d-container id="two"></d-container>',
     ]);
     $this->assertStringContainsString('BLUEPRINT_ONE_ROOT', $output);

@@ -1785,9 +1785,9 @@ button.daedalus-stylish-inspector__segment:disabled {
 .daedalus-stylish-islands__combinator {
   display: inline-block;
   padding: 0 0.25em;
+  color: var(--daedalus-text, inherit);
   border-radius: calc(var(--daedalus-border-radius) / 2);
   background: var(--daedalus-selection-background, rgb(0, 116, 189, 0.08));
-  color: var(--daedalus-text, inherit);
   font-weight: 700;
   line-height: 1.2;
 }
@@ -1842,7 +1842,7 @@ button.daedalus-stylish-inspector__segment:disabled {
    SKIN_COLOR), darkened for text; the active and hot marks are the
    part header's. */
 .daedalus-stylish-islands__part--rule .daedalus-stylish-islands__part-label {
-  color: color-mix(in sRGB, hsl(172 66% 50%) 70%, var(--daedalus-text, #000));
+  color: color-mix(in sRGB, hsl(172, 66%, 50%) 70%, var(--daedalus-text, #000));
   font-weight: 500;
 }
 
@@ -1879,9 +1879,9 @@ button.daedalus-stylish-inspector__segment:disabled {
    background, so it lifts on both schemes) inside a hairline. Nothing
    else moves. */
 .daedalus-stylish-island--live > .daedalus-stylish-island__editor {
-  background: color-mix(in sRGB, var(--daedalus-text) 5%, var(--daedalus-background));
   outline: 1px solid color-mix(in sRGB, var(--daedalus-lines) 60%, transparent);
   outline-offset: -1px;
+  background: color-mix(in sRGB, var(--daedalus-text) 5%, var(--daedalus-background));
 }
 
 .daedalus-stylish-island--invalid > .daedalus-stylish-island__editor {
@@ -2896,10 +2896,10 @@ span.daedalus-stylish-library-card__label {
 .daedalus-stylish-dimension__unit-label {
   flex: 0 0 auto;
   padding: 0.125rem;
+  user-select: none;
   color: var(--daedalus-text-muted);
   font-size: var(--daedalus-font-size-small);
   line-height: 1.6;
-  user-select: none;
 }
 
 .daedalus-stylish-dimension--disabled .daedalus-stylish-dimension__unit-label {
@@ -4127,9 +4127,8 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
 .daedalus-stylish-skin__row {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.125rem 0.25rem;
   width: 100%;
+  padding: 0.125rem 0.25rem;
   cursor: pointer;
   text-align: start;
   color: inherit;
@@ -4137,6 +4136,7 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   border-radius: var(--daedalus-border-radius);
   background: none;
   font: inherit;
+  gap: 0.375rem;
 }
 
 .daedalus-stylish-skin__row:hover {
@@ -4389,9 +4389,8 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
 .daedalus-stylish-skin-card__open {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.125rem 0.25rem;
   width: 100%;
+  padding: 0.125rem 0.25rem;
   cursor: pointer;
   text-align: start;
   color: inherit;
@@ -4399,6 +4398,7 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
   border-radius: var(--daedalus-border-radius);
   background: none;
   font: inherit;
+  gap: 0.375rem;
 }
 
 .daedalus-stylish-skin-card__open:hover {
@@ -4663,8 +4663,8 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
    to it ("See what the AI holds") sit on one line. */
 .daedalus-stylish-ai-offer {
   display: inline-flex;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
   white-space: nowrap;
   font-size: 0.6875rem;
   gap: 0.375rem 0.75rem;
@@ -4678,8 +4678,8 @@ html[data-daedalus-ui-canvas-view] .daedalus-stylish-paint {
 }
 
 .daedalus-stylish-ai-offer__context {
-  color: var(--daedalus-text-muted);
   text-decoration: underline;
+  color: var(--daedalus-text-muted);
   text-underline-offset: 0.125rem;
 }
 

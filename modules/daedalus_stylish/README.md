@@ -163,13 +163,12 @@ does. The per-bundle permission is minted for every bundle carrying the
 style map field (`StylePermissions`, the shape of core's Layout Builder
 override permissions) and depends on that field config, so it exists
 exactly where styling is enabled. The op door enforces the verdict on
-`update_style`, `apply_variant`, `move_style` and every other style write; every read
-publishes it; the inspector reads it through daedalus_ui's one client
-gate (`capable(key, 'style')`, the satellite from the leader's
-broadcast), and `InspectorSidebar::applies()` mounts the panel only where
-the host keeps a style store and style is allowed somewhere. Structure
-follows core's override permissions, which the spine's role policy
-answers.
+`update_style`, `apply_variant`, `move_style` and every other style write; every
+read publishes it; the inspector reads it through daedalus_ui's one client gate
+(`capable(key, 'style')`, the satellite from the leader's broadcast), and
+`InspectorSidebar::applies()` mounts the panel only where the host keeps a style
+store and style is allowed somewhere. Structure follows core's override
+permissions, which the spine's role policy answers.
 
 ## Shipped design systems
 
@@ -184,21 +183,20 @@ site-wide is the skin's `offered` flag per token, never a guide list).
 Three sub-modules ship a design system as install
 config plus a skin that keeps every one of those promises:
 
-- `daedalus_stylish_olivero_skin`: the open reference. Core's front-end look; the
-  guide shapes offers and never refuses. The `daedalus` recipe activates
-  it.
+- `daedalus_stylish_olivero_skin`: the open reference. Core's front-end look;
+  the guide shapes offers and never refuses. The `daedalus` recipe activates it.
 - `daedalus_stylish_guide_example`: the strict reference. A fully constrained,
   brand-neutral site as data (a skin with its palette tokens and
   animations, guide, per-block-type and per-layout files, variants, a
   blueprint), the authoring
   reference for a designed site and the fixture strict-posture tests
   activate.
-- `daedalus_stylish_starter_skin`: the blank canvas. One open system and one skin
-  minting a neutral placeholder token on every scale the suite declares,
-  with token-only base-tag defaults and no guide fragment, for a site to
-  build its own design system off. Not part of any recipe; its README
-  walks through building a system off it (activate it, author on the
-  canvas, ship) and growing toward guarded or strict.
+- `daedalus_stylish_starter_skin`: the blank canvas. One open system and one
+  skin minting a neutral placeholder token on every scale the suite declares,
+  with token-only base-tag defaults and no guide fragment, for a site to build
+  its own design system off. Not part of any recipe; its README walks through
+  building a system off it (activate it, author on the canvas, ship) and growing
+  toward guarded or strict.
 
 ```bash
 drush en daedalus_stylish_starter_skin
@@ -570,9 +568,9 @@ site changed nothing, and unsetting a site value reveals the package's
 again. A skin with no provider (the site's own, or a copy) has one
 layer, edited directly. A member skin is born wearable: one that
 brings no defaults starts from the defaults its design system's default
-skin wears, so a skin of tokens alone never renders a page bare. Both layers are revisionable; the identity
-fields are not, so a revision restore changes what a skin says, never
-what it is.
+skin wears, so a skin of tokens alone never renders a page bare. Both layers are
+revisionable; the identity fields are not, so a revision restore changes what a
+skin says, never what it is.
 
 ### The skin's materials
 
@@ -586,8 +584,10 @@ record, and every store and machine-written file holds records. Tokens
 ride the materials operations with `kind: token`:
 
 ```
-save_material   {kind: token, group: space, label: xl, value: 4rem, description: '...', offered: true}
-save_material   {kind: token, label: plum-veil, element: '#hero', property: background-image}
+save_material   {kind: token, group: space, label: xl, value: 4rem,
+                 description: '...', offered: true}
+save_material   {kind: token, label: plum-veil, element: '#hero',
+                 property: background-image}
 update_material {kind: token, id: space/xl, value?, description?, offered?}
 remove_material {kind: token, id: space/xl}
 ```
@@ -631,7 +631,8 @@ Site element defaults are written by one style operation, the site-scope
 twin of `update_style`:
 
 ```
-update_default {scope: 'base:h2', key?: '', condition?: default, properties: {font-size: 'var(--text-title-1)'}}
+update_default {scope: 'base:h2', key?: '', condition?: default,
+                properties: {font-size: 'var(--text-title-1)'}}
 ```
 
 A patch of one scope's defaults under one condition; `null` unsets, and
@@ -806,8 +807,8 @@ on the materials delta to every open editor.
 
 ## The disk lane
 
-A module ships daedalus_stylish materials as YAML files at its root, keyed by machine
-name. The lane has two directions with two words:
+A module ships daedalus_stylish materials as YAML files at its root, keyed by
+machine name. The lane has two directions with two words:
 
 - **Sync** is disk to site. Every enabled module's shipped definitions
   land on the site as content entities on a cache rebuild, on module
@@ -839,7 +840,8 @@ A package's per-id lane writes one file per kind, each kind with its own
 shipper: `MODULE.daedalus_stylish.skins.ID.yml` (with its fonts' files
 under `assets/fonts/`) and `MODULE.daedalus_stylish.variants.ID.yml`. The
 blueprint lane writes `MODULE.daedalus_blueprint.blueprints.ID.yml` plus
-`MODULE.daedalus_stylish.variants.ID.yml` for the variants the composition wears.
+`MODULE.daedalus_stylish.variants.ID.yml` for the variants the composition
+wears.
 
 Keys a shipper does not own are carried from the existing entry when a file
 is rewritten (the variants file's `blueprint:` key belongs to the blueprint
@@ -890,18 +892,17 @@ with no re-sync.
 Kinds sync in dependency order: skins, then variants (a variant may wear
 a skin's animation). A skin's `fonts:` tier is hashed content-addressed
 (a sha256 per face's bytes), so one hash compares the disk's basenames
-with the site's files. A skin is never `kept`: the sync writes its package layer alone,
-so new disk defaults always land there while the site's layer rides the
+with the site's files. A skin is never `kept`: the sync writes its package layer
+alone, so new disk defaults always land there while the site's layer rides the
 new revision untouched (each layer has one author; a developer editing the
-package layer under the lifted lock ships before pulling). A module
-packaging a design system that is not the active one is deferred whole;
-its definitions land when its system becomes active (its activation, or
-its config landing under a pointer that already names it), which re-syncs
-every enabled module under the incoming law. Skins are deferred for every
-module while `system.theme` names a default theme that is not installed
-(`MODULE: skins deferred; the default theme "THEME" is not installed.
-They land when it is.`); the theme landing re-syncs every enabled module
-the same way.
+package layer under the lifted lock ships before pulling). A module packaging a
+design system that is not the active one is deferred whole; its definitions land
+when its system becomes active (its activation, or its config landing under a
+pointer that already names it), which re-syncs every enabled module under the
+incoming law. Skins are deferred for every module while `system.theme` names a
+default theme that is not installed (`MODULE: skins deferred; the default theme
+"THEME" is not installed. They land when it is.`); the theme landing re-syncs
+every enabled module the same way.
 
 ```bash
 # Every enabled module (the same sync a cache rebuild runs).
@@ -951,8 +952,8 @@ entity on the site, is refused (`SHIPPED_<KIND>_CONFLICT`,
 `SHIPPED_<KIND>_ABSENT`); refusals print last and fail the run while
 everything else ships. A skin's fonts ship with their files: each face's
 file is copied under `assets/fonts/` before the yml is written. A skin
-ships its package layer only; the site layer is the site's and never reaches disk
-(on a development site with the lock lifted, skin writes land in the
+ships its package layer only; the site layer is the site's and never reaches
+disk (on a development site with the lock lifted, skin writes land in the
 package layer, so there is nothing to lose).
 
 After a ship the site is consistent with disk: every shipped entity is
@@ -983,19 +984,18 @@ lift the lock in `settings.php`:
 $settings['daedalus_blueprint_developer'] = TRUE;
 ```
 
-The flag is read by daedalus_blueprint's `daedalus_blueprint.distro_lock` service,
-the one fact every shipped-material gate in daedalus_stylish consults: the variant
-manager (push, details and value edits, revision restore, delete), the
-skin material and skin gestures' layer rule (with the lock lifted a
-material write, an `update_default` and a revision restore land in a
-shipped skin's package layer, and a shipped token, animation or font may
-be renamed or deleted), the blueprint lane field handlers and their guidance text, and
-the materials provider's `updatable` record flag that the inspector's
-library and push bar read. It is a setting rather than a permission because
-writable module directories are an environment property: a development site
-needs no role setup, and a production administrator cannot lift a lock that
-protects production. Roster records are cached, so rebuild caches
-(`drush cr`) after flipping it.
+The flag is read by daedalus_blueprint's `daedalus_blueprint.distro_lock`
+service, the one fact every shipped-material gate in daedalus_stylish consults:
+the variant manager (push, details and value edits, revision restore, delete),
+the skin material and skin gestures' layer rule (with the lock lifted a material
+write, an `update_default` and a revision restore land in a shipped skin's
+package layer, and a shipped token, animation or font may be renamed or
+deleted), the blueprint lane field handlers and their guidance text, and the
+materials provider's `updatable` record flag that the inspector's library and
+push bar read. It is a setting rather than a permission because writable module
+directories are an environment property: a development site needs no role setup,
+and a production administrator cannot lift a lock that protects production.
+Roster records are cached, so rebuild caches (`drush cr`) after flipping it.
 
 The author's flow: change the system on the site (re-value or mint
 tokens, animations and fonts in the Skin tab, push a skin session's

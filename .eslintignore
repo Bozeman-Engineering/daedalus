@@ -1,6 +1,14 @@
 node_modules/**/*
 modules/daedalus_edit/assets/vendor/**/*
+modules/daedalus_explode/js/dist/**/*
+modules/daedalus_layout/js/dist/**/*
 modules/daedalus_stylish/js/dist/**/*
 modules/daedalus_ui/js/edit_mode/dist/**/*
 # A fixture that is malformed on purpose (the importer's error path).
 modules/daedalus_stylish/tests/modules/daedalus_stylish_variants_files_test_malformed/*.yml
+# The two JSON readers import with `with { type: 'json' }` (ES2025 import
+# attributes, which node needs to import JSON and the browsers run); core's
+# eslint 8 parser stops at ES2024 and cannot read the statement. Their node
+# suites cover them. Drop these lines when core's parser reads ES2025.
+modules/daedalus_stylish/js/src/pseudo-vocabularies.js
+modules/daedalus_stylish/js/src/wide-selectors.js

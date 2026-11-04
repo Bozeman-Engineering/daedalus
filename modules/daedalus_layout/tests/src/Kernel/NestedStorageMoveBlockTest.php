@@ -13,12 +13,12 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
 /**
  * Nested-storage semantics of moving blocks at various nesting levels.
  *
- * Exercises the storage primitives a block move is made of — component
- * lookup, section resolution, removal/insertion, cache invalidation, and
- * bubbling — through NestedAwareSectionStorage over embedded-section
- * containers. These are the same primitives daedalus_blueprint's move_element
- * op drives through the DaedalusLayoutAdapter; the browser-driven move gesture is
- * covered end to end in NestedLayoutBehaviorTest.
+ * Exercises the storage primitives a block move is made of — component lookup,
+ * section resolution, removal/insertion, cache invalidation, and bubbling —
+ * through NestedAwareSectionStorage over embedded-section containers. These are
+ * the same primitives daedalus_blueprint's move_element op drives through the
+ * DaedalusLayoutAdapter; the browser-driven move gesture is covered end to end
+ * in NestedLayoutBehaviorTest.
  */
 #[CoversClass(\Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage::class)]
 #[Group('daedalus_layout')]

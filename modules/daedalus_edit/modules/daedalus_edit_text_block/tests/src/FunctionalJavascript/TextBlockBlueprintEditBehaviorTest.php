@@ -20,16 +20,15 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * entity form involved. daedalus_edit's InlineEditBehaviorTest covers the form
  * path; this test covers the blueprint path's defining behaviors on a real
  * page:
- * - The collapsed composed render: the block IS its composed root — ALWAYS
- *   the tag element, with the anchor nested inside it when linked
- *   (tag > a, the anchor itself carrying the typing surface: editing
- *   attributes ride the declared elements, no editing-only span) so
- *   daedalus_stylish's block-scoped styles land on the element the theme's own tag
- *   rules target — directly inside the container root (one box, no part
- *   element) with no block sandwich, carrying the selectable key, the
- *   component uuid, and
- *   the identity-only editor attribution (data-daedalus-edit-editor + settings)
- *   on that one element.
+ * - The collapsed composed render: the block IS its composed root — ALWAYS the
+ *   tag element, with the anchor nested inside it when linked (tag > a, the
+ *   anchor itself carrying the typing surface: editing attributes ride the
+ *   declared elements, no editing-only span) so daedalus_stylish's block-scoped
+ *   styles land on the element the theme's own tag rules target — directly
+ *   inside the container root (one box, no part element) with no block
+ *   sandwich, carrying the selectable key, the component uuid, and the
+ *   identity-only editor attribution (data-daedalus-edit-editor + settings) on
+ *   that one element.
  * - The anchor part: linked, the anchor carries the stable text-block-link
  *   class from BOTH producers of the linked shape (the generative render
  *   and the client-side link preview, one resolver grammar shared through
@@ -824,19 +823,19 @@ class TextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       'Relinked, the part class and the worn button styling returned with the anchor.',
     );
 
-    // The open edit is a DRAFT, half one: a foreign STYLE mutation. With
-    // the edit open and a local draft typed on the surface, a font-size
-    // scrub through the spine (update_style on the block key, the reported
-    // bug: the Daedalus Stylish inspector styles WHILE editing) swaps the edited
-    // markup out from under the typing. The seam only a browser can see:
-    // the op queue's swap detaches the subtree (the engine captures the
-    // draft there), the mirror is replaced, and once the response is fully
-    // applied the edit resumes over the fresh markup by the three-way
-    // rule. The style touched nothing the edit holds (base == remote for
-    // the text), so the draft is re-projected: same current edit, the
-    // local text back on a rebuilt surface (contenteditable, editing
-    // class, the chip's widgets standing), the snapshot still the remote
-    // text, and the scrubbed font-size landed on the block.
+    // The open edit is a DRAFT, half one: a foreign STYLE mutation. With the
+    // edit open and a local draft typed on the surface, a font-size scrub
+    // through the spine (update_style on the block key, the reported bug: the
+    // Daedalus Stylish inspector styles WHILE editing) swaps the edited markup
+    // out from under the typing. The seam only a browser can see: the op
+    // queue's swap detaches the subtree (the engine captures the draft there),
+    // the mirror is replaced, and once the response is fully applied the edit
+    // resumes over the fresh markup by the three-way rule. The style touched
+    // nothing the edit holds (base == remote for the text), so the draft is
+    // re-projected: same current edit, the local text back on a rebuilt surface
+    // (contenteditable, editing class, the chip's widgets standing), the
+    // snapshot still the remote text, and the scrubbed font-size landed on the
+    // block.
     $this->reopenEdit("block:$component_uuid", "$leaf [data-daedalus-edit-text]");
     $this->assertJsCondition(
       'Drupal.Daedalus.Edit.CurrentlyEditingElement !== null',

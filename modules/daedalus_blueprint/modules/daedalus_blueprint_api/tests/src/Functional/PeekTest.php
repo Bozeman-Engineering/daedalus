@@ -44,6 +44,11 @@ class PeekTest extends BrowserTestBase {
   use DaedalusFixtureTrait;
 
   /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
    * The render test module, for its block whose build throws an \Error.
    *
    * Installed on top of the recipe's product; its view-alter probe records
@@ -270,7 +275,7 @@ class PeekTest extends BrowserTestBase {
     if ($token !== NULL) {
       $headers['X-CSRF-Token'] = $token;
     }
-    return $this->getHttpClient()->post($url, [
+    return $this->getHttpClient()->request('POST', $url, [
       'cookies' => $this->getSessionCookies(),
       'headers' => $headers,
       'body' => json_encode($body),

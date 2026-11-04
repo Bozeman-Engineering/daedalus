@@ -6,7 +6,7 @@ This module exists to be deleted. It ships one provider plugin,
 `daedalus_anthropic` ("Anthropic (Daedalus upstream)"), a subclass of
 `ai_provider_anthropic`'s `AnthropicProvider` that implements the context
 spine's accelerator interfaces (`Drupal\daedalus_ai\Provider\*`). Every
-behaviour it adds is proposed upstream, to drupal/ai (opaque provider
+behavior it adds is proposed upstream, to drupal/ai (opaque provider
 content on `ChatMessage`, rendering hints on `ChatInput`, `cachedWrite`
 filled on `TokenUsageDto`, system-role passthrough semantics) and to
 ai_provider_anthropic (the request shapes below). The day those land, the
@@ -69,13 +69,14 @@ two settings:
   replayed. The transcript stores them either way. Off until the ledger
   shows what re-thinking each leg costs against the replayed tokens.
 - `thinking_display` (`omitted` by default, or `summarized`): what the
-  thinking blocks of a response carry. The API's default on the models
-  that think by default (Sonnet 5.5, Haiku 5.5, Opus 5 and later) is
-  empty text; `summarized` asks for the model's reasoning summary, which
-  the transcript keeps, the atelier's record shows and the ai_logging rows
-  carry. A diagnostic: it changes visibility only, the model thinks and is
-  billed the same under either value, so a production site leaves it
-  omitted and a dev site (the dev recipe) sets it summarized.
+  thinking blocks of a response carry. On the models that think by
+  default (Sonnet 5.5, Haiku 5.5, Opus 5 and later) the API's own default
+  is empty text. `summarized` asks for the model's reasoning summary
+  instead; the transcript keeps it, the ai_logging rows carry it, and any
+  tool that reads a conversation's record can show it. This is a
+  diagnostic, nothing more: the model thinks and is billed the same under
+  either value, only what is visible afterwards changes. A production
+  site leaves it omitted; a dev site (the dev recipe) sets it summarized.
 
 The per-turn blocks (current page, print, selection, attachments) are always
 text inside the user message, on this provider as on every other: a block

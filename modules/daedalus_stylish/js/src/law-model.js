@@ -35,6 +35,7 @@ import { parseKey } from './style-guide.js';
  * carry at all.
  *
  * @param {object} args
+ *   The selection and the law to read it against.
  * @param {?string} args.key
  *   The selected key.
  * @param {object} [args.blockTypes]
@@ -45,6 +46,7 @@ import { parseKey } from './style-guide.js';
  *   The law projection.
  *
  * @return {?string}
+ *   The node scope, or null when the law carries none for the key.
  */
 export const lawScopeFor = ({
   key,
@@ -71,6 +73,12 @@ export const lawScopeFor = ({
 
 /**
  * The family word a node scope files under, for the type picker.
+ *
+ * @param {string} scope
+ *   A law node scope (`kind:container`, `block_type:text`, ...).
+ *
+ * @return {string}
+ *   The translated family word; the scope itself for an unknown family.
  */
 const familyWord = (scope) => {
   switch (scope.slice(0, scope.indexOf(':'))) {
@@ -91,6 +99,14 @@ const familyWord = (scope) => {
  * A node's name: the label it carries (a block type's bundle label, a
  * part's authored label), else its scope in words (provenance-model.js
  * declarationLabel, the origin sentences' own name for it).
+ *
+ * @param {string} scope
+ *   The node's scope.
+ * @param {?object} node
+ *   The law node.
+ *
+ * @return {string}
+ *   The node's name.
  */
 export const nodeLabel = (scope, node) =>
   typeof node?.label === 'string' && node.label !== ''
@@ -105,6 +121,7 @@ export const nodeLabel = (scope, node) =>
  *   The law projection.
  *
  * @return {Array<{scope: string, label: string, family: string}>}
+ *   One entry per law node.
  */
 export const lawTypes = (law) =>
   Object.entries(law?.nodes ?? {}).map(([scope, node]) => ({
@@ -121,6 +138,7 @@ export const lawTypes = (law) =>
  *   The law projection.
  *
  * @return {string[]}
+ *   The three sentences: mode, properties, constraints.
  */
 export const readingSentences = (law) => {
   const mode = law?.enforcement ?? 'guarded';
@@ -139,7 +157,9 @@ export const readingSentences = (law) => {
           'Undeclared properties stay open with recognition and grammar checks.',
         ),
     law?.constraints === 'law'
-      ? Drupal.t('Authored constraints are law: a value outside one is refused.')
+      ? Drupal.t(
+          'Authored constraints are law: a value outside one is refused.',
+        )
       : Drupal.t(
           'Authored constraints shape the offer only: nothing is refused.',
         ),
@@ -152,8 +172,10 @@ export const readingSentences = (law) => {
  * for a fact no layer wrote.
  *
  * @param {?{provider: ?string, file: ?string}} origin
+ *   The fact's origin; null for a built-in fact.
  *
  * @return {string}
+ *   The origin in words.
  */
 export const originWords = (origin) => {
   if (!origin) {
@@ -168,7 +190,11 @@ export const originWords = (origin) => {
 /**
  * An origin's title: which module or theme ships the file.
  *
+ * @param {?{provider: ?string, file: ?string}} origin
+ *   The fact's origin.
+ *
  * @return {?string}
+ *   The title, or null when the origin names no provider.
  */
 export const originTitle = (origin) =>
   origin && typeof origin.provider === 'string'
@@ -177,6 +203,12 @@ export const originTitle = (origin) =>
 
 /**
  * An origin as the view renders it.
+ *
+ * @param {?{provider: ?string, file: ?string}} origin
+ *   The fact's origin.
+ *
+ * @return {{words: string, title: ?string}}
+ *   The origin's words and title.
  */
 const originEntry = (origin) => ({
   words: originWords(origin),
@@ -185,6 +217,14 @@ const originEntry = (origin) => ({
 
 /**
  * A constraint fact in words: a list joins, a scalar prints.
+ *
+ * @param {string} fact
+ *   The fact's name (min, max, stops, scale, ...).
+ * @param {*} value
+ *   The fact's value.
+ *
+ * @return {string}
+ *   The value in words.
  */
 export const factWords = (fact, value) =>
   Array.isArray(value) ? value.map(String).join(', ') : String(value);
@@ -195,6 +235,8 @@ export const factWords = (fact, value) =>
  *
  * @param {object} node
  *   A law root node.
+ * @param {string} [scope]
+ *   The root's scope, for its label; '' labels the root by the node alone.
  *
  * @return {Array<{path: string, label: string, node: object, depth: number, root: boolean}>}
  *   `path` is the relative address in the key grammar ('' the root,
@@ -231,6 +273,16 @@ export const lawTree = (node, scope = '') => {
 
 /**
  * Whether a focus names a property of this node.
+ *
+ * @param {?{scope: string, property: ?string}} focus
+ *   The focus, or null.
+ * @param {string} property
+ *   The row's property.
+ * @param {boolean} root
+ *   Whether the node is a root (only a root's rows take the focus).
+ *
+ * @return {boolean}
+ *   True when the row is the focused one.
  */
 const focused = (focus, property, root) =>
   root && Boolean(focus?.property) && focus.property === property;
@@ -253,11 +305,14 @@ const focused = (focus, property, root) =>
  * @param {?object} law
  *   The law projection, for the reading the section words follow.
  * @param {object} [options]
+ *   The view's options.
  * @param {?{scope: string, property: ?string}} [options.focus]
+ *   The property to mark as the focus, or null for none.
  * @param {boolean} [options.root]
  *   Whether the node is a root (axes, birth and defaults are the root's).
  *
  * @return {Array<{id: string, label: string, rows: Array<object>}>}
+ *   The non-empty sections in render order.
  */
 export const nodeSections = (node, law, { focus = null, root = true } = {}) => {
   const sections = [];
@@ -320,7 +375,11 @@ export const nodeSections = (node, law, { focus = null, root = true } = {}) => {
       origin: axis === 'style' ? originEntry(null) : axesOrigin,
     }));
     if (axes.length) {
-      sections.push({ id: 'axes', label: Drupal.t('Variant axes'), rows: axes });
+      sections.push({
+        id: 'axes',
+        label: Drupal.t('Variant axes'),
+        rows: axes,
+      });
     }
 
     const birth = Object.entries(node?.birth ?? {}).map(([axis, entry]) => ({
@@ -385,6 +444,7 @@ export const nodeSections = (node, law, { focus = null, root = true } = {}) => {
  *   The law projection.
  *
  * @return {Array<object>}
+ *   One row per declared scale, with its bindings.
  */
 export const scaleRows = (law) => {
   const bindings = {};
@@ -398,7 +458,9 @@ export const scaleRows = (law) => {
   }
   for (const [scope, node] of Object.entries(law?.nodes ?? {})) {
     for (const { path, node: current } of lawTree(node, scope)) {
-      for (const [property, block] of Object.entries(current.constraints ?? {})) {
+      for (const [property, block] of Object.entries(
+        current.constraints ?? {},
+      )) {
         if (
           typeof block?.scale === 'string' &&
           current.origins?.constraints?.[property]?.source === 'node'
@@ -415,8 +477,9 @@ export const scaleRows = (law) => {
     prefix: entry.prefix,
     contract: entry.contract ?? [],
     origins: (entry.origins?.scale ?? []).map(originEntry),
-    contractOrigin:
-      entry.contract?.length ? originEntry(entry.origins?.contract ?? null) : null,
+    contractOrigin: entry.contract?.length
+      ? originEntry(entry.origins?.contract ?? null)
+      : null,
     bindings: bindings[scale] ?? [],
   }));
 };
@@ -424,6 +487,12 @@ export const scaleRows = (law) => {
 /**
  * A binding in words for the scale rows: the property, site-wide or at
  * a node's path.
+ *
+ * @param {{property: string, site: boolean, scope: ?string, path: string}} binding
+ *   A scale binding from scaleRows.
+ *
+ * @return {string}
+ *   The binding in words.
  */
 export const bindingWords = (binding) =>
   binding.site

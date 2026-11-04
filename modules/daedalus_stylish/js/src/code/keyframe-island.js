@@ -47,6 +47,26 @@ import {
  * identity, so a drag along the track re-renders the header, never the
  * island.
  */
+
+/**
+ * The step island component.
+ *
+ * @param {object} props
+ *   The step's inputs.
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials context the island's validation reads.
+ * @param {Object<string, string>} props.declarations
+ *   The step's declarations, property to value, printed once on mount.
+ * @param {boolean} props.autoFocus
+ *   Whether the island wakes with the cursor on mount.
+ * @param {function(object): void} props.onSettle
+ *   Hears each settle: the buffer's valid declarations as the step's map.
+ *
+ * @return {object}
+ *   The island's vnode.
+ */
 export const KeyframeIsland = ({
   guide,
   materials,

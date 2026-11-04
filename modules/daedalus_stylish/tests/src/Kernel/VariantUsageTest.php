@@ -20,11 +20,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the daedalus_variant_usage table and its save chokepoint.
  *
- * The table replaces content parsing (the retired LIKE scan and
- * load-everything walk): host entity saves and deletes maintain it through
- * the daedalus_stylish_entity_insert()/update()/delete() hooks, default revisions
- * only, and rebuild() reproduces exactly what incremental maintenance
- * wrote (rebuild parity).
+ * The table replaces content parsing (the retired LIKE scan and load-everything
+ * walk): host entity saves and deletes maintain it through the
+ * daedalus_stylish_entity_insert()/update()/delete() hooks, default revisions
+ * only, and rebuild() reproduces exactly what incremental maintenance wrote
+ * (rebuild parity).
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -68,8 +68,8 @@ class VariantUsageTest extends KernelTestBase {
     $this->installEntitySchema('entity_test');
     $this->installEntitySchema('entity_test_rev');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
@@ -83,7 +83,11 @@ class VariantUsageTest extends KernelTestBase {
    * Creates a saved variant to count against.
    */
   protected function createVariant(string $label, string $machine_name): DaedalusStylishVariantInterface {
-    $variant = DaedalusStylishVariant::create(['label' => $label, 'machine_name' => $machine_name, 'scope' => 'kind:block']);
+    $variant = DaedalusStylishVariant::create([
+      'label' => $label,
+      'machine_name' => $machine_name,
+      'scope' => 'kind:block',
+    ]);
     $variant->setStyles(['' => ['default' => ['padding' => '1rem']]]);
     $variant->save();
     return $variant;

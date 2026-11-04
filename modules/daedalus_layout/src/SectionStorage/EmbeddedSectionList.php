@@ -13,10 +13,10 @@ use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
  * A SectionListInterface over one nested-section container component.
  *
  * Under the sections-all-the-way-down model a nested section is an ordinary
- * SectionComponent (the daedalus_layout_section container) whose configuration embeds
- * exactly ONE Section::toArray() value. This list is the storage adapter that
- * lets ANY core-shaped Layout Builder form or op speak (section list, delta)
- * to that embedded value with no knowledge of the embedding:
+ * SectionComponent (the daedalus_layout_section container) whose configuration
+ * embeds exactly ONE Section::toArray() value. This list is the storage adapter
+ * that lets ANY core-shaped Layout Builder form or op speak (section list,
+ * delta) to that embedded value with no knowledge of the embedding:
  *
  * - getSection(0) is the embedded section. Hydration is memoized and
  *   identity-stable: core forms mutate the Section returned by

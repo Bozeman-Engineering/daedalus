@@ -10,7 +10,7 @@ use Drupal\Core\Config\ConfigEvents;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Recomputes stamped asset arrays when the daedalus_stylish_layers config changes.
+ * Recomputes stamped asset arrays on daedalus_stylish_layers config changes.
  *
  * AssetResolver caches resolved CSS asset arrays permanently under the
  * library_info tag, and those arrays bake in the stamps (and, with
@@ -34,7 +34,7 @@ final class ConfigSubscriber implements EventSubscriberInterface {
   }
 
   /**
-   * Invalidates cached asset arrays when daedalus_stylish_layers settings change.
+   * Invalidates cached asset arrays when the module's settings change.
    */
   public function onConfigSave(ConfigCrudEvent $event): void {
     if ($event->getConfig()->getName() === 'daedalus_stylish_layers.settings') {

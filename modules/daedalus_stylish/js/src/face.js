@@ -16,6 +16,7 @@ import { h } from 'preact';
  * the token scope.
  *
  * @param {object} props
+ *   The chip's props.
  * @param {string} props.className
  *   The call site's face class(es); the paired modifier joins here.
  * @param {string} props.paint
@@ -29,7 +30,10 @@ export const Face = ({ className, paint, paintDark = null }) => (
     style={{ background: paint }}
   >
     {paintDark != null && (
-      <span className="daedalus-stylish-face__dark" style={{ background: paintDark }} />
+      <span
+        className="daedalus-stylish-face__dark"
+        style={{ background: paintDark }}
+      />
     )}
   </span>
 );

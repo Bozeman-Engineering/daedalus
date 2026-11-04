@@ -424,6 +424,7 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString('rgb(1, 2, 3)', $html, "The blueprint's map is delivered on the page: $html");
     $this->assertSame(1, $xpath->query('.//style', $element)->length, 'Inside the linked placement.');
     $wrapper = $xpath->query('.//*[contains(@class, "' . LinkedBlueprintBlock::WRAPPER_CLASS . '")]', $element)->item(0);
+    assert($wrapper instanceof \DOMElement);
     $this->assertSame('entity:' . $this->blueprint->uuid(), $wrapper->getAttribute('data-selectable'), "The blueprint document's root key rides the wrapper, never the placement's root: $html");
     $this->assertSame('block:' . $linked, $element->getAttribute('data-selectable'));
 
@@ -509,7 +510,7 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     $tree = $this->container->get('daedalus_blueprint.node_tree_builder')->build($this->host($this->reload($page)));
     $placed = array_values(array_filter($this->rootChildren($tree), static fn (array $node): bool => $node['kind'] === 'container'));
     $this->assertSame('testimonial', $placed[0]['blueprint'], 'A detached placement is a copy with provenance.');
-    $this->assertSame(1, count(array_filter($this->rootChildren([$placed[0]]), static fn (array $node): bool => ($node['field'] ?? NULL) === 'name')), 'The copy holds the blueprint\'s elements.');
+    $this->assertCount(1, array_filter($this->rootChildren([$placed[0]]), static fn (array $node): bool => ($node['field'] ?? NULL) === 'name'), 'The copy holds the blueprint\'s elements.');
   }
 
   /**
@@ -617,6 +618,7 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     $saved = $this->container->get('entity_type.manager')->getStorage('blueprint')->loadByProperties(['label' => 'Testimonial copy']);
     $this->assertCount(1, $saved);
     $saved = reset($saved);
+    assert($saved instanceof BlueprintInterface);
     $this->assertSame(BlueprintInterface::SCOPE_BLOCK, $saved->getScope());
     $definition = $this->container->get('daedalus_blueprint_library.discovery')->getBlueprint($saved->getMachineName());
     $this->assertArrayNotHasKey('blueprint', $definition['layout'][0]);

@@ -21,14 +21,22 @@
 /**
  * The five capabilities, the spine's closed vocabulary in its order.
  */
-export const CAPABILITIES = ['content', 'configure', 'style', 'arrange', 'insert'];
+export const CAPABILITIES = [
+  'content',
+  'configure',
+  'style',
+  'arrange',
+  'insert',
+];
 
 /**
  * Whether a value is one of the five capabilities.
  *
  * @param {*} capability
+ *   The value to test.
  *
  * @return {boolean}
+ *   Whether the value is a capability name.
  */
 export const isCapability = (capability) => CAPABILITIES.includes(capability);
 
@@ -49,6 +57,7 @@ export const isCapability = (capability) => CAPABILITIES.includes(capability);
  *   A selectable key.
  *
  * @return {?string}
+ *   The subject's key, or null for a key that is no field key.
  */
 export const subjectKeyOf = (key) => {
   const [kind, uuid, ...name] = key.split(':');
@@ -131,6 +140,7 @@ export const capableIn = (index, key, capability) =>
  *   The selectable key or part address.
  *
  * @return {boolean}
+ *   Whether the verdict allows any capability at all.
  */
 export const selectableIn = (index, key) => {
   const verdict = verdictIn(index, key);
@@ -153,6 +163,8 @@ export const selectableIn = (index, key) => {
  *   The element uuid (a selectable key's second segment).
  *
  * @return {?Object<string, boolean>}
+ *   The node's verdict by capability, or null when the tree holds no
+ *   such element.
  */
 export const verdictInTree = (tree, uuid) => {
   if (!uuid) {
@@ -184,6 +196,7 @@ export const verdictInTree = (tree, uuid) => {
  *   One of CAPABILITIES.
  *
  * @return {boolean}
+ *   Whether the verdict allows the capability.
  */
 export const capableInTree = (tree, uuid, capability) =>
   verdictInTree(tree, uuid)?.[capability] === true;

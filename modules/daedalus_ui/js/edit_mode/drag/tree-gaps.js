@@ -79,6 +79,7 @@ const BAND_PX = 8;
  * nothing.
  *
  * @return {Array<{element: Element, key: ?string, region: ?string, owner: ?string, claims: ?string[], door: ?string, depth: number, expanded: boolean}>}
+ *   One record per visible row, in document order.
  */
 export const readTreeRows = () =>
   Array.from(
@@ -96,11 +97,23 @@ export const readTreeRows = () =>
 
 /**
  * A key's segments, or null.
+ *
+ * @param {?string} key
+ *   A selectable key (`block:{uuid}`), or null.
+ *
+ * @return {?string[]}
+ *   The colon-separated segments, or null for no key.
  */
 const segmentsOf = (key) => key?.split(':') ?? null;
 
 /**
  * A key's uuid: the second segment.
+ *
+ * @param {string} key
+ *   A selectable key.
+ *
+ * @return {string}
+ *   The uuid.
  */
 const uuidOf = (key) => segmentsOf(key)[1];
 
@@ -108,6 +121,12 @@ const uuidOf = (key) => segmentsOf(key)[1];
  * True for a key that names an item of some flow: the root entity, a
  * container, or a block PLACEMENT (block:{uuid}; a block's field rows
  * carry a third segment and inline entities are not layout flow).
+ *
+ * @param {?string} key
+ *   A selectable key, or null.
+ *
+ * @return {boolean}
+ *   Whether the key names a flow item.
  */
 const isFlowKey = (key) => {
   const parts = segmentsOf(key);
@@ -125,6 +144,12 @@ const isFlowKey = (key) => {
  * for an inert row (a field, a part, a value, any other shell, an inline
  * entity, a shell claiming sections of a non-root owner). Only the claim
  * and the owner decide for a shell, never its label.
+ *
+ * @param {Object} row
+ *   A row record (readTreeRows).
+ *
+ * @return {?string}
+ *   The kind, or null for an inert row.
  */
 const rowKind = (row) => {
   if (row.region !== null) {
@@ -153,6 +178,12 @@ const rowKind = (row) => {
 /**
  * The key of the container a container-like row stands for: its own key,
  * or its owner's for a region row and the sections shell.
+ *
+ * @param {Object} row
+ *   A row record.
+ *
+ * @return {string}
+ *   The container's key.
  */
 const containerKeyOf = (row) => row.key ?? row.owner;
 
@@ -162,6 +193,14 @@ const containerKeyOf = (row) => row.key ?? row.owner;
  * in the markup view: the shell claiming the root's sections holds the
  * section rows, so it is the face when rendered (the same preference
  * treeRowForLocation draws by), the root row otherwise.
+ *
+ * @param {Object[]} rows
+ *   The visible rows.
+ * @param {?string} containerKey
+ *   The container's key.
+ *
+ * @return {?Object}
+ *   The row record, or null when the container has no row.
  */
 const containerRowFor = (rows, containerKey) =>
   rows.find(
@@ -175,6 +214,16 @@ const containerRowFor = (rows, containerKey) =>
 
 /**
  * The candidate "after a row's element, in its parent flow".
+ *
+ * @param {Object[]} rows
+ *   The visible rows.
+ * @param {Object} row
+ *   The anchor row.
+ * @param {Map} index
+ *   The projection index.
+ *
+ * @return {{location: Object, anchorKey: string, anchorRow: Object, containerRow: ?Object}}
+ *   The candidate.
  */
 const afterRow = (rows, row, index) => ({
   location: { anchor: uuidOf(row.key), placement: 'after' },
@@ -186,6 +235,14 @@ const afterRow = (rows, row, index) => ({
 /**
  * The candidate "inside a container-like row's element": the append, with
  * the region name when the row is a region's.
+ *
+ * @param {Object[]} rows
+ *   The visible rows.
+ * @param {Object} row
+ *   The container-like row.
+ *
+ * @return {{location: Object, anchorKey: string, anchorRow: Object, containerRow: ?Object}}
+ *   The candidate.
  */
 const insideRow = (rows, row) => {
   const key = containerKeyOf(row);
@@ -209,6 +266,18 @@ const insideRow = (rows, row) => {
  * region's first block; a door's is its fill); a region row's is the
  * visible row beneath it, since the index has no entry for a region.
  * Null for a collapsed row and for rows that are no container.
+ *
+ * @param {Object[]} rows
+ *   The visible rows.
+ * @param {number} i
+ *   The row's index.
+ * @param {Map} index
+ *   The projection index.
+ * @param {?string} kind
+ *   The row's kind (rowKind).
+ *
+ * @return {?{location: Object, anchorKey: string, anchorRow: Object, containerRow: ?Object}}
+ *   The start candidate, or null.
  */
 const startOf = (rows, i, index, kind) => {
   const row = rows[i];
@@ -265,6 +334,7 @@ const startOf = (rows, i, index, kind) => {
  *   The projection index.
  *
  * @return {Array<{location: Object, anchorKey: string, anchorRow: Object, containerRow: ?Object}>}
+ *   The candidates, deepest first; empty for no line.
  */
 export const lineCandidates = (rows, i, index) => {
   const row = rows[i];
@@ -323,6 +393,7 @@ export const lineCandidates = (rows, i, index) => {
  *   rowContentEdge; specs pass their own).
  *
  * @return {?Object}
+ *   The picked candidate, or null for an empty list.
  */
 export const pickByX = (candidates, x, contentEdge) =>
   candidates.find((candidate) => contentEdge(candidate.anchorRow) <= x) ??
@@ -333,6 +404,12 @@ export const pickByX = (candidates, x, contentEdge) =>
  * A row record's content edge: where its indent ends, the one reading the
  * panel caret's line also starts from (gaps.js treeRowContentEdge), so
  * the depth x picks is the depth the drawn line shows.
+ *
+ * @param {Object} row
+ *   A row record.
+ *
+ * @return {number}
+ *   The viewport x where the row's content starts.
  */
 const rowContentEdge = (row) => treeRowContentEdge(row.element);
 
@@ -350,6 +427,14 @@ const rowContentEdge = (row) => treeRowContentEdge(row.element);
  *   the location (isRootFlowLocation's derivation) so a tree target and a
  *   canvas target agree on it.
  * Then legalize: a block drop in the root flow wraps in a new section.
+ *
+ * @param {Object} candidate
+ *   A line candidate (lineCandidates).
+ * @param {string} targets
+ *   'block' or 'section', what the drag source places.
+ *
+ * @return {Object}
+ *   The drop target.
  */
 const targetFor = (candidate, targets) => {
   const { location, anchorKey, containerRow } = candidate;
@@ -374,8 +459,9 @@ const targetFor = (candidate, targets) => {
  * @param {Element} row
  *   The row under the cursor (a treeitem).
  * @param {number} x
+ *   The cursor's viewport x coordinate.
  * @param {number} y
- *   Viewport cursor coordinates.
+ *   The cursor's viewport y coordinate.
  * @param {string} targets
  *   'block' or 'section', what the drag source places.
  *

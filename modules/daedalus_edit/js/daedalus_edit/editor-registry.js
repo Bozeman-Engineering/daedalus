@@ -36,13 +36,14 @@ class EditorRegistry {
   /**
    * Register an editor.
    *
-   * @param editor
+   * @param {EditorPluginBase} editor
    *   The editor plugin instance.
    */
   register(editor) {
     if (!(editor instanceof EditorPluginBase)) {
-      console.error('Failed to register editor: ', editor);
-      return;
+      throw new TypeError(
+        'Daedalus Edit: an editor must extend EditorPluginBase to register.',
+      );
     }
     // An editor that declares no id stays addressable by its constructor
     // name.
@@ -60,7 +61,7 @@ class EditorRegistry {
   /**
    * Get an editor by id.
    *
-   * @param id
+   * @param {string} id
    *   The editor id.
    *
    * @return {EditorPluginBase|undefined}
@@ -99,7 +100,7 @@ class EditorRegistry {
    * because resolution is needed before a widget (and therefore an editor)
    * is known: the form item wrapper lookup is itself keyed by property.
    *
-   * @param elementInfo
+   * @param {object} elementInfo
    *   An EditableElement's info object.
    * @return {string}
    *   The property name.
@@ -138,7 +139,7 @@ class EditorRegistry {
  * contained so one broken editor cannot take down the registrations behind
  * it.
  */
-export default function () {
+export default function initEditorRegistry() {
   const registry = new EditorRegistry();
   Drupal.Daedalus.Edit.Editors = registry;
 
@@ -164,7 +165,7 @@ export default function () {
     try {
       callback(daedalusEdit);
     } catch (error) {
-      console.error('An DaedalusEdit registration callback failed:', error);
+      Drupal.throwError(error);
     }
   };
   window.DaedalusEditQueue = { push: run };

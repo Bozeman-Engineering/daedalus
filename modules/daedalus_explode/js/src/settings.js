@@ -55,6 +55,14 @@ const TOGGLES = ['labels', 'isolate'];
 /**
  * A number held to its range, or the default for anything not a finite
  * number.
+ *
+ * @param {string} name
+ *   The numeric setting's name (a RANGES key).
+ * @param {*} value
+ *   The candidate value.
+ *
+ * @return {number}
+ *   The value within the range, or the default.
  */
 const clampNumber = (name, value) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -66,6 +74,12 @@ const clampNumber = (name, value) => {
 
 /**
  * The depth cap the model reads: an integer of at least one, else All.
+ *
+ * @param {*} value
+ *   The candidate depth cap.
+ *
+ * @return {?number}
+ *   The cap, or null for All.
  */
 const normalizeCap = (value) =>
   Number.isInteger(value) && value >= 1 ? value : null;
@@ -88,18 +102,34 @@ export const normalize = (raw) => {
   }
   value.depthCap = normalizeCap(given.depthCap);
   for (const name of TOGGLES) {
-    value[name] = typeof given[name] === 'boolean' ? given[name] : DEFAULTS[name];
+    value[name] =
+      typeof given[name] === 'boolean' ? given[name] : DEFAULTS[name];
   }
   return Object.freeze(value);
 };
 
 /**
  * Whether two normalized settings objects carry the same values.
+ *
+ * @param {object} a
+ *   One normalized settings object.
+ * @param {object} b
+ *   The other.
+ *
+ * @return {boolean}
+ *   True when every setting matches.
  */
-const same = (a, b) => Object.keys(DEFAULTS).every((name) => a[name] === b[name]);
+const same = (a, b) =>
+  Object.keys(DEFAULTS).every((name) => a[name] === b[name]);
 
 /**
  * Reads the stored settings, or null for nothing usable.
+ *
+ * @param {?Storage} storage
+ *   The backend, or null for none.
+ *
+ * @return {*}
+ *   The parsed value, or null.
  */
 const read = (storage) => {
   try {

@@ -108,9 +108,9 @@ class EditorSettings {
    * come through here. The save route is generic, so normalize on read:
    * anything but a known tier collapses to the 'full' default.
    *
-   * The tiers are ordered: chrome declaring data-daedalus-ui-conceal="minimal" hides
-   * at minimal density and denser; data-daedalus-ui-conceal="clean" hides only at
-   * clean.
+   * The tiers are ordered: chrome declaring data-daedalus-ui-conceal="minimal"
+   * hides at minimal density and denser; data-daedalus-ui-conceal="clean" hides
+   * only at clean.
    *
    * @return string
    *   'full' (show everything), 'minimal', or 'clean'.

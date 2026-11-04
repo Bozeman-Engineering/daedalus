@@ -77,7 +77,7 @@ function findFunc(scope, name) {
  * @param {object} config
  *  The plugin configuration object.
  *
- * @return {null|function|*}
+ * @return {null|Function|*}
  *  Resulting configuration value.
  */
 function buildFunc(config) {

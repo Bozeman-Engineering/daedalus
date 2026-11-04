@@ -60,8 +60,8 @@ class DaedalusStylishSkinTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_skin');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_variant');
     // The skin save's token usage chokepoint (a token may reference
     // another token: accent-hover below).
@@ -142,9 +142,15 @@ class DaedalusStylishSkinTest extends KernelTestBase {
     $second->save();
     $this->assertSame('aurora_dark_2', $second->getMachineName());
 
-    // The shipped-source lane: one hash, two comparisons. The shipped
-    // payload covers every tier under stable keys ({tokens, animations, fonts, defaults}).
-    $loaded->setShippedSource('example_recipe', ['tokens' => $tokens, 'animations' => [], 'fonts' => [], 'defaults' => []])->save();
+    // The shipped-source lane: one hash, two comparisons. The shipped payload
+    // covers every tier under stable keys ({tokens, animations, fonts,
+    // defaults}).
+    $loaded->setShippedSource('example_recipe', [
+      'tokens' => $tokens,
+      'animations' => [],
+      'fonts' => [],
+      'defaults' => [],
+    ])->save();
     $this->assertTrue($loaded->isShipped());
     $this->assertFalse($loaded->isModified());
     $reordered = [

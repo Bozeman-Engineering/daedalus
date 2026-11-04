@@ -12,14 +12,14 @@ use PHPUnit\Framework\Attributes\Group;
 /**
  * The condition clause grammar, and its client twin.
  *
- * ConditionClause reads a condition key as clauses: references to the
- * published conditions, literal feature queries, supports tests and
- * pseudo-classes, unknown words; it derives the band and preference the
- * canvas poses from a clause's CSS, and spells a compound canonically.
- * The client twin (daedalus_ui/js/edit_mode/materials/condition-clause.js) is locked to the class by
- * the shared battery daedalus_ui/tests/js/condition-clause-cases.mjs: the node suite
- * answers every case through the twin, this test answers every case
- * through the class, and both compare to the one recorded answer, so the
+ * ConditionClause reads a condition key as clauses: references to the published
+ * conditions, literal feature queries, supports tests and pseudo-classes,
+ * unknown words; it derives the band and preference the canvas poses from a
+ * clause's CSS, and spells a compound canonically. The client twin
+ * (daedalus_ui/js/edit_mode/materials/condition-clause.js) is locked to the
+ * class by the shared battery daedalus_ui/tests/js/condition-clause-cases.mjs:
+ * the node suite answers every case through the twin, this test answers every
+ * case through the class, and both compare to the one recorded answer, so the
  * two can never drift.
  */
 #[Group('daedalus_blueprint')]

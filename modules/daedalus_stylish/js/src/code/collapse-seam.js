@@ -71,6 +71,8 @@ export const mountOutline = (view) => {
  * posture when no page view is mounted in this document.
  *
  * @return {{folds: ?object, outline: Array<object>}}
+ *   The mounted view's posture and outline rows; null folds and no rows
+ *   when nothing is mounted.
  */
 export const readOutline = () =>
   mounted ? mounted.read() : { folds: null, outline: [] };

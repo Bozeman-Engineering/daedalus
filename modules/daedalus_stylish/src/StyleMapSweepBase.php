@@ -10,15 +10,15 @@ use Drupal\daedalus_layout\ComponentTransform\HostTransformInterface;
 /**
  * Base for host transforms that sweep a host's whole style map.
  *
- * A sweep rides daedalus_layout's transform spine once per host, after the section
- * walk: the walkers run it over every persisted host revision and every
+ * A sweep rides daedalus_layout's transform spine once per host, after the
+ * section walk: the walkers run it over every persisted host revision and every
  * template display, and the presave / load-time safety net keeps stale
- * tempstore sessions converging. The base owns the ride (read the host's
- * style map wherever the host keeps it, skip hosts with none, write the
- * swept map back and report whether anything changed); each sweep
- * supplies only its rewrite through sweep(). Sweeps are registered
- * permanently, so a converged map costs one no-op pass, and their order is
- * the daedalus_layout.host_transform tag priority.
+ * tempstore sessions converging. The base owns the ride (read the host's style
+ * map wherever the host keeps it, skip hosts with none, write the swept map
+ * back and report whether anything changed); each sweep supplies only its
+ * rewrite through sweep(). Sweeps are registered permanently, so a converged
+ * map costs one no-op pass, and their order is the
+ * daedalus_layout.host_transform tag priority.
  */
 abstract class StyleMapSweepBase implements HostTransformInterface {
 
@@ -49,8 +49,8 @@ abstract class StyleMapSweepBase implements HostTransformInterface {
    * @param array $map
    *   The host's non-empty style map.
    * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
-   *   The host, for sweeps that need more than the map (the row-arrangement sweep reads
-   *   the layout tree for each container's ordered children).
+   *   The host, for sweeps that need more than the map (the row-arrangement
+   *   sweep reads the layout tree for each container's ordered children).
    * @param string $context
    *   The "entity_type:id" label the migrations prefix their report lines
    *   with.

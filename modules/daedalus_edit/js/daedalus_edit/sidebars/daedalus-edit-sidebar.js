@@ -71,6 +71,7 @@
      * The panel element.
      *
      * @return {?Element}
+     *   The panel, or null before it is rendered.
      */
     panel() {
       return document.getElementById(DaedalusEditSidebar.PANEL_ID);
@@ -80,6 +81,7 @@
      * The form-cache mount inside the panel.
      *
      * @return {?Element}
+     *   The mount, or null before the panel is rendered.
      */
     mount() {
       return document.getElementById(DaedalusEditSidebar.FORM_CACHE_ID);
@@ -89,6 +91,7 @@
      * The subject's cached form element, or null.
      *
      * @return {?Element}
+     *   The subject's form, or null when the panel has no subject.
      */
     subjectForm() {
       const mount = this.mount();
@@ -106,6 +109,7 @@
      * main entity wrapper's canonical id.
      *
      * @return {?string}
+     *   The form identity, or null without a main entity wrapper.
      */
     topLevelSubjectId() {
       const wrapper = document.querySelector(
@@ -218,6 +222,7 @@
      * a second fetch of the same form.
      *
      * @return {?Promise}
+     *   The pending fetch, or null.
      */
     pendingFetch() {
       return this.topLevelFetch;
@@ -312,10 +317,7 @@
           } catch (revertError) {
             // No top-level form to revert to (no main entity, fetch
             // failed): an open panel with nothing to show closes.
-            console.error(
-              'Daedalus Edit: could not revert the form panel to the top-level entity.',
-              revertError,
-            );
+            Drupal.throwError(revertError);
             this.closeSidebar(DaedalusEditSidebar.PANEL_ID);
           }
         }
@@ -407,12 +409,7 @@
               this.closeSidebar(id);
               resolve();
             })
-            .catch((error) => {
-              if (error !== 'HTML validation failed') {
-                console.error(error);
-              }
-              reject(error);
-            });
+            .catch(reject);
         } else {
           this.closeSidebar(id);
           resolve();
@@ -485,10 +482,7 @@
         const plugin = sidebarManager.getPlugin('daedalus_edit_form');
         if (!plugin.subjectForm()) {
           plugin.ensureTopLevelSubject(true).catch((error) => {
-            console.error(
-              'Daedalus Edit: could not restore the form panel subject.',
-              error,
-            );
+            Drupal.throwError(error);
             plugin.closeSidebar(DaedalusEditSidebar.PANEL_ID);
           });
         }

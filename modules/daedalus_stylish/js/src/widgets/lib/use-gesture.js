@@ -34,6 +34,17 @@ import { useEffect, useState } from 'preact/hooks';
  *   is its own gesture), the draft's identity beside the base.
  * @param {Object<string, ?string>} base
  *   The shown values the draft layers over.
+ * @param {Function} onPreview
+ *   The widget contract's preview handler, called with the gesture's
+ *   properties object to paint the canvas.
+ * @param {Function} onCommit
+ *   The widget contract's commit handler, called with the same
+ *   properties object; returns the op's promise, whose rejection drops
+ *   the draft.
+ *
+ * @return {{values: object, invalid: boolean, stage: Function, pick: Function}}
+ *   The shown values with the draft layered over, the rejected-commit
+ *   mark, the paint-only half and the paint-and-commit gesture.
  */
 export const useGesture = (key, base, onPreview, onCommit) => {
   const committed = JSON.stringify([key, base]);
@@ -85,7 +96,7 @@ export const useGesture = (key, base, onPreview, onCommit) => {
  * `base` is the authoritative text underneath the field: the shown
  * value (the winner's at the pose) with any sibling gesture's optimistic
  * draft layered over it (useGesture's `values`), so a sibling's pick (a
- * stroke's style or colour) repaints the field in the same breath. The field's
+ * stroke's style or color) repaints the field in the same breath. The field's
  * own draft echoes previews back into the controlled field; a new base
  * supersedes it (a settled commit, an AI edit, a selection move — or a
  * failed CHIP commit reverting). `own` is what the editable layer says
@@ -97,6 +108,28 @@ export const useGesture = (key, base, onPreview, onCommit) => {
  * own value (a row over the own entry alone) leave `own` at its default.
  * A failed commit keeps the typed value for correction and marks the
  * field invalid until the next authoritative value or gesture.
+ *
+ * @param {?string} base
+ *   The authoritative text underneath the field (see above).
+ * @param {string} property
+ *   The CSS property the field edits, the key of every handler's
+ *   properties object.
+ * @param {Function} onPreview
+ *   The widget contract's preview handler, called per input event with
+ *   `{ [property]: value }` (null for an emptied field).
+ * @param {Function} onRelease
+ *   The widget contract's release handler, called with the same shape
+ *   when a settle has nothing to persist.
+ * @param {Function} onCommit
+ *   The widget contract's commit handler, called with the same shape on
+ *   a settle that changes the editable layer; returns the op's promise.
+ * @param {?string} [own]
+ *   What the editable layer says at the exact pose (see above);
+ *   defaults to `base`.
+ *
+ * @return {{shown: string, invalid: boolean, preview: Function, settle: Function}}
+ *   The text the field shows, the rejected-commit mark, the per-input
+ *   preview and the gesture-end settle.
  */
 export const useFieldGesture = (
   base,

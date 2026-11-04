@@ -89,7 +89,10 @@ test('the two decisions are the strings the door compares against', () => {
 
 test('no open edit: every write stays, whatever it lands on', () => {
   assert.equal(leaveDecision({ editingKey: null, nextKeys: [OTHER] }), STAY);
-  assert.equal(leaveDecision({ editingKey: null, nextKeys: [OTHER, THIRD] }), STAY);
+  assert.equal(
+    leaveDecision({ editingKey: null, nextKeys: [OTHER, THIRD] }),
+    STAY,
+  );
   assert.equal(leaveDecision({ editingKey: null, nextKeys: [] }), STAY);
   assert.equal(leaveDecision({ nextKeys: [OTHER] }), STAY);
   assert.equal(leaveDecision(), STAY);
@@ -98,9 +101,15 @@ test('no open edit: every write stays, whatever it lands on', () => {
 test('the same single key: re-selecting the edited element stays', () => {
   assert.equal(leaveDecision({ editingKey: EDITED, nextKeys: [EDITED] }), STAY);
   // Duplicates collapse the way setSelectedSet collapses them.
-  assert.equal(leaveDecision({ editingKey: EDITED, nextKeys: [EDITED, EDITED] }), STAY);
+  assert.equal(
+    leaveDecision({ editingKey: EDITED, nextKeys: [EDITED, EDITED] }),
+    STAY,
+  );
   // A null member is no member (setSelected(null) is the empty set, not a key).
-  assert.equal(leaveDecision({ editingKey: EDITED, nextKeys: [EDITED, null] }), STAY);
+  assert.equal(
+    leaveDecision({ editingKey: EDITED, nextKeys: [EDITED, null] }),
+    STAY,
+  );
 });
 
 test('a different primary: selecting another element leaves', () => {
@@ -109,9 +118,18 @@ test('a different primary: selecting another element leaves', () => {
 });
 
 test('a set containing the editing key leaves: no edit rides a multi-select', () => {
-  assert.equal(leaveDecision({ editingKey: EDITED, nextKeys: [EDITED, OTHER] }), LEAVE);
-  assert.equal(leaveDecision({ editingKey: EDITED, nextKeys: [OTHER, EDITED] }), LEAVE);
-  assert.equal(leaveDecision({ editingKey: EDITED, nextKeys: [OTHER, THIRD] }), LEAVE);
+  assert.equal(
+    leaveDecision({ editingKey: EDITED, nextKeys: [EDITED, OTHER] }),
+    LEAVE,
+  );
+  assert.equal(
+    leaveDecision({ editingKey: EDITED, nextKeys: [OTHER, EDITED] }),
+    LEAVE,
+  );
+  assert.equal(
+    leaveDecision({ editingKey: EDITED, nextKeys: [OTHER, THIRD] }),
+    LEAVE,
+  );
 });
 
 test('an empty set leaves: a clear ends the edit the same as a move', () => {
@@ -144,11 +162,32 @@ test('removedSet mirrors removeSelected: a member leaves, a non-member is a no-o
 
 test('the helpers feed the decision: toggling in a second key or the edited key off leaves, a no-op toggle or remove stays', () => {
   const current = [EDITED];
-  assert.equal(leaveDecision({ editingKey: EDITED, nextKeys: toggledSet(current, OTHER) }), LEAVE);
-  assert.equal(leaveDecision({ editingKey: EDITED, nextKeys: toggledSet(current, EDITED) }), LEAVE);
-  assert.equal(leaveDecision({ editingKey: EDITED, nextKeys: toggledSet(current, null) }), STAY);
-  assert.equal(leaveDecision({ editingKey: EDITED, nextKeys: removedSet(current, EDITED) }), LEAVE);
-  assert.equal(leaveDecision({ editingKey: EDITED, nextKeys: removedSet(current, OTHER) }), STAY);
+  assert.equal(
+    leaveDecision({ editingKey: EDITED, nextKeys: toggledSet(current, OTHER) }),
+    LEAVE,
+  );
+  assert.equal(
+    leaveDecision({
+      editingKey: EDITED,
+      nextKeys: toggledSet(current, EDITED),
+    }),
+    LEAVE,
+  );
+  assert.equal(
+    leaveDecision({ editingKey: EDITED, nextKeys: toggledSet(current, null) }),
+    STAY,
+  );
+  assert.equal(
+    leaveDecision({
+      editingKey: EDITED,
+      nextKeys: removedSet(current, EDITED),
+    }),
+    LEAVE,
+  );
+  assert.equal(
+    leaveDecision({ editingKey: EDITED, nextKeys: removedSet(current, OTHER) }),
+    STAY,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -310,22 +349,22 @@ test('the edit may end: a set, a toggle, a remove and a clear each commit it the
   assert.equal(selection().editingKey, null);
 });
 
-test('endEdit rejecting after canEndEdit said yes is logged, and the write has already landed', async () => {
+test('endEdit rejecting after canEndEdit said yes is rethrown outside the stack, and the write has already landed', async () => {
   openEdit({ rejects: true });
-  const logged = [];
-  const { error } = console;
-  console.error = (...args) => logged.push(args);
+  // The failure is rethrown outside the call stack (Drupal.throwError),
+  // never swallowed.
+  const errors = [];
+  Drupal.throwError = (error) => errors.push(error);
   try {
     assert.equal(selectKey(OTHER), true);
     assert.equal(selection().selectedKey, OTHER);
     await Promise.resolve();
     await Promise.resolve();
   } finally {
-    console.error = error;
+    delete Drupal.throwError;
   }
-  assert.equal(logged.length, 1);
-  assert.match(logged[0][0], /Cannot end the edit/);
-  assert.equal(logged[0][1].message, 'HTML validation failed');
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].message, 'HTML validation failed');
   stub.editing = false;
   Drupal.Daedalus.EditSession.editChanged(null);
 });

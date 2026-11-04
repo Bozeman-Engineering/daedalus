@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint_library;
 
 /**
- * The result of a blueprint gesture: the persisted blueprint plus capture noise.
+ * The result of a blueprint gesture.
+ *
+ * The persisted blueprint plus capture noise.
  *
  * Warnings come straight from the capture's instantiation (the batch's
  * warning channel): what the copy could not carry was dropped, never

@@ -22,9 +22,9 @@ use Drupal\filter\FilterFormatInterface;
  * mintItems() over each field the blueprint spine applies, so mutations
  * that stage into tempstore without a save carry ids too.
  *
- * Only the 'value' property is minted. Summaries (text_with_summary) render
- * in teasers outside the canvas identity story: no row, no Daedalus Stylish target,
- * so ids there would be noise in teaser markup with no consumer.
+ * Only the 'value' property is minted. Summaries (text_with_summary) render in
+ * teasers outside the canvas identity story: no row, no Daedalus Stylish
+ * target, so ids there would be noise in teaser markup with no consumer.
  */
 final class EntityIdentityMinting {
 

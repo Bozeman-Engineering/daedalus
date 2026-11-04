@@ -12,16 +12,16 @@ use Drupal\layout_builder\Entity\LayoutEntityDisplayInterface;
 /**
  * Deprecation-window safety net: converges layouts at save AND load time.
  *
- * The migration spine's batched walkers rewrite every persisted layout
- * store, but an editing session staged in tempstore before the update ran
- * still holds deprecated components and would write them back verbatim on
- * save. Rather than walking tempstore's per-user serialized envelopes, every
- * entity save passes through this net (EntityPresave::entityPresave()): while any
- * transform is registered, the layout sections of the entity being saved are
- * converged in place. One save-path chokepoint catches stale sessions,
- * forgotten drafts, replayed blueprint placements, and anything else
- * that slips past the walkers, and it costs a single hasTransforms() check
- * once a deprecation window closes and its transform is unregistered.
+ * The migration spine's batched walkers rewrite every persisted layout store,
+ * but an editing session staged in tempstore before the update ran still holds
+ * deprecated components and would write them back verbatim on save. Rather than
+ * walking tempstore's per-user serialized envelopes, every entity save passes
+ * through this net (EntityPresave::entityPresave()): while any transform is
+ * registered, the layout sections of the entity being saved are converged in
+ * place. One save-path chokepoint catches stale sessions, forgotten drafts,
+ * replayed blueprint placements, and anything else that slips past the walkers,
+ * and it costs a single hasTransforms() check once a deprecation window closes
+ * and its transform is unregistered.
  *
  * The save-time half alone is not enough for structural migrations: a
  * staged session whose sections reference RETIRED plugins (the four

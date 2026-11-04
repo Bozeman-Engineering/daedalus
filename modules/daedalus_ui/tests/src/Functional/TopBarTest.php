@@ -30,9 +30,17 @@ use PHPUnit\Framework\Attributes\Group;
 #[Group('daedalus_ui')]
 class TopBarTest extends BrowserTestBase {
 
-  use DaedalusFixtureTrait {
-    setUp as daedalusSetUp;
-  }
+  use DaedalusFixtureTrait;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = '';
 
   /**
    * Core's manage-display layout route for the Page type: a template host.
@@ -43,7 +51,8 @@ class TopBarTest extends BrowserTestBase {
    * {@inheritdoc}
    */
   protected function setUp(): void {
-    $this->daedalusSetUp();
+    parent::setUp();
+    $this->installFixture();
     // The template route is field_ui's; the recipe does not enable it.
     \Drupal::service('module_installer')->install(['field_ui']);
     $this->rebuildContainer();

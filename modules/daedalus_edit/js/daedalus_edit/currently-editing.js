@@ -29,7 +29,7 @@ let appRef = null;
 /**
  * Binds the registration-seam app so edit changes can be reported.
  *
- * @param app
+ * @param {object} app
  *   The Daedalus registration app API.
  */
 export const bindEditChangeReporting = (app) => {

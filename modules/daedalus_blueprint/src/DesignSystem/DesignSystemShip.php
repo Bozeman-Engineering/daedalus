@@ -133,7 +133,10 @@ final class DesignSystemShip {
   }
 
   /**
-   * Ships: creates and installs the module if needed, writes the unit, runs the lanes.
+   * Ships a design system to its package module.
+   *
+   * Creates and installs the module if needed, writes the unit, runs the
+   * lanes.
    *
    * @param string $system_id
    *   The design system id.

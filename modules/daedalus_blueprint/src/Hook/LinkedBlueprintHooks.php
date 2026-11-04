@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Hook;
 
+use Drupal\Component\Plugin\Discovery\CachedDiscoveryInterface;
 use Drupal\Core\Block\BlockManagerInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Hook\Attribute\Hook;
 use Drupal\daedalus_blueprint\Host\BlueprintHost;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * Keeps the linked placement derivatives in step with the blueprints.
@@ -22,7 +24,10 @@ use Drupal\daedalus_blueprint\Host\BlueprintHost;
  */
 final class LinkedBlueprintHooks {
 
-  public function __construct(protected BlockManagerInterface $blockManager) {}
+  public function __construct(
+    #[Autowire(service: 'plugin.manager.block')]
+    protected BlockManagerInterface&CachedDiscoveryInterface $blockManager,
+  ) {}
 
   /**
    * Rebuilds the block definitions after a blueprint entity is written.

@@ -113,8 +113,16 @@ const disarmPicker = () => {
  * part resolution rides that policy, no separate modifier state. The
  * facet carries the part's OWN owner key (the seam's parentKey): the
  * owning scope root can sit above the LEAF-resolved element, and the
- * @scope paint must root at the true owner. The seam's part id IS the
+ * `@scope` paint must root at the true owner. The seam's part id IS the
  * part's selector ('.cls').
+ *
+ * @param {MouseEvent} event
+ *   The pointer event.
+ * @param {boolean} pickerArmed
+ *   The selection slice's pickerArmed flag.
+ *
+ * @return {?{key: string, selector: string, hit: ?Element}}
+ *   The part facet with the element the seam matched, or null.
  */
 const resolvePart = (event, pickerArmed) => {
   if (!isDeep(event, pickerArmed)) {
@@ -135,6 +143,14 @@ const resolvePart = (event, pickerArmed) => {
  * deepest presented element (a container's root class over a block) loses
  * to the element, or Cmd+click on a merged block would commit its
  * section's part instead of the block.
+ *
+ * @param {?{key: string, selector: string, hit: ?Element}} part
+ *   The resolved part facet, or null.
+ * @param {?string} key
+ *   The LEAF-resolved element key.
+ *
+ * @return {boolean}
+ *   Whether the part is the deeper hit.
  */
 const partWins = (part, key) => {
   if (!part) {

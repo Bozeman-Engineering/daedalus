@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_ai\Functional;
 
+use Drupal\ai_assistant_api\Entity\AiAssistant;
 use Drupal\Component\Serialization\Json;
 use Drupal\node\Entity\Node;
 use Drupal\Tests\BrowserTestBase;
@@ -40,6 +41,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 final class ChatTurnContractTest extends BrowserTestBase {
 
   use DaedalusFixtureTrait;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
 
   /**
    * {@inheritdoc}
@@ -107,6 +113,7 @@ final class ChatTurnContractTest extends BrowserTestBase {
     $assistant_id = $this->config('daedalus_ai.settings')->get('assistant_id');
     $assistant = $this->container->get('entity_type.manager')->getStorage('ai_assistant')->load($assistant_id);
     $this->assertNotNull($assistant, "The $assistant_id assistant is installed.");
+    assert($assistant instanceof AiAssistant);
     $template = (string) $assistant->get('error_message');
     $this->assertStringContainsString('[error_message]', $template, 'The fixture assistant carries the reason token.');
     [$prefix] = explode('[error_message]', $template, 2);

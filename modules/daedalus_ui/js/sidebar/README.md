@@ -79,8 +79,10 @@ return [
       $entity->id(),
     ),
     'class' => ['daedalus-edit-form', 'daedalus-ui-sidebar', 'right-sidebar'],
-    'data-sidebar-type' => 'daedalus_edit_form',  // Matches DaedalusEditSidebar plugin
-    'data-sidebar-slot' => 'bottom',  // Stacks under top-slot panels
+    // Matches DaedalusEditSidebar plugin.
+    'data-sidebar-type' => 'daedalus_edit_form',
+    // Stacks under top-slot panels.
+    'data-sidebar-slot' => 'bottom',
     'data-daedalus-edit-form-id' => sprintf(
       '%s::%s',
       $entity->getEntityTypeId(),
@@ -270,9 +272,10 @@ await Drupal.Daedalus.SidebarManager.closeAll();
 
 ### Rail Width
 
-The rail width is a wrapper-level CSS custom property, `--daedalus-ui-sidebar-width`
-(default `17rem`), that every panel consumes for its `inline-size`. A panel may
-still declare its own width by id (e.g. the AI chat's `24rem`). Two writers:
+The rail width is a wrapper-level CSS custom property,
+`--daedalus-ui-sidebar-width` (default `17rem`), that every panel consumes for
+its `inline-size`. A panel may still declare its own width by id (e.g. the AI
+chat's `24rem`). Two writers:
 
 - **The user.** `sidebar-resize.js` injects a drag handle on each wrapper's
   page-facing edge. Dragging sets the property live; release persists it in the

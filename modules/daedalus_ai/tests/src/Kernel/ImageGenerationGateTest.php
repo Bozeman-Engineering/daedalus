@@ -29,8 +29,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * The per-user level is read through the REAL EditorSettings service backed by
  * a real user entity (not a mock), because the gate's value depends on the
  * daedalus_ui_settings map field plumbing; a unit mock would not prove that
- * integration. This shares DaedalusAiKernelTestBase with the handler test so the
- * expensive install happens once for both.
+ * integration. This shares DaedalusAiKernelTestBase with the handler test so
+ * the expensive install happens once for both.
  *
  * @group daedalus_ai
  */

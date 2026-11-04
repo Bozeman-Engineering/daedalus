@@ -25,6 +25,8 @@ import {
   scopeTargets,
 } from '../../js/src/printer.js';
 
+// cspell:ignore narow
+
 /**
  * The specificity of one compound or complex selector, as [a, b, c]
  * (CssPrinterTest::specificity's twin): CSS's algorithm over the

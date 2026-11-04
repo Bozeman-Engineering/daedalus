@@ -37,12 +37,24 @@ export const CODE_SCOPES = ['element', 'subtree', 'page'];
  *
  * Element is the default for everything unknown — a missing key, a
  * removed key (storage events deliver null), or a garbage write.
+ *
+ * @param {*} value
+ *   A stored or received value.
+ *
+ * @return {string}
+ *   One of CODE_SCOPES.
  */
 export const normalizeCodeScope = (value) =>
   value === 'subtree' || value === 'page' ? value : 'element';
 
 /**
  * Builds a scope store over a Storage-shaped backend (null for none).
+ *
+ * @param {?Storage} storage
+ *   The backend, or null for none.
+ *
+ * @return {object}
+ *   The store (createPreferenceStore).
  */
 export const createCodeScopeStore = (storage) =>
   createPreferenceStore(storage, STORAGE_KEY, normalizeCodeScope);

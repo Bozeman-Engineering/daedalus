@@ -7,6 +7,7 @@ namespace Drupal\Tests\daedalus_blueprint\Kernel\NodeTree;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
 use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -118,7 +119,9 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
     $section->setThirdPartySetting('daedalus_layout', 'uuid', $root_uuid);
     $section->appendComponent(SectionBlock::createComponent($nested, 'content', 1));
 
-    $entity->get('layout_builder__layout')->appendSection($section);
+    $layout = $entity->get('layout_builder__layout');
+    assert($layout instanceof SectionListInterface);
+    $layout->appendSection($section);
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
@@ -219,7 +222,9 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
       ],
     ]);
 
-    $entity->get('layout_builder__layout')->appendSection($section);
+    $layout = $entity->get('layout_builder__layout');
+    assert($layout instanceof SectionListInterface);
+    $layout->appendSection($section);
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
@@ -254,7 +259,9 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
         'configuration' => $this->createInlineBlockConfiguration('text_section', $block, 'Solo'),
       ],
     ]);
-    $entity->get('layout_builder__layout')->appendSection($section);
+    $layout = $entity->get('layout_builder__layout');
+    assert($layout instanceof SectionListInterface);
+    $layout->appendSection($section);
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
 
@@ -287,7 +294,9 @@ class NodeTreeBuilderTest extends BlueprintKernelTestBase {
         'configuration' => $this->createInlineBlockConfiguration('text_section', $block, 'Solo'),
       ],
     ]);
-    $entity->get('layout_builder__layout')->appendSection($section);
+    $layout = $entity->get('layout_builder__layout');
+    assert($layout instanceof SectionListInterface);
+    $layout->appendSection($section);
     $entity->save();
     $entity = $this->entityTypeManager->getStorage('entity_test')->load($entity->id());
     $host = $this->host($entity);

@@ -134,11 +134,11 @@ class CssStyleBackend implements StyleBackendInterface {
    * canvas). Nearest-ancestor resolution still hands edit mode to the
    * posed stage automatically; see the constant's docblock.
    *
-   * Demand-gated exactly like before: only maps using width conditions
-   * emit it, and daedalus_stylish.settings container_roots turns it off for themes
-   * that manage containment themselves. Variant-carried width conditions
-   * need no rule here: the compiled variants file and the workspace inline
-   * fallback ship their own copies (VariantStylesheet).
+   * Demand-gated exactly like before: only maps using width conditions emit it,
+   * and daedalus_stylish.settings container_roots turns it off for themes that
+   * manage containment themselves. Variant-carried width conditions need no
+   * rule here: the compiled variants file and the workspace inline fallback
+   * ship their own copies (VariantStylesheet).
    *
    * @return string
    *   The page-container rule, or ''.

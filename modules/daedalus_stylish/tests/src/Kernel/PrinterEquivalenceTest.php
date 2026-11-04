@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
-// cspell:ignore scopep
+// cspell:ignore scopep narow
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
@@ -278,12 +278,18 @@ class PrinterEquivalenceTest extends KernelTestBase {
         "container:$uuid_a::.quote::after" => ['default' => ['content' => '""'], 'hover' => ['color' => 'purple']],
         "container:$uuid_a::.section > *::before" => ['default' => ['content' => '""']],
         "container:$uuid_a::.section + .section::before" => ['default' => ['content' => '""']],
-        "container:$uuid_a::> d-text::before" => ['default' => ['content' => '""'], 'hover+medium' => ['color' => 'blue']],
+        "container:$uuid_a::> d-text::before" => [
+          'default' => ['content' => '""'],
+          'hover+medium' => ['color' => 'blue'],
+        ],
         "container:$uuid_a::> d-text:has(a)::after" => ['default' => ['content' => '""']],
         "container:$uuid_a::> p + p::before" => ['default' => ['content' => '""']],
         "container:$uuid_a::> *:nth-child(odd)::after" => ['default' => ['content' => '""']],
         "container:$uuid_a::d-block::before" => ['default' => ['content' => '""']],
-        "block:$uuid_a::p::before" => ['default' => ['content' => '""'], 'hover' => ['animation-trigger' => '--in-view replay reset']],
+        "block:$uuid_a::p::before" => [
+          'default' => ['content' => '""'],
+          'hover' => ['animation-trigger' => '--in-view replay reset'],
+        ],
         "block:$uuid_b::&::part(x)" => ['default' => ['color' => 'red']],
         "block:$uuid_b::&" => ['default' => ['color' => 'red']],
         "block:$uuid_b::& ::before" => ['default' => ['color' => 'red']],
@@ -321,22 +327,34 @@ class PrinterEquivalenceTest extends KernelTestBase {
       // a :has() argument); conditions and the box compose after them,
       // byte-identical on both sides.
       [
-        "container:$uuid_a::.menu-item:is(:focus-within, :hover) > ul" => ['default' => ['display' => 'block'], 'hover' => ['display' => 'grid']],
+        "container:$uuid_a::.menu-item:is(:focus-within, :hover) > ul" => [
+          'default' => ['display' => 'block'],
+          'hover' => ['display' => 'grid'],
+        ],
         "container:$uuid_a::*:is(h1, h2)" => ['default' => ['margin-top' => '0']],
         "container:$uuid_a::> *:is(d-image, d-text)" => ['default' => ['gap' => '1rem']],
         "container:$uuid_a::> d-text:has(*:is(a, button))" => ['default' => ['color' => 'teal']],
         "container:$uuid_a::li:hover > ul" => ['default' => ['display' => 'block']],
-        "container:$uuid_a::> d-text:hover a" => ['default' => ['color' => 'blue'], 'hover' => ['text-decoration-line' => 'underline']],
+        "container:$uuid_a::> d-text:hover a" => [
+          'default' => ['color' => 'blue'],
+          'hover' => ['text-decoration-line' => 'underline'],
+        ],
         "container:$uuid_a::li.active > ul" => ['default' => ['display' => 'block']],
         "container:$uuid_a::&.open > ul" => ['default' => ['display' => 'block'], 'narrow' => ['display' => 'none']],
         "block:$uuid_a::&:hover > ul" => ['default' => ['opacity' => '1']],
-        "block:$uuid_a::&.open" => ['default' => ['outline' => '1px solid teal'], 'hover' => ['outline-color' => 'navy']],
+        "block:$uuid_a::&.open" => [
+          'default' => ['outline' => '1px solid teal'],
+          'hover' => ['outline-color' => 'navy'],
+        ],
         "container:$uuid_a::*[aria-expanded=\"true\"] > ul" => ['default' => ['display' => 'block']],
         "block:$uuid_a::a:visited" => ['default' => ['color' => 'purple']],
         "container:$uuid_a::> *:not(:hover)" => ['default' => ['opacity' => '0.5']],
         "container:$uuid_a::> d-text:has(a:hover)" => ['default' => ['background-color' => '#eeeeee']],
         "container:$uuid_a::.featured.quote" => ['default' => ['color' => 'red']],
-        "container:$uuid_a::li.active:hover[aria-current=\"page\"] > a::before" => ['default' => ['content' => '""'], 'hover' => ['color' => 'blue']],
+        "container:$uuid_a::li.active:hover[aria-current=\"page\"] > a::before" => [
+          'default' => ['content' => '""'],
+          'hover' => ['color' => 'blue'],
+        ],
       ],
       // Literal condition clauses (the WHEN opened): a feature query nests
       // as its own at-rule by its prefix, a supports test the same, a
@@ -528,7 +546,10 @@ class PrinterEquivalenceTest extends KernelTestBase {
     // compiled file, the entity's inline tag and the client's preview.
     $box_styles = [
       '' => ['default' => ['padding' => '1rem']],
-      '::&::before' => ['default' => ['content' => '""', 'animation-trigger' => '--in-view play-once'], 'hover' => ['color' => 'purple']],
+      '::&::before' => [
+        'default' => ['content' => '""', 'animation-trigger' => '--in-view play-once'],
+        'hover' => ['color' => 'purple'],
+      ],
       '::.link::after' => ['default' => ['content' => '""'], 'narrow' => ['display' => 'none']],
       '::&::part(x)' => ['default' => ['color' => 'red']],
     ];

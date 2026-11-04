@@ -183,7 +183,11 @@ class StyleStackToolTest extends KernelTestBase {
    * element's own padding shadows both variants' padding.
    */
   protected function layeredFixture(): array {
-    $sleek = DaedalusStylishVariant::create(['label' => 'Sleek', 'machine_name' => 'sleek', 'scope' => 'block_type:testimonial']);
+    $sleek = DaedalusStylishVariant::create([
+      'label' => 'Sleek',
+      'machine_name' => 'sleek',
+      'scope' => 'block_type:testimonial',
+    ]);
     $sleek->setStyles([
       '' => [
         'default' => ['padding' => '1rem', 'background-color' => '#ffffff'],
@@ -341,7 +345,11 @@ class StyleStackToolTest extends KernelTestBase {
    * since deleted) prints by machine name: inert, never hidden.
    */
   public function testOriginBearingLayer(): void {
-    $row = DaedalusStylishVariant::create(['label' => 'Row', 'machine_name' => 'row', 'scope' => 'block_type:testimonial']);
+    $row = DaedalusStylishVariant::create([
+      'label' => 'Row',
+      'machine_name' => 'row',
+      'scope' => 'block_type:testimonial',
+    ]);
     $row->setStyles(['' => ['default' => ['display' => 'flex']]]);
     $row->save();
     $emphatic = DaedalusStylishVariant::create([
@@ -352,7 +360,11 @@ class StyleStackToolTest extends KernelTestBase {
     ]);
     $emphatic->setStyles(['' => ['default' => ['font-weight' => 'bold']]]);
     $emphatic->save();
-    $card = DaedalusStylishVariant::create(['label' => 'Card Left', 'machine_name' => 'card_left', 'scope' => 'kind:container']);
+    $card = DaedalusStylishVariant::create([
+      'label' => 'Card Left',
+      'machine_name' => 'card_left',
+      'scope' => 'kind:container',
+    ]);
     $card->setStyles([
       '' => ['default' => ['gap' => '1rem']],
       'block(testimonial,1)' => ['variants' => [['variant' => 'row', 'fragment' => '']]],
@@ -602,15 +614,29 @@ class StyleStackToolTest extends KernelTestBase {
     $this->config('system.theme')->set('default', self::THEME)->save();
     $this->container->get('daedalus_stylish.style_guide')->resetCache();
 
-    $sleek = DaedalusStylishVariant::create(['label' => 'Sleek', 'machine_name' => 'sleek', 'scope' => 'block_type:testimonial']);
+    $sleek = DaedalusStylishVariant::create([
+      'label' => 'Sleek',
+      'machine_name' => 'sleek',
+      'scope' => 'block_type:testimonial',
+    ]);
     $sleek->setStyles(['' => ['default' => ['padding' => '1rem']]]);
     $sleek->save();
-    $loud = DaedalusStylishVariant::create(['label' => 'Loud', 'machine_name' => 'loud', 'scope' => 'block_type:testimonial', 'axis' => 'emphasis']);
+    $loud = DaedalusStylishVariant::create([
+      'label' => 'Loud',
+      'machine_name' => 'loud',
+      'scope' => 'block_type:testimonial',
+      'axis' => 'emphasis',
+    ]);
     $loud->setStyles(['' => ['default' => ['font-weight' => 'bold']]]);
     $loud->save();
     // The tone axis exists only under the stack test theme: the site
     // default is what the entity's own axis check reads.
-    $toned = DaedalusStylishVariant::create(['label' => 'Toned', 'machine_name' => 'toned', 'scope' => 'block_type:testimonial', 'axis' => 'tone']);
+    $toned = DaedalusStylishVariant::create([
+      'label' => 'Toned',
+      'machine_name' => 'toned',
+      'scope' => 'block_type:testimonial',
+      'axis' => 'tone',
+    ]);
     $toned->setStyles(['' => ['default' => ['color' => 'teal']]]);
     $toned->save();
 
@@ -838,9 +864,16 @@ class StyleStackToolTest extends KernelTestBase {
     ])->enableLayoutBuilder()->setOverridable()->save();
     BlockContentType::create(['id' => 'testimonial', 'label' => 'Testimonial', 'revision' => TRUE])->save();
     $this->container->get('daedalus_stylish.style_guide')->resetCache();
-    $sleek = DaedalusStylishVariant::create(['label' => 'Sleek', 'machine_name' => 'sleek', 'scope' => 'block_type:testimonial']);
+    $sleek = DaedalusStylishVariant::create([
+      'label' => 'Sleek',
+      'machine_name' => 'sleek',
+      'scope' => 'block_type:testimonial',
+    ]);
     $sleek->setStyles([
-      '' => ['default' => ['padding' => '1rem', 'background-color' => '#ffffff'], 'hover' => ['background-color' => '#eeeeee']],
+      '' => [
+        'default' => ['padding' => '1rem', 'background-color' => '#ffffff'],
+        'hover' => ['background-color' => '#eeeeee'],
+      ],
       '::.testimonial__quote' => ['default' => ['font-size' => '1.5rem']],
     ]);
     $sleek->save();
@@ -866,7 +899,10 @@ class StyleStackToolTest extends KernelTestBase {
       'name' => 'host',
       'layout_builder__layout' => [$section],
       DaedalusStylishFieldManager::FIELD_NAME => json_encode([
-        $rule => ['variants' => [['variant' => 'sleek', 'fragment' => '']], 'default' => ['color' => 'red', 'padding' => '2rem']],
+        $rule => [
+          'variants' => [['variant' => 'sleek', 'fragment' => '']],
+          'default' => ['color' => 'red', 'padding' => '2rem'],
+        ],
         "$rule .testimonial__quote" => ['default' => ['color' => 'plum']],
         $block_key => ['default' => ['padding' => '3rem']],
       ]),
@@ -880,7 +916,10 @@ class StyleStackToolTest extends KernelTestBase {
     // The rule's own stack: the worn root entry beneath the rule's entry.
     $own = $stack->stack($map, $rule, ['host' => $this->host($entity)], NULL, $document);
     $this->assertSame(['variant:sleek', 'element'], array_column($own['layers'], 'id'));
-    $this->assertSame(['default' => ['padding' => '1rem', 'background-color' => '#ffffff'], 'hover' => ['background-color' => '#eeeeee']], $own['layers'][0]['styles']);
+    $this->assertSame([
+      'default' => ['padding' => '1rem', 'background-color' => '#ffffff'],
+      'hover' => ['background-color' => '#eeeeee'],
+    ], $own['layers'][0]['styles']);
     $this->assertSame('block_type:testimonial', $own['layers'][0]['scope']);
     $this->assertSame(['default' => ['color' => 'red', 'padding' => '2rem']], $own['layers'][1]['styles']);
     $this->assertSame([
@@ -908,7 +947,10 @@ class StyleStackToolTest extends KernelTestBase {
     $this->assertSame('Sleek', $member['layers'][0]['label']);
     $this->assertSame($container_key, $member['layers'][0]['scope']);
     $this->assertSame(['key' => $container_key, 'selector' => '> d-testimonial'], $member['layers'][0]['carrier']);
-    $this->assertSame(['default' => ['padding' => '1rem', 'background-color' => '#ffffff'], 'hover' => ['background-color' => '#eeeeee']], $member['layers'][0]['styles']);
+    $this->assertSame([
+      'default' => ['padding' => '1rem', 'background-color' => '#ffffff'],
+      'hover' => ['background-color' => '#eeeeee'],
+    ], $member['layers'][0]['styles']);
     $this->assertSame(['default' => ['color' => 'red', 'padding' => '2rem']], $member['layers'][1]['styles']);
     // Every padding loses to the topmost definer (the block's own); the
     // rule's own value sits over the worn one by order.
@@ -919,8 +961,8 @@ class StyleStackToolTest extends KernelTestBase {
       ['layer' => 1, 'property' => 'padding', 'value' => '2rem', 'lost' => TRUE, 'winner' => 2],
       ['layer' => 2, 'property' => 'padding', 'value' => '3rem', 'lost' => FALSE, 'winner' => NULL],
     ], $stack->linesAt($member, 'default'));
-    $wornless = $stack->stack($map + [$block_key => []], $block_key, ['host' => $this->host($entity)], NULL, $document);
-    $this->assertSame(['default' => ['padding' => '3rem']], $wornless['layers'][2]['styles']);
+    $unworn = $stack->stack($map + [$block_key => []], $block_key, ['host' => $this->host($entity)], NULL, $document);
+    $this->assertSame(['default' => ['padding' => '3rem']], $unworn['layers'][2]['styles']);
     // The id grammar reads the position from either spelling, and the
     // variant from the worn one.
     $this->assertSame(['key' => $container_key, 'selector' => '> d-testimonial'], $stack->ancestorRule("ancestor:$rule|sleek"));
@@ -988,7 +1030,11 @@ class StyleStackToolTest extends KernelTestBase {
     ])->enableLayoutBuilder()->setOverridable()->save();
     BlockContentType::create(['id' => 'testimonial', 'label' => 'Testimonial', 'revision' => TRUE])->save();
     $this->container->get('daedalus_stylish.style_guide')->resetCache();
-    $sleek = DaedalusStylishVariant::create(['label' => 'Sleek', 'machine_name' => 'sleek', 'scope' => 'block_type:testimonial']);
+    $sleek = DaedalusStylishVariant::create([
+      'label' => 'Sleek',
+      'machine_name' => 'sleek',
+      'scope' => 'block_type:testimonial',
+    ]);
     $sleek->setStyles([
       '' => ['default' => ['padding' => '1rem', 'background-color' => '#ffffff']],
       '::.testimonial__quote' => ['default' => ['font-size' => '1.5rem']],

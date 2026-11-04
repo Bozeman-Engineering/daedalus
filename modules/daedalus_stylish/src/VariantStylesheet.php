@@ -16,19 +16,19 @@ use Drupal\workspaces\WorkspaceManagerInterface;
 /**
  * Compiles variant CSS into one shared, hash-busted stylesheet file.
  *
- * An applied variant is a REFERENCE in the host entity's style map; the
- * element carries a variant class stamped at render, and the CSS lives here:
- * every published variant's styles print once, scoped to its class, into a
- * single public file regenerated on variant save. The published set is the
- * MATERIALS ROSTER's variant records (the file carries exactly the variants
- * the validator admits, the catalog parses and the prompt teaches, because
- * all of them read the one roster); the entity behind a record loads
- * through the same identity map validation resolves references with
- * (StyleMapValidator::loadVariant()). The filename embeds a
- * content hash, so browsers cache it cross-page and every regeneration is a
- * new URL — the "daedalus_stylish/variants" library resolves the current file at
- * library-discovery time (hook_library_info_build()), which is why cached
- * renders that attached the library never go stale on the library NAME.
+ * An applied variant is a REFERENCE in the host entity's style map; the element
+ * carries a variant class stamped at render, and the CSS lives here: every
+ * published variant's styles print once, scoped to its class, into a single
+ * public file regenerated on variant save. The published set is the MATERIALS
+ * ROSTER's variant records (the file carries exactly the variants the validator
+ * admits, the catalog parses and the prompt teaches, because all of them read
+ * the one roster); the entity behind a record loads through the same identity
+ * map validation resolves references with (StyleMapValidator::loadVariant()).
+ * The filename embeds a content hash, so browsers cache it cross-page and every
+ * regeneration is a new URL — the "daedalus_stylish/variants" library resolves
+ * the current file at library-discovery time (hook_library_info_build()), which
+ * is why cached renders that attached the library never go stale on the library
+ * NAME.
  *
  * Scope roots are classes, not selectable keys: per-entity @scope roots
  * would tie the shared stylesheet to every page's uuids and force a
@@ -476,8 +476,8 @@ class VariantStylesheet extends CompiledStylesheetBase {
       $key = (string) $key;
       // Rule keys are the rule-wear lane's (ruleWearCss(), every mode):
       // they have no selectable attribute of their own to root at. The
-      // charset gate is the emit-side hygiene: the key lands inside the
-      // @scope prelude's attribute selector.
+      // charset gate is the emit-side hygiene: the key lands inside the @scope
+      // prelude's attribute selector.
       if (str_contains($key, RelativeSelector::SUFFIX) || !preg_match('/^[A-Za-z0-9:_-]+$/', $key)) {
         continue;
       }

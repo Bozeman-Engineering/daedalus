@@ -24,7 +24,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * The skin material lifecycle endpoints: tokens, animations and fonts, one controller.
+ * The skin material lifecycle endpoints: tokens, animations and fonts.
  *
  * The variant API's twin for the materials that live on the skin, under
  * /daedalus_stylish/skin/{section}/…: the per-material management read
@@ -324,7 +324,12 @@ final class SkinMaterialApiController extends GestureApiControllerBase {
     }
     catch (MaterialGestureException $exception) {
       $codes = array_column($exception->getErrorsAsArrays(), 'code');
-      return $this->unprocessable($exception, array_intersect(['STYLE_TOKEN_IN_USE', 'STYLE_ANIMATION_IN_USE', 'STYLE_FONT_IN_USE'], $codes) !== [] ? 403 : 422);
+      $in_use = array_intersect([
+        'STYLE_TOKEN_IN_USE',
+        'STYLE_ANIMATION_IN_USE',
+        'STYLE_FONT_IN_USE',
+      ], $codes);
+      return $this->unprocessable($exception, $in_use !== [] ? 403 : 422);
     }
     if ($result->staged === 0) {
       return $this->mutated([

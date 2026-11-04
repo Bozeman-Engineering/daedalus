@@ -11,13 +11,13 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 /**
  * The base-at-top width-band style migration: fold wide into base.
  *
- * The width vocabulary is narrow / medium / base now: "wide" is deleted
- * because the unconditioned base layer IS the full-width look, and the new
- * "medium" range condition (768-1023px) covers the band the base look no
- * longer owns. This service owns every STYLE-DATA rewrite that follows
- * (the config reshape is daedalus_stylish_post_update_base_at_top_width_bands()),
- * so the host sweep, the post_update hooks, and the drush command all
- * speak through one implementation.
+ * The width vocabulary is narrow / medium / base now: "wide" is deleted because
+ * the unconditioned base layer IS the full-width look, and the new "medium"
+ * range condition (768-1023px) covers the band the base look no longer owns.
+ * This service owns every STYLE-DATA rewrite that follows (the config reshape
+ * is daedalus_stylish_post_update_base_at_top_width_bands()), so the host
+ * sweep, the post_update hooks, and the drush command all speak through one
+ * implementation.
  *
  * The fold rule, per entry, per compound lane: a "wide"-carrying condition
  * folds into the same compound WITHOUT its wide part ("wide" -> default,
@@ -57,8 +57,8 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
  * intent is unrecoverable: styles that were tablet-authored migrated to
  * narrow and stay narrow.
  *
- * Every notable rewrite is reported: returned as lines to the caller AND
- * logged to the daedalus_stylish channel, so batched post_update runs stay loud in
+ * Every notable rewrite is reported: returned as lines to the caller AND logged
+ * to the daedalus_stylish channel, so batched post_update runs stay loud in
  * watchdog while the drush command prints everything.
  */
 class WidthBandMigration {
@@ -350,7 +350,5 @@ class WidthBandMigration {
     }
     return $lines;
   }
-
-
 
 }

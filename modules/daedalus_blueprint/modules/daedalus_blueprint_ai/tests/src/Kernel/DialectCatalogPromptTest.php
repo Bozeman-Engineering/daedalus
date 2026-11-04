@@ -142,7 +142,9 @@ class DialectCatalogPromptTest extends KernelTestBase {
   ];
 
   /**
-   * The shipped image block's card: four shapes, the picture in every one with media.
+   * The shipped image block's card.
+   *
+   * Four shapes, the picture in every one with media.
    */
   private const IMAGE_CARD = [
     'renders' => [
@@ -472,7 +474,10 @@ class DialectCatalogPromptTest extends KernelTestBase {
     );
     $this->assertSame(
       'states :hover; width bands narrow @container (max-width: 767px) (base-out: the default, no wrapper, IS the wide look and each band adapts it downward; @container (max-width: 767px) { #hero-title { font-size: 2.5rem } } steps a headline down on phones; there is no wide wrapper).' . $closed,
-      $this->prompt()->conditions($this->catalog([], ['hover' => ['wrapper' => ':hover', 'axis' => 'state'], 'narrow' => ['wrapper' => '@container (max-width: 767px)', 'axis' => 'width']])),
+      $this->prompt()->conditions($this->catalog([], [
+        'hover' => ['wrapper' => ':hover', 'axis' => 'state'],
+        'narrow' => ['wrapper' => '@container (max-width: 767px)', 'axis' => 'width'],
+      ])),
     );
     $this->assertSame(
       'states :hover.' . $closed,
@@ -480,7 +485,9 @@ class DialectCatalogPromptTest extends KernelTestBase {
     );
     $this->assertSame(
       'preferences dark @media (prefers-color-scheme: dark).' . $closed,
-      $this->prompt()->conditions($this->catalog([], ['dark' => ['wrapper' => '@media (prefers-color-scheme: dark)', 'axis' => 'scheme']])),
+      $this->prompt()->conditions($this->catalog([], [
+        'dark' => ['wrapper' => '@media (prefers-color-scheme: dark)', 'axis' => 'scheme'],
+      ])),
     );
     // An open site teaches the literal lane beside the references, in the
     // styling layer's words.
@@ -549,7 +556,7 @@ class DialectCatalogPromptTest extends KernelTestBase {
   }
 
   /**
-   * The cached blueprint sentence carries the blueprint contract, grows by data.
+   * The cached blueprint sentence carries the contract, grows by data.
    *
    * With no blueprint in the roster the block line says nothing about
    * blueprints; with one it states the two placement shapes (the

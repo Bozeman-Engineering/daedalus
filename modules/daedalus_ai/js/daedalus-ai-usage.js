@@ -49,11 +49,23 @@
 
   /**
    * Seconds from now to a moment.
+   *
+   * @param {number} epoch
+   *   The moment, in seconds since the epoch.
+   *
+   * @return {number}
+   *   The seconds until it; negative once it has passed.
    */
   const secondsUntil = (epoch) => epoch - Math.floor(Date.now() / 1000);
 
   /**
    * A duration in words: "3 h 10 min", "42 min", "1 min" (never less).
+   *
+   * @param {number} seconds
+   *   The duration, in seconds.
+   *
+   * @return {string}
+   *   The words, translated.
    */
   const duration = (seconds) => {
     const minutes = Math.max(1, Math.round(seconds / 60));
@@ -73,6 +85,12 @@
 
   /**
    * A clock time: "3:40 PM".
+   *
+   * @param {number} epoch
+   *   The moment, in seconds since the epoch.
+   *
+   * @return {string}
+   *   The time in the page's language.
    */
   const clock = (epoch) =>
     new Intl.DateTimeFormat(locale(), { timeStyle: 'short' }).format(
@@ -82,6 +100,12 @@
   /**
    * A short date: "Fri 9:12 AM" inside a week, "Nov 1" beyond (with the
    * year when it differs from this one).
+   *
+   * @param {number} epoch
+   *   The moment, in seconds since the epoch.
+   *
+   * @return {string}
+   *   The date in the page's language.
    */
   const shortDate = (epoch) => {
     const date = new Date(epoch * 1000);
@@ -101,12 +125,24 @@
 
   /**
    * The percent left, floored so 99.6% never reads as full.
+   *
+   * @param {object} window
+   *   A window.
+   *
+   * @return {number}
+   *   The whole percent of the window left.
    */
   const percent = (window) => Math.floor(window.remaining * 100);
 
   /**
    * When a reset moment is, in words: "at 3:40 PM" within a day, else the
    * short date. Null when the window never clears by time.
+   *
+   * @param {?number} epoch
+   *   The reset moment, in seconds since the epoch, or null.
+   *
+   * @return {?string}
+   *   The words, or null when there is no moment.
    */
   const resetWords = (epoch) => {
     if (epoch === null || epoch === undefined) {
@@ -115,6 +151,78 @@
     return secondsUntil(epoch) < DAY
       ? Drupal.t('at @time', { '@time': clock(epoch) })
       : shortDate(epoch);
+  };
+
+  /**
+   * The notice's line for a reached window.
+   *
+   * @param {object} window
+   *   A reached window.
+   *
+   * @return {string}
+   *   The line.
+   */
+  const notice = (window) => {
+    const when = resetWords(window.reset_at);
+    if (window.scope === SCOPE_SITE) {
+      return when === null
+        ? Drupal.t("This site's AI usage limit for the @label is reached", {
+            '@label': window.label,
+          })
+        : Drupal.t(
+            "This site's AI usage limit for the @label is reached · resets @when",
+            { '@label': window.label, '@when': when },
+          );
+    }
+    return when === null
+      ? Drupal.t('AI usage limit reached for the last @label', {
+          '@label': window.label,
+        })
+      : Drupal.t('AI usage limit reached for the last @label · resets @when', {
+          '@label': window.label,
+          '@when': when,
+        });
+  };
+
+  /**
+   * Paints the kebab's dot and the notice from the fetched windows.
+   */
+  const render = () => {
+    const reached = windows.filter((window) => window.reached);
+    const low = windows.some(
+      (window) => !window.reached && window.remaining < LOW,
+    );
+    document
+      .querySelectorAll('.daedalus-ai-chat-menu-button')
+      .forEach((button) => {
+        if (reached.length > 0) {
+          button.setAttribute('data-usage', 'out');
+        } else if (low) {
+          button.setAttribute('data-usage', 'low');
+        } else {
+          button.removeAttribute('data-usage');
+        }
+      });
+    document
+      .querySelectorAll('#daedalus_ai .chat-container')
+      .forEach((chat) => {
+        let line = chat.parentElement.querySelector(
+          '.daedalus-ai-chat-usage-notice',
+        );
+        if (reached.length === 0) {
+          line?.remove();
+          return;
+        }
+        if (!line) {
+          line = document.createElement('div');
+          line.className = 'daedalus-ai-chat-usage-notice';
+          line.setAttribute('role', 'status');
+          chat.insertAdjacentElement('afterend', line);
+        }
+        // A site window refuses everyone and is checked first, so it is the
+        // one line that matters when both are reached.
+        line.textContent = notice(reached[0]);
+      });
   };
 
   /**
@@ -170,35 +278,9 @@
     },
 
     /**
-     * The notice's line for a reached window.
-     *
-     * @param {object} window
-     *   A reached window.
-     *
-     * @return {string}
-     *   The line.
+     * The notice's line for a reached window (the module-level notice()).
      */
-    notice(window) {
-      const when = resetWords(window.reset_at);
-      if (window.scope === SCOPE_SITE) {
-        return when === null
-          ? Drupal.t("This site's AI usage limit for the @label is reached", {
-              '@label': window.label,
-            })
-          : Drupal.t(
-              "This site's AI usage limit for the @label is reached · resets @when",
-              { '@label': window.label, '@when': when },
-            );
-      }
-      return when === null
-        ? Drupal.t('AI usage limit reached for the last @label', {
-            '@label': window.label,
-          })
-        : Drupal.t('AI usage limit reached for the last @label · resets @when', {
-            '@label': window.label,
-            '@when': when,
-          });
-    },
+    notice,
 
     /**
      * Fetches the status and repaints the dot and the notice.
@@ -220,45 +302,6 @@
       render();
       return windows;
     },
-  };
-
-  /**
-   * Paints the kebab's dot and the notice from the fetched windows.
-   */
-  const render = () => {
-    const reached = windows.filter((window) => window.reached);
-    const low = windows.some(
-      (window) => !window.reached && window.remaining < LOW,
-    );
-    document
-      .querySelectorAll('.daedalus-ai-chat-menu-button')
-      .forEach((button) => {
-        if (reached.length > 0) {
-          button.setAttribute('data-usage', 'out');
-        } else if (low) {
-          button.setAttribute('data-usage', 'low');
-        } else {
-          button.removeAttribute('data-usage');
-        }
-      });
-    document.querySelectorAll('#daedalus_ai .chat-container').forEach((chat) => {
-      let notice = chat.parentElement.querySelector(
-        '.daedalus-ai-chat-usage-notice',
-      );
-      if (reached.length === 0) {
-        notice?.remove();
-        return;
-      }
-      if (!notice) {
-        notice = document.createElement('div');
-        notice.className = 'daedalus-ai-chat-usage-notice';
-        notice.setAttribute('role', 'status');
-        chat.insertAdjacentElement('afterend', notice);
-      }
-      // A site window refuses everyone and is checked first, so it is the
-      // one line that matters when both are reached.
-      notice.textContent = usage.notice(reached[0]);
-    });
   };
 
   Drupal.Daedalus.Ai.usage = usage;

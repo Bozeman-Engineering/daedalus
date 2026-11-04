@@ -270,6 +270,8 @@ const BORDER_FAMILIES = STROKE_PARTS.map((part) => STROKES.border[part]);
  *   color: object}>, families: Object<string, {set: boolean,
  *   uniform: ?string, text: ?string}>, uniform: boolean,
  *   values: Object<string, ?string>}}
+ *   The per-side provenance by part, each family's uniform state,
+ *   whether every family is uniform, and the per-shorthand values.
  */
 export const strokeSides = (stacks, condition = 'default', conditions = {}) => {
   const provenance = {};
@@ -455,6 +457,7 @@ export const strokeSideValues = (read, side) =>
  *   The stroke's property names (strokeParts).
  *
  * @return {string[]}
+ *   Every spelling the own layer could carry for the stroke.
  */
 export const strokeUnsetProperties = (parts) =>
   STROKE_PARTS.flatMap((part) => {
@@ -477,8 +480,10 @@ export const strokeUnsetProperties = (parts) =>
  * them).
  *
  * @param {string[]} sides
+ *   The physical sides (SIDES) the cells touch.
  *
  * @return {string[]}
+ *   The width, style and color longhands of those sides.
  */
 export const strokeSideLonghands = (sides) =>
   BORDER_FAMILIES.flatMap((family) =>

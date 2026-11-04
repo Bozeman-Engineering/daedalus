@@ -50,7 +50,9 @@ export const APPLIES_WEARS = 'wears';
  *
  * @param {object} record
  *   A record in the delivery shape.
+ *
  * @return {boolean}
+ *   Whether the record is root-only.
  */
 export const rootOnly = (record) =>
   record.applies?.[APPLIES_DEPTH] === DEPTH_ROOT;
@@ -60,7 +62,9 @@ export const rootOnly = (record) =>
  *
  * @param {object} record
  *   A record in the delivery shape.
+ *
  * @return {string[]}
+ *   The variant ids, empty for a record with no captured wearings.
  */
 export const wears = (record) => record.applies?.[APPLIES_WEARS] ?? [];
 
@@ -77,8 +81,12 @@ export const wears = (record) => record.applies?.[APPLIES_WEARS] ?? [];
  * fact the address families cannot express).
  *
  * @param {string} variantScope
+ *   The variant's printed scope ("kind:block", "block_type:text").
  * @param {string} elementScope
+ *   The element's printed scope.
+ *
  * @return {boolean}
+ *   Whether the scopes pair.
  */
 export const scopesPair = (variantScope, elementScope) => {
   if (elementScope === variantScope) {
@@ -195,7 +203,9 @@ export const createRoster = (records) => {
    *
    * @param {object} blueprint
    *   A record in the delivery shape.
+   *
    * @return {boolean}
+   *   Whether the blueprint is a section.
    */
   const isSection = (blueprint) => rootOnlyWears(blueprint).size > 0;
 
@@ -218,7 +228,9 @@ export const createRoster = (records) => {
    *   where it would land.
    * @param {string|null} [withinBlueprint=null]
    *   The id of the blueprint whose placement the element sits inside.
+   *
    * @return {boolean}
+   *   Whether the material may be worn there.
    */
   const applicable = (
     record,

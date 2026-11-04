@@ -156,6 +156,16 @@ const HINT_LIST_REDUNDANT =
 
 /**
  * A refusal answer.
+ *
+ * @param {string} code
+ *   The refusal code (BAD_SELECTOR, SELECTOR_LIST, ...).
+ * @param {string} message
+ *   What was refused and why, quoting the text.
+ * @param {string} hint
+ *   What to write instead.
+ *
+ * @return {{selector: null, condition: null, refusal: {code: string, message: string, hint: string}, folded: boolean}}
+ *   The answer.
  */
 const refuse = (code, message, hint) => ({
   selector: null,
@@ -169,6 +179,12 @@ const refuse = (code, message, hint) => ({
  * quotes kept), so the structural scans never read a `,`, `#`, `::` or
  * paren inside an attribute value. A backslash escapes the next character;
  * an unterminated string blanks to the end.
+ *
+ * @param {string} text
+ *   The selector text.
+ *
+ * @return {string}
+ *   The masked text, the same length.
  */
 const mask = (text) => {
   let masked = '';
@@ -195,6 +211,14 @@ const mask = (text) => {
 
 /**
  * The paren and bracket depth at an index of a masked text.
+ *
+ * @param {string} masked
+ *   The masked text (mask).
+ * @param {number} index
+ *   The index to measure at.
+ *
+ * @return {number}
+ *   The depth: parens and brackets opened before the index, less closed.
  */
 const depthAt = (masked, index) => {
   let depth = 0;
@@ -211,6 +235,12 @@ const depthAt = (masked, index) => {
 /**
  * Splits a text at its top-level commas (outside parens, brackets and
  * strings), each member trimmed.
+ *
+ * @param {string} text
+ *   The selector list text.
+ *
+ * @return {string[]}
+ *   The members.
  */
 const splitList = (text) => {
   const masked = mask(text);
@@ -243,12 +273,16 @@ const rosterOf = ({ conditions, posable } = {}) => {
   const publishedStates = new Set();
   const published = [];
   Object.entries(table).forEach(([name, definition]) => {
-    const wrapper = typeof definition?.wrapper === 'string' ? definition.wrapper : '';
+    const wrapper =
+      typeof definition?.wrapper === 'string' ? definition.wrapper : '';
     if (wrapper.startsWith('@')) {
       published.push(`${wrapper}  (${name})`);
     } else if (wrapper.startsWith(':')) {
       publishedStates.add(wrapper.toLowerCase());
-      if ((posable == null || posable.includes(name)) && !states.has(wrapper.toLowerCase())) {
+      if (
+        (posable == null || posable.includes(name)) &&
+        !states.has(wrapper.toLowerCase())
+      ) {
         states.set(wrapper.toLowerCase(), name);
       }
     }
@@ -258,14 +292,32 @@ const rosterOf = ({ conditions, posable } = {}) => {
 
 /**
  * The published posable condition a pseudo-class qualifier spells, or null.
+ *
+ * @param {{name: string, argument: *}} qualifier
+ *   A parsed qualifier.
+ * @param {Object} roster
+ *   The options' roster (rosterOf).
+ *
+ * @return {?string}
+ *   The condition's name, or null.
  */
 const posableOf = (qualifier, roster) =>
-  qualifier.argument === null ? (roster.states.get(`:${qualifier.name}`) ?? null) : null;
+  qualifier.argument === null
+    ? (roster.states.get(`:${qualifier.name}`) ?? null)
+    : null;
 
 /**
  * The first posable state an `:is()` member of a compound carries, or null
  * (SelectorDigest::stateInsideIs): on the last compound such a state is a
  * disjunctive condition, which the condition model does not hold.
+ *
+ * @param {Object} compound
+ *   A parsed compound.
+ * @param {Object} roster
+ *   The options' roster (rosterOf).
+ *
+ * @return {?string}
+ *   The state's pseudo-class name, or null.
  */
 const stateInsideIs = (compound, roster) => {
   for (const qualifier of compound.qualifiers) {
@@ -273,7 +325,9 @@ const stateInsideIs = (compound, roster) => {
       continue;
     }
     for (const member of qualifier.argument) {
-      const inner = member.qualifiers.find((candidate) => posableOf(candidate, roster) !== null);
+      const inner = member.qualifiers.find(
+        (candidate) => posableOf(candidate, roster) !== null,
+      );
       if (inner !== undefined) {
         return inner.name;
       }
@@ -288,6 +342,14 @@ const stateInsideIs = (compound, roster) => {
  * pseudo-class literal (`:checked`) when unpublished and a stamp can pose
  * it, null for a published name the editor cannot pose, a position, a
  * qualifier with an argument, or a state no stamp stands in for.
+ *
+ * @param {{name: string, argument: *}} qualifier
+ *   A parsed qualifier of the last compound.
+ * @param {Object} roster
+ *   The options' roster (rosterOf).
+ *
+ * @return {?string}
+ *   The clause text, or null.
  */
 const clauseOf = (qualifier, roster) => {
   if (qualifier.argument !== null) {
@@ -298,7 +360,10 @@ const clauseOf = (qualifier, roster) => {
     return name;
   }
   const wrapper = `:${qualifier.name}`;
-  if (roster.publishedStates.has(wrapper) || POSITIONS.includes(qualifier.name)) {
+  if (
+    roster.publishedStates.has(wrapper) ||
+    POSITIONS.includes(qualifier.name)
+  ) {
     return null;
   }
   const clause = parseClause(wrapper, roster.table);
@@ -308,6 +373,12 @@ const clauseOf = (qualifier, roster) => {
 /**
  * The first subject or pseudo-class outside every element's subtree in a
  * chain (`html`, `body`, `:root`), or null.
+ *
+ * @param {Object[]} compounds
+ *   Parsed compounds.
+ *
+ * @return {?string}
+ *   The word as written, or null.
  */
 const outsideOf = (compounds) => {
   for (const compound of compounds) {
@@ -341,17 +412,41 @@ const outsideOf = (compounds) => {
 /**
  * The canonical text of compounds and a pseudo, the owner's own forms
  * included: no compounds is OWNER, or `&::before`.
+ *
+ * @param {Object[]} compounds
+ *   Parsed compounds, possibly none.
+ * @param {?string} pseudo
+ *   The pseudo-element's name, or null.
+ *
+ * @return {string}
+ *   The canonical text.
  */
-const spell = (compounds, pseudo) =>
-  `${compounds.length ? printCompounds(compounds) : pseudo === null ? OWNER : ANCHOR}${pseudo === null ? '' : `${SUFFIX}${pseudo}`}`;
+const spell = (compounds, pseudo) => {
+  let head = ANCHOR;
+  if (compounds.length) {
+    head = printCompounds(compounds);
+  } else if (pseudo === null) {
+    head = OWNER;
+  }
+  return pseudo === null ? head : `${head}${SUFFIX}${pseudo}`;
+};
 
 /**
- * Digests one list member: `{selector, states}` or a refusal answer.
+ * Digests one list member: `{selector, clauses}` or a refusal answer.
+ *
+ * @param {string} member
+ *   One member of the selector list.
+ * @param {Object} roster
+ *   The options' roster (rosterOf).
+ *
+ * @return {Object}
+ *   The canonical selector with the clause texts its last compound peeled
+ *   into, or a refusal answer (refuse).
  */
 const digestOne = (member, roster) => {
   const text = member.trim();
   const masked = mask(text);
-  const id = /#([^\s>+~.:\[,]*)/.exec(masked);
+  const id = /#([^\s>+~.:[,]*)/.exec(masked);
   if (id !== null) {
     return refuse(
       BAD_SELECTOR,
@@ -405,7 +500,11 @@ const digestOne = (member, roster) => {
       'Style a pseudo-element by its bare name, last and glued to the compound whose box it is; ::part(), ::slotted(), ::highlight() and ::cue() reach shadow trees and highlights this element does not expose.',
     );
   }
-  const boxes = [...sugaredMasked.matchAll(/::?(?:before|after|first-letter|first-line)(?![A-Za-z0-9_-])|::[A-Za-z][A-Za-z0-9-]*/gi)];
+  const boxes = [
+    ...sugaredMasked.matchAll(
+      /::?(?:before|after|first-letter|first-line)(?![A-Za-z0-9_-])|::[A-Za-z][A-Za-z0-9-]*/gi,
+    ),
+  ];
   if (boxes.length) {
     if (depthAt(sugaredMasked, boxes[0].index) > 0) {
       return refuse(
@@ -414,7 +513,10 @@ const digestOne = (member, roster) => {
         'Style the box of what the qualifier narrows ("> d-text:has(a)::before"), or the box as its own rule ("a::before").',
       );
     }
-    if (boxes.length > 1 || boxes[0].index + boxes[0][0].length !== sugaredMasked.length) {
+    if (
+      boxes.length > 1 ||
+      boxes[0].index + boxes[0][0].length !== sugaredMasked.length
+    ) {
       return refuse(
         BAD_SELECTOR,
         `"${text}": a pseudo-element is terminal and one per selector; the qualifiers and states go before it ("&:hover::after", "> d-text:first-child::before") and nothing follows it`,
@@ -432,14 +534,25 @@ const digestOne = (member, roster) => {
   }
   const parsed = parseSelector(sugared);
   if (parsed === null) {
-    return refuse(BAD_SELECTOR, `"${text}" is not a relative selector the grammar accepts`, HINT_GRAMMAR);
+    return refuse(
+      BAD_SELECTOR,
+      `"${text}" is not a relative selector the grammar accepts`,
+      HINT_GRAMMAR,
+    );
   }
   const outside = outsideOf(parsed.compounds);
   if (outside !== null) {
-    return refuse(BAD_SELECTOR, `"${text}": "${outside}" is not addressable; a rule styles inside this element's own subtree`, HINT_OWN);
+    return refuse(
+      BAD_SELECTOR,
+      `"${text}": "${outside}" is not addressable; a rule styles inside this element's own subtree`,
+      HINT_OWN,
+    );
   }
   // The peel, by name, off the last compound (the bare anchor included).
-  const compounds = parsed.compounds.map((compound) => ({ ...compound, qualifiers: [...compound.qualifiers] }));
+  const compounds = parsed.compounds.map((compound) => ({
+    ...compound,
+    qualifiers: [...compound.qualifiers],
+  }));
   const clauses = [];
   if (compounds.length) {
     const last = compounds[compounds.length - 1];
@@ -474,7 +587,9 @@ const digestOne = (member, roster) => {
     );
   }
   const seen = new Map();
-  const records = clauses.length ? parseCompound(clauses.join(DELIMITER), roster.table) : [];
+  const records = clauses.length
+    ? parseCompound(clauses.join(DELIMITER), roster.table)
+    : [];
   for (const record of records) {
     if (seen.has(record.axis)) {
       return refuse(
@@ -495,13 +610,20 @@ const digestOne = (member, roster) => {
  * read over the whole bag; the grammar settles the subject again when the
  * fold is parsed.
  *
+ * @param {Object} compound
+ *   A parsed compound.
+ *
  * @return {{subject: ?{kind: string, name: string}, qualifiers: Array}}
+ *   The subject (null for a class or universal subject) and the bag.
  */
 const bag = (compound) => {
   const qualifiers = [...compound.qualifiers];
   let subject = null;
   if (compound.kind === CLASS_PART) {
-    qualifiers.push({ name: CLASS_QUALIFIER, argument: compound.name.slice(1) });
+    qualifiers.push({
+      name: CLASS_QUALIFIER,
+      argument: compound.name.slice(1),
+    });
   } else if (compound.kind !== null && compound.kind !== UNIVERSAL) {
     subject = { kind: compound.kind, name: compound.name };
   }
@@ -510,12 +632,30 @@ const bag = (compound) => {
 
 /**
  * The refusal for a list that shares no shape or differs at two places.
+ *
+ * @param {string} whole
+ *   The whole selector list as written.
+ *
+ * @return {Object}
+ *   A refusal answer (refuse).
  */
 const noShape = (whole) =>
-  refuse(SELECTOR_LIST, `"${whole}": these rules share no shape; write them as separate rules`, HINT_LIST);
+  refuse(
+    SELECTOR_LIST,
+    `"${whole}": these rules share no shape; write them as separate rules`,
+    HINT_LIST,
+  );
 
 /**
  * The refusal for a member the others already cover.
+ *
+ * @param {string} whole
+ *   The whole selector list as written.
+ * @param {string} selector
+ *   The covering member's canonical selector.
+ *
+ * @return {Object}
+ *   A refusal answer (refuse).
  */
 const redundant = (whole, selector) =>
   refuse(
@@ -534,6 +674,11 @@ const redundant = (whole, selector) =>
  * an `:is()` member; a remainder that is `:is()` alone flattens into the
  * fold.
  *
+ * @param {string[]} selectors
+ *   The members' canonical selectors, distinct.
+ * @param {string} whole
+ *   The whole selector list as written, for the refusals.
+ *
  * @return {string|Object}
  *   The canonical folded selector, or a refusal answer (SELECTOR_LIST: no
  *   shared shape, a redundant member, an `:is()` the fold would nest).
@@ -541,17 +686,26 @@ const redundant = (whole, selector) =>
 const fold = (selectors, whole) => {
   const parsed = selectors.map((selector) => {
     const record = selector === OWNER ? null : parseSelector(selector);
-    return { compounds: record?.compounds ?? [], pseudo: record?.pseudo ?? null };
+    return {
+      compounds: record?.compounds ?? [],
+      pseudo: record?.pseudo ?? null,
+    };
   });
   const [first] = parsed;
   const differing = new Set();
   for (const member of parsed) {
-    if (member.compounds.length !== first.compounds.length || member.pseudo !== first.pseudo) {
+    if (
+      member.compounds.length !== first.compounds.length ||
+      member.pseudo !== first.pseudo
+    ) {
       return noShape(whole);
     }
     for (const [i, compound] of member.compounds.entries()) {
       const model = first.compounds[i];
-      if (compound.combinator !== model.combinator || (compound.kind === ANCHOR_KIND) !== (model.kind === ANCHOR_KIND)) {
+      if (
+        compound.combinator !== model.combinator ||
+        (compound.kind === ANCHOR_KIND) !== (model.kind === ANCHOR_KIND)
+      ) {
         return noShape(whole);
       }
       if (printCompound(compound) !== printCompound(model)) {
@@ -567,18 +721,25 @@ const fold = (selectors, whole) => {
   let subject = bags[0].subject;
   let shared = bags[0].qualifiers;
   for (const candidate of bags) {
-    if (candidate.subject?.kind !== subject?.kind || candidate.subject?.name !== subject?.name) {
+    if (
+      candidate.subject?.kind !== subject?.kind ||
+      candidate.subject?.name !== subject?.name
+    ) {
       subject = null;
     }
     const prints = candidate.qualifiers.map(printQualifier);
-    shared = shared.filter((qualifier) => prints.includes(printQualifier(qualifier)));
+    shared = shared.filter((qualifier) =>
+      prints.includes(printQualifier(qualifier)),
+    );
   }
   const sharedPrints = shared.map(printQualifier);
   const members = [];
   const seen = new Set();
   for (const [i, candidate] of bags.entries()) {
     const own = subject === null ? candidate.subject : null;
-    const qualifiers = candidate.qualifiers.filter((qualifier) => !sharedPrints.includes(printQualifier(qualifier)));
+    const qualifiers = candidate.qualifiers.filter(
+      (qualifier) => !sharedPrints.includes(printQualifier(qualifier)),
+    );
     let remainders;
     if (own === null && qualifiers.length === 1 && qualifiers[0].name === IS) {
       remainders = qualifiers[0].argument;
@@ -591,7 +752,14 @@ const fold = (selectors, whole) => {
     } else if (own === null && !qualifiers.length) {
       return redundant(whole, selectors[i]);
     } else {
-      remainders = [{ combinator: null, kind: own?.kind ?? null, name: own?.name ?? null, qualifiers }];
+      remainders = [
+        {
+          combinator: null,
+          kind: own?.kind ?? null,
+          name: own?.name ?? null,
+          qualifiers,
+        },
+      ];
     }
     for (const remainder of remainders) {
       const print = printCompound(remainder);
@@ -612,7 +780,9 @@ const fold = (selectors, whole) => {
   const spelled = spell(compounds, first.pseudo);
   const canonical = canonicalSelector(spelled);
   if (canonical === null) {
-    throw new Error(`The fold of "${whole}" spelled "${spelled}", which the grammar refuses.`);
+    throw new Error(
+      `The fold of "${whole}" spelled "${spelled}", which the grammar refuses.`,
+    );
   }
   return canonical;
 };
@@ -639,7 +809,12 @@ export const digest = (text, options = {}) => {
   if (whole.startsWith('@')) {
     const clause = parseClause(whole, roster.table);
     if (clause.kind !== UNKNOWN) {
-      return { selector: null, condition: clause.text, refusal: null, folded: false };
+      return {
+        selector: null,
+        condition: clause.text,
+        refusal: null,
+        folded: false,
+      };
     }
     return refuse(
       UNKNOWN_WRAPPER,
@@ -649,7 +824,11 @@ export const digest = (text, options = {}) => {
   }
   const members = splitList(whole);
   if (members.length > 1 && members.includes('')) {
-    return refuse(SELECTOR_LIST, `"${whole}": an empty selector in the list`, 'Remove the stray comma.');
+    return refuse(
+      SELECTOR_LIST,
+      `"${whole}": an empty selector in the list`,
+      'Remove the stray comma.',
+    );
   }
   const selectors = [];
   let condition;
@@ -659,7 +838,9 @@ export const digest = (text, options = {}) => {
     if (answer.refusal) {
       return answer;
     }
-    const peeled = answer.clauses.length ? canonicalCompound(answer.clauses.join(DELIMITER), roster.table) : null;
+    const peeled = answer.clauses.length
+      ? canonicalCompound(answer.clauses.join(DELIMITER), roster.table)
+      : null;
     if (condition === undefined) {
       condition = peeled;
       firstMember = member;
@@ -675,13 +856,23 @@ export const digest = (text, options = {}) => {
     }
   }
   if (selectors.length === 1) {
-    return { selector: selectors[0], condition: condition ?? null, refusal: null, folded: false };
+    return {
+      selector: selectors[0],
+      condition: condition ?? null,
+      refusal: null,
+      folded: false,
+    };
   }
   const folded = fold(selectors, whole);
   if (typeof folded !== 'string') {
     return folded;
   }
-  return { selector: folded, condition: condition ?? null, refusal: null, folded: true };
+  return {
+    selector: folded,
+    condition: condition ?? null,
+    refusal: null,
+    folded: true,
+  };
 };
 
 /**
@@ -691,6 +882,14 @@ export const digest = (text, options = {}) => {
  * member left bare is dropped, an `:is()` left empty is dropped; one
  * member left merges into its host on the re-parse), never inside
  * `:not()`.
+ *
+ * @param {Object[]} compounds
+ *   Parsed compounds.
+ * @param {Object} roster
+ *   The options' roster (rosterOf).
+ *
+ * @return {Object[]}
+ *   The compounds, stripped.
  */
 const stripCompounds = (compounds, roster) =>
   compounds.map((compound) => ({
@@ -710,7 +909,10 @@ const stripCompounds = (compounds, roster) =>
       }
       const argument = stripCompounds(qualifier.argument, roster);
       const degenerate = argument.some(
-        (inner) => inner.combinator === DESCENDANT && inner.kind === UNIVERSAL && !inner.qualifiers.length,
+        (inner) =>
+          inner.combinator === DESCENDANT &&
+          inner.kind === UNIVERSAL &&
+          !inner.qualifiers.length,
       );
       return degenerate ? [] : [{ ...qualifier, argument }];
     }),
@@ -739,7 +941,11 @@ export const reach = (selector, options = {}) => {
   }
   const roster = rosterOf(options);
   const compounds = stripCompounds(parsed.compounds, roster);
-  if (compounds.length && compounds[0].kind === ANCHOR_KIND && !compounds[0].qualifiers.length) {
+  if (
+    compounds.length &&
+    compounds[0].kind === ANCHOR_KIND &&
+    !compounds[0].qualifiers.length
+  ) {
     compounds.shift();
   }
   // A universal or part compound whose classes were its subject keeps

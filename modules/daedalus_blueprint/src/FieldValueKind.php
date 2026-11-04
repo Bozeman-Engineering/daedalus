@@ -16,14 +16,10 @@ namespace Drupal\daedalus_blueprint;
  */
 enum FieldValueKind: string {
 
-  /**
-   * A grammar value, deserialized by the field's handler before the set.
-   */
+  // A grammar value, deserialized by the field's handler before the set.
   case Value = 'value';
 
-  /**
-   * An ExtractedValue, applied as the item list the caller built.
-   */
+  // An ExtractedValue, applied as the item list the caller built.
   case Extracted = 'extracted';
 
 }

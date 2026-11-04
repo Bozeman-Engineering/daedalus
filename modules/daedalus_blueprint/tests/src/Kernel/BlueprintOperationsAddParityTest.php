@@ -17,16 +17,15 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
 /**
  * Tests the add-side palette-parity operations.
  *
- * Covers plugin-block placement (plugin_id + context-mapping defaulting),
- * the populate: 'sample' enrichment option, the component-created event
- * with the batch's dressed posture, and the add_section operation. The
- * fixture section carries a seed
- * component so block placements can speak the ONE anchor grammar without
- * daedalus_layout (section anchors need daedalus_layout section UUIDs). daedalus_layout-dependent
- * paths (section UUIDs as add_section anchors, placement inside a nested
- * section, and the PlaceBlockEvent re-fire) need the assembled stack and
- * are covered by functional JS when the placement tools cut over (task
- * 9c).
+ * Covers plugin-block placement (plugin_id + context-mapping defaulting), the
+ * populate: 'sample' enrichment option, the component-created event with the
+ * batch's dressed posture, and the add_section operation. The fixture section
+ * carries a seed component so block placements can speak the ONE anchor grammar
+ * without daedalus_layout (section anchors need daedalus_layout section UUIDs).
+ * daedalus_layout-dependent paths (section UUIDs as add_section anchors,
+ * placement inside a nested section, and the PlaceBlockEvent re-fire) need the
+ * assembled stack and are covered by functional JS when the placement tools cut
+ * over (task 9c).
  */
 #[RunTestsInSeparateProcesses]
 #[CoversClass(BlueprintOperations::class)]

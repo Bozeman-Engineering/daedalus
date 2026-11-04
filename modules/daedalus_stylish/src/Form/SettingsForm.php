@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish\Form;
 
+use Drupal\Core\Config\Schema\TypedConfigInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -94,6 +95,7 @@ final class SettingsForm extends ConfigFormBase {
     // The two band ceilings; their meaning is the schema's, read from it so
     // the form and the schema cannot drift.
     $typed = $this->typedConfigManager->get(self::SETTINGS);
+    assert($typed instanceof TypedConfigInterface);
     $form['breakpoints'] = [
       '#type' => 'fieldset',
       '#title' => $this->t('Container breakpoints'),

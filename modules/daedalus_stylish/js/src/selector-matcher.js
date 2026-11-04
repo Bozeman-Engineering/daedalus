@@ -181,6 +181,14 @@ const nonEmptyString = (value) =>
  * `even`, `n`, `-n`, `2n+1`, `-n+3`, `n-1`, `3`, `0`); p is admitted
  * when p = An + B for an integer n >= 0. Anything else is a caller bug
  * and throws.
+ *
+ * @param {string} argument
+ *   The canonical `An+B` argument.
+ * @param {number} position
+ *   The 1-based position to test.
+ *
+ * @return {boolean}
+ *   True when the argument admits the position.
  */
 export const nthHolds = (argument, position) => {
   if (argument === 'odd') {
@@ -196,7 +204,9 @@ export const nthHolds = (argument, position) => {
   if (match === null) {
     throw new TypeError(`"${String(argument)}" is not a canonical An+B.`);
   }
-  const a = (match[2] === '' ? 1 : parseInt(match[2], 10)) * (match[1] === '-' ? -1 : 1);
+  const a =
+    (match[2] === '' ? 1 : parseInt(match[2], 10)) *
+    (match[1] === '-' ? -1 : 1);
   const b = match[3] === undefined ? 0 : parseInt(match[3], 10);
   if (a === 0) {
     return position === b;
@@ -228,7 +238,10 @@ export const nthHolds = (argument, position) => {
  *   empty, and the index and count among the siblings sharing its tag
  *   (null for an unknown tag).
  */
-export const structuralHolds = ({ name, argument = null }, { index, count, empty, typeIndex, typeCount }) => {
+export const structuralHolds = (
+  { name, argument = null },
+  { index, count, empty, typeIndex, typeCount },
+) => {
   switch (name) {
     case 'first-child':
       return index === 0;
@@ -251,7 +264,9 @@ export const structuralHolds = ({ name, argument = null }, { index, count, empty
     case 'nth-of-type':
       return typeIndex !== null && nthHolds(String(argument), typeIndex + 1);
     case 'nth-last-of-type':
-      return typeIndex !== null && nthHolds(String(argument), typeCount - typeIndex);
+      return (
+        typeIndex !== null && nthHolds(String(argument), typeCount - typeIndex)
+      );
     default:
       throw new TypeError(`":${String(name)}" is not a position qualifier.`);
   }
@@ -259,43 +274,79 @@ export const structuralHolds = ({ name, argument = null }, { index, count, empty
 
 /**
  * Whether a qualifier name is one of the grammar's position pseudo-classes.
+ *
+ * @param {string} name
+ *   The qualifier name.
+ *
+ * @return {boolean}
+ *   True for a position pseudo-class, nth family included.
  */
-const isPosition = (name) => POSITIONS.includes(name) || NTH_POSITIONS.includes(name);
+const isPosition = (name) =>
+  POSITIONS.includes(name) || NTH_POSITIONS.includes(name);
 
 /**
  * Whether a class qualifier holds against a node's wear
  * (SelectorMatcher::classHolds mirror): a variant class holds when the
  * node wears it; a markup class is no tree fact and holds as if absent.
+ *
+ * @param {string} className
+ *   The qualifier's class name, without its dot.
+ * @param {string[]} wear
+ *   The classes the node's worn variants deliver (wearOf).
+ *
+ * @return {boolean}
+ *   True when the qualifier holds.
  */
-const classHolds = (className, wear) => !isVariantClass(className) || wear.includes(className);
+const classHolds = (className, wear) =>
+  !isVariantClass(className) || wear.includes(className);
 
 /**
  * The classes a node's worn variants deliver on it (SelectorMatcher::wear
  * mirror): the element entry's references, each as the class the stamp
  * carries (fragmentClass); a pair that cannot be a class name stamps
  * nothing, and a rule key's wear stamps no class and is not here.
+ *
+ * @param {?object} map
+ *   The style map.
+ * @param {?string} key
+ *   The node's element key, or null for a node without one.
+ *
+ * @return {string[]}
+ *   The worn classes, first-seen order.
  */
 const wearOf = (map, key) => {
   const classes = [];
-  (key === null || !isPlainObject(map) ? [] : entryRefs(map[key])).forEach((ref) => {
-    const className = fragmentClass(ref.variant, ref.fragment);
-    if (className !== null && !classes.includes(className)) {
-      classes.push(className);
-    }
-  });
+  (key === null || !isPlainObject(map) ? [] : entryRefs(map[key])).forEach(
+    (ref) => {
+      const className = fragmentClass(ref.variant, ref.fragment);
+      if (className !== null && !classes.includes(className)) {
+        classes.push(className);
+      }
+    },
+  );
   return classes;
 };
 
 /**
  * Whether an element address is a member of a type compound's family
  * (the structural twin of CssPrinter::addressMembers).
+ *
+ * @param {string} type
+ *   The type compound's name.
+ * @param {string} address
+ *   The node's root address (`block_type:…`, `layout:…`).
+ *
+ * @return {boolean}
+ *   True when the address is of the type's family.
  */
 export const typeMatches = (type, address) => {
   if (type === TYPE_CONTAINER) {
     return address.startsWith('layout:');
   }
   if (type === TYPE_BLOCK) {
-    return address.startsWith('block_type:') || address.startsWith('block_plugin:');
+    return (
+      address.startsWith('block_type:') || address.startsWith('block_plugin:')
+    );
   }
   return address === typeAddress(type);
 };
@@ -314,6 +365,7 @@ export const typeMatches = (type, address) => {
  *   block's, for an open render); [] for a record over one field's markup.
  *
  * @return {{tags: string[], parts: Object<string, ?string>}}
+ *   The tags the markup carries and its parts' tags by class.
  */
 const anatomyOf = (markup, fields) => {
   const tag = nonEmptyString(markup.tag);
@@ -337,13 +389,15 @@ const anatomyOf = (markup, fields) => {
   // an unknown never matches a rule.
   const parts = {};
   const flatten = (list) => {
-    Object.entries(isPlainObject(list) ? list : {}).forEach(([selector, part]) => {
-      if (selector === '' || !isPlainObject(part)) {
-        return;
-      }
-      parts[selector] = nonEmptyString(part.tag);
-      flatten(part.parts);
-    });
+    Object.entries(isPlainObject(list) ? list : {}).forEach(
+      ([selector, part]) => {
+        if (selector === '' || !isPlainObject(part)) {
+          return;
+        }
+        parts[selector] = nonEmptyString(part.tag);
+        flatten(part.parts);
+      },
+    );
   };
   flatten(markup.parts);
   (Array.isArray(markup.hoisted) ? markup.hoisted : []).forEach((selector) => {
@@ -393,10 +447,16 @@ const anatomyOf = (markup, fields) => {
  *   The block's key.
  *
  * @return {Array<Object>}
+ *   One record per annotated field, in the node's order.
  */
 const fieldRecords = (node, key) =>
-  Object.entries(isPlainObject(node._element?.fields) ? node._element.fields : {})
-    .filter(([name, field]) => name !== '' && isPlainObject(field) && field.element !== false)
+  Object.entries(
+    isPlainObject(node._element?.fields) ? node._element.fields : {},
+  )
+    .filter(
+      ([name, field]) =>
+        name !== '' && isPlainObject(field) && field.element !== false,
+    )
     .map(([name, field]) => ({
       key: `${key}:${name}`,
       kind: 'field',
@@ -411,6 +471,13 @@ const fieldRecords = (node, key) =>
 /**
  * The facts one node carries, before its place among its siblings
  * (SelectorMatcher::nodeFacts mirror).
+ *
+ * @param {object} node
+ *   The lean tree node.
+ *
+ * @return {object}
+ *   The node's facts: key, kind, address, tag, tags, parts, name, type
+ *   and icon.
  */
 const nodeFacts = (node) => {
   const kind =
@@ -444,7 +511,9 @@ const nodeFacts = (node) => {
       address = `block_plugin:${pluginBase}`;
     }
   }
-  const markup = isPlainObject(node._element?.markup) ? node._element.markup : {};
+  const markup = isPlainObject(node._element?.markup)
+    ? node._element.markup
+    : {};
   const tag = nonEmptyString(markup.tag);
   // The annotated fields whose markup is inside the root: a block's (an
   // open render's prose renders inside the block). The entity root's
@@ -454,7 +523,9 @@ const nodeFacts = (node) => {
   const fields =
     kind === 'entity'
       ? []
-      : Object.values(isPlainObject(node._element?.fields) ? node._element.fields : {});
+      : Object.values(
+          isPlainObject(node._element?.fields) ? node._element.fields : {},
+        );
   const { tags, parts } = anatomyOf(markup, fields);
   return {
     key,
@@ -484,6 +555,7 @@ const nodeFacts = (node) => {
  *   A node's root address (the matcher's facts).
  *
  * @return {?string}
+ *   The type name, or null for no address.
  */
 export const typeOfAddress = (address) => {
   if (address === null || address === undefined) {
@@ -509,8 +581,10 @@ export const typeOfAddress = (address) => {
  * @param {Array<object>} facts
  *   Matcher facts ({address, tag, tags}) for the matched nodes.
  * @param {{inner?: boolean}} [options]
+ *   `inner` adds the tags inside each node to its root tag.
  *
  * @return {{types: string[], tags: string[]}}
+ *   The types and tags present, first-seen order.
  */
 export const presentRoster = (facts, { inner = false } = {}) => {
   const types = [];
@@ -592,7 +666,9 @@ export const createMatcher = (document, map = null) => {
     const siblings = (Array.isArray(list) ? list : []).filter(isPlainObject);
     siblings.forEach((node, position) => {
       const id = nodes.length;
-      const children = (Array.isArray(node.children) ? node.children : []).filter(isPlainObject);
+      const children = (
+        Array.isArray(node.children) ? node.children : []
+      ).filter(isPlainObject);
       const own = nodeFacts(node);
       const facts = {
         ...own,
@@ -614,7 +690,11 @@ export const createMatcher = (document, map = null) => {
       }
       if (own.kind === 'block' && own.key !== null) {
         fieldRecords(node, own.key).forEach((record) => {
-          fields.set(record.key, { ...record, wear: wearOf(map, record.key), parent: id });
+          fields.set(record.key, {
+            ...record,
+            wear: wearOf(map, record.key),
+            parent: id,
+          });
         });
       }
       index(children, id);
@@ -661,7 +741,8 @@ export const createMatcher = (document, map = null) => {
     const { parent } = nodes[id];
     return parent === null ? roots : nodes[parent].children;
   };
-  const earlierSiblings = (id) => siblings(id).slice(0, nodes[id].index).reverse();
+  const earlierSiblings = (id) =>
+    siblings(id).slice(0, nodes[id].index).reverse();
   // A node's place among its siblings, as structuralHolds reads it
   // (SelectorMatcher::place mirror). A block's root holds its content,
   // which the tree carries no nodes for: a block is never empty; a
@@ -714,11 +795,14 @@ export const createMatcher = (document, map = null) => {
       case TAG:
         return facts.tag !== null && facts.tag === compound.name;
       case TYPE:
-        return facts.address !== null && typeMatches(compound.name, facts.address);
+        return (
+          facts.address !== null && typeMatches(compound.name, facts.address)
+        );
       case CLASS_PART:
         return (
           compound.combinator === null &&
-          (Object.hasOwn(facts.parts, compound.name) || facts.wear.includes(compound.name.slice(1)))
+          (Object.hasOwn(facts.parts, compound.name) ||
+            facts.wear.includes(compound.name.slice(1)))
         );
       case ANCHOR_KIND:
         return id === anchor;
@@ -764,11 +848,17 @@ export const createMatcher = (document, map = null) => {
           // compound is (SelectorMatcher::isHolds mirror): a member of
           // states alone holds as if absent, so
           // `> d-text:is(:hover, :focus-within) a` reaches as `> d-text a`.
-          return qualifier.argument.some((member) => compoundMatches(id, member, anchor, judged));
+          return qualifier.argument.some((member) =>
+            compoundMatches(id, member, anchor, judged),
+          );
         case CLASS_QUALIFIER:
           return !judged || classHolds(qualifier.argument, nodes[id].wear);
         default:
-          return !isPosition(qualifier.name) || !judged || structuralHolds(qualifier, place(id));
+          return (
+            !isPosition(qualifier.name) ||
+            !judged ||
+            structuralHolds(qualifier, place(id))
+          );
       }
     });
   };
@@ -792,7 +882,9 @@ export const createMatcher = (document, map = null) => {
     ) {
       return true;
     }
-    return [...nodes.keys()].some((candidate) => chainMatches(candidate, argument, n - 1, id, true));
+    return [...nodes.keys()].some((candidate) =>
+      chainMatches(candidate, argument, n - 1, id, true),
+    );
   };
   // The engine's right-to-left walk: compound i on the node, then its
   // combinator decides where compound i - 1 must match (the parent for
@@ -842,7 +934,9 @@ export const createMatcher = (document, map = null) => {
       default:
         candidates = [];
     }
-    return candidates.some((at) => chainMatches(at, compounds, i - 1, anchor, anchored));
+    return candidates.some((at) =>
+      chainMatches(at, compounds, i - 1, anchor, anchored),
+    );
   };
   const addressableParent = (id) => {
     for (let at = nodes[id].parent; at !== null; at = nodes[at].parent) {
@@ -888,7 +982,9 @@ export const createMatcher = (document, map = null) => {
       return { place: id, tags: nodes[id].tags, parts: nodes[id].parts };
     }
     const record = fields.get(key) ?? null;
-    return record === null ? null : { place: record.parent, tags: record.tags, parts: record.parts };
+    return record === null
+      ? null
+      : { place: record.parent, tags: record.tags, parts: record.parts };
   };
   // A descendant subject sits INSIDE the node, so the chain before it
   // must match the node itself or any ancestor (the engine's walk from
@@ -943,7 +1039,11 @@ export const createMatcher = (document, map = null) => {
       const record = fields.get(key) ?? null;
       return record === null
         ? null
-        : publicFacts(record, { index: null, count: null, childCount: 0 }, nodes[record.parent].key);
+        : publicFacts(
+            record,
+            { index: null, count: null, childCount: 0 },
+            nodes[record.parent].key,
+          );
     },
 
     ancestors: (key) => {
@@ -954,7 +1054,9 @@ export const createMatcher = (document, map = null) => {
       // A field's ancestors are its block's, then the block itself: the
       // field's rows inherit the block's rules and its ancestors'.
       const record = fields.get(key) ?? null;
-      return record === null ? [] : [...ancestorKeys(record.parent), nodes[record.parent].key];
+      return record === null
+        ? []
+        : [...ancestorKeys(record.parent), nodes[record.parent].key];
     },
 
     matches,
@@ -1025,7 +1127,12 @@ export const createMatcher = (document, map = null) => {
       const root = byKey.get(owner) ?? null;
       // The candidate: a node, or a field record judged at its block.
       const subject = subjectOf(candidate);
-      if (root === null || subject === null || !inScope(subject.place, root) || !compounds.length) {
+      if (
+        root === null ||
+        subject === null ||
+        !inScope(subject.place, root) ||
+        !compounds.length
+      ) {
         return false;
       }
       const { place, tags, parts } = subject;
@@ -1036,7 +1143,9 @@ export const createMatcher = (document, map = null) => {
       // a bag of tags without order or depth: only an unqualified tag
       // reached by descent can be answered there.
       const tagSubject =
-        last.kind === TAG && last.combinator === DESCENDANT && !last.qualifiers.length;
+        last.kind === TAG &&
+        last.combinator === DESCENDANT &&
+        !last.qualifiers.length;
       if (position.kind === TAG) {
         if (!tagSubject || last.name !== name) {
           return false;
@@ -1059,7 +1168,11 @@ export const createMatcher = (document, map = null) => {
         return false;
       }
       const partTag = parts[name] ?? null;
-      return partTag !== null && partTag === last.name && descentReaches(place, compounds, root);
+      return (
+        partTag !== null &&
+        partTag === last.name &&
+        descentReaches(place, compounds, root)
+      );
     },
   };
 };

@@ -184,7 +184,8 @@ final class DialectCatalog {
   /**
    * Attribute names no variant axis may take on any tag.
    *
-   * The global attributes (identity, wear, look, provenance),    * generic-form identity attributes (plugin, type), the blueprint
+   * The global attributes (identity, wear, look, provenance),
+   * generic-form identity attributes (plugin, type), the blueprint
    * reference's name, and the set op's body slot; data-* is reserved as a
    * prefix (print-only annotations).
    */
@@ -616,7 +617,9 @@ final class DialectCatalog {
   }
 
   /**
-   * The kind shells of a card as words: what an undeclared type renders through.
+   * The kind shells of a card as words.
+   *
+   * What an undeclared type renders through.
    *
    * The one spelling for both registers (the cached prompt's line and the
    * schema's entry live in different modules, so the words live here, on

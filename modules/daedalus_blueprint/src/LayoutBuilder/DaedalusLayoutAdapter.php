@@ -118,7 +118,8 @@ class DaedalusLayoutAdapter {
    *   The section.
    *
    * @return string|null
-   *   The section UUID or NULL if daedalus_layout is not available or no UUID set.
+   *   The section UUID or NULL if daedalus_layout is not available or no UUID
+   *   set.
    */
   public function getSectionUuid(Section $section): ?string {
     if (!$this->isDaedalusLayoutAvailable()) {
@@ -490,9 +491,10 @@ class DaedalusLayoutAdapter {
    * replacement). New sections are containers whenever the site has them:
    * arrangement is styling on the container, not a layout choice, so no
    * chooser follows the add. The resolution ladder:
-   * 1. The render display's daedalus_layout `default_section` third-party setting,
-   *    when its layout is currently in the allowed set AND is a container
-   *    layout (the whole setting array doubles as the section settings).
+   * 1. The render display's daedalus_layout `default_section` third-party
+   *    setting, when its layout is currently in the allowed set AND is a
+   *    container layout (the whole setting array doubles as the section
+   *    settings).
    * 2. The first container layout (ContainerLayout::isContainer()) in the
    *    placement-restrictions allowed-layouts answer.
    * 3. The configured `default_section` setting when its (non-container)
@@ -565,7 +567,9 @@ class DaedalusLayoutAdapter {
   }
 
   /**
-   * Locates a section nested inside a container component by its daedalus_layout UUID.
+   * Locates a section nested inside a container component by its UUID.
+   *
+   * The UUID is the section's daedalus_layout UUID.
    *
    * Root-level sections are found by iterating the root list of the host's
    * storage (ElementLocator::locateSection()); this method covers sections
@@ -718,10 +722,10 @@ class DaedalusLayoutAdapter {
   /**
    * Yields block_content entities from Layout Builder sections lazily.
    *
-   * When daedalus_layout is available, uses the TreeIndex for efficient iteration
-   * at all nesting depths. Without daedalus_layout, performs flat iteration of
-   * root sections. Extraction (unserialize/revision load) happens on
-   * demand so the caller can stop early.
+   * When daedalus_layout is available, uses the TreeIndex for efficient
+   * iteration at all nesting depths. Without daedalus_layout, performs flat
+   * iteration of root sections. Extraction (unserialize/revision load) happens
+   * on demand so the caller can stop early.
    *
    * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
    *   The host.
@@ -799,9 +803,9 @@ class DaedalusLayoutAdapter {
   /**
    * Walks every component of the root sections, keyed by element path.
    *
-   * The one flat walk (no daedalus_layout, so no recursion into nested layouts).
-   * The locate and the block-content sweep both read it, so they agree on
-   * section order, on the positional component index and on the path
+   * The one flat walk (no daedalus_layout, so no recursion into nested
+   * layouts). The locate and the block-content sweep both read it, so they
+   * agree on section order, on the positional component index and on the path
    * format by construction rather than by copy.
    *
    * @param \Drupal\layout_builder\SectionStorageInterface $sectionStorage

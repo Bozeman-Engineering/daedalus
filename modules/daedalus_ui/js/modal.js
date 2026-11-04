@@ -7,12 +7,12 @@
  * skin (css/dialog-skin.css rides core/drupal.dialog). Its shape lives
  * here once: any module's door is one call, or a link wearing an
  * attribute, never its own Drupal.ajax:
- * @code
- *   Drupal.Daedalus.openModal(url, { width: 560 });
- *   <a href="/the/route" data-daedalus-modal
- *      data-daedalus-modal-width="560"
- *      data-daedalus-modal-class="my-dialog">Open</a>
- * @endcode
+ *
+ * @example
+ * Drupal.Daedalus.openModal(url, { width: 560 });
+ * <a href="/the/route" data-daedalus-modal
+ *    data-daedalus-modal-width="560"
+ *    data-daedalus-modal-class="my-dialog">Open</a>
  *
  * The request rides as GET (a dialog route answers a reading; nothing is
  * written by opening it) with _wrapper_format=drupal_modal, so the route
@@ -76,7 +76,10 @@
    * @return {Drupal.Ajax}
    *   The instance executed, for a caller's error handler.
    */
-  const openModal = (url, { width = 560, dialogClass = null, title = null } = {}) => {
+  const openModal = (
+    url,
+    { width = 560, dialogClass = null, title = null } = {},
+  ) => {
     const dialog = { width };
     if (dialogClass) {
       dialog.classes = { 'ui-dialog': dialogClass };
@@ -166,11 +169,7 @@
       // reports as "ResizeObserver loop completed with undelivered
       // notifications", a console error. The same cap changes no size,
       // so the observer reports nothing further and the cycle ends here.
-      $pane.dialog(
-        'option',
-        'maxHeight',
-        $pane.dialog('option', 'maxHeight'),
-      );
+      $pane.dialog('option', 'maxHeight', $pane.dialog('option', 'maxHeight'));
     });
     observer.observe(pane);
     observers.set(pane, observer);

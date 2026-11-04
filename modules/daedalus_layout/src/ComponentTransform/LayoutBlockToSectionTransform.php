@@ -250,8 +250,8 @@ class LayoutBlockToSectionTransform implements ComponentTransformInterface {
   /**
    * Remaps a component's context_mapping off daedalus_layout.root_entity.
    *
-   * The legacy model remapped field blocks moved into a layout block onto
-   * the daedalus_layout.root_entity context. Containers forward the root entity as
+   * The legacy model remapped field blocks moved into a layout block onto the
+   * daedalus_layout.root_entity context. Containers forward the root entity as
    * layout_builder.entity at every depth, so the core-native id is correct
    * again everywhere.
    *
@@ -339,9 +339,9 @@ class LayoutBlockToSectionTransform implements ComponentTransformInterface {
    *   The section uuid replacing it.
    */
   protected function migrateStyles(EntityInterface $host, string $block_uuid, string $section_uuid): void {
-    // The field name is DaedalusStylishFieldManager::FIELD_NAME, referenced as a
-    // literal so this class never loads Daedalus Stylish code Daedalus Stylish may not be
-    // installed to provide.
+    // The field name is DaedalusStylishFieldManager::FIELD_NAME, referenced as
+    // a literal so this class never loads Daedalus Stylish code Daedalus
+    // Stylish may not be installed to provide.
     if (!$host instanceof FieldableEntityInterface || !$host->hasField('daedalus_stylish_styles')) {
       return;
     }

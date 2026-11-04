@@ -14,7 +14,7 @@
  * holds a row, since a row is in the DOM once per set it belongs to and
  * comes and goes with the folds.
  *
- * What survived the swap unchanged as behaviour: the three drag sources
+ * What survived the swap unchanged as behavior: the three drag sources
  * (`new_block`, `new_section`, `new_blueprint_section`) feeding the one
  * caret, the Insert verb's pending anchor with click-to-place and its
  * arrow-key highlight, the armed root on an empty canvas (the blank-page
@@ -106,6 +106,12 @@ export const createInsertSession = (app) => {
 
   /**
    * The placed element's uuid: the last uuid-carrying op in a batch.
+   *
+   * @param {object[]} operations
+   *   The batch of spine ops a drop composed.
+   *
+   * @return {string|undefined}
+   *   The uuid, or undefined when no op in the batch names one.
    */
   const placedUuidOf = (operations) =>
     [...operations].reverse().find((operation) => operation.uuid)?.uuid;
@@ -119,6 +125,12 @@ export const createInsertSession = (app) => {
    * (SLOT_OWN_DOCUMENT) and is an ordinary block to place beside. The
    * node fact and the verdict are both the server's; nothing here reads a
    * plugin id.
+   *
+   * @param {string} key
+   *   The selectable key.
+   *
+   * @return {boolean}
+   *   TRUE for a slot block this document may fill.
    */
   const isSlotDoor = (key) => {
     const [kind, uuid] = key.split(':');
@@ -369,8 +381,8 @@ export const createInsertSession = (app) => {
       // the open never races a hidden panel. A rejected open (the slot's
       // current panel refused to close) rolls the arming back.
       setPendingAnchor(key);
-      Drupal.Daedalus.SidebarManager.openSidebar('place_block').catch(
-        () => disarm(),
+      Drupal.Daedalus.SidebarManager.openSidebar('place_block').catch(() =>
+        disarm(),
       );
     },
   });
@@ -380,6 +392,13 @@ export const createInsertSession = (app) => {
    * the DOM at any nesting depth, for the anchor's location grammar
    * (model/drop.js anchorLocation: a section placed at a block anchor
    * lands after the block's own container).
+   *
+   * @param {string} key
+   *   The block's selectable key.
+   *
+   * @return {?string}
+   *   The enclosing container's uuid, or null when the element is not in
+   *   the document or sits in no container.
    */
   const enclosingContainerOf = (key) =>
     Drupal.Daedalus.Selection.getElement(key)
@@ -397,6 +416,14 @@ export const createInsertSession = (app) => {
    * legality (its acceptsTarget, as the lift asks for each enumerated
    * gap). A refused target places nothing and peeks nothing: the caret
    * would never have offered it, so no request leaves the client.
+   *
+   * @param {{source: string, data: object, placingSection: boolean}} rowSpec
+   *   The row's drag source spec (rowSource).
+   * @param {object} location
+   *   The drop location in the drag controller's location grammar.
+   *
+   * @return {?object}
+   *   The resolved target, or null where the drop is refused.
    */
   const legalTarget = (rowSpec, location) => {
     const target = resolveTarget(app.drag.isRootFlowLocation, rowSpec, {
@@ -420,6 +447,9 @@ export const createInsertSession = (app) => {
    * gaps it walks. With a pending Insert anchor the caret starts at the
    * anchor's gap; without one (the anchor-less keyboard entry) `Drag.lift`
    * needs no anchor and starts the caret at the FIRST valid gap.
+   *
+   * @param {Element} row
+   *   The row element being lifted.
    */
   const liftRow = (row) => {
     const { source, data, placingSection } = rowSource(row);
@@ -451,6 +481,8 @@ export const createInsertSession = (app) => {
    *   A row element.
    *
    * @return {?{operations: object[], show: string}}
+   *   The batch and the key of what it places, or null when nothing can
+   *   be shown.
    */
   const peekRequest = (row) => {
     const root = Drupal.Daedalus.Blueprint.getRoot();
@@ -472,6 +504,13 @@ export const createInsertSession = (app) => {
    * original anchor. A blueprint row places a copy by default and a
    * linked node (the blueprint shown by reference) with `linked`, the
    * row menu's "Place linked".
+   *
+   * @param {Element} row
+   *   The clicked row element.
+   * @param {object} options
+   *   The placement options.
+   * @param {boolean} options.linked
+   *   Whether a blueprint row places a linked node rather than a copy.
    */
   const placeRow = async (row, { linked = false } = {}) => {
     const context = Drupal.Daedalus.Blueprint.rootContext();

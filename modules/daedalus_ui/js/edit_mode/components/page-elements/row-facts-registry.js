@@ -76,7 +76,10 @@ export const registerRowFacts = (provider) => {
     throw new Error('A row-facts provider requires a string id.');
   }
   for (const entry of ['facts', 'doorways', 'subscribe']) {
-    if (provider[entry] !== undefined && typeof provider[entry] !== 'function') {
+    if (
+      provider[entry] !== undefined &&
+      typeof provider[entry] !== 'function'
+    ) {
       throw new Error(
         `Row-facts provider "${provider.id}" names ${entry} but it is not a function.`,
       );
@@ -98,7 +101,17 @@ export const registerRowFacts = (provider) => {
 /**
  * Reads one entry of every registered provider for an address, in
  * registration order, concatenated. A provider without the entry
- * contributes nothing; one whose entry throws is contained.
+ * contributes nothing; one whose entry throws is contained: the read goes
+ * on without it and the error is rethrown outside the call stack
+ * (Drupal.throwError), so it surfaces without breaking the tree.
+ *
+ * @param {string} entry
+ *   The provider entry to read ('facts' or 'doorways').
+ * @param {string} address
+ *   The row's projection-index address.
+ *
+ * @return {Array<object>}
+ *   Every provider's answers, concatenated in registration order.
  */
 const readAll = (entry, address) => {
   const answers = [];
@@ -109,10 +122,7 @@ const readAll = (entry, address) => {
     try {
       answers.push(...(provider[entry](address) ?? []));
     } catch (error) {
-      console.error(
-        `Row-facts provider "${provider.id}" failed answering ${entry}:`,
-        error,
-      );
+      Drupal.throwError(error);
     }
   });
   return answers;
@@ -125,6 +135,7 @@ const readAll = (entry, address) => {
  *   The row's projection-index address; null (a keyless row) asks nobody.
  *
  * @return {Array<{mark: string, hue?: string, text?: string, title: string}>}
+ *   Every provider's facts, in registration order.
  */
 export const rowFacts = (address) => (address ? readAll('facts', address) : []);
 
@@ -136,6 +147,7 @@ export const rowFacts = (address) => (address ? readAll('facts', address) : []);
  *   The row's projection-index address; null asks nobody.
  *
  * @return {Array<object>}
+ *   Every provider's doorways, in registration order.
  */
 export const rowDoorways = (address) =>
   address ? readAll('doorways', address) : [];
@@ -166,6 +178,12 @@ export const withDoorways = (doorways, verbs) => {
  * Subscribes to the seam's announcements (a registration, an
  * unregistration, a provider's own change); returns unsubscribe. The
  * tree re-renders its rows on each.
+ *
+ * @param {function(): void} callback
+ *   Called on every announcement.
+ *
+ * @return {function(): void}
+ *   Unsubscribes.
  */
 export const subscribeRowFacts = (callback) => {
   listeners.add(callback);

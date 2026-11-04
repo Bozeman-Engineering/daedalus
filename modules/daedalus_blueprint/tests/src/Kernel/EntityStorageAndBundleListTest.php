@@ -23,9 +23,9 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
  * saved-vs-tempstored flag, and the affected component UUIDs. That hook is a
  * documented contract consumers subscribe to (change-detection timestamps, AI
  * side effects), so its payload is pinned here. This class deliberately runs
- * with neither daedalus_tempstore nor layout_builder enabled, which is the exact
- * configuration where the service must fall through to a direct database save:
- * it proves new=TRUE, force_save=TRUE, and a plain edit (new=FALSE, no
+ * with neither daedalus_tempstore nor layout_builder enabled, which is the
+ * exact configuration where the service must fall through to a direct database
+ * save: it proves new=TRUE, force_save=TRUE, and a plain edit (new=FALSE, no
  * tempstore backend) all save directly and all fire the hook with saved=TRUE
  * and the passed UUIDs. It also pins isWorkspaceRequired()=FALSE when the
  * workspaces module is absent (the workspace gate is wired but cannot trip
@@ -57,12 +57,12 @@ class EntityStorageAndBundleListTest extends BlueprintKernelTestBase {
    * Relaxed schema checking for a sibling module's settings.
    *
    * The daedalus_blueprint_ai.settings config that drives BundleListBuilder's
-   * visibility filtering is owned by the daedalus_blueprint_ai sub-module, which
-   * is not installed here (the base module's BundleListBuilder reads the config
-   * defensively whether or not that module is present). Relax schema checking
-   * so the test can write that config directly; this does not weaken any
-   * behavioral assertion, it only skips schema validation of a sibling module's
-   * settings object.
+   * visibility filtering is owned by the daedalus_blueprint_ai sub-module,
+   * which is not installed here (the base module's BundleListBuilder reads the
+   * config defensively whether or not that module is present). Relax schema
+   * checking so the test can write that config directly; this does not weaken
+   * any behavioral assertion, it only skips schema validation of a sibling
+   * module's settings object.
    *
    * @var bool
    */
@@ -106,8 +106,8 @@ class EntityStorageAndBundleListTest extends BlueprintKernelTestBase {
     $this->assertSame('after', $reloaded->get('field_subtitle')->value);
 
     // new=FALSE with no tempstore backend available also saves directly: the
-    // storage handler has neither daedalus_tempstore nor layout_builder here, so it
-    // falls through to a database save and reports saved=TRUE.
+    // storage handler has neither daedalus_tempstore nor layout_builder here,
+    // so it falls through to a database save and reports saved=TRUE.
     $editOnly = $this->createTestEntity(['field_subtitle' => 'one']);
     $editOnly->set('field_subtitle', 'two');
     $handler->persist($this->host($editOnly), element_uuids: []);

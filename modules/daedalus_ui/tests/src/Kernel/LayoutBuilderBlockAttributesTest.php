@@ -272,8 +272,10 @@ class LayoutBuilderBlockAttributesTest extends KernelTestBase {
     // portal and wears none of its own.
     $inner = $xpath->query('//*[@data-layout-builder-block-uuid="' . self::INNER_BLOCK . '"]');
     $this->assertSame(1, $inner->length, 'The blueprint\'s block renders inside the placement.');
-    $this->assertFalse($inner->item(0)->hasAttribute('data-daedalus-ui-portal-url'));
-    $this->assertFalse($inner->item(0)->hasAttribute('data-daedalus-ui-portal-type'));
+    $inner_node = $inner->item(0);
+    assert($inner_node instanceof \DOMElement);
+    $this->assertFalse($inner_node->hasAttribute('data-daedalus-ui-portal-url'));
+    $this->assertFalse($inner_node->hasAttribute('data-daedalus-ui-portal-type'));
     // The page's own placement is no portal: the kind rides the portal alone.
     $this->assertFalse($this->selectable($xpath, 'block:' . self::PLUGIN_BLOCK)->hasAttribute('data-daedalus-ui-portal-type'));
     $this->assertSame(1, $xpath->query('//*[@data-daedalus-ui-portal-type]')->length, 'One portal on the page, one kind word.');

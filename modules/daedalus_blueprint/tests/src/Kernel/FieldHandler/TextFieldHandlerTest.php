@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel\FieldHandler;
 
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\daedalus_blueprint\FieldHandler\FieldHandlerManager;
 use Drupal\daedalus_blueprint\FieldHandler\TextFieldHandler;
 use Drupal\filter\Entity\FilterFormat;
@@ -253,6 +254,7 @@ class TextFieldHandlerTest extends BlueprintKernelTestBase {
     $entity->save();
 
     $reloaded = $this->entityTypeManager->getStorage('entity_test')->loadUnchanged($entity->id());
+    assert($reloaded instanceof FieldableEntityInterface);
     $serialized = $this->handler->serialize($reloaded->get('field_description'), $definition);
     $this->assertSame(['value' => 'Echoed', 'format' => 'plain_text'], $serialized);
   }

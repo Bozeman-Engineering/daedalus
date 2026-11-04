@@ -56,7 +56,6 @@ const fetchEntityForm = (entityTypeId, entityId, viewMode, quiet = false) => {
             message: Drupal.t('Loading form...'),
           },
       error: (error) => {
-        console.error('Entity form load: ', error.responseText || error);
         Drupal.Daedalus.ModeManager.getPlugin('edit').handleError(
           error,
           'Unable to load the entity form.',
@@ -123,7 +122,6 @@ export const fetchBlockForm = (element, viewMode, quiet = false) => {
             message: Drupal.t('Loading form...'),
           },
       error: (error) => {
-        console.error('Block form load: ', error.responseText || error);
         Drupal.Daedalus.ModeManager.getPlugin('edit').handleError(
           error,
           'Unable to load the block form.',
@@ -153,8 +151,7 @@ export const fetchBlockForm = (element, viewMode, quiet = false) => {
  *   the appropriate form.
  */
 export const getForm = async (EditableElement) => {
-  const plugin =
-    Drupal.Daedalus.SidebarManager.getPlugin('daedalus_edit_form');
+  const plugin = Drupal.Daedalus.SidebarManager.getPlugin('daedalus_edit_form');
 
   // A cached form: retarget the panel's subject and open it. openOn()
   // handles the (side, slot) exclusivity — a different bottom-slot panel is
@@ -203,6 +200,7 @@ export const getForm = async (EditableElement) => {
  * The main entity wrapper, or null.
  *
  * @return {?Element}
+ *   The wrapper element, or null when the page renders no main entity.
  */
 const mainEntityWrapper = () =>
   document.querySelector('[data-main-entity][data-daedalus-ui-entity-wrapper]');
@@ -215,8 +213,10 @@ const mainEntityWrapper = () =>
  * view mode instead. Exposed on Drupal.Daedalus.Edit (daedalus-edit.js) for the
  * sidebar plugin, which lives outside this ES-module graph.
  *
- * @param {Object} options
- *   - quiet: skip the fullscreen progress indicator.
+ * @param {object} options
+ *   The fetch options.
+ * @param {boolean} options.quiet
+ *   Skip the fullscreen progress indicator.
  *
  * @return {Promise<unknown>}
  *   A promise to retrieve the form.
@@ -234,7 +234,9 @@ export const fetchMainEntityForm = ({ quiet = false } = {}) => {
   // display's canvas) has no entity form to fetch; the door is inert.
   if (Drupal.Daedalus.Blueprint?.getBlueprint()?.fields === undefined) {
     return Promise.reject(
-      new Error('Daedalus Edit: the root has no entity form (a template host).'),
+      new Error(
+        'Daedalus Edit: the root has no entity form (a template host).',
+      ),
     );
   }
   const [entityTypeId, entityId] =
@@ -257,8 +259,10 @@ export const fetchMainEntityForm = ({ quiet = false } = {}) => {
  *
  * @param {string} formId
  *   The form identity.
- * @param {Object} options
- *   - quiet: skip the fullscreen progress indicator.
+ * @param {object} options
+ *   The fetch options.
+ * @param {boolean} options.quiet
+ *   Skip the fullscreen progress indicator.
  *
  * @return {Promise<unknown>}
  *   A promise to retrieve the form.

@@ -58,7 +58,8 @@ class ElementLocator {
     // sweep read the same wrapper the caller passed or the host answered.
     $sectionStorage ??= $host->sectionStorage();
 
-    // Search Layout Builder components (O(1) with daedalus_layout, flat without).
+    // Search Layout Builder components (O(1) with daedalus_layout, flat
+    // without).
     $result = $this->daedalusLayoutAdapter->locateElement($host, $uuid, $sectionStorage);
     if ($result !== NULL) {
       return $result;

@@ -27,21 +27,20 @@ use Symfony\Component\Routing\Route;
  * Tests the outside-rendered-label rule behind page-title inline editing.
  *
  * The entity's label field presents AS the root row (the element model's
- * derived edit target), but the label usually renders OUTSIDE the entity
- * as the theme's page-title element. PageTitleEditing decides when the
- * page title stands in for the label as its one in-place leaf: exactly
- * when the model names it AND the entity render itself does not produce
- * the field on the canonical page, so the title element is the label's
- * ONE canvas render (duplicate leaf identities would make the form-swap
- * and markup replacement ambiguous). The rule answers from proven render
- * truths only:
- * a node's non-configurable title (template_preprocess_node pulls it out of
- * page content) and a Layout Builder display's root fields (core strips
- * every display-configurable one); everything else stays inert. The same rule gates every delivery half, attribution
- * (preprocessPageTitle), the replacement render (titleRender) and the
- * mutation-response subscriber (onMutationResponse) that puts that render
- * on the op spine's contract under the label's key, so they agree by
- * construction.
+ * derived edit target), but the label usually renders OUTSIDE the entity as the
+ * theme's page-title element. PageTitleEditing decides when the page title
+ * stands in for the label as its one in-place leaf: exactly when the model
+ * names it AND the entity render itself does not produce the field on the
+ * canonical page, so the title element is the label's ONE canvas render
+ * (duplicate leaf identities would make the form-swap and markup replacement
+ * ambiguous). The rule answers from proven render truths only: a node's
+ * non-configurable title (template_preprocess_node pulls it out of page
+ * content) and a Layout Builder display's root fields (core strips every
+ * display-configurable one); everything else stays inert. The same rule gates
+ * every delivery half, attribution (preprocessPageTitle), the replacement
+ * render (titleRender) and the mutation-response subscriber
+ * (onMutationResponse) that puts that render on the op spine's contract under
+ * the label's key, so they agree by construction.
  *
  * @group daedalus_edit
  */
@@ -55,8 +54,9 @@ class PageTitleEditingTest extends KernelTestBase {
    *
    * The daedalus_ui hard dependencies (daedalus_blueprint +
    * daedalus_blueprint_api) are invisible to kernel environments and must be
-   * listed explicitly or the container fails to compile. daedalus_layout registers
-   * the Layout Builder root-existence feeder the LB branch agrees with.
+   * listed explicitly or the container fails to compile. daedalus_layout
+   * registers the Layout Builder root-existence feeder the LB branch agrees
+   * with.
    */
   protected static $modules = [
     'system',
@@ -264,7 +264,6 @@ class PageTitleEditingTest extends KernelTestBase {
   public function testMutationResponseReportsAnUnattributedTitle(): void {
     $this->node->save();
     $uuid = $this->node->uuid();
-    $label_key = SelectableKey::field($uuid, 'title');
     $entity_key = SelectableKey::entity($uuid);
     $markup = [$entity_key => '<article>whole</article>'];
 

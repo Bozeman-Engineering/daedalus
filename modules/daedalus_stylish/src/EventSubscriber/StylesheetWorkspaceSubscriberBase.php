@@ -27,7 +27,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  *   live set, then every stylesheet the family's save recompiles
  *   compiles, in the order given (a skin publish is a law change, so
  *   the skin family compiles the skin file then the variants file, as
- *   _daedalus_skin_change() does; the variant family its own file).
+ *   _daedalus_stylish_skin_change() does; the variant family its own file).
  * - A SOURCE entity that gained or lost references inside a workspace
  *   carried them in staged revisions the usage tables deliberately ignore
  *   (default revisions only). Publish promotes them, so the published

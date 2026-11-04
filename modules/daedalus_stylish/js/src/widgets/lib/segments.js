@@ -18,6 +18,15 @@ import { h } from 'preact';
  *   is the only way out (`closed`). The choice row (choice-row.js) is
  *   the one mount: a closed vocabulary short enough for the row.
  */
+
+/**
+ * A stop's glyph: filled rectangles on a 16-unit grid.
+ *
+ * @param {object} props
+ *   The component's props.
+ * @param {Array<[number, number, number, number]>} props.rects
+ *   The rectangles as [x, y, width, height] tuples.
+ */
 const SegmentIcon = ({ rects }) => (
   <svg
     className="daedalus-stylish-inspector__segment-icon"
@@ -45,6 +54,7 @@ const SegmentIcon = ({ rects }) => (
  * One segmented button row: the stops, the explicit custom pill.
  *
  * @param {object} props
+ *   The component's props.
  * @param {Array} props.stops
  *   The stop table (widget-values.js shape).
  * @param {{selected: ?string, custom: boolean}} props.state

@@ -36,8 +36,8 @@ const RANGE_TOP = {
   'entry-crossing': (p, h, vh) => vh - p * h,
   contain: (p, h, vh) => (h <= vh ? vh - h - p * (vh - h) : (vh - h) * (1 - p)),
   cover: (p, h, vh) => vh - p * (vh + h),
-  exit: (p, h, vh) => -p * h,
-  'exit-crossing': (p, h, vh) => -p * h,
+  exit: (p, h) => -p * h,
+  'exit-crossing': (p, h) => -p * h,
 };
 
 /**
@@ -80,6 +80,16 @@ const percentOf = (token) => {
  * Reads one range point at `parts[at]`: a range name with an optional
  * percentage (absent = `namedDefault`), or a bare percentage on the whole
  * timeline. Returns `{point, next}` or null when the token is neither.
+ *
+ * @param {string[]} parts
+ *   The activation range's tokens.
+ * @param {number} at
+ *   The index of the token to read.
+ * @param {number} namedDefault
+ *   The percentage a bare range name takes (0 at the start, 100 at the end).
+ *
+ * @return {{point: {edge: string, percent: number}, next: number}|null}
+ *   The point and the index after it, or null.
  */
 const readPoint = (parts, at, namedDefault) => {
   const token = parts[at];
@@ -102,6 +112,12 @@ const readPoint = (parts, at, namedDefault) => {
  * The activation range's tokens (after the source, before any `/`) as
  * `{edge, percent, end: {edge, percent}}` by animation-range's shorthand
  * rules; null when malformed.
+ *
+ * @param {string[]} parts
+ *   The activation range's tokens.
+ *
+ * @return {object|null}
+ *   The range, or null when malformed.
  */
 const parseActivationRange = (parts) => {
   if (parts.length === 0) {
@@ -146,6 +162,12 @@ const parseActivationRange = (parts) => {
  * timeline (`cover`); no range at all (`normal`) is the whole timeline.
  * Checked against Chrome 152's computed `timeline-trigger-activation-range`.
  * Whether the polyfill can honour the end is observerOptions' business.
+ *
+ * @param {string} value
+ *   The `timeline-trigger` value.
+ *
+ * @return {{name: string, source: string, range: object}|null}
+ *   The trigger, or null when there is nothing to polyfill.
  */
 export const parseTimelineTrigger = (value) => {
   const first = String(value ?? '').split(',')[0];
@@ -170,6 +192,12 @@ export const parseTimelineTrigger = (value) => {
  * (no dashed ident, an unknown action). One action means "on activation
  * only" (exit `none`); a third action and beyond are ignored. Only the
  * first list item counts.
+ *
+ * @param {string} value
+ *   The `animation-trigger` value.
+ *
+ * @return {{name: string, enter: string, exit: string}|null}
+ *   The trigger name and its actions, or null.
  */
 export const parseAnimationTrigger = (value) => {
   const parts = tokens(String(value ?? '').split(',')[0]);
@@ -207,6 +235,16 @@ export const parseAnimationTrigger = (value) => {
  * element's start edge reaches the top instead; the polyfill has no
  * geometry beyond the scrollport. Threshold stays 0 (the edge crossing is
  * the whole signal).
+ *
+ * @param {{edge: string, percent: number}} range
+ *   The activation range (parseTimelineTrigger's `range`).
+ * @param {number} elementHeight
+ *   The element's height in pixels.
+ * @param {number} viewportHeight
+ *   The scrollport's height in pixels.
+ *
+ * @return {{threshold: number, rootMargin: string}}
+ *   The IntersectionObserver options.
  */
 export const observerOptions = (range, elementHeight, viewportHeight) => {
   const top = RANGE_TOP[range.edge](
@@ -242,6 +280,12 @@ export const observerOptions = (range, elementHeight, viewportHeight) => {
  * `play-once` is `play` here; the runtime stops observing after its first
  * activation, and every re-activation passes through `reset` first, so the
  * paused branch is the one that ever replays a finished entrance.
+ *
+ * @param {string} kind
+ *   The action name (one of ACTIONS).
+ *
+ * @return {Function|null}
+ *   The step over one Animation, or null for `none`.
  */
 export const actionFor = (kind) => {
   switch (kind) {
@@ -284,6 +328,14 @@ export const actionFor = (kind) => {
 /**
  * Whether the two effective marker values bind: both parse and name the
  * same trigger. Returns the binding (`{timeline, actions}`) or null.
+ *
+ * @param {string} timelineValue
+ *   The effective `timeline-trigger` marker value.
+ * @param {string} animationValue
+ *   The effective `animation-trigger` marker value.
+ *
+ * @return {{timeline: object, actions: object}|null}
+ *   The binding, or null.
  */
 export const bindingFor = (timelineValue, animationValue) => {
   const timeline = parseTimelineTrigger(timelineValue);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish\Drush\Commands;
 
+use Drupal\daedalus_layout\ComponentTransform\HostEntityWalker;
 use Drupal\daedalus_stylish\ShippedSync;
 use Drupal\daedalus_stylish\StyleStoreConvergenceInterface;
 use Drush\Commands\AutowireTrait;
@@ -28,12 +29,23 @@ abstract class ConvergenceCommandBase extends Command {
 
   use AutowireTrait;
 
-  public function __construct(
-    protected ShippedSync $shippedSync,
-    protected StyleStoreConvergenceInterface $convergence,
-  ) {
-    parent::__construct();
-  }
+  /**
+   * The shipped definitions sync, run before any in-place rewrite.
+   *
+   * A concrete command's constructor promotes the three properties: it is
+   * the autowiring surface, naming the convergence service it runs.
+   */
+  protected ShippedSync $shippedSync;
+
+  /**
+   * The convergence this command runs.
+   */
+  protected StyleStoreConvergenceInterface $convergence;
+
+  /**
+   * The host entity walker, NULL when daedalus_layout is not installed.
+   */
+  protected ?HostEntityWalker $hostEntityWalker = NULL;
 
   /**
    * The convergence's name, for the closing line.
@@ -53,12 +65,12 @@ abstract class ConvergenceCommandBase extends Command {
       return self::FAILURE;
     }
 
-    if (\Drupal::hasService('daedalus_layout.host_entity_walker')) {
+    if ($this->hostEntityWalker !== NULL) {
       $output->writeln('Walking host entities (all revisions and translations)...');
       $sandbox = [];
       $saved = 0;
       do {
-        $saved += \Drupal::service('daedalus_layout.host_entity_walker')->walk($sandbox);
+        $saved += $this->hostEntityWalker->walk($sandbox);
       } while (empty($sandbox['#finished']) || $sandbox['#finished'] < 1);
       $output->writeln(sprintf('  %d host revision(s) rewritten.', $saved));
     }

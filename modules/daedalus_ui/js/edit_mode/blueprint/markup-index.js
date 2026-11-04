@@ -49,6 +49,11 @@ let index = null;
 
 /**
  * Indexes one owning node's annotation under its key family.
+ *
+ * @param {?object} element
+ *   The node's `_element` annotation ({markup, fields}), or null.
+ * @param {string} baseKey
+ *   The node's selectable key ('entity:{uuid}', 'block:{uuid}').
  */
 const indexNode = (element, baseKey) => {
   if (element?.markup) {
@@ -68,6 +73,9 @@ const indexNode = (element, baseKey) => {
  * their annotation under the `container:` key family and recurse; region
  * nodes are transparent grouping (not addressable, never annotated);
  * everything else is a block node.
+ *
+ * @param {?Array<object>} nodes
+ *   The lean node list to walk.
  */
 const indexTree = (nodes) => {
   for (const node of Array.isArray(nodes) ? nodes : []) {
@@ -157,6 +165,9 @@ export const markupForKey = (key) => {
  *   ('.s-ab').
  *
  * @return {'element'|'root'|false|null}
+ *   'element' when the part rendered as its own element, 'root' when it
+ *   hoisted onto the key's root, false when the model positively says
+ *   absent, null when the model does not speak for the key.
  */
 export const partPlacement = (key, selector) =>
   markupPlacement(markupForKey(key), selector);
@@ -178,6 +189,7 @@ export const partPlacement = (key, selector) =>
  *   ('.s-ab').
  *
  * @return {?boolean}
+ *   True placed, false absent, null when the model does not speak.
  */
 export const partPresence = (key, selector) => {
   const placement = partPlacement(key, selector);
@@ -194,6 +206,7 @@ export const partPresence = (key, selector) => {
  *   The owning model key.
  *
  * @return {?string}
+ *   The root's tag name, or null.
  */
 export const rootTag = (key) => markupForKey(key)?.tag ?? null;
 
@@ -213,6 +226,7 @@ export const rootTag = (key) => markupForKey(key)?.tag ?? null;
  *   A container selectable key ('container:{uuid}').
  *
  * @return {?boolean}
+ *   True empty, false populated, null when the model does not speak.
  */
 export const containerEmpty = (key) => {
   const markup = markupForKey(key);
@@ -233,6 +247,7 @@ export const containerEmpty = (key) => {
  *   ('.s-ab').
  *
  * @return {?string}
+ *   The part's rendered tag name, or null.
  */
 export const partTag = (key, selector) => {
   const markup = markupForKey(key);
@@ -270,6 +285,7 @@ export const partTag = (key, selector) => {
  *   class ('.s-ab').
  *
  * @return {?string}
+ *   The matched form's label, or null.
  */
 export const partLabel = (key, selector) => {
   const markup = markupForKey(key);

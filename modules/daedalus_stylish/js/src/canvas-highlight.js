@@ -38,6 +38,23 @@ import { highlightRects } from './canvas-painters.js';
  * arithmetic and a box has no rect, only its hosts do, and tinting the
  * host's padding for the box's would lie about where the value lives.
  */
+
+/**
+ * Wires the highlight renderer to the leader source.
+ *
+ * @param {object} options
+ *   The wiring.
+ * @param {object} options.app
+ *   daedalus_ui's edit-mode app (its geometry tracker).
+ * @param {object} options.source
+ *   The leader state source (its canvas-highlight state).
+ * @param {object} [options.guide]
+ *   The style guide payload (its condition table).
+ *
+ * @return {?{container: Element}}
+ *   The renderer's container, or null without a #daedalus-root to float
+ *   in.
+ */
 export const createCanvasHighlight = ({ app, source, guide = {} }) => {
   // The posable states, for the structural reach a state-qualified rule
   // measures (computed-read.js resolveTargets).

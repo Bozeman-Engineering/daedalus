@@ -18,7 +18,8 @@ namespace Drupal\daedalus_blueprint_api\Render;
  * - entity:{entity_uuid} — a rendered entity root
  * - field:{entity_uuid}:{field_name} — a field of an entity (the root entity
  *   or a paragraph)
- * - container:{section_uuid} — a Layout Builder section (UUIDs via daedalus_layout).
+ * - container:{section_uuid} — a Layout Builder section (UUIDs via
+ *   daedalus_layout).
  *   The UI word is "container": arrangement is styling on the one element,
  *   grouping is nesting, so a section IS a container at every depth. Regions
  *   have no keys — a container's children are one ordered flow, and a
@@ -33,9 +34,10 @@ namespace Drupal\daedalus_blueprint_api\Render;
  *   both the server and the blueprint address inline-block content by
  *   component UUID
  * - {parent_key}::.{css_class} — a presentation sub-element: a piece of a
- *   selectable element's markup addressed by CSS class (Daedalus Stylish style-map
- *   keys and @scope roots). Sub-elements are stylable but never selectable —
- *   they never appear in data-selectable attributes or selection state
+ *   selectable element's markup addressed by CSS class (Daedalus Stylish
+ *   style-map keys and @scope roots). Sub-elements are stylable but never
+ *   selectable — they never appear in data-selectable attributes or selection
+ *   state
  *
  * This is the single producer of the format: both the attribution side
  * (daedalus_ui, daedalus_layout, daedalus_edit stamping wrappers) and the

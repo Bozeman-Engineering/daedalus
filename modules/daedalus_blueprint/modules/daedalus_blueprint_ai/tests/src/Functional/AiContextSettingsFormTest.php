@@ -32,6 +32,11 @@ final class AiContextSettingsFormTest extends BrowserTestBase {
   use DaedalusFixtureTrait;
 
   /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
    * The form's path.
    */
   private const PATH = '/admin/config/ai/daedalus-blueprint';

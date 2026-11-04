@@ -64,9 +64,12 @@ export const LEAVE = 'leave';
  * edit.
  *
  * @param {object} facts
- *   - editingKey: the store's live edit key, or null when no edit is open.
- *   - nextKeys: the ordered set the write would commit (duplicates are
- *     collapsed the way setSelectedSet collapses them).
+ *   The write's facts.
+ * @param {?string} facts.editingKey
+ *   The store's live edit key, or null when no edit is open.
+ * @param {string[]} facts.nextKeys
+ *   The ordered set the write would commit (duplicates are collapsed the
+ *   way setSelectedSet collapses them).
  *
  * @return {string}
  *   STAY or LEAVE.
@@ -89,6 +92,7 @@ export const leaveDecision = ({ editingKey = null, nextKeys = [] } = {}) => {
  *   The key to toggle.
  *
  * @return {string[]}
+ *   The toggled set, a new array.
  */
 export const toggledSet = (keys, key) => {
   if (!key) {
@@ -109,6 +113,7 @@ export const toggledSet = (keys, key) => {
  *   The key to remove.
  *
  * @return {string[]}
+ *   The set without the key, a new array.
  */
 export const removedSet = (keys, key) =>
   keys.includes(key) ? keys.filter((member) => member !== key) : [...keys];
@@ -142,6 +147,7 @@ const write = (nextKeys, action) => {
  * the empty set.
  *
  * @param {?string} key
+ *   The key to select, or null to empty the selection.
  *
  * @return {boolean}
  *   Whether the write landed (false when the open edit refused the leave).
@@ -152,6 +158,7 @@ export const selectKey = (key) => write(key ? [key] : [], setSelected(key));
  * Replaces the whole set (the slice's setSelectedSet).
  *
  * @param {string[]} keys
+ *   The set to commit.
  * @param {?string} primary
  *   The key to keep primary; the reducer defaults to the last key.
  *
@@ -165,25 +172,33 @@ export const selectKeys = (keys, primary = null) =>
  * Toggles a key's set membership (the slice's toggleSelected).
  *
  * @param {?string} key
+ *   The key to toggle.
  *
  * @return {boolean}
  *   Whether the write landed (a falsy key is the reducer's no-op, which
  *   lands).
  */
 export const toggleKey = (key) =>
-  write(toggledSet(store.getState().selection.selectedKeys, key), toggleSelected(key));
+  write(
+    toggledSet(store.getState().selection.selectedKeys, key),
+    toggleSelected(key),
+  );
 
 /**
  * Removes a key from the set (the slice's removeSelected).
  *
  * @param {?string} key
+ *   The key to remove.
  *
  * @return {boolean}
  *   Whether the write landed (a non-member is the reducer's no-op, which
  *   lands).
  */
 export const removeKey = (key) =>
-  write(removedSet(store.getState().selection.selectedKeys, key), removeSelected(key));
+  write(
+    removedSet(store.getState().selection.selectedKeys, key),
+    removeSelected(key),
+  );
 
 /**
  * Empties the selection (the slice's clearSelection, which also drops

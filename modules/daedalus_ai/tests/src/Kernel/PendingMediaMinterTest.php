@@ -9,6 +9,7 @@ use Drupal\daedalus_ai\PendingMedia\PendingMediaMinter;
 use Drupal\Core\Access\AccessException;
 use Drupal\file\Entity\File;
 use Drupal\media\MediaInterface;
+use Drupal\media\MediaTypeInterface;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -17,8 +18,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * Extends the gate/handler kernel base for its shared fixture (media:image
  * bundle, daedalus_ai.settings seed, gate helpers); the minter itself is
- * constructed directly from real container collaborators, mirroring its
- * service definition, because the daedalus_ai module's AI-stack dependencies are
+ * constructed directly from real container collaborators, mirroring its service
+ * definition, because the daedalus_ai module's AI-stack dependencies are
  * unrelated to minting (see the base class docblock).
  *
  * @group daedalus_ai
@@ -226,9 +227,9 @@ class PendingMediaMinterTest extends DaedalusAiKernelTestBase {
    *   The source field item (target_id + alt).
    */
   protected function sourceItem(MediaInterface $media) {
-    $source_field = $media->bundle->entity->getSource()
-      ->getSourceFieldDefinition($media->bundle->entity)
-      ->getName();
+    $type = $media->bundle->entity;
+    assert($type instanceof MediaTypeInterface);
+    $source_field = $type->getSource()->getSourceFieldDefinition($type)->getName();
     return $media->get($source_field)->first();
   }
 

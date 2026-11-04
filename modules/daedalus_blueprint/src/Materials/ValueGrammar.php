@@ -101,15 +101,14 @@ final class ValueGrammar {
   /**
    * Every reference a value carries, in source order.
    *
-   * A style value yields each var() reference (with or without a
-   * fallback) and each media, generate or file url() inside it, so a
-   * compound like "1px solid var(--color-x)" or "linear-gradient(…),
-   * url('media:…')" is checked reference by reference; a plain url()
-   * (a path or an external URL) is no reference and is not listed. A class list yields
-   * one reference per whitespace-separated token. An attribute value, a
-   * blueprint name or an animation name yields its one reference. Literals
-   * never appear here:
-   * the list is what must resolve for the value to be legal.
+   * A style value yields each var() reference (with or without a fallback) and
+   * each media, generate or file url() inside it, so a compound like "1px solid
+   * var(--color-x)" or "linear-gradient(…), url('media:…')" is checked
+   * reference by reference; a plain url() (a path or an external URL) is no
+   * reference and is not listed. A class list yields one reference per
+   * whitespace-separated token. An attribute value, a blueprint name or an
+   * animation name yields its one reference. Literals never appear here: the
+   * list is what must resolve for the value to be legal.
    *
    * @return \Drupal\daedalus_blueprint\Materials\ValueReference[]
    *   The references, never literal.

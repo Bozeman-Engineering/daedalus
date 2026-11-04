@@ -32,7 +32,7 @@ use Symfony\Component\Yaml\Yaml;
 /**
  * The contrib Anthropic provider plus the context spine's accelerators.
  *
- * Deprecated by design: every behaviour this subclass adds is proposed
+ * Deprecated by design: every behavior this subclass adds is proposed
  * upstream to ai_provider_anthropic and drupal/ai, and the plugin retires
  * when those land. Until then it is the spine's landing on the installed
  * base, reached through the same key, host and cache settings as the

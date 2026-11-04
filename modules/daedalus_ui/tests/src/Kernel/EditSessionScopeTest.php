@@ -14,10 +14,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests the edit-session scope derivation.
  *
  * The scope names the BroadcastChannel that pairs secondary windows
- * (daedalus_stylish's popped-out inspector, the responsive preview) with the editing
- * page, so its shape is a cross-module contract: entity uuid + langcode +
- * workspace, ':'-joined, with 'live' standing in when no workspace is
- * active (or the workspaces module is absent).
+ * (daedalus_stylish's popped-out inspector, the responsive preview) with the
+ * editing page, so its shape is a cross-module contract: entity uuid + langcode
+ * + workspace, ':'-joined, with 'live' standing in when no workspace is active
+ * (or the workspaces module is absent).
  */
 #[Group('daedalus_ui')]
 #[RunTestsInSeparateProcesses]

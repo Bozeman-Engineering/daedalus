@@ -94,6 +94,12 @@ import { createSlice } from '@reduxjs/toolkit';
  * either a bare key (selector implicitly null: a key change without an
  * explicit selector clears the hover facet) or {key, selector}. A
  * selector without a key is invalid and drops to null.
+ *
+ * @param {?(string|{key: ?string, selector: ?string})} payload
+ *   The hover payload.
+ *
+ * @return {{key: ?string, selector: ?string}}
+ *   The normalized pair.
  */
 const normalizeAddress = (payload) => {
   const { key = null, selector = null } =
@@ -125,6 +131,11 @@ const selectionSlice = createSlice({
      * — the tree part rows' writer: hovering a part row lights the part
      * without lighting the owner element's hover outline. Pass
      * {key, selector} or null to clear.
+     *
+     * @param {object} state
+     *   The slice state.
+     * @param {{payload: *}} action
+     *   The action, its payload {key, selector} or null.
      */
     setHoverSelector: (state, action) => {
       const { key, selector } = normalizeAddress(action.payload);
@@ -135,6 +146,11 @@ const selectionSlice = createSlice({
      * payload is a bare key; any selection write clears the subject facet
      * and the write address (each is only ever set explicitly, after its
      * selection).
+     *
+     * @param {object} state
+     *   The slice state.
+     * @param {{payload: *}} action
+     *   The action, its payload the key or null.
      */
     setSelected: (state, action) => {
       const key = action.payload ?? null;
@@ -151,11 +167,19 @@ const selectionSlice = createSlice({
      * ADDRESS, setAddress) and drops to null, as does a facet without a
      * single selection to belong to. A facet write clears the address:
      * the address was picked for the subject that just changed.
+     *
+     * @param {object} state
+     *   The slice state.
+     * @param {{payload: *}} action
+     *   The action, its payload {key, selector} or null.
      */
     setTarget: (state, action) => {
       const { key = null, selector = null } = action.payload ?? {};
       state.target =
-        key && key === state.selectedKey && selector && state.selectedKeys.length === 1
+        key &&
+        key === state.selectedKey &&
+        selector &&
+        state.selectedKeys.length === 1
           ? { key, selector }
           : null;
       state.address = null;
@@ -169,6 +193,11 @@ const selectionSlice = createSlice({
      * drops to null; ancestry is the facade's check (the slice holds no
      * tree). It leaves the subject facet alone: a chip pick changes only
      * where the write lands.
+     *
+     * @param {object} state
+     *   The slice state.
+     * @param {{payload: *}} action
+     *   The action, its payload {key, selector} or null.
      */
     setAddress: (state, action) => {
       const { key = null, selector = null } = action.payload ?? {};
@@ -182,6 +211,11 @@ const selectionSlice = createSlice({
      * a panel row). Adding makes the key the primary; removing hands the
      * primary to the most recently selected survivor. Multi-select is
      * element-only, so any toggle clears the facet and the address.
+     *
+     * @param {object} state
+     *   The slice state.
+     * @param {{payload: *}} action
+     *   The action, its payload the key.
      */
     toggleSelected: (state, action) => {
       const key = action.payload;
@@ -206,6 +240,11 @@ const selectionSlice = createSlice({
     /**
      * Removes a key from the set if present (chip dismiss, stale-key
      * pruning) — a no-op when it is not a member.
+     *
+     * @param {object} state
+     *   The slice state.
+     * @param {{payload: *}} action
+     *   The action, its payload the key.
      */
     removeSelected: (state, action) => {
       const key = action.payload;
@@ -226,6 +265,11 @@ const selectionSlice = createSlice({
      * Replaces the whole set (panel Shift-range). The primary defaults to
      * the last key; pass primary explicitly to keep the clicked row primary.
      * A set gesture is element-only: it clears the facet and the address.
+     *
+     * @param {object} state
+     *   The slice state.
+     * @param {{payload: *}} action
+     *   The action, its payload {keys, primary}.
      */
     setSelectedSet: (state, action) => {
       const { keys = [], primary = null } = action.payload ?? {};
@@ -243,6 +287,11 @@ const selectionSlice = createSlice({
      * Records the key the live edit lands on (null when the edit ended).
      * Dispatched only by the edit session's editChanged report — the
      * engine's setter is the one origin, so this field never predicts.
+     *
+     * @param {object} state
+     *   The slice state.
+     * @param {{payload: *}} action
+     *   The action, its payload the key or null.
      */
     setEditingKey: (state, action) => {
       state.editingKey = action.payload ?? null;
@@ -250,6 +299,11 @@ const selectionSlice = createSlice({
     /**
      * Arms or disarms the element picker. Written by the picker toggle
      * (selection/picker.js) and the Selector grammar's disarm rungs.
+     *
+     * @param {object} state
+     *   The slice state.
+     * @param {{payload: *}} action
+     *   The action, its payload the armed flag.
      */
     setPickerArmed: (state, action) => {
       state.pickerArmed = Boolean(action.payload);
@@ -261,6 +315,9 @@ const selectionSlice = createSlice({
      * clearKeys) before this reducer runs, and the engine's own report
      * retires the key; a clear the door refused never reaches here. The
      * reducer never ends an edit itself.
+     *
+     * @param {object} state
+     *   The slice state.
      */
     clearSelection: (state) => {
       state.hoverKey = null;

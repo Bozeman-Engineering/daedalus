@@ -6,6 +6,7 @@ namespace Drupal\Tests\daedalus_ui\Functional;
 
 use Drupal\block_content\Entity\BlockContentType;
 use Drupal\daedalus_ui\Controller\BundleRoster;
+use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\node\Entity\NodeType;
 use Drupal\Tests\BrowserTestBase;
 use PHPUnit\Framework\Attributes\Group;
@@ -107,7 +108,9 @@ final class BundleRosterTest extends BrowserTestBase {
     ])->save();
     $displays = $this->container->get('entity_display.repository');
     foreach (['built', 'owned'] as $type) {
-      $displays->getViewDisplay('node', $type)->enableLayoutBuilder()->setOverridable()->save();
+      $display = $displays->getViewDisplay('node', $type);
+      assert($display instanceof LayoutBuilderEntityViewDisplay);
+      $display->enableLayoutBuilder()->setOverridable()->save();
     }
     $this->container->get('daedalus_stylish.field_manager')->enable('node', 'built');
   }

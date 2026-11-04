@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_blueprint_library\Kernel;
 
 use Drupal\Component\Serialization\Yaml;
+use Drupal\Core\Entity\EntityStorageException;
 use Drupal\Core\Test\TestDatabase;
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
@@ -29,7 +30,9 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
- * Tests the blueprint ship lane: a saved blueprint to a module, with its variants.
+ * Tests the blueprint ship lane.
+ *
+ * A saved blueprint to a module, with its variants.
  *
  * The lock worth having is the round trip: a ship writes the blueprint
  * file (discovery's envelope, built from the blueprint host's tree and
@@ -240,7 +243,9 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * Refusals: the module, the id, a file under the id, an empty document, the face.
+   * Refusals.
+   *
+   * The module, the id, a file under the id, an empty document, the face.
    */
   public function testRefusals(): void {
     $blueprint = $this->createWearing('Card', 'card');
@@ -275,7 +280,11 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
 
     // An empty document: a blueprint file holds at least one root.
     try {
-      $this->shipper()->plan($this->createBlueprint(['label' => 'Empty', 'machine_name' => 'empty', 'layout_builder__layout' => []]), self::TARGET);
+      $this->shipper()->plan($this->createBlueprint([
+        'label' => 'Empty',
+        'machine_name' => 'empty',
+        'layout_builder__layout' => [],
+      ]), self::TARGET);
       $this->fail('An empty document must refuse.');
     }
     catch (BlueprintShipException $e) {
@@ -357,7 +366,11 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
     // The command's dry run prints the report and the file as it would be
     // written, and writes nothing.
     $tester = $this->tester();
-    $this->assertSame(Command::SUCCESS, $tester->execute(['blueprint' => 'call_to_action', 'module' => self::TARGET, '--dry-run' => TRUE]));
+    $this->assertSame(Command::SUCCESS, $tester->execute([
+      'blueprint' => 'call_to_action',
+      'module' => self::TARGET,
+      '--dry-run' => TRUE,
+    ]));
     $display = $tester->getDisplay();
     $this->assertStringContainsString(self::TARGET . ': blueprint call_to_action created', $display);
     $this->assertStringContainsString('content blueprint "Call to Action" (' . $blueprint->id() . ') graduates', $display);
@@ -416,7 +429,11 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
     // the other looks (axes replace, so one look per element). The rival's
     // look cannot be applied here (the apply gate), so it is worn through
     // the map directly: the roster reads wearings, not gates.
-    $blueprint = $this->createBlueprintFromTree(['label' => 'Card', 'machine_name' => 'card', 'description' => 'The Card blueprint.'], [
+    $blueprint = $this->createBlueprintFromTree([
+      'label' => 'Card',
+      'machine_name' => 'card',
+      'description' => 'The Card blueprint.',
+    ], [
       $this->container(['card_right'], [
         $this->container(['free_look']),
         $this->container(['elsewhere_look']),
@@ -527,7 +544,7 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
       $this->createWearing('Card again', 'card');
       $this->fail('A content blueprint under a shipped id must refuse.');
     }
-    catch (\Drupal\Core\Entity\EntityStorageException $e) {
+    catch (EntityStorageException $e) {
       $this->assertStringContainsString('already taken', $e->getPrevious()->getMessage());
     }
   }
@@ -688,7 +705,11 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
   public function testCommand(): void {
     $this->createWearing('Card', 'card');
     $tester = $this->tester();
-    $this->assertSame(Command::SUCCESS, $tester->execute(['blueprint' => 'card', 'module' => self::TARGET, '--label' => 'Card v2'], ['interactive' => FALSE]));
+    $this->assertSame(Command::SUCCESS, $tester->execute([
+      'blueprint' => 'card',
+      'module' => self::TARGET,
+      '--label' => 'Card v2',
+    ], ['interactive' => FALSE]));
     $display = $tester->getDisplay();
     $this->assertStringContainsString(self::TARGET . ': blueprint card created', $display);
     $this->assertStringContainsString(self::TARGET . ': icon card none', $display);

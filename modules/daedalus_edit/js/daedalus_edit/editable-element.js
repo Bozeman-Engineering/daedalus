@@ -89,6 +89,7 @@ export class EditableElement {
    *   The editor's readProperties() over this item.
    *
    * @return {Object<string, *>}
+   *   The committed values, keyed by property name.
    */
   committedValues(names, surface) {
     return surface();
@@ -99,6 +100,7 @@ export class EditableElement {
    * the mutation-failure display; null for an unaddressed render.
    *
    * @return {?string}
+   *   The selectable key, or null.
    */
   get selectableKey() {
     return (
@@ -111,7 +113,7 @@ export class EditableElement {
   /**
    * Create from form item.
    *
-   * @param element
+   * @param {Element} element
    *   An element within a form item wrapper.
    *
    * @return {EditableElement}
@@ -140,7 +142,9 @@ export class EditableElement {
       );
     }
 
-    const editableElement = new EditableElement(pageElement.dataset.daedalusEditId);
+    const editableElement = new EditableElement(
+      pageElement.dataset.daedalusEditId,
+    );
     editableElement.setWidget();
     return editableElement;
   }
@@ -151,7 +155,8 @@ export class EditableElement {
    * Once the form is loaded the widget needs to be set on the EditableElement.
    */
   setWidget() {
-    this.info.widget = this.getFormItemWrapper().dataset.daedalusEditFormItemWidget;
+    this.info.widget =
+      this.getFormItemWrapper().dataset.daedalusEditFormItemWidget;
     this.plugin = Drupal.Daedalus.Edit.Editors.getPlugin(this);
   }
 
@@ -189,7 +194,8 @@ export class EditableElement {
    */
   handleIsWrapper() {
     const wrapper = this.getFormItemWrapper();
-    const elementToUseAsHandle = wrapper.dataset.daedalusEditHandle ?? 'form_item';
+    const elementToUseAsHandle =
+      wrapper.dataset.daedalusEditHandle ?? 'form_item';
     // @todo This doesn't account for getFormItemHandle() gracefully falling back to the wrapper.
     return elementToUseAsHandle === 'wrapper';
   }
@@ -285,25 +291,26 @@ export class EditableElement {
       return this.getFormItemWrapper();
     }
 
-    try {
-      return document
-        .querySelector(
-          `[data-daedalus-edit-form-item-id="${this.getFormItemId()}"]`,
-        )
-        .closest('.daedalus-edit-form-item');
-    } catch (e) {
-      console.warn(
-        `The ${this.info.fieldName} field is configured to use the form item as a handle, but no form item markup was found. Try configuring ${this.info.fieldName} to use the wrapper as a handle instead.`,
-      );
-      const wrapper = this.getFormItemWrapper();
-      if (wrapper) {
-        console.info(
-          `Falling back to the wrapper handle for ${this.info.fieldName}.`,
-        );
-        return wrapper;
-      }
-      throw e;
+    const formItem = document
+      .querySelector(
+        `[data-daedalus-edit-form-item-id="${this.getFormItemId()}"]`,
+      )
+      ?.closest('.daedalus-edit-form-item');
+    if (formItem) {
+      return formItem;
     }
+    // A misconfigured handle: the field asked for the form item but its
+    // markup is missing. The wrapper stands in when it exists, and the
+    // misconfiguration surfaces either way.
+    const error = new Error(
+      `The ${this.info.fieldName} field is configured to use the form item as a handle, but no form item markup was found. Try configuring ${this.info.fieldName} to use the wrapper as a handle instead.`,
+    );
+    const wrapper = this.getFormItemWrapper();
+    if (wrapper) {
+      Drupal.throwError(error);
+      return wrapper;
+    }
+    throw error;
   }
 
   /**
@@ -319,7 +326,7 @@ export class EditableElement {
   /**
    * Parse markup ID.
    *
-   * @param id
+   * @param {string} id
    *   The Entity Plus ID on the rendered field value.
    *
    * @return {{elementId, langcode: *, fieldName: *, mainProperty: *, delta: *, entityTypeId: *, entityId: *, widget: *, viewMode: *, fieldType: *}}

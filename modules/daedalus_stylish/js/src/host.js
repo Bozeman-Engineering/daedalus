@@ -29,6 +29,7 @@ const PopOutIcon = () => (
  * control (Inspector's `rail` prop; the placeholder's own cluster).
  *
  * @param {object} props
+ *   The host's props.
  * @param {object} props.source
  *   The leader state source.
  * @param {?object} props.popout
@@ -82,7 +83,9 @@ export const InspectorHost = ({
     return (
       <div className="daedalus-stylish-inspector daedalus-stylish-inspector--popped-out">
         <div className="daedalus-stylish-inspector__header daedalus-ui-panel__header">
-          <h3 className="daedalus-stylish-inspector__title">{Drupal.t('Styles')}</h3>
+          <h3 className="daedalus-stylish-inspector__title">
+            {Drupal.t('Styles')}
+          </h3>
           <div
             className="daedalus-stylish-inspector__actions"
             data-daedalus-ui-conceal="clean"

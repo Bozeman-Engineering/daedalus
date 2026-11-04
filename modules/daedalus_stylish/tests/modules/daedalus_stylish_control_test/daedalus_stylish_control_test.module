@@ -30,11 +30,11 @@ function daedalus_stylish_control_test_page_builder_declarations_alter(array &$d
     $declarations['instances'][$pattern] = PageBuilderDeclarations::merge($declarations['instances'][$pattern] ?? [], $declaration);
   }
   // The injected site declaration IS the site under test: it replaces the
-  // layered lane (daedalus_stylish ships a module-level site: with eleven token scales
-  // and the base tag vocabulary) rather than merging over it, so grammar
-  // tests control the whole vocabulary, including "no scales at all".
-  // Layering across providers is the spine's contract, covered by
-  // daedalus_ui's declaration tests.
+  // layered lane (daedalus_stylish ships a module-level site: with eleven token
+  // scales and the base tag vocabulary) rather than merging over it, so grammar
+  // tests control the whole vocabulary, including "no scales at all". Layering
+  // across providers is the spine's contract, covered by daedalus_ui's
+  // declaration tests.
   $site = \Drupal::state()->get('daedalus_stylish_control_test.site');
   if ($site !== NULL) {
     $declarations[PageBuilderDeclarations::SITE] = $site;

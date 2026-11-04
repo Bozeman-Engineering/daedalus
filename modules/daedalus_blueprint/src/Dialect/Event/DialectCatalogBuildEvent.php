@@ -14,36 +14,31 @@ use Drupal\daedalus_blueprint\Materials\VocabularyRosterInterface;
 /**
  * Collects the styling DECLARATIONS half of the site's dialect vocabulary.
  *
- * The catalog builder derives everything the spine itself owns (block
- * types with their field attribute contracts, the container layout id)
- * and reads the site's MATERIALS from the materials roster (tokens,
- * variants, blueprints, animations, fonts: MaterialsRosterBuilder over
- * the tagged
- * providers), then dispatches this event so the styling layer (daedalus_stylish,
- * or whatever declares conditions and axes on a site) can contribute the
- * declarations no material record carries: each variant scope's axis
- * attribute order with each axis's description and the properties it
- * owns, the condition vocabulary with its CSS wrappers, the selector
- * rosters per owner (the declared
- * part classes and the addressable base tags a relative selector's
- * compounds may land on under a container, a block type or any other
- * block), the instance namespaces, the vocabulary rosters per element
- * kind with their value spaces (the site-wide bindings and the per-address
- * deviations) and the prose that teaches them, the birth defaults each
- * placement scope stamps and the base tags the active skin dresses.
- * The site's group vocabulary (the filter categories blueprints and
- * block types are filed under on the surfaces that offer them) rides
- * the same event: its declaration lives in a family the spine cannot
- * read, so the UI layer that parses it contributes the groups here. The
- * render cards (what each element renders as: dialect writes paired with
- * the HTML they render as, or the kind shells an undeclared type renders
- * through) ride it too, derived from the markup declarations by the
- * layer that reads them.
- * Nothing here names a material by spelling: a
- * material reaches the catalog through the roster or not at all (a birth
- * default names a variant by id, which the roster resolves), so the
- * catalog, the cached prompt, the schema and the validators never
- * disagree about what is published.
+ * The catalog builder derives everything the spine itself owns (block types
+ * with their field attribute contracts, the container layout id) and reads the
+ * site's MATERIALS from the materials roster (tokens, variants, blueprints,
+ * animations, fonts: MaterialsRosterBuilder over the tagged providers), then
+ * dispatches this event so the styling layer (daedalus_stylish, or whatever
+ * declares conditions and axes on a site) can contribute the declarations no
+ * material record carries: each variant scope's axis attribute order with each
+ * axis's description and the properties it owns, the condition vocabulary with
+ * its CSS wrappers, the selector rosters per owner (the declared part classes
+ * and the addressable base tags a relative selector's compounds may land on
+ * under a container, a block type or any other block), the instance namespaces,
+ * the vocabulary rosters per element kind with their value spaces (the
+ * site-wide bindings and the per-address deviations) and the prose that teaches
+ * them, the birth defaults each placement scope stamps and the base tags the
+ * active skin dresses. The site's group vocabulary (the filter categories
+ * blueprints and block types are filed under on the surfaces that offer them)
+ * rides the same event: its declaration lives in a family the spine cannot
+ * read, so the UI layer that parses it contributes the groups here. The render
+ * cards (what each element renders as: dialect writes paired with the HTML they
+ * render as, or the kind shells an undeclared type renders through) ride it
+ * too, derived from the markup declarations by the layer that reads them.
+ * Nothing here names a material by spelling: a material reaches the catalog
+ * through the roster or not at all (a birth default names a variant by id,
+ * which the roster resolves), so the catalog, the cached prompt, the schema and
+ * the validators never disagree about what is published.
  */
 final class DialectCatalogBuildEvent extends Event {
 
@@ -177,6 +172,7 @@ final class DialectCatalogBuildEvent extends Event {
    * no block plugin discovery through the catalog build.
    *
    * @return string[]
+   *   The placeable inline block bundle names.
    */
   public function getPlaceableBundles(): array {
     return $this->placeableBundles;
@@ -247,7 +243,8 @@ final class DialectCatalogBuildEvent extends Event {
    * teach what the palette's placements wear.
    *
    * @param string $scope
-   *   The placement scope ("layout:daedalus_stylish_container", "block_type:text").
+   *   The placement scope ("layout:daedalus_stylish_container",
+   *   "block_type:text").
    * @param array<string, string> $defaults
    *   Axis attribute => variant id.
    */

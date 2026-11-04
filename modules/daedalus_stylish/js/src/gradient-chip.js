@@ -28,6 +28,7 @@ import { gradientTokenOf } from './materials.js';
  * widget over the handlers, so it renders in the satellite too.
  *
  * @param {object} options
+ *   The hook's options.
  * @param {object} options.guide
  *   The style guide payload.
  * @param {object} options.materials
@@ -129,7 +130,9 @@ export const useGradientChip = ({
  * and the advanced media row's opener face.
  *
  * @param {object} props
+ *   The glyph's props.
  * @param {?string} [props.className]
+ *   A class for the svg element, or null for none.
  */
 export const GradientGlyph = ({ className = null }) => (
   <svg

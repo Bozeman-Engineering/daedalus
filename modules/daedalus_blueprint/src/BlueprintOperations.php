@@ -160,7 +160,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * @param \Drupal\daedalus_blueprint\LayoutBuilder\OpaqueDataMerger $opaqueDataMerger
    *   The opaque data merger, used to patch managed configuration keys.
    * @param \Drupal\daedalus_blueprint\LayoutBuilder\PluginBlockConfiguration $pluginBlockConfiguration
-   *   A plugin block's property bag, schema and validation from its config schema.
+   *   A plugin block's property bag, schema and validation from its config
+   *   schema.
    * @param \Drupal\Core\Block\BlockManagerInterface $blockManager
    *   The block plugin manager, used to create plugin block components.
    * @param \Symfony\Contracts\EventDispatcher\EventDispatcherInterface $eventDispatcher
@@ -1784,7 +1785,7 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   }
 
   /**
-   * Removes a slot section the last element just left, if that is what happened.
+   * Removes a slot section the last element just left, if that happened.
    *
    * The last element leaving a slot section empties the slot: the section
    * goes with it, so the slot shows its default (or its stand-in) again
@@ -2049,8 +2050,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       return $failure;
     }
 
-    // A component's depth is its section's depth, read BEFORE mutating so
-    // both facts come off the same tree. A section without an daedalus_layout UUID
+    // A component's depth is its section's depth, read BEFORE mutating so both
+    // facts come off the same tree. A section without an daedalus_layout UUID
     // cannot be nested (nesting needs daedalus_layout), so it reads as root.
     $was_nested = $source_section_uuid !== NULL && $this->elementLocator->isNestedSection($host, $source_section_uuid);
     $is_nested = $dest_section_uuid !== NULL && $this->elementLocator->isNestedSection($host, $dest_section_uuid);
@@ -2493,11 +2494,11 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   /**
    * Whether an anchor lives inside the element being moved.
    *
-   * Placing an element relative to its own nested content would insert it
-   * into itself. Detected through the daedalus_layout tree index: a descendant's
+   * Placing an element relative to its own nested content would insert it into
+   * itself. Detected through the daedalus_layout tree index: a descendant's
    * tree path carries every ancestor's UUID (container components and their
-   * embedded sections share one UUID, so the check is uniform for blocks
-   * and sections).
+   * embedded sections share one UUID, so the check is uniform for blocks and
+   * sections).
    *
    * @param object|null $storage
    *   The shared section storage wrapper for this operation.
@@ -2513,7 +2514,8 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    */
   protected function anchorInsideElement(?object $storage, string $element_uuid, string $anchor_uuid, ElementContext $element_context): bool {
     if ($storage === NULL || !method_exists($storage, 'getPath')) {
-      // Without daedalus_layout there is no nesting, so containment is impossible.
+      // Without daedalus_layout there is no nesting, so containment is
+      // impossible.
       return FALSE;
     }
     $anchor_path = $storage->getPath($anchor_uuid) ?? [];
@@ -3071,8 +3073,9 @@ class BlueprintOperations implements BlueprintOperationsInterface {
    * its index and flushes every embedded section list deepest-first,
    * writing Section::toArray() back through the container components.
    *
-   * Safe to call unconditionally: when sectionStorage is NULL (no daedalus_layout)
-   * this is a no-op, and the flush is idempotent for unmutated wrappers.
+   * Safe to call unconditionally: when sectionStorage is NULL (no
+   * daedalus_layout) this is a no-op, and the flush is idempotent for unmutated
+   * wrappers.
    *
    * @param \Drupal\daedalus_blueprint\ElementContext $context
    *   The element context from the locate operation.
@@ -3630,10 +3633,11 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       return BlueprintResult::structuralFailure($sorted['errors']);
     }
 
-    // Palette enrichment (ported from daedalus_layout's Dropzones): sample content
-    // for fields the caller didn't provide, and a view mode that actually
-    // exists for the block bundle (InlineBlock's 'full' default usually
-    // doesn't). Runs before field validation so required fields are filled.
+    // Palette enrichment (ported from daedalus_layout's Dropzones): sample
+    // content for fields the caller didn't provide, and a view mode that
+    // actually exists for the block bundle (InlineBlock's 'full' default
+    // usually doesn't). Runs before field validation so required fields are
+    // filled.
     if ($populate === 'sample') {
       $this->populateSampleValues($block, array_keys($sorted['fields']));
       $view_mode = $this->resolveExistingViewMode($block, $view_mode);
@@ -3796,9 +3800,9 @@ class BlueprintOperations implements BlueprintOperationsInterface {
       ]);
     }
 
-    // Restriction enforcement at the spine, same answer as inline blocks.
-    // This also refuses plugins hidden from Layout Builder placement
-    // entirely (core's non-functional blocks, the daedalus_layout nested-section
+    // Restriction enforcement at the spine, same answer as inline blocks. This
+    // also refuses plugins hidden from Layout Builder placement entirely
+    // (core's non-functional blocks, the daedalus_layout nested-section
     // container — sections are placed via the section grammar, never as
     // blocks).
     $region = $location['region'] ?? 'content';
@@ -4339,7 +4343,9 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   }
 
   /**
-   * What add_element requires: insert on a layout destination, or content on a parent.
+   * What add_element requires.
+   *
+   * Insert on a layout destination, or content on a parent.
    *
    * The placement grammar names a layout destination (insert on the
    * container the location resolves to) or a paragraph slot: inside the

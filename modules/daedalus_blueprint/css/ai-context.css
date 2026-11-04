@@ -150,9 +150,9 @@
 
 .daedalus-ai-context-form__kind {
   margin: 0;
+  padding: 0;
   border: 0;
   border-top: 1px solid var(--daedalus-lines, #d2d2d7);
-  padding: 0;
 }
 
 .daedalus-ai-context-form__kind > summary {
@@ -172,10 +172,10 @@
 /* A scale's heading (tokens) or the kind's invisible one. */
 .daedalus-ai-context-form__boxes > legend {
   padding: 0.25rem 0;
+  text-transform: capitalize;
   color: var(--daedalus-text-muted, #6e6e73);
   font-size: var(--daedalus-font-size-small, 0.8125rem);
   font-weight: 600;
-  text-transform: capitalize;
 }
 
 .daedalus-ai-context-form__boxes .form-type-checkbox,

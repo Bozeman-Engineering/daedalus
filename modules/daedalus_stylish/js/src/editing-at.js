@@ -57,7 +57,10 @@
  * variant's own document. There is no write-target layer flip anymore.
  */
 
-import { IS, parseSelector } from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
+import {
+  IS,
+  parseSelector,
+} from '../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
 import { stopsFromConditions, stopPosePx } from './canvas-stops.js';
 import {
   DELIMITER,
@@ -107,6 +110,12 @@ const FEATURES = {
  * The preference a condition's wrapper tests ({feature, value}), derived
  * by the clause grammar, or null when its wrapper tests no single user
  * preference.
+ *
+ * @param {?{wrapper?: string}} definition
+ *   A condition definition (guide.conditions[name]).
+ *
+ * @return {?{feature: string, value: string}}
+ *   The preference, or null.
  */
 const preferenceOf = (definition) =>
   typeof definition?.wrapper === 'string'
@@ -115,6 +124,14 @@ const preferenceOf = (definition) =>
 
 /**
  * Whether a band {min?, max?} holds at a width (inclusive edges).
+ *
+ * @param {{min?: number, max?: number}} band
+ *   The band.
+ * @param {number} width
+ *   A canvas width, px.
+ *
+ * @return {boolean}
+ *   Whether the width is inside the band.
  */
 const bandHolds = (band, width) =>
   width >= (band.min ?? 0) && (band.max === undefined || width <= band.max);
@@ -164,7 +181,9 @@ export const literalClauses = (styleMap, key, conditions) => {
         values === null ||
         typeof values !== 'object' ||
         Array.isArray(values) ||
-        !Object.values(values).some((value) => value !== null && value !== undefined)
+        !Object.values(values).some(
+          (value) => value !== null && value !== undefined,
+        )
       ) {
         return;
       }
@@ -181,6 +200,12 @@ export const literalClauses = (styleMap, key, conditions) => {
 /**
  * The state-axis condition names (the force-state vocabulary), in table
  * order.
+ *
+ * @param {?Object} conditions
+ *   guide.conditions.
+ *
+ * @return {string[]}
+ *   The names.
  */
 export const stateConditionNames = (conditions) =>
   Object.entries(conditions ?? {})
@@ -193,6 +218,12 @@ export const stateConditionNames = (conditions) =>
  * snapshot (the full width the unposed stage renders at). Null only when
  * neither exists — a page without the canvas facade, a satellite before
  * its first snapshot — where the width axis honestly contributes nothing.
+ *
+ * @param {?{width?: ?number, measured?: ?number}} vector
+ *   The canvas state vector snapshot.
+ *
+ * @return {?number}
+ *   The width, px, or null.
  */
 export const effectiveWidth = (vector) =>
   vector?.width ?? vector?.measured ?? null;
@@ -241,6 +272,18 @@ export const widthConditionFor = (width, conditions, literals = []) => {
  * value the forced value makes true, else a literal in use testing the
  * same (the later in map order, as for widths). The FEATURE decides, not
  * a declared axis name: the derivation and the pose read one fact.
+ *
+ * @param {string} axis
+ *   'scheme' | 'motion'.
+ * @param {string} value
+ *   The axis's posed vector value.
+ * @param {?Object} conditions
+ *   guide.conditions.
+ * @param {Array<{preference: ?object, text: string}>} literals
+ *   The literal clauses in use (literalClauses).
+ *
+ * @return {?string}
+ *   The condition name or literal text, or null.
  */
 const preferenceConditionFor = (axis, value, conditions, literals) => {
   const forced = FORCED[axis][value] ?? null;
@@ -265,6 +308,16 @@ const preferenceConditionFor = (axis, value, conditions, literals) => {
  * condition name as the force state spells it, else a posable literal
  * pseudo-class in use whose stamp word the force state carries
  * (`checked` for `:checked`, the word the printed dual matches).
+ *
+ * @param {?string} forceState
+ *   The selection-scoped force state.
+ * @param {?Object} conditions
+ *   guide.conditions.
+ * @param {Array<object>} literals
+ *   The literal clauses in use (literalClauses).
+ *
+ * @return {?string}
+ *   The condition name or literal text, or null.
  */
 const stateConditionFor = (forceState, conditions, literals) => {
   if (!forceState) {
@@ -287,6 +340,18 @@ const stateConditionFor = (forceState, conditions, literals) => {
  * order. Empty when the pose activates nothing — the default condition.
  * The four canvas axes derive the parts, over the table and the literal
  * clauses in use on the selected element's rows.
+ *
+ * @param {?Object} vector
+ *   The canvas state vector snapshot.
+ * @param {?string} forceState
+ *   The selection-scoped force state.
+ * @param {?Object} conditions
+ *   guide.conditions.
+ * @param {Array<object>} [literals]
+ *   The literal clauses in use (literalClauses).
+ *
+ * @return {string[]}
+ *   The parts.
  */
 export const vectorParts = (vector, forceState, conditions, literals = []) => {
   const pose = { ...DEFAULT_VECTOR, ...(vector ?? {}) };
@@ -315,7 +380,12 @@ export const vectorParts = (vector, forceState, conditions, literals = []) => {
  *   The literal clauses in use on the selected element's rows
  *   (literalClauses); none when nothing is selected.
  */
-export const vectorCondition = (vector, forceState, conditions, literals = []) => {
+export const vectorCondition = (
+  vector,
+  forceState,
+  conditions,
+  literals = [],
+) => {
   const parts = vectorParts(vector, forceState, conditions, literals);
   return parts.length ? parts.join(DELIMITER) : 'default';
 };
@@ -338,7 +408,13 @@ export const vectorCondition = (vector, forceState, conditions, literals = []) =
  * emulates, `:visited`, an unknown word — leave their axis at default
  * and mark the pose incomplete.
  *
+ * @param {string} condition
+ *   A stored condition (a compound key).
+ * @param {?Object} conditions
+ *   guide.conditions.
+ *
  * @return {{vector: Object, state: ?string, complete: boolean}}
+ *   The vector to pose, the force state, and whether every clause posed.
  */
 export const conditionPose = (condition, conditions) => {
   const pose = { vector: { ...DEFAULT_VECTOR }, state: null, complete: true };
@@ -392,6 +468,14 @@ export const conditionPose = (condition, conditions) => {
  * cannot pose (a site-provided @media width condition, the popout
  * viewport's business) is excluded: offering it would promise a pose the
  * select cannot deliver.
+ *
+ * @param {string} axis
+ *   'state' | 'width' | 'scheme' | 'motion'.
+ * @param {?Object} conditions
+ *   guide.conditions.
+ *
+ * @return {string[]}
+ *   The names.
  */
 export const poseableAxisConditions = (axis, conditions) =>
   Object.entries(conditions ?? {})
@@ -408,6 +492,12 @@ export const poseableAxisConditions = (axis, conditions) =>
  * reference's conditions beside the own entry's). 'default' and the
  * variants reference list are not conditioned styles; empty blocks carry
  * nothing.
+ *
+ * @param {?object} entry
+ *   A condition-keyed entry (deliveredEntry).
+ *
+ * @return {string[]}
+ *   The condition keys carrying styles.
  */
 export const styledConditions = (entry) =>
   Object.entries(entry ?? {})
@@ -451,7 +541,9 @@ export const styledConditions = (entry) =>
  */
 export const stateQualifiers = (selector, conditions) => {
   const parsed =
-    typeof selector === 'string' && selector !== '' ? parseSelector(selector) : null;
+    typeof selector === 'string' && selector !== ''
+      ? parseSelector(selector)
+      : null;
   if (parsed === null) {
     return [];
   }
@@ -490,6 +582,7 @@ export const stateQualifiers = (selector, conditions) => {
  *   guide.conditions: name -> {label, wrapper, axis}.
  *
  * @return {string[]}
+ *   The names, in table order.
  */
 export const qualifierStates = (selector, conditions) => {
   const names = stateQualifiers(selector, conditions).map(({ state }) => state);

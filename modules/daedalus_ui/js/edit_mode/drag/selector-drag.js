@@ -184,6 +184,14 @@ const syncArming = () => {
  * server's descendant-anchor guard). Tree-row targets carry the anchor's
  * CANVAS element (the row itself is never inside the dragged element), so
  * the containment check tests the element the location actually means.
+ *
+ * @param {Object} target
+ *   The resolved drop target.
+ * @param {Object} data
+ *   The drag data: the moved element's uuid and canvas element.
+ *
+ * @return {boolean}
+ *   Whether the move can mean the target.
  */
 const acceptsTarget = (target, data) =>
   target.location.anchor !== data.uuid &&

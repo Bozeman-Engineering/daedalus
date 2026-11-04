@@ -58,8 +58,7 @@
       );
     }
     const page = window.location.pathname + window.location.search;
-    const query =
-      `scope=${encodeURIComponent(scope)}&url=${encodeURIComponent(page)}`;
+    const query = `scope=${encodeURIComponent(scope)}&url=${encodeURIComponent(page)}`;
     return window.open(`${url}?${query}`, WINDOW_NAME, WINDOW_FEATURES);
   };
 })(Drupal, drupalSettings);

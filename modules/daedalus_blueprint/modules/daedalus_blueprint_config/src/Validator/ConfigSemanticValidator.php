@@ -59,9 +59,10 @@ class ConfigSemanticValidator {
    * gate themselves on update access without relying on the calling tool.
    *
    * Create access for the otherwise-ungated config types (entity displays,
-   * field config) is supplied by daedalus_blueprint_config_entity_create_access()
-   * — an admin allow-list plus a permission — so fail-closed here means those
-   * types are deniable by default and reachable only when opted in.
+   * field config) is supplied by
+   * daedalus_blueprint_config_entity_create_access() — an admin allow-list plus
+   * a permission — so fail-closed here means those types are deniable by
+   * default and reachable only when opted in.
    *
    * @param \Drupal\Core\Config\Entity\ConfigEntityInterface $entity
    *   The entity.

@@ -67,7 +67,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
       data_type: 'string',
       label: new TranslatableMarkup('Group'),
       required: FALSE,
-      description: new TranslatableMarkup('A group id from the schema\'s materials.groups, or ungrouped: materials.blueprints then lists that group\'s blueprints alone.'),
+      description: new TranslatableMarkup("A group id from the schema's materials.groups, or ungrouped: materials.blueprints then lists that group's blueprints alone."),
     ),
   ],
 )]

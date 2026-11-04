@@ -20,18 +20,18 @@ use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
  * Tests the storage spine's shared defaults->overrides upgrade helper.
  *
  * A not-yet-overridden root entity (its layout field is EMPTY) must yield an
- * OVERRIDES section storage from the render path (DaedalusLayoutEntityHelperTrait,
- * what daedalus_layout publishes to the editing UI) with the same tempstore key the
- * tempstore write path (LayoutTempstoreStrategy) resolves, seeded from the
- * display's template as a COPY with fresh identity: every element uuid is
- * derived from the page (DocumentInstantiator::derivedUuid()), so no page
- * carries a template uuid, no two pages share an element uuid, and the
- * template's styles re-key onto the seeded identity in the page's own map.
- * Before the shared helper, the render path returned the shared bundle
- * display's DEFAULTS storage and keyed the view mode as the literal 'full'
- * while the tempstore keyed the resolved display mode ('default'), so the UI
- * and the staged draft disagreed; before the instantiator, the seed was a
- * by-reference copy sharing the template's uuids.
+ * OVERRIDES section storage from the render path
+ * (DaedalusLayoutEntityHelperTrait, what daedalus_layout publishes to the
+ * editing UI) with the same tempstore key the tempstore write path
+ * (LayoutTempstoreStrategy) resolves, seeded from the display's template as a
+ * COPY with fresh identity: every element uuid is derived from the page
+ * (DocumentInstantiator::derivedUuid()), so no page carries a template uuid, no
+ * two pages share an element uuid, and the template's styles re-key onto the
+ * seeded identity in the page's own map. Before the shared helper, the render
+ * path returned the shared bundle display's DEFAULTS storage and keyed the view
+ * mode as the literal 'full' while the tempstore keyed the resolved display
+ * mode ('default'), so the UI and the staged draft disagreed; before the
+ * instantiator, the seed was a by-reference copy sharing the template's uuids.
  *
  * @group daedalus_layout
  */

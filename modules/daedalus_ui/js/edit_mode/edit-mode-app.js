@@ -1,4 +1,4 @@
-import { h, render } from 'preact';
+import { render } from 'preact';
 import { Provider } from 'react-redux';
 import store from './store/store';
 import SelectionFrame from './components/selection-frame/selection-frame';
@@ -93,8 +93,10 @@ const boot = () => {
 // ajax_page_state once caused by re-shipping already-loaded scripts. Refuse
 // loudly instead.
 if (window.DaedalusUiAppBooted) {
-  console.warn(
-    'The Daedalus edit-mode app executed twice; ignoring the repeat execution.',
+  Drupal.throwError(
+    new Error(
+      'The Daedalus edit-mode app executed twice; ignoring the repeat execution.',
+    ),
   );
 } else {
   window.DaedalusUiAppBooted = true;

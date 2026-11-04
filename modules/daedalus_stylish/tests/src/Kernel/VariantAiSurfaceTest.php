@@ -194,7 +194,6 @@ class VariantAiSurfaceTest extends KernelTestBase {
     $this->assertStringContainsString('a kind absent here has no materials on this site', $materials['guidance']);
   }
 
-
   /**
    * The op guidance and the JSON door teach wear at a rule.
    *

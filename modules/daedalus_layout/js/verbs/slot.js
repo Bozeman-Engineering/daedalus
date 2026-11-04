@@ -38,10 +38,19 @@
 
 /**
  * The mirror node behind a selectable key, else null.
+ *
+ * @param {string} key
+ *   The selectable key.
+ *
+ * @return {?object}
+ *   The lean node, or null when the mirror holds no element by that uuid.
  */
 const nodeOf = (key) => {
   const { Blueprint } = Drupal.Daedalus;
-  return Blueprint.componentForUuid(Blueprint.getBlueprint(), key.split(':')[1]) ?? null;
+  return (
+    Blueprint.componentForUuid(Blueprint.getBlueprint(), key.split(':')[1]) ??
+    null
+  );
 };
 
 /**
@@ -55,6 +64,7 @@ const nodeOf = (key) => {
  *   A selectable key.
  *
  * @return {boolean}
+ *   TRUE for a top-level container filling a slot.
  */
 export const isSlotSection = (key) =>
   key.startsWith('container:') && typeof nodeOf(key)?.slot === 'string';
@@ -85,7 +95,9 @@ export const registerSlotVerbs = (app) => {
       }
       // The door on the canvas: the slot it declares is the op's target,
       // and where it sits decides the reload.
-      const door = document.querySelector(`[data-layout-builder-block-uuid="${uuid}"]`);
+      const door = document.querySelector(
+        `[data-layout-builder-block-uuid="${uuid}"]`,
+      );
       const slot = door?.getAttribute('data-daedalus-slot');
       if (!slot) {
         throw new Error(`The slot door ${uuid} is not on this canvas.`);

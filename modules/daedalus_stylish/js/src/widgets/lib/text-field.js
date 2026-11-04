@@ -53,6 +53,32 @@ import { useStopMenu } from '../../stop-menu.js';
  * renders the input inert with `title` as the reason (the panel's
  * write address withholds the property); the shown value still
  * renders honestly.
+ *
+ * @param {object} props
+ *   The field's props.
+ * @param {string} props.label
+ *   The accessible name (the input's or select's aria-label).
+ * @param {?string} props.value
+ *   The shown text: the committed value or the consumer's draft echo;
+ *   a non-string renders as empty.
+ * @param {object} props.space
+ *   The property's value space (valueSpaceFor): its kind picks the
+ *   render, its stops fill the select or the stop picker.
+ * @param {?string} [props.face]
+ *   Text worn instead of the value while unfocused, or null for none.
+ * @param {string} [props.title]
+ *   The input's title: the disabled reason when disabled.
+ * @param {boolean} [props.invalid]
+ *   The rejected-commit mark.
+ * @param {boolean} [props.disabled]
+ *   Whether the input renders inert.
+ * @param {Function} props.onPreview
+ *   Called with the raw text per input event and stop pick.
+ * @param {Function} props.onSettle
+ *   Called with the commit spelling at gesture end.
+ *
+ * @return {object}
+ *   The select (a closed space) or the value box with the input.
  */
 export const TextField = ({
   label,

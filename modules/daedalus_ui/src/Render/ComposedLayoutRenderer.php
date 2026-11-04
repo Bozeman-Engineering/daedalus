@@ -30,8 +30,8 @@ use Drupal\daedalus_ui\ModeState;
  * builds the composed_container element, whose pre_render lands here once
  * daedalus_layout has stamped the section's identity attributes on the build.
  *
- * A container needs no content provider: its children ARE the regions
- * build handed to the layout plugin, its depth is daedalus_layout's nested marker,
+ * A container needs no content provider: its children ARE the regions build
+ * handed to the layout plugin, its depth is daedalus_layout's nested marker,
  * and its emptiness is the child count — all facts the render path already
  * holds.
  *
@@ -79,8 +79,9 @@ final class ComposedLayoutRenderer {
    *   section element. Region wrappers do not render, so region-level
    *   attributes never print — a container's children are one flow.
    * @param bool $nested
-   *   Whether the section renders embedded in another section (daedalus_layout's
-   *   nested marker); decides the depth the declaration resolves at.
+   *   Whether the section renders embedded in another section
+   *   (daedalus_layout's nested marker); decides the depth the declaration
+   *   resolves at.
    *
    * @return array
    *   The render array: the resolved tree as markup, or cache metadata

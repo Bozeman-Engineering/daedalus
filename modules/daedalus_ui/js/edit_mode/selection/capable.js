@@ -28,6 +28,7 @@ export {
  *   One of CAPABILITIES: content, configure, style, arrange, insert.
  *
  * @return {boolean}
+ *   Whether the published verdict allows the capability.
  */
 export const capable = (key, capability) =>
   capableIn(projectionIndex(), key, capability);
@@ -46,6 +47,7 @@ export const capable = (key, capability) =>
  *   The selectable key or part address.
  *
  * @return {boolean}
+ *   Whether the published verdict allows anything at all.
  */
 export const selectable = (key) => selectableIn(projectionIndex(), key);
 
@@ -56,5 +58,6 @@ export const selectable = (key) => selectableIn(projectionIndex(), key);
  *   The selectable key or part address.
  *
  * @return {?Object<string, boolean>}
+ *   The verdict by capability, or null.
  */
 export const verdictFor = (key) => verdictIn(projectionIndex(), key);

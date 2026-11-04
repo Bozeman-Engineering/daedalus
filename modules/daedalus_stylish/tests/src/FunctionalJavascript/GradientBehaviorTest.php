@@ -413,7 +413,8 @@ class GradientBehaviorTest extends WebDriverTestBase {
 
     // A real Layout Builder page, the surface the widgets operate on. The
     // recipe enables styling for the page bundle, so the node's
-    // daedalus_stylish_styles field hosts the style map for the whole layout tree.
+    // daedalus_stylish_styles field hosts the style map for the whole layout
+    // tree.
     $node = Node::create([
       'type' => 'page',
       'title' => 'Gradient behavior page',
@@ -1064,6 +1065,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     $skin_storage = \Drupal::entityTypeManager()->getStorage($skin->getEntityTypeId());
     $skin_storage->resetCache([$skin->id()]);
     $worn = $skin_storage->load($skin->id());
+    assert($worn instanceof DaedalusStylishSkin);
     $minted_value = $worn->tokens()['gradient']['molten-brass']['value'] ?? NULL;
     $this->assertIsString($minted_value, 'The builder minted a plain string token value on the gradient scale of the worn skin.');
     $this->assertStringContainsString(
@@ -1172,6 +1174,7 @@ class GradientBehaviorTest extends WebDriverTestBase {
     // authoring is not strict-gated.
     $skin_storage->resetCache([$skin->id()]);
     $worn = $skin_storage->load($skin->id());
+    assert($worn instanceof DaedalusStylishSkin);
     $this->assertSame('#3366cc', $worn->tokens()['color']['ember-coral']['value'] ?? NULL, 'The palette mint persisted on the skin\'s color scale, and the strict site accepted the LITERAL color value.');
 
     // And it is spendable vocabulary in the same document: back in the
@@ -1511,15 +1514,15 @@ class GradientBehaviorTest extends WebDriverTestBase {
 
     // ═════ Scale-constrained padding: the minted vocabulary, end to end. ═════
     // Block padding is closed over the site's space scale (the
-    // daedalus_stylish_scale_constraint_test layer; the scenario skin minted the
-    // tokens), so the basic padding row must BE the closed field over
-    // the minted scale — a select offering display VALUES, the built-in
-    // literal table displaced — and a pick must commit the var()
-    // REFERENCE, the strict scale rule's only legal spelling, never the
-    // value the face displays. The canvas then resolves the reference
-    // through the compiled skin file's token-scope custom property: the
-    // derivation, the payload's minted tokens, the strict validator, and
-    // the skin stylesheet agreeing is the seam only a browser can see.
+    // daedalus_stylish_scale_constraint_test layer; the scenario skin minted
+    // the tokens), so the basic padding row must BE the closed field over the
+    // minted scale — a select offering display VALUES, the built-in literal
+    // table displaced — and a pick must commit the var() REFERENCE, the strict
+    // scale rule's only legal spelling, never the value the face displays. The
+    // canvas then resolves the reference through the compiled skin file's
+    // token-scope custom property: the derivation, the payload's minted tokens,
+    // the strict validator, and the skin stylesheet agreeing is the seam only a
+    // browser can see.
     $session->executeScript("Drupal.Daedalus.Selection.select('$block_key');");
     $spacing = '#daedalus_stylish_inspector .daedalus-stylish-inspector__widget--spacing';
     $padding_select = "$spacing select[aria-label='Padding']";
@@ -1632,18 +1635,18 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'A second click on the Corners well closes its listbox.',
     );
 
-    // ═════ A refused push toasts in the messenger; no strip renders. ═════
-    // The push bar is the pending engine's one commit surface, and a
-    // commit the server refuses has exactly one display: the op queue's
-    // source reports it (reportFailure on the leader) into the
-    // document-level messenger, and the session stays open for a
-    // correction. Seam: push bar → op queue → reportFailure → messenger,
-    // four layers that only meet in a browser. The refusal is real and
-    // server-side: the editor's role loses "create variants" AFTER the
-    // page loaded, so the Save doorway is still offered (the client's
-    // gate is drupalSettings, read at load) and the server is the law.
-    // The retired inline strip (.daedalus-stylish-inspector__variant-message) must
-    // not regrow beside the toast.
+    // ═════ A refused push toasts in the messenger; no strip renders. ═════ The
+    // push bar is the pending engine's one commit surface, and a commit the
+    // server refuses has exactly one display: the op queue's source reports it
+    // (reportFailure on the leader) into the document-level messenger, and the
+    // session stays open for a correction. Seam: push bar → op queue →
+    // reportFailure → messenger, four layers that only meet in a browser. The
+    // refusal is real and server-side: the editor's role loses "create
+    // variants" AFTER the page loaded, so the Save doorway is still offered
+    // (the client's gate is drupalSettings, read at load) and the server is the
+    // law. The retired inline strip
+    // (.daedalus-stylish-inspector__variant-message) must not regrow beside the
+    // toast.
     $session->executeScript("Drupal.Daedalus.Selection.select('$block_key');");
     $this->clickPanel("#daedalus_stylish_inspector button[aria-label='Save as variant']");
     $session_name = '#daedalus_stylish_inspector .daedalus-stylish-session__name';
@@ -1710,11 +1713,11 @@ class GradientBehaviorTest extends WebDriverTestBase {
       'Discard closed the refused session.',
     );
 
-    // ——— Staged, not committed — and truly no reload. ———
-    // Everything above lives in tempstore: the saved node has neither a
-    // layout override nor any style map (the daedalus_stylish analog of daedalus_edit's
-    // "stage, don't save"). And the sentinel proves the whole scenario ran
-    // in one document: every restyle was an op round trip, never a reload.
+    // ——— Staged, not committed — and truly no reload. ——— Everything above
+    // lives in tempstore: the saved node has neither a layout override nor any
+    // style map (the daedalus_stylish analog of daedalus_edit's "stage, don't
+    // save"). And the sentinel proves the whole scenario ran in one document:
+    // every restyle was an op round trip, never a reload.
     $storage = \Drupal::entityTypeManager()->getStorage('node');
     $storage->resetCache([$nid]);
     $saved = $storage->load($nid);

@@ -70,6 +70,12 @@ import {
  * style-map keys carry. Text outside the grammar is a caller bug, never
  * an address to seat: it throws rather than committing one nothing can
  * resolve.
+ *
+ * @param {?string} selector
+ *   The selector as the caller spelled it, or null.
+ *
+ * @return {?string}
+ *   The canonical relative selector, or null.
  */
 const relativeSelector = (selector) => {
   if (selector === null || selector === undefined) {
@@ -89,6 +95,16 @@ const relativeSelector = (selector) => {
  * index (the panel's own nesting, parts transparent). Unknown keys have
  * no ancestry: a key the index cannot place, or no index yet, answers
  * false.
+ *
+ * @param {?Map<string, {parent: ?string}>} index
+ *   The projection index, or null before the mirror boots.
+ * @param {string} key
+ *   The candidate ancestor key.
+ * @param {string} of
+ *   The key whose ancestry is walked.
+ *
+ * @return {boolean}
+ *   Whether `key` is an ancestor of `of`.
  */
 const isAncestor = (index, key, of) => {
   let cursor = index?.get(of)?.parent ?? null;
@@ -206,6 +222,12 @@ export const initSelectionFacade = () => {
      * address under the element too (canvas Cmd-hover's shape, a part as
      * '.cls'); a bare key clears the selector facet. The selector is
      * canonicalized through the grammar, and text outside it throws.
+     *
+     * @param {?string} key
+     *   The selectable key to hover, or null to clear.
+     * @param {?string} selector
+     *   A relative selector under the element, or null for the bare
+     *   element.
      */
     hover: (key, selector = null) =>
       store.dispatch(setHover({ key, selector: relativeSelector(selector) })),
@@ -217,16 +239,29 @@ export const initSelectionFacade = () => {
      * selector's owner key with it; hoverSelector(null) clears. The
      * selector is canonicalized through the grammar, and text outside it
      * throws.
+     *
+     * @param {?string} key
+     *   The selector's owner key, or null to clear.
+     * @param {?string} selector
+     *   The relative selector, or null to clear.
      */
     hoverSelector: (key, selector = null) => {
       const canonical = relativeSelector(selector);
       store.dispatch(
-        setHoverSelector(key && canonical ? { key, selector: canonical } : null),
+        setHoverSelector(
+          key && canonical ? { key, selector: canonical } : null,
+        ),
       );
     },
 
     /**
      * The DOM element currently carrying a selectable key, or null.
+     *
+     * @param {?string} key
+     *   The selectable key.
+     *
+     * @return {?Element}
+     *   The element, or null.
      */
     getElement: (key) => elementForKey(key),
 
@@ -263,6 +298,11 @@ export const initSelectionFacade = () => {
      * single selection to seat under, throws rather than seating a facet
      * nothing can resolve. A facet write drops any standing address: the
      * address was picked for the subject that just changed.
+     *
+     * @param {string} key
+     *   The selected element's key.
+     * @param {string} selector
+     *   The relative selector of the facet.
      */
     target: (key, selector) => {
       const canonical = relativeSelector(selector);
@@ -296,6 +336,12 @@ export const initSelectionFacade = () => {
      * the subject's address set (a rule that reaches it) is the styling
      * module's judgement, not the spine's: an address the set does not
      * carry stands, and no surface moves the selection over it.
+     *
+     * @param {?string} key
+     *   The selected element or one of its ancestors, or null to drop
+     *   the address.
+     * @param {?string} selector
+     *   The relative selector the write rebases to.
      */
     address: (key, selector = null) => {
       if (key === null || key === undefined) {
@@ -312,7 +358,10 @@ export const initSelectionFacade = () => {
           'A styling address needs a single selected element to belong to.',
         );
       }
-      if (key !== selectedKey && !isAncestor(projectionIndex(), key, selectedKey)) {
+      if (
+        key !== selectedKey &&
+        !isAncestor(projectionIndex(), key, selectedKey)
+      ) {
         throw new TypeError(
           `Styling address key "${key}" is neither the selected element "${selectedKey}" nor an ancestor of it.`,
         );
@@ -356,6 +405,9 @@ export const initSelectionFacade = () => {
     /**
      * Sets the drill context — double-click's programmatic face. Hover and
      * click (and so Selector drag arming) resolve one level inside it.
+     *
+     * @param {?string} key
+     *   The context key, or null for the page root.
      */
     drill: (key) => store.dispatch(setDrill(key)),
 
@@ -674,6 +726,12 @@ export const initSelectionFacade = () => {
      * declares no markup model (or the anatomy payload is not on this
      * page); callers treat null as "the model does not speak", never as
      * an empty declaration.
+     *
+     * @param {string} blockType
+     *   The block type id.
+     *
+     * @return {?object}
+     *   The declaration, or null.
      */
     blockTypeDeclaration: (blockType) =>
       drupalSettings?.daedalusUi?.anatomy?.blockTypes?.[blockType] ?? null,
@@ -742,6 +800,7 @@ export const initSelectionFacade = () => {
      * the response re-renders the view mode the canvas displays.
      *
      * @return {?{entityType: string, entityId: string, viewMode: string}}
+     *   The root entity's mutation context, or null.
      */
     rootContext: () => {
       const root = document.querySelector('[data-main-entity]');
@@ -827,11 +886,25 @@ export const initSelectionFacade = () => {
 
     /**
      * The records of one kind, roster order.
+     *
+     * @param {string} kind
+     *   The material kind.
+     *
+     * @return {Array<object>}
+     *   The records.
      */
     ofKind: (kind) => roster().ofKind(kind),
 
     /**
      * One record by kind and id, or null.
+     *
+     * @param {string} kind
+     *   The material kind.
+     * @param {string} id
+     *   The record id.
+     *
+     * @return {?object}
+     *   The record, or null.
      */
     get: (kind, id) => roster().get(kind, id),
 
@@ -840,11 +913,25 @@ export const initSelectionFacade = () => {
     /**
      * The record spelled exactly this way in a slot ('style', 'class',
      * 'blueprint', 'animation', 'attr:{scope}:{name}'), or null.
+     *
+     * @param {string} slot
+     *   The slot name.
+     * @param {string} spelling
+     *   The spelling in that slot.
+     *
+     * @return {?object}
+     *   The record, or null.
      */
     bySpelling: (slot, spelling) => roster().bySpelling(slot, spelling),
 
     /**
      * Every spelling in a slot, {spelling: record}.
+     *
+     * @param {string} slot
+     *   The slot name.
+     *
+     * @return {Object<string, object>}
+     *   The records by spelling.
      */
     spellings: (slot) => roster().spellings(slot),
 
@@ -853,9 +940,25 @@ export const initSelectionFacade = () => {
      * material", "may this blueprint land here"), shared with the server
      * (MaterialsRoster::applicable()), bound to the store's roster: a
      * blueprint's section fact resolves against the variant records it holds.
+     *
+     * @param {object} record
+     *   The material record.
+     * @param {string} elementScope
+     *   The element scope the material would land in.
+     * @param {boolean} topLevel
+     *   Whether the element sits at the top level of its section.
+     * @param {?string} withinBlueprint
+     *   The enclosing blueprint id, or null outside any.
+     *
+     * @return {boolean}
+     *   Whether the material applies there.
      */
-    applicable: (record, elementScope, topLevel = true, withinBlueprint = null) =>
-      roster().applicable(record, elementScope, topLevel, withinBlueprint),
+    applicable: (
+      record,
+      elementScope,
+      topLevel = true,
+      withinBlueprint = null,
+    ) => roster().applicable(record, elementScope, topLevel, withinBlueprint),
     scopesPair,
 
     /**

@@ -170,6 +170,12 @@ export const PART_SELECTOR = /^\.[A-Za-z0-9_-]+$/;
  * The vocabulary for rows the annotator does not name: a field row's
  * machine name, a region's, an inline entity's bundle (paragraphs carry
  * no `_element`). Never an annotated node's word, which is delivered.
+ *
+ * @param {string} machineName
+ *   A machine name (`field_body`, `content`).
+ *
+ * @return {string}
+ *   The words, capitalized.
  */
 const humanize = (machineName) => {
   const words = String(machineName)
@@ -186,6 +192,12 @@ const humanize = (machineName) => {
  * instance-rows.js, a carrier's name (its excerpt): content rows, never
  * elements. An element's name is minted server-side (`_element.name`),
  * where the same first-line rule names a merged block.
+ *
+ * @param {*} value
+ *   A field value.
+ *
+ * @return {?string}
+ *   The excerpt, or null for a non-string or empty value.
  */
 export const textExcerpt = (value) => {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -202,6 +214,12 @@ export const textExcerpt = (value) => {
  * Html::getClass) on the field's root element — the same element the
  * field's selectable key addresses, so this is the row's markup identity,
  * not an extra row.
+ *
+ * @param {string} name
+ *   The field's machine name.
+ *
+ * @return {string}
+ *   The class.
  */
 export const fieldClass = (name) =>
   `field--name-${String(name).replace(/_/g, '-')}`;
@@ -210,12 +228,26 @@ export const fieldClass = (name) =>
  * An inline-serialized entity (a paragraph or other owned reference):
  * distinguishable from shared-reference values ({target_id, _label}) by
  * carrying its own uuid.
+ *
+ * @param {*} value
+ *   A field value entry.
+ *
+ * @return {boolean}
+ *   Whether the value is an inline entity.
  */
 const isInlineEntity = (value) => isPlainObject(value) && !!value.uuid;
 
 /**
  * A field row exists when the owner's annotation doesn't say otherwise —
  * the same rule the built-in projection applies (see projection.js).
+ *
+ * @param {Object<string, {element?: boolean}>} facts
+ *   The owner's `_element.fields` map.
+ * @param {string} name
+ *   The field's machine name.
+ *
+ * @return {boolean}
+ *   Whether the field renders as an element.
  */
 const fieldExists = (facts, name) => facts[name]?.element !== false;
 
@@ -240,6 +272,12 @@ const GENERIC = {
  * The slot kind a `contains:` token claims: the bucket's kind for a
  * generic token, the prefix for a specific claim (`field:NAME` claims a
  * field), null for anything else.
+ *
+ * @param {*} token
+ *   One `contains:` token.
+ *
+ * @return {?string}
+ *   The claimed kind ('field', 'region', 'value', 'section'), or null.
  */
 const claimedKind = (token) => {
   if (typeof token !== 'string') {
@@ -260,6 +298,12 @@ const claimedKind = (token) => {
  * row's structural meaning, read where the row is used (the drop resolver
  * treats the shell that claims the root's sections as the root flow's
  * drop surface, because the sections are its rows).
+ *
+ * @param {object} part
+ *   A declaration part (an entry of a declaration's `elements`).
+ *
+ * @return {string[]}
+ *   The claimed kinds, in authored order, deduplicated.
  */
 const partClaims = (part) =>
   Array.from(
@@ -275,6 +319,10 @@ const partClaims = (part) =>
  * has vouched for the grammar: unique classes, one generic bucket per kind,
  * no child claimed twice — first-wins here only tolerates degraded
  * payloads).
+ *
+ * @param {object} declaration
+ *   A declaration's elements tree (the anatomy payload's entry for a
+ *   kind, a block type or a layout).
  *
  * @return {{specific: Map<string, string>, generic: Map<string, string>}}
  *   Token → claiming part selector: specific keys are the full tokens
@@ -325,6 +373,19 @@ const collectClaims = (declaration) => {
  * ('element', a null channel, a key the model does not speak for) mounts:
  * the sketch degrades to declarations alone, never to an emptier tree
  * than the declarations promise.
+ *
+ * @param {object} declaration
+ *   The declaration (or nested part) whose `elements` mount.
+ * @param {?string} parentKey
+ *   The owning model key the shell rows sit under.
+ * @param {Map<string, object[]>} assigned
+ *   The claimed model rows by claiming part selector (mount's
+ *   assignment), consumed as each part mounts.
+ * @param {?function(string, string): (string|boolean|null)} placement
+ *   The part placement channel, or null.
+ *
+ * @return {object[]}
+ *   The shell rows, nested as authored.
  */
 const shellRows = (declaration, parentKey, assigned, placement) => {
   const rows = [];
@@ -415,6 +476,14 @@ const mount = (declaration, ownerKey, entries, placement = null) => {
 /**
  * Depth-first search for one composed row, returning its position so the
  * absorption passes can replace it in place.
+ *
+ * @param {?object[]} nodes
+ *   The rows to search, their subtrees included.
+ * @param {function(object): boolean} predicate
+ *   The match.
+ *
+ * @return {?{parent: object[], index: number, node: object}}
+ *   The row with the list it sits in and its position there, or null.
  */
 const findRow = (nodes, predicate) => {
   for (let index = 0; index < (nodes?.length ?? 0); index++) {
@@ -435,6 +504,26 @@ const findRow = (nodes, predicate) => {
  * .field--name-X wrapper element (one element, one row). Its content — one
  * value row for a single scalar, model rows for inline entities — mounts
  * into the field kind's shell at the `value` slot.
+ *
+ * @param {string} key
+ *   The field's model key (`field:<owner uuid>:<name>`).
+ * @param {string} name
+ *   The field's machine name.
+ * @param {*} value
+ *   The field's value: a scalar, a form-only stub, a shared reference,
+ *   an inline entity or a list of either.
+ * @param {object} context
+ *   The compose context (compose's `context`: anatomy, targets, placement,
+ *   rootFields, fillsOf).
+ * @param {string} [presentation]
+ *   The field's presentation mode from the owner's annotation ('open' or
+ *   'unit').
+ * @param {boolean} [shells]
+ *   Whether the field kind's shell mounts around the content (off for a
+ *   collapsed block's fields).
+ *
+ * @return {object}
+ *   The field row.
  */
 const composeField = (
   key,
@@ -526,6 +615,14 @@ const composeField = (
  * entities carry no `_element` annotation (the projection reads none
  * either), so their fields exist and present open, and their words are
  * the entity's own label and its humanized bundle.
+ *
+ * @param {object} entity
+ *   The inline-serialized entity (uuid, type, label, fields).
+ * @param {object} context
+ *   The compose context.
+ *
+ * @return {object}
+ *   The entity row.
  */
 const composeEntity = (entity, context) => {
   const key = `entity:${entity.uuid}`;
@@ -560,6 +657,11 @@ const composeEntity = (entity, context) => {
  * the merged row standing in its place) presents under its markup class,
  * flagged `absorbed`, its own descendants included. Shells stay: the
  * wrapper elements are real markup, only their identities merged away.
+ *
+ * @param {object[]} rows
+ *   The composed rows to walk, in place.
+ * @param {object} spared
+ *   The one row (and subtree) the absorption leaves alone.
  */
 const absorbSiblings = (rows, spared) => {
   for (const row of rows) {
@@ -579,6 +681,14 @@ const absorbSiblings = (rows, spared) => {
  * with no wrapper element of their own (the collapse merged the sandwich
  * into the single tag), sibling field rows vanish outright, the data
  * tree's rule; shells and the target's spared descendants stay.
+ *
+ * @param {object[]} rows
+ *   The composed rows to fold.
+ * @param {Set<object>} spared
+ *   The rows that stay whatever they are.
+ *
+ * @return {object[]}
+ *   The rows with the sibling identities folded out.
  */
 const foldSiblings = (rows, spared) =>
   rows.flatMap((row) => {
@@ -594,6 +704,13 @@ const foldSiblings = (rows, spared) =>
 
 /**
  * The merged-presentation absorption on one composed block subtree.
+ *
+ * @param {object} blockNode
+ *   The composed block row.
+ * @param {object} component
+ *   The lean block node the row composed from, its `_element` riding it.
+ * @param {object} context
+ *   The compose context.
  *
  * @return {object[]}
  *   The rows replacing the block row at its position.
@@ -689,6 +806,11 @@ const absorb = (blockNode, component, context) => {
  * its type's shell — or, merged and collapsed cases aside, whatever the
  * presentation pass leaves at the block's position.
  *
+ * @param {object} component
+ *   A lean block node.
+ * @param {object} context
+ *   The compose context.
+ *
  * @return {object[]}
  *   One block row normally; the hoisted shell chain after absorption.
  */
@@ -759,7 +881,11 @@ const composeComponent = (component, context) => {
   // row after the fills. Unclaimable (no slot kind), so it mounts at the
   // door's root after its shells, the same position a fill takes.
   for (const row of shownRows(component)) {
-    entries.push({ slotKind: null, name: null, node: { type: 'shown', ...row } });
+    entries.push({
+      slotKind: null,
+      name: null,
+      node: { type: 'shown', ...row },
+    });
   }
 
   // Plugin blocks (site branding, menus) resolve by BASE plugin id: all
@@ -767,11 +893,12 @@ const composeComponent = (component, context) => {
   // id with any :derivative suffix stripped. A field node names the page's
   // field, never a per-bundle plugin id; its base is field_block
   // (NodeTreeBuilder::pluginBase, the server's one derivation).
-  const basePluginId = component.field
-    ? 'field_block'
-    : component.plugin_id
-      ? component.plugin_id.split(':')[0]
-      : null;
+  let basePluginId = null;
+  if (component.field) {
+    basePluginId = 'field_block';
+  } else if (component.plugin_id) {
+    basePluginId = component.plugin_id.split(':')[0];
+  }
   // A collapsed type's declared elements are interior parts of its single
   // tag, so they mount even collapsed; only the block kind's fallback tree
   // stays out (it describes the wrapper sandwich collapse merges away).
@@ -816,6 +943,14 @@ const composeComponent = (component, context) => {
  * sections all the way down, one node shape at every depth — anything
  * else composes as a component. (Region nodes never reach here;
  * composeSection unwraps them.)
+ *
+ * @param {object} child
+ *   A lean tree node (a container or a block).
+ * @param {object} context
+ *   The compose context.
+ *
+ * @return {object[]}
+ *   The child's rows.
  */
 const composeTreeChild = (child, context) =>
   child.kind === 'container'
@@ -838,6 +973,14 @@ const composeTreeChild = (child, context) =>
  * annotation's: `name` (the custom label when renamed, else the type
  * word) and `type` ("Section" at page depth, "Container" nested);
  * `customLabel` is the raw stored label the rename input seeds from.
+ *
+ * @param {object} section
+ *   A lean container node.
+ * @param {object} context
+ *   The compose context.
+ *
+ * @return {object}
+ *   The section row.
  */
 const composeSection = (section, context) => {
   const key = section.uuid ? `container:${section.uuid}` : null;
@@ -902,6 +1045,13 @@ const composeSection = (section, context) => {
  * field's WRAPPER element is still real markup, so its row stays —
  * absorbed, presenting under its markup class — while its value row folds
  * (the root row already presents the content as its live label).
+ *
+ * @param {object} rootNode
+ *   The composed root row, absorbed in place.
+ * @param {string} targetKey
+ *   The edit target field's model key.
+ * @param {object} context
+ *   The compose context.
  */
 const absorbRootTarget = (rootNode, targetKey, context) => {
   const targetRow = findRow(

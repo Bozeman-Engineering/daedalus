@@ -16,6 +16,7 @@ use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\InlineBlockEntityOperations as CoreInlineBlockEntityOperations;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use PHPUnit\Framework\Attributes\Group;
@@ -87,6 +88,18 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
   }
 
   /**
+   * The sections stored in an entity's own layout field.
+   *
+   * @return \Drupal\layout_builder\Section[]
+   *   The stored sections.
+   */
+  protected function storedSections(EntityTest $entity): array {
+    $list = $entity->get(OverridesSectionStorage::FIELD_NAME);
+    assert($list instanceof SectionListInterface);
+    return $list->getSections();
+  }
+
+  /**
    * Reads a component's raw stored configuration at any depth.
    *
    * Walks the PERSISTED shape (embedded Section::toArray() values inside
@@ -104,7 +117,7 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
    *   The component configuration.
    */
   protected function storedComponentConfiguration(EntityTest $entity, array $container_path, string $component_uuid): array {
-    $sections = $entity->get(OverridesSectionStorage::FIELD_NAME)->getSections();
+    $sections = $this->storedSections($entity);
     $section_array = $sections[0]->toArray();
     foreach ($container_path as $container_uuid) {
       $section_array = $section_array['components'][$container_uuid]['configuration'][SectionBlock::SECTION_KEY];
@@ -212,7 +225,9 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
     $this->assertSame(1, $count(), 'The first edit saves exactly one block: the page\'s own.');
     $row = $this->usageRowForHost($entity);
     $this->assertNotFalse($row, 'The seeded page\'s block is used by the page.');
-    $stored = EntityTest::load($entity->id())->get(OverridesSectionStorage::FIELD_NAME)->getSections();
+    $reloaded = EntityTest::load($entity->id());
+    assert($reloaded instanceof EntityTest);
+    $stored = $this->storedSections($reloaded);
     $this->assertCount(1, $stored);
     $components = $stored[0]->getComponents();
     $this->assertCount(1, $components);
@@ -320,7 +335,7 @@ class InlineBlockLifecycleTest extends NestedStorageKernelTestBase {
     $block_storage = $this->entityTypeManager->getStorage('block_content');
     $deep_block_id = $block_storage->loadRevision($deep_config['block_revision_id'])->id();
 
-    $sections = $entity->get(OverridesSectionStorage::FIELD_NAME)->getSections();
+    $sections = $this->storedSections($entity);
     $mid_component = $sections[0]->getComponent($ids['mid_container_uuid']);
     $mid_section = Section::fromArray($mid_component->get('configuration')[SectionBlock::SECTION_KEY]);
     $deep_component = $mid_section->getComponent($ids['deep_container_uuid']);

@@ -269,7 +269,7 @@ class HostResolver {
   }
 
   /**
-   * Whether an entity is a Layout Builder enabled display on a site that can host it.
+   * Whether an entity is a Layout Builder enabled display a site can host.
    */
   protected function isDisplayHost(EntityInterface $entity): bool {
     return $this->sectionStorageManager !== NULL

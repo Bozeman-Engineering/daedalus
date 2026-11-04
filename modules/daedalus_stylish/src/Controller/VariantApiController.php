@@ -19,9 +19,9 @@ use Symfony\Component\HttpFoundation\Request;
  * The variant lifecycle endpoints.
  *
  * Usage, details and delete (ADAPTERS over the variant kind of the material
- * gesture family: the same DaedalusStylishMaterialsProvider::update() / remove() the
- * update_material / remove_material ops dispatch to), copy, revert,
- * revisions/restore.
+ * gesture family: the same DaedalusStylishMaterialsProvider::update() /
+ * remove() the update_material / remove_material ops dispatch to), copy,
+ * revert, revisions/restore.
  *
  * Save-as and push are not routes: the inspector's push bar submits
  * save_material / update_material (kind variant) through the page batch,
@@ -92,7 +92,7 @@ final class VariantApiController extends GestureApiControllerBase {
   }
 
   /**
-   * POST /daedalus_stylish/variants/{reference}/revert: revert to shipped defaults.
+   * POST /daedalus_stylish/variants/{reference}/revert: to shipped defaults.
    *
    * An ordinary revisioned save of the styles the
    * variant's provider ships on disk right now (workspace-staged inside a
@@ -225,11 +225,11 @@ final class VariantApiController extends GestureApiControllerBase {
   }
 
   /**
-   * POST /daedalus_stylish/variants/{reference}/revisions/{revision_id}/restore.
+   * Restores a revision: a NEW default revision carrying its content.
    *
-   * A NEW default revision carrying the old revision's content — never a
-   * rollback, so a restore is itself one restore away from undo. No body;
-   * responds with the use count the restore updated; the restored record
+   * POST /daedalus_stylish/variants/{reference}/revisions/{revision_id}/restore
+   * is never a rollback, so a restore is itself one restore away from undo. No
+   * body; responds with the use count the restore updated; the restored record
    * rides the delta.
    */
   public function restore(string $reference, string|int $revision_id): JsonResponse {

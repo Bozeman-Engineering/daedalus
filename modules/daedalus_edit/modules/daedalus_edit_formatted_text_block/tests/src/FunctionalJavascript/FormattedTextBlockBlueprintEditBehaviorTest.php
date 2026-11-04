@@ -432,19 +432,19 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
       'The format switch committed as one {value, format} op and the swap re-stamped the settings.',
     );
 
-    // The open edit is a DRAFT, half one: a foreign STYLE mutation. With
-    // the edit open and a local draft in the live CKEditor, a font-size
-    // scrub through the spine (update_style on the block key, the reported
-    // bug: the Daedalus Stylish inspector styles WHILE editing) swaps the root, the
-    // editor's own element, out from under the typing. The seam only a
-    // browser can see: the op queue's swap detaches the root (the engine
-    // captures the draft there and the orphaned editor is destroyed), the
-    // mirror is replaced, and once the response is fully applied the edit
-    // resumes over the fresh root by the three-way rule. The style touched
-    // nothing the edit holds (base == remote for the field), so the draft
-    // is seeded into ONE fresh CKEditor on the swapped-in root: same
-    // current edit, the local draft in the editor, the editing marks and
-    // the Text format widget standing, the snapshot still the remote.
+    // The open edit is a DRAFT, half one: a foreign STYLE mutation. With the
+    // edit open and a local draft in the live CKEditor, a font-size scrub
+    // through the spine (update_style on the block key, the reported bug: the
+    // Daedalus Stylish inspector styles WHILE editing) swaps the root, the
+    // editor's own element, out from under the typing. The seam only a browser
+    // can see: the op queue's swap detaches the root (the engine captures the
+    // draft there and the orphaned editor is destroyed), the mirror is
+    // replaced, and once the response is fully applied the edit resumes over
+    // the fresh root by the three-way rule. The style touched nothing the edit
+    // holds (base == remote for the field), so the draft is seeded into ONE
+    // fresh CKEditor on the swapped-in root: same current edit, the local draft
+    // in the editor, the editing marks and the Text format widget standing, the
+    // snapshot still the remote.
     $open_edit();
     $this->assertJsCondition($editor_ready, 20000, 'Double-clicking the leaf opened the edit for the draft steps.');
     $session->executeScript(<<<JS

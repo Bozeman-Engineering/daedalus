@@ -231,7 +231,13 @@ class BlueprintMaterialsProviderTest extends BlueprintKernelTestBase {
 
     $active->activate('aurora');
     $roster = $builder->build();
-    $this->assertEqualsCanonicalizing(['aurora_section', 'aurora_named_section', 'call_to_action', 'hero', 'plain_section'], array_keys($roster->blueprints()));
+    $this->assertEqualsCanonicalizing([
+      'aurora_section',
+      'aurora_named_section',
+      'call_to_action',
+      'hero',
+      'plain_section',
+    ], array_keys($roster->blueprints()));
     $this->assertSame('aurora', $roster->get(MaterialKind::Blueprint, 'aurora_section')->designSystem);
     $this->assertSame('aurora', $roster->get(MaterialKind::Blueprint, 'aurora_section')->toArray()['design_system']);
     $this->assertArrayHasKey('aurora_section', $schema->narrow($schema->fragment(), NULL, DialectCatalog::UNGROUPED)['blueprints']);
@@ -356,7 +362,11 @@ class BlueprintMaterialsProviderTest extends BlueprintKernelTestBase {
     $share = ['offered' => TRUE, 'label' => 'Shared banner'];
     $this->assertRefusedAsFull(fn () => $provider->update(MaterialKind::Blueprint, $id, $share, NULL, []), $reading, 'offered');
     $this->assertSame('Banner', $this->loadBlueprint('banner')->label(), 'A refused update writes nothing.');
-    $provider->update(MaterialKind::Blueprint, $id, ['label' => 'Banner section', 'offered' => FALSE, 'favorite' => TRUE], NULL, []);
+    $provider->update(MaterialKind::Blueprint, $id, [
+      'label' => 'Banner section',
+      'offered' => FALSE,
+      'favorite' => TRUE,
+    ], NULL, []);
     $blueprint = $this->loadBlueprint('banner');
     $this->assertSame('Banner section', $blueprint->label());
     $this->assertTrue($blueprint->isFavorite(), 'A favorite is a listing fact: it passes on a full site.');

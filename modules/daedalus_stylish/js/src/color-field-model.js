@@ -36,6 +36,7 @@ import {
  *   A color spelling.
  *
  * @return {?number[]}
+ *   [r, g, b, a], or null for a spelling beyond the parse.
  */
 export const parseColor = (text) => {
   const spelling = typeof text === 'string' ? text.trim() : '';
@@ -84,6 +85,7 @@ export const parseColor = (text) => {
  *   [r, g, b, a] as parseColor answers.
  *
  * @return {string}
+ *   The spelling.
  */
 export const formatColor = ([r, g, b, a]) =>
   a >= 1
@@ -110,6 +112,7 @@ export const formatColor = ([r, g, b, a]) =>
  *   Fallback parser: (spelling) => '#rrggbb' | null.
  *
  * @return {?string}
+ *   '#rrggbb', or null when the picker cannot wear the paint.
  */
 export const pickerHex = (paint, resolve = null) => {
   const parsed = parseColor(paint);
@@ -251,6 +254,7 @@ export const colorFace = (
  *   colorFace's answer for the shown value.
  *
  * @return {{entries: Array<object>, selected: ?string}}
+ *   The grid's entries and the selected entry's id.
  */
 export const gridEntries = (space, face) => {
   const entries = space.stops.map((stop) => ({
@@ -289,10 +293,14 @@ export const gridEntries = (space, face) => {
  * unknown and unset have nothing to mint).
  *
  * @param {{kind: string}} space
+ *   The value space.
  * @param {{kind: string}} face
+ *   colorFace's answer for the shown value.
  * @param {boolean} canMint
+ *   The grant.
  *
  * @return {boolean}
+ *   Whether the gesture renders.
  */
 export const mintOffered = (space, face, canMint) =>
   Boolean(canMint) && space.kind !== 'closed' && face.kind === 'literal';

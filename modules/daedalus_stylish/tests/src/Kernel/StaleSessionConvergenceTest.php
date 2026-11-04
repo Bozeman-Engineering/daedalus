@@ -18,17 +18,17 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests that stale pre-migration tempstore sessions converge at LOAD time.
  *
  * A session staged before the container migration ran holds sections that
- * reference the four RETIRED layout plugins (daedalus_stylish_twocol etc., deleted
- * in the cleanup pass). The save-time safety net cannot help such a
+ * reference the four RETIRED layout plugins (daedalus_stylish_twocol etc.,
+ * deleted in the cleanup pass). The save-time safety net cannot help such a
  * session: rendering it throws PluginNotFoundException, and a session that
  * cannot render can never reach save. The tempstore load chokepoint
  * (LayoutTempstoreStrategy::get()) must therefore converge every staged
  * envelope it deserializes, through the load-time half of daedalus_layout's
  * deprecation-window safety net.
  *
- * Deliberately does NOT enable daedalus_stylish_layouts_retired_test: the retired
- * plugins must be truly absent, exactly as on a real updated site, to pin
- * that neither the transforms nor the render path resolve them.
+ * Deliberately does NOT enable daedalus_stylish_layouts_retired_test: the
+ * retired plugins must be truly absent, exactly as on a real updated site, to
+ * pin that neither the transforms nor the render path resolve them.
  *
  * @group daedalus_stylish
  */
@@ -166,10 +166,10 @@ class StaleSessionConvergenceTest extends NestedStorageKernelTestBase {
     $this->assertArrayNotHasKey('container:' . self::TWOCOL_UUID . '::.daedalus-stylish-layout-container', $map);
     $this->assertArrayNotHasKey('section:' . self::TWOCOL_UUID . '::.daedalus-stylish-layout-container', $map);
 
-    // The line that used to throw PluginNotFoundException (daedalus_stylish_twocol):
-    // the staged session renders, through the composed one-box render (a
-    // root-depth container is a real <section>; the old inner part div is
-    // gone).
+    // The line that used to throw PluginNotFoundException
+    // (daedalus_stylish_twocol): the staged session renders, through the
+    // composed one-box render (a root-depth container is a real <section>; the
+    // old inner part div is gone).
     $html = $this->renderEntity($staged);
     $this->assertStringContainsString('<section', $html);
     $this->assertStringNotContainsString('daedalus-stylish-layout-container', $html);

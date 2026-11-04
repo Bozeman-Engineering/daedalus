@@ -46,7 +46,12 @@ const FACE_LOADING = 128;
 
 /**
  * The scale the CSS lays the frame out at.
- * @param element
+ *
+ * @param {Element} element
+ *   The layer element, where the scale's custom property resolves.
+ *
+ * @return {number}
+ *   The scale, 0.4 when the stylesheet names none.
  */
 const scaleOf = (element) =>
   parseFloat(
@@ -56,8 +61,14 @@ const scaleOf = (element) =>
 /**
  * The placed element's height in its document: the shown element's
  * bottom edge, else the body's.
- * @param frame
- * @param show
+ *
+ * @param {HTMLIFrameElement} frame
+ *   The frame the peek's document is loaded into.
+ * @param {string} show
+ *   The selectable key of the element the document shows.
+ *
+ * @return {number}
+ *   The height in CSS pixels, 0 before the document is there.
  */
 const contentHeight = (frame, show) => {
   const doc = frame.contentDocument;
@@ -79,13 +90,14 @@ const contentHeight = (frame, show) => {
  * The layer.
  *
  * @param {object} props
- *   - peek: {faceId, label, show, status, document, message, top}: the
- *     face shown, the key of what the document shows, `loading`, `ready`
- *     or `refused`, the document (ready) or the refusal's sentence
- *     (refused), and the rested-on row's top edge.
- *   - panel: the panel element the layer sits beside.
- * @param props.peek
- * @param props.panel
+ *   The component's props.
+ * @param {object} props.peek
+ *   {faceId, label, show, status, document, message, top}: the face
+ *   shown, the key of what the document shows, `loading`, `ready` or
+ *   `refused`, the document (ready) or the refusal's sentence (refused),
+ *   and the rested-on row's top edge.
+ * @param {Element} props.panel
+ *   The panel element the layer sits beside.
  */
 export const PeekFrame = ({ peek, panel }) => {
   const ref = useRef(null);

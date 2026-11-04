@@ -18,7 +18,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
- * Ships a design system to its package module: the CLI adapter over DesignSystemShip.
+ * Ships a design system to its package module.
+ *
+ * The CLI adapter over DesignSystemShip.
  *
  * `daedalus_stylish:sync MODULE` brings a package onto the site; this
  * command runs the other direction for a whole design system: the unit
@@ -110,7 +112,9 @@ final class DesignSystemShipCommand extends Command {
   }
 
   /**
-   * The blueprints a plan graduates: every blueprint line that is not a refusal.
+   * The blueprints a plan graduates.
+   *
+   * Every blueprint line that is not a refusal.
    *
    * The blueprint lane's only package gesture is graduation, so a
    * blueprint outcome is a content blueprint that leaves the site. The

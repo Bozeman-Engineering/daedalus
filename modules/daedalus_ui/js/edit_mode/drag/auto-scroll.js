@@ -42,6 +42,14 @@ export const MAX_VELOCITY = 1400;
  * Zero outside the edge bands; inside a band it ramps linearly from 0 at
  * the band's inner boundary to MAX_VELOCITY at the viewport edge.
  * Negative is up.
+ *
+ * @param {number} clientY
+ *   The cursor's viewport y coordinate.
+ * @param {number} viewportHeight
+ *   The viewport's height (window.innerHeight).
+ *
+ * @return {number}
+ *   The signed velocity in px/s, zero outside the bands.
  */
 export const desiredVelocity = (clientY, viewportHeight) => {
   const topDepth = EDGE_BAND - clientY;
@@ -60,6 +68,14 @@ export const desiredVelocity = (clientY, viewportHeight) => {
  * autoscroll already moved in the same direction since the last frame.
  * Movement in the opposite direction (a user wheel, an anchor jump) is not
  * ours to fight and is ignored rather than compensated.
+ *
+ * @param {number} desired
+ *   The signed step (px) the velocity asks for this frame.
+ * @param {number} nativeDelta
+ *   The signed scroll movement (px) measured since the last frame.
+ *
+ * @return {number}
+ *   The signed step to apply, never past the desired one.
  */
 export const topUp = (desired, nativeDelta) => {
   const native =
@@ -112,6 +128,9 @@ const tick = (now) => {
 
 /**
  * Feeds the drag cursor in; called from the controller's dragover.
+ *
+ * @param {number} clientY
+ *   The cursor's viewport y coordinate.
  */
 export const updateAutoScroll = (clientY) => {
   cursorY = clientY;

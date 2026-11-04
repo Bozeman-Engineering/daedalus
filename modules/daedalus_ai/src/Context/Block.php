@@ -12,7 +12,7 @@ final class Block {
   /**
    * Constructs a block.
    *
-   * @param \Drupal\daedalus_ai_memory\Transcript\BlockKind $kind
+   * @param \Drupal\daedalus_ai\Context\BlockKind $kind
    *   The kind.
    * @param string $text
    *   The text the producer stated, without any wrapper the renderer adds.

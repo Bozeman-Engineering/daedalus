@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\Slot;
 
+use Drupal\Core\Config\Entity\ConfigEntityTypeInterface;
 use Drupal\Core\Config\StorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\daedalus_blueprint\Entity\FrameInterface;
@@ -144,7 +145,11 @@ final class SlotPlacements {
    */
   private function prefix(string $entity_type_id): ?string {
     $definition = $this->entityTypeManager->getDefinition($entity_type_id, FALSE);
-    return $definition === NULL ? NULL : $definition->getConfigPrefix() . '.';
+    if ($definition === NULL) {
+      return NULL;
+    }
+    assert($definition instanceof ConfigEntityTypeInterface);
+    return $definition->getConfigPrefix() . '.';
   }
 
   /**

@@ -19,18 +19,19 @@ use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
  * Tests the style grammar's input tier: the style-value handler seam.
  *
  * The input grammar for a style property value is a superset of the storage
- * grammar: a plain CSS string, a handled-value object dispatched on its
- * marker key (a service tagged daedalus_stylish.style_value_handler), or, on
- * media-capable properties, a layers list of strings and objects joined to
- * one comma-separated value. StyleValueResolver runs in two phases: CHECK
+ * grammar: a plain CSS string, a handled-value object dispatched on its marker
+ * key (a service tagged daedalus_stylish.style_value_handler), or, on
+ * media-capable properties, a layers list of strings and objects joined to one
+ * comma-separated value. StyleValueResolver runs in two phases: CHECK
  * substitutes sound stand-ins so StyleMapValidator runs unchanged and
  * side-effect-free, COMMIT invokes the handlers only after validation
  * succeeded, so failed writes mint nothing. All three write lanes wire the
- * seam: StyleMapFieldHandler whole-map writes, DaedalusStylishOperationHandler's
- * update_style patch, and VariantStylesFieldHandler variant styles. The
- * test handler (daedalus_stylish_value_handler_test) registers the "_test_value"
- * marker and logs its invocations in state; daedalus_stylish itself registers no
- * handlers, so an unrecognized marker is a validation error.
+ * seam: StyleMapFieldHandler whole-map writes,
+ * DaedalusStylishOperationHandler's update_style patch, and
+ * VariantStylesFieldHandler variant styles. The test handler
+ * (daedalus_stylish_value_handler_test) registers the "_test_value" marker and
+ * logs its invocations in state; daedalus_stylish itself registers no handlers,
+ * so an unrecognized marker is a validation error.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]

@@ -31,6 +31,7 @@ import { styleTarget } from './widgets/lib/use-highlight.js';
  *   The store's variant records.
  *
  * @return {{axes: string[], scopes: string[]}}
+ *   The sorted axis and scope vocabularies.
  */
 export const libraryFilters = (variants) => ({
   axes: [
@@ -59,10 +60,13 @@ export const libraryFilters = (variants) => ({
  * @param {?Array<object>} variants
  *   The store's variant records (roster order: weight, then label).
  * @param {{search?: string, axis?: ?string, scope?: ?string}} filters
+ *   The list's filters: a search needle, an exact axis and an exact scope
+ *   (null = all).
  *
  * @return {Array<{reference: string, label: string, axis: string,
  *   scope: string, description: string, weight: number, shipped: boolean,
  *   offered: boolean}>}
+ *   The rows that pass the filters, in roster order.
  */
 export const libraryRows = (
   variants,
@@ -111,6 +115,7 @@ export const libraryRows = (
  *   The materials roster.
  *
  * @return {string}
+ *   The blueprint's label, or its id when the roster lacks it.
  */
 export const blueprintLabel = (blueprint, materials) =>
   materials.get('blueprint', blueprint)?.label ?? blueprint;
@@ -132,6 +137,8 @@ export const blueprintLabel = (blueprint, materials) =>
  *   The materials roster.
  *
  * @return {?{owner: ?string, label: ?string, orphaned: boolean}}
+ *   The owner's id and label (both null when orphaned), or null when the
+ *   variant is unowned.
  */
 export const variantOwnership = (variant, materials) => {
   if (variant?.owned_by == null) {
@@ -163,6 +170,7 @@ export const variantOwnership = (variant, materials) => {
  *   The materials roster.
  *
  * @return {Array<{id: string, label: string}>}
+ *   The transfer targets, in roster order.
  */
 export const blueprintTargets = (variant, materials) =>
   materials
@@ -171,7 +179,10 @@ export const blueprintTargets = (variant, materials) =>
       (blueprint) =>
         blueprint.updatable === true && blueprint.id !== variant?.owned_by,
     )
-    .map((blueprint) => ({ id: blueprint.id, label: blueprint.label ?? blueprint.id }))
+    .map((blueprint) => ({
+      id: blueprint.id,
+      label: blueprint.label ?? blueprint.id,
+    }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
 /**
@@ -214,6 +225,7 @@ export const blueprintTargets = (variant, materials) =>
  * @return {{details: boolean, revisions: boolean, editStyles: boolean,
  *   duplicate: boolean, copy: boolean, revert: boolean, release: boolean,
  *   transfer: boolean, delete: boolean}}
+ *   Each card gesture's grant.
  */
 export const cardGestures = (
   variant,
@@ -290,6 +302,7 @@ export const cardGestures = (
  *
  * @return {'ready'|'no-selection'|'worn'|'unfit'|'unfit-owned'|
  *   'unfit-orphaned'}
+ *   The doorway's state for the target.
  */
 export const applyDoorway = (
   variant,
@@ -348,6 +361,7 @@ export const applyDoorway = (
  *   the anchor.
  *
  * @return {?{key: string, reference: string, fragment: string}}
+ *   The anchor wearer, or null when the page wears none of the variant.
  */
 export const pageWearer = (styleMap, variant, preferred = null) => {
   if (!variant) {
@@ -365,7 +379,9 @@ export const pageWearer = (styleMap, variant, preferred = null) => {
       return own;
     }
   }
-  const wearers = Object.keys(styleMap ?? {}).map(wornRef).filter(Boolean);
+  const wearers = Object.keys(styleMap ?? {})
+    .map(wornRef)
+    .filter(Boolean);
   const roots = wearers.filter((wearer) => wearer.fragment === '');
   return (
     roots.find((wearer) => styleTarget(wearer.key).selector === null) ??

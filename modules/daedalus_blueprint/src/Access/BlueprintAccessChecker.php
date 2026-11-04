@@ -16,8 +16,8 @@ use Drupal\daedalus_blueprint\Host\HostInterface;
 /**
  * Centralized access checks for blueprint operations.
  *
- * Every read, write, reference, and schema path in Daedalus Blueprint routes its
- * access decisions through this one service, so the "enforce against the
+ * Every read, write, reference, and schema path in Daedalus Blueprint routes
+ * its access decisions through this one service, so the "enforce against the
  * current user" rule lives in a single place. Callers that legitimately bypass
  * access (trusted CLI) simply do not call the checker — the checker itself
  * always answers truthfully and has no bypass toggle.

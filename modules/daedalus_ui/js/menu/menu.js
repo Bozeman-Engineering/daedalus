@@ -5,23 +5,24 @@
  * The one popup menu every chrome surface shares: right-click
  * menus, chevron and kebab dropdowns, the stop picker. Any chrome library
  * declares daedalus_ui/menu as a dependency and opens it imperatively:
- * @code
- *   Drupal.Daedalus.menu.open({
- *     anchor: button,                  // or x, y from a pointer
- *     align: 'end',                    // 'start' (default) or 'end'
- *     header: Drupal.t('Show'),
- *     items: [
- *       { caption: Drupal.t('Model') },
- *       { label, icon, checked, hint, run, preview },
- *       { label: Drupal.t('Panels'), items: [{ label, checked, run }] },
- *       { separator: true },
- *       { label, meter: 0.82, hint },
- *       { separator: true },
- *       { label, danger: true, confirm: Drupal.t('Confirm delete?'), run },
- *     ],
- *     onClose,
- *   });
- * @endcode
+ *
+ * @example
+ * Drupal.Daedalus.menu.open({
+ *   anchor: button,                  // or x, y from a pointer
+ *   align: 'end',                    // 'start' (default) or 'end'
+ *   header: Drupal.t('Show'),
+ *   items: [
+ *     { caption: Drupal.t('Model') },
+ *     { label, icon, checked, hint, run, preview },
+ *     { label: Drupal.t('Panels'), items: [{ label, checked, run }] },
+ *     { separator: true },
+ *     { label, meter: 0.82, hint },
+ *     { separator: true },
+ *     { label, danger: true, confirm: Drupal.t('Confirm delete?'), run },
+ *   ],
+ *   onClose,
+ * });
+ *
  * open() returns false when items is empty (no items, NO menu) so an
  * adapter can leave the native context menu alone (skip preventDefault).
  *
@@ -127,6 +128,16 @@ const armedLabel = (item) =>
 
 /**
  * Builds one element with a class and optional text.
+ *
+ * @param {string} tag
+ *   The element's tag name.
+ * @param {string} className
+ *   The element's class attribute, whole.
+ * @param {string} [text]
+ *   Its text content; omitted leaves the element empty.
+ *
+ * @return {Element}
+ *   The element, not yet in the document.
  */
 const build = (tag, className, text) => {
   const el = document.createElement(tag);
@@ -173,6 +184,12 @@ const leaveByKeyboard = () => {
  * Activates an item; after a run the opener gets its focus back (a
  * click or Enter on an item is a deliberate leave, whichever pointed).
  * `inFlyout` names the list the index is in.
+ *
+ * @param {number} index
+ *   The item's index in its list.
+ * @param {boolean} [inFlyout]
+ *   Whether the index addresses the open flyout rather than the top
+ *   list; false by default.
  */
 const activateItem = (index, inFlyout = false) => {
   if (mounted) {
@@ -244,6 +261,9 @@ const onKeyDown = (event) => {
  * capture, registered before the surface's own Escape listener so it
  * runs first and the surface never sees the press; with no flyout the
  * press goes on to the surface, which closes the menu.
+ *
+ * @param {KeyboardEvent} event
+ *   The document's capture-phase keydown.
  */
 const onEscapeCapture = (event) => {
   if (event.key !== 'Escape' || !getState()?.sub) {
@@ -256,6 +276,12 @@ const onEscapeCapture = (event) => {
 
 /**
  * The check gutter: the mark on a checked row, empty space on the rest.
+ *
+ * @param {?boolean} checked
+ *   The row's checked state; null for an uncheckable row.
+ *
+ * @return {Element}
+ *   The gutter span, decorative.
  */
 const buildCheck = (checked) => {
   const check = build('span', 'daedalus-ui-menu__check');
@@ -271,6 +297,12 @@ const buildCheck = (checked) => {
  *
  * The fill is the fraction as a width; the hint carries the number in
  * words, so the bar is decoration to a screen reader.
+ *
+ * @param {object} item
+ *   A normalized meter item.
+ *
+ * @return {Element}
+ *   The row.
  */
 const buildMeter = (item) => {
   const row = build(
@@ -303,6 +335,11 @@ const buildMeter = (item) => {
  * delay, if the row is still the active one by then; a plain row's enter
  * cancels a pending intent (and, through setActive, closes a flyout
  * that stands at another row).
+ *
+ * @param {object} item
+ *   The normalized item the pointer entered.
+ * @param {number} index
+ *   Its index in the top list.
  */
 const onTopRowEnter = (item, index) => {
   clearIntent();
@@ -323,6 +360,18 @@ const onTopRowEnter = (item, index) => {
  * Renders one item row: a separator, a group caption, a meter row, or a
  * menuitem button. `inFlyout` names the list the row is in, which is
  * where its pointer and click land.
+ *
+ * @param {object} item
+ *   A normalized item.
+ * @param {number} index
+ *   Its index in its list.
+ * @param {boolean} gutter
+ *   Whether every row in the list wears the check gutter.
+ * @param {boolean} inFlyout
+ *   Whether the list is the open flyout rather than the top list.
+ *
+ * @return {Element}
+ *   The row.
  */
 const buildItem = (item, index, gutter, inFlyout) => {
   if (item.separator) {
@@ -404,7 +453,16 @@ const buildItem = (item, index, gutter, inFlyout) => {
  * every row the gutter, so labels align; a meter row always carries one,
  * so its presence aligns the rest too.
  *
+ * @param {object[]} items
+ *   The normalized items of the list.
+ * @param {string} label
+ *   The list's accessible name.
+ * @param {boolean} inFlyout
+ *   Whether the list is a flyout rather than the top list.
+ *
  * @return {{list: Element, buttons: (Element|null)[]}}
+ *   The list element and, by item index, each focusable row's button or
+ *   null for an inert row.
  */
 const buildList = (items, label, inFlyout) => {
   const list = build('div', 'daedalus-ui-menu');
@@ -432,6 +490,11 @@ const buildList = (items, label, inFlyout) => {
  * Mounts the flyout of the submenu row at `index` into the surface
  * root beside the row: measured hidden, placed by flyoutPosition,
  * revealed. The row reads expanded.
+ *
+ * @param {object} menu
+ *   The menu state (menu-state.js getState()).
+ * @param {number} index
+ *   The submenu row's top index.
  */
 const mountSub = (menu, index) => {
   const row = mounted.buttons[index];
@@ -478,6 +541,9 @@ const unmountSub = () => {
  * surface) closes the menu's state. The host's Escape listener goes on
  * the document BEFORE the surface registers its own, so a flyout's
  * Escape is taken here first.
+ *
+ * @param {object} menu
+ *   The menu state (menu-state.js getState()) of the fresh open.
  */
 const mount = (menu) => {
   const { list, buttons } = buildList(
@@ -528,6 +594,13 @@ const unmount = () => {
 
 /**
  * Swaps the armed row's label in one list and restores the others'.
+ *
+ * @param {object[]} items
+ *   The list's normalized items.
+ * @param {(Element|null)[]} buttons
+ *   Their buttons by index, null for an inert row.
+ * @param {?number} armedIndex
+ *   The armed row's index, or null when none is armed.
  */
 const syncArmed = (items, buttons, armedIndex) => {
   items.forEach((item, index) => {

@@ -94,6 +94,9 @@ const notify = () => listeners.forEach((listener) => listener());
  * has no ordering guarantee), so anything rendering the binding list must
  * re-render on changes rather than snapshot once.
  *
+ * @param {Function} listener
+ *   Called after every registry change.
+ *
  * @return {Function}
  *   Unsubscribe.
  */
@@ -171,6 +174,11 @@ const unregister = (id) => {
 
 /**
  * Rebinds a binding client-side. Persistence is the settings tray's job.
+ *
+ * @param {string} id
+ *   The binding id.
+ * @param {string} key
+ *   The new binding string; empty unbinds.
  */
 const rebind = (id, key) => {
   const binding = bindings.get(id);
@@ -215,6 +223,11 @@ const releaseAll = () => {
 
 /**
  * Runs one candidate's action for a 'down' stroke.
+ *
+ * @param {object} binding
+ *   The candidate binding.
+ * @param {object} stroke
+ *   The keystroke (keyboard-sensor.js).
  *
  * @return {boolean|symbol}
  *   The verdict: PASS when the action passed, else whether it handled the
@@ -293,6 +306,7 @@ export const dispatch = (stroke) => {
  * live contexts.
  *
  * @return {{free: string[], typing: string[]}}
+ *   `free`: claimed while not typing; `typing`: claimed while typing.
  */
 export const claimSet = () => {
   if (!store.getState().hotKey.enabled) {
@@ -356,7 +370,7 @@ const ensureServerBindings = () => {
             // A refused close (an invalid daedalus_edit form) is expected
             // and already shown to the user; anything else is a bug.
             if (error !== Drupal.Daedalus.SidebarPluginBase.CLOSE_BLOCKED) {
-              console.error('Cannot toggle sidebar:', error);
+              Drupal.throwError(error);
             }
           });
         },

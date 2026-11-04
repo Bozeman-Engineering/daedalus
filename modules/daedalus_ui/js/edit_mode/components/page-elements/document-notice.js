@@ -1,4 +1,3 @@
-import { h } from 'preact';
 import { useSelector } from 'react-redux';
 import { pencilIcon } from '../../verbs/rename-verb';
 import { noticeLines } from './document-notice-model';
@@ -28,7 +27,10 @@ export const DocumentNotice = () => {
           {line.portal && (
             /* A real anchor, so Cmd-click opens the template in a new
                tab natively. */
-            <a className="daedalus-ui-document-notice__portal" href={line.portal.url}>
+            <a
+              className="daedalus-ui-document-notice__portal"
+              href={line.portal.url}
+            >
               <span
                 className="daedalus-ui-document-notice__icon"
                 aria-hidden="true"

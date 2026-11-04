@@ -31,7 +31,7 @@ class FrontendContextSubscriberTest extends UnitTestCase {
 
     $event = new AiAssistantPassContextToAgentEvent($this->agent('other_agent'), $context);
     $subscriber->onPassContext($event);
-    $this->assertSame($context, $event->getContext(), 'An agent the spine does not manage keeps the contrib behaviour.');
+    $this->assertSame($context, $event->getContext(), 'An agent the spine does not manage keeps the contrib behavior.');
   }
 
   /**

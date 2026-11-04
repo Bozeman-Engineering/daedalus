@@ -55,7 +55,6 @@ const FORM_SELECTOR = '.daedalus-edit-form';
  */
 const dirty = new WeakSet();
 
-
 /**
  * The revealed wrapper an element sits in, or null: a wrapper in the
  * form-cache mount that the panel shows (not hidden behind a canvas leaf).
@@ -64,6 +63,7 @@ const dirty = new WeakSet();
  *   The element.
  *
  * @return {?Element}
+ *   The revealed wrapper, or null.
  */
 const revealedWrapperOf = (element) => {
   const mount = formCacheMount();
@@ -80,11 +80,11 @@ export class PanelWidgetEditor extends EditorPluginBase {
   /**
    * The widget's value is the form's to extract: nothing is read here.
    */
-  readProperties(item) {
+  readProperties() {
     return {};
   }
 
-  writeProperties(item, properties) {}
+  writeProperties() {}
 
   /**
    * Mount: reveal the widget when a canvas leaf hides it.
@@ -96,6 +96,9 @@ export class PanelWidgetEditor extends EditorPluginBase {
    * reveal sticky across a resume (`item.revealed`): the reveal that
    * opened the edit is what the teardown undoes, whatever a re-mount over
    * swapped-in markup finds.
+   *
+   * @param {object} item
+   *   The item being edited.
    */
   mount(item) {
     this.revealFormItem(item, true);
@@ -110,6 +113,9 @@ export class PanelWidgetEditor extends EditorPluginBase {
 
   /**
    * Defocus: re-hide a leaf's widget; a panel widget stays as it is.
+   *
+   * @param {object} item
+   *   The item being edited.
    */
   defocus(item) {
     if (item.revealed) {
@@ -122,6 +128,12 @@ export class PanelWidgetEditor extends EditorPluginBase {
   /**
    * The explicit floor: commit if the widget reported input since its
    * last commit. A `change` that already fired committed and cleared it.
+   *
+   * @param {object} item
+   *   The item being edited.
+   *
+   * @return {Promise<void>}
+   *   Resolves once the commit, if any, is queued.
    */
   blurElement(item) {
     const wrapper = item.getFormItemWrapper();
@@ -134,6 +146,12 @@ export class PanelWidgetEditor extends EditorPluginBase {
   /**
    * Cancel: a fresh form when the widget reported input, because its
    * uncommitted state is not the client's to restore; nothing otherwise.
+   *
+   * @param {object} item
+   *   The item being edited.
+   *
+   * @return {Promise}
+   *   Resolves once the form is fresh again.
    */
   cancelElement(item) {
     const wrapper = item.getFormItemWrapper();
@@ -147,8 +165,14 @@ export class PanelWidgetEditor extends EditorPluginBase {
 
   /**
    * Resume: the widget (refetched or not) is the surface again.
+   *
+   * @param {object} item
+   *   The item being edited.
+   *
+   * @return {Promise<void>}
+   *   Resolves once the widget is focused.
    */
-  resume(item, draft) {
+  resume(item) {
     this.mount(item);
     this.focus(item);
     return Promise.resolve();
@@ -205,6 +229,9 @@ export class PanelWidgetEditor extends EditorPluginBase {
 
   /**
    * A control inside a revealed wrapper changed: commit.
+   *
+   * @param {Event} event
+   *   The change event.
    */
   onChange(event) {
     const wrapper = revealedWrapperOf(event.target);
@@ -221,6 +248,9 @@ export class PanelWidgetEditor extends EditorPluginBase {
   /**
    * A control inside a revealed wrapper reported input: the explicit
    * floor commits it when the edit ends.
+   *
+   * @param {Event} event
+   *   The input event.
    */
   onInput(event) {
     const wrapper = revealedWrapperOf(event.target);
@@ -235,6 +265,9 @@ export class PanelWidgetEditor extends EditorPluginBase {
    * The context is the inserted or replaced subtree; a whole form arriving
    * (the cache append, a rebuilt form after validation) is the form
    * wrapper itself, above every field wrapper, and commits nothing.
+   *
+   * @param {Element|Document} context
+   *   The behavior context the response attached.
    */
   onAjaxTouched(context) {
     if (

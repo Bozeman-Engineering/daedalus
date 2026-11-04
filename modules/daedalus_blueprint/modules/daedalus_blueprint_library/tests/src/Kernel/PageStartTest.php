@@ -418,6 +418,7 @@ class PageStartTest extends BlueprintKernelTestBase {
     $this->assertSame($new_blocks, $referenced, 'The page\'s components reference exactly the blocks the save created.');
     $this->assertSame(['inline_block:text', 'field_block:node:page:body', 'inline_block:basic'], $this->pluginIds($sections), 'The blueprint\'s document, with the body field resolved against the page bundle; the template\'s block never seeded under it.');
     $text = $block_storage->loadRevision($sections[0]->getComponents()[array_key_first($sections[0]->getComponents())]->get('configuration')['block_revision_id']);
+    assert($text instanceof FieldableEntityInterface);
     $this->assertTrue($text->get('field_heading')->isEmpty(), 'A saved blueprint\'s empty field is present (a stub), so it copies empty: the sample fill is for ABSENT fields, a shipped file\'s or a skeleton capture\'s.');
 
     // The page-level styles landed on the page's own root, re-addressed
@@ -454,7 +455,9 @@ class PageStartTest extends BlueprintKernelTestBase {
     // The placement fill's ladder stops at the site's answer (a default
     // value or a configured generator; core's type-level invention is not
     // a placement rung), so the site answers for the absent heading.
-    FieldConfig::loadByName('block_content', 'text', 'field_heading')->setDefaultValue([['value' => 'Your heading here']])->save();
+    $heading = FieldConfig::loadByName('block_content', 'text', 'field_heading');
+    assert($heading instanceof FieldConfig);
+    $heading->setDefaultValue([['value' => 'Your heading here']])->save();
 
     $node = Node::create(['type' => 'page', 'title' => 'Shipped']);
     $host = $this->host($node);
@@ -472,6 +475,7 @@ class PageStartTest extends BlueprintKernelTestBase {
     ], $this->host($fresh)->styleMap(), 'The bare keys re-address to the page\'s root.');
     $components = array_values($sections[0]->getComponents());
     $text = $this->container->get('entity_type.manager')->getStorage('block_content')->loadRevision($components[0]->get('configuration')['block_revision_id']);
+    assert($text instanceof FieldableEntityInterface);
     $this->assertSame('Your heading here', $text->get('field_heading')->value, 'An absent field sample-populated at the start, as a placement\'s does.');
   }
 
@@ -789,6 +793,7 @@ class PageStartTest extends BlueprintKernelTestBase {
     $saved = $this->container->get('entity_type.manager')->getStorage('blueprint')->loadByProperties(['label' => 'Hero fill']);
     $this->assertCount(1, $saved);
     $saved = reset($saved);
+    assert($saved instanceof BlueprintInterface);
     $this->assertSame(BlueprintInterface::SCOPE_PAGE, $saved->getScope());
     $this->assertSame(['node', 'plain'], [$saved->getSubjectType(), $saved->getSubjectBundle()]);
     $layout = $this->container->get('daedalus_blueprint_library.discovery')->getBlueprint($saved->getMachineName())['layout'];

@@ -1,6 +1,3 @@
-/* eslint-disable max-classes-per-file */
-// Two CodeMirror WidgetType subclasses (the winner chip and the pending
-// line's chrome) render the decorations this view module owns.
 import { h, Fragment } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
@@ -124,21 +121,28 @@ import {
 import {
   TYPE_BLOCK,
   TYPE_CONTAINER,
-  CLASS_PART,
   SUFFIX,
   splitKey,
   typeAddress,
 } from '../../../../daedalus_ui/js/edit_mode/materials/relative-selector.js';
-import {
-  animationOptions,
-  scaleTokens,
-  tokenOptions,
-} from '../materials.js';
+import { animationOptions, scaleTokens, tokenOptions } from '../materials.js';
 import { KEYFRAMES_PROPERTIES } from '../keyframes-names.js';
 import { imageSlot } from '../widget-values.js';
-import { isWideProperty, widePropertyNames, wideValueKeywords } from './wide-tier.js';
-import { OWNER, digest } from '../../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
-import { PART_SELECTOR, selectorLabel, partsForKey, typeLabels } from '../parts.js';
+import {
+  isWideProperty,
+  widePropertyNames,
+  wideValueKeywords,
+} from './wide-tier.js';
+import {
+  OWNER,
+  digest,
+} from '../../../../daedalus_ui/js/edit_mode/materials/selector-digest.js';
+import {
+  PART_SELECTOR,
+  selectorLabel,
+  partsForKey,
+  typeLabels,
+} from '../parts.js';
 import { conditionRenders } from '../editing-at.js';
 import { createMatcher } from '../selector-matcher.js';
 import {
@@ -155,6 +159,15 @@ import {
  * type labels). Built once per host render (the element view, the
  * document view); the per-row context adds the owner key, its parts,
  * its DOM presence and its prose tags.
+ *
+ * @param {object} guide
+ *   The style guide payload (kinds, block types, base tags, conditions).
+ * @param {?Array<object>} document
+ *   The page's document tree (source.getDocument()), null when the host
+ *   serves none.
+ *
+ * @return {object}
+ *   The host-wide half of selectorGestureOptions' context.
  */
 const selectorGestureVocabulary = (guide, document) => {
   const partsOfType = (type) => {
@@ -169,7 +182,10 @@ const selectorGestureVocabulary = (guide, document) => {
             : null;
     return Object.entries(flattenElements(declaration))
       .filter(([selector]) => PART_SELECTOR.test(selector))
-      .map(([selector, part]) => ({ id: selector, label: part?.label ?? selector }));
+      .map(([selector, part]) => ({
+        id: selector,
+        label: part?.label ?? selector,
+      }));
   };
   return {
     document,
@@ -192,11 +208,24 @@ const selectorGestureVocabulary = (guide, document) => {
  * mint on a host goes through beside the brace (bracedSelector), so a
  * picked `a:hover` mints the `a` row's hover island exactly as the
  * typed `a:hover {` does.
+ *
+ * @param {string} spelling
+ *   The selector the gesture spelled, composed under its island's rule.
+ * @param {?object} conditions
+ *   The guide's condition table, the digester's roster.
+ *
+ * @return {?{selector: string, condition: string, folded: boolean}}
+ *   The row to mint (its selector, its condition, whether a list folded
+ *   into one `:is()`), or null when the digester refuses the spelling.
  */
 const mintReading = (spelling, conditions) => {
   const answer = digest(spelling, { conditions: conditions ?? {} });
   return answer.refusal === null && answer.selector !== null
-    ? { selector: answer.selector, condition: answer.condition, folded: answer.folded }
+    ? {
+        selector: answer.selector,
+        condition: answer.condition,
+        folded: answer.folded,
+      }
     : null;
 };
 
@@ -206,10 +235,18 @@ const mintReading = (spelling, conditions) => {
  * where the alternatives went, in the row's voice. Read off the
  * digester's answer, never the text (the digester is the one reader of
  * commas); nothing for a plain selector, a typed `:is()` or a wrapper.
+ *
+ * @param {object} reading
+ *   The mint reading (mintReading).
+ * @param {boolean} reading.folded
+ *   Whether the digester folded a typed list into one `:is()` row.
  */
 const notifyFold = ({ folded }) => {
   if (folded) {
-    notify('status', Drupal.t('Folded into one rule: :is(…) holds the alternatives.'));
+    notify(
+      'status',
+      Drupal.t('Folded into one rule: :is(…) holds the alternatives.'),
+    );
   }
 };
 
@@ -217,18 +254,32 @@ const notifyFold = ({ folded }) => {
  * A rule move's refusal, worded for the host's failure path (rule-move.js
  * REFUSED_*): the same sentence whether the move is the element view's
  * op or a document's staged fact, since the plan refusing it is the same.
+ *
+ * @param {{reason: string, key: string}} refusal
+ *   The plan's refusal: its REFUSED_* reason and the key it names.
+ * @param {string} to
+ *   The selector the move was headed for, as typed.
+ *
+ * @return {string}
+ *   The translated sentence for the messenger.
  */
 const moveRefusalMessage = (refusal, to) => {
   switch (refusal.reason) {
     case REFUSED_TARGET_EXISTS:
-      return Drupal.t('A rule already stands at "!key" here; moving onto it would merge the two.', {
-        '!key': refusal.key,
-      });
+      return Drupal.t(
+        'A rule already stands at "!key" here; moving onto it would merge the two.',
+        {
+          '!key': refusal.key,
+        },
+      );
     case REFUSED_CONTINUATION:
-      return Drupal.t('"!key" cannot follow "!to": a generated box takes no continuation.', {
-        '!key': refusal.key,
-        '!to': to,
-      });
+      return Drupal.t(
+        '"!key" cannot follow "!to": a generated box takes no continuation.',
+        {
+          '!key': refusal.key,
+          '!to': to,
+        },
+      );
     default:
       return Drupal.t('"!to" is not a selector.', { '!to': to });
   }
@@ -371,6 +422,17 @@ const TOKEN_SHAPES_FOR = {
  * (content) offers no token at all: its grammar takes its keywords or one
  * media token, and a var() is refused there, so the offer follows the
  * type and the flag adds only the picker.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {object} materials
+ *   The materials payload (the token scales).
+ * @param {?object} definition
+ *   The property's definition (type, media), or null for an unknown
+ *   property.
+ *
+ * @return {Array<{label: string, type: string, detail: string}>}
+ *   CM6 completion options, one per token.
  */
 const tokenCompletions = (guide, materials, definition) => {
   if (definition?.media && !imageSlot(definition)) {
@@ -397,6 +459,14 @@ const tokenCompletions = (guide, materials, definition) => {
  * spelling the value wears; the detail names the animation. A keyframes
  * name is an ident, not a var(), so these ride the value offer beside
  * the property's keywords (`none`), never the `--` token trigger.
+ *
+ * @param {object} materials
+ *   The materials payload (the animation roster).
+ * @param {string} property
+ *   The property being completed.
+ *
+ * @return {Array<{label: string, type: string, detail: string}>}
+ *   CM6 completion options, one per animation; [] off the two properties.
  */
 const animationCompletions = (materials, property) =>
   KEYFRAMES_PROPERTIES.includes(property)
@@ -406,6 +476,7 @@ const animationCompletions = (materials, property) =>
         detail: animation.label,
       }))
     : [];
+
 /**
  * The property and value completions over one served node: the granted
  * properties (every wide-tier name when the world is open), then a
@@ -416,6 +487,15 @@ const animationCompletions = (materials, property) =>
  * outside preact's render loop). Exported for the keyframes editor's
  * islands (keyframe-island.js), which complete under the universal
  * vocabulary and want no gesture or tag offers.
+ *
+ * @param {object} context
+ *   CM6's CompletionContext (state, pos, explicit, matchBefore).
+ * @param {{current: object}} propsRef
+ *   The island's props ref ({guide, materials, declaration} read live).
+ *
+ * @return {?object}
+ *   A CM6 completion result ({from, options, validFor}), or null when
+ *   nothing offers at the cursor.
  */
 export const guideCompletions = (context, propsRef) => {
   const { guide, materials, declaration } = propsRef.current;
@@ -563,6 +643,13 @@ export const guideCompletions = (context, propsRef) => {
  * head). A colon glued to what follows it is a selector's (`a:ho`, the
  * `:` lane; `&::`, a generated box's tail) and passes; whether the word
  * before it is a property is the selector gesture's own check.
+ *
+ * @param {object} context
+ *   CM6's CompletionContext (state, pos).
+ *
+ * @return {?{line: object, before: string, after: string}}
+ *   The cursor's line and its text on either side of the cursor, or null
+ *   off a declaration position.
  */
 const gestureLine = (context) => {
   const line = context.state.doc.lineAt(context.pos);
@@ -579,6 +666,14 @@ const gestureLine = (context) => {
  * first colon is one bare word the guide or the wide tier knows as a
  * property (`color:`, `margin:`), so `color:` never opens the `:` lane
  * (a tag word is never a property; `a:`, `li:`, `d-text:` open it).
+ *
+ * @param {string} before
+ *   The line's text before the cursor.
+ * @param {object} guide
+ *   The style guide payload (the property definitions).
+ *
+ * @return {boolean}
+ *   True when the head before the first colon is a known property.
  */
 const declarationHead = (before, guide) => {
   const colon = before.indexOf(':');
@@ -618,6 +713,16 @@ const declarationHead = (before, guide) => {
  * popup spells each option the nested way the user is typing
  * (nestedSpelling: `&::before`, `> a`) while picking it mints the
  * composed canonical selector (`p::before`, `p > a`).
+ *
+ * @param {object} context
+ *   CM6's CompletionContext (state, pos).
+ * @param {{current: object}} propsRef
+ *   The island's props ref ({guide, materialize} read live; the gesture
+ *   stands down without `materialize.selector`).
+ *
+ * @return {?object}
+ *   A CM6 completion result whose options mint rows, or null when the
+ *   line is not a selector being typed.
  */
 const selectorCompletions = (context, propsRef) => {
   const { guide, materialize } = propsRef.current;
@@ -688,6 +793,15 @@ const selectorCompletions = (context, propsRef) => {
  * the selector gesture. Picking an option REMOVES the typed token and
  * materializes the condition row (or the box row) + island instead of
  * inserting text.
+ *
+ * @param {object} context
+ *   CM6's CompletionContext (state, pos).
+ * @param {{current: object}} propsRef
+ *   The island's props ref ({guide, materialize} read live).
+ *
+ * @return {?object}
+ *   A CM6 completion result whose options mint rows, or null when the
+ *   line carries no sigil (or the guide no conditions).
  */
 const conditionCompletions = (context, propsRef) => {
   const { guide, materialize } = propsRef.current;
@@ -715,8 +829,10 @@ const conditionCompletions = (context, propsRef) => {
   const anchored = read.before.trim().startsWith('&') && materialize.selector;
   const rule = anchored ? materialize.selector.rule : null;
   const boxes = anchored
-    ? (selectorGestureOptions(nestUnder(rule, '&::'), materialize.selector.context)
-        ?.options ?? [])
+    ? (selectorGestureOptions(
+        nestUnder(rule, '&::'),
+        materialize.selector.context,
+      )?.options ?? [])
     : [];
   return {
     // The filter range starts past the sigil so typed text matches
@@ -738,7 +854,10 @@ const conditionCompletions = (context, propsRef) => {
         detail: selectorDetail(option),
         section: box,
         apply: (view, completion, from, to) => {
-          const reading = mintReading(option.selector, materialize.selector.context?.conditions);
+          const reading = mintReading(
+            option.selector,
+            materialize.selector.context?.conditions,
+          );
           if (reading === null) {
             return;
           }
@@ -764,6 +883,14 @@ const conditionCompletions = (context, propsRef) => {
  * selector shape (`>`, `.`, `d-`, a chain) is the selector gesture
  * alone, and the property offer stands down there (guideCompletions
  * reads only a bare word as a property).
+ *
+ * @param {object} context
+ *   CM6's CompletionContext.
+ * @param {{current: object}} propsRef
+ *   The island's props ref, handed to each gesture.
+ *
+ * @return {?object}
+ *   The first gesture's CM6 completion result, the merged popup, or null.
  */
 const completionSource = (context, propsRef) => {
   const condition = conditionCompletions(context, propsRef);
@@ -792,6 +919,16 @@ const completionSource = (context, propsRef) => {
  * resolves the placement against the freshly built state before any
  * EditorView exists. The fresh-line placement (FRESH_LINE) never
  * arrives here: the surface resolves it, since it edits the document.
+ *
+ * @param {object} state
+ *   The island's CM6 EditorState (its doc is the buffer).
+ * @param {{edge: string, column: (number|undefined)}} placement
+ *   The neighbor's intent: the edge to land on ('end', 'firstLine',
+ *   'lastLine', 'firstStop', 'lastStop') and, for a vertical arrival, the
+ *   goal column.
+ *
+ * @return {number}
+ *   The document position to place the cursor at.
  */
 const placementAnchor = (state, placement) => {
   const doc = state.doc;
@@ -826,6 +963,13 @@ const placementAnchor = (state, placement) => {
  * inside the island (moveVertically respects line wrapping, so a wrapped
  * last line keeps its visual rows); only a cursor with nowhere left to go
  * crosses to the neighbor, carrying its goal column.
+ *
+ * @param {function(number, object): boolean} stitchTo
+ *   Focuses the neighbor island (direction 1 or -1) with a placement;
+ *   false when there is none, which hands the key back to CodeMirror.
+ *
+ * @return {Array<{key: string, run: Function}>}
+ *   The four arrow bindings for a CM6 keymap.
  */
 const stitchArrowKeys = (stitchTo) => [
   {
@@ -873,104 +1017,93 @@ const stitchArrowKeys = (stitchTo) => [
 ];
 
 /**
- * The winner dot: the small chrome chip on a lost line naming the layer
- * whose value beats it, in that layer's stable hue. A widget, never
- * buffer text, so it cannot diff or read as an edit. The DOM comes from
- * the shared builder (island-surface.js) the printer uses too.
+ * The one CodeMirror widget this view mints: a decoration whose DOM comes
+ * from a shared builder (island-surface.js, the same DOM the printer
+ * places), never buffer text, so it cannot diff or read as an edit.
+ *
+ * Identity is the key: two widgets with one key are equal (CodeMirror
+ * keeps the DOM), so a factory below keys on exactly the facts its DOM
+ * shows. WidgetType's default ignoreEvent() (true) is the behavior every
+ * one of them wants: the editor hands an event on the widget no further,
+ * so a run label's right-click bubbles to the island's contextmenu (the
+ * run menu) and a pending mark's button runs its own handler without
+ * moving the cursor.
  */
-class WinnerWidget extends WidgetType {
-  constructor(label, color) {
+class IslandWidget extends WidgetType {
+  constructor(key, render) {
     super();
-    this.label = label;
-    this.color = color;
+    this.key = key;
+    this.render = render;
   }
 
   eq(other) {
-    return other.label === this.label && other.color === this.color;
+    return other.key === this.key;
   }
 
   toDOM() {
-    return winnerChip(this.label, this.color);
-  }
-
-  // CodeMirror's WidgetType hook: the answer is the widget class's, never
-  // an instance's.
-  // eslint-disable-next-line class-methods-use-this
-  ignoreEvent() {
-    return true;
+    return this.render();
   }
 }
+
+/**
+ * The winner dot: the small chrome chip on a lost line naming the layer
+ * whose value beats it, in that layer's stable hue.
+ *
+ * @param {string} label
+ *   The winning layer's label.
+ * @param {string} color
+ *   The winning layer's hue.
+ *
+ * @return {IslandWidget}
+ *   The widget, equal to any other winner dot with the same words and hue.
+ */
+const winnerWidget = (label, color) =>
+  new IslandWidget(JSON.stringify(['winner', label, color]), () =>
+    winnerChip(label, color),
+  );
 
 /**
  * The run label: the block naming a layer run once above its first line,
  * in the layer's hue (line-marks.js `run`). A block widget before the
- * line, never buffer text, so it cannot diff or read as an edit; the
- * printer places the same DOM before the printed line (island-surface.js
- * runLabel), so the two postures agree on where the label sits. The
- * label is the run's handle: ignoreEvent keeps its right-click out of
- * the editor (CodeMirror hands the event no further), so it bubbles to
- * the island's contextmenu, which opens the run menu.
+ * line; the printer places the same DOM before the printed line
+ * (island-surface.js runLabel), so the two postures agree on where the
+ * label sits. The label is the run's handle for the run menu.
+ *
+ * @param {string} label
+ *   The run's label.
+ * @param {string} color
+ *   The layer's hue.
+ * @param {string} layer
+ *   The layer id the run belongs to.
+ *
+ * @return {IslandWidget}
+ *   The widget, equal to any other run label with the same facts.
  */
-class RunWidget extends WidgetType {
-  constructor(label, color, layer) {
-    super();
-    this.label = label;
-    this.color = color;
-    this.layer = layer;
-  }
-
-  eq(other) {
-    return (
-      other.label === this.label &&
-      other.color === this.color &&
-      other.layer === this.layer
-    );
-  }
-
-  toDOM() {
-    return runLabel(this.label, this.color, this.layer);
-  }
-
-  // CodeMirror's WidgetType hook: the answer is the widget class's, never
-  // an instance's.
-  // eslint-disable-next-line class-methods-use-this
-  ignoreEvent() {
-    return true;
-  }
-}
+const runWidget = (label, color, layer) =>
+  new IslandWidget(JSON.stringify(['run', label, color, layer]), () =>
+    runLabel(label, color, layer),
+  );
 
 /**
  * The pending-row mark: the dismiss (or restore) control on a pending
  * line. Document islands (the editing session's body) wear it on staged
- * lines:
- * dismiss drops the staged edit and the stored sheet resurfaces.
- * Interactive chrome, so ignoreEvent lets the button's own handler run
- * without moving the cursor. The DOM comes from the shared builder
- * (island-surface.js) the printer uses too.
+ * lines: dismiss drops the staged edit and the stored sheet resurfaces.
+ *
+ * @param {string} kind
+ *   The mark's kind ('dismiss' or 'restore').
+ * @param {string} id
+ *   The pending line's id, the handler's argument.
+ * @param {function(string): void} onRun
+ *   The gesture handler; not part of the identity (one handler per
+ *   island render).
+ *
+ * @return {IslandWidget}
+ *   The widget, equal to any other mark of the same kind on the same id.
  */
-class PendingMarkWidget extends WidgetType {
-  constructor(kind, id, onRun) {
-    super();
-    this.kind = kind;
-    this.id = id;
-    this.onRun = onRun;
-  }
-
-  eq(other) {
-    return other.kind === this.kind && other.id === this.id;
-  }
-
-  toDOM() {
-    return pendingMark(this.kind, this.id, this.onRun);
-  }
-
-  // CodeMirror's WidgetType hook: the answer is the widget class's, never
-  // an instance's.
-  // eslint-disable-next-line class-methods-use-this
-  ignoreEvent() {
-    return true;
-  }
-}
+const pendingMarkWidget = (kind, id, onRun) =>
+  new IslandWidget(JSON.stringify(['pending', kind, id]), () =>
+    pendingMark(kind, id, onRun),
+  );
 
 /**
  * One island: one (key, condition) declaration list, in one of two
@@ -1006,6 +1139,57 @@ class PendingMarkWidget extends WidgetType {
  * it (the satellite), which drops the item. `law` is the law gate
  * ({canView}): the declared run's "See the declaration" item exists only
  * under it; otherwise the run says the declaration is code.
+ *
+ * @param {object} props
+ *   The island's props; CM6 reads them live through a ref.
+ * @param {object} props.source
+ *   The state source (preview, release and the style map writes).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials payload (tokens, animations).
+ * @param {object} props.declaration
+ *   The served declaration for the island's key (grants, sets), {} when
+ *   the key lands nowhere declared.
+ * @param {string} props.mapKey
+ *   The style map key the island edits (an owner key, or `owner::selector`).
+ * @param {string} props.condition
+ *   The island's condition name ('default' for the bare island).
+ * @param {?object} props.styleMap
+ *   The style map, the island's write target.
+ * @param {?Array<object>} props.variants
+ *   The variant library.
+ * @param {?Array<string>} props.axes
+ *   The axis vocabulary for the island's owner.
+ * @param {?object} props.materialize
+ *   The typing gestures' landings: `selector` ({rule, context,
+ *   onMaterialize}) and `condition(name)`; null on a host that mints no
+ *   rows.
+ * @param {boolean} props.autoFocus
+ *   Whether the island wakes with the cursor on mount (a draft's focus,
+ *   a wake).
+ * @param {?object} props.stitch
+ *   The host's stitching registry (stitching.js createStitching), the
+ *   keyboard chain across islands.
+ * @param {?object} props.sheet
+ *   A document island's sheet: {reference, variantStyles, session, slot,
+ *   anchored, stage, dismiss}; null for a map island.
+ * @param {boolean} props.posed
+ *   Whether the island's condition is the one the canvas is posed at.
+ * @param {?object} props.stack
+ *   The key's style stack (style-stack.js buildStack), or null.
+ * @param {?Function} props.project
+ *   The island's read of the stack's lines, `(lines, condition) =>
+ *   lines`, or null to print them as they are.
+ * @param {boolean} props.rule
+ *   Whether this is a rule island (an ancestor rule reaching the key).
+ * @param {?Function} props.onOpenDocument
+ *   The variant doorway, `(reference, condition, anchor)`, or null.
+ * @param {object} props.law
+ *   The law gate ({canView}).
+ *
+ * @return {object}
+ *   The island element.
  */
 const Island = ({
   source,
@@ -1044,7 +1228,6 @@ const Island = ({
   const islandId = `${mapKey}|${condition}`;
   const rootPos = mapKey.indexOf('::');
   const rootKey = rootPos === -1 ? mapKey : mapKey.slice(0, rootPos);
-  const relative = mapKey.slice(rootKey.length);
 
   // The stack is rebuilt per render; its signature keys the re-print on
   // what it says (a floor layer appearing, a tag change swapping the
@@ -1374,7 +1557,11 @@ const Island = ({
         return;
       }
       const id = `${slot}\u0000${entryCondition}`;
-      const group = grouped.get(id) ?? { slot, condition: entryCondition, properties: {} };
+      const group = grouped.get(id) ?? {
+        slot,
+        condition: entryCondition,
+        properties: {},
+      };
       Object.assign(group.properties, properties ?? {});
       grouped.set(id, group);
     });
@@ -1386,7 +1573,10 @@ const Island = ({
       );
       const merged = new Map(
         (sheetCtx.session?.lines ?? [])
-          .filter((line) => line.relative === slot && line.condition === entryCondition)
+          .filter(
+            (line) =>
+              line.relative === slot && line.condition === entryCondition,
+          )
           .map((line) => [line.property, line.value]),
       );
       Object.entries(properties).forEach(([property, value]) => {
@@ -1414,13 +1604,24 @@ const Island = ({
   // whose correctives stand is not re-sent until it is edited, and a
   // text in flight is not sent twice. Resolves true when the entries
   // landed, false when correctives stand (the caller places the text).
-  const sendToDoor = (texts, chunks, { onErrors = null, onLanded = null } = {}) => {
+  const sendToDoor = (
+    texts,
+    chunks,
+    { onErrors = null, onLanded = null } = {},
+  ) => {
     const text = texts.join('\n');
     const standing = session.current.door;
-    if (session.current.doorInFlight === text || standing?.texts.join('\n') === text) {
+    if (
+      session.current.doorInFlight === text ||
+      standing?.texts.join('\n') === text
+    ) {
       return;
     }
-    const { guide: currentGuide, sheet: sheetCtx, source: currentSource } = propsRef.current;
+    const {
+      guide: currentGuide,
+      sheet: sheetCtx,
+      source: currentSource,
+    } = propsRef.current;
     if (sheetCtx && !sheetCtx.anchored) {
       notify(
         'warning',
@@ -1613,7 +1814,7 @@ const Island = ({
       if (mark.run) {
         ranges.push(
           Decoration.widget({
-            widget: new RunWidget(mark.run.label, mark.run.color, mark.run.layer),
+            widget: runWidget(mark.run.label, mark.run.color, mark.run.layer),
             block: true,
             side: -1,
           }).range(docLine.from),
@@ -1625,7 +1826,7 @@ const Island = ({
         // representation).
         ranges.push(
           Decoration.widget({
-            widget: new PendingMarkWidget(
+            widget: pendingMarkWidget(
               mark.pending.kind,
               mark.pending.id,
               dismissPendingLine,
@@ -1645,7 +1846,7 @@ const Island = ({
       if (mark.winner) {
         ranges.push(
           Decoration.widget({
-            widget: new WinnerWidget(mark.winner.label, mark.winner.color),
+            widget: winnerWidget(mark.winner.label, mark.winner.color),
             side: 1,
           }).range(docLine.to),
         );
@@ -1760,7 +1961,9 @@ const Island = ({
     if (surfaceRef.current?.live || propsRef.current.sheet) {
       return;
     }
-    const lineElement = event.target.closest?.('.daedalus-stylish-island__line');
+    const lineElement = event.target.closest?.(
+      '.daedalus-stylish-island__line',
+    );
     if (!lineElement) {
       return;
     }
@@ -1987,7 +2190,8 @@ const Island = ({
       const word = /^\s*([A-Za-z-]+)\s*$/.exec(text)?.[1] ?? null;
       const property =
         word !== null &&
-        (definitionFor(propsRef.current.guide, word) !== null || isWideProperty(word));
+        (definitionFor(propsRef.current.guide, word) !== null ||
+          isWideProperty(word));
       const reached = property
         ? null
         : previewReach(text, {
@@ -2052,7 +2256,9 @@ const Island = ({
               return false;
             }
             const leading = line.text.length - line.text.trimStart().length;
-            view.dispatch({ changes: { from: line.from + leading, to: line.to } });
+            view.dispatch({
+              changes: { from: line.from + leading, to: line.to },
+            });
             // The commit clears the preview: the minted row seats its
             // own facet.
             clearTypedPreview();
@@ -2412,7 +2618,11 @@ const Island = ({
   // identity color, inherited by every line (a staged line overrides it
   // with the focus color in inspector.css).
   const railHue = sheet
-    ? { '--daedalus-stylish-line-hue': layerColor(documentLayerId(sheet.reference)) }
+    ? {
+        '--daedalus-stylish-line-hue': layerColor(
+          documentLayerId(sheet.reference),
+        ),
+      }
     : undefined;
 
   return (
@@ -2521,6 +2731,49 @@ const Island = ({
  * its prelude for the selector editor (selector-chrome.js, the mint
  * surface in place); a commit moves the rule and its family through one
  * `move_style` op (element-model.js ruleMovePlan) and the seat follows.
+ *
+ * @param {object} props
+ *   The host's props.
+ * @param {object} props.source
+ *   The state source (block types, section layouts, the page document,
+ *   the style map writes, the hover facets).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials payload.
+ * @param {string} props.elementKey
+ *   The element's key, the roster's owner.
+ * @param {?object} props.styleMap
+ *   The style map.
+ * @param {?Array<object>} props.variants
+ *   The variant library.
+ * @param {?object} props.stitch
+ *   A stitching registry shared with the host's other bodies (the page
+ *   tree's), or null to keep a local one.
+ * @param {string} props.posed
+ *   The posed compound (the canvas vector + force state), 'default' at
+ *   rest.
+ * @param {?Function} props.onPose
+ *   Drives the canvas to a condition's compound (the Inspector's
+ *   driveCanvas), or null.
+ * @param {boolean} props.posedGhost
+ *   Whether a posed compound with no stored island renders a ghost
+ *   island (the selected element only).
+ * @param {boolean} props.sparse
+ *   Whether the roster prunes to occupied islands (unselected tree rows).
+ * @param {?string} props.targetSelector
+ *   The spine's styling target's selector when this element is the
+ *   selection, else null.
+ * @param {?object} props.address
+ *   The spine's write address ({key, selector}) when this element is the
+ *   selection, else null.
+ * @param {?Function} props.onOpenDocument
+ *   The variant doorway, `(reference, condition, anchor)`, or null.
+ * @param {object} props.law
+ *   The law gate ({canView}).
+ *
+ * @return {object}
+ *   The roster body element.
  */
 export const ElementIslands = ({
   source,
@@ -2725,7 +2978,11 @@ export const ElementIslands = ({
         return;
       }
       const subject = source.getTarget?.() ?? null;
-      if (owner === selected && subject?.key === selected && subject?.selector === from) {
+      if (
+        owner === selected &&
+        subject?.key === selected &&
+        subject?.selector === from
+      ) {
         source.target?.(selected, to);
       }
     };
@@ -2733,7 +2990,10 @@ export const ElementIslands = ({
       source
         .commitBatch({
           operations: plan.operations,
-          label: Drupal.t('Moved "!from" to "!to"', { '!from': from, '!to': to }),
+          label: Drupal.t('Moved "!from" to "!to"', {
+            '!from': from,
+            '!to': to,
+          }),
         })
         .then(follow, () => {
           // Named already by the source's failure report; the row stays.
@@ -2743,9 +3003,12 @@ export const ElementIslands = ({
     if (!viewOnly) {
       notify(
         'error',
-        Drupal.t('Nothing of this element\'s to move at "!from": its styles are a variant\'s, which stay until the variant is detached.', {
-          '!from': from,
-        }),
+        Drupal.t(
+          'Nothing of this element\'s to move at "!from": its styles are a variant\'s, which stay until the variant is detached.',
+          {
+            '!from': from,
+          },
+        ),
       );
       return;
     }
@@ -3112,7 +3375,9 @@ export const ElementIslands = ({
             className={`daedalus-stylish-islands__part daedalus-stylish-islands__part--rule${lit ? ' daedalus-stylish-islands__part--active' : ''}`}
             data-daedalus-stylish-part-owner={rule.owner}
             data-daedalus-stylish-part={rule.selector}
-            onMouseEnter={() => source.hoverSelector?.(rule.owner, rule.selector)}
+            onMouseEnter={() =>
+              source.hoverSelector?.(rule.owner, rule.selector)
+            }
             onMouseLeave={() => {
               const current = source.getHoveredSelector?.();
               if (
@@ -3210,7 +3475,11 @@ export const ElementIslands = ({
         // A drafted row (minted, never written) renames as view state;
         // anything else goes through the plan (an entry or a family moves,
         // a variant-supplied row refuses).
-        const edit = editFor(selected, part.selector, drafts.parts.includes(part.selector));
+        const edit = editFor(
+          selected,
+          part.selector,
+          drafts.parts.includes(part.selector),
+        );
         return (
           <Fragment key={part.key}>
             {/* The part header is the part's chrome row on the selection
@@ -3228,7 +3497,9 @@ export const ElementIslands = ({
               className={`daedalus-stylish-islands__part${active ? ' daedalus-stylish-islands__part--active' : ''}`}
               data-daedalus-stylish-part-owner={selected}
               data-daedalus-stylish-part={part.selector}
-              onMouseEnter={() => source.hoverSelector?.(selected, part.selector)}
+              onMouseEnter={() =>
+                source.hoverSelector?.(selected, part.selector)
+              }
               onMouseLeave={() => {
                 const current = source.getHoveredSelector?.();
                 if (
@@ -3342,14 +3613,6 @@ export const ElementIslands = ({
  * chrome says so and its islands stage without previewing (no canvas
  * element could honestly show the line).
  *
- * @param {string} props.anchor
- *   The session's anchor: the styling target's wear key the document was
- *   entered from (an element or a rule).
- * @param {object} props.document
- *   The document context the Inspector builds: {reference, styles,
- *   session, rootKind, stage(slot, condition, lines), dismiss(id),
- *   stageMove(from, to)}.
- *
  * Selector rows are the host body's chrome one document over (the
  * edit-selector landing: variants and skins ride the same selector
  * targeting machinery): a selector typed with `{` on any island mints a
@@ -3358,6 +3621,35 @@ export const ElementIslands = ({
  * header opens the prelude editor whose commit stages a move in the
  * session (`document.stageMove`), the document's landing of the one
  * gesture (the host body sends move_style).
+ *
+ * @param {object} props
+ *   The view's props.
+ * @param {object} props.source
+ *   The state source (block types, section layouts, the page document,
+ *   the tree).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The materials payload.
+ * @param {?string} props.anchor
+ *   The session's anchor: the styling target's wear key the document was
+ *   entered from (an element or a rule), null when nothing on the page
+ *   anchors it.
+ * @param {?object} props.styleMap
+ *   The page's style map (the wearers).
+ * @param {?Array<object>} props.variants
+ *   The variant library.
+ * @param {object} props.document
+ *   The document context the Inspector builds: {reference, styles,
+ *   session, rootKind, stage(slot, condition, lines), dismiss(id),
+ *   stageMove(from, to)}.
+ * @param {string} props.posed
+ *   The posed compound, 'default' at rest.
+ * @param {?Function} props.onPose
+ *   Drives the canvas to a condition's compound, or null.
+ *
+ * @return {object}
+ *   The document view element.
  */
 export const VariantDocumentView = ({
   source,
@@ -3414,7 +3706,12 @@ export const VariantDocumentView = ({
   // table serves both, so renameDrafts rekeys both when a move lands and
   // the × drops both at once; `parts` stays empty (the host body's
   // element-relative draft list, which a document has no owner for).
-  const emptyDrafts = { for: doc.reference, conditions: {}, parts: [], focus: null };
+  const emptyDrafts = {
+    for: doc.reference,
+    conditions: {},
+    parts: [],
+    focus: null,
+  };
   const [draftState, setDraftState] = useState(emptyDrafts);
   const drafts = draftState.for === doc.reference ? draftState : emptyDrafts;
   const withDrafts = (mutate) =>
@@ -3447,7 +3744,10 @@ export const VariantDocumentView = ({
         ...state,
         conditions: {
           ...state.conditions,
-          [key]: condition === null || existing.includes(condition) ? existing : [...existing, condition],
+          [key]:
+            condition === null || existing.includes(condition)
+              ? existing
+              : [...existing, condition],
         },
         focus: `${key}|${condition ?? 'default'}`,
       };
@@ -3468,7 +3768,9 @@ export const VariantDocumentView = ({
   // session (doc.stageMove), never an op: the document's landing.
   const [editState, setEditState] = useState(null);
   const editingKey =
-    editState !== null && editState.for === doc.reference ? editState.key : null;
+    editState !== null && editState.for === doc.reference
+      ? editState.key
+      : null;
   const closeEdit = () => setEditState(null);
   const openEdit = (key) => setEditState({ for: doc.reference, key });
   const conditionLabel = (name) => guide?.conditions?.[name]?.label ?? name;
@@ -3504,7 +3806,10 @@ export const VariantDocumentView = ({
   // document view's islands compose under the row's own selector as the
   // host's rule islands do, so a minted selector arrives relative to the
   // slot and keys straight into the document.
-  const gestureVocabulary = selectorGestureVocabulary(guide, pageDocument ?? []);
+  const gestureVocabulary = selectorGestureVocabulary(
+    guide,
+    pageDocument ?? [],
+  );
   const gestureContextFor = (slot) => {
     const owner = labelOwner(slot);
     return {
@@ -3519,7 +3824,8 @@ export const VariantDocumentView = ({
     };
   };
   const selectorGestureFor = (node, key) => {
-    const rule = key === node.slot ? null : key.slice(node.slot.length + SUFFIX.length);
+    const rule =
+      key === node.slot ? null : key.slice(node.slot.length + SUFFIX.length);
     const self = rule ?? OWNER;
     return {
       rule,
@@ -3628,7 +3934,7 @@ export const VariantDocumentView = ({
   };
   // The editor's props for a selector row, or null while it shows its
   // code face (Prelude's `edit`).
-  const editFor = (node, key, selector) =>
+  const editFor = (node, key) =>
     editingKey === key
       ? {
           completions: gestureContextFor(node.slot),
@@ -3736,7 +4042,13 @@ export const VariantDocumentView = ({
     const anchored = carried !== null;
     const mapKey = anchored ? carried : `~${key}`;
     const axes = anchored
-      ? axisVocabulary(guide, carrier, blockTypes, layoutsTable, source.getTree?.() ?? [])
+      ? axisVocabulary(
+          guide,
+          carrier,
+          blockTypes,
+          layoutsTable,
+          source.getTree?.() ?? [],
+        )
       : [];
     const declaration = anchored
       ? declarationForKey(
@@ -3827,106 +4139,118 @@ export const VariantDocumentView = ({
       {tree.map((node) => {
         const words = slotWords(node);
         return (
-        <div
-          key={node.slot || 'root'}
-          className="daedalus-stylish-document__slot"
-          style={
-            node.depth ? { '--daedalus-stylish-document-depth': node.depth } : undefined
-          }
-        >
-          <div className="daedalus-stylish-document__header">
-            <span className="daedalus-stylish-document__kind">{words.word}</span>
-            {words.name !== null && (
-              <span className="daedalus-stylish-document__name">{words.name}</span>
-            )}
-            {node.detail && (
-              <code className="daedalus-stylish-document__detail">{node.detail}</code>
-            )}
-            {node.slot !== '' && node.kind === null && (
-              <code className="daedalus-stylish-document__detail">{node.slot}</code>
-            )}
-            {carriedChip(node.slot)}
-          </div>
-          {node.keys.map(({ key, selector }) => {
-            const edit = selector === null ? null : editFor(node, key, selector);
-            return (
-            <Fragment key={key}>
-              {selector !== null && (
-                /* The selector row's header, the host body's chrome one
+          <div
+            key={node.slot || 'root'}
+            className="daedalus-stylish-document__slot"
+            style={
+              node.depth
+                ? { '--daedalus-stylish-document-depth': node.depth }
+                : undefined
+            }
+          >
+            <div className="daedalus-stylish-document__header">
+              <span className="daedalus-stylish-document__kind">
+                {words.word}
+              </span>
+              {words.name !== null && (
+                <span className="daedalus-stylish-document__name">
+                  {words.name}
+                </span>
+              )}
+              {node.detail && (
+                <code className="daedalus-stylish-document__detail">
+                  {node.detail}
+                </code>
+              )}
+              {node.slot !== '' && node.kind === null && (
+                <code className="daedalus-stylish-document__detail">
+                  {node.slot}
+                </code>
+              )}
+              {carriedChip(node.slot)}
+            </div>
+            {node.keys.map(({ key, selector }) => {
+              const edit = selector === null ? null : editFor(node, key);
+              return (
+                <Fragment key={key}>
+                  {selector !== null && (
+                    /* The selector row's header, the host body's chrome one
                    document over: the header button takes the double-click
                    that opens the editor (a single click has no seat to
                    take here: the document's rows are its own keys, not
                    spine facts), the editor mounts beside the button (a
                    click in its text must reach CodeMirror alone), and the
                    × unsets the row through the pending lane. */
-                <div
-                  className="daedalus-stylish-islands__part"
-                  data-daedalus-stylish-document-key={key}
-                >
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    className="daedalus-stylish-islands__part-select"
-                    title={key}
-                    onClick={(event) =>
-                      selectorHeaderClick(event, {
-                        seat: () => {},
-                        edit: () => openEdit(key),
-                      })
+                    <div
+                      className="daedalus-stylish-islands__part"
+                      data-daedalus-stylish-document-key={key}
+                    >
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        className="daedalus-stylish-islands__part-select"
+                        title={key}
+                        onClick={(event) =>
+                          selectorHeaderClick(event, {
+                            seat: () => {},
+                            edit: () => openEdit(key),
+                          })
+                        }
+                      >
+                        <span className="daedalus-stylish-islands__part-label">
+                          {selectorLabel(
+                            guide,
+                            labelOwner(node.slot),
+                            selector,
+                            blockTypes,
+                            layoutsTable,
+                            labelOwner(node.slot)
+                              ? source.getMarkup?.(labelOwner(node.slot))
+                              : null,
+                          )}
+                        </span>
+                        {edit === null && (
+                          <Prelude
+                            selector={selector}
+                            guide={guide}
+                            className="daedalus-stylish-islands__prelude"
+                          />
+                        )}
+                      </button>
+                      {edit !== null && (
+                        <Prelude
+                          selector={selector}
+                          guide={guide}
+                          className="daedalus-stylish-islands__prelude"
+                          edit={edit}
+                        />
+                      )}
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        className="daedalus-stylish-islands__remove daedalus-ui-icon-button daedalus-ui-icon-button--muted"
+                        title={Drupal.t(
+                          'Remove this row and unset its styles.',
+                        )}
+                        onClick={() => removeDocumentRow(key)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  <div
+                    className={
+                      selector !== null
+                        ? 'daedalus-stylish-islands__part-body'
+                        : undefined
                     }
                   >
-                    <span className="daedalus-stylish-islands__part-label">
-                      {selectorLabel(
-                        guide,
-                        labelOwner(node.slot),
-                        selector,
-                        blockTypes,
-                        layoutsTable,
-                        labelOwner(node.slot)
-                          ? source.getMarkup?.(labelOwner(node.slot))
-                          : null,
-                      )}
-                    </span>
-                    {edit === null && (
-                      <Prelude
-                        selector={selector}
-                        guide={guide}
-                        className="daedalus-stylish-islands__prelude"
-                      />
-                    )}
-                  </button>
-                  {edit !== null && (
-                    <Prelude
-                      selector={selector}
-                      guide={guide}
-                      className="daedalus-stylish-islands__prelude"
-                      edit={edit}
-                    />
-                  )}
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    className="daedalus-stylish-islands__remove daedalus-ui-icon-button daedalus-ui-icon-button--muted"
-                    title={Drupal.t('Remove this row and unset its styles.')}
-                    onClick={() => removeDocumentRow(key)}
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-              <div
-                className={
-                  selector !== null
-                    ? 'daedalus-stylish-islands__part-body'
-                    : undefined
-                }
-              >
-                {islandsFor(node, key)}
-              </div>
-            </Fragment>
-            );
-          })}
-        </div>
+                    {islandsFor(node, key)}
+                  </div>
+                </Fragment>
+              );
+            })}
+          </div>
         );
       })}
     </div>

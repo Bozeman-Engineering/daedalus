@@ -463,14 +463,14 @@ final class SelectorMatcher {
   }
 
   /**
-   * Whether the tree carries an addressable node, or a block's field, under the key.
+   * Whether the tree carries an addressable node or a block's field at the key.
    */
   public function has(string $key): bool {
     return isset($this->byKey[$key]) || isset($this->fields[$key]);
   }
 
   /**
-   * The facts of one addressable node or field record, or NULL when the tree lacks it.
+   * The facts of one addressable node or field, or NULL when the tree lacks it.
    *
    * @return array|null
    *   ['key', 'kind' ('entity' | 'container' | 'block' | 'field'),
@@ -496,7 +496,12 @@ final class SelectorMatcher {
     $index = $this->byKey[$key] ?? NULL;
     if ($index !== NULL) {
       $node = $this->nodes[$index];
-      return self::publicFacts($node, ['index' => $node['index'], 'count' => $node['count'], 'childCount' => $node['childCount']], $this->addressableParent($index));
+      $facts = [
+        'index' => $node['index'],
+        'count' => $node['count'],
+        'childCount' => $node['childCount'],
+      ];
+      return self::publicFacts($node, $facts, $this->addressableParent($index));
     }
     $record = $this->fields[$key] ?? NULL;
     return $record === NULL ? NULL : self::publicFacts($record, ['index' => NULL, 'count' => NULL, 'childCount' => 0], $this->nodes[$record['parent']]['key']);
@@ -557,6 +562,7 @@ final class SelectorMatcher {
    * A node's addressable ancestors' keys, farthest first.
    *
    * @return string[]
+   *   The ancestors' keys, farthest first.
    */
   private function ancestorKeys(int $index): array {
     $keys = [];
@@ -585,7 +591,14 @@ final class SelectorMatcher {
       return ['place' => $index, 'tags' => $this->nodes[$index]['tags'], 'parts' => $this->nodes[$index]['parts']];
     }
     $record = $this->fields[$key] ?? NULL;
-    return $record === NULL ? NULL : ['place' => $record['parent'], 'tags' => $record['tags'], 'parts' => $record['parts']];
+    if ($record === NULL) {
+      return NULL;
+    }
+    return [
+      'place' => $record['parent'],
+      'tags' => $record['tags'],
+      'parts' => $record['parts'],
+    ];
   }
 
   /**
@@ -707,7 +720,8 @@ final class SelectorMatcher {
     // The `p` or `.cls` tier is ONE unqualified compound reached by
     // descent; anything else is a rule of its own.
     $position = $tier->compounds[0];
-    if (count($tier->compounds) !== 1 || $position['combinator'] !== RelativeSelector::DESCENDANT || $position['qualifiers'] !== [] || !in_array($position['kind'], [RelativeSelector::TAG, RelativeSelector::CLASS_PART], TRUE)) {
+    $subject_kinds = [RelativeSelector::TAG, RelativeSelector::CLASS_PART];
+    if (count($tier->compounds) !== 1 || $position['combinator'] !== RelativeSelector::DESCENDANT || $position['qualifiers'] !== [] || !in_array($position['kind'], $subject_kinds, TRUE)) {
       return FALSE;
     }
     $compounds = $rule->compounds;
@@ -905,6 +919,7 @@ final class SelectorMatcher {
    * The node's ancestors, nearest first.
    *
    * @return int[]
+   *   The ancestors' indexes, nearest first.
    */
   private function ancestorsOf(int $node): array {
     $ancestors = [];
@@ -921,6 +936,7 @@ final class SelectorMatcher {
    * node sits at its own `index` in it.
    *
    * @return int[]
+   *   The siblings' indexes in document order.
    */
   private function siblings(int $node): array {
     $parent = $this->nodes[$node]['parent'];
@@ -931,6 +947,7 @@ final class SelectorMatcher {
    * The node's earlier siblings, nearest first ([] for a first child).
    *
    * @return int[]
+   *   The earlier siblings' indexes, nearest first.
    */
   private function earlierSiblings(int $node): array {
     return array_reverse(array_slice($this->siblings($node), 0, $this->nodes[$node]['index']));

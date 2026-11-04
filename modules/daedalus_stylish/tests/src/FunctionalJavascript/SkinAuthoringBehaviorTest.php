@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_stylish\FunctionalJavascript;
 
 use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
+use Drupal\daedalus_stylish\DaedalusStylishSkinInterface;
+use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
 use Drupal\node\Entity\Node;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
@@ -126,20 +128,24 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 class SkinAuthoringBehaviorTest extends WebDriverTestBase {
 
   use EditModeTrait;
-  use DaedalusFixtureTrait {
-    setUp as daedalusSetUp;
-  }
+  use DaedalusFixtureTrait;
 
   /**
    * {@inheritdoc}
    */
-  protected $defaultTheme = 'stark';
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = '';
 
   /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
-    $this->daedalusSetUp();
+    parent::setUp();
+    $this->installFixture();
 
     // The card's door to the AI context usage (F1) is the permission's
     // alone (the materials budget's spine permission, daedalus_blueprint);
@@ -193,7 +199,7 @@ class SkinAuthoringBehaviorTest extends WebDriverTestBase {
   }
 
   /**
-   * "+ New" on the Skin tab, then one kind from its picker.
+   * Clicks "+ New" on the Skin tab, then one kind from its picker.
    */
   private function mintNew(string $kind): void {
     $this->clickPanel('#daedalus_stylish_inspector .daedalus-stylish-skin__new');
@@ -579,6 +585,7 @@ class SkinAuthoringBehaviorTest extends WebDriverTestBase {
     $skin_storage->resetCache();
     $skins = $skin_storage->loadByProperties(['machine_name' => 'olivero']);
     $skin = reset($skins);
+    assert($skin instanceof DaedalusStylishSkinInterface);
     $this->assertNotFalse($skin, 'The olivero skin loads.');
     // The card's pair editor commits the whole pair (the dark entry seeded
     // from the record, the honesty rule), so the site's record carries
@@ -641,6 +648,7 @@ class SkinAuthoringBehaviorTest extends WebDriverTestBase {
     $skin_storage->resetCache();
     $skins = $skin_storage->loadByProperties(['machine_name' => 'olivero']);
     $skin = reset($skins);
+    assert($skin instanceof DaedalusStylishSkinInterface);
     $this->assertSame('3rem', $skin->siteTokens()['space']['hero']['value'] ?? NULL, 'F3: the minted token lives in the site layer.');
 
     // The section's Padding row, in the styling place: the Basic segment
@@ -700,10 +708,12 @@ class SkinAuthoringBehaviorTest extends WebDriverTestBase {
     $skin_storage->resetCache();
     $skins = $skin_storage->loadByProperties(['machine_name' => 'olivero']);
     $skin = reset($skins);
+    assert($skin instanceof DaedalusStylishSkinInterface);
     $this->assertArrayNotHasKey('accent', $skin->siteTokens()['color'] ?? [], 'F5: the site layer no longer holds the accent.');
     $this->assertSame('3rem', $skin->siteTokens()['space']['hero']['value'] ?? NULL, 'F5: the site-minted token is untouched by the revert.');
 
-    // ----- F4: "Edit skin…" enters the skin session; change, Push; every h2 restyles. -----
+    // ----- F4: "Edit skin…" enters the skin session; change, Push; every h2
+    // restyles. -----
     $heading_a = $uuid_service->generate();
     $heading_b = $uuid_service->generate();
     $this->placeHeadings($section_uuid, $heading_a, $heading_b);
@@ -778,6 +788,7 @@ class SkinAuthoringBehaviorTest extends WebDriverTestBase {
     $skin_storage->resetCache();
     $skins = $skin_storage->loadByProperties(['machine_name' => 'olivero']);
     $skin = reset($skins);
+    assert($skin instanceof DaedalusStylishSkinInterface);
     $this->assertSame('3rem', $skin->siteDefaults()['base:h2']['']['default']['font-size'] ?? NULL, 'F4: the push landed in the skin\'s SITE layer at base:h2.');
     $this->assertSame('var(--text-headline)', $skin->packageDefaults()['base:h2']['']['default']['font-size'] ?? NULL, 'F4: the package layer stands beneath the site\'s value.');
     $this->assertSame('3rem', $skin->defaults()['base:h2']['']['default']['font-size'] ?? NULL, 'F4: the merge wears the site\'s default.');
@@ -971,6 +982,7 @@ class SkinAuthoringBehaviorTest extends WebDriverTestBase {
     $skin_storage->resetCache();
     $skins = $skin_storage->loadByProperties(['machine_name' => 'olivero']);
     $skin = reset($skins);
+    assert($skin instanceof DaedalusStylishSkinInterface);
     $this->assertSame('uppercase', $skin->siteDefaults()['base:h2']['::a']['default']['text-transform'] ?? NULL, 'F7: the push landed in the skin\'s SITE layer at the moved key (base:h2, ::a).');
     $this->assertArrayNotHasKey('::> *', $skin->siteDefaults()['base:h2'] ?? [], 'F7: nothing landed at the key the row left (::> *): the staged move replaced the line\'s relative and a key that stored nothing earns no null.');
     $this->assertSame('3rem', $skin->siteDefaults()['base:h2']['']['default']['font-size'] ?? NULL, 'F7: F4\'s pushed size stands beside the new rule.');
@@ -1020,7 +1032,7 @@ class SkinAuthoringBehaviorTest extends WebDriverTestBase {
     $face = $font['faces'][0];
     $this->assertSame('400', $face['weight'], 'F6: the face stored canonical (weight).');
     $this->assertSame('normal', $face['style'], 'F6: the face stored canonical (style).');
-    $this->assertStringStartsWith('@font-face {', file_get_contents(\Drupal::state()->get(\Drupal\daedalus_stylish\SkinStylesheet::STATE_KEY)), 'F6: the skin stylesheet recompiled on the save and opens with the face.');
+    $this->assertStringStartsWith('@font-face {', file_get_contents(\Drupal::state()->get(SkinStylesheet::STATE_KEY)), 'F6: the skin stylesheet recompiled on the save and opens with the face.');
 
     // The heading wears the family through its own stack (update_style,
     // the op every row commits); the browser then fetches the face.
@@ -1060,10 +1072,10 @@ class SkinAuthoringBehaviorTest extends WebDriverTestBase {
       'F6: the font card lists the 400 face with its specimen in the family and finished its management read.',
     );
 
-    // ----- F8: a gradient token through the builder; the canvas repaints. -----
-    // The second heading wears the gradient token as its background
-    // image (update_style, the op every row commits): the use the drag
-    // must repaint before any commit.
+    // ----- F8: a gradient token through the builder; the canvas repaints.
+    // ----- The second heading wears the gradient token as its background image
+    // (update_style, the op every row commits): the use the drag must repaint
+    // before any commit.
     $session->executeScript(<<<JS
       (() => {
         const Blueprint = Drupal.Daedalus.Blueprint;
@@ -1127,6 +1139,7 @@ class SkinAuthoringBehaviorTest extends WebDriverTestBase {
     $skin_storage->resetCache();
     $skins = $skin_storage->loadByProperties(['machine_name' => 'olivero']);
     $skin = reset($skins);
+    assert($skin instanceof DaedalusStylishSkinInterface);
     $saved = $skin->siteTokens()['gradient']['hero-fade']['value'] ?? NULL;
     $this->assertIsString($saved, 'F8: the gradient token\'s new value lives in the site layer.');
     $this->assertMatchesRegularExpression('/#ff0000 (9\d(?:\.\d+)?|100)%, #0000ff/', $saved, 'F8: the saved gradient carries the dragged stop\'s serialized percent (at or past 90%) ahead of the blue stop.');

@@ -264,6 +264,8 @@ export const carriedBy = (map, reference) => {
  *
  * @return {Array<{property: string, value: string, layer: string,
  *   variant: null, lost: boolean, winner: null}>}
+ *   The sheet's lines in entry order, every one its own (nothing lost,
+ *   no winner); [] when the slot and condition hold no entry.
  */
 export const documentBaselineLines = (variantStyles, slot, condition) => {
   const values = variantStyles?.[slot]?.[condition];

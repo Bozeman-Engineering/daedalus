@@ -122,6 +122,39 @@ import { Mark } from '../lib/mark.js';
  * panel's write address withholds either half of the pair (controls.js
  * withheldReasonFor): a pick writes the pair as one.
  */
+
+/**
+ * The widget.
+ *
+ * @param {object} props
+ *   The widget contract's props (basic-controls.js renderControl).
+ * @param {object} props.model
+ *   The control model (controls.js controlModels): the owned
+ *   properties' keys, stacks and reads at the editing compound, the
+ *   constraints, the grant and what the write address withholds.
+ * @param {object} props.guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide).
+ * @param {object} props.materials
+ *   The materials roster the stop vocabularies derive from.
+ * @param {object} props.skinMaterials
+ *   The skin material gates ({canCreate}): honest chrome for the
+ *   well's save-as-token gesture.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {Function} props.onPreview
+ *   `(properties)`: previews the set on the canvas, routed per key.
+ * @param {Function} props.onCommit
+ *   `(properties)`: commits the set through the op queue.
+ * @param {Function} props.onPickMedia
+ *   `({property, label, companions})`: opens the media library over
+ *   the property, the picked image landing with its companions.
+ * @param {?Function} [props.onPickCondition]
+ *   Poses the canvas at a condition (the rows' "Also set at" entries).
+ * @param {?Function} [props.onOpenDocument]
+ *   Opens a variant's document (the row menu's doorway).
+ * @param {object} [props.law]
+ *   The law gate ({canView}, drupalSettings.daedalusStylish.law).
+ */
 const Background = ({
   model,
   guide,
@@ -314,12 +347,18 @@ const Background = ({
     <div className={widgetClasses('background', invalid)}>
       <div
         className="daedalus-stylish-inspector__widget-row"
-        style={origin?.color ? { '--daedalus-stylish-origin': origin.color } : undefined}
+        style={
+          origin?.color
+            ? { '--daedalus-stylish-origin': origin.color }
+            : undefined
+        }
         onContextMenu={onContextMenu}
       >
         <span className="daedalus-stylish-inspector__widget-label">
           <Mark origin={origin} />
-          <span className="daedalus-stylish-inspector__widget-axis">{model.label}</span>
+          <span className="daedalus-stylish-inspector__widget-axis">
+            {model.label}
+          </span>
         </span>
         <span className="daedalus-stylish-inspector__widget-value">
           {well}

@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
+use Drupal\Core\Entity\RevisionableStorageInterface;
 use Drupal\daedalus_layout\NestedSectionStorageInterface;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
 use Drupal\daedalus_stylish\FactConditionConvergence;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use Drupal\Tests\daedalus\Kernel\NestedStorageKernelTestBase;
@@ -124,7 +126,11 @@ class FactConditionMigrationTest extends NestedStorageKernelTestBase {
    */
   protected function styleMap(EntityTest $entity): array {
     $item = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
-    return $item ? $item->getStyleMap() : [];
+    if ($item === NULL) {
+      return [];
+    }
+    assert($item instanceof StyleMapItem);
+    return $item->getStyleMap();
   }
 
   /**
@@ -288,12 +294,15 @@ class FactConditionMigrationTest extends NestedStorageKernelTestBase {
     $storage = $this->entityTypeManager->getStorage('daedalus_variant');
     $storage->resetCache();
 
+    $unchanged = $storage->loadUnchanged($variant->id());
+    assert($unchanged instanceof DaedalusStylishVariant);
     $this->assertSame([
       '::.section' => ['default' => ['padding-top' => '6rem']],
       '::.section:last-child' => ['default' => ['padding-bottom' => '0']],
-    ], $storage->loadUnchanged($variant->id())->getStyles());
-    /** @var \Drupal\daedalus_stylish\DaedalusStylishVariantInterface $first */
+    ], $unchanged->getStyles());
+    assert($storage instanceof RevisionableStorageInterface);
     $first = $storage->loadRevision($first_revision_id);
+    assert($first instanceof DaedalusStylishVariant);
     $this->assertSame([
       '' => [
         'default' => ['background-color' => 'aliceblue'],
@@ -308,6 +317,7 @@ class FactConditionMigrationTest extends NestedStorageKernelTestBase {
     ], $first->getStyles());
 
     $shipped = $storage->loadUnchanged($shipped->id());
+    assert($shipped instanceof DaedalusStylishVariant);
     $this->assertSame($shipped_styles, $shipped->getStyles(), 'A shipped unmodified variant is left to the sync lane.');
     $this->assertFalse($shipped->isModified());
 
@@ -412,7 +422,8 @@ class FactConditionMigrationTest extends NestedStorageKernelTestBase {
     $staged = $this->container->get('daedalus_tempstore.entity_tempstore_repository')->get($fresh);
     $this->assertNotSame($fresh, $staged, 'The staged session is served.');
 
-    $map = $staged->get(DaedalusStylishFieldManager::FIELD_NAME)->first()->getStyleMap();
+    assert($staged instanceof EntityTest);
+    $map = $this->styleMap($staged);
     $this->assertSame(['default' => ['margin' => '0']], $map["container:$uuid::> *"]);
     $this->assertSame(['default' => ['margin-bottom' => '24px']], $map["container:$uuid::> *:not(:last-child)"]);
   }

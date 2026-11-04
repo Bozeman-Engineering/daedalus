@@ -46,6 +46,14 @@ let memo = { mirror: null, draft: null, effective: null };
 
 /**
  * The drafted node's annotation with the draft merged over its markup.
+ *
+ * @param {?object} element
+ *   The node's `_element` annotation, or null when none is stamped.
+ * @param {object} markup
+ *   The draft's markup.
+ *
+ * @return {object}
+ *   The annotation copy carrying the merged markup.
  */
 const overlayElement = (element, markup) => ({
   ...(element ?? {}),
@@ -60,6 +68,18 @@ const overlayElement = (element, markup) => ({
  * key matches a block node (any non-container, non-region node) of that
  * uuid. Region nodes are transparent grouping: never a match, always
  * walked through.
+ *
+ * @param {Array<object>} nodes
+ *   The lean node list to walk.
+ * @param {string} family
+ *   The key's family, 'block' or 'container'.
+ * @param {string} uuid
+ *   The drafted node's uuid.
+ * @param {object} markup
+ *   The draft's markup.
+ *
+ * @return {?Array<object>}
+ *   The path-copied node list, or null when no node matched.
  */
 const overlayTree = (nodes, family, uuid, markup) => {
   if (!Array.isArray(nodes)) {
@@ -97,6 +117,16 @@ const overlayTree = (nodes, family, uuid, markup) => {
 /**
  * The mirror with the draft laid over the drafted node, or null when the
  * draft's key names no node of the tree.
+ *
+ * @param {object} mirror
+ *   The committed blueprint.
+ * @param {?object} root
+ *   The slice's root entity context ({uuid}), or null.
+ * @param {object} draft
+ *   The draft ({key, markup}).
+ *
+ * @return {?object}
+ *   The path-copied blueprint, or null.
  */
 const overlay = (mirror, root, draft) => {
   const segments = typeof draft.key === 'string' ? draft.key.split(':') : [];

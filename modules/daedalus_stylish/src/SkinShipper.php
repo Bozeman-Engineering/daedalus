@@ -16,22 +16,21 @@ use Drupal\workspaces\WorkspaceManagerInterface;
 /**
  * Ships site skins to disk: the skin kind of the shipper base.
  *
- * SkinImporter brings MODULE.daedalus_stylish.skins*.yml INTO a site (sync); this
- * service takes a site's skins OUT to a module (ship), writing
- * MODULE.daedalus_stylish.skins.FILE_ID.yml with the fonts' faces' bytes
- * beside it under assets/fonts/ and adopting each skin in place with the
- * written {tokens, animations, fonts, defaults} payload as its source
- * hash. The lane's mechanics (the whole-file rewrite, the shipped-elsewhere
- * refusal, the workspace escape, the adoption) live in
- * ShippedDefinitionsShipper; this class supplies the skin facts:
- * definition() in SkinImporter's grammar (tokens, animations and fonts as
- * the stored records, {value, description, offered}, {steps, description,
- * offered} and {family, faces, description, offered}: a machine-written
- * file never spells the bare shorthand, so what the site holds is what
- * disk holds), the assets written before the file (writeFile()), the
- * importer's payload read of what was written as the hashed slice (so a
- * sync right after a ship reads UNCHANGED), DaedalusStylishSkin's hash,
- * and ShippedSkinException.
+ * SkinImporter brings MODULE.daedalus_stylish.skins*.yml INTO a site (sync);
+ * this service takes a site's skins OUT to a module (ship), writing
+ * MODULE.daedalus_stylish.skins.FILE_ID.yml with the fonts' faces' bytes beside
+ * it under assets/fonts/ and adopting each skin in place with the written
+ * {tokens, animations, fonts, defaults} payload as its source hash. The lane's
+ * mechanics (the whole-file rewrite, the shipped-elsewhere refusal, the
+ * workspace escape, the adoption) live in ShippedDefinitionsShipper; this class
+ * supplies the skin facts: definition() in SkinImporter's grammar (tokens,
+ * animations and fonts as the stored records, {value, description, offered},
+ * {steps, description, offered} and {family, faces, description, offered}: a
+ * machine-written file never spells the bare shorthand, so what the site holds
+ * is what disk holds), the assets written before the file (writeFile()), the
+ * importer's payload read of what was written as the hashed slice (so a sync
+ * right after a ship reads UNCHANGED), DaedalusStylishSkin's hash, and
+ * ShippedSkinException.
  *
  * The importer's reverse, face by face: a site face names its managed
  * file by uuid, the file's own name (unique within the font store, the

@@ -21,7 +21,8 @@ use Drupal\KernelTests\KernelTestBase;
  *
  * Only the ai module and its direct dependencies are enabled; the manager and
  * adapter are constructed directly (the daedalus_ai module's own hard AI-stack
- * dependencies are unrelated to the unit under test, see DaedalusAiKernelTestBase).
+ * dependencies are unrelated to the unit under test, see
+ * DaedalusAiKernelTestBase).
  *
  * @coversDefaultClass \Drupal\daedalus_ai\ImageDimension\ImageDimensionAdapterManager
  * @group daedalus_ai

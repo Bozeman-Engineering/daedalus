@@ -21,7 +21,9 @@ import { h } from 'preact';
  * client URL table cannot answer.
  *
  * @param {object} props
+ *   The glyph's props.
  * @param {?string} [props.className]
+ *   A class for the svg element, or null for none.
  */
 export const MediaGlyph = ({ className = null }) => (
   <svg
@@ -61,9 +63,11 @@ export const MediaGlyph = ({ className = null }) => (
  * current value, and the chip stays the opener.
  *
  * @param {object} props
+ *   The chip's props.
  * @param {?string} [props.thumbnail]
  *   A resolved image URL for the face, or null for the glyph.
  * @param {Function} props.onClick
+ *   The consumer's opener: called with the click event.
  */
 export const MediaButton = ({ thumbnail = null, onClick }) => (
   <button

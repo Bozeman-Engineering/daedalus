@@ -35,15 +35,14 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
  *
  * WHICH LAYER a write lands in is the skin manager's one answer
  * (SkinManager::writesSiteLayer(), shared with the site defaults op):
- * - the SITE layer (site_tokens, site_animations, site_fonts) when the skin is a
- *   package's (it has a provider) and the distro lock holds, the consuming
- *   site's posture: a mint adds a site-minted record, an update stores
- *   only the facts it changes over the package's record (the rest show
- *   through, so a package update to an unstated fact still lands), and a
- *   removal takes the site's record away, revealing the package's whole
- *   or deleting a site-minted one; a package record the site never
- *   touched cannot be removed on a consuming site (the disk is its one
- *   author);
+ * - the SITE layer (site_tokens, site_animations, site_fonts) when the skin is
+ *   a package's (it has a provider) and the distro lock holds, the consuming
+ *   site's posture: a mint adds a site-minted record, an update stores only the
+ *   facts it changes over the package's record (the rest show through, so a
+ *   package update to an unstated fact still lands), and a removal takes the
+ *   site's record away, revealing the package's whole or deleting a site-minted
+ *   one; a package record the site never touched cannot be removed on a
+ *   consuming site (the disk is its one author);
  * - the skin's ONE layer (the package layer) when the skin is the site's
  *   own (no provider) or the developer gate lifts the lock (DistroLock,
  *   the authoring site that ships the result back to disk): the write
@@ -234,7 +233,7 @@ class SkinMaterialManager {
   /**
    * The roster record an animation will be once renamed.
    *
-   * renamedRecord()'s twin for the motion section: the new identity is
+   * `renamedRecord()`'s twin for the motion section: the new identity is
    * the name, and the spelling the keyframes name under the motion
    * prefix (StyleGuide::animationName()).
    */
@@ -256,7 +255,7 @@ class SkinMaterialManager {
   /**
    * The roster record a font will be once renamed.
    *
-   * renamedRecord()'s twin for the type section: the new identity is the
+   * `renamedRecord()`'s twin for the type section: the new identity is the
    * name alone; the spelling (the quoted family) is untouched, since a
    * stack names the family, never the name.
    */
@@ -310,7 +309,7 @@ class SkinMaterialManager {
   }
 
   /**
-   * Resolves an animation of a skin to its handle, or NULL when the skin lacks it.
+   * Resolves a skin's animation to its handle, or NULL when the skin lacks it.
    */
   public function resolveAnimation(DaedalusStylishSkinInterface $skin, string $name, ?string $rename_to = NULL): ?SkinAnimation {
     $record = $skin->animations()[$name] ?? NULL;
@@ -413,7 +412,9 @@ class SkinMaterialManager {
   }
 
   /**
-   * An animation's shipped state against the CURRENT disk payload; see shippedState().
+   * An animation's shipped state against the CURRENT disk payload.
+   *
+   * See shippedState().
    */
   public function animationShippedState(DaedalusStylishSkinInterface $skin, string $name): ?string {
     $shipped = $this->shippedAnimationRecord($skin, $name);
@@ -424,7 +425,9 @@ class SkinMaterialManager {
   }
 
   /**
-   * A font's shipped state against the CURRENT disk payload; see shippedState().
+   * A font's shipped state against the CURRENT disk payload.
+   *
+   * See shippedState().
    *
    * The comparison is content-addressed on both sides (a face names its
    * file by uuid on the site and by basename on disk; the hash of the
@@ -698,7 +701,7 @@ class SkinMaterialManager {
   /**
    * Changes an animation's facts in place: steps, description, offered.
    *
-   * update()'s twin for the motion section, the one write behind
+   * `update()`'s twin for the motion section, the one write behind
    * update_material (kind animation) and the keyframes editor's commit.
    * The steps ARE the delivered @keyframes body, so one save re-animates
    * every wearer site-wide.
@@ -755,7 +758,7 @@ class SkinMaterialManager {
   /**
    * Changes a font's facts in place: family, faces, description, offered.
    *
-   * update()'s twin for the type section, the one write behind
+   * `update()`'s twin for the type section, the one write behind
    * update_material (kind font) and the faces editor's commit. The faces
    * ARE the delivered at-rules and the family IS the reference: one save
    * restyles every element set in the family. A family change respells no
@@ -881,7 +884,7 @@ class SkinMaterialManager {
   /**
    * Renames an animation: the record moves, every reference follows.
    *
-   * rename()'s twin for the motion section: the name is the keyframes
+   * `rename()`'s twin for the motion section: the name is the keyframes
    * ident tail, so a rename respells every motion-{name} in the wearers'
    * animation-name and animation values (KeyframesNames::replaceName()),
    * staged as the rewrite-then-rename batch when the animation is worn.
@@ -1012,7 +1015,7 @@ class SkinMaterialManager {
   }
 
   /**
-   * Reverts an animation to what its skin's provider ships right now; see revert().
+   * Reverts an animation to what its skin's provider ships now; see revert().
    *
    * @throws \Drupal\daedalus_stylish\Exception\SkinMaterialValidationException
    */
@@ -1160,7 +1163,7 @@ class SkinMaterialManager {
   /**
    * Removes an animation: the site's record of it, or the animation itself.
    *
-   * deleteToken()'s twin for the motion section: a WORN animation has
+   * `deleteToken()`'s twin for the motion section: a WORN animation has
    * every motion-{name} reference rewritten to `none` first (a keyframes
    * block has no literal form inside a value; the wearer keeps its timing
    * declarations and animates nothing, exactly what its stale reference
@@ -1210,7 +1213,7 @@ class SkinMaterialManager {
   /**
    * Removes a font: the site's record of it, or the font itself.
    *
-   * deleteToken()'s twin for the type section: a NAMED font (its quoted
+   * `deleteToken()`'s twin for the type section: a NAMED font (its quoted
    * family in a stack, a font-bound token among them) has the family
    * removed from every stack first (a stack is its own fallback list, so
    * the element lands on the next family the author wrote; a stack that
@@ -1300,7 +1303,12 @@ class SkinMaterialManager {
       ]))
       ->setFinishCallback([SkinMaterialDeleteBatch::class, 'finished']);
     foreach ($references as $reference) {
-      $batch->addOperation([SkinMaterialDeleteBatch::class, 'rewriteSource'], [$batch_id, $reference['source'], $reference['entity_type'], $reference['entity_id']]);
+      $batch->addOperation([SkinMaterialDeleteBatch::class, 'rewriteSource'], [
+        $batch_id,
+        $reference['source'],
+        $reference['entity_type'],
+        $reference['entity_id'],
+      ]);
     }
     $batch->addOperation([SkinMaterialDeleteBatch::class, 'deleteSkinMaterial'], [$batch_id]);
     batch_set($batch->toArray());
@@ -1318,7 +1326,12 @@ class SkinMaterialManager {
       ]))
       ->setFinishCallback([SkinMaterialDeleteBatch::class, 'renameFinished']);
     foreach ($references as $reference) {
-      $batch->addOperation([SkinMaterialDeleteBatch::class, 'rewriteSource'], [$batch_id, $reference['source'], $reference['entity_type'], $reference['entity_id']]);
+      $batch->addOperation([SkinMaterialDeleteBatch::class, 'rewriteSource'], [
+        $batch_id,
+        $reference['source'],
+        $reference['entity_type'],
+        $reference['entity_id'],
+      ]);
     }
     $batch->addOperation([SkinMaterialDeleteBatch::class, 'renameSkinMaterial'], [$batch_id]);
     batch_set($batch->toArray());
@@ -1330,7 +1343,8 @@ class SkinMaterialManager {
    * @param array $map
    *   The layer's map.
    * @param string[] $path
-   *   [scale, name] for tokens, [name] for animations and fonts.
+   *   The record's path: [scale, name] for tokens, [name] for animations
+   *   and fonts.
    * @param string $new_name
    *   The new last key.
    */
@@ -1360,7 +1374,8 @@ class SkinMaterialManager {
    * @param array $map
    *   The layer's map.
    * @param string[] $path
-   *   [scale, name] for tokens, [name] for animations and fonts.
+   *   The record's path: [scale, name] for tokens, [name] for animations
+   *   and fonts.
    */
   protected static function without(array $map, array $path): array {
     if (count($path) === 1) {
@@ -1416,7 +1431,7 @@ class SkinMaterialManager {
   /**
    * Validates the skin's animations as worn, errors re-rooted onto the gesture.
    *
-   * validateTokens()'s twin: the merge runs through
+   * `validateTokens()`'s twin: the merge runs through
    * StyleMapValidator::validateAnimations() against the skin's OWN tokens
    * as worn (a skin's motion resolves var() against the skin it rides
    * with, the self-containment the disk lane keeps too); the written
@@ -1450,7 +1465,7 @@ class SkinMaterialManager {
   /**
    * Validates the skin's fonts as worn, errors re-rooted onto the gesture.
    *
-   * validateAnimations()'s twin for the type section: the merge runs
+   * `validateAnimations()`'s twin for the type section: the merge runs
    * through FontValidator::validateFonts() (the name grammar, the record
    * shape, the family and faces grammars, every face's file resolved, one
    * font per family); the written font's own path re-roots onto "label",

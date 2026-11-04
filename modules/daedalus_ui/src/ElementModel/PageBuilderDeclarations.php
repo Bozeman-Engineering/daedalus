@@ -137,28 +137,26 @@ use Drupal\daedalus_ui\Presentation\Presentation;
  * through this discovery, so anatomy and its consumers' concerns co-locate
  * per provider without daedalus_ui depending on any of them.
  *
- * Besides the element kinds, a universal file may carry the reserved
- * top-level `site` key: the declaration of the SITE itself, for vocabulary
- * scoped to the whole site rather than any element (daedalus_stylish's token_scales,
- * say). Everything inside it is foreign sections — daedalus_ui owns no
- * site vocabulary — merged across layers exactly like a kind declaration
- * and served whole by getSite(). A universal file may also carry the
- * reserved top-level `instances` key: the site's INSTANCE NAMESPACES,
- * content-borne identity-class vocabularies (minted rich-text identities)
- * declared once at the spine because carrier ownership is a DOM fact that
- * varies (a composed block's carriers ride its own markup, an open
- * render's ride the field key) while the stylable vocabulary must not.
- * Each entry keys by a pattern selector ('.s-*', PART_PATTERN) and
- * declares `label` (the namespace's human name) plus `tags`, the ONE tag
- * vocabulary truth ({tag: label}): the minter, the CKEditor contract, the
- * annotator's row labels, and every styling resolver read it from here.
- * Foreign sections (property_groups, controls) ride through untouched,
- * exactly as in kind declarations; the shell/markup vocabulary (tag,
- * forms, present, attributes, contains, elements) is impossible there —
- * instances are content, each carrying its own markup. The top-level
- * vocabulary otherwise stays closed (an unknown key is a build error, so
- * a typo'd kind can never silently become a site section); reserved lanes
- * buy theirs by naming them.
+ * Besides the element kinds, a universal file may carry the reserved top-level
+ * `site` key: the declaration of the SITE itself, for vocabulary scoped to the
+ * whole site rather than any element (daedalus_stylish's token_scales, say).
+ * Everything inside it is foreign sections — daedalus_ui owns no site
+ * vocabulary — merged across layers exactly like a kind declaration and served
+ * whole by getSite(). A universal file may also carry the reserved top-level
+ * `instances` key: the site's INSTANCE NAMESPACES, content-borne identity-class
+ * vocabularies (minted rich-text identities) declared once at the spine because
+ * carrier ownership is a DOM fact that varies (a composed block's carriers ride
+ * its own markup, an open render's ride the field key) while the stylable
+ * vocabulary must not. Each entry keys by a pattern selector ('.s-*',
+ * PART_PATTERN) and declares `label` (the namespace's human name) plus `tags`,
+ * the ONE tag vocabulary truth ({tag: label}): the minter, the CKEditor
+ * contract, the annotator's row labels, and every styling resolver read it from
+ * here. Foreign sections (property_groups, controls) ride through untouched,
+ * exactly as in kind declarations; the shell/markup vocabulary (tag, forms,
+ * present, attributes, contains, elements) is impossible there — instances are
+ * content, each carrying its own markup. The top-level vocabulary otherwise
+ * stays closed (an unknown key is a build error, so a typo'd kind can never
+ * silently become a site section); reserved lanes buy theirs by naming them.
  *
  * Layering, lowest to highest: modules that package no design system (in
  * module list order), the ACTIVE design system's package, the active
@@ -239,9 +237,9 @@ class PageBuilderDeclarations {
   /**
    * The reserved universal-file key declaring the site's instance namespaces.
    *
-   * The spine-level home of content-borne identity-class vocabularies:
-   * {pattern selector: {label, tags, ...sections other modules contribute}}, merged across
-   * layers exactly like the kind declarations (a higher layer refines an
+   * The spine-level home of content-borne identity-class vocabularies: {pattern
+   * selector: {label, tags, ...sections other modules contribute}}, merged
+   * across layers exactly like the kind declarations (a higher layer refines an
    * entry; NULL withdraws it).
    */
   public const INSTANCES = 'instances';
@@ -267,13 +265,12 @@ class PageBuilderDeclarations {
   /**
    * The values a {depth: ...} condition accepts.
    *
-   * `present: {depth: root}` on a ROOT FORM of a container-family tree
-   * declares the form the element's root takes at root depth (the shipped
-   * container's section/div swap); parts never condition on depth — an
-   * element is one box at every depth. Mirrors the variant-axis depth
-   * qualifier's vocabulary (daedalus_stylish's {axis: {depth: root}}): both name
-   * the same placement fact, that full-bleed/constrained is a root-depth
-   * phenomenon.
+   * `present: {depth: root}` on a ROOT FORM of a container-family tree declares
+   * the form the element's root takes at root depth (the shipped container's
+   * section/div swap); parts never condition on depth — an element is one box
+   * at every depth. Mirrors the variant-axis depth qualifier's vocabulary
+   * (daedalus_stylish's {axis: {depth: root}}): both name the same placement
+   * fact, that full-bleed/constrained is a root-depth phenomenon.
    */
   protected const DEPTHS = ['root', 'nested'];
 
@@ -495,10 +492,10 @@ class PageBuilderDeclarations {
   /**
    * Gets the merged site declaration.
    *
-   * The site declaration is vocabulary scoped to the whole site rather than
-   * any element, authored under the reserved top-level `site` key of
-   * universal files. Its content is entirely foreign sections; owners
-   * validate their own vocabulary (daedalus_stylish validates token_scales, say).
+   * The site declaration is vocabulary scoped to the whole site rather than any
+   * element, authored under the reserved top-level `site` key of universal
+   * files. Its content is entirely foreign sections; owners validate their own
+   * vocabulary (daedalus_stylish validates token_scales, say).
    *
    * @return array
    *   The layered site declaration, or [] if nothing is declared.

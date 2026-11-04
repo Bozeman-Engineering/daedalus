@@ -252,7 +252,13 @@ final class DialectWalk {
       $this->errors[] = self::illegalAttr($name, $tag, $legal, $el->line);
     }
     if ($slot && !isset($node['slot'])) {
-      $this->errors[] = new DialectError('ILLEGAL_ATTR', sprintf('<%s> needs name="..." (the id of the slot it fills)', self::SLOT_TAG), $el->line, ['attribute' => self::NAME_ATTR, 'legal' => $legal], 'A slot section names the slot the document around this one placed: <d-slot name="hero">.');
+      $this->errors[] = new DialectError(
+        'ILLEGAL_ATTR',
+        sprintf('<%s> needs name="..." (the id of the slot it fills)', self::SLOT_TAG),
+        $el->line,
+        ['attribute' => self::NAME_ATTR, 'legal' => $legal],
+        'A slot section names the slot the document around this one placed: <d-slot name="hero">.',
+      );
     }
 
     $children = [];
@@ -525,16 +531,16 @@ final class DialectWalk {
   /**
    * Builds a linked placement node: a blueprint shown by reference.
    *
-   * The blueprint="" attribute names a published BLOCK blueprint saved on
-   * this site as an entity: the name resolves through the blueprint slot (UNKNOWN_BLUEPRINT
-   * with the roster's candidates otherwise), a shipped file is refused
-   * (BLUEPRINT_NOT_LINKABLE: a file has no live document to show) and a
-   * page blueprint is refused (BLUEPRINT_WRONG_SCOPE: a whole page is a
-   * new page's start). The element is a block: it takes id, class, style
-   * and the block kind's axes, no children (its content is the
-   * blueprint's document, edited on the blueprint), and sits inside a
-   * container like any block. Whether the blueprint fits the page is the
-   * op door's judgement at placement (BLUEPRINT_DOES_NOT_FIT).
+   * The blueprint="" attribute names a published BLOCK blueprint saved on this
+   * site as an entity: the name resolves through the blueprint slot
+   * (UNKNOWN_BLUEPRINT with the roster's candidates otherwise), a shipped file
+   * is refused (BLUEPRINT_NOT_LINKABLE: a file has no live document to show)
+   * and a page blueprint is refused (BLUEPRINT_WRONG_SCOPE: a whole page is a
+   * new page's start). The element is a block: it takes id, class, style and
+   * the block kind's axes, no children (its content is the blueprint's
+   * document, edited on the blueprint), and sits inside a container like any
+   * block. Whether the blueprint fits the page is the op door's judgement at
+   * placement (BLUEPRINT_DOES_NOT_FIT).
    */
   private function linkedPlacement(RawElement $el, int $depth): array {
     $node = ['kind' => LinkedBlueprintBlock::KIND];
@@ -763,7 +769,9 @@ final class DialectWalk {
   }
 
   /**
-   * Handles the global attributes: id, class, style, blueprint, data-*, residue.
+   * Handles the global attributes.
+   *
+   * The attributes: id, class, style, blueprint, data-*, residue.
    *
    * @param \Drupal\daedalus_blueprint\Dialect\RawElement $el
    *   The raw element.

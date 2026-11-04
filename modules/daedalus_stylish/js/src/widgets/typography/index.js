@@ -60,6 +60,17 @@ import { widgetClasses } from '../lib/widget-classes.js';
  * DISABLED with the roster's reason as its title (model.withheld); what
  * the own key never grants stays hidden as ever.
  */
+
+/**
+ * The Font row's face style: the stop's minted stack, worn.
+ *
+ * @param {{display?: string}} stop
+ *   The offered stop; `display` is the literal value the offer carries.
+ *
+ * @return {?object}
+ *   A fontFamily style over the stack, or null when the display is
+ *   empty or itself a var() reference the panel could not resolve.
+ */
 const familyFace = (stop) =>
   typeof stop.display === 'string' &&
   stop.display !== '' &&
@@ -88,34 +99,34 @@ const Typography = ({
 }) => {
   const lit = litValues(model.reads);
   return (
-  <div className={widgetClasses('typography', false)}>
-    {ROWS.map(({ label, property, faceStyle }) => (
-      <ChoiceRow
-        key={property}
-        guide={guide}
-        materials={materials}
-        source={source}
-        highlight={styleTarget(model.keys[property])}
-        condition={model.condition}
-        label={Drupal.t(label)}
-        property={property}
-        value={lit[property]}
-        definition={model.propertyDefinitions?.[property] ?? {}}
-        constraints={model.constraints?.[property] ?? {}}
-        stack={model.stacks[property]}
-        read={model.reads[property]}
-        faceStyle={faceStyle}
-        disabled={Boolean(model.withheld?.[property])}
-        disabledTitle={model.withheld?.[property] ?? null}
-        onPickCondition={onPickCondition}
-        onOpenDocument={onOpenDocument}
-        law={law}
-        onPreview={onPreview}
-        onRelease={onRelease}
-        onCommit={onCommit}
-      />
-    ))}
-  </div>
+    <div className={widgetClasses('typography', false)}>
+      {ROWS.map(({ label, property, faceStyle }) => (
+        <ChoiceRow
+          key={property}
+          guide={guide}
+          materials={materials}
+          source={source}
+          highlight={styleTarget(model.keys[property])}
+          condition={model.condition}
+          label={Drupal.t(label)}
+          property={property}
+          value={lit[property]}
+          definition={model.propertyDefinitions?.[property] ?? {}}
+          constraints={model.constraints?.[property] ?? {}}
+          stack={model.stacks[property]}
+          read={model.reads[property]}
+          faceStyle={faceStyle}
+          disabled={Boolean(model.withheld?.[property])}
+          disabledTitle={model.withheld?.[property] ?? null}
+          onPickCondition={onPickCondition}
+          onOpenDocument={onOpenDocument}
+          law={law}
+          onPreview={onPreview}
+          onRelease={onRelease}
+          onCommit={onCommit}
+        />
+      ))}
+    </div>
   );
 };
 

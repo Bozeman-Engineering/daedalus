@@ -58,6 +58,7 @@ import { useTokenWell } from './token-well.js';
  * still land on a mounted input), which is why the consumer places it.
  *
  * @param {object} options
+ *   The well's inputs, below.
  * @param {object} options.model
  *   The widget model (constraints, propertyDefinitions, condition).
  * @param {string} options.property
@@ -94,6 +95,7 @@ import { useTokenWell } from './token-well.js';
  *   property), `disabledTitle` its reason; the color lane's picker
  *   closes with it.
  * @param {?string} [options.disabledTitle]
+ *   The reason the well is inert, as its hover title.
  *
  * @return {{well: object, input: ?object, popover: ?object, closed:
  *   boolean, stops: Array, space: object, face: object}}

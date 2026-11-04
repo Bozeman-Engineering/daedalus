@@ -43,6 +43,7 @@ import { useMenu } from './menu.js';
  *   Called with the picked stop after the menu has closed.
  *
  * @return {Array<{label: string, checked: boolean, run: Function}>}
+ *   The menu items in stop order.
  */
 export const stopMenuItems = (stops, face, onPick) => {
   const current =
@@ -60,8 +61,10 @@ export const stopMenuItems = (stops, face, onPick) => {
  * Whether a keydown in the input is the open gesture (Alt+ArrowDown).
  *
  * @param {{key: string, altKey: boolean}} event
+ *   The keydown event.
  *
  * @return {boolean}
+ *   True for Alt+ArrowDown.
  */
 export const isOpenKey = (event) =>
   event.key === 'ArrowDown' && event.altKey === true;
@@ -70,6 +73,7 @@ export const isOpenKey = (event) =>
  * The stop picker's chrome and gestures for one detented text input.
  *
  * @param {object} options
+ *   The picker's wiring.
  * @param {Array} options.stops
  *   The space's stops; with none the chevron renders nothing and the
  *   keyboard opener is inert.

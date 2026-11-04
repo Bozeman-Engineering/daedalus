@@ -74,16 +74,16 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   blank-page button, the sidebar manager's open and the panel's
  *   observer of it; Kernel pins the hint's wording, LayoutRootTest).
  *
- * The seams only a browser sees: the drag controller's acceptsTarget
- * consult over the caret's real DOM (the caret stays hidden over a gap
- * the source refuses and appears over one it accepts), the pending anchor
- * path in js/src/insert-session.js reaching the same spec before building its ops,
- * the dialog's inert markup driven by js/verbs/blueprint.js into the op
- * spine and the panel repainting from the store. Node tests lock the
- * predicate itself (daedalus_ui tests/js/materials-grammar.test.mjs, the
- * blueprint case) and the location's depth read (tests/js/gaps.test.mjs,
- * isRootFlowLocation); kernel tests lock the PHP side, the PHP/JS
- * equivalence, the dialogs' markup and the routes' payloads.
+ * The seams only a browser sees: the drag controller's acceptsTarget consult
+ * over the caret's real DOM (the caret stays hidden over a gap the source
+ * refuses and appears over one it accepts), the pending anchor path in
+ * js/src/insert-session.js reaching the same spec before building its ops, the
+ * dialog's inert markup driven by js/verbs/blueprint.js into the op spine and
+ * the panel repainting from the store. Node tests lock the predicate itself
+ * (daedalus_ui tests/js/materials-grammar.test.mjs, the blueprint case) and the
+ * location's depth read (tests/js/gaps.test.mjs, isRootFlowLocation); kernel
+ * tests lock the PHP side, the PHP/JS equivalence, the dialogs' markup and the
+ * routes' payloads.
  *
  * The scenario, in dependency order:
  * - FIXTURE: a page with two top-level containers A and B, and a
@@ -109,18 +109,17 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * - BACK TO THE PAGE: the page boots again with the Card delivered from
  *   discovery's content lane (the item is in the Add panel with no
  *   capture this time).
- * - CAPTURE (F3), THE SECTION: "Save as blueprint…" on B mints "Section" (a section
- *   by derivation: its root wears Site width, which the capture carries
- *   into the blueprint's own style store, so the blueprint bundle must
- *   have styling enabled on the recipe's site). B is the Section's first
- *   placement the moment the save response lands: the mirror holds
- *   `blueprint: section` on B and B's own chip shows the split control
- *   "Update blueprint 'Section'", with no reload (the seam: the response's
- *   targets re-rendering B, the mirror's stamp and the verb registry
- *   agreeing; the kernel tier pins the stamp and the targets,
- *   BlueprintOwnedVariantTest::testSaveStampsTheSource, and only the
- *   browser sees the chip read them). Kris's trap was the missing stamp:
- *   the container just saved offered no Update and refused the looks the
+ * - CAPTURE (F3), THE SECTION: "Save as blueprint…" on B mints "Section" (a
+ *   section by derivation: its root wears Site width, which the capture carries
+ *   into the blueprint's own style store, so the blueprint bundle must have
+ *   styling enabled on the recipe's site). B is the Section's first placement
+ *   the moment the save response lands: the mirror holds `blueprint: section`
+ *   on B and B's own chip shows the split control "Update blueprint 'Section'",
+ *   with no reload (the seam: the response's targets re-rendering B, the
+ *   mirror's stamp and the verb registry agreeing; the kernel tier pins the
+ *   stamp and the targets, BlueprintOwnedVariantTest::testSaveStampsTheSource,
+ *   and only the browser sees the chip read them). Kris's trap was the missing
+ *   stamp: the container just saved offered no Update and refused the looks the
  *   update adopted.
  * - DRAG, REFUSED: dragging the Section item over the nested container's
  *   interior offers no caret (the only gap there is inside C, nested).
@@ -506,10 +505,12 @@ class BlueprintPlacementBehaviorTest extends WebDriverTestBase {
       JS);
     $label_input = $assert_session->waitForElementVisible('css', '#drupal-modal #daedalus-layout-blueprint-label', 20000);
     $this->assertNotNull($label_input, 'The Save as blueprint dialog opened with its label input.');
+    $label_js = $this->jsString($label);
+    $description_js = $this->jsString($description);
     $session->executeScript(<<<JS
       (() => {
-        document.getElementById('daedalus-layout-blueprint-label').value = {$this->jsString($label)};
-        document.getElementById('daedalus-layout-blueprint-description').value = {$this->jsString($description)};
+        document.getElementById('daedalus-layout-blueprint-label').value = {$label_js};
+        document.getElementById('daedalus-layout-blueprint-description').value = {$description_js};
         document.querySelector('#drupal-modal [data-blueprint-save]').click();
       })();
       JS);

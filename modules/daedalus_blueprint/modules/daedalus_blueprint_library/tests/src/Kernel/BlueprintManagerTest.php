@@ -10,6 +10,7 @@ use Drupal\daedalus_blueprint\Materials\MaterialGestureOperationHandler;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint_library\BlueprintDiscoveryInterface;
+use Drupal\daedalus_blueprint_library\BlueprintInterface;
 use Drupal\daedalus_blueprint_library\BlueprintLayout;
 use Drupal\daedalus_blueprint_library\BlueprintManager;
 use Drupal\daedalus_blueprint_library\Exception\BlueprintGestureException;
@@ -51,7 +52,11 @@ class BlueprintManagerTest extends BlueprintKernelTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static array $permissions = ['create section blueprint', 'edit any section blueprint', 'delete any section blueprint'];
+  protected static array $permissions = [
+    'create section blueprint',
+    'edit any section blueprint',
+    'delete any section blueprint',
+  ];
 
   /**
    * {@inheritdoc}
@@ -229,7 +234,11 @@ class BlueprintManagerTest extends BlueprintKernelTestBase {
         'location' => ['anchor' => $section, 'placement' => 'inside'],
         'plugin_id' => 'field_block:entity_test:entity_test:name',
         'uuid' => $field_block,
-        'properties' => ['label' => 'The name', 'label_display' => 'visible', 'formatter' => ['type' => 'string', 'label' => 'inline']],
+        'properties' => [
+          'label' => 'The name',
+          'label_display' => 'visible',
+          'formatter' => ['type' => 'string', 'label' => 'inline'],
+        ],
       ],
       [
         'op' => 'save_material',
@@ -311,7 +320,10 @@ class BlueprintManagerTest extends BlueprintKernelTestBase {
     $this->assertSame('page', $blueprint->getScope());
     $definition = $this->definitionOf($blueprint);
     $this->assertCount(2, $definition, 'Both top-level containers travel.');
-    $this->assertEquals([$this->definitionAt($this->host($entity), $root_section), $this->definitionAt($this->host($entity), $section)], $definition);
+    $this->assertEquals([
+      $this->definitionAt($this->host($entity), $root_section),
+      $this->definitionAt($this->host($entity), $section),
+    ], $definition);
     $map = $this->host($blueprint)->styleMap();
     $this->assertSame(['default' => ['margin' => '1rem']], $map['entity:' . $blueprint->uuid()] ?? NULL, 'The page root\'s own entry is re-addressed to the blueprint.');
     $this->assertArrayNotHasKey('entity:' . $entity->uuid(), $map);
@@ -346,23 +358,45 @@ class BlueprintManagerTest extends BlueprintKernelTestBase {
     $this->setUpCurrentUser([], ['create site_chrome blueprint'], FALSE);
 
     $result = $this->operations()->batchOperations($this->host($entity), [
-      ['op' => 'save_material', 'kind' => 'blueprint', 'element' => $section, 'label' => 'Header', 'description' => 'The site header.'],
+      [
+        'op' => 'save_material',
+        'kind' => 'blueprint',
+        'element' => $section,
+        'label' => 'Header',
+        'description' => 'The site header.',
+      ],
     ]);
     $this->assertFalse($result->isSuccess(), 'The default type is section; the site chrome grant does not create one.');
     $this->assertSame('PERMISSION_DENIED', $result->getErrors()[0]->getCode());
 
     $result = $this->operations()->batchOperations($this->host($entity), [
-      ['op' => 'save_material', 'kind' => 'blueprint', 'element' => $section, 'label' => 'Header', 'description' => 'The site header.', 'type' => 'site_chrome'],
+      [
+        'op' => 'save_material',
+        'kind' => 'blueprint',
+        'element' => $section,
+        'label' => 'Header',
+        'description' => 'The site header.',
+        'type' => 'site_chrome',
+      ],
     ]);
     $this->assertBatchSuccess($result);
     $blueprints = \Drupal::entityTypeManager()->getStorage('blueprint')->loadByProperties(['machine_name' => 'header']);
-    $this->assertSame('site_chrome', reset($blueprints)->getType());
+    $header = reset($blueprints);
+    assert($header instanceof BlueprintInterface);
+    $this->assertSame('site_chrome', $header->getType());
     $this->assertSame('site_chrome', \Drupal::service(BlueprintDiscoveryInterface::class)->getBlueprint('header')['type'], 'Discovery serves the type.');
     $roster = \Drupal::service('daedalus_blueprint.materials_roster_builder')->build();
     $this->assertSame('site_chrome', $roster->get(MaterialKind::Blueprint, 'header')->group, 'The roster groups the blueprint by its type.');
 
     $result = $this->operations()->batchOperations($this->host($entity), [
-      ['op' => 'save_material', 'kind' => 'blueprint', 'element' => $section, 'label' => 'Stray', 'description' => 'No such type.', 'type' => 'banner'],
+      [
+        'op' => 'save_material',
+        'kind' => 'blueprint',
+        'element' => $section,
+        'label' => 'Stray',
+        'description' => 'No such type.',
+        'type' => 'banner',
+      ],
     ]);
     $this->assertFalse($result->isSuccess());
     $this->assertSame('INVALID_PARAMETER', $result->getErrors()[0]->getCode());
@@ -400,7 +434,13 @@ class BlueprintManagerTest extends BlueprintKernelTestBase {
 
     // Roots are containers: a block is refused toward its container.
     $result = $this->operations()->batchOperations($this->host($entity), [
-      ['op' => 'save_material', 'kind' => 'blueprint', 'element' => $text, 'label' => 'Heading', 'description' => 'One block.'],
+      [
+        'op' => 'save_material',
+        'kind' => 'blueprint',
+        'element' => $text,
+        'label' => 'Heading',
+        'description' => 'One block.',
+      ],
     ]);
     $this->assertSame(['BLUEPRINT_ROOT_NOT_CONTAINER'], $this->errorCodes($result)['element']);
     $this->assertSame($section, $result->getErrors()[0]->getContext()['container']);
@@ -408,7 +448,14 @@ class BlueprintManagerTest extends BlueprintKernelTestBase {
 
     // A malformed strip_values is a malformed gesture.
     $codes = $this->errorCodes($this->operations()->batchOperations($this->host($entity), [
-      ['op' => 'save_material', 'kind' => 'blueprint', 'element' => $section, 'label' => 'CTA', 'description' => 'A CTA.', 'strip_values' => 'yes'],
+      [
+        'op' => 'save_material',
+        'kind' => 'blueprint',
+        'element' => $section,
+        'label' => 'CTA',
+        'description' => 'A CTA.',
+        'strip_values' => 'yes',
+      ],
     ]));
     $this->assertSame(['INVALID_PARAMETER'], $codes['strip_values']);
 

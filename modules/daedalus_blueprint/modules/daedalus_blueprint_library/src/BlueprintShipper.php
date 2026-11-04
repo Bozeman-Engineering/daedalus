@@ -438,7 +438,9 @@ class BlueprintShipper implements PackageShipperInterface {
   }
 
   /**
-   * Executes a plan: writes the files, graduates the blueprint, adopts the variants.
+   * Executes a plan.
+   *
+   * Writes the files, graduates the blueprint, adopts the variants.
    *
    * The order keeps every step recoverable and the site rebuildable at
    * every point: the icon copied first (discovery validates at rebuild

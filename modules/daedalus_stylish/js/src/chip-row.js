@@ -30,6 +30,14 @@ import { bandRangeText } from './canvas-stops.js';
  * A face/label descriptor as user text (chip-row-model.js's vocabulary).
  * Site vocabulary (condition labels) arrives resolved; everything fixed
  * translates here so the strings stay extractable.
+ *
+ * @param {string} axis
+ *   The chip's axis ('state' | 'width' | 'scheme' | 'motion').
+ * @param {{kind: string}} descriptor
+ *   A face or label descriptor.
+ *
+ * @return {string}
+ *   The user text.
  */
 const descriptorText = (axis, descriptor) => {
   switch (descriptor.kind) {
@@ -87,7 +95,10 @@ const CHIP_TITLES = () => ({
 });
 
 /**
+ * The chip row component.
+ *
  * @param {object} props
+ *   The row's props.
  * @param {object} props.source
  *   The state source (leader or satellite).
  * @param {object} props.guide

@@ -26,12 +26,24 @@
 
 /**
  * A block node declaring a slot: the template's slot block, the door.
+ *
+ * @param {?object} node
+ *   A lean tree node.
+ *
+ * @return {boolean}
+ *   Whether the node is a door.
  */
 export const isDoor = (node) =>
   node?.kind === 'block' && typeof node.slot === 'string';
 
 /**
  * A root container tagged with the slot it fills.
+ *
+ * @param {?object} node
+ *   A lean tree node.
+ *
+ * @return {boolean}
+ *   Whether the node is a fill.
  */
 export const isFill = (node) =>
   node?.kind === 'container' && typeof node.slot === 'string';
@@ -61,7 +73,10 @@ export const pairSlotFills = (layout) => {
   const list = layout ?? [];
   // Doors are declared by the template's nodes, never inside a fill (a
   // document never fills its own slot), so the fills are not searched.
-  const slots = declaredSlots(list.filter((node) => !isFill(node)), new Set());
+  const slots = declaredSlots(
+    list.filter((node) => !isFill(node)),
+    new Set(),
+  );
   const fills = new Map();
   const roots = [];
   for (const node of list) {

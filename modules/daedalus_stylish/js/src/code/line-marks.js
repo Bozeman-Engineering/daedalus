@@ -53,6 +53,14 @@ import { declarationLabel } from '../provenance-model.js';
 /**
  * A variant's label for the titles and chips: the library's, or the raw
  * reference when the library lacks it.
+ *
+ * @param {Array<object>} library
+ *   The variant library (findVariant's shape).
+ * @param {string} reference
+ *   The variant reference a line carries.
+ *
+ * @return {string}
+ *   The label to print.
  */
 const variantLabel = (library, reference) =>
   findVariant(library, reference)?.label ?? reference;
@@ -61,6 +69,12 @@ const variantLabel = (library, reference) =>
  * A floor scope in the run label's words: the declaring scope as the
  * provenance sentences spell it ("text block type", "container kind"),
  * the skin's base:{tag} block as its tag, an unknown scope as itself.
+ *
+ * @param {?string} scope
+ *   The layer id's scope tail (layerScope), `kind:block` or `base:p`.
+ *
+ * @return {?string}
+ *   The words, or the scope itself when no sentence names it.
  */
 const scopeWords = (scope) => {
   if (typeof scope === 'string' && scope.startsWith('base:')) {
@@ -78,6 +92,16 @@ const scopeWords = (scope) => {
  * value arrives through (a line carries its layer id, whose tail is the
  * position; the carrier that wears the variant is the layer's, read by
  * the provenance row), a variant line its variant.
+ *
+ * @param {string} layer
+ *   The line's layer id (lineLayerId).
+ * @param {object} line
+ *   The delivered line; its `variant` names a variant line's supplier.
+ * @param {Array<object>} library
+ *   The variant library the labels read.
+ *
+ * @return {string}
+ *   The translated title.
  */
 const supplierTitle = (layer, line, library) => {
   const tier = layerTier(layer);
@@ -125,6 +149,20 @@ const supplierTitle = (layer, line, library) => {
  * element printing as a rule island whose own run reads "this rule"),
  * so a worn ancestor line's run would read its variant's label and an
  * own ancestor line's run nothing.
+ *
+ * @param {string} layer
+ *   The run's layer id.
+ * @param {object} line
+ *   The run's first line; its `variant` names a variant layer's label.
+ * @param {object} context
+ *   The lineMarks context.
+ * @param {Array<object>} context.library
+ *   The variant library.
+ * @param {string} context.own
+ *   'element' or 'rule', the own layer's word.
+ *
+ * @return {string}
+ *   The translated label.
  */
 const runLabel = (layer, line, { library, own }) => {
   if (layer === ELEMENT_LAYER) {
@@ -132,7 +170,9 @@ const runLabel = (layer, line, { library, own }) => {
   }
   const tier = layerTier(layer);
   if (tier === TIER_SKIN) {
-    return Drupal.t('skin, !scope', { '!scope': scopeWords(layerScope(layer)) });
+    return Drupal.t('skin, !scope', {
+      '!scope': scopeWords(layerScope(layer)),
+    });
   }
   if (tier === TIER_DECLARED) {
     return Drupal.t('declared, !scope', {
@@ -147,6 +187,16 @@ const runLabel = (layer, line, { library, own }) => {
  * a floor winner (the chip is short; the winning line's own hover title
  * names the scope), the rule for an ancestor rule's own winner, the
  * variant's label for a variant winner, an ancestor's worn one included.
+ *
+ * @param {string} winnerId
+ *   The winning layer's id (winnerLayerId).
+ * @param {object} winner
+ *   The winning line; its `variant` names a variant winner.
+ * @param {Array<object>} library
+ *   The variant library.
+ *
+ * @return {string}
+ *   The translated chip label.
  */
 const winnerLabel = (winnerId, winner, library) => {
   if (winnerId === ELEMENT_LAYER) {
@@ -182,12 +232,16 @@ const winnerLabel = (winnerId, winner, library) => {
  *   (null/undefined, an unmatched, mid-edit declaration) yield null
  *   marks: an override-in-the-making prints plain.
  * @param {object} context
- *   - library: the variant library (supplier labels; falls back to the
- *     raw reference when a variant is not in it).
- *   - sheet: true for a document island (one variant sheet: pending marks
- *     apply, provenance does not), false for an element island.
- *   - own: 'element' or 'rule', the own layer's word (a rule island's
- *     own layer is the rule's entry).
+ *   The island's reading context.
+ * @param {Array<object>} context.library
+ *   The variant library (supplier labels; falls back to the raw
+ *   reference when a variant is not in it).
+ * @param {boolean} context.sheet
+ *   True for a document island (one variant sheet: pending marks apply,
+ *   provenance does not), false for an element island.
+ * @param {string} context.own
+ *   'element' or 'rule', the own layer's word (a rule island's own layer
+ *   is the rule's entry).
  *
  * @return {Array<?{classes: string[], attributes: ?{style: string,
  *   title?: string}, winner: ?{label: string, color: string},

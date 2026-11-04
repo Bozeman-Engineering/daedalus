@@ -1,7 +1,13 @@
 (($, Drupal) => {
   Drupal.Daedalus = Drupal.Daedalus || {};
 
-  Drupal.Daedalus.highlightElement = function (el) {
+  /**
+   * Calls attention to one element with the chrome's highlight animation.
+   *
+   * @param {Element} el
+   *   The element to highlight; the class leaves when the animation ends.
+   */
+  Drupal.Daedalus.highlightElement = function highlightElement(el) {
     el.classList.add('call-attention-to');
     el.addEventListener(
       'animationend',
@@ -14,8 +20,13 @@
 
   /**
    * AJAX command to highlight elements on the page.
+   *
+   * @param {Drupal.Ajax} ajax
+   *   The Drupal.Ajax object.
+   * @param {object} response
+   *   The command's response: `selectors`, the elements to highlight.
    */
-  Drupal.AjaxCommands.prototype.highlight = function (ajax, response) {
+  Drupal.AjaxCommands.prototype.highlight = function highlight(ajax, response) {
     if (!response.selectors?.length) {
       return;
     }

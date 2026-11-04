@@ -47,8 +47,13 @@ export const registerPortalAction = (action) => {
   if (!action || typeof action.id !== 'string' || action.id === '') {
     throw new Error('A portal action declares a string id.');
   }
-  if (typeof action.applies !== 'function' || typeof action.run !== 'function') {
-    throw new Error(`Portal action "${action.id}" declares applies(showing) and run(showing, uuid).`);
+  if (
+    typeof action.applies !== 'function' ||
+    typeof action.run !== 'function'
+  ) {
+    throw new Error(
+      `Portal action "${action.id}" declares applies(showing) and run(showing, uuid).`,
+    );
   }
   actions.set(action.id, action);
   return () => {
@@ -94,6 +99,7 @@ export const portalActionsFor = (showing) => {
  *   The door's component uuid.
  *
  * @return {Array<{label: string, icon: ?string, run: function(): void}>}
+ *   One item per action that applies to the showing.
  */
 export const portalActionItems = (showing, uuid) =>
   portalActionsFor(showing).map((action) => ({

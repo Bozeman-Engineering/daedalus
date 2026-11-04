@@ -38,6 +38,11 @@ final class ModelChoicesFormTest extends BrowserTestBase {
   use DaedalusFixtureTrait;
 
   /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
    * The form's path.
    */
   private const PATH = '/admin/config/daedalus/ai/chat';

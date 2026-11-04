@@ -542,8 +542,13 @@ class BlueprintFitsTest extends BlueprintKernelTestBase {
     $this->assertSame(BlueprintInterface::TYPE_SITE_CHROME, $header['type']);
     $this->assertTrue($header['frame_only'], 'Discovery serves the type\'s rule beside the type.');
     $this->assertFalse($section['frame_only']);
-    $this->assertTrue($this->container->get('entity_type.manager')->getStorage(BlueprintTypeInterface::ENTITY_TYPE_ID)->load(BlueprintInterface::TYPE_SITE_CHROME)->isFrameOnly());
-    $this->assertFalse($this->container->get('entity_type.manager')->getStorage(BlueprintTypeInterface::ENTITY_TYPE_ID)->load(BlueprintInterface::TYPE_SECTION)->isFrameOnly());
+    $types = $this->container->get('entity_type.manager')->getStorage(BlueprintTypeInterface::ENTITY_TYPE_ID);
+    $chrome_type = $types->load(BlueprintInterface::TYPE_SITE_CHROME);
+    assert($chrome_type instanceof BlueprintTypeInterface);
+    $section_type = $types->load(BlueprintInterface::TYPE_SECTION);
+    assert($section_type instanceof BlueprintTypeInterface);
+    $this->assertTrue($chrome_type->isFrameOnly());
+    $this->assertFalse($section_type->isFrameOnly());
 
     $requires = BlueprintRequirements::derive($header['layout'], $header['bundles'], $header['frame_only']);
     $this->assertSame([FrameInterface::ENTITY_TYPE_ID], $requires[BlueprintRequirements::FRAME]);

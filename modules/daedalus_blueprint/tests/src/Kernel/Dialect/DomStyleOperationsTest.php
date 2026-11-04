@@ -24,14 +24,16 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * The DOM style op and set's style half, through daedalus_stylish's registered ops.
+ * The DOM style op and set's style half.
+ *
+ * Through daedalus_stylish's registered ops.
  *
  * The `style` op's CSS parses under the <style>-block grammar (the same
- * DialectCssParser instance grammar the document parser uses) and lands
- * as update_style operations, so daedalus_stylish's one validation engine judges
- * every value; the explicit `remove` list is the deletion syntax (unset
- * is a real CSS value, not a delete). set's style attribute is
- * whole-list replacement of the element's own default-condition styles.
+ * DialectCssParser instance grammar the document parser uses) and lands as
+ * update_style operations, so daedalus_stylish's one validation engine judges
+ * every value; the explicit `remove` list is the deletion syntax (unset is a
+ * real CSS value, not a delete). set's style attribute is whole-list
+ * replacement of the element's own default-condition styles.
  *
  * The adversarial CSS surface (the reject list and the fluency spills:
  * descendant selectors into rich text, compound #id.class) is pinned
@@ -99,8 +101,8 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
     $this->installEntitySchema('block_content');
     $this->installConfig(['block_content']);
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', [
       'daedalus_variant_usage',
@@ -128,13 +130,16 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * The test vocabulary: conditions matching daedalus_stylish's names, no tokens.
+   * The test vocabulary.
+   *
+   * Conditions matching daedalus_stylish's names, no tokens.
    */
   protected function catalog(): DialectCatalog {
     return new DialectCatalog(
       containerLayoutId: 'layout_onecol',
-      // 0.6: the testimonial block type's emphasis axis (daedalus_stylish_guide_test
-      // declares it), an attribute on the block's own tag.
+      // 0.6: the testimonial block type's emphasis axis
+      // (daedalus_stylish_guide_test declares it), an attribute on the block's
+      // own tag.
       axes: ['block_type:testimonial' => ['emphasis' => []]],
       blockTypes: [],
       conditions: [
@@ -185,17 +190,20 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
       // The tag tier's vocabulary on every owner is the styling layer's
       // base section (daedalus_stylish's shipped one), not the identity
       // tags above.
-      selectors: array_fill_keys(['d-container', 'd-text', 'd-formatted-text', 'd-block'], ['parts' => [], 'tags' => ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'img']]),
+      selectors: array_fill_keys(['d-container', 'd-text', 'd-formatted-text', 'd-block'], [
+        'parts' => [],
+        'tags' => ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'a', 'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'img'],
+      ]),
     );
   }
 
   /**
    * Declares the '.s-*' namespace on the SPINE and builds the note type.
    *
-   * The dialect maps selectors to storage keys; the update_style writes
-   * they land in are judged by daedalus_stylish against the spine's declarations,
-   * so the namespace must exist there too (one vocabulary truth, two
-   * readers). Returns the request options for the rich-text lane.
+   * The dialect maps selectors to storage keys; the update_style writes they
+   * land in are judged by daedalus_stylish against the spine's declarations, so
+   * the namespace must exist there too (one vocabulary truth, two readers).
+   * Returns the request options for the rich-text lane.
    */
   protected function setUpRichTextLane(): array {
     $this->createBlockContentType('formatted_text', 'Formatted text');
@@ -583,7 +591,7 @@ class DomStyleOperationsTest extends BlueprintKernelTestBase {
    * class the rule wears off (remove_variant) and leaves its properties,
    * and a remove naming a wear the rule does not carry says so.
    */
-  public function testStyleOpWearsAtARule(): void {
+  public function testStyleOpWearsAtRule(): void {
     $this->mintSectionVariant();
     $rule = "container:{$this->rootUuid}::> d-container";
 
@@ -859,7 +867,7 @@ CSS;
    * ids its fragment carries, and an op that depends on a tainted id has no
    * problem of its own, so reporting it would invite the writer to "fix" an
    * operation whose only fault is upstream (dependent-op suppression, the
-   * dail-in-ai decision). Were the shadow presented as real, structural
+   * dial-in-ai decision). Were the shadow presented as real, structural
    * priority would flip the phase; suppression keeps the one real failure
    * labeled semantic.
    */

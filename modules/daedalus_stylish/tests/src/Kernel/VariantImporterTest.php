@@ -16,15 +16,15 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the module-shipped variants importer (the disk lane).
  *
- * The daedalus_stylish_variants_test module ships a MODULE.daedalus_stylish.variants.yml
- * with two variants, validated against daedalus_stylish_guide_test's guide. The
- * tests drive the importer's sync() directly; on a site it runs through
- * ShippedSync (cache rebuild, install, `drush daedalus_stylish:sync`). Every
- * definition rides the blueprint deserializer (the spine), and the
- * importer itself saves, live and published. Sync semantics are "one hash,
- * two comparisons": unmodified variants auto-sync new disk defaults as a
- * new revision, user-modified variants keep their styles AND their stored
- * hash so the UI can keep offering revert.
+ * The daedalus_stylish_variants_test module ships a
+ * MODULE.daedalus_stylish.variants.yml with two variants, validated against
+ * daedalus_stylish_guide_test's guide. The tests drive the importer's sync()
+ * directly; on a site it runs through ShippedSync (cache rebuild, install,
+ * `drush daedalus_stylish:sync`). Every definition rides the blueprint
+ * deserializer (the spine), and the importer itself saves, live and published.
+ * Sync semantics are "one hash, two comparisons": unmodified variants auto-sync
+ * new disk defaults as a new revision, user-modified variants keep their styles
+ * AND their stored hash so the UI can keep offering revert.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -83,8 +83,8 @@ class VariantImporterTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_skin');
     // The daedalus-stylish-install sweep imports the enabled packages' shipped
     // variants, whose motion-* and var() references mirror into the skin

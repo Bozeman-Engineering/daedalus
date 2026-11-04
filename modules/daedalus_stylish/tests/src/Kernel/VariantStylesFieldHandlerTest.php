@@ -19,10 +19,11 @@ use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
  * The blueprint lane of the variant-styles road: a variant serializes with
  * structured element-relative styles (no JSON-string-in-JSON), and writes
  * validate through the validator's address door (validateAt()) — the same path
- * drush dd-blueprint-serialize/dd-blueprint-deserialize and the AI's generic create/update tools ride. The style
- * guide in play comes from daedalus_stylish_guide_test: section declares spacing with
- * padding max 4rem, and the testimonial block type declares typography
- * (font-size max 2rem) plus a .testimonial__quote sub-element.
+ * drush dd-blueprint-serialize/dd-blueprint-deserialize and the AI's generic
+ * create/update tools ride. The style guide in play comes from
+ * daedalus_stylish_guide_test: section declares spacing with padding max 4rem,
+ * and the testimonial block type declares typography (font-size max 2rem) plus
+ * a .testimonial__quote sub-element.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -95,7 +96,9 @@ class VariantStylesFieldHandlerTest extends KernelTestBase {
   }
 
   /**
-   * Deserializes a blueprint, as drush dd-blueprint-deserialize and the AI create tool do.
+   * Deserializes a blueprint the way drush and the AI create tool do.
+   *
+   * The drush path is dd-blueprint-deserialize.
    */
   protected function deserialize(array $data): BlueprintResultInterface {
     return $this->container->get('daedalus_blueprint.deserializer')->deserialize($data);
@@ -113,7 +116,9 @@ class VariantStylesFieldHandlerTest extends KernelTestBase {
   }
 
   /**
-   * A blueprint round-trips structured styles — the drush dd-blueprint-deserialize/dd-blueprint-serialize path.
+   * A blueprint round-trips structured styles.
+   *
+   * The drush dd-blueprint-deserialize/dd-blueprint-serialize path.
    */
   public function testBlueprintRoundTrip(): void {
     $styles = [
@@ -124,7 +129,8 @@ class VariantStylesFieldHandlerTest extends KernelTestBase {
       '::.testimonial__quote' => ['default' => ['font-size' => '1.25rem']],
     ];
 
-    // Create through the deserializer (dd-blueprint-deserialize), then save — the caller decides.
+    // Create through the deserializer (dd-blueprint-deserialize), then save —
+    // the caller decides.
     $result = $this->deserialize($this->blueprint([
       'label' => 'Testimonial — bold',
       'machine_name' => 'testimonial_bold',
@@ -142,7 +148,8 @@ class VariantStylesFieldHandlerTest extends KernelTestBase {
     $this->assertInstanceOf(DaedalusStylishVariant::class, $loaded);
     $this->assertSame($styles, $loaded->getStyles());
 
-    // Serialize (dd-blueprint-serialize) exposes the decoded map, never a JSON string.
+    // Serialize (dd-blueprint-serialize) exposes the decoded map, never a JSON
+    // string.
     $blueprint = $this->container->get('daedalus_blueprint.serializer')->serialize($this->host($loaded));
     $this->assertSame($styles, $blueprint['fields']['styles']);
   }
@@ -267,12 +274,12 @@ class VariantStylesFieldHandlerTest extends KernelTestBase {
     $this->assertArrayHasKey('default', $guide['conditions']);
 
     // The applicability story rides this fragment too, as designer-facing
-    // lines: the site's own bindings (the unbound fixture withdraws the
-    // suite's dimension and type bindings, so the one line left is
-    // daedalus_stylish's shipped font-family -> font scale), and every node's value
-    // space as a deviations line at the scope-key grammar, a cap authored
-    // on a shorthand reading as one phrase per served value space (the
-    // family expanded at the source).
+    // lines: the site's own bindings (the unbound fixture withdraws the suite's
+    // dimension and type bindings, so the one line left is daedalus_stylish's
+    // shipped font-family -> font scale), and every node's value space as a
+    // deviations line at the scope-key grammar, a cap authored on a shorthand
+    // reading as one phrase per served value space (the family expanded at the
+    // source).
     $this->assertSame(['font-family' => 'font values'], $guide['bindings']);
     $this->assertSame('padding at most 4rem; padding-top at most 4rem; padding-right at most 4rem; padding-bottom at most 4rem; padding-left at most 4rem', $guide['deviations']['kind:container']);
     $this->assertSame('font-family one of: Inter, Georgia; font-size at most 2rem', $guide['deviations']['block_type:testimonial']);

@@ -7,18 +7,18 @@ namespace Drupal\daedalus\Migrate\PlusSuite;
 /**
  * The rename mapping: the old suite's vocabulary translated to daedalus's.
  *
- * Reads migrate/plus_suite/mapping.tsv, the one table the code-rename script beside the
- * parent topic note and the site migration share, and applies its rows with
- * the script's boundary rules so a stored value and a source file translate
- * the same way. Rows are `kind<TAB>old<TAB>new<TAB>note`; the kinds and the
- * boundaries each one puts around its literal `old` are documented at the
- * top of the table. Literal rows are tried at every position id/prefix/lcamel
- * first, then camel, longest first within each (ties in table order); regex
- * rows run before the literal pass; protect and keep rows are masked before
- * the passes and restored after; and every literal refuses a `daedalus` or
- * `Daedalus` immediately before it, which makes translation idempotent.
- * floor rows carry the oldest schema version served per old module; forbid
- * and skip rows are the script's and are ignored here.
+ * Reads migrate/plus_suite/mapping.tsv, the one table the code-rename script
+ * beside the parent topic note and the site migration share, and applies its
+ * rows with the script's boundary rules so a stored value and a source file
+ * translate the same way. Rows are `kind<TAB>old<TAB>new<TAB>note`; the kinds
+ * and the boundaries each one puts around its literal `old` are documented at
+ * the top of the table. Literal rows are tried at every position
+ * id/prefix/lcamel first, then camel, longest first within each (ties in table
+ * order); regex rows run before the literal pass; protect and keep rows are
+ * masked before the passes and restored after; and every literal refuses a
+ * `daedalus` or `Daedalus` immediately before it, which makes translation
+ * idempotent. floor rows carry the oldest schema version served per old module;
+ * forbid and skip rows are the script's and are ignored here.
  */
 final class Mapping {
 

@@ -90,6 +90,15 @@ const declaredVocabulary = () => {
 
 /**
  * The modeled classes an element wears (declared parts + instances).
+ *
+ * @param {Element} element
+ *   An element inside the owner's subtree.
+ * @param {{classes: Set<string>, prefixes: string[]}} terms
+ *   The owner's modeled vocabulary: the declared part classes and the
+ *   instance class prefixes.
+ *
+ * @return {string[]}
+ *   The element's classes the model speaks for.
  */
 const modeledClasses = (element, terms) =>
   [...element.classList].filter(
@@ -103,6 +112,14 @@ const modeledClasses = (element, terms) =>
 /**
  * DOM presence of one selector inside an owner, ownership-honored: a match
  * inside a nested selectable is that owner's business.
+ *
+ * @param {Element} owner
+ *   The owner's selectable element.
+ * @param {string} selector
+ *   The class selector to look for.
+ *
+ * @return {boolean}
+ *   Whether the owner or its own subtree matches.
  */
 const domPresence = (owner, selector) =>
   owner.matches(selector) ||
@@ -113,6 +130,13 @@ const domPresence = (owner, selector) =>
 /**
  * Verifies one owner's modeled classes against the annotation, logging
  * disagreements.
+ *
+ * @param {Element} owner
+ *   The owner's selectable element.
+ * @param {{classes: Set<string>, prefixes: string[]}} terms
+ *   The owner's modeled vocabulary (modeledClasses).
+ * @param {function(string): void} log
+ *   Where a disagreement is reported.
  */
 const verifyOwner = (owner, terms, log) => {
   const key = owner.getAttribute('data-selectable');

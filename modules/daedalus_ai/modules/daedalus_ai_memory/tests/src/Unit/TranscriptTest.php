@@ -604,7 +604,7 @@ class TranscriptTest extends UnitTestCase {
         $record([['type' => 'tool', 'text' => '', 'tool_id' => 7]]),
         'tool_id must be a string or NULL',
       ],
-      'prefix hash' => [
+      'prefix hashes entry' => [
         ['version' => 1, 'segments' => [['number' => 1, 'prefix_hashes' => [''], 'entries' => []]]],
         'prefix hash must be a non-empty string',
       ],

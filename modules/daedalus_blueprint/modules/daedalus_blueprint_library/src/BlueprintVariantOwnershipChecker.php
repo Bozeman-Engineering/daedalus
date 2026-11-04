@@ -37,12 +37,12 @@ use Drupal\daedalus_stylish\VariantApplicabilityCheckerInterface;
  * validating and rendering wherever they are, and orphaned variants (owner
  * deleted or undiscoverable) refuse everywhere, the offer-nowhere parity.
  *
- * Registered by DaedalusBlueprintLibraryServiceProvider, and only when daedalus_stylish
- * is installed: this class cannot even LOAD without daedalus_stylish (the implemented
- * interface lives there), and container compilation reflects every registered
- * service class, so a plain services.yml entry fatals a daedalus-stylish-less
- * container. Lazy tag collection is no protection; compile-time reflection is
- * unconditional.
+ * Registered by DaedalusBlueprintLibraryServiceProvider, and only when
+ * daedalus_stylish is installed: this class cannot even LOAD without
+ * daedalus_stylish (the implemented interface lives there), and container
+ * compilation reflects every registered service class, so a plain services.yml
+ * entry fatals a daedalus-stylish-less container. Lazy tag collection is no
+ * protection; compile-time reflection is unconditional.
  */
 class BlueprintVariantOwnershipChecker implements VariantApplicabilityCheckerInterface {
 

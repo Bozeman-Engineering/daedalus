@@ -14,9 +14,9 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
  * Tests the anchor-relative placement grammar.
  *
  * The grammar {anchor, placement: before|after|inside} resolves an insertion
- * point relative to existing content. Section anchors require daedalus_layout section
- * UUIDs, so those paths are covered by the functional assembled-stack tests;
- * this kernel test covers component anchors, paragraph anchors, the root
+ * point relative to existing content. Section anchors require daedalus_layout
+ * section UUIDs, so those paths are covered by the functional assembled-stack
+ * tests; this kernel test covers component anchors, paragraph anchors, the root
  * entity anchor, and the grammar's error cases.
  */
 #[RunTestsInSeparateProcesses]

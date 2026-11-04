@@ -43,7 +43,9 @@ interface PackageShipperInterface {
   public function packageDependencies(): array;
 
   /**
-   * Plans the lane's part of a package ship: outcomes recorded, nothing written.
+   * Plans the lane's part of a package ship.
+   *
+   * Outcomes recorded, nothing written.
    *
    * @param \Drupal\daedalus_blueprint\DesignSystem\DesignSystemInterface $system
    *   The design system shipped.

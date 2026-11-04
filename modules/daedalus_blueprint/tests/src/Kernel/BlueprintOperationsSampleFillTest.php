@@ -336,7 +336,7 @@ class BlueprintOperationsSampleFillTest extends BlueprintKernelTestBase {
    * A generator that prevents saving its sample is refused at write time.
    *
    * Field_sample_value's SampleValue constraint marks such a value as
-   * unsaveable; the spine validates every write as saveable, so the request
+   * unsavable; the spine validates every write as saveable, so the request
    * fails with that constraint rather than staging a value Save would
    * refuse.
    */

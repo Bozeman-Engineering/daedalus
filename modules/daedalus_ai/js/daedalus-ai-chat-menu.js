@@ -64,6 +64,9 @@
    * saveSetting arrives with daedalus_ui/save_setting, a dependency of the
    * chat library; its absence is a broken dependency, so it throws rather
    * than losing the choice.
+   *
+   * @param {string} key
+   *   The chosen model's key, as the row carries it.
    */
   const chooseModel = (key) => {
     if (typeof Drupal.Daedalus.saveSetting !== 'function') {
@@ -153,18 +156,24 @@
    * The token rides the X-CSRF-Token header the way every page-builder post
    * does; a failed release is an error, since the reset that follows would
    * hand the held files to the next conversation.
+   *
+   * @param {string} threadId
+   *   The conversation's thread id.
    */
   const releaseAttachments = async (threadId) => {
     const tokenResponse = await fetch(Drupal.url('session/token'));
     const token = await tokenResponse.text();
-    const response = await fetch(Drupal.url('daedalus-ai/attachments/release'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-Token': token,
+    const response = await fetch(
+      Drupal.url('daedalus-ai/attachments/release'),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': token,
+        },
+        body: JSON.stringify({ thread_id: threadId }),
       },
-      body: JSON.stringify({ thread_id: threadId }),
-    });
+    );
     if (!response.ok) {
       throw new Error(
         `Daedalus AI: releasing the attachments of thread ${threadId} failed (${response.status}).`,
@@ -191,45 +200,47 @@
 
   Drupal.behaviors.daedalusAiChatMenu = {
     attach(context) {
-      once('daedalus-ai-chat-menu', '.daedalus-ai-chat-menu-button', context).forEach(
-        (button) => {
-          // Whether OUR menu is the open one (aria-expanded); the primitive's
-          // onClose clears it however the menu closes.
-          let expanded = false;
-          const setExpanded = (open) => {
-            expanded = open;
-            button.setAttribute('aria-expanded', open ? 'true' : 'false');
-          };
+      once(
+        'daedalus-ai-chat-menu',
+        '.daedalus-ai-chat-menu-button',
+        context,
+      ).forEach((button) => {
+        // Whether OUR menu is the open one (aria-expanded); the primitive's
+        // onClose clears it however the menu closes.
+        let expanded = false;
+        const setExpanded = (open) => {
+          expanded = open;
+          button.setAttribute('aria-expanded', open ? 'true' : 'false');
+        };
 
-          // The kebab toggles: the anchor counts as inside the menu's
-          // dismissal boundary, so a click on it while open closes rather
-          // than reopens.
-          button.addEventListener('click', () => {
-            if (expanded) {
-              Drupal.Daedalus.menu.close();
-              return;
-            }
-            setExpanded(
-              Drupal.Daedalus.menu.open({
-                anchor: button,
-                align: 'end',
-                items: [
-                  ...modelItems(),
-                  ...usageItems(),
-                  ...contextItems(),
-                  {
-                    label: Drupal.t('Clear History'),
-                    danger: true,
-                    confirm: true,
-                    run: clearHistory,
-                  },
-                ],
-                onClose: () => setExpanded(false),
-              }),
-            );
-          });
-        },
-      );
+        // The kebab toggles: the anchor counts as inside the menu's
+        // dismissal boundary, so a click on it while open closes rather
+        // than reopens.
+        button.addEventListener('click', () => {
+          if (expanded) {
+            Drupal.Daedalus.menu.close();
+            return;
+          }
+          setExpanded(
+            Drupal.Daedalus.menu.open({
+              anchor: button,
+              align: 'end',
+              items: [
+                ...modelItems(),
+                ...usageItems(),
+                ...contextItems(),
+                {
+                  label: Drupal.t('Clear History'),
+                  danger: true,
+                  confirm: true,
+                  run: clearHistory,
+                },
+              ],
+              onClose: () => setExpanded(false),
+            }),
+          );
+        });
+      });
     },
   };
 })(Drupal, drupalSettings, once);

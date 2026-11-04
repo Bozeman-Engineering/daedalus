@@ -19,14 +19,14 @@ use Psr\Log\LoggerInterface;
 /**
  * Tests the token contract: the guide's grammar and the skin's conformance.
  *
- * The site declaration's token_contract ({scale: [names]}) is the token
- * names a design system promises. The guide build proves the guide's half of it (a
- * scale whose stops are curated declares a contract, and every stop is
- * a contract name: guide code naming guide code, so a fault is a build
- * error); SkinConformance answers the skin's half (whether one skin
- * mints every contract name, and what it lacks), skin data that never
- * bricks the guide. The delivery-time drift log the client payload used
- * to write for a curated stop the skin did not mint is gone with it.
+ * The site declaration's token_contract ({scale: [names]}) is the token names a
+ * design system promises. The guide build proves the guide's half of it (a
+ * scale whose stops are curated declares a contract, and every stop is a
+ * contract name: guide code naming guide code, so a fault is a build error);
+ * SkinConformance answers the skin's half (whether one skin mints every
+ * contract name, and what it lacks), skin data that never bricks the guide. The
+ * delivery-time drift log the client payload used to write for a curated stop
+ * the skin did not mint is gone with it.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]

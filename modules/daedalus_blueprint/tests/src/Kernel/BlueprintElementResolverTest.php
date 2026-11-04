@@ -28,13 +28,13 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
  * pins each branch.
  *
  * It runs the real assembled Daedalus Layout daedalus_layout stack rather than
- * mocking, because section and region resolution genuinely depend on daedalus_layout:
- * sections only carry a UUID (an daedalus_layout third-party setting) when daedalus_layout is
- * installed, and ElementLocator::locateSection matches on that UUID. The
- * fixture module ships scoped context YAML (layout_onecol guidance for
- * entity_test.entity_test), which lets the test prove the
- * YAML-over-handler/derived guidance merge is wired all the way through to the
- * resolved element.
+ * mocking, because section and region resolution genuinely depend on
+ * daedalus_layout: sections only carry a UUID (an daedalus_layout third-party
+ * setting) when daedalus_layout is installed, and ElementLocator::locateSection
+ * matches on that UUID. The fixture module ships scoped context YAML
+ * (layout_onecol guidance for entity_test.entity_test), which lets the test
+ * prove the YAML-over-handler/derived guidance merge is wired all the way
+ * through to the resolved element.
  *
  * The five scenarios live in one fat method on purpose: every kernel test
  * method reinstalls Drupal and re-enables this module stack, which is the slow
@@ -61,7 +61,7 @@ class BlueprintElementResolverTest extends BlueprintKernelTestBase {
   protected BlueprintElementResolver $resolver;
 
   /**
-   * Enables the full daedalus_layout + Layout Builder stack and the fixture module.
+   * Enables the daedalus_layout + Layout Builder stack and the fixture module.
    *
    * Lb_plus is required so sections carry a UUID; daedalus_tempstore and
    * daedalus_ui are its hard dependencies. The fixture module supplies the
@@ -104,8 +104,9 @@ class BlueprintElementResolverTest extends BlueprintKernelTestBase {
    * Tests field, missing-field, block, section, and region resolution.
    */
   public function testResolvesEachElementTypeAndDispatch(): void {
-    // Build one entity carrying: a stock string field value, an inline block
-    // in a section, and an daedalus_layout section UUID so the section is addressable.
+    // Build one entity carrying: a stock string field value, an inline block in
+    // a section, and an daedalus_layout section UUID so the section is
+    // addressable.
     $block = $this->entityTypeManager->getStorage('block_content')->create([
       'type' => 'text_section',
       'reusable' => FALSE,

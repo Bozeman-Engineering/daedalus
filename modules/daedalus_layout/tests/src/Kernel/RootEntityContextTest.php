@@ -115,8 +115,8 @@ class RootEntityContextTest extends NestedStorageKernelTestBase {
    * Legacy mappings against the stable id keep resolving at depth.
    *
    * Pre-unification content mapped nested field blocks to
-   * daedalus_layout.root_entity; the container forwards the root entity under that
-   * id too, so those mappings render unchanged until migration heals them.
+   * daedalus_layout.root_entity; the container forwards the root entity under
+   * that id too, so those mappings render unchanged until migration heals them.
    */
   public function testLegacyStableIdStillRendersNested(): void {
     $field_block_uuid = $this->uuid->generate();

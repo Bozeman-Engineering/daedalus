@@ -689,7 +689,7 @@ class ContextBlocksTest extends KernelTestBase {
    * as contexts.attachments, and the block's "File N:" line states the
    * same spelling: the one the model repeats into view_file(). A macOS
    * screenshot carries a NARROW NO-BREAK SPACE (U+202F) before "PM", which
-   * the model normalised to a plain space on the live site; the lane dashes
+   * the model normalized to a plain space on the live site; the lane dashes
    * it, so the block never carries the byte. The screenshot is exported as
    * PDF because this container has no media type and the lane's accepted
    * set is the textual kinds (FileLaneTest pins the png); the original

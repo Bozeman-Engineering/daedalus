@@ -15,12 +15,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests how compose and markup shells reach the AI schema.
  *
  * A composed inline block (composed: true in the bundle's
- * PROVIDER.page_builder.block_type.BUNDLE.yml declaration) renders to a
- * single root, so no markup shells apply — not the block kind's, not its
- * fields'. Both facts are ANATOMY, so they reach the AI through the bundle
- * schema's anatomy fragment (daedalus_ui's daedalus_blueprint context
- * feed, whose fragment spells the fact as `composed`, the grammar's own
- * key), while daedalus_stylish's style_guide additions stay styling-only: what each
+ * PROVIDER.page_builder.block_type.BUNDLE.yml declaration) renders to a single
+ * root, so no markup shells apply — not the block kind's, not its fields'. Both
+ * facts are ANATOMY, so they reach the AI through the bundle schema's anatomy
+ * fragment (daedalus_ui's daedalus_blueprint context feed, whose fragment
+ * spells the fact as `composed`, the grammar's own key), while
+ * daedalus_stylish's style_guide additions stay styling-only: what each
  * selector permits, never what the markup is. Compose declarations come
  * state-injected through daedalus_stylish_nested_test's
  * hook_page_builder_declarations_alter().
@@ -80,9 +80,9 @@ class ComposedBlockSchemaTest extends KernelTestBase {
   /**
    * Layers state-injected declarations over the YAML ones for a dimension.
    *
-   * The compile that installConfig(['daedalus_stylish']) fires in setUp() builds the
-   * style guide, which warms the declarations memo and persistent cache
-   * before any test injects its fixtures; state is invisible to both, so
+   * The compile that installConfig(['daedalus_stylish']) fires in setUp()
+   * builds the style guide, which warms the declarations memo and persistent
+   * cache before any test injects its fixtures; state is invisible to both, so
    * the guide's cache is reset here for the injection to be read.
    */
   protected function declare(string $dimension, array $declarations): void {
@@ -172,11 +172,11 @@ class ComposedBlockSchemaTest extends KernelTestBase {
     $this->assertStringContainsString('border', $entries['block_types.chromed::.chrome']);
 
     // Sub-elements flatten to "{root}::.selector" entries at any authored
-    // depth, as prose (no anatomy vocabulary, no constraint dump); the
-    // header's font-size cap is the header's own value space, a
-    // deviations line at its address (the fixture authors no bindings of
-    // its own; the one binding line is daedalus_stylish's shipped font-family ->
-    // font scale, the site lane every fixture layers over).
+    // depth, as prose (no anatomy vocabulary, no constraint dump); the header's
+    // font-size cap is the header's own value space, a deviations line at its
+    // address (the fixture authors no bindings of its own; the one binding line
+    // is daedalus_stylish's shipped font-family -> font scale, the site lane
+    // every fixture layers over).
     $this->assertArrayHasKey('block_types.card::.card__kicker', $entries);
     $this->assertStringContainsString('font-size', $entries['block_types.card::.card__header']);
     $this->assertStringNotContainsString('"constraints"', json_encode($guide['stylable']));

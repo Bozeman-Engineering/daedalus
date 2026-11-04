@@ -28,7 +28,7 @@ html {
   #edit-mode-top-bar {
     --admin-toolbar-font-family: var(--daedalus-font);
     /* The quiet glyph: the text color pulled 28% toward the background. */
-    --toolbar-button-color: color-mix(in srgb, var(--daedalus-text) 72%, var(--daedalus-background));
+    --toolbar-button-color: color-mix(in sRGB, var(--daedalus-text) 72%, var(--daedalus-background));
     --toolbar-button-hover-color: var(--daedalus-text);
     /* The bar's hover is the neutral toggle surface, not the chrome's
        selection wash: no blue in the bar (see the file comment). */
@@ -58,9 +58,9 @@ html {
       flex: 1 1 auto;
       align-items: center;
       justify-content: center;
-      gap: 0.75rem;
-      min-width: 0;
       width: auto;
+      min-width: 0;
+      gap: 0.75rem;
     }
     .top-bar__right-toggles {
       display: flex;
@@ -113,8 +113,8 @@ html {
 
     /* The mark reads as the wordmark when its label is inline. */
     .daedalus-ui-menu-trigger .toolbar-button__label {
-      font-weight: 600;
       letter-spacing: -0.01em;
+      font-weight: 600;
     }
 
     /* The document sentence: the host's title, the kind as a muted suffix
@@ -127,8 +127,8 @@ html {
       text-overflow: ellipsis;
     }
     .daedalus-ui-document__title {
-      font-weight: 500;
       letter-spacing: -0.01em;
+      font-weight: 500;
     }
     .daedalus-ui-kind {
       color: var(--daedalus-text-muted);
@@ -144,22 +144,23 @@ html {
        stays inline at every density, so the pill always reads. */
     .daedalus-ui-save {
       flex: none;
-      gap: 0.45rem;
       height: 1.625rem;
-      padding-block: 0;
-      padding-inline: 0.7rem;
-      border-radius: 999px;
-      font-size: var(--daedalus-font-size-small);
-      font-weight: 600;
       transition:
         background-color 0.15s ease,
         color 0.15s ease;
+      border-radius: 999px;
+      font-size: var(--daedalus-font-size-small);
+      font-weight: 600;
+      gap: 0.45rem;
+      padding-block: 0;
+      padding-inline: 0.7rem;
       &[data-daedalus-ui-saved="false"] {
         --toolbar-button-color: var(--daedalus-background);
         --toolbar-button-hover-color: var(--daedalus-background);
         --toolbar-button-focus-color: var(--daedalus-background);
         --toolbar-button-bg: var(--daedalus-text);
-        --toolbar-button-hover-bg: color-mix(in srgb, var(--daedalus-text) 82%, var(--daedalus-background));
+        --toolbar-button-hover-bg: color-mix(in sRGB, var(--daedalus-text) 82%, var(--daedalus-background));
+
         padding-inline-start: 0.6rem;
         &::before {
           width: 0.4375rem;
@@ -167,11 +168,12 @@ html {
           content: "";
           border-radius: 50%;
           background: currentColor;
-          box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 28%, transparent);
+          box-shadow: 0 0 0 3px color-mix(in sRGB, currentColor 28%, transparent);
         }
       }
       &[data-daedalus-ui-saved="true"] {
         --toolbar-button-color: var(--daedalus-text-muted);
+
         font-weight: 500;
       }
     }

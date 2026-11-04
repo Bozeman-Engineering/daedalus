@@ -11,7 +11,6 @@ import {
 import {
   ANCHOR_KIND,
   ATTRIBUTE,
-  CLASS_PART,
   CLASS_QUALIFIER,
   HAS,
   IS,
@@ -102,9 +101,16 @@ export const BOX_LABELS = {
 /**
  * The word for a pseudo-element's name ('before' → "Before",
  * 'file-selector-button' → "File selector button").
+ *
+ * @param {string} pseudo
+ *   The pseudo-element name, without its colons.
+ *
+ * @return {string}
+ *   The human word for the box.
  */
 export const boxWord = (pseudo) =>
-  BOX_LABELS[pseudo]?.() ?? `${pseudo.charAt(0).toUpperCase()}${pseudo.slice(1).replace(/-/g, ' ')}`;
+  BOX_LABELS[pseudo]?.() ??
+  `${pseudo.charAt(0).toUpperCase()}${pseudo.slice(1).replace(/-/g, ' ')}`;
 
 /**
  * Finds an instance row (or nested carrier) in a markup annotation.
@@ -115,6 +121,7 @@ export const boxWord = (pseudo) =>
  *   The instance-part selector ('.s-a3').
  *
  * @return {?{class: string, tag: string, label: string}}
+ *   The instance row, or null when the annotation has none for it.
  */
 export const findInstancePart = (markup, sub) => {
   const search = (rows) => {
@@ -180,6 +187,16 @@ export const partsForKey = (
  * for it. An identity class is worn by one element in the world, so the
  * one thing that names its kind without the annotation is the namespace
  * that minted it, never the class itself.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {?object} declaration
+ *   The key's owner declaration (declarationForKey), or null.
+ * @param {string} sub
+ *   The instance-part selector ('.s-a3').
+ *
+ * @return {?string}
+ *   The covering declaration's label, or null.
  */
 const coveringLabel = (guide, declaration, sub) => {
   const covering =
@@ -199,6 +216,22 @@ const coveringLabel = (guide, declaration, sub) => {
  * owner pattern part's, else the site instance namespace's) where the
  * annotation is out of reach (the satellite window, a key the model does
  * not speak for). The selector itself is the last resort, unchanged.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {string} key
+ *   The owning element's key.
+ * @param {string} sub
+ *   The part selector ('.quote', '.s-a3').
+ * @param {object} blockTypes
+ *   component uuid → bundle.
+ * @param {object} sectionLayouts
+ *   section uuid → layout id.
+ * @param {?object} markup
+ *   The key's `_element.markup` annotation, or null.
+ *
+ * @return {string}
+ *   The part's label, the selector itself as the last resort.
  */
 const partLabel = (guide, key, sub, blockTypes, sectionLayouts, markup) => {
   const declared = partsForKey(guide, key, blockTypes, sectionLayouts).find(
@@ -216,7 +249,11 @@ const partLabel = (guide, key, sub, blockTypes, sectionLayouts, markup) => {
     if (parsed && !parsed.selector) {
       const covering = coveringLabel(
         guide,
-        declarationForKey(guide, parsed, bundleForKey(parsed, blockTypes, sectionLayouts)),
+        declarationForKey(
+          guide,
+          parsed,
+          bundleForKey(parsed, blockTypes, sectionLayouts),
+        ),
         sub,
       );
       if (covering !== null) {
@@ -262,6 +299,14 @@ export const typeLabels = (guide) => {
  * The human label of a type compound, plural: "Text blocks" for
  * `d-text` (the bundle's label), "Containers" and "Blocks" for the two
  * kinds; an undeclared or unlabelled type reads as its spelling.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {string} type
+ *   The type compound's name (`d-text`).
+ *
+ * @return {string}
+ *   The plural label.
  */
 const typeLabel = (guide, type) => {
   if (type === TYPE_CONTAINER) {
@@ -283,6 +328,14 @@ const lower = (text) =>
  * The bare word of a type for the middle of a sentence: "image" for
  * `d-image` (the bundle's label), "container" and "block" for the two
  * kinds; an undeclared or unlabelled type reads as its spelling.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {string} type
+ *   The type compound's name (`d-image`).
+ *
+ * @return {string}
+ *   The bare singular word.
  */
 const typeWord = (guide, type) => {
   if (type === TYPE_CONTAINER) {
@@ -297,6 +350,12 @@ const typeWord = (guide, type) => {
 
 /**
  * A noun behind its indefinite article ("a link", "an image").
+ *
+ * @param {string} noun
+ *   The bare noun.
+ *
+ * @return {string}
+ *   The noun with its article.
  */
 const article = (noun) =>
   /^[aeiou]/i.test(noun)
@@ -306,6 +365,14 @@ const article = (noun) =>
 /**
  * The block-type declaration a type compound's parts label against, or
  * null for a kind or an undeclared type.
+ *
+ * @param {object} guide
+ *   The style guide payload.
+ * @param {string} type
+ *   The type compound's name.
+ *
+ * @return {?object}
+ *   The block-type declaration, or null.
  */
 const typeOwner = (guide, type) => {
   const address = typeAddress(type);
@@ -317,7 +384,7 @@ const typeOwner = (guide, type) => {
 /**
  * The words of one relative selector, one group per descent step.
  *
- * A group is a compound with the sibling-combinated compounds that
+ * A group is a compound with the sibling-combinator compounds that
  * follow it folded in: `> p + p` is ONE group (the second paragraph,
  * worded "right after a paragraph"), `> d-text .link` two ("Text
  * blocks", "Link"). Each group carries its subject's words and its
@@ -382,6 +449,7 @@ const typeOwner = (guide, type) => {
  *
  * @return {?Array<{compound: object, combinator: string, label: string,
  *   noun: string, plural: string, phrases: string[]}>}
+ *   One group per compound of the chain, or null for the element itself.
  */
 export const selectorWords = (
   guide,
@@ -436,7 +504,8 @@ export const selectorWords = (
     const label = partWords(compound.name, owner);
     return { label, noun: lower(label), plural: `${lower(label)}s` };
   };
-  const nounPhrase = (group) => [article(group.noun), ...group.phrases].join(' ');
+  const nounPhrase = (group) =>
+    [article(group.noun), ...group.phrases].join(' ');
   const hasPhrase = (lead, thing, negated) => {
     if (lead === NEXT) {
       return negated
@@ -484,13 +553,19 @@ export const selectorWords = (
         ? Drupal.t('without !attribute', { '!attribute': attribute })
         : Drupal.t('with !attribute', { '!attribute': attribute });
     }
-    if (POSITIONS.includes(qualifier.name) || NTH_POSITIONS.includes(qualifier.name)) {
+    if (
+      POSITIONS.includes(qualifier.name) ||
+      NTH_POSITIONS.includes(qualifier.name)
+    ) {
       const place = positionPlace(qualifier);
       return negated
         ? Drupal.t('that are not !place', { '!place': place })
         : Drupal.t('that are !place', { '!place': place });
     }
-    const condition = conditionForPseudoClass(guide?.conditions, qualifier.name);
+    const condition = conditionForPseudoClass(
+      guide?.conditions,
+      qualifier.name,
+    );
     const state =
       condition === null
         ? printQualifier(qualifier)
@@ -525,7 +600,8 @@ export const selectorWords = (
   // qualifier phrases negate, inside `:is()` they read plain.
   const compoundWords = (compound, context, negated = false) => {
     const implied = compound.kind === null;
-    const owner = compound.kind === TYPE ? typeOwner(guide, compound.name) : context;
+    const owner =
+      compound.kind === TYPE ? typeOwner(guide, compound.name) : context;
     if (implied) {
       // The implied subject inside `:not()`: `:not(:has(x))` reads the
       // negation on each `:has` phrase, `:not(:last-child)`,
@@ -540,7 +616,9 @@ export const selectorWords = (
           if (qualifier.name !== HAS) {
             return qualifierPhrase(qualifier, negated);
           }
-          const thing = groups(qualifier.argument, owner).map(nounPhrase).join(' › ');
+          const thing = groups(qualifier.argument, owner)
+            .map(nounPhrase)
+            .join(' › ');
           return hasPhrase(qualifier.argument[0].combinator, thing, negated);
         }),
       };
@@ -548,7 +626,9 @@ export const selectorWords = (
     const has = compound.qualifiers
       .filter((qualifier) => qualifier.name === HAS)
       .map((qualifier) => {
-        const thing = groups(qualifier.argument, owner).map(nounPhrase).join(' › ');
+        const thing = groups(qualifier.argument, owner)
+          .map(nounPhrase)
+          .join(' › ');
         return hasPhrase(qualifier.argument[0].combinator, thing, false);
       });
     const not = compound.qualifiers
@@ -573,7 +653,9 @@ export const selectorWords = (
           '!members': qualifier.argument
             .map((member) => {
               const words = compoundWords(member, context);
-              return words.implied ? words.phrases.join(' ') : nounPhrase(words);
+              return words.implied
+                ? words.phrases.join(' ')
+                : nounPhrase(words);
             })
             .join(', '),
         }),
@@ -628,6 +710,7 @@ export const selectorWords = (
  *   null where no annotation is reachable.
  *
  * @return {string}
+ *   The human label, the selector itself as the last resort.
  */
 export const selectorLabel = (
   guide,
@@ -637,7 +720,14 @@ export const selectorLabel = (
   sectionLayouts = {},
   markup = null,
 ) => {
-  const words = selectorWords(guide, key, selector, blockTypes, sectionLayouts, markup);
+  const words = selectorWords(
+    guide,
+    key,
+    selector,
+    blockTypes,
+    sectionLayouts,
+    markup,
+  );
   if (words === null) {
     return typeof selector === 'string' ? selector : '';
   }

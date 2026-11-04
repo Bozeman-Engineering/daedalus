@@ -6,7 +6,7 @@ namespace Drupal\daedalus_ai_memory\Service;
 
 use Drupal\ai\OperationType\Chat\ChatInput;
 use Drupal\ai\OperationType\Chat\ChatOutput;
-use Drupal\ai_agents\PluginInterfaces\AiAgentInterface;
+use Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface;
 use Drupal\daedalus_ai_memory\Segment\SegmentBudget;
 use Drupal\daedalus_ai_memory\Transcript\Rendering;
 use Drupal\daedalus_ai_memory\Transcript\Transcript;
@@ -93,7 +93,7 @@ final class TurnState {
    *
    * @param string $jobId
    *   The job id: the conversation's identity and the agent's runner id.
-   * @param \Drupal\ai_agents\PluginInterfaces\AiAgentInterface $agent
+   * @param \Drupal\ai_agents\PluginInterfaces\ConfigAiAgentInterface $agent
    *   The agent wrapper the legs run through.
    * @param \Drupal\daedalus_ai_memory\Transcript\Transcript $transcript
    *   The conversation's transcript.
@@ -110,7 +110,7 @@ final class TurnState {
    */
   public function __construct(
     public readonly string $jobId,
-    public readonly AiAgentInterface $agent,
+    public readonly ConfigAiAgentInterface $agent,
     public readonly Transcript $transcript,
     public readonly object $provider,
     public readonly string $modelId,

@@ -28,6 +28,23 @@ import { paintCoverage } from './code/layers.js';
  * views and variant area set it directly, a satellite's intents ride the
  * BroadcastChannel and land in the leader source.
  */
+
+/**
+ * Wires the paint renderer to the leader source.
+ *
+ * @param {object} options
+ *   The wiring.
+ * @param {object} options.app
+ *   daedalus_ui's edit-mode app (its geometry tracker and page tree).
+ * @param {object} options.source
+ *   The leader state source (its canvas-paint state and style map).
+ * @param {object} [options.guide]
+ *   The style guide payload (its condition table).
+ *
+ * @return {?{container: Element}}
+ *   The renderer's container, or null without a #daedalus-root to float
+ *   in.
+ */
 export const createCanvasPaint = ({ app, source, guide = {} }) => {
   // The posable states, for the structural reach a state-qualified rule
   // covers (computed-read.js resolveTargets).
@@ -90,18 +107,20 @@ export const createCanvasPaint = ({ app, source, guide = {} }) => {
       if (pseudoOf(target.selector) !== null) {
         return;
       }
-      resolveTargets(target.key, target.selector, conditions).forEach((element) => {
-        let ids = covered.get(element);
-        if (!ids) {
-          ids = [];
-          covered.set(element, ids);
-        }
-        target.layers.forEach((id) => {
-          if (!ids.includes(id)) {
-            ids.push(id);
+      resolveTargets(target.key, target.selector, conditions).forEach(
+        (element) => {
+          let ids = covered.get(element);
+          if (!ids) {
+            ids = [];
+            covered.set(element, ids);
           }
-        });
-      });
+          target.layers.forEach((id) => {
+            if (!ids.includes(id)) {
+              ids.push(id);
+            }
+          });
+        },
+      );
     });
     markRows([...marks]);
     covered.forEach((ids, element) => {

@@ -18,7 +18,30 @@
     // Modules export named bindings on purpose so an importer binds the
     // registration function under its own name beside the app it registers
     // into.
-    "import/prefer-default-export": "off"
+    "import/prefer-default-export": "off",
+    // Core's eslint 8 (eslint-scope 7) records no reference for a JSX tag
+    // and core ships no eslint-plugin-react to teach it, so the bindings
+    // JSX alone reads look unused: `h`, the pragma every JSX module imports
+    // (webpack.config.js, preset-react `pragma: 'h'`), `Fragment`, and a
+    // PascalCase binding, which is a component rendered as a tag. Every
+    // other binding, a parameter included, stays checked; airbnb's options
+    // restated because an options object replaces them whole.
+    "no-unused-vars": [
+      "warn",
+      {
+        "vars": "all",
+        "args": "after-used",
+        "ignoreRestSiblings": true,
+        "varsIgnorePattern": "^(h|Fragment|[A-Z][a-z][A-Za-z0-9]*)$"
+      }
+    ],
+    // A classic script opens with a file docblock (@file) and the IIFE that
+    // wraps it, core's shape; jsdoc attaches that block to the IIFE and
+    // asks it to document the injected globals (Drupal, once). A block
+    // carrying @file describes the file, so it exempts the function it
+    // precedes; the rule's default exemption (inheritdoc) restated because
+    // the list replaces it whole.
+    "jsdoc/require-param": ["warn", { "exemptedBy": ["inheritdoc", "file"] }]
   },
   "overrides": [
     {

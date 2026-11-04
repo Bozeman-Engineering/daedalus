@@ -37,6 +37,12 @@ export const TIER_VARIANT = 'variant';
 /**
  * A worn variant's layer id, namespaced so no machine name collides with
  * the element layer.
+ *
+ * @param {string} name
+ *   The variant's reference (its record id).
+ *
+ * @return {string}
+ *   `variant:{name}`.
  */
 export const variantLayerId = (name) => `${TIER_VARIANT}:${name}`;
 
@@ -61,6 +67,12 @@ export const variantLayerId = (name) => `${TIER_VARIANT}:${name}`;
  * and Push commits update_default). Canvas coverage has no footprint
  * for them (paintCoverage reads map refs and own styles; the floor's
  * coverage story is still an open design call).
+ *
+ * @param {string} scope
+ *   The declaring scope (`kind:block`, `block_type:text`).
+ *
+ * @return {string}
+ *   `declared:{scope}`.
  */
 export const declaredLayerId = (scope) => `${TIER_DECLARED}:${scope}`;
 
@@ -68,6 +80,12 @@ export const declaredLayerId = (scope) => `${TIER_DECLARED}:${scope}`;
  * An active-skin defaults layer id at one declaring scope
  * (`skin:kind:block`, `skin:block_type:text`, and `skin:base:p` for the
  * skin's base:{tag} block, present only when the rendered tag is known).
+ *
+ * @param {string} scope
+ *   The declaring scope (`kind:block`, `block_type:text`, `base:p`).
+ *
+ * @return {string}
+ *   `skin:{scope}`.
  */
 export const skinLayerId = (scope) => `${TIER_SKIN}:${scope}`;
 
@@ -84,11 +102,57 @@ export const skinLayerId = (scope) => `${TIER_SKIN}:${scope}`;
  * variant reference carries a colon, so the grammar tells the two apart
  * (isSkinDocument), and every identity surface (the dot, the rail hue)
  * reads the document's layer through documentLayerId.
+ *
+ * @param {string} scope
+ *   The declaring scope the skin document edits.
+ *
+ * @return {string}
+ *   The scope's skin layer id, the document's reference.
  */
 export const skinDocument = (scope) => skinLayerId(scope);
 
 /**
+ * A layer id's tier: the prefix before the first colon, or the whole id
+ * for the unprefixed element layer.
+ *
+ * @param {string} id
+ *   A layer id.
+ *
+ * @return {string}
+ *   'declared', 'skin', 'variant' or 'element' (an unknown id answers
+ *   its own prefix).
+ */
+export const layerTier = (id) => {
+  const name = String(id);
+  const pos = name.indexOf(':');
+  return pos === -1 ? name : name.slice(0, pos);
+};
+
+/**
+ * A layer id's address after its tier prefix: a floor layer's declaring
+ * scope (`kind:block`, `base:p`), a variant layer's reference; null for
+ * the element layer.
+ *
+ * @param {string} id
+ *   A layer id.
+ *
+ * @return {?string}
+ *   The address after the first colon, null when the id has none.
+ */
+export const layerScope = (id) => {
+  const name = String(id);
+  const pos = name.indexOf(':');
+  return pos === -1 ? null : name.slice(pos + 1);
+};
+
+/**
  * Whether a document reference names the skin's document at a scope.
+ *
+ * @param {*} reference
+ *   A document reference (a variant's record id or a skin layer id).
+ *
+ * @return {boolean}
+ *   True for a `skin:{scope}` string with a non-empty scope.
  */
 export const isSkinDocument = (reference) =>
   typeof reference === 'string' &&
@@ -97,6 +161,12 @@ export const isSkinDocument = (reference) =>
 
 /**
  * The scope a skin document reference names, null for a variant's.
+ *
+ * @param {*} reference
+ *   A document reference.
+ *
+ * @return {?string}
+ *   The declaring scope after the `skin:` prefix, or null.
  */
 export const skinDocumentScope = (reference) =>
   isSkinDocument(reference) ? layerScope(reference) : null;
@@ -104,6 +174,12 @@ export const skinDocumentScope = (reference) =>
 /**
  * A document's layer id: a skin document's own spelling, a variant
  * reference's variant layer.
+ *
+ * @param {string} reference
+ *   A document reference.
+ *
+ * @return {string}
+ *   The layer id the stack overlays the document on.
  */
 export const documentLayerId = (reference) =>
   isSkinDocument(reference) ? reference : variantLayerId(reference);
@@ -121,12 +197,26 @@ export const documentLayerId = (reference) =>
  * document is never a session: the Inspector's openDocument routes it
  * to the tab before any session logic (lawDocumentFocus), so no stack
  * or session ever sees the fragment. No scope or property carries `#`.
+ *
+ * @param {string} scope
+ *   The declaring scope the Law tab shows.
+ * @param {?string} property
+ *   A property to focus the tab's rows on, or null for the whole scope.
+ *
+ * @return {string}
+ *   `declared:{scope}`, with `#{property}` appended when one is given.
  */
 export const lawDocument = (scope, property = null) =>
   `${declaredLayerId(scope)}${property ? `#${property}` : ''}`;
 
 /**
  * Whether a document reference names the law at a scope.
+ *
+ * @param {*} reference
+ *   A document reference.
+ *
+ * @return {boolean}
+ *   True for a `declared:{scope}` string with a non-empty scope.
  */
 export const isLawDocument = (reference) =>
   typeof reference === 'string' &&
@@ -136,7 +226,12 @@ export const isLawDocument = (reference) =>
 /**
  * The focus a law document reference names, null for any other document.
  *
+ * @param {*} reference
+ *   A document reference.
+ *
  * @return {?{scope: string, property: ?string}}
+ *   The declaring scope and the property the `#` fragment names (null
+ *   without one), or null when the reference is not a law document's.
  */
 export const lawDocumentFocus = (reference) => {
   if (!isLawDocument(reference)) {
@@ -173,6 +268,14 @@ export const lawDocumentFocus = (reference) => {
  * delivery order, then the rule's own entry. This id names the own
  * layer, which reads in the floor hue; ancestorWearLayerId() names a
  * worn one, which reads in its variant's hue.
+ *
+ * @param {string} owner
+ *   The rule's own key (the ancestor element's selectable key).
+ * @param {string} selector
+ *   The rule's relative selector under the owner (`> d-text`).
+ *
+ * @return {string}
+ *   `ancestor:{owner}::{selector}`.
  */
 export const ancestorLayerId = (owner, selector) =>
   `${TIER_ANCESTOR}:${owner}::${selector}`;
@@ -185,6 +288,17 @@ export const ancestorLayerId = (owner, selector) =>
  * (relative-selector.js) nor a machine name admits, so the tail after
  * the LAST `|` is the variant and ancestorRule() reads the position back
  * from either spelling.
+ *
+ * @param {string} owner
+ *   The rule's own key.
+ * @param {string} position
+ *   The rule position (relative selector) the variant reaches this key
+ *   through.
+ * @param {string} variant
+ *   The worn variant's reference.
+ *
+ * @return {string}
+ *   The own ancestor layer id with `|{variant}` appended.
  */
 export const ancestorWearLayerId = (owner, position, variant) =>
   `${ancestorLayerId(owner, position)}|${variant}`;
@@ -198,6 +312,12 @@ export const ancestorWearLayerId = (owner, position, variant) =>
  * the variant's, while its tier keeps every "this element wears" reader
  * (the Advanced roster, the candidate resolver, the AI door) honest by
  * construction.
+ *
+ * @param {string} id
+ *   A layer id.
+ *
+ * @return {?string}
+ *   The variant reference after the last `|`, or null.
  */
 export const ancestorVariant = (id) => {
   if (layerTier(id) !== TIER_ANCESTOR) {
@@ -213,6 +333,12 @@ export const ancestorVariant = (id) => {
  * the worn spelling alike (a worn layer's rule is the POSITION its value
  * reaches this key through; the carrier that wears the variant is the
  * layer's own `carrier` field), or null for any other id.
+ *
+ * @param {string} id
+ *   A layer id.
+ *
+ * @return {?{key: string, selector: string}}
+ *   The rule's owner key and relative selector, or null.
  */
 export const ancestorRule = (id) => {
   if (layerTier(id) !== TIER_ANCESTOR) {
@@ -229,44 +355,23 @@ export const ancestorRule = (id) => {
 
 /**
  * Whether a layer id names an ancestor-rule layer.
+ *
+ * @param {string} id
+ *   A layer id.
+ *
+ * @return {boolean}
+ *   True when the tier prefix is `ancestor`.
  */
 export const isAncestorLayer = (id) => layerTier(id) === TIER_ANCESTOR;
 
 /**
- * A layer id's tier: the prefix before the first colon, or the whole id
- * for the unprefixed element layer.
- *
- * @param {string} id
- *   A layer id.
- *
- * @return {string}
- *   'declared', 'skin', 'variant' or 'element' (an unknown id answers
- *   its own prefix).
- */
-export const layerTier = (id) => {
-  const name = String(id);
-  const pos = name.indexOf(':');
-  return pos === -1 ? name : name.slice(0, pos);
-};
-
-/**
- * A layer id's address after its tier prefix: a floor layer's declaring
- * scope (`kind:block`, `base:p`), a variant layer's reference; null for
- * the element layer.
- *
- * @param {string} id
- *   A layer id.
- *
- * @return {?string}
- */
-export const layerScope = (id) => {
-  const name = String(id);
-  const pos = name.indexOf(':');
-  return pos === -1 ? null : name.slice(pos + 1);
-};
-
-/**
  * Whether a layer id names a defaults-floor layer (either tier).
+ *
+ * @param {string} id
+ *   A layer id.
+ *
+ * @return {boolean}
+ *   True when the tier prefix is `skin` or `declared`.
  */
 export const isFloorLayer = (id) => {
   const tier = layerTier(id);
@@ -288,11 +393,23 @@ export const SKIN_COLOR = 'hsl(172 66% 50%)';
 
 /**
  * The layer a line belongs to (the code view's line shapes carry it).
+ *
+ * @param {{layer: string}} line
+ *   A code view line shape.
+ *
+ * @return {string}
+ *   The line's layer id.
  */
 export const lineLayerId = (line) => line.layer;
 
 /**
  * The layer a lost line's winner names ({layer, variant}).
+ *
+ * @param {{layer: string, variant: ?string}} winner
+ *   A lost line's winner record.
+ *
+ * @return {string}
+ *   The winning layer's id.
  */
 export const winnerLayerId = (winner) => winner.layer;
 
@@ -334,9 +451,9 @@ export const layerColor = (id) => {
   let hash = 5381;
   const name = String(id);
   for (let i = 0; i < name.length; i += 1) {
-    // djb2: the shift and the unsigned coercion are the hash.
-    // eslint-disable-next-line no-bitwise
-    hash = ((hash << 5) + hash + name.charCodeAt(i)) >>> 0;
+    // djb2 (hash * 33 + c), kept to 32 bits the way the shift form's
+    // unsigned coercion did; the product stays exact below 2 ** 53.
+    hash = (hash * 33 + name.charCodeAt(i)) % 2 ** 32;
   }
   let hue = hash % 360;
   if (Math.abs(hue - 213) < 24) {
@@ -350,6 +467,12 @@ export const layerColor = (id) => {
  * block with at least one property — the reserved `variants` list is not
  * a declaration). The element layer's coverage read: a pure-reference
  * entry wears layers but adds nothing of its own.
+ *
+ * @param {?object} entry
+ *   A style map entry (condition → property → value, plus `variants`).
+ *
+ * @return {boolean}
+ *   True when some condition block holds a property.
  */
 const entryHasOwnStyles = (entry) =>
   Object.entries(entry ?? {}).some(

@@ -40,8 +40,9 @@
  */
 
 import { animationReference, tokenReference } from '../style-guide.js';
-import { animationOptions, scaleTokens, styleReference } from '../materials.js';
+import { animationOptions, scaleTokens } from '../materials.js';
 import { keyframesNamesInValue } from '../keyframes-names.js';
+import { hasControlChar } from '../control-chars.js';
 import {
   resolveValue,
   KIND,
@@ -95,6 +96,13 @@ const DIMENSION_PATTERN = new RegExp(
 /**
  * Parses a single CSS dimension component.
  *
+ * @param {string} component
+ *   One component of the value (no commas or spaces).
+ * @param {boolean} allowNegative
+ *   Whether a negative number parses.
+ * @param {boolean} allowNumber
+ *   Whether a unitless non-zero number parses.
+ *
  * @return {?[number, string]}
  *   [number, unit] — unit '' for a bare number or unitless zero — or null.
  */
@@ -116,6 +124,17 @@ const parseDimension = (component, allowNegative, allowNumber) => {
 
 /**
  * Compares a parsed value to a bound; null when not comparable.
+ *
+ * @param {number} number
+ *   The value's number.
+ * @param {string} unit
+ *   The value's unit ('' for a bare number).
+ * @param {string|number} bound
+ *   The constraint's min or max, a dimension as written.
+ *
+ * @return {?number}
+ *   -1, 0 or 1 as the value sits below, at or above the bound; null
+ *   when the bound does not parse or the units have no common basis.
  */
 const compare = (number, unit, bound) => {
   const parsed = parseDimension(String(bound), true, true);
@@ -248,6 +267,16 @@ const validateNumber = (property, value, definition, constraints) => {
  * with a digit. CSS-wide keywords, "default", and "--" prefixes are
  * reserved per the <custom-ident> grammar; the definition's keywords ride
  * along as extra accepted values. Mirrors PropertyGroupBase::validateIdent.
+ *
+ * @param {string} property
+ *   The CSS property name (for messages).
+ * @param {string} value
+ *   The value as written.
+ * @param {object} definition
+ *   The property definition (its keywords ride along).
+ *
+ * @return {Array<{code: string, message: string, hint: string}>}
+ *   Violations, empty when the value passes.
  */
 const validateIdent = (property, value, definition) => {
   if ((definition.keywords ?? []).includes(value.toLowerCase())) {
@@ -278,6 +307,16 @@ const validateIdent = (property, value, definition) => {
  * the reference check's question (checkAnimationReferences, over the
  * roster); this only says whether the spelling could be a name at all.
  * Mirrors PropertyGroupBase::validateAnimationName.
+ *
+ * @param {string} property
+ *   The CSS property name (for messages).
+ * @param {string} value
+ *   The value as written.
+ * @param {object} definition
+ *   The property definition (its keywords ride along).
+ *
+ * @return {Array<{code: string, message: string, hint: string}>}
+ *   Violations, empty when the spelling could be a name.
  */
 const validateAnimationName = (property, value, definition) => {
   if (validateIdent(property, value, definition).length === 0) {
@@ -332,7 +371,11 @@ const validateColor = (property, value) => {
  * segment (leading, trailing, or doubled comma) or unbalanced parentheses.
  * Mirrors PropertyGroupBase::splitList.
  *
+ * @param {string} value
+ *   The list value as written.
+ *
  * @return {?string[]}
+ *   The components in order, or null for a malformed list.
  */
 const splitList = (value) => {
   const components = [];
@@ -341,9 +384,12 @@ const splitList = (value) => {
   let pendingComma = false;
   for (const char of value) {
     if (char === '(') {
-      depth++;
-    } else if (char === ')' && --depth < 0) {
-      return null;
+      depth += 1;
+    } else if (char === ')') {
+      depth -= 1;
+      if (depth < 0) {
+        return null;
+      }
     }
     if (depth === 0 && (char === ',' || /\s/.test(char))) {
       if (current !== '') {
@@ -404,6 +450,9 @@ const validateText = (property, value) => {
  *   what is minted and published); null skips the check.
  *
  * @return {Array<{code: string, message: string, hint: string, severity: string}>}
+ *   One violation per unminted in-namespace variable, an error on a
+ *   closed site and a warning elsewhere; empty when every reference
+ *   resolves.
  */
 const checkTokenReferences = (property, value, tokens) => {
   if (!tokens || !value.includes('var(')) {
@@ -464,6 +513,8 @@ const checkTokenReferences = (property, value, tokens) => {
  *   check.
  *
  * @return {Array<{code: string, message: string, hint: string, severity: string}>}
+ *   One violation per keyframes name that does not resolve, an error on
+ *   a closed site and a warning elsewhere; empty when every name does.
  */
 const checkAnimationReferences = (property, value, tokens) => {
   if (!tokens) {
@@ -532,8 +583,7 @@ export const validateValue = (
   tokens = null,
 ) => {
   value = value.trim();
-  // eslint-disable-next-line no-control-regex
-  if (value === '' || /[;{}<>]|[\x00-\x1F]/.test(value)) {
+  if (value === '' || /[;{}<>]/.test(value) || hasControlChar(value)) {
     return [
       {
         code: 'INVALID_STYLE_VALUE',
@@ -581,6 +631,21 @@ export const validateValue = (
  * The allowed-list, pass-through and typed checks: everything but the
  * scale closure (which returns early, a closed space) and the animation
  * reference check (which runs after every shape outcome).
+ *
+ * @param {string} property
+ *   The CSS property name.
+ * @param {string} value
+ *   The (trimmed) value.
+ * @param {?object} definition
+ *   The property definition from guide.groups (type, keywords, flags).
+ * @param {object} constraints
+ *   The declaration's constraints ({allowed, min, max, units}), {} when
+ *   unconstrained.
+ * @param {?object} tokens
+ *   The materials context for the reference check, or null to skip it.
+ *
+ * @return {Array<{code: string, message: string, hint: string, severity?: string}>}
+ *   Violations, empty when the value passes.
  */
 const validateShape = (property, value, definition, constraints, tokens) => {
   if (Array.isArray(constraints.allowed)) {
@@ -632,6 +697,12 @@ const validateShape = (property, value, definition, constraints, tokens) => {
 
 /**
  * The definition's own min/max, as a constraints fragment.
+ *
+ * @param {object} definition
+ *   The property definition (its min and max, when set).
+ *
+ * @return {object}
+ *   {min?, max?}: only the bounds the definition sets.
  */
 const definitionRange = (definition) =>
   Object.fromEntries(
@@ -650,6 +721,19 @@ const definitionRange = (definition) =>
  * grammar bound, in force on every site whatever the enforcement mode, the
  * way `negative` already bounds the sign. A guide constraint block for the
  * property layers over it per key. Mirrors PropertyGroupBase::validateScalar.
+ *
+ * @param {string} property
+ *   The CSS property name.
+ * @param {string} value
+ *   One component of the value.
+ * @param {object} definition
+ *   The property definition (type, keywords, flags, own range).
+ * @param {object} constraints
+ *   The declaration's constraints ({min, max, units}), layered over the
+ *   definition's range.
+ *
+ * @return {Array<{code: string, message: string, hint: string}>}
+ *   Violations, empty when the component passes.
  */
 const validateScalar = (property, value, definition, constraints) => {
   constraints = { ...definitionRange(definition), ...constraints };

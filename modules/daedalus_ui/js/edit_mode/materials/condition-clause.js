@@ -62,10 +62,21 @@ export const UNPOSABLE_STATES = ['visited', 'target'];
 
 const WIDTH_FEATURES = ['width', 'min-width', 'max-width'];
 const PREFERENCE_PREFIX = 'prefers-';
-const QUERY_KEYWORDS = ['and', 'or', 'not', 'only', 'all', 'screen', 'print', 'speech'];
+const QUERY_KEYWORDS = [
+  'and',
+  'or',
+  'not',
+  'only',
+  'all',
+  'screen',
+  'print',
+  'speech',
+];
 
 const isRow = (definition) =>
-  definition !== null && typeof definition === 'object' && !Array.isArray(definition);
+  definition !== null &&
+  typeof definition === 'object' &&
+  !Array.isArray(definition);
 
 /**
  * Splits a compound into its clause texts, at the top-level `+` only.
@@ -75,6 +86,7 @@ const isRow = (definition) =>
  * clause.
  *
  * @param {string} compound
+ *   The compound text.
  *
  * @return {string[]}
  *   The clause texts, trimmed, in spelled order.
@@ -103,6 +115,12 @@ export const compoundParts = (compound) => {
 /**
  * Splits a query body into words and parenthesized groups; null when the
  * parentheses do not balance.
+ *
+ * @param {string} body
+ *   The at-rule's body, after its name.
+ *
+ * @return {?string[]}
+ *   The tokens, or null.
  */
 const tokens = (body) => {
   const found = [];
@@ -148,6 +166,13 @@ const tokens = (body) => {
 /**
  * Reads a wrapper's CSS into {form, text, features}, or null for text of
  * no known form (the PHP read()'s twin).
+ *
+ * @param {string} input
+ *   The wrapper's CSS.
+ *
+ * @return {?{form: string, text: string, features: Array<Array<?string>>}}
+ *   The form, the printed text and the [name, value] feature pairs, or
+ *   null.
  */
 const read = (input) => {
   const css = String(input).trim();
@@ -179,7 +204,9 @@ const read = (input) => {
   const printed = [];
   for (const token of parts) {
     if (token[0] === '(') {
-      const feature = token.match(/^\(\s*([a-z][a-z0-9-]*)\s*(?::\s*([^()]*?)\s*)?\)$/i);
+      const feature = token.match(
+        /^\(\s*([a-z][a-z0-9-]*)\s*(?::\s*([^()]*?)\s*)?\)$/i,
+      );
       if (!feature) {
         return null;
       }
@@ -204,6 +231,12 @@ const read = (input) => {
 /**
  * How a wrapper wraps a rule, by its prefix: PSEUDO, MEDIA, CONTAINER,
  * SUPPORTS, or null for text of no known form.
+ *
+ * @param {string} input
+ *   The wrapper's CSS.
+ *
+ * @return {?string}
+ *   The form, or null.
  */
 export const clauseForm = (input) => {
   const css = String(input).trim();
@@ -220,6 +253,12 @@ export const clauseForm = (input) => {
 /**
  * The width band a wrapper's CSS poses: {min?, max?} in inclusive px for
  * a `@container` width query, else null.
+ *
+ * @param {string} css
+ *   The wrapper's CSS.
+ *
+ * @return {?{min: number, max: number}}
+ *   The band, either edge optional, or null.
  */
 export const clauseBand = (css) => {
   const reading = read(css);
@@ -254,10 +293,20 @@ export const clauseBand = (css) => {
 /**
  * The user preference a wrapper's CSS tests: {feature, value} for a
  * single-feature `@media` `prefers-*` query with a value, else null.
+ *
+ * @param {string} css
+ *   The wrapper's CSS.
+ *
+ * @return {?{feature: string, value: string}}
+ *   The preference, or null.
  */
 export const clausePreference = (css) => {
   const reading = read(css);
-  if (reading === null || reading.form !== MEDIA || reading.features.length !== 1) {
+  if (
+    reading === null ||
+    reading.form !== MEDIA ||
+    reading.features.length !== 1
+  ) {
     return null;
   }
   const [name, value] = reading.features[0];
@@ -271,6 +320,12 @@ export const clausePreference = (css) => {
  * The feature tests a wrapper's CSS makes, as [name, value] pairs in
  * spelled order (ConditionClause::features()'s twin): empty for a
  * pseudo-class, a `@supports` test or text of no known form.
+ *
+ * @param {string} css
+ *   The wrapper's CSS.
+ *
+ * @return {Array<Array<?string>>}
+ *   The [name, value] pairs, the value null for a valueless feature.
  */
 export const clauseFeatures = (css) => read(css)?.features ?? [];
 
@@ -285,13 +340,17 @@ export const clauseFeatures = (css) => read(css)?.features ?? [];
  *   A clause record (parseClause).
  *
  * @return {boolean}
+ *   Whether the canvas can pose the clause.
  */
 export const clausePosable = (clause) => {
   if (clause.kind === UNKNOWN) {
     return false;
   }
   if (clause.form === PSEUDO) {
-    return clause.kind === REFERENCE || !UNPOSABLE_STATES.includes(clause.text.slice(1));
+    return (
+      clause.kind === REFERENCE ||
+      !UNPOSABLE_STATES.includes(clause.text.slice(1))
+    );
   }
   return clause.band !== null || clause.preference !== null;
 };
@@ -305,6 +364,7 @@ export const clausePosable = (clause) => {
  *   A clause record (parseClause).
  *
  * @return {?string}
+ *   The stamp word, or null.
  */
 export const clauseStamp = (clause) => {
   if (clause.form !== PSEUDO || clause.kind === UNKNOWN) {
@@ -325,15 +385,25 @@ const record = (kind, text, form, axis, css) => ({
 
 const reference = (name, conditions) => {
   const definition = conditions[name];
-  const wrapper = typeof definition.wrapper === 'string' ? definition.wrapper : null;
+  const wrapper =
+    typeof definition.wrapper === 'string' ? definition.wrapper : null;
   const axis =
-    typeof definition.axis === 'string' && definition.axis !== '' ? definition.axis : null;
-  return record(REFERENCE, name, wrapper === null ? null : clauseForm(wrapper), axis, wrapper);
+    typeof definition.axis === 'string' && definition.axis !== ''
+      ? definition.axis
+      : null;
+  return record(
+    REFERENCE,
+    name,
+    wrapper === null ? null : clauseForm(wrapper),
+    axis,
+    wrapper,
+  );
 };
 
 const publishedRows = (conditions) =>
   Object.entries(conditions ?? {}).filter(
-    ([, definition]) => isRow(definition) && typeof definition.wrapper === 'string',
+    ([, definition]) =>
+      isRow(definition) && typeof definition.wrapper === 'string',
   );
 
 const featureAxis = (feature, conditions) => {
@@ -345,7 +415,10 @@ const featureAxis = (feature, conditions) => {
       continue;
     }
     const published = read(definition.wrapper);
-    if (published !== null && published.features.some(([name]) => name === feature)) {
+    if (
+      published !== null &&
+      published.features.some(([name]) => name === feature)
+    ) {
       return definition.axis;
     }
   }
@@ -359,7 +432,9 @@ const literalAxis = (reading, conditions) => {
   if (reading.form === SUPPORTS) {
     return SUPPORTS_AXIS;
   }
-  const axes = new Set(reading.features.map(([name]) => featureAxis(name, conditions)));
+  const axes = new Set(
+    reading.features.map(([name]) => featureAxis(name, conditions)),
+  );
   return axes.size === 1 ? [...axes][0] : null;
 };
 
@@ -402,6 +477,14 @@ export const parseClause = (input, conditions) => {
 
 /**
  * Parses a compound into its clause records, in spelled order.
+ *
+ * @param {string} compound
+ *   The compound text.
+ * @param {Object} conditions
+ *   The published condition table (see parseClause).
+ *
+ * @return {Object[]}
+ *   The clause records (parseClause's shape).
  */
 export const parseCompound = (compound, conditions) =>
   compoundParts(compound).map((text) => parseClause(text, conditions));
@@ -449,7 +532,10 @@ const compareRanks = (a, b) => {
     return a[1] - b[1];
   }
   if (a[0] === 1) {
-    return a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0;
+    if (a[1] < b[1]) {
+      return -1;
+    }
+    return a[1] > b[1] ? 1 : 0;
   }
   return 0;
 };
@@ -457,11 +543,25 @@ const compareRanks = (a, b) => {
 /**
  * The canonical spelling of a compound: clauses in canonical order, each
  * as its clause text. Idempotent; never invents or drops a clause.
+ *
+ * @param {string} compound
+ *   The compound text.
+ * @param {Object} conditions
+ *   The published condition table (see parseClause).
+ *
+ * @return {string}
+ *   The canonical compound.
  */
 export const canonicalCompound = (compound, conditions) => {
-  const order = new Map(conditionAxisOrder(conditions).map((axis, index) => [axis, index]));
+  const order = new Map(
+    conditionAxisOrder(conditions).map((axis, index) => [axis, index]),
+  );
   return parseCompound(compound, conditions)
-    .map((clause, index) => ({ rank: rank(clause, order), index, text: clause.text }))
+    .map((clause, index) => ({
+      rank: rank(clause, order),
+      index,
+      text: clause.text,
+    }))
     .sort((a, b) => compareRanks(a.rank, b.rank) || a.index - b.index)
     .map(({ text }) => text)
     .join(DELIMITER);

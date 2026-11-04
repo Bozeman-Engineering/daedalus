@@ -37,7 +37,47 @@ import { widgetClasses } from '../lib/widget-classes.js';
  * spacing story, so a Padding row there would be meaningless air inside a
  * box that only arranges.
  */
-const Gap = ({ model, guide, materials, source, onPreview, onRelease, onCommit, onPickCondition = null, onOpenDocument = null, law = {} }) => (
+
+/**
+ * The widget.
+ *
+ * @param {object} props
+ *   The widget contract's props (basic-controls.js renderControl).
+ * @param {object} props.model
+ *   The control model (controls.js controlModels): the owned
+ *   properties' keys, stacks and reads at the editing compound, the
+ *   constraints, the grant and what the write address withholds.
+ * @param {object} props.guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide).
+ * @param {object} props.materials
+ *   The materials roster the stop vocabularies derive from.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {Function} props.onPreview
+ *   `(properties)`: previews the set on the canvas, routed per key.
+ * @param {Function} props.onRelease
+ *   `(properties)`: releases the preview.
+ * @param {Function} props.onCommit
+ *   `(properties)`: commits the set through the op queue.
+ * @param {?Function} [props.onPickCondition]
+ *   Poses the canvas at a condition (the rows' "Also set at" entries).
+ * @param {?Function} [props.onOpenDocument]
+ *   Opens a variant's document (the row menu's doorway).
+ * @param {object} [props.law]
+ *   The law gate ({canView}, drupalSettings.daedalusStylish.law).
+ */
+const Gap = ({
+  model,
+  guide,
+  materials,
+  source,
+  onPreview,
+  onRelease,
+  onCommit,
+  onPickCondition = null,
+  onOpenDocument = null,
+  law = {},
+}) => (
   <div className={widgetClasses('gap', false)}>
     <ChoiceRow
       guide={guide}
@@ -65,5 +105,6 @@ const Gap = ({ model, guide, materials, source, onPreview, onRelease, onCommit, 
 );
 
 controlWidgets.register('gap', Gap, {
-  applicable: (self, parent, model) => boundGapGate(self, model?.home?.element || null),
+  applicable: (self, parent, model) =>
+    boundGapGate(self, model?.home?.element || null),
 });

@@ -1,0 +1,64 @@
+{
+  // Layered over core's .eslintrc.passing.json, which drupal.org's eslint job
+  // links into the directory above the project. The js tree is the Explode
+  // panel app (js/src, preact JSX bundled by webpack into js/dist) and
+  // nothing else: no classic scripts, no native modules. Each entry below
+  // exists because of that app.
+  "parserOptions": {
+    // Core's parser stops at ES2020 and has no JSX; the app is JSX with
+    // class fields (the sidebar plugin's `type`) and logical assignment
+    // (the DaedalusUiQueue seam).
+    "ecmaVersion": 2022,
+    "ecmaFeatures": { "jsx": true }
+  },
+  "globals": {
+    // Core's env is es6, which predates globalThis; log.js reads it to grab
+    // the daedalus_ui logger on a host that has no window (the node suites
+    // import the pure modules directly).
+    "globalThis": "readonly"
+  },
+  "rules": {
+    // Every relative import carries its .js: the node suites import js/src
+    // modules directly, and node resolves nothing without the extension.
+    "import/extensions": ["error", "ignorePackages", { "js": "always" }],
+    // Modules export named bindings on purpose so an importer binds a
+    // component, a store or the log handle under its own name beside the
+    // ones it composes.
+    "import/prefer-default-export": "off",
+    // Core's eslint 8 (eslint-scope 7) records no reference for a JSX tag
+    // and core ships no eslint-plugin-react to teach it, so the bindings
+    // JSX alone reads look unused: `h`, the pragma every JSX module imports
+    // (webpack.config.js, preset-react `pragma: 'h'`), `Fragment`, and a
+    // PascalCase binding, which is a component rendered as a tag. Every
+    // other binding, a parameter included, stays checked; airbnb's options
+    // restated because an options object replaces them whole.
+    "no-unused-vars": [
+      "warn",
+      {
+        "vars": "all",
+        "args": "after-used",
+        "ignoreRestSiblings": true,
+        "varsIgnorePattern": "^(h|Fragment|[A-Z][a-z][A-Za-z0-9]*)$"
+      }
+    ],
+    // Core's airbnb rule forbids for...of for the regenerator runtime a
+    // transpiled build would need; the bundle's preset-env compiles for...of
+    // without it (regenerator serves generators and async), and the model
+    // walks Maps and Sets, which for...of is the language's way through.
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "ForInStatement",
+        "message": "for..in loops iterate over the entire prototype chain; use Object.{keys,values,entries} and iterate the resulting array."
+      },
+      {
+        "selector": "LabeledStatement",
+        "message": "Labels are a form of GOTO; they make code confusing and hard to maintain."
+      },
+      {
+        "selector": "WithStatement",
+        "message": "`with` is disallowed in strict mode because it makes code impossible to predict and optimize."
+      }
+    ]
+  }
+}

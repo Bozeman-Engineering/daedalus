@@ -5,6 +5,8 @@
   "globRoot": ".",
   "minWordLength": 4,
   "ignorePaths": [
+    "modules/daedalus_explode/js/dist/**",
+    "modules/daedalus_layout/js/dist/**",
     "modules/daedalus_stylish/js/dist/**",
     "modules/daedalus_ui/js/edit_mode/dist/**"
   ],

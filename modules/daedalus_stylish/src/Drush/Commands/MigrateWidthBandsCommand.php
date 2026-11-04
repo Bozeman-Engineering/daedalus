@@ -15,11 +15,11 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 /**
  * Runs the whole width-band style migration on demand.
  *
- * The same sequence the width_bands_000N post_update hooks run, for
- * development environments and re-imported data sets: walk every host
- * style map through the transform spine, then fold variant entities and
- * skin tokens and defaults. Every notable rewrite prints;
- * the post_update path logs the same lines to the daedalus_stylish channel instead.
+ * The same sequence the width_bands_000N post_update hooks run, for development
+ * environments and re-imported data sets: walk every host style map through the
+ * transform spine, then fold variant entities and skin tokens and defaults.
+ * Every notable rewrite prints; the post_update path logs the same lines to the
+ * daedalus_stylish channel instead.
  */
 #[AsCommand(
   name: 'daedalus_stylish:migrate-width-bands',

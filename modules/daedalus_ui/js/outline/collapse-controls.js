@@ -54,18 +54,55 @@ const REVEAL_NEAR = 80;
 /**
  * The gesture's tooltip: its label with the binding's current key when
  * one is bound.
+ *
+ * @param {string} label
+ *   The gesture's label.
+ * @param {string} bindingId
+ *   The binding's id in the registry.
+ *
+ * @return {string}
+ *   The label, with the key in parentheses when the binding has one.
  */
 const tooltipFor = (label, bindingId) => {
-  const binding = registry()?.getBindings().find(({ id }) => id === bindingId);
+  const binding = registry()
+    ?.getBindings()
+    .find(({ id }) => id === bindingId);
   const key = describeBinding(binding?.key);
-  return key ? Drupal.t('@label (@key)', { '@label': label, '@key': key }) : label;
+  return key
+    ? Drupal.t('@label (@key)', { '@label': label, '@key': key })
+    : label;
 };
 
 /**
  * One of the pair: a kit icon button carrying its glyph, tooltip and
  * disabled state, registered with the reveal engine while mounted.
+ *
+ * @param {object} props
+ *   The button.
+ * @param {string} props.className
+ *   The gesture's class on the button.
+ * @param {string} props.label
+ *   The accessible name.
+ * @param {string} props.tooltip
+ *   The tooltip text.
+ * @param {string} props.icon
+ *   The glyph's SVG markup.
+ * @param {boolean} props.disabled
+ *   Whether the gesture would do nothing.
+ * @param {function(): void} props.onClick
+ *   Runs the gesture.
+ *
+ * @return {object}
+ *   The rendered button.
  */
-const ControlButton = ({ className, label, tooltip, icon, disabled, onClick }) => {
+const ControlButton = ({
+  className,
+  label,
+  tooltip,
+  icon,
+  disabled,
+  onClick,
+}) => {
   const buttonRef = useRef(null);
   useEffect(() => {
     const el = buttonRef.current;
@@ -91,13 +128,20 @@ const ControlButton = ({ className, label, tooltip, icon, disabled, onClick }) =
  * The pair, expand all first.
  *
  * @param {object} props
- *   - id: the outline's id, the registrar's; omitted when the outline
- *     registers no hotkeys, so the tooltips carry no key.
- *   - folds: the adapter's current posture.
- *   - outline: the adapter's outline, in the model's shape.
- *   - apply: function(next, gesture) receiving the gesture's next
- *     posture and its name ('collapse_all' or 'expand_all'), the same
- *     signature the registrar's actions use.
+ *   The adapter's outline and posture.
+ * @param {string} [props.id]
+ *   The outline's id, the registrar's; omitted when the outline registers
+ *   no hotkeys, so the tooltips carry no key.
+ * @param {?object} props.folds
+ *   The adapter's current posture.
+ * @param {Array<object>} props.outline
+ *   The adapter's outline, in the model's shape.
+ * @param {function(?object, string): void} props.apply
+ *   Receives the gesture's next posture and its name ('collapse_all' or
+ *   'expand_all'), the same signature the registrar's actions use.
+ *
+ * @return {object}
+ *   The rendered pair.
  */
 export const CollapseControls = ({ id, folds, outline, apply }) => {
   // The bindings' keys change under a remap (the settings tray) and the
@@ -121,7 +165,9 @@ export const CollapseControls = ({ id, folds, outline, apply }) => {
       <ControlButton
         className="daedalus-ui-collapse-all"
         label={collapseLabel}
-        tooltip={id ? tooltipFor(collapseLabel, ids.collapseAll) : collapseLabel}
+        tooltip={
+          id ? tooltipFor(collapseLabel, ids.collapseAll) : collapseLabel
+        }
         icon={collapseAllIcon}
         disabled={allCollapsed(folds, outline)}
         onClick={() => apply(collapseAll(folds, outline), 'collapse_all')}

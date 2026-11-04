@@ -30,6 +30,12 @@ import { usePopover } from './popover.js';
  * daedalus_ui's data-daedalus-ui-tooltip, so tokens that paint alike still
  * tell apart instantly) and the token well's face (the well wears the
  * selected stop, so it tells the same story).
+ *
+ * @param {{label: string, paint: ?string, paintDark: ?string}} stop
+ *   The paint-carrying stop.
+ *
+ * @return {string}
+ *   The hover label.
  */
 export const stopTitle = (stop) =>
   stop.paintDark != null
@@ -64,6 +70,7 @@ export const stopTitle = (stop) =>
  * popup consumer sets it so opening moves focus onto the roving chip.
  *
  * @param {object} props
+ *   The grid's props.
  * @param {Array} props.stops
  *   Paint-carrying entries (the widget stop-table shape: id, value,
  *   label, paint, paintDark, group).
@@ -157,7 +164,9 @@ export const PaletteGrid = ({
                   tabIndex={stop.id === roving ? 0 : -1}
                   className={`daedalus-stylish-palette-grid__stop${active ? ' daedalus-stylish-palette-grid__stop--active' : ''}`}
                   aria-label={Drupal.t(stop.label)}
-                  data-daedalus-ui-tooltip={active ? Drupal.t('Unset') : stopTitle(stop)}
+                  data-daedalus-ui-tooltip={
+                    active ? Drupal.t('Unset') : stopTitle(stop)
+                  }
                   data-daedalus-ui-tooltip-position="top"
                   onClick={() => onPick(active ? null : stop)}
                   onFocus={() => setFocusId(stop.id)}
@@ -197,6 +206,7 @@ export const PaletteGrid = ({
  * the popover portals into the surface under body.
  *
  * @param {object} options
+ *   The popover's wiring.
  * @param {Array} options.stops
  *   Paint-carrying entries (PaletteGrid's shape).
  * @param {?string} [options.selected]
@@ -219,6 +229,8 @@ export const PaletteGrid = ({
  *   Vnodes flowing under the grid and the lanes (the mint row).
  *
  * @return {{open: boolean, triggerProps: object, popover: ?object}}
+ *   Whether the popover is open, the props the trigger spreads, and the
+ *   portaled popover vnode (null while closed).
  */
 export const usePalettePopover = ({
   stops,

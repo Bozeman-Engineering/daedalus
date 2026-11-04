@@ -86,9 +86,9 @@ class VariantManager {
    * A variant as the gesture routes speak it (the response and usage shape).
    *
    * Not a roster shape: the published set reaches the client as materials
-   * records (DaedalusStylishMaterialsProvider); this is the per-gesture payload a
-   * write answers with beside the materials delta, and the management
-   * facts the usage route reads per open.
+   * records (DaedalusStylishMaterialsProvider); this is the per-gesture payload
+   * a write answers with beside the materials delta, and the management facts
+   * the usage route reads per open.
    *
    * @return array
    *   {machine_name, uuid, label, scope, axis, styles, provider,
@@ -242,8 +242,8 @@ class VariantManager {
    *   a global variant, a member of no system, offered under every one
    *   and validated against the active system's vocabulary.
    * @param bool $offered
-   *   The AI opt-out: TRUE (the default) shares the variant with the AI,
-   *   FALSE keeps it for UI use only (DaedalusStylishVariantInterface::isOffered()).
+   *   The AI opt-out: TRUE (the default) shares the variant with the AI, FALSE
+   *   keeps it for UI use only (DaedalusStylishVariantInterface::isOffered()).
    *
    * @return \Drupal\daedalus_stylish\DaedalusStylishVariantInterface
    *   The saved variant.
@@ -425,11 +425,11 @@ class VariantManager {
    * complement of revert()'s SHIPPED_DEFAULTS_MISSING hint. Revert stays
    * open on locked variants (it converges TOWARD the disk, never away).
    *
-   * The lock is the distro lock (DistroLock): it holds on a consuming site
-   * and lifts on a development site whose settings.php names the package
-   * author (`$settings['daedalus_blueprint_developer'] = TRUE`), where the
-   * site is the authoring canvas and `drush daedalus-blueprint:design-system:ship`
-   * carries the variant back to disk.
+   * The lock is the distro lock (DistroLock): it holds on a consuming site and
+   * lifts on a development site whose settings.php names the package author
+   * (`$settings['daedalus_blueprint_developer'] = TRUE`), where the site is the
+   * authoring canvas and `drush daedalus-blueprint:design-system:ship` carries
+   * the variant back to disk.
    *
    * @throws \Drupal\daedalus_stylish\Exception\VariantValidationException
    */
@@ -752,8 +752,8 @@ class VariantManager {
    *
    * The gesture-lane twin of VariantStylesFieldHandler::checkSubmittedAxis()
    * (the blueprint lane's corrective) ahead of the save-time backstop in
-   * DaedalusStylishVariant::preSave(): same code, same valid_axes context, so both
-   * lanes speak one corrective language. NULL/empty means the built-in
+   * DaedalusStylishVariant::preSave(): same code, same valid_axes context, so
+   * both lanes speak one corrective language. NULL/empty means the built-in
    * "style" axis and always passes.
    *
    * @throws \Drupal\daedalus_stylish\Exception\VariantValidationException

@@ -75,7 +75,18 @@ class ConditionTypeTest extends KernelTestBase {
     // position pseudo-classes are selector grammar (RelativeSelector's
     // qualifiers), so no plugin publishes them and no condition carries
     // a flag telling a state from a fact.
-    foreach (['first-child', 'last-child', 'only-child', 'empty', 'odd', 'even', 'not-first-child', 'not-last-child', 'not-only-child', 'not-empty'] as $retired) {
+    foreach ([
+      'first-child',
+      'last-child',
+      'only-child',
+      'empty',
+      'odd',
+      'even',
+      'not-first-child',
+      'not-last-child',
+      'not-only-child',
+      'not-empty',
+    ] as $retired) {
       $this->assertFalse($manager->hasCondition($retired), "$retired is a position qualifier, not a condition.");
     }
     foreach ($manager->getConditions() as $name => $definition) {
@@ -212,10 +223,14 @@ class ConditionTypeTest extends KernelTestBase {
     // A retired position name is no condition any more: the position is
     // a qualifier in the key ("::&:first-child"), and the entry keyed on
     // the old name is refused as any unknown part is.
-    $errors = $validator->validate(["entity:$uuid" => ['first-child' => ['margin-top' => '0'], 'hover+not-last-child' => ['color' => 'blue']]]);
+    $errors = $validator->validate([
+      "entity:$uuid" => ['first-child' => ['margin-top' => '0'], 'hover+not-last-child' => ['color' => 'blue']],
+    ]);
     $this->assertCount(2, $errors);
     $this->assertSame(['INVALID_STYLE_CONDITION', 'INVALID_STYLE_CONDITION'], array_map(static fn ($error) => $error->getCode(), $errors));
-    $this->assertSame([], $validator->validate(["entity:$uuid::&:first-child" => ['default' => ['margin-top' => '0'], 'hover' => ['color' => 'blue']]]));
+    $this->assertSame([], $validator->validate([
+      "entity:$uuid::&:first-child" => ['default' => ['margin-top' => '0'], 'hover' => ['color' => 'blue']],
+    ]));
 
     // An unknown part fails the whole compound, naming the part.
     $errors = $validator->validate(["entity:$uuid" => ['narrow+bogus' => ['padding' => '1rem']]]);

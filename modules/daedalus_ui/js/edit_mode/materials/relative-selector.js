@@ -142,8 +142,21 @@ export const CLASS_QUALIFIER = 'class';
  */
 const WHERE = 'where';
 export const ATTRIBUTE = 'attribute';
-export const POSITIONS = ['first-child', 'last-child', 'only-child', 'empty', 'first-of-type', 'last-of-type', 'only-of-type'];
-export const NTH_POSITIONS = ['nth-child', 'nth-last-child', 'nth-of-type', 'nth-last-of-type'];
+export const POSITIONS = [
+  'first-child',
+  'last-child',
+  'only-child',
+  'empty',
+  'first-of-type',
+  'last-of-type',
+  'only-of-type',
+];
+export const NTH_POSITIONS = [
+  'nth-child',
+  'nth-last-child',
+  'nth-of-type',
+  'nth-last-of-type',
+];
 
 /**
  * The attribute operators, as CSS spells them.
@@ -209,7 +222,8 @@ export const ANCHOR = '&';
  * any case: `::` and any name (group 2), or the legacy single-colon
  * spelling of the four names it still means (group 1).
  */
-const PSEUDO_AT_END = /(?:::?(before|after|first-letter|first-line)|::([A-Za-z][A-Za-z0-9-]*))\s*$/i;
+const PSEUDO_AT_END =
+  /(?:::?(before|after|first-letter|first-line)|::([A-Za-z][A-Za-z0-9-]*))\s*$/i;
 
 /**
  * The DOM attribute carrying an element's address (daedalus_ui's
@@ -239,7 +253,16 @@ const HEX_ESCAPE_AT = /[0-9A-Fa-f]{1,6}\s?/y;
  * The names a pseudo-class may not carry: the functional names without
  * their parens, the record names, the legacy pseudo-elements'.
  */
-const NOT_PSEUDO_CLASSES = [HAS, NOT, IS, WHERE, CLASS_QUALIFIER, ATTRIBUTE, ...NTH_POSITIONS, ...LEGACY_PSEUDOS];
+const NOT_PSEUDO_CLASSES = [
+  HAS,
+  NOT,
+  IS,
+  WHERE,
+  CLASS_QUALIFIER,
+  ATTRIBUTE,
+  ...NTH_POSITIONS,
+  ...LEGACY_PSEUDOS,
+];
 
 /**
  * An `An+B` argument, whitespace free at the ends and around the sign,
@@ -255,6 +278,12 @@ const ANB = /^(?:(odd|even)|([+-]?)(\d*)n(?:\s*([+-])\s*(\d+))?|([+-]?\d+))$/i;
  * zero, B alone when A is zero (`2n+1`, `n`, `-n+3`, `3`, `2n`, `0`).
  * Lenient on case and on whitespace at the ends and around B's sign
  * only; the `of S` form is refused.
+ *
+ * @param {*} argument
+ *   The argument text.
+ *
+ * @return {?string}
+ *   The canonical spelling, or null.
  */
 export const canonicalNth = (argument) => {
   const match = typeof argument === 'string' ? ANB.exec(argument.trim()) : null;
@@ -267,27 +296,82 @@ export const canonicalNth = (argument) => {
   if (match[6] !== undefined) {
     return String(parseInt(match[6], 10));
   }
-  const a = (match[3] === '' ? 1 : parseInt(match[3], 10)) * (match[2] === '-' ? -1 : 1);
-  const b = match[5] === undefined ? 0 : parseInt(match[5], 10) * (match[4] === '-' ? -1 : 1);
+  const a =
+    (match[3] === '' ? 1 : parseInt(match[3], 10)) *
+    (match[2] === '-' ? -1 : 1);
+  const b =
+    match[5] === undefined
+      ? 0
+      : parseInt(match[5], 10) * (match[4] === '-' ? -1 : 1);
   if (a === 0) {
     return String(b);
   }
-  const head = a === 1 ? 'n' : a === -1 ? '-n' : `${a}n`;
-  return `${head}${b > 0 ? `+${b}` : b < 0 ? `-${-b}` : ''}`;
+  let head = `${a}n`;
+  if (a === 1) {
+    head = 'n';
+  } else if (a === -1) {
+    head = '-n';
+  }
+  let tail = '';
+  if (b > 0) {
+    tail = `+${b}`;
+  } else if (b < 0) {
+    tail = `-${-b}`;
+  }
+  return `${head}${tail}`;
 };
 
 /**
- * The canonical spelling of an attribute value: double-quoted, a quote
- * and a backslash escaped as themselves, a control character as its hex
- * escape with its terminating space.
+ * The canonical spelling of one character of an attribute value: a quote
+ * and a backslash escaped as themselves, a control character (C0 and
+ * DEL) as its hex escape with its terminating space, any other as is.
+ *
+ * @param {string} char
+ *   One UTF-16 code unit.
+ *
+ * @return {string}
+ *   The spelling.
+ */
+const printChar = (char) => {
+  if (char === '"') {
+    return '\\"';
+  }
+  if (char === '\\') {
+    return '\\\\';
+  }
+  const code = char.charCodeAt(0);
+  return code < 0x20 || code === 0x7f ? `\\${code.toString(16)} ` : char;
+};
+
+/**
+ * The canonical spelling of an attribute value: double-quoted, each
+ * character as printChar spells it.
+ *
+ * @param {string} value
+ *   The decoded value.
+ *
+ * @return {string}
+ *   The spelling.
  */
 const printString = (value) =>
-  `"${value.replace(/["\\]|[\x00-\x1f\x7f]/g, (char) =>
-    char === '"' ? '\\"' : char === '\\' ? '\\\\' : `\\${char.charCodeAt(0).toString(16)} `,
-  )}"`;
+  `"${Array.prototype.map.call(value, printChar).join('')}"`;
 
 /**
  * The canonical spelling of an attribute qualifier's record.
+ *
+ * @param {object} record
+ *   The record (parseAttribute).
+ * @param {string} record.attribute
+ *   The attribute's name, lowercased.
+ * @param {?string} record.operator
+ *   The operator (`=`, `^=`, ...), or null for a bare `[name]`.
+ * @param {?string} record.value
+ *   The decoded value, or null with no operator.
+ * @param {?string} record.flag
+ *   The `i` or `s` flag, or null.
+ *
+ * @return {string}
+ *   The spelling.
  */
 const printAttribute = ({ attribute, operator, value, flag }) =>
   `[${attribute}${operator === null ? '' : `${operator}${printString(value)}${flag === null ? '' : ` ${flag}`}`}]`;
@@ -297,6 +381,12 @@ const printAttribute = ({ attribute, operator, value, flag }) =>
  *
  * Exported for the CSS printer, which wraps this spelling in :where() at
  * the qualifier's compound rather than spell a qualifier a second time.
+ *
+ * @param {{name: string, argument: *}} qualifier
+ *   A parsed qualifier (see parseSelector).
+ *
+ * @return {string}
+ *   The spelling.
  */
 export const printQualifier = (qualifier) => {
   if (qualifier.name === HAS) {
@@ -319,6 +409,12 @@ export const printQualifier = (qualifier) => {
 
 /**
  * The canonical spelling of one compound without its combinator.
+ *
+ * @param {Object} compound
+ *   A parsed compound (see parseSelector).
+ *
+ * @return {string}
+ *   The spelling.
  */
 export const printCompound = (compound) =>
   `${compound.name ?? ''}${compound.qualifiers.map(printQualifier).join('')}`;
@@ -328,6 +424,12 @@ export const printCompound = (compound) =>
  * combinator (a lead glued to its space, a descendant combinator the one
  * space between compounds), the subject glued to its qualifiers
  * (RelativeSelector::printCompounds).
+ *
+ * @param {Object[]} compounds
+ *   Parsed compounds (see parseSelector).
+ *
+ * @return {string}
+ *   The spelling.
  */
 export const printCompounds = (compounds) =>
   compounds
@@ -344,12 +446,30 @@ export const printCompounds = (compounds) =>
 /**
  * The canonical spelling of a parsed selector: the chain (or the anchor
  * when there is none) with the pseudo glued to it.
+ *
+ * @param {object} record
+ *   A parsed selector (parseSelector).
+ * @param {Object[]} record.compounds
+ *   The compounds.
+ * @param {?string} record.pseudo
+ *   The terminal pseudo-element's name, or null.
+ *
+ * @return {string}
+ *   The spelling.
  */
 export const printSelector = ({ compounds, pseudo }) =>
   `${compounds.length ? printCompounds(compounds) : ANCHOR}${pseudo ? `${SUFFIX}${pseudo}` : ''}`;
 
 /**
- * A read position over the text, advanced by the parse functions.
+ * Advances the cursor past whitespace.
+ *
+ * The cursor is a read position over the text, `{at}`, advanced in place
+ * by the parse functions.
+ *
+ * @param {string} text
+ *   The text being parsed.
+ * @param {{at: number}} cursor
+ *   The read position.
  */
 const skipSpace = (text, cursor) => {
   while (cursor.at < text.length && /\s/.test(text[cursor.at])) {
@@ -359,6 +479,16 @@ const skipSpace = (text, cursor) => {
 
 /**
  * Matches a sticky pattern at the cursor, or null.
+ *
+ * @param {RegExp} pattern
+ *   A sticky (`y`) pattern.
+ * @param {string} text
+ *   The text being parsed.
+ * @param {{at: number}} cursor
+ *   The read position; not advanced.
+ *
+ * @return {?Array<string>}
+ *   The match, or null.
  */
 const matchAt = (pattern, text, cursor) => {
   pattern.lastIndex = cursor.at;
@@ -373,6 +503,14 @@ const matchAt = (pattern, text, cursor) => {
  * raw NUL), a backslash before a newline a continuation. An unescaped
  * newline or the end of the text before the closing quote is no string
  * (null).
+ *
+ * @param {string} text
+ *   The text being parsed.
+ * @param {{at: number}} cursor
+ *   The read position, on the opening quote; left after the closing one.
+ *
+ * @return {?string}
+ *   The decoded string, or null.
  */
 function readString(text, cursor) {
   const quote = text[cursor.at];
@@ -407,7 +545,10 @@ function readString(text, cursor) {
     if (hex !== null) {
       cursor.at += hex[0].length;
       const code = parseInt(hex[0].trim(), 16);
-      value += code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff) ? '\uFFFD' : String.fromCodePoint(code);
+      value +=
+        code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)
+          ? '\uFFFD'
+          : String.fromCodePoint(code);
       continue;
     }
     value += text[cursor.at];
@@ -423,6 +564,14 @@ function readString(text, cursor) {
  * either quote or an ident kept as written, the flag `i` or `s` in any
  * case, after whitespace when the value is an ident. Null when the
  * brackets hold anything else.
+ *
+ * @param {string} text
+ *   The text being parsed.
+ * @param {{at: number}} cursor
+ *   The read position, on the `[`; left after the `]`.
+ *
+ * @return {?{attribute: string, operator: ?string, value: ?string, flag: ?string}}
+ *   The record, or null.
  */
 function parseAttribute(text, cursor) {
   cursor.at += 1;
@@ -458,7 +607,8 @@ function parseAttribute(text, cursor) {
     }
     const before = cursor.at;
     skipSpace(text, cursor);
-    const flagged = quoted || cursor.at > before ? matchAt(FLAG_AT, text, cursor) : null;
+    const flagged =
+      quoted || cursor.at > before ? matchAt(FLAG_AT, text, cursor) : null;
     if (flagged !== null) {
       flag = flagged[1].toLowerCase();
       cursor.at += 1;
@@ -489,6 +639,22 @@ function parseAttribute(text, cursor) {
  * argument (`:not()` and `:is()` refused), `inIs` whether it stands
  * anywhere inside an `:is()` member (`:is()` refused). Null outside the
  * grammar.
+ *
+ * @param {string} text
+ *   The text being parsed.
+ * @param {{at: number}} cursor
+ *   The read position, on the compound's first character; left after it.
+ * @param {?string} combinator
+ *   The combinator reaching the compound, null for a predicate.
+ * @param {boolean} inHas
+ *   Whether the compound stands inside a `:has()` argument.
+ * @param {boolean} inNot
+ *   Whether the compound stands inside a `:not()` argument.
+ * @param {boolean} inIs
+ *   Whether the compound stands inside an `:is()` member.
+ *
+ * @return {?{combinator: ?string, kind: ?string, name: ?string, qualifiers: Array}}
+ *   The compound, or null.
  */
 function parseCompound(text, cursor, combinator, inHas, inNot, inIs) {
   let kind = null;
@@ -522,7 +688,7 @@ function parseCompound(text, cursor, combinator, inHas, inNot, inIs) {
   if (merged === null) {
     return null;
   }
-  let { qualifiers } = merged;
+  const { qualifiers } = merged;
   ({ kind, name } = merged);
   if (kind === null || kind === UNIVERSAL) {
     // The classes sort first: the first one is the subject.
@@ -546,13 +712,35 @@ function parseCompound(text, cursor, combinator, inHas, inNot, inIs) {
 }
 
 /**
+ * Compares two printed forms by code unit, the PHP twin's byte order
+ * (never the locale's), so the canonical sort agrees across the seam.
+ *
+ * @param {string} a
+ *   A printed form.
+ * @param {string} b
+ *   Another.
+ *
+ * @return {number}
+ *   Negative when a sorts first, positive when b does, zero when equal.
+ */
+const compareText = (a, b) => {
+  if (a < b) {
+    return -1;
+  }
+  return a > b ? 1 : 0;
+};
+
+/**
  * Sorts qualifiers by their printed form: the one canonical order.
+ *
+ * @param {Array<{name: string, argument: *}>} qualifiers
+ *   Parsed qualifiers; sorted in place.
+ *
+ * @return {Array<{name: string, argument: *}>}
+ *   The same array.
  */
 const sortQualifiers = (qualifiers) =>
-  qualifiers.sort((a, b) => {
-    const [pa, pb] = [printQualifier(a), printQualifier(b)];
-    return pa < pb ? -1 : pa > pb ? 1 : 0;
-  });
+  qualifiers.sort((a, b) => compareText(printQualifier(a), printQualifier(b)));
 
 /**
  * Merges every single-member `:is()` among the qualifiers into its host
@@ -563,6 +751,13 @@ const sortQualifiers = (qualifiers) =>
  * merge), and the member's qualifiers sort in with the host's. A member
  * subject against a host that has its own (`h1:is(h2)`, `&:is(h1)`;
  * `h1:is(h1)` is `h1`) is refused: nothing is both.
+ *
+ * @param {?string} kind
+ *   The host's subject kind as parsed, null when implied.
+ * @param {?string} name
+ *   The host's subject name as parsed, null when implied.
+ * @param {Array<{name: string, argument: *}>} qualifiers
+ *   The host's qualifiers, sorted.
  *
  * @return {?{kind: ?string, name: ?string, qualifiers: Array}}
  *   The host after the merge, or null when a member contradicts it.
@@ -596,6 +791,20 @@ function mergeSingletons(kind, name, qualifiers) {
  * none is written, null when a `.`, `[` or `:` there opens anything but
  * a qualifier. `inHas` refuses `:has()`, `inNot` refuses `:not()` and
  * `:is()`, `inIs` refuses `:is()`.
+ *
+ * @param {string} text
+ *   The text being parsed.
+ * @param {{at: number}} cursor
+ *   The read position, after the subject; left after the qualifiers.
+ * @param {boolean} inHas
+ *   Whether the compound stands inside a `:has()` argument.
+ * @param {boolean} inNot
+ *   Whether the compound stands inside a `:not()` argument.
+ * @param {boolean} inIs
+ *   Whether the compound stands inside an `:is()` member.
+ *
+ * @return {?Array<{name: string, argument: *}>}
+ *   The qualifiers sorted canonical, or null.
  */
 function parseQualifiers(text, cursor, inHas, inNot, inIs) {
   const qualifiers = [];
@@ -671,12 +880,13 @@ function parseQualifiers(text, cursor, inHas, inNot, inIs) {
         cursor.at += 1;
       }
       const argument = [...members.keys()]
-        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        .sort(compareText)
         .map((printed) => members.get(printed));
       qualifier = { name: IS, argument };
     } else if (NTH_POSITIONS.includes(qualifierName) && open) {
       const close = text.indexOf(')', cursor.at);
-      const argument = close === -1 ? null : canonicalNth(text.slice(cursor.at, close));
+      const argument =
+        close === -1 ? null : canonicalNth(text.slice(cursor.at, close));
       if (argument === null) {
         return null;
       }
@@ -708,6 +918,20 @@ function parseQualifiers(text, cursor, inHas, inNot, inIs) {
  * `inHas` admits sibling leads and refuses `:has()` anywhere inside;
  * `inNot` refuses `:not()` and `:is()` on every compound, `inIs`
  * refuses `:is()`. Null outside the grammar.
+ *
+ * @param {string} text
+ *   The text being parsed.
+ * @param {{at: number}} cursor
+ *   The read position; left after the last compound.
+ * @param {boolean} inHas
+ *   Whether the chain is a `:has()` argument.
+ * @param {boolean} inNot
+ *   Whether the chain stands inside a `:not()` argument.
+ * @param {boolean} inIs
+ *   Whether the chain stands inside an `:is()` member.
+ *
+ * @return {?Object[]}
+ *   The compounds in order (parseCompound's shape), or null.
  */
 function parseChain(text, cursor, inHas, inNot, inIs) {
   skipSpace(text, cursor);
@@ -727,7 +951,12 @@ function parseChain(text, cursor, inHas, inNot, inIs) {
     if (merged === null) {
       return null;
     }
-    compounds.push({ combinator: DESCENDANT, kind: ANCHOR_KIND, name: ANCHOR, qualifiers: merged.qualifiers });
+    compounds.push({
+      combinator: DESCENDANT,
+      kind: ANCHOR_KIND,
+      name: ANCHOR,
+      qualifiers: merged.qualifiers,
+    });
   } else {
     let combinator = DESCENDANT;
     const symbol = text[cursor.at] ?? '';
@@ -739,7 +968,14 @@ function parseChain(text, cursor, inHas, inNot, inIs) {
       cursor.at += 1;
       skipSpace(text, cursor);
     }
-    const compound = parseCompound(text, cursor, combinator, inHas, inNot, inIs);
+    const compound = parseCompound(
+      text,
+      cursor,
+      combinator,
+      inHas,
+      inNot,
+      inIs,
+    );
     if (compound === null) {
       return null;
     }
@@ -768,10 +1004,21 @@ function parseChain(text, cursor, inHas, inNot, inIs) {
     const previous = compounds[compounds.length - 1];
     // The owner's siblings are outside its subtree: behind the anchor
     // the chain descends.
-    if (previous.kind === ANCHOR_KIND && combinator !== DESCENDANT && combinator !== CHILD) {
+    if (
+      previous.kind === ANCHOR_KIND &&
+      combinator !== DESCENDANT &&
+      combinator !== CHILD
+    ) {
       return null;
     }
-    const compound = parseCompound(text, cursor, combinator, inHas, inNot, inIs);
+    const compound = parseCompound(
+      text,
+      cursor,
+      combinator,
+      inHas,
+      inNot,
+      inIs,
+    );
     if (compound === null) {
       return null;
     }
@@ -836,6 +1083,12 @@ export const parseSelector = (selector) => {
 
 /**
  * The canonical spelling of selector text, or null outside the grammar.
+ *
+ * @param {*} selector
+ *   The selector text, in any spelling the grammar reads.
+ *
+ * @return {?string}
+ *   The canonical spelling, or null.
  */
 export const canonicalSelector = (selector) => {
   const parsed = parseSelector(selector);
@@ -844,6 +1097,12 @@ export const canonicalSelector = (selector) => {
 
 /**
  * Whether a string is a selector in its one canonical spelling.
+ *
+ * @param {*} selector
+ *   The candidate.
+ *
+ * @return {boolean}
+ *   Whether it is canonical.
  */
 export const isCanonicalSelector = (selector) =>
   canonicalSelector(selector) === selector;
@@ -854,6 +1113,9 @@ export const isCanonicalSelector = (selector) =>
  * The one split every key grammar shares: the root is everything before
  * the first "::", the selector everything after it, admitted canonical
  * only. A key without "::" is a root with no selector.
+ *
+ * @param {*} key
+ *   The key.
  *
  * @return {?{root: string, selector: ?string}}
  *   The root and the canonical selector (null when the key carries
@@ -882,10 +1144,17 @@ export const splitKey = (key) => {
  * (`li.active`) is that subject's compound, not a part first. The
  * owner's own pseudo ('&::before') and the qualified anchor alone have
  * no first subject.
+ *
+ * @param {*} selector
+ *   The selector text.
+ *
+ * @return {boolean}
+ *   Whether a part class comes first.
  */
 export const isPartFirst = (selector) => {
   const compounds = parseSelector(selector)?.compounds ?? [];
-  const first = compounds[0]?.kind === ANCHOR_KIND ? compounds[1] : compounds[0];
+  const first =
+    compounds[0]?.kind === ANCHOR_KIND ? compounds[1] : compounds[0];
   return first?.kind === CLASS_PART;
 };
 
@@ -893,6 +1162,12 @@ export const isPartFirst = (selector) => {
  * Whether a selector is exactly one part class ('.cls', '> .cls'); a
  * qualified one ('.cls:has(a)', '.a.b') or a pseudo behind it
  * ('.cls::after') is a rule of its own.
+ *
+ * @param {*} selector
+ *   The selector text.
+ *
+ * @return {boolean}
+ *   Whether the selector is one part class.
  */
 export const isPart = (selector) => {
   const parsed = parseSelector(selector);
@@ -907,6 +1182,16 @@ export const isPart = (selector) => {
 /**
  * Whether a selector is one unqualified compound of a combinator and
  * kind, with no pseudo behind it.
+ *
+ * @param {*} selector
+ *   The selector text.
+ * @param {string} combinator
+ *   The combinator the one compound must carry.
+ * @param {string} kind
+ *   The subject kind it must have.
+ *
+ * @return {boolean}
+ *   Whether the selector is that one compound.
  */
 const isOne = (selector, combinator, kind) => {
   const parsed = parseSelector(selector);
@@ -923,6 +1208,12 @@ const isOne = (selector, combinator, kind) => {
  * Whether a selector is exactly the element's direct children ('> *');
  * a qualified one ('> *:not(d-image)') or a pseudo behind it
  * ('> *::before') is a rule of its own.
+ *
+ * @param {*} selector
+ *   The selector text.
+ *
+ * @return {boolean}
+ *   Whether the selector is '> *'.
  */
 export const isChildren = (selector) => isOne(selector, CHILD, UNIVERSAL);
 
@@ -930,6 +1221,12 @@ export const isChildren = (selector) => isOne(selector, CHILD, UNIVERSAL);
  * Whether a selector is exactly one tag ('p'): the tag tier; a
  * qualified one ('p:has(a)', 'a.button') or a pseudo behind it
  * ('p::before') is a rule of its own.
+ *
+ * @param {*} selector
+ *   The selector text.
+ *
+ * @return {boolean}
+ *   Whether the selector is one tag.
  */
 export const isTag = (selector) => isOne(selector, DESCENDANT, TAG);
 
@@ -939,10 +1236,18 @@ export const isTag = (selector) => isOne(selector, DESCENDANT, TAG);
  * (`*:is(d-image, d-text)`, the fold of `d-text, d-image`, reaches as
  * `d-text` does), where `:has()` and `:not()` narrow and reach nothing
  * of their own.
+ *
+ * @param {Object} compound
+ *   A parsed compound.
+ *
+ * @return {boolean}
+ *   Whether its subject is a type.
  */
 const isType = (compound) =>
   compound.kind === TYPE ||
-  compound.qualifiers.some((qualifier) => qualifier.name === IS && qualifier.argument.some(isType));
+  compound.qualifiers.some(
+    (qualifier) => qualifier.name === IS && qualifier.argument.some(isType),
+  );
 
 /**
  * Whether a selector crosses into children: a relation (`>`, `+`, `~`)
@@ -951,6 +1256,12 @@ const isType = (compound) =>
  * `&:first-child > *` reaches by its `> *`) nor a qualified universal
  * by descent (`*:hover`, like a tag by descent), and a pseudo hangs on
  * what the chain reaches.
+ *
+ * @param {*} selector
+ *   The selector text.
+ *
+ * @return {boolean}
+ *   Whether the selector reaches into children.
  */
 export const reachesChildren = (selector) =>
   (parseSelector(selector)?.compounds ?? []).some(
@@ -958,28 +1269,54 @@ export const reachesChildren = (selector) =>
   );
 
 /**
+ * The classes a qualifier names, in print order: a class qualifier's own
+ * (`li.active`'s `.active`), a `:has()`, `:is()` or `:not()` argument's
+ * recursively; a position, state or attribute qualifier names none.
+ *
+ * @param {{name: string, argument: *}} qualifier
+ *   A parsed qualifier.
+ *
+ * @return {string[]}
+ *   The classes, '.cls' spelled.
+ */
+const qualifierClasses = (qualifier) => {
+  if (qualifier.name === CLASS_QUALIFIER) {
+    return [`.${qualifier.argument}`];
+  }
+  if (qualifier.name === HAS || qualifier.name === IS) {
+    return classesOf(qualifier.argument);
+  }
+  if (qualifier.name === NOT) {
+    return classesOf([qualifier.argument]);
+  }
+  return [];
+};
+
+/**
  * The classes of compounds and their qualifiers, in print order: the
- * subjects, the class qualifiers (`li.active`'s `.active`), and the
- * arguments' recursively.
+ * subjects, then each compound's qualifiers' (qualifierClasses).
+ *
+ * @param {Object[]} compounds
+ *   Parsed compounds.
+ *
+ * @return {string[]}
+ *   The classes, '.cls' spelled.
  */
 const classesOf = (compounds) =>
   compounds.flatMap((compound) => [
     ...(compound.kind === CLASS_PART ? [compound.name] : []),
-    // A position, state or attribute qualifier names no class.
-    ...compound.qualifiers.flatMap((qualifier) =>
-      qualifier.name === CLASS_QUALIFIER
-        ? [`.${qualifier.argument}`]
-        : qualifier.name === HAS || qualifier.name === IS
-          ? classesOf(qualifier.argument)
-          : qualifier.name === NOT
-            ? classesOf([qualifier.argument])
-            : [],
-    ),
+    ...compound.qualifiers.flatMap(qualifierClasses),
   ]);
 
 /**
  * The class names a selector carries, in print order ('.cls' spelled),
  * the qualifiers' arguments included.
+ *
+ * @param {*} selector
+ *   The selector text.
+ *
+ * @return {string[]}
+ *   The classes; empty outside the grammar.
  */
 export const selectorClasses = (selector) =>
   classesOf(parseSelector(selector)?.compounds ?? []);
@@ -1013,7 +1350,11 @@ export const selectorClasses = (selector) =>
 export const under = (rule, suffix) => {
   const parsedRule = parseSelector(rule);
   const parsedSuffix = parseSelector(suffix);
-  if (parsedRule === null || parsedSuffix === null || parsedRule.pseudo !== null) {
+  if (
+    parsedRule === null ||
+    parsedSuffix === null ||
+    parsedRule.pseudo !== null
+  ) {
     return null;
   }
   let { compounds } = parsedSuffix;
@@ -1025,7 +1366,9 @@ export const under = (rule, suffix) => {
   if (compounds.length) {
     text += ` ${printCompounds(compounds)}`;
   }
-  return canonicalSelector(`${text}${parsedSuffix.pseudo === null ? '' : `${SUFFIX}${parsedSuffix.pseudo}`}`);
+  return canonicalSelector(
+    `${text}${parsedSuffix.pseudo === null ? '' : `${SUFFIX}${parsedSuffix.pseudo}`}`,
+  );
 };
 
 /**
@@ -1051,10 +1394,17 @@ export const under = (rule, suffix) => {
  */
 export const prefix = (selector, index) => {
   const parsed = parseSelector(selector);
-  if (parsed === null || !Number.isInteger(index) || index < 0 || index >= parsed.compounds.length) {
+  if (
+    parsed === null ||
+    !Number.isInteger(index) ||
+    index < 0 ||
+    index >= parsed.compounds.length
+  ) {
     return null;
   }
-  return canonicalSelector(printCompounds(parsed.compounds.slice(0, index + 1)));
+  return canonicalSelector(
+    printCompounds(parsed.compounds.slice(0, index + 1)),
+  );
 };
 
 /**
@@ -1062,6 +1412,9 @@ export const prefix = (selector, index) => {
  *
  * `d-container` is `kind:container`, `d-block` `kind:block`,
  * `d-{bundle}` `block_type:{bundle}` ('-' spelled '_').
+ *
+ * @param {string} type
+ *   A compound's name.
  *
  * @return {?string}
  *   The printed address, or null when the name is not a type compound.
@@ -1081,6 +1434,9 @@ export const typeAddress = (type) => {
 
 /**
  * The type compound spelling a root address (RelativeSelector::typeName).
+ *
+ * @param {*} address
+ *   A printed root address.
  *
  * @return {?string}
  *   `d-{bundle}` for a block type, `d-container` for the container
@@ -1106,11 +1462,18 @@ export const typeName = (address) => {
  * The attribute selectors a root address selects, by the element
  * address stamp (CssPrinter::addressMembers twin).
  *
+ * @param {*} address
+ *   A printed root address.
+ *
  * @return {string[]}
  *   The members, [] when the address selects no stamped root.
  */
 export const addressMembers = (address) => {
-  if (typeof address !== 'string' || address.includes(SUFFIX) || address.startsWith('base:')) {
+  if (
+    typeof address !== 'string' ||
+    address.includes(SUFFIX) ||
+    address.startsWith('base:')
+  ) {
     return [];
   }
   const attribute = ELEMENT_ADDRESS_ATTRIBUTE;
@@ -1131,6 +1494,12 @@ export const addressMembers = (address) => {
 
 /**
  * The selector a type compound matches (CssPrinter::typeSelector twin).
+ *
+ * @param {string} type
+ *   A type compound's name (`d-text`).
+ *
+ * @return {string}
+ *   The attribute selector, or an `:is()` of several.
  */
 export const typeSelector = (type) => {
   const members = addressMembers(typeAddress(type));

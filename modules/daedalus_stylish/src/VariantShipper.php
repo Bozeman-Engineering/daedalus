@@ -10,14 +10,14 @@ use Drupal\daedalus_stylish\Exception\ShippedVariantException;
 /**
  * Ships site variants to disk: the variant kind of the shipper base.
  *
- * VariantImporter brings MODULE.daedalus_stylish.variants*.yml INTO a site (sync);
- * this service takes a site's variants OUT to a module (ship), writing
- * MODULE.daedalus_stylish.variants.FILE_ID.yml and adopting each variant in place
- * with the written styles as its source hash. The lane's mechanics (the
- * whole-file rewrite, the shipped-elsewhere refusal, the workspace escape,
- * the adoption) live in ShippedDefinitionsShipper; this class supplies the
- * variant facts: definition() in VariantImporter's grammar, the styles as
- * the hashed slice, DaedalusStylishVariant's hash, and ShippedVariantException.
+ * VariantImporter brings MODULE.daedalus_stylish.variants*.yml INTO a site
+ * (sync); this service takes a site's variants OUT to a module (ship), writing
+ * MODULE.daedalus_stylish.variants.FILE_ID.yml and adopting each variant in
+ * place with the written styles as its source hash. The lane's mechanics (the
+ * whole-file rewrite, the shipped-elsewhere refusal, the workspace escape, the
+ * adoption) live in ShippedDefinitionsShipper; this class supplies the variant
+ * facts: definition() in VariantImporter's grammar, the styles as the hashed
+ * slice, DaedalusStylishVariant's hash, and ShippedVariantException.
  *
  * Callers add what this module cannot know: the `blueprint:` key belongs to
  * whoever owns blueprints (daedalus_blueprint_library), not here.

@@ -1,4 +1,3 @@
-import { h } from 'preact';
 import { useSelector, useDispatch } from 'react-redux';
 import { setTarget, setDrill } from '../../store/slices/selection-slice';
 import { removeKey } from '../../selection/select-door';
@@ -72,62 +71,77 @@ const Breadcrumb = ({
     >
       {trail.map((crumb, position) => {
         const current = position === trail.length - 1;
+        // The crumb's three faces: the current target crumb (a button
+        // back to the whole element), a static crumb (the current one,
+        // or any crumb of a non-interactive trail), and a step-up
+        // button.
+        let face;
+        if (current && interactive && target) {
+          face = (
+            <button
+              type="button"
+              className="daedalus-ui-breadcrumb__crumb daedalus-ui-breadcrumb__crumb--current daedalus-ui-breadcrumb__crumb--target"
+              aria-current
+              title={Drupal.t('Back to the whole element')}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                // The target crumb drops the styling (the facet, and
+                // the write address with it): the selection stays,
+                // styling goes back to the element itself.
+                dispatch(setTarget(null));
+              }}
+            >
+              {crumb.label}
+            </button>
+          );
+        } else if (current || !interactive) {
+          face = (
+            <span
+              className={`daedalus-ui-breadcrumb__crumb${current ? ' daedalus-ui-breadcrumb__crumb--current' : ''}`}
+              aria-current={current || undefined}
+            >
+              {crumb.label}
+            </span>
+          );
+        } else {
+          face = (
+            <button
+              type="button"
+              className="daedalus-ui-breadcrumb__crumb"
+              title={Drupal.t('Select @label', { '@label': crumb.label })}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                // The step-up shape (ArrowLeft's): the crumb becomes
+                // the selection (its part the target for a part crumb, the
+                // tree row's own commit), its element parent the drill
+                // context (crumb.key is the owner for a part, so this is
+                // the owner's parent), so pointer resolution keeps working
+                // at the climbed-to level. The canvas reveals the owner
+                // element: a part has no key of its own to look up.
+                commitAddress(crumb.key, crumb.selector);
+                dispatch(setDrill(index?.get(crumb.key)?.parent ?? null));
+                Drupal.Daedalus.scrollReveal(elementForKey(crumb.key), {
+                  behavior: 'smooth',
+                });
+              }}
+            >
+              {crumb.label}
+            </button>
+          );
+        }
         return (
           <span key={crumb.address} className="daedalus-ui-breadcrumb__segment">
             {position > 0 && (
-              <span className="daedalus-ui-breadcrumb__separator" aria-hidden="true">
+              <span
+                className="daedalus-ui-breadcrumb__separator"
+                aria-hidden="true"
+              >
                 ›
               </span>
             )}
-            {current && interactive && target ? (
-              <button
-                type="button"
-                className="daedalus-ui-breadcrumb__crumb daedalus-ui-breadcrumb__crumb--current daedalus-ui-breadcrumb__crumb--target"
-                aria-current
-                title={Drupal.t('Back to the whole element')}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  // The target crumb drops the styling (the facet, and
-                  // the write address with it): the selection stays,
-                  // styling goes back to the element itself.
-                  dispatch(setTarget(null));
-                }}
-              >
-                {crumb.label}
-              </button>
-            ) : current || !interactive ? (
-              <span
-                className={`daedalus-ui-breadcrumb__crumb${current ? ' daedalus-ui-breadcrumb__crumb--current' : ''}`}
-                aria-current={current || undefined}
-              >
-                {crumb.label}
-              </span>
-            ) : (
-              <button
-                type="button"
-                className="daedalus-ui-breadcrumb__crumb"
-                title={Drupal.t('Select @label', { '@label': crumb.label })}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  // The step-up shape (ArrowLeft's): the crumb becomes
-                  // the selection (its part the target for a part crumb, the
-                  // tree row's own commit), its element parent the drill
-                  // context (crumb.key is the owner for a part, so this is
-                  // the owner's parent), so pointer resolution keeps working
-                  // at the climbed-to level. The canvas reveals the owner
-                  // element: a part has no key of its own to look up.
-                  commitAddress(crumb.key, crumb.selector);
-                  dispatch(setDrill(index?.get(crumb.key)?.parent ?? null));
-                  Drupal.Daedalus.scrollReveal(elementForKey(crumb.key), {
-                    behavior: 'smooth',
-                  });
-                }}
-              >
-                {crumb.label}
-              </button>
-            )}
+            {face}
           </span>
         );
       })}

@@ -39,6 +39,7 @@ import { lawDocument, skinDocument } from '../../code/layers.js';
  * ancestor and element doorways.
  *
  * @param {object} input
+ *   The row's facts and seams, below.
  * @param {?object} input.origin
  *   choice-row-model.js originFor() / provenance-model.js originOf(),
  *   or null for a row with no origin story (the padding row's shorthand
@@ -101,7 +102,11 @@ export const rowMenuSpec = ({
         onOpenDocument?.(skinDocument(doorway.scope), doorway.condition, null);
         break;
       case 'declared':
-        onOpenDocument?.(lawDocument(doorway.scope, doorway.property), null, null);
+        onOpenDocument?.(
+          lawDocument(doorway.scope, doorway.property),
+          null,
+          null,
+        );
         break;
       case 'winner':
         onWinner?.(doorway.winner);

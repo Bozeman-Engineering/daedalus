@@ -90,8 +90,12 @@ import { useRowMenu } from './use-row-menu.js';
  * in the satellite unchanged.
  *
  * @param {object} props
+ *   The row's props.
  * @param {?object} props.guide
+ *   The style guide payload (the style well's allowed list, the color
+ *   well's closed offer), or null without one.
  * @param {object} props.materials
+ *   The materials roster (the color well's palette, the origin words).
  * @param {object} props.model
  *   The widget model (keys, stacks, home, condition, constraints,
  *   propertyDefinitions).
@@ -115,6 +119,7 @@ import { useRowMenu } from './use-row-menu.js';
  *   panel's write address withholds a part of the stroke, and a stroke
  *   writes whole. `disabledTitle` is the reason, on every part's title.
  * @param {?string} [props.disabledTitle]
+ *   The disabled reason, on every part's title; null for none.
  * @param {?object} [props.source]
  *   The state source (the mint row commits through it, the row menu's
  *   ancestor doorway seats the target on it, the origin's words read
@@ -122,10 +127,24 @@ import { useRowMenu } from './use-row-menu.js';
  * @param {?object} [props.skinMaterials]
  *   The skin material grants ({canCreate}: the color well's save-as-token).
  * @param {Function} props.onPreview
+ *   The widget contract's preview handler (properties → void): paints
+ *   the canvas with the mapped stroke patch.
  * @param {Function} props.onRelease
+ *   The widget contract's release handler (properties → void): drops a
+ *   staged preview that has nothing to persist.
  * @param {Function} props.onCommit
+ *   The widget contract's commit handler (properties → Promise): one
+ *   update_style op per gesture.
  * @param {?Function} [props.onPickCondition]
+ *   Moves the editing compound (the row menu's "edit at" doorway).
  * @param {?Function} [props.onOpenDocument]
+ *   Opens a variant's document (the worn rows' doorway).
+ * @param {object} [props.law]
+ *   The law gate ({canView}, drupalSettings.daedalusStylish.law), for
+ *   each part's origin doorways.
+ *
+ * @return {object}
+ *   The row element.
  */
 export const StrokeRow = ({
   guide,
@@ -169,7 +188,12 @@ export const StrokeRow = ({
     STROKE_PARTS.map((part) => [
       part,
       stackFor(parts[part])
-        ? stackAt(stackFor(parts[part]), parts[part], model.condition, conditions)
+        ? stackAt(
+            stackFor(parts[part]),
+            parts[part],
+            model.condition,
+            conditions,
+          )
         : null,
     ]),
   );
@@ -177,7 +201,10 @@ export const StrokeRow = ({
     const stack = stackFor(name);
     return (
       !stack ||
-      ownAtPose(stackAt(stack, name, model.condition, conditions), model.condition)
+      ownAtPose(
+        stackAt(stack, name, model.condition, conditions),
+        model.condition,
+      )
     );
   });
 
@@ -289,7 +316,7 @@ export const StrokeRow = ({
     stage: (properties) => gesture.stage(patchFor(properties)),
     // The well's captured-literal preview (a typed literal settling on
     // a token) rides the same mapping as its live picker, so the canvas
-    // wears the COMPLETED stroke on that tick too, not a colour alone.
+    // wears the COMPLETED stroke on that tick too, not a color alone.
     onPreview: (properties) => onPreview(patchFor(properties)),
     state: () => ({
       ...stroke.parts.color,
@@ -419,6 +446,16 @@ const DRAWN_STYLES = [
 /**
  * A line drawn in a border style, and optionally a color (the ring's
  * cell face paints the side's own color; the wells keep currentColor).
+ *
+ * @param {object} props
+ *   The glyph's props.
+ * @param {string} props.value
+ *   The border-style keyword the line draws.
+ * @param {?string} [props.color]
+ *   The line's color, or null for currentColor.
+ *
+ * @return {object}
+ *   The glyph element.
  */
 export const StyleGlyph = ({ value, color = null }) => (
   <span
@@ -431,6 +468,12 @@ export const StyleGlyph = ({ value, color = null }) => (
 /**
  * The keyword a value's line glyph draws, or null when it paints no
  * line (none, hidden, an unknown word).
+ *
+ * @param {?string} value
+ *   The style part's shown value.
+ *
+ * @return {?string}
+ *   The drawable keyword, or null.
  */
 const drawnStyle = (value) => {
   const keyword = normalizeValue(value);
@@ -452,12 +495,25 @@ const drawnStyle = (value) => {
  * the rows below.
  *
  * @param {object} options
+ *   The well's options.
  * @param {Array} options.stops
  *   The style vocabulary's stop table.
  * @param {{selected: ?string, custom: boolean, value: ?string}} options.state
  *   The style part's mapped state (stroke-model.js strokeState).
  * @param {string} options.label
+ *   The well's accessible name (the face button's aria-label, the
+ *   listbox's name).
  * @param {Function} options.onPick
+ *   Called with the picked stop (the lit one for an unset); the popover
+ *   closes first.
+ * @param {boolean} [options.disabled]
+ *   Whether the face button renders inert.
+ * @param {?string} [options.disabledTitle]
+ *   The disabled reason as the button's title, or null for none.
+ *
+ * @return {{open: boolean, well: object, popover: ?object}}
+ *   Whether the popover is open, the face button and the portaled
+ *   popover (null while closed).
  */
 const useStyleWell = ({
   stops,

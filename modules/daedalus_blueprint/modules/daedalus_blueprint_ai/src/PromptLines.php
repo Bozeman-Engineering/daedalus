@@ -35,7 +35,9 @@ final class PromptLines {
   private array $lines = [];
 
   /**
-   * Adds lines under a kind: a record's own (its id) or the kind's shared (NULL).
+   * Adds lines under a kind.
+   *
+   * A record's own (its id) or the kind's shared (NULL).
    */
   public function of(MaterialKind $kind, ?string $id, string ...$lines): static {
     foreach ($lines as $line) {

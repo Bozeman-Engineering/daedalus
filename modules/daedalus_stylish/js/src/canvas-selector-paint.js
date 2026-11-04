@@ -8,8 +8,8 @@
  * (app.onTargetChange, which carries the subject facet and the write
  * address together) and renders each as one injected <style> tag whose
  * rule comes from the part behavior's selectorFor: the printers' own
- * @scope targets for the relative selector, so the paint is a truthful
- * preview of the selector's style reach. Every match lights up,
+ * CSS `@scope` targets for the relative selector, so the paint is a
+ * truthful preview of the selector's style reach. Every match lights up,
  * whatever the selector addresses (every instance of a declared part in
  * its owner's scope, every direct child for '> *', every text block for
  * '> d-text', every anchor in a section for the ancestor rule
@@ -39,6 +39,17 @@
  * Leader-only, like every canvas adapter: the satellite window has no
  * canvas, and the leader is the single spine writer/reader (satellite
  * facet and address picks land on the spine by intent).
+ */
+
+/**
+ * Wires the selector paint to the selection spine.
+ *
+ * @param {object} options
+ *   The wiring.
+ * @param {object} options.app
+ *   daedalus_ui's edit-mode app (the spine's hover and target facets).
+ * @param {object} options.behavior
+ *   The part behavior (its selectorFor prints the rule).
  */
 export const createCanvasSelectorPaint = ({ app, behavior }) => {
   const TREATMENTS = {
@@ -72,10 +83,7 @@ export const createCanvasSelectorPaint = ({ app, behavior }) => {
   };
 
   const samePair = (a, b) =>
-    Boolean(a) &&
-    Boolean(b) &&
-    a.key === b.key &&
-    a.selector === b.selector;
+    Boolean(a) && Boolean(b) && a.key === b.key && a.selector === b.selector;
   const sameFact = (a, b) => (a === null && b === null) || samePair(a, b);
 
   // The hover box yields to the facet or address box on the same

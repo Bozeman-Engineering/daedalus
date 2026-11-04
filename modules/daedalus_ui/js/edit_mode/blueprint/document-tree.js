@@ -77,5 +77,7 @@ export const documentTree = (blueprint, rootUuid = null) => {
  */
 export const layoutOf = (document) => {
   const root = Array.isArray(document) ? document[0] : null;
-  return root?.kind === 'entity' && Array.isArray(root.children) ? root.children : [];
+  return root?.kind === 'entity' && Array.isArray(root.children)
+    ? root.children
+    : [];
 };

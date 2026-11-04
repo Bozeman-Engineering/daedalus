@@ -168,6 +168,10 @@ const notify = () => listeners.forEach((callback) => callback());
 
 /**
  * Registers a tree view provider (via the app API: app.tree).
+ *
+ * @param {object} provider
+ *   The provider (the contract is in the file docblock): its projectTree,
+ *   its displayToggle and, optionally, its subscribe.
  */
 export const registerTreeViewProvider = (provider) => {
   providers.push(provider);
@@ -185,6 +189,12 @@ export const registerTreeViewProvider = (provider) => {
  * Cmd+click on a subtree the panel absorbs (a media entity's inner fields
  * under a unit reference) would commit a key no row can name. Inert before
  * the mirror boots, like the element filter.
+ *
+ * @param {string} key
+ *   An element key.
+ *
+ * @return {boolean}
+ *   Whether the panel presents the key (or no index exists yet).
  */
 const presented = (key) => {
   const index = projectionIndex();
@@ -226,6 +236,10 @@ const reachableRow = () => {
  * predicate as its third, and considers only presented owners and
  * reachable parts, so every consumer of getPartBehavior().resolve() stays
  * inside what the panel depicts without knowing either filter exists.
+ *
+ * @param {object} behavior
+ *   The part behavior: its resolve(target, presented, reachable) and the
+ *   rest of the contract the file docblock states.
  */
 export const registerPartBehavior = (behavior) => {
   partBehavior = {
@@ -249,6 +263,9 @@ export const getPartBehavior = () => partBehavior;
  *
  * A malformed item throws: the menu primitive would refuse it at open
  * time anyway, and a registration is the place to say so.
+ *
+ * @param {{id: string, label: string, icon?: string, checked: function(): boolean, run: function(): void}} item
+ *   The Show-menu item.
  */
 export const registerShowMenuItem = (item) => {
   if (!item || typeof item.id !== 'string' || item.id === '') {
@@ -274,12 +291,19 @@ export const registerShowMenuItem = (item) => {
  *
  * @return {Array<{id: string, label: string, icon?: string,
  *   checked: function(): boolean, run: function(): void}>}
+ *   The registered items, in registration order.
  */
 export const showMenuItems = () => menuItems;
 
 /**
  * Subscribes to view changes (registration, hot/active state); returns
  * unsubscribe. The tree re-reads the active provider on each announcement.
+ *
+ * @param {function(): void} callback
+ *   Called on every announcement.
+ *
+ * @return {function(): void}
+ *   Unsubscribes.
  */
 export const subscribeTreeViews = (callback) => {
   listeners.add(callback);
@@ -310,6 +334,7 @@ export const activeTreeView = () => {
  * no registered Show-menu items) means no menu at all.
  *
  * @return {Array<{id: string, label: string}>}
+ *   One toggle per provider that declares one, in registration order.
  */
 export const viewToggles = () =>
   providers

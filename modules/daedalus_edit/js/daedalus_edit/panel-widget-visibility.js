@@ -76,7 +76,9 @@ const reconcileSampleButton = (wrapper, key, offer) => {
   button.className = `daedalus-ui-pill-button ${SAMPLE_CLASS}`;
   button.dataset.daedalusEditSampleKey = key;
   button.textContent = Drupal.t('Fill with sample');
-  button.title = Drupal.t('Fill this empty field with generated sample content');
+  button.title = Drupal.t(
+    'Fill this empty field with generated sample content',
+  );
   button.addEventListener('click', (event) => {
     event.preventDefault();
     fillWithSample(button.dataset.daedalusEditSampleKey);

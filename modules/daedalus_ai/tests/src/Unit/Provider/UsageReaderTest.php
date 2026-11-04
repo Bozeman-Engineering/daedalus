@@ -164,8 +164,10 @@ class UsageReaderTest extends UnitTestCase {
   /**
    * A raw array in the wire shape answers everything, split included.
    *
-   * This is the shape a raw-HTTP provider (Apple's) hands over, and the
-   * write total is summed from the split when the wire omits it.
+   * Not every provider wraps the response in an SDK object; some hand the
+   * reader the decoded HTTP body as it came off the wire. The reader takes
+   * the cache split straight from that array and, when the wire carries the
+   * split but not the total, sums the total itself.
    */
   public function testRawWireArray(): void {
     $reader = new UsageReader();

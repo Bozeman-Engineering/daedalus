@@ -10,6 +10,14 @@
 
 /**
  * The instance row a selector addresses (descendants included), or null.
+ *
+ * @param {?Array<object>} rows
+ *   The annotation's instance rows ({class, children}).
+ * @param {string} selector
+ *   The instance class selector ('.s-ab').
+ *
+ * @return {?object}
+ *   The matching row, or null.
  */
 export const findInstance = (rows, selector) => {
   for (const row of Array.isArray(rows) ? rows : []) {
@@ -28,6 +36,14 @@ export const findInstance = (rows, selector) => {
  * The resolved part node a selector addresses inside a parts tree, or
  * null. A matched key always yields an object (the resolver emits {tag,
  * attributes, parts} nodes) so callers can rely on truthiness.
+ *
+ * @param {?object} parts
+ *   The resolved parts tree, declared selector to part node.
+ * @param {string} selector
+ *   The declared part selector ('.text-block-link').
+ *
+ * @return {?object}
+ *   The part node, or null.
  */
 export const findPart = (parts, selector) => {
   for (const [key, part] of Object.entries(parts ?? {})) {
@@ -54,6 +70,10 @@ export const findPart = (parts, selector) => {
  *   ('.s-ab').
  *
  * @return {'element'|'root'|false|null}
+ *   'element' when the part is in the annotation's shell or carried by an
+ *   instance, 'root' when hoisted to the root, false when the shell models
+ *   the element and the part is absent, null when the annotation cannot
+ *   answer.
  */
 export const markupPlacement = (markup, selector) => {
   if (!markup) {

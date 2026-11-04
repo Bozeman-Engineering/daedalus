@@ -12,9 +12,9 @@ use Drupal\daedalus_ui\ElementModel\PageBuilderDeclarations;
  * Mints identity classes onto semantic text elements in stored field HTML.
  *
  * Eager identity's canonical guarantee: every semantic text element of the
- * declared instance vocabulary carries a short random base36 id class
- * (e.g. class="s-a3f") in the stored HTML, so a cold-loaded page's elements
- * are addressable by Daedalus Stylish and the markup view with no editor attached.
+ * declared instance vocabulary carries a short random base36 id class (e.g.
+ * class="s-a3f") in the stored HTML, so a cold-loaded page's elements are
+ * addressable by Daedalus Stylish and the markup view with no editor attached.
  * The CKEditor postfixer mirrors this live; this service is the server-side
  * source of truth on every write path (stage-time seam, presave backstop,
  * backfill).

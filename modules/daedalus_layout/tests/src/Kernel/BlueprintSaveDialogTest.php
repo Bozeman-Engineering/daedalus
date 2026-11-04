@@ -101,8 +101,9 @@ class BlueprintSaveDialogTest extends KernelTestBase {
     $build = BlueprintSaveDialog::create($this->container)->build(new Request());
 
     $this->assertSame('daedalus-layout-blueprint-label', $build['label_field']['input']['#attributes']['id']);
-    // Without daedalus_stylish (and thus without the ownership field) the adoption
-    // section never renders; the dialog is the plain two-field contract.
+    // Without daedalus_stylish (and thus without the ownership field) the
+    // adoption section never renders; the dialog is the plain two-field
+    // contract.
     $this->assertArrayNotHasKey('adopt', $build);
     // Without host coordinates on the query the icon picker cannot name an
     // access subject, so it degrades away too.

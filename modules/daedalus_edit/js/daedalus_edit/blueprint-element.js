@@ -67,7 +67,9 @@ export class BlueprintEditableElement {
      *
      * @type {Object}
      */
-    this.settings = JSON.parse(element.dataset.daedalusEditEditorSettings ?? '{}');
+    this.settings = JSON.parse(
+      element.dataset.daedalusEditEditorSettings ?? '{}',
+    );
 
     const wrapper = element.closest('[data-selectable^="block:"]');
     if (!wrapper) {
@@ -153,6 +155,7 @@ export class BlueprintEditableElement {
    * The page element is its own handle: nothing swaps in for it.
    *
    * @return {?Element}
+   *   The rendered page element, or null when it left the document.
    */
   getPageElementHandle() {
     return this.getPageElement();

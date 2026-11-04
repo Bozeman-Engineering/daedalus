@@ -10,7 +10,7 @@ use Drupal\Core\Url;
 /**
  * Drives daedalus_ui's Edit Mode and hotkeys in a browser test.
  *
- * daedalus_ui is the UI framework the rest of the Daedalus plugs into, so
+ * `daedalus_ui` is the UI framework the rest of the Daedalus plugs into, so
  * almost every page-builder behavior test first has to get a page into Edit
  * Mode. This trait gathers those shared moves so each test does not re-copy
  * them. It is meant for a WebDriverTestBase: the methods rely on

@@ -96,6 +96,12 @@ export const STEP_GRAIN = 0.1;
  * The scrub feel knobs are rem-tuned (SCRUB_PER_PIXEL, MAGNET_RADIUS);
  * px-magnitude units scale them by the conventional root so a px scrub
  * travels and magnetizes like its rem twin.
+ *
+ * @param {string} unit
+ *   The field's current unit ('' for a bare number).
+ *
+ * @return {number}
+ *   The multiplier for the knobs: 1 for rem, em and bare, 16 otherwise.
  */
 export const feelFactor = (unit) =>
   unit === 'rem' || unit === 'em' || unit === '' ? 1 : 16;
@@ -127,8 +133,10 @@ export const referenceVariable = (value) => {
  * Whether a parsed dimension is a zero length, the unit-agnostic value.
  *
  * @param {{number: number, unit: string}} parsed
+ *   A parsed dimension (dimension-value's parseDimension).
  *
  * @return {boolean}
+ *   Whether the number is zero within float noise.
  */
 const isZero = (parsed) => Math.abs(parsed.number) < 1e-9;
 
@@ -144,9 +152,12 @@ const isZero = (parsed) => Math.abs(parsed.number) < 1e-9;
  * strings.
  *
  * @param {*} a
+ *   One value spelling.
  * @param {*} b
+ *   The other.
  *
  * @return {boolean}
+ *   Whether the two spell one value.
  */
 export const valuesEqual = (a, b) => {
   const left = parseDimension(typeof a === 'string' ? a : String(a ?? ''));
@@ -221,6 +232,18 @@ export const displayAt = (guide, materials, value, condition = 'default') => {
  * collision set and the provenance menu name it ({ref, kind, scale,
  * name}); a reference the roster lacks keeps the custom property as its
  * name, kind and scale null.
+ *
+ * @param {?object} guide
+ *   The style guide payload.
+ * @param {object} materials
+ *   The materials roster.
+ * @param {string} ref
+ *   The var() reference spelling.
+ * @param {string} variable
+ *   The custom property it names (referenceVariable).
+ *
+ * @return {{ref: string, kind: ?string, scale: ?string, name: string}}
+ *   The token identity.
  */
 const referenceToken = (guide, materials, ref, variable) => {
   const material = materialOf(guide, materials, ref);
@@ -243,6 +266,12 @@ const referenceToken = (guide, materials, ref, variable) => {
  * references). The property-scoped slot rule: a bare ident means
  * different things per property, so only a space that knows its property
  * is animation-shaped asks the animation slot.
+ *
+ * @param {?object} definition
+ *   The bound property's definition, or null.
+ *
+ * @return {boolean}
+ *   Whether the space reads the animation slot.
  */
 const animationSpace = (definition) => definition?.type === 'animation_name';
 
@@ -251,6 +280,14 @@ const animationSpace = (definition) => definition?.type === 'animation_name';
  * the one-member collision set ({ref, kind, scale, name}: the spelling,
  * the animation kind, no scale, the label), or null for a stop that is
  * not a rostered animation (`none`, a theme's keyframes name).
+ *
+ * @param {object} materials
+ *   The materials roster.
+ * @param {string} name
+ *   The keyframes name the stop spells.
+ *
+ * @return {?{ref: string, kind: string, scale: null, name: string}}
+ *   The animation's identity, or null.
  */
 const animationToken = (materials, name) => {
   const animation = animationOf(materials, name);
@@ -279,6 +316,7 @@ const animationToken = (materials, name) => {
  *   The property's resolved constraints, or null.
  *
  * @return {boolean}
+ *   Whether the vocabulary is closed.
  */
 export const spaceClosed = (guide, constraints) =>
   constraintsAreLaw(guide) &&
@@ -292,8 +330,10 @@ export const spaceClosed = (guide, constraints) =>
  * stays bare), or null when the stops disagree or none parses.
  *
  * @param {Array<{number: ?number, unit: ?string}>} stops
+ *   The space's stops, each carrying its display value's parse.
  *
  * @return {?string}
+ *   The shared unit, or null.
  */
 const spaceUnit = (stops) => {
   const parsed = stops.filter((stop) => stop.unit !== null);
@@ -381,6 +421,8 @@ const spaceUnit = (stops) => {
  *   tokens: Array<{ref: string, kind: ?string, scale: ?string,
  *   name: string}>, number: ?number, unit: ?string}>, unit: ?string,
  *   definition: ?object, constraints: ?object}}
+ *   The value space: its kind, the regrouped stops, the shared unit and
+ *   the definition and constraints it was derived from.
  */
 export const valueSpaceFor = (
   guide,
@@ -476,6 +518,7 @@ export const valueSpaceFor = (
  *   A value-space stop.
  *
  * @return {string}
+ *   The list text.
  */
 export const stopLabel = (stop) => {
   if (stop.tokens.length) {
@@ -513,6 +556,7 @@ export const FACE_BUDGET = 5;
  *   A value-space stop.
  *
  * @return {string}
+ *   The face text.
  */
 export const stopFace = (stop) => {
   if (stop.tokens.length) {
@@ -591,6 +635,7 @@ export const discreteScrubStart = (index) => index * SCRUB_BAND;
  *   The space's stop count.
  *
  * @return {{raw: number, index: number}}
+ *   The pinned accumulator and the stop index it lands on.
  */
 export const discreteScrubMove = (raw, movementX, count) => {
   const pinned = Math.max(
@@ -613,6 +658,7 @@ export const discreteScrubMove = (raw, movementX, count) => {
  *   The field's current unit ('' for a bare number).
  *
  * @return {Array<{number: number, stop: object}>}
+ *   The magnets, ascending by number.
  */
 export const detentsFor = (stops, unit) =>
   stops
@@ -660,6 +706,8 @@ export const detentsFor = (stops, unit) =>
  *   number is always the stop's own.
  *
  * @return {{raw: number, number: number, stop: ?object}}
+ *   The advanced accumulator, the number to show, and the capturing
+ *   stop (null between magnets).
  */
 export const magnetAdvance = (raw, movementX, detents, options = {}) => {
   const {
@@ -709,6 +757,7 @@ export const magnetAdvance = (raw, movementX, detents, options = {}) => {
  *   The step size between stops.
  *
  * @return {{number: number, stop: ?object}}
+ *   The number to land on and the crossed stop (null when none was).
  */
 export const stepAcross = (number, direction, detents, grain = STEP_GRAIN) => {
   const next = applyStep(number, direction, grain);
@@ -835,6 +884,7 @@ export const magneticCapture = (stops, value) => {
  *   The committed value.
  *
  * @return {?{stop: object, token: object}}
+ *   The stop and the one token the variable names, or null.
  */
 export const referenceMatch = (stops, value) => {
   const variable = referenceVariable(value);
@@ -875,6 +925,8 @@ export const referenceMatch = (stops, value) => {
  *   The editing compound.
  *
  * @return {{face: string, token: ?object, stop: ?object}}
+ *   The display face, the token behind it (null for a literal or an
+ *   unknown reference) and the space's stop when one matches.
  */
 export const wearing = (
   guide,

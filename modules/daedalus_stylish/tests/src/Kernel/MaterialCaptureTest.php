@@ -28,12 +28,12 @@ use Drupal\Tests\daedalus_stylish\Traits\HostTrait;
  * The token, variant and animation gestures, end to end.
  *
  * The save_material / update_material / remove_material with kind token,
- * variant or animation dispatch to DaedalusStylishMaterialsProvider on the real batch
- * door: a token minted from a value or captured from the literal an element
- * wears (a reference refuses: it is already a material), landing on the
- * first declared scale whose shape fits when no scale is named, a variant captured
- * from an element's whole look (VariantCapture: its own overrides, its parts,
- * its staged children by slot path, the same-axis look it wears folded
+ * variant or animation dispatch to DaedalusStylishMaterialsProvider on the real
+ * batch door: a token minted from a value or captured from the literal an
+ * element wears (a reference refuses: it is already a material), landing on the
+ * first declared scale whose shape fits when no scale is named, a variant
+ * captured from an element's whole look (VariantCapture: its own overrides, its
+ * parts, its staged children by slot path, the same-axis look it wears folded
  * beneath), an animation minted from its steps outright (a keyframes block
  * lives on no element), pushes and face rewrites through update_material,
  * removal of unreferenced materials and the loud refusal of referenced ones on
@@ -228,11 +228,13 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
    */
   public function testTokenGestures(): void {
     [$entity, $ids] = $this->buildComposition([
-      'container:{sec}' => ['default' => [
-        'background-color' => '#e94560',
-        'background-image' => 'linear-gradient(135deg, #e94560, #fbbf24)',
-        'color' => 'var(--color-accent)',
-      ]],
+      'container:{sec}' => [
+        'default' => [
+          'background-color' => '#e94560',
+          'background-image' => 'linear-gradient(135deg, #e94560, #fbbf24)',
+          'color' => 'var(--color-accent)',
+        ],
+      ],
     ]);
     $skin = DaedalusStylishSkin::create(['label' => 'Aurora', 'machine_name' => 'aurora']);
     $skin->setPackageTokens(['color' => ['accent' => '#1a1a2e']])->save();
@@ -251,7 +253,12 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
     ]);
     $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
     $record = array_column($this->delta()['upsert'], NULL, 'id')['color/brand-red'];
-    $this->assertSame(['token', 'user', 'color', 'var(--color-brand-red)'], [$record['kind'], $record['origin'], $record['group'], $record['spellings']['style']]);
+    $this->assertSame(['token', 'user', 'color', 'var(--color-brand-red)'], [
+      $record['kind'],
+      $record['origin'],
+      $record['group'],
+      $record['spellings']['style'],
+    ]);
 
     // No scale named: a gradient value lands on the gradient scale.
     $result = $this->batch($entity, [
@@ -270,8 +277,20 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
     // From the selection: the literal the element wears for the property,
     // the scale inferred from its shape (a color, a gradient).
     $result = $this->batch($entity, [
-      ['op' => 'save_material', 'kind' => 'token', 'label' => 'section-red', 'element' => $ids['sec'], 'property' => 'background-color'],
-      ['op' => 'save_material', 'kind' => 'token', 'label' => 'section-fade', 'element' => $ids['sec'], 'property' => 'background-image'],
+      [
+        'op' => 'save_material',
+        'kind' => 'token',
+        'label' => 'section-red',
+        'element' => $ids['sec'],
+        'property' => 'background-color',
+      ],
+      [
+        'op' => 'save_material',
+        'kind' => 'token',
+        'label' => 'section-fade',
+        'element' => $ids['sec'],
+        'property' => 'background-image',
+      ],
     ], [MaterialGestureOperationHandler::ORIGIN_OPTION => 'ai']);
     $this->assertTrue($result->isSuccess(), json_encode($result->toArray()));
     $records = array_column($this->delta()['upsert'], NULL, 'id');
@@ -299,7 +318,14 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
     ]));
     $this->assertSame(['MISSING_PARAMETER'], $codes['value']);
     $codes = $this->errorCodes($this->batch($entity, [
-      ['op' => 'save_material', 'kind' => 'token', 'group' => 'color', 'label' => 'nope', 'value' => '#b91c1c', 'global' => TRUE],
+      [
+        'op' => 'save_material',
+        'kind' => 'token',
+        'group' => 'color',
+        'label' => 'nope',
+        'value' => '#b91c1c',
+        'global' => TRUE,
+      ],
     ]));
     $this->assertSame(['INVALID_PARAMETER'], $codes['global']);
 
@@ -363,7 +389,11 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
     $skin->setPackageTokens(['color' => ['accent' => '#1a1a2e']])->save();
     $this->activateSkin($skin);
     $this->delta();
-    $animations = static fn (): array => \Drupal::entityTypeManager()->getStorage('daedalus_skin')->loadUnchanged($skin->id())->animations();
+    $animations = static function () use ($skin): array {
+      $fresh = \Drupal::entityTypeManager()->getStorage('daedalus_skin')->loadUnchanged($skin->id());
+      assert($fresh instanceof DaedalusStylishSkin);
+      return $fresh->animations();
+    };
 
     // By steps: the record lands on the skin and rides the delta with its
     // animation-slot spelling and canonical steps.
@@ -390,7 +420,11 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
     ], [$record['kind'], $record['id'], $record['origin'], $record['group'], $record['description']]);
     $this->assertSame(['animation' => 'motion-drift'], $record['spellings']);
     $this->assertSame(['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']], $record['value']);
-    $this->assertSame(['steps' => ['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']], 'description' => 'A soft entrance.', 'offered' => TRUE], $animations()['drift']);
+    $this->assertSame([
+      'steps' => ['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']],
+      'description' => 'A soft entrance.',
+      'offered' => TRUE,
+    ], $animations()['drift']);
 
     // Refusals in the gesture's parameter space: missing steps, the steps
     // seam's own codes, the name grammar, no membership of its own.
@@ -412,7 +446,13 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
     ]));
     $this->assertSame(['INVALID_ANIMATION_NAME'], $codes['label']);
     $codes = $this->errorCodes($this->batch($entity, [
-      ['op' => 'save_material', 'kind' => 'animation', 'label' => 'nope', 'steps' => ['0%' => ['opacity' => '0']], 'global' => TRUE],
+      [
+        'op' => 'save_material',
+        'kind' => 'animation',
+        'label' => 'nope',
+        'steps' => ['0%' => ['opacity' => '0']],
+        'global' => TRUE,
+      ],
     ]));
     $this->assertSame(['INVALID_PARAMETER'], $codes['global']);
 
@@ -507,7 +547,10 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
       '' => ['default' => ['border-radius' => '8px']],
     ])->save();
     [$entity, $ids] = $this->buildComposition([
-      'container:{sec}' => ['default' => ['padding' => '2rem'], 'variants' => [['variant' => 'section', 'fragment' => '']]],
+      'container:{sec}' => [
+        'default' => ['padding' => '2rem'],
+        'variants' => [['variant' => 'section', 'fragment' => '']],
+      ],
       'container:{sec}::.inner' => ['default' => ['margin' => '0']],
       'container:{sec}::.s-abc12' => ['default' => ['color' => 'red']],
       'container:{sec}::p' => ['default' => ['color' => 'blue']],
@@ -680,7 +723,10 @@ class MaterialCaptureTest extends NestedStorageKernelTestBase {
     [$entity, $ids] = $this->buildComposition([
       'container:{sec}' => ['default' => ['padding' => '2rem']],
       'container:{sec}::> d-basic' => [
-        'variants' => [['variant' => 'card', 'fragment' => '', 'via' => 'section'], ['variant' => 'section', 'fragment' => 'container(1)']],
+        'variants' => [
+          ['variant' => 'card', 'fragment' => '', 'via' => 'section'],
+          ['variant' => 'section', 'fragment' => 'container(1)'],
+        ],
         'default' => ['margin' => '0'],
       ],
       'container:{nsec}::> d-basic' => ['variants' => [['variant' => 'card', 'fragment' => '']]],

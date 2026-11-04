@@ -23,12 +23,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests the place_blueprint operation.
  *
  * Instantiation expands a blueprint's element tree into the existing batch
- * grammar (add_section born as the node's layout, update_element,
- * add_element, and daedalus_stylish's style operations) and runs it as a nested
- * batch. A section-rooted blueprint rides add_section's ONE placement
- * grammar, so the same blueprint lands as a top-level section or nested inside
- * any region. The style operations are captured by a spy handler standing
- * in for daedalus_stylish, which keeps the assertions on exactly what the blueprint
+ * grammar (add_section born as the node's layout, update_element, add_element,
+ * and daedalus_stylish's style operations) and runs it as a nested batch. A
+ * section-rooted blueprint rides add_section's ONE placement grammar, so the
+ * same blueprint lands as a top-level section or nested inside any region. The
+ * style operations are captured by a spy handler standing in for
+ * daedalus_stylish, which keeps the assertions on exactly what the blueprint
  * handler emits: the operations and their translated selectable keys.
  */
 #[CoversClass(BlueprintOperationHandler::class)]
@@ -207,10 +207,10 @@ class BlueprintInstantiateTest extends BlueprintKernelTestBase {
     $this->assertSame('layout_onecol', $serialized_inner['layout_id']);
     $this->assertArrayNotHasKey('blueprint', $serialized_inner);
 
-    // The co-located relative style keys were translated onto the minted
-    // UUIDs as daedalus_ui selectable keys and emitted through daedalus_stylish's
-    // operations, in tree order — the full layered entries: variant
-    // references AND overrides, re-keyed onto the fresh uuids.
+    // The co-located relative style keys were translated onto the minted UUIDs
+    // as daedalus_ui selectable keys and emitted through daedalus_stylish's
+    // operations, in tree order — the full layered entries: variant references
+    // AND overrides, re-keyed onto the fresh uuids.
     $this->assertSame(
       $this->expectedStyleOps($section_uuid, $text_uuid, $inner_uuid),
       \Drupal::state()->get(StyleOpSpy::STATE_KEY, []),

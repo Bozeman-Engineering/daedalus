@@ -93,6 +93,7 @@ const DEFAULT_DURATION_MS = 600;
  *   The computed background-color.
  *
  * @return {boolean}
+ *   True for the keyword or a zero alpha.
  */
 const isTransparent = (color) =>
   color === 'transparent' || /(?:,|\/)\s*0(?:\.0+)?\)$/.test(color);
@@ -102,12 +103,16 @@ const isTransparent = (color) =>
  * fully transparent color.
  *
  * @param {Element} element
+ *   The element whose computed background to read.
  *
  * @return {boolean}
+ *   True when neither a background image nor an opaque color paints.
  */
 const paintsNoBackground = (element) => {
   const style = getComputedStyle(element);
-  return style.backgroundImage === 'none' && isTransparent(style.backgroundColor);
+  return (
+    style.backgroundImage === 'none' && isTransparent(style.backgroundColor)
+  );
 };
 
 /**
@@ -123,10 +128,14 @@ const stageElement = () => document.getElementById('daedalus-ui-stage');
  *   set it) is the one the transition uses.
  *
  * @return {number}
+ *   The duration in milliseconds; DEFAULT_DURATION_MS when the property
+ *   is unset or unreadable.
  */
 const durationMs = (stage) => {
   const raw = stage
-    ? getComputedStyle(stage).getPropertyValue('--daedalus-explode-duration').trim()
+    ? getComputedStyle(stage)
+        .getPropertyValue('--daedalus-explode-duration')
+        .trim()
     : '';
   const match = /^(\d*\.?\d+)(ms|s)$/.exec(raw);
   if (!match) {
@@ -143,6 +152,7 @@ const durationMs = (stage) => {
  * own bookkeeping.
  *
  * @return {{done: Promise<void>, cancel: Function}}
+ *   done resolves when the return has ended; cancel() settles it at once.
  */
 const afterReturn = () => {
   const stage = stageElement();
@@ -174,6 +184,7 @@ const afterReturn = () => {
  * Builds the host over the app API and the settings store.
  *
  * @param {object} options
+ *   What the host runs over.
  * @param {object} options.app
  *   The app API handed to the registration callback.
  * @param {{get: Function, subscribe: Function}} options.settings
@@ -210,6 +221,14 @@ export const createHost = ({ app, settings }) => {
    * generated box (plane-model.js), so the behavior's answer is read as
    * the contract states it: a hit naming a pseudo matches the HOSTS of
    * a box, which has no geometry of its own and anchors nothing here.
+   *
+   * @param {import('./plane-model.js').Plane} plane
+   *   The plane.
+   * @param {?object} behavior
+   *   The registered part behavior, or null.
+   *
+   * @return {Element[]}
+   *   The elements, possibly none.
    */
   const elementsOf = (plane, behavior) => {
     if (plane.tier === 'element') {
@@ -223,6 +242,14 @@ export const createHost = ({ app, settings }) => {
   /**
    * Whether an element counts as static for the anchor: its first read,
    * or the anchor it already wears when the sheet has tainted the read.
+   *
+   * @param {Element} element
+   *   One element the plane addresses.
+   * @param {string} address
+   *   The plane address it belongs to.
+   *
+   * @return {boolean}
+   *   True when the element counts as static.
    */
   const isStatic = (element, address) => {
     if (!measuredPosition.has(element)) {
@@ -238,6 +265,14 @@ export const createHost = ({ app, settings }) => {
   /**
    * Whether an element counts as bare for the surface: its first read,
    * or the surface it already wears when the sheet has tainted the read.
+   *
+   * @param {Element} element
+   *   One element the plane addresses.
+   * @param {string} address
+   *   The plane address it belongs to.
+   *
+   * @return {boolean}
+   *   True when the element counts as bare.
    */
   const isBare = (element, address) => {
     if (!measuredBackground.has(element)) {
@@ -273,6 +308,14 @@ export const createHost = ({ app, settings }) => {
    * The DOM reads for the lifted planes: the addresses to anchor and the
    * addresses to surface, each when every element the plane addresses
    * agrees (and there is at least one).
+   *
+   * @param {import('./plane-model.js').Plane[]} planes
+   *   The planes the model produced for this print.
+   * @param {?object} behavior
+   *   The registered part behavior, or null.
+   *
+   * @return {{anchored: Set<string>, bare: Set<string>}}
+   *   The addresses to anchor and the addresses to surface.
    */
   const readsFor = (planes, behavior) => {
     const anchors = new Set();
@@ -382,9 +425,14 @@ export const createHost = ({ app, settings }) => {
     bareKeys = new Set();
     // Part planes settle through the same behavior they lifted through;
     // dropping them from the flat sheet would snap them down unanimated.
-    style.textContent = print(flat, FLAT, {}, {
-      selectorFor: partBehavior()?.selectorFor ?? null,
-    });
+    style.textContent = print(
+      flat,
+      FLAT,
+      {},
+      {
+        selectorFor: partBehavior()?.selectorFor ?? null,
+      },
+    );
     log('stop', 'Returning flat');
     const returning = afterReturn();
     pendingReturn = returning;

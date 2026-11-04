@@ -11,14 +11,15 @@ use Drupal\daedalus_stylish\PropertyGroupBase;
 /**
  * Transitions and animations: how an element moves between and into states.
  *
- * The curated home of transition-* and animation-*, the two wearing halves
- * of motion (the `transition` token scale is the site's motion tokens). Curating them takes ownership away from the wide tier's
- * Animations and Transitions derivatives (weight 80 beats wide:* at 100
- * in (weight, id) order), which makes them advanced-mode rows, strict-site
- * declarable, and gives animation-name the `animation_name` type the
- * animation material's reference grammar hangs on: a motion-{name} ident
- * names a site animation (StyleGuide::animationName()), validated against
- * the published roster and offered from it.
+ * The curated home of transition-* and animation-*, the two wearing halves of
+ * motion (the `transition` token scale is the site's motion tokens). Curating
+ * them takes ownership away from the wide tier's Animations and Transitions
+ * derivatives (weight 80 beats wide:* at 100 in (weight, id) order), which
+ * makes them advanced-mode rows, strict-site declarable, and gives
+ * animation-name the `animation_name` type the animation material's reference
+ * grammar hangs on: a motion-{name} ident names a site animation
+ * (StyleGuide::animationName()), validated against the published roster and
+ * offered from it.
  *
  * Shorthands and easing functions are 'text' (multi-part grammars the
  * client's csstree lints); the longhands are typed so the validator and

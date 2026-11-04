@@ -34,9 +34,9 @@ class IdentityMinterTest extends KernelTestBase {
   /**
    * {@inheritdoc}
    *
-   * The minter itself only needs filter, but compiling daedalus_edit's container
-   * pulls in daedalus_ui and its invisible-to-kernel hard dependencies
-   * (see PageTitleEditingTest), so the full stack is listed.
+   * The minter itself only needs filter, but compiling daedalus_edit's
+   * container pulls in daedalus_ui and its invisible-to-kernel hard
+   * dependencies (see PageTitleEditingTest), so the full stack is listed.
    */
   protected static $modules = [
     'system',

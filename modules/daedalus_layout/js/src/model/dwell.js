@@ -35,8 +35,16 @@ export const DWELL_MS = 400;
  * Builds a dwell.
  *
  * @param {object} options
- *   `delay` in milliseconds (DWELL_MS); `setTimer(fn, ms)` and
- *   `clearTimer(handle)` as setTimeout and clearTimeout.
+ *   The clock: how long a rest is and what runs it.
+ * @param {number} options.delay
+ *   How long a row is rested on before its peek fires, in milliseconds
+ *   (DWELL_MS).
+ * @param {Function} options.setTimer
+ *   `setTimer(fn, ms)`, setTimeout's shape; the node tier hands in a
+ *   manual clock.
+ * @param {Function} options.clearTimer
+ *   `clearTimer(handle)`, clearTimeout's shape, for the handle setTimer
+ *   returned.
  *
  * @return {{arm: Function, cancel: Function, pending: Function}}
  *   `arm(key, fire)` starts the clock for a row (its key), calling

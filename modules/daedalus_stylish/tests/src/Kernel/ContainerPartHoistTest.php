@@ -19,12 +19,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests the one-box convergence: part styles hoist onto the root key.
  *
  * The container is ONE element at every depth now, so stored styles still
- * addressing the retired `.daedalus-stylish-layout-container` part (and its `::>`
- * children entries) re-key onto the root everywhere they live: host style
+ * addressing the retired `.daedalus-stylish-layout-container` part (and its
+ * `::>` children entries) re-key onto the root everywhere they live: host style
  * maps (the ContainerPartHoistSweep, riding daedalus_layout's transform spine
- * after the row sweep), daedalus_variant styles across revisions
- * (composition slot paths included), daedalus_skin defaults, and stale
- * tempstore sessions converging at load time.
+ * after the row sweep), daedalus_variant styles across revisions (composition
+ * slot paths included), daedalus_skin defaults, and stale tempstore sessions
+ * converging at load time.
  *
  * @group daedalus_stylish
  */
@@ -50,8 +50,8 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -238,7 +238,6 @@ class ContainerPartHoistTest extends NestedStorageKernelTestBase {
     $this->assertSame($shipped_data['defaults'], $shipped->packageDefaults(), 'A shipped unmodified skin is left to the sync lane.');
     $this->assertFalse($shipped->isModified());
   }
-
 
   /**
    * A stale tempstore session's part keys converge at LOAD time.

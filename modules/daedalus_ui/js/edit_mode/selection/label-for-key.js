@@ -83,6 +83,8 @@ export const fallbackLabel = (key) => {
  *   The selectable key, or a `key::selector` address.
  *
  * @return {string}
+ *   The row's label, or the key's fallback label when the index cannot
+ *   place it.
  */
 export const labelFor = (index, address) => {
   const placed = index?.get(address)?.label;
@@ -105,6 +107,7 @@ export const labelFor = (index, address) => {
  *   The target's canonical relative selector.
  *
  * @return {string}
+ *   The selector's words, or the selector itself.
  */
 export const targetLabel = (key, selector) =>
   getPartBehavior()?.label?.(key, selector) ?? selector;
@@ -117,5 +120,6 @@ export const targetLabel = (key, selector) =>
  *   The selectable key.
  *
  * @return {string}
+ *   The display label.
  */
 export const labelForKey = (key) => labelFor(projectionIndex(), key);

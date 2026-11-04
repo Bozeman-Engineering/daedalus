@@ -19,6 +19,9 @@ import {
  * `none` there (the GeneratedContent group's two spellings, `""` and
  * `none`; a box born at the op spine carries `""` at default, an author
  * may switch it off with `none` and on again under a state).
+ *
+ * @param {Object<string, Object<string, string>>} entry
+ *   The delivered entry, condition → property → winning value.
  */
 const deliversBox = (entry) =>
   Object.values(entry).some(
@@ -26,6 +29,39 @@ const deliversBox = (entry) =>
       typeof values.content === 'string' &&
       values.content.trim().toLowerCase() !== 'none',
   );
+
+/**
+ * The deeper of a resolution's best part so far and one more candidate.
+ *
+ * The candidate wins when its hit sits under the owner's root, the model
+ * places the part on this owner, and it is contained by the best so far
+ * (deepest under the pointer wins); else the best stands. Module-level
+ * so the resolve walk calls it per candidate without minting a closure
+ * over the advancing root inside the loop.
+ *
+ * @param {?{parentKey: string, id: string, hit: Element}} best
+ *   The deepest placed part so far, or null.
+ * @param {Element} root
+ *   The owner's canvas root (its `data-selectable` element).
+ * @param {string} key
+ *   The owner key.
+ * @param {function(string, string): boolean} placed
+ *   Whether a part (owner key, part id) is a row of its owner.
+ * @param {string} id
+ *   The candidate part's id (its selector).
+ * @param {?Element} hit
+ *   The canvas element the candidate resolved on, or null.
+ *
+ * @return {?{parentKey: string, id: string, hit: Element}}
+ *   The candidate's row when it is the new best, else `best`.
+ */
+const deeperPart = (best, root, key, placed, id, hit) =>
+  hit &&
+  root.contains(hit) &&
+  placed(key, id) &&
+  (!best || best.hit.contains(hit))
+    ? { parentKey: key, id, hit }
+    : best;
 
 /**
  * Daedalus Stylish's part behavior for the page-elements markup view.
@@ -79,6 +115,18 @@ const deliversBox = (entry) =>
  * materializes, the rows the page-elements tree renders under the
  * element since anatomy cannot know them (existence is a cascade fact:
  * the box exists iff something delivers `content` there).
+ *
+ * @param {object} props
+ *   The behavior's inputs.
+ * @param {object} props.source
+ *   The state source (the block type, section layout, style map,
+ *   materials and document reads).
+ * @param {object} props.guide
+ *   The style guide payload.
+ *
+ * @return {{resolve: Function, selectorFor: Function, matches: Function,
+ *   generated: Function, label: Function}}
+ *   The part behavior the view registry takes.
  */
 export const createPartBehavior = ({ source, guide }) => {
   // ---- Selector → scoped CSS: the @scope rule builder. ---------------------
@@ -159,6 +207,17 @@ export const createPartBehavior = ({ source, guide }) => {
    * The DOM walk stays containment-based on purpose: a strict
    * `hit !== root` check here would be a second, DOM-derived placement
    * rule that could drift from the model's.
+   *
+   * @param {*} target
+   *   The pointer target; anything but an Element resolves nothing.
+   * @param {function(string): boolean} presented
+   *   Whether an owner key is in the selection universe.
+   * @param {function(string, string): boolean} placed
+   *   Whether a part (owner key, part id) is a row of its owner.
+   *
+   * @return {?{parentKey: string, id: string, hit: Element}}
+   *   The deepest placed part under the pointer and the canvas element it
+   *   resolved on, or null.
    */
   const resolve = (target, presented = () => true, placed = () => true) => {
     if (!(target instanceof Element)) {
@@ -177,29 +236,23 @@ export const createPartBehavior = ({ source, guide }) => {
       const key = root.getAttribute('data-selectable');
       const parsed = parseKey(key);
       if (parsed && !parsed.selector && presented(key)) {
+        // Each candidate is offered to deeperPart (module level: a closure
+        // minted here would close over the advancing root).
         let best = null;
-        // Offers one candidate; true when it became the best so far. The
-        // closure runs inside this iteration only, before root advances.
-        // eslint-disable-next-line no-loop-func
-        const consider = (id, hit) => {
-          if (
-            hit &&
-            root.contains(hit) &&
-            placed(key, id) &&
-            (!best || best.hit.contains(hit))
-          ) {
-            best = { parentKey: key, id, hit };
-            return true;
-          }
-          return false;
-        };
         for (const part of partsForKey(
           guide,
           key,
           source.getBlockTypes(),
           source.getSectionLayouts(),
         )) {
-          consider(part.id, target.closest(part.id));
+          best = deeperPart(
+            best,
+            root,
+            key,
+            placed,
+            part.id,
+            target.closest(part.id),
+          );
         }
         // Instance parts: the deepest identity-class carrier on the
         // target's ancestor chain that OWNS to this root (innermost
@@ -222,8 +275,19 @@ export const createPartBehavior = ({ source, guide }) => {
           const identity = [...carrier.classList].find((name) =>
             INSTANCE_PART.test(`.${name}`),
           );
-          if (identity && consider(`.${identity}`, carrier)) {
-            break;
+          if (identity) {
+            const deeper = deeperPart(
+              best,
+              root,
+              key,
+              placed,
+              `.${identity}`,
+              carrier,
+            );
+            if (deeper !== best) {
+              best = deeper;
+              break;
+            }
           }
         }
         if (best) {
@@ -250,6 +314,7 @@ export const createPartBehavior = ({ source, guide }) => {
    *   A canonical relative selector.
    *
    * @return {string}
+   *   The selector's words in the owner's vocabulary.
    */
   const label = (key, selector) =>
     selectorLabel(
@@ -327,7 +392,13 @@ export const createPartBehavior = ({ source, guide }) => {
     const variants = source.getMaterials().ofKind('variant');
     // The axis vocabulary's depth read walks the layout; the stack reads
     // the document (the host entity above the sections).
-    const axes = axisVocabulary(guide, key, blockTypes, sectionLayouts, source.getTree?.() ?? []);
+    const axes = axisVocabulary(
+      guide,
+      key,
+      blockTypes,
+      sectionLayouts,
+      source.getTree?.() ?? [],
+    );
     const document = source.getDocument();
     const delivered = (pseudo) =>
       deliveredEntry(
@@ -352,12 +423,19 @@ export const createPartBehavior = ({ source, guide }) => {
         Object.keys(map ?? {})
           .filter((entry) => entry.startsWith(own))
           .map((entry) => entry.slice(own.length))
-          .filter((pseudo) => PSEUDO_PATTERN.test(pseudo) && !GENERATED_BOXES.includes(pseudo)),
+          .filter(
+            (pseudo) =>
+              PSEUDO_PATTERN.test(pseudo) && !GENERATED_BOXES.includes(pseudo),
+          ),
       ),
     ];
     return [
       ...GENERATED_BOXES.filter((pseudo) => deliversBox(delivered(pseudo))),
-      ...others.filter((pseudo) => Object.values(delivered(pseudo)).some((values) => Object.keys(values).length > 0)),
+      ...others.filter((pseudo) =>
+        Object.values(delivered(pseudo)).some(
+          (values) => Object.keys(values).length > 0,
+        ),
+      ),
     ].map((pseudo) => ({
       id: `${ANCHOR}${SUFFIX}${pseudo}`,
       pseudo,

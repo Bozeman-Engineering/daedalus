@@ -294,8 +294,8 @@ class SkinDefaultsTest extends KernelTestBase {
     $this->assertIsString($uri);
     $css = file_get_contents($uri);
 
-    // The whole tier is BARE rules inside the token scope element: no
-    // @scope anywhere (a default in its own @scope at the element would
+    // The whole tier is BARE rules inside the token scope element: no @scope
+    // anywhere (a default in its own @scope at the element would
     // beat an ancestor's equal-weight rule on proximity) and FULLY
     // :where()-wrapped, the scope class included, so every default sits
     // at zero specificity: the element tag tier's bare in-scope tag

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel;
 
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\daedalus_blueprint\BlueprintDeserializer;
 use Drupal\daedalus_blueprint\BlueprintSerializer;
 use Drupal\daedalus_layout\Plugin\Block\SectionBlock;
@@ -637,7 +638,9 @@ class BlueprintDeserializerTest extends BlueprintKernelTestBase {
       'fields' => ['field_subtitle' => 'After'],
     ]);
     $this->assertTrue($result->isSuccess(), print_r(array_map(fn ($e) => $e->toArray(), $result->getErrors()), TRUE));
-    $this->assertSame('After', $result->getEntity()->get('field_subtitle')->value);
+    $after = $result->getEntity();
+    assert($after instanceof FieldableEntityInterface);
+    $this->assertSame('After', $after->get('field_subtitle')->value);
   }
 
   /**
@@ -676,7 +679,9 @@ class BlueprintDeserializerTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * A validate_only create judges the tree on the unsaved host, landing nothing.
+   * A validate_only create judges the tree on the unsaved host.
+   *
+   * It lands nothing.
    */
   public function testValidateOnlyJudgesTheLayout(): void {
     $this->setUpLayoutPayloads();

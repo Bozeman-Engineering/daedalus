@@ -18,8 +18,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * tool. The handler-level tests in EntityReferenceFieldHandlerTest prove that
  * label resolution excludes unviewable entities; these tests prove the closure
  * survives the full tool round-trip (deserialize -> BlueprintResult::toArray ->
- * DaedalusBlueprintToolBase::formatResult) and that nothing re-discloses a label
- * downstream of the gate.
+ * DaedalusBlueprintToolBase::formatResult) and that nothing re-discloses a
+ * label downstream of the gate.
  *
  * The leak is reached through a HYDRATING tool. eb_validate runs validate_only
  * (structural Phase A only) and never resolves references, so the reference

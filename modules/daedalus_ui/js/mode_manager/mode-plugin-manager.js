@@ -12,25 +12,24 @@ class ModePluginManager {
   /**
    * Register plugin.
    *
-   * @param plugin
-   *  The mode plugin.
+   * @param {ModePluginBase} plugin
+   *   The mode plugin.
    */
   registerPlugin(plugin) {
-    if (plugin instanceof modePluginBase.ModePluginBase) {
-      this.plugins[plugin.constructor.name] = plugin;
-      plugin.init();
-    } else {
-      console.error('Failed to register mode plugin: ', plugin);
+    if (!(plugin instanceof modePluginBase.ModePluginBase)) {
+      throw new TypeError('A mode plugin must extend ModePluginBase.');
     }
+    this.plugins[plugin.constructor.name] = plugin;
+    plugin.init();
   }
 
   /**
    * Get plugin.
    *
-   * @param mode
+   * @param {string} mode
    *   The mode plugin id.
-   * @return {modePluginBase|null}
-   *   The mode plugin.
+   * @return {ModePluginBase}
+   *   The registered plugin, or a default plugin wearing the id.
    */
   getPlugin = (mode) => {
     let foundPlugin = null;
@@ -48,7 +47,7 @@ class ModePluginManager {
   };
 }
 
-export default function () {
+export default function bootModeManager() {
   Drupal.Daedalus = Drupal.Daedalus || {};
   Drupal.Daedalus.ModeManager = new ModePluginManager();
 }

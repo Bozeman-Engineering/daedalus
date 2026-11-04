@@ -117,6 +117,14 @@ export const pageNodes = (document) => {
  * draft-session subtree rule uses it to ask whether a fresh canvas
  * selection still lives INSIDE the capture's subtree (outside means the
  * save session leaves).
+ *
+ * @param {Array<object>} nodes
+ *   pageNodes()' tree (or any subtree of it).
+ * @param {string} key
+ *   The selectable key to find.
+ *
+ * @return {?object}
+ *   The node, children intact, or null when no node carries the key.
  */
 export const findNode = (nodes, key) => {
   for (const node of Array.isArray(nodes) ? nodes : []) {
@@ -210,6 +218,14 @@ export const scopeNodes = (nodes, scope, selected) => {
  * included). This is visibleTree's annotation and the islands-vs-bare-row
  * fork: an unstyled element has nothing an island could print, so its
  * row renders bare, no editor beneath, until it is selected.
+ *
+ * @param {object} map
+ *   The style map (mirror view).
+ * @param {string} key
+ *   The element's key.
+ *
+ * @return {boolean}
+ *   True when the element overrides or wears anything.
  */
 export const isStyledElement = (map, key) =>
   hasCustomStyles(map, key) || entryRefs(map?.[key]).length > 0;
@@ -253,6 +269,14 @@ export const visibleTree = (nodes, map) => {
  * placeholder islands included), styled or not. A bare leaf (an unstyled,
  * unselected element without children) has none: its row is the header
  * alone, so it carries no chevron, only the chevron's footprint.
+ *
+ * @param {object} node
+ *   A visibleTree() node ({key, styled, children}).
+ * @param {?string} selected
+ *   The selected element key, or null.
+ *
+ * @return {boolean}
+ *   True when the row has a body to collapse.
  */
 export const hasBody = (node, selected = null) =>
   Boolean(node.styled) ||
@@ -276,6 +300,7 @@ export const hasBody = (node, selected = null) =>
  *   The selected element key (the selected bare leaf is foldable).
  *
  * @return {Array<object>}
+ *   The outline rows ({id, foldable, folded, children}), one per node.
  */
 export const outlineOf = (tree, selected = null) =>
   (Array.isArray(tree) ? tree : []).map((node) => ({
@@ -303,6 +328,7 @@ export const outlineOf = (tree, selected = null) =>
  *   The row's element key.
  *
  * @return {{count: number, worn: Array<string>}}
+ *   The element's own declaration count and the layer ids it wears.
  */
 export const foldSummary = (map, key) => {
   const count = Object.values(elementEntries(map, key)).reduce(
@@ -339,7 +365,15 @@ export const foldSummary = (map, key) => {
  * root's gesture — and a root reference to a fragment-less variant has
  * nothing to distribute.
  *
+ * @param {object} map
+ *   The style map (mirror view).
+ * @param {string} key
+ *   The element's key.
+ * @param {Array<object>} variants
+ *   The variant library (findVariant's shape).
+ *
  * @return {?{variant: string, fragment: string}}
+ *   The worn root reference to a composition variant, or null.
  */
 export const reapplyRef = (map, key, variants) =>
   entryRefs(map?.[key]).find(

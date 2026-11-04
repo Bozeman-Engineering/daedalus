@@ -62,15 +62,15 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
   protected function setUp(): void {
     $this->daedalusSetUp();
 
-    // The presentation legs need an UNCOLLAPSED media block: the recipe's
-    // image block collapses to ONE composed <img> root (its media reference
-    // field is hidden in the view display and renders no wrapper), so it can
-    // no longer exercise the field-tier unit root, the collapsed posture, or full
+    // The presentation legs need an UNCOLLAPSED media block: the recipe's image
+    // block collapses to ONE composed <img> root (its media reference field is
+    // hidden in the view display and renders no wrapper), so it can no longer
+    // exercise the field-tier unit root, the collapsed posture, or full
     // structure. This fabricated 'photo' bundle is the faithful stand-in: a
     // plain media reference block rendering through the default
     // entity_reference_entity_view chain, exactly the shape the legs were
-    // written against. The image block's own collapsed behaviors are pinned
-    // by daedalus_edit_image_block's ImageBlockBlueprintEditBehaviorTest.
+    // written against. The image block's own collapsed behaviors are pinned by
+    // daedalus_edit_image_block's ImageBlockBlueprintEditBehaviorTest.
     BlockContentType::create([
       'id' => 'photo',
       'label' => 'Photo',
@@ -212,8 +212,8 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
     $this->assertNotNull($blank, 'The empty landing page renders the blank-page prompt.');
 
     // The Add (place block) panel is a #[Sidebar] plugin registered into
-    // daedalus_ui's Edit Mode chrome; the cookie-arrival render builds
-    // its button server-side. This is daedalus_layout's one registration seam into
+    // daedalus_ui's Edit Mode chrome; the cookie-arrival render builds its
+    // button server-side. This is daedalus_layout's one registration seam into
     // the framework's chrome.
     $assert_session->elementExists('css', '[data-sidebar-button-for="#place_block"]');
 
@@ -450,7 +450,8 @@ class MediaFileDragBehaviorTest extends WebDriverTestBase {
       'Cmd+double-click on the inner image resolved to the media reference field — the presentation boundary.',
     );
 
-    // --- Leg 6: Tab traversal from the open edit filters through collapse roots. ---
+    // --- Leg 6: Tab traversal from the open edit filters through collapse
+    // roots. ---
     //
     // A collapse root's subtree contributes exactly ONE Tab stop (its
     // boundary item): advancing from the first photo block lands on the

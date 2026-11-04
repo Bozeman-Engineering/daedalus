@@ -54,6 +54,7 @@ import { createUploadProgress } from './upload-progress.js';
    * compatibility filter gets to work with.
    *
    * @param {DataTransferItemList} items
+   *   The drag's items (dragenter's dataTransfer.items).
    *
    * @return {?string[]}
    *   Extensions like '.jpg', or null when the drag carries no items.
@@ -82,6 +83,7 @@ import { createUploadProgress } from './upload-progress.js';
    *   The [data-media-reference] element.
    *
    * @return {boolean}
+   *   Whether the file may land on the element.
    */
   const fileIsCompatibleWithMedia = (fileExtensions, media) => {
     const accepted = media.dataset.acceptedFiles;
@@ -102,6 +104,7 @@ import { createUploadProgress } from './upload-progress.js';
    * brief window exit.
    *
    * @param {DragEvent} e
+   *   The dragenter event.
    */
   const onDragEnter = (e) => {
     if (e.dataTransfer?.types?.[0] !== 'Files') {
@@ -133,6 +136,7 @@ import { createUploadProgress } from './upload-progress.js';
    * timeout that the next dragover cancels.
    *
    * @param {DragEvent} e
+   *   The dragleave event.
    */
   const onDragLeave = (e) => {
     if (
@@ -183,8 +187,7 @@ import { createUploadProgress } from './upload-progress.js';
 
     drupalSettings.Daedalus ??= {};
     drupalSettings.Daedalus.FileDragDisable ??= {};
-    drupalSettings.Daedalus.FileDragDisable.DropzoneJs =
-      '.dropzone-enable';
+    drupalSettings.Daedalus.FileDragDisable.DropzoneJs = '.dropzone-enable';
     drupalSettings.Daedalus.FileDragDisable.FileResup = '.file-resup';
     const disableClasses = Object.values(
       drupalSettings.Daedalus.FileDragDisable,
@@ -251,6 +254,7 @@ import { createUploadProgress } from './upload-progress.js';
    *   The dropped file.
    *
    * @return {Promise<null>}
+   *   Resolves with null once the replacement round has settled.
    */
   const replaceMedia = async (media, file) => {
     if (!file) {
@@ -342,8 +346,16 @@ import { createUploadProgress } from './upload-progress.js';
    * Invoked by MediaBlockFileAssociationForm's ajaxSubmit with the
    * resolution. Sent BEFORE the dialog-close command, so the happy path
    * consumes the pending choice before the close-means-cancel check runs.
+   *
+   * @param {object} resolution
+   *   The form's resolution of the pending choice.
+   *
+   * @return {jQuery}
+   *   The jQuery set, for chaining.
    */
-  $.fn.daedalusUiFileAssociationChosen = function (resolution) {
+  $.fn.daedalusUiFileAssociationChosen = function fileAssociationChosen(
+    resolution,
+  ) {
     pendingChoice?.(resolution);
     pendingChoice = null;
     return this;
@@ -456,7 +468,9 @@ import { createUploadProgress } from './upload-progress.js';
         accepts: (element, data) =>
           fileIsCompatibleWithMedia(data.fileExtensions, element) &&
           app.Selection.capable(
-            element.closest('[data-selectable]')?.getAttribute('data-selectable') ?? null,
+            element
+              .closest('[data-selectable]')
+              ?.getAttribute('data-selectable') ?? null,
             'content',
           ),
         label: Drupal.t('Replace media'),

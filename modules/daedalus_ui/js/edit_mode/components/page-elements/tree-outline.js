@@ -46,6 +46,12 @@ import { ancestorsOf } from '../../../outline/collapse';
  * Whether a rendered node is an instance row: a pseudo row the instance
  * source minted (markup-view.js toInstanceRow), identity-carrying rich
  * text, drawn in every view.
+ *
+ * @param {object} node
+ *   A rendered tree node.
+ *
+ * @return {boolean}
+ *   Whether the node is an instance row.
  */
 const isInstanceRow = (node) =>
   node.pseudo === true && node.source === 'instance';
@@ -58,6 +64,7 @@ const isInstanceRow = (node) =>
  *   A rendered tree node (a model node or a pseudo row).
  *
  * @return {boolean}
+ *   Whether the node is rich text with rows under it.
  */
 export const richTextRow = (node) => {
   const children = Array.isArray(node.children) ? node.children : [];
@@ -77,6 +84,7 @@ export const richTextRow = (node) => {
  *   Whether the node is the tree's root row.
  *
  * @return {{id: string, foldable: boolean, folded: boolean}}
+ *   The row in the collapse model's shape.
  */
 export const modelRow = (node, isRoot) => ({
   id: node.key ?? node.label,
@@ -98,6 +106,7 @@ export const modelRow = (node, isRoot) => ({
  *   A pseudo row (a shell, an instance carrier, a generated box).
  *
  * @return {{id: string, foldable: boolean, folded: boolean}}
+ *   The row in the collapse model's shape.
  */
 export const pseudoRow = (part) => ({
   id: `pseudo:${part.parentKey}:${part.id}`,
@@ -114,6 +123,7 @@ export const pseudoRow = (part) => ({
  *   A shown-document row (shown-rows.js).
  *
  * @return {{id: string, foldable: boolean, folded: boolean}}
+ *   The row in the collapse model's shape.
  */
 export const shownRow = (row) => ({
   id: `shown:${row.parentKey}`,
@@ -132,6 +142,7 @@ export const shownRow = (row) => ({
  *   The row's posture, as the model reads it.
  *
  * @return {?number}
+ *   The direct row count, or null when the row says nothing.
  */
 export const foldedRowCount = (node, collapsed) =>
   collapsed && richTextRow(node) ? node.children.length : null;
@@ -145,6 +156,7 @@ export const foldedRowCount = (node, collapsed) =>
  *   The rendered tree's root node.
  *
  * @return {Array<object>}
+ *   The outline: one root node, its subtree in the model's shape.
  */
 export const outlineOf = (tree) => {
   const rowOfNode = (node, isRoot) => {
@@ -162,6 +174,14 @@ export const outlineOf = (tree) => {
 
 /**
  * The outline's node for a row id, or null when the outline lacks it.
+ *
+ * @param {Array<object>} outline
+ *   The outline (outlineOf), or any list of its nodes.
+ * @param {string} id
+ *   The row id to find.
+ *
+ * @return {?object}
+ *   The node, at any depth.
  */
 export const rowOf = (outline, id) => {
   for (const node of outline) {
@@ -183,6 +203,15 @@ export const rowOf = (outline, id) => {
  * moves the key under other rows, and holds through everything else, so
  * a manual re-collapse of a row that still holds the selection sticks
  * (the rule is keyed to the CHANGE, as the per-row rule it replaced was).
+ *
+ * @param {Array<object>} outline
+ *   The outline (outlineOf).
+ * @param {?string} key
+ *   The row id to reach, or null for none.
+ *
+ * @return {string}
+ *   The row ids from the root to the key, newline-joined; empty for
+ *   null.
  */
 export const pathTo = (outline, key) =>
   key ? [...ancestorsOf(outline, key), key].join('\n') : '';

@@ -7,13 +7,13 @@ namespace Drupal\daedalus_stylish;
 /**
  * Resolves a handled style value to its canonical stored CSS string.
  *
- * The style grammar's input tier: a style property value may arrive as a
- * plain CSS string, as a handled-value object dispatched on its marker key,
- * or, on media-capable properties, as a list of layers (strings and
- * handled objects) that joins to one comma-separated value. Handlers are
- * the object half of that tier: each registers ONE marker key (a service
- * tagged daedalus_stylish.style_value_handler), and an object value dispatches to
- * the handler whose marker key it carries. Daedalus Stylish itself registers no
+ * The style grammar's input tier: a style property value may arrive as a plain
+ * CSS string, as a handled-value object dispatched on its marker key, or, on
+ * media-capable properties, as a list of layers (strings and handled objects)
+ * that joins to one comma-separated value. Handlers are the object half of that
+ * tier: each registers ONE marker key (a service tagged
+ * daedalus_stylish.style_value_handler), and an object value dispatches to the
+ * handler whose marker key it carries. Daedalus Stylish itself registers no
  * handlers; an object carrying no registered marker is a validation error.
  *
  * Storage stays exactly the plain-CSS doctrine: the input tier is resolved

@@ -39,8 +39,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * are container-wide facts. The count-keyed proportions family (split_*)
  * retired with the mode + share migration.
  *
- * Importing the real MODULE.daedalus_stylish.variants.yml against the real layout
- * declarations exercises the whole chain: guide build (variant_axes +
+ * Importing the real MODULE.daedalus_stylish.variants.yml against the real
+ * layout declarations exercises the whole chain: guide build (variant_axes +
  * default_variants validation), the scope-only styles seam, and the axis
  * vocabulary check in DaedalusStylishVariant::preSave().
  */
@@ -81,8 +81,8 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_skin');
     // Variant saves mirror their var() and motion-* references into the
     // skin material usage table.
@@ -139,9 +139,9 @@ class DaedalusStylishLayoutsVariantsTest extends KernelTestBase {
     $this->assertSame('kind:container', $row->getScope());
     // The container ROOT backs every axis's properties: layout for the
     // arrangement variant (flex-direction, gap), sizing and spacing for the
-    // width variants, motion for the skin packages' entrances, effects and shadow for
-    // the hover axis's Lift — the one box carries every group the widgets
-    // and the shipped materials write.
+    // width variants, motion for the skin packages' entrances, effects and
+    // shadow for the hover axis's Lift — the one box carries every group the
+    // widgets and the shipped materials write.
     $groups = $declaration['property_groups'] ?? [];
     foreach (['layout', 'sizing', 'spacing', 'background', 'motion', 'effects', 'shadow'] as $group) {
       $this->assertArrayHasKey($group, $groups, "container root lacks $group");

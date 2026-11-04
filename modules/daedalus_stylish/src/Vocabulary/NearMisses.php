@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_stylish\Vocabulary;
 
+// cspell:ignore zzzx
 /**
  * Ranks the names of a vocabulary closest to a word outside it.
  *

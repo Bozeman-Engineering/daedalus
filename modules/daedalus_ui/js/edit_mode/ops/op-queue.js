@@ -99,6 +99,12 @@ const send = async (op) => {
 
 /**
  * Plays an array of Drupal AJAX commands.
+ *
+ * @param {Array<object>} commands
+ *   The command list, as a Drupal AJAX response carries it.
+ *
+ * @return {Promise<void>}
+ *   Resolves once the commands have played.
  */
 const playCommands = (commands) => {
   if (!commands || commands.length === 0) {
@@ -116,6 +122,9 @@ const playCommands = (commands) => {
  * the removal, and WebKit clamps the window scroll inside that removal
  * (preserve-scroll.js). One save and one restore per response, never per
  * key.
+ *
+ * @param {object} markup
+ *   The response's markup map, selectable key to rendered subtree HTML.
  */
 const swapMarkup = (markup) => {
   preserveScroll(() => {
@@ -126,8 +135,10 @@ const swapMarkup = (markup) => {
         // show it — a structural blind spot (an unattributed container,
         // evicted nested-edit chrome), not a transient. Loud, because the
         // symptom is "nothing happened" while tempstore says otherwise.
-        console.warn(
-          `Daedalus: no element on the page for mutation response markup "${key}"; the swap was skipped. The change is staged and appears on reload.`,
+        Drupal.throwError(
+          new Error(
+            `Daedalus: no element on the page for mutation response markup "${key}"; the swap was skipped. The change is staged and appears on reload.`,
+          ),
         );
         return;
       }
@@ -201,6 +212,10 @@ const swapMarkup = (markup) => {
  * the engine refusing the leave (an invalid panel widget) keeps the
  * selection on the widget the user must fix, the placement itself
  * having landed already.
+ *
+ * @param {string|Array<string>} select
+ *   The op's select option: a selectable key or a bare uuid, or a list of
+ *   them.
  */
 const applySelect = (select) => {
   const keys = (Array.isArray(select) ? select : [select])
@@ -218,6 +233,13 @@ const applySelect = (select) => {
   }
 };
 
+/**
+ * Applies a mutation-response payload to the page, in contract order.
+ *
+ * @param {object} payload
+ *   The response payload ({blueprint, markup, targets, errors, attachments,
+ *   drupal_commands, history, materials}).
+ */
 export const applyResponse = async (payload) => {
   // Mutation and restore responses carry the moved history timeline.
   if (payload.history) {
@@ -294,23 +316,27 @@ export const applyResponse = async (payload) => {
  * Called once by the app entry, after the AJAX framework is on the page.
  */
 export const initApplyResponseCommand = () => {
-  Drupal.AjaxCommands.prototype.daedalusBlueprintApplyResponse = function (
-    ajax,
-    response,
-  ) {
-    const { payload } = response;
-    ajax.daedalusBlueprintPayload = payload;
-    if (!payload?.success) {
-      return undefined;
-    }
-    return applyResponse(payload);
-  };
+  Drupal.AjaxCommands.prototype.daedalusBlueprintApplyResponse =
+    function daedalusBlueprintApplyResponse(ajax, response) {
+      const { payload } = response;
+      ajax.daedalusBlueprintPayload = payload;
+      if (!payload?.success) {
+        return undefined;
+      }
+      return applyResponse(payload);
+    };
 };
 
 /**
  * Applies a payload the queue sent for: the contract's failure shape (a
  * 422 carries success false and the errors) throws with the payload
  * attached, a success applies to the page.
+ *
+ * @param {object} payload
+ *   The response payload.
+ *
+ * @return {Promise<object>}
+ *   Resolves with the applied payload.
  */
 const applied = async (payload) => {
   if (!payload.success) {
@@ -336,7 +362,6 @@ const process = async () => {
     try {
       // An entry executes to its applied payload (an op: sent and applied
       // here; a job: applied by its own transport) or throws.
-      // eslint-disable-next-line no-await-in-loop
       const payload = await op.execute();
       // Select after the swap (the element must be on the page) and before
       // resolve, so a caller's completion hook observes the selection.
@@ -371,12 +396,26 @@ const process = async () => {
 
 /**
  * Queues an entry: its optimistic apply runs now, its execute() in turn.
+ *
+ * @param {object} entry
+ *   The entry.
+ * @param {function(): Promise<object>} entry.execute
+ *   Executes to the applied payload (an op: sent and applied here; a job:
+ *   applied by its own transport) or throws.
+ * @param {?object} entry.optimistic
+ *   Optional { apply, rollback } hooks.
+ * @param {?(string|Array<string>)} entry.select
+ *   Optional element(s) to select once the response has applied.
+ *
+ * @return {Promise<object>}
+ *   Resolves with the applied payload; rejects with the failure.
  */
 const enqueue = ({ execute, optimistic = null, select = null }) =>
   new Promise((resolve, reject) => {
     optimistic?.apply?.();
+    sequence += 1;
     queue.push({
-      seq: ++sequence,
+      seq: sequence,
       execute,
       optimistic,
       select,
@@ -389,22 +428,32 @@ const enqueue = ({ execute, optimistic = null, select = null }) =>
 /**
  * Queues a blueprint mutation.
  *
- * @param {Object} op
- *   - entityType / entityId: the root entity the operations target.
- *   - operations: the batch-operation list (the wire grammar).
- *   - label: optional human-readable gesture name ("Moved Heading") — it
- *     becomes the mutation's history-entry label in the History sidebar.
- *   - langcode: optional translation language.
- *   - viewMode: the view mode the canvas displays (drives the re-render).
- *   - optimistic: optional { apply, rollback } hooks. apply() runs now;
- *     rollback() runs if this op (or one before it) fails.
- *   - select: optional element(s) to select once the response has applied,
- *     each a selectable key or a bare uuid (kind probed from the landed
- *     markup). Placement gestures pass what they placed so focus follows
- *     it; nothing is selected on failure or when the element never landed.
- *     The landing is a plain selection: no request opens an editor.
+ * @param {object} op
+ *   The mutation.
+ * @param {string} op.entityType
+ *   The root entity type the operations target.
+ * @param {string} op.entityId
+ *   The root entity id the operations target.
+ * @param {Array<object>} op.operations
+ *   The batch-operation list (the wire grammar).
+ * @param {?string} op.label
+ *   Optional human-readable gesture name ("Moved Heading") — it becomes
+ *   the mutation's history-entry label in the History sidebar.
+ * @param {?string} op.langcode
+ *   Optional translation language.
+ * @param {string} op.viewMode
+ *   The view mode the canvas displays (drives the re-render).
+ * @param {?object} op.optimistic
+ *   Optional { apply, rollback } hooks. apply() runs now; rollback() runs
+ *   if this op (or one before it) fails.
+ * @param {?(string|Array<string>)} op.select
+ *   Optional element(s) to select once the response has applied, each a
+ *   selectable key or a bare uuid (kind probed from the landed markup).
+ *   Placement gestures pass what they placed so focus follows it; nothing
+ *   is selected on failure or when the element never landed. The landing
+ *   is a plain selection: no request opens an editor.
  *
- * @return {Promise<Object>}
+ * @return {Promise<object>}
  *   Resolves with the full response payload after it has been applied to
  *   the page; rejects with an Error carrying .payload on failure.
  */
@@ -420,9 +469,14 @@ export const enqueueOperations = ({
 }) =>
   enqueue({
     execute: () =>
-      send({ entityType, entityId, operations, label, langcode, viewMode }).then(
-        applied,
-      ),
+      send({
+        entityType,
+        entityId,
+        operations,
+        label,
+        langcode,
+        viewMode,
+      }).then(applied),
     optimistic,
     select,
   });
@@ -436,12 +490,20 @@ export const enqueueOperations = ({
  * applied identically; there is no optimistic half (the server owns what
  * the restored state looks like).
  *
- * @param {Object} op
- *   - entityType / entityId: the root entity whose timeline to move.
- *   - restore: {direction: 'undo'|'redo'} or {to: seq}.
- *   - langcode / viewMode: as for enqueueOperations.
+ * @param {object} op
+ *   The restore.
+ * @param {string} op.entityType
+ *   The root entity type whose timeline to move.
+ * @param {string} op.entityId
+ *   The root entity id whose timeline to move.
+ * @param {object} op.restore
+ *   {direction: 'undo'|'redo'} or {to: seq}.
+ * @param {?string} op.langcode
+ *   As for enqueueOperations.
+ * @param {string} op.viewMode
+ *   As for enqueueOperations.
  *
- * @return {Promise<Object>}
+ * @return {Promise<object>}
  *   Resolves with the applied response payload; rejects with an Error
  *   carrying .payload on failure (NOTHING_TO_RESTORE lands here too).
  */
@@ -470,12 +532,14 @@ export const enqueueHistoryRestore = ({
  * itself refused (a form's validation errors, an HTTP failure); every
  * failure rolls back the queue behind it exactly as an op's does.
  *
- * @param {Object} job
- *   - run: () => Promise<Object> — the transport round trip, resolving
- *     with the payload it carried back.
- *   - optimistic: optional { apply, rollback } hooks, as for an op.
+ * @param {object} job
+ *   The job.
+ * @param {function(): Promise<object>} job.run
+ *   The transport round trip, resolving with the payload it carried back.
+ * @param {?object} job.optimistic
+ *   Optional { apply, rollback } hooks, as for an op.
  *
- * @return {Promise<Object>}
+ * @return {Promise<object>}
  *   Resolves with the applied payload; rejects with the failure.
  */
 export const enqueueJob = ({ run, optimistic = null }) =>

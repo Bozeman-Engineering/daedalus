@@ -28,11 +28,11 @@ use Drupal\layout_builder\SectionComponent;
  *
  * Node shapes:
  * - Container (every section, top-level or nested): {kind: 'container',
- *   layout_id, uuid?, label?, blueprint?, slot?, layout_settings?,
- *   children: [...], styles?}. A container LAYOUT's ordered flow (see ContainerLayout: its
- *   sole region is a storage vestige with no addressable identity) is its
- *   `children` directly; a multi-region layout's genuinely named slots
- *   appear as region nodes, empty ones included.
+ *   layout_id, uuid?, label?, blueprint?, slot?, layout_settings?, children:
+ *   [...], styles?}. A container LAYOUT's ordered flow (see ContainerLayout:
+ *   its sole region is a storage vestige with no addressable identity) is its
+ *   `children` directly; a multi-region layout's genuinely named slots appear
+ *   as region nodes, empty ones included.
  * - Region (multi-region layouts only): {kind: 'region', region: name,
  *   children: [...]}. Regions are not addressable elements (no uuid, no
  *   styles) but their grouping is real structure, so it is a node, never

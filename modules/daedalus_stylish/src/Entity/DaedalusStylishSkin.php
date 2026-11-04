@@ -194,8 +194,8 @@ class DaedalusStylishSkin extends EditorialContentEntityBase implements Daedalus
       ->setInternal(TRUE);
 
     // Shipped-source identity (the disk lane): which module's
-    // MODULE.daedalus_stylish.skins.yml this skin came from, and the hash of the
-    // tokens as shipped. Non-revisionable like the other identity fields.
+    // MODULE.daedalus_stylish.skins.yml this skin came from, and the hash of
+    // the tokens as shipped. Non-revisionable like the other identity fields.
     $fields['provider'] = BaseFieldDefinition::create('string')
       ->setLabel(new TranslatableMarkup('Provider'))
       ->setDescription(new TranslatableMarkup('The module whose skins file ships this skin. Empty for skins created in the UI or by AI, which have no disk source and therefore no revert-to-defaults.'))

@@ -11,7 +11,7 @@ export const initEditModePlugin = () => {
   const modeManager = Drupal.Daedalus.ModeManager;
 
   Drupal.behaviors.DaedalusUiEditMode = {
-    attach: (context, settings) => {
+    attach: () => {
       // Not once-gated: this behavior can miss the initial document attach
       // (script delivery order varies with page weight and entry path), and
       // once('body') would then never match again — later attaches only see
@@ -40,7 +40,7 @@ export const initEditModePlugin = () => {
 
     enable = () => {
       this.ReloadPageElements()
-        .then(async (response, status) => {
+        .then(async () => {
           document.querySelector('html').classList.add('edit_mode');
           // Clean slate: clear any panel left open from outside Edit Mode
           // (the chat), then open the mode's default-open panels.
@@ -50,10 +50,7 @@ export const initEditModePlugin = () => {
           window.setFileDrag(true);
         })
         .catch((error) => {
-          console.error(
-            'An error occurred while trying to load the editing UI:',
-            error,
-          );
+          Drupal.throwError(error);
         });
     };
 
@@ -97,7 +94,7 @@ export const initEditModePlugin = () => {
      * elements will have the UI attributes applied to them.
      */
     ReloadPageElements = () => {
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         const info = this.getMainEntityInfo();
         if (!info) {
           this.message('No main entity found.');
@@ -115,7 +112,6 @@ export const initEditModePlugin = () => {
             message: Drupal.t('Loading Layout Builder...'),
           },
           error: (error) => {
-            console.error(error.responseText);
             this.handleError(error, 'Unable to load the editing UI.');
           },
           success: (response, status) => {
@@ -155,7 +151,7 @@ export const initEditModePlugin = () => {
     /**
      * Get section storage information.
      *
-     * @param element
+     * @param {Element} element
      *   Probably a dropzone, field, or block element.
      *
      * @return {{region: string, storageId: string, blockUuid: string, storageType: string, sectionDelta: string}}
@@ -187,11 +183,25 @@ export const initEditModePlugin = () => {
       };
     };
 
+    /**
+     * Reports a failed edit-mode request.
+     *
+     * The one road for an AJAX failure in edit mode: the progress throbber
+     * goes, the user sees the message as a toast, and the server's detail
+     * (status, response text) surfaces outside the call stack as core's
+     * AjaxError, never swallowed.
+     *
+     * @param {object} error
+     *   The failed request (the jqXHR a Drupal.Ajax error callback gets).
+     * @param {string} message
+     *   The message shown to the user.
+     */
     handleError = (error, message = 'Unknown operation') => {
       document.querySelectorAll('.ajax-progress').forEach((progress) => {
         progress.remove();
       });
       this.message(message, 'error', 15000);
+      Drupal.throwError(new Drupal.AjaxError(error, error.url ?? '', message));
     };
 
     /**
@@ -201,16 +211,17 @@ export const initEditModePlugin = () => {
      * (Drupal.Daedalus.messenger, daedalus_ui/messenger): the
      * toast, its history and the repeat handling live there.
      *
-     * @param message
+     * @param {string} message
      *   The message text to display.
-     * @param type
+     * @param {string} type
      *   The message type: 'error', 'warning' or 'status'.
-     * @param options
-     *   Optional configuration object:
-     *   - duration: How long to show the message in milliseconds or -1 for
-     *     forever.
-     *   - scroll: Whether to bring the toast into view (default: true)
-     * @param elementId
+     * @param {object} options
+     *   Optional configuration object.
+     * @param {number} [options.duration]
+     *   How long to show the message in milliseconds or -1 for forever.
+     * @param {boolean} [options.scroll]
+     *   Whether to bring the toast into view (default: true).
+     * @param {?string} elementId
      *   Optional element id or selectable key the message concerns; the
      *   notifications sidebar scrolls back to it.
      *
@@ -234,7 +245,7 @@ export const initEditModePlugin = () => {
      * is. The fixed chrome's offset is the canvas's scroll-margin-top
      * (css/edit-mode.css), no math here.
      *
-     * @param element
+     * @param {Element} element
      *   The canvas element.
      */
     scrollToElement = (element) => {
@@ -246,7 +257,8 @@ export const initEditModePlugin = () => {
      *
      * Adds a 3s fading background to an element to call attention to it.
      *
-     * @param element
+     * @param {?Element} element
+     *   The element to highlight; nothing happens without one.
      */
     highlight = (element) => {
       element?.classList.add('call-attention-to');

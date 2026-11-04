@@ -22,22 +22,21 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the guide_example package as the strict reference design system.
  *
- * daedalus_stylish_guide_example packages the guide_example design system: the
- * unit as install config (strict, its own skin, the module as package),
- * a skin minting every scale the layered guide declares, a guide whose
- * site section carries only deltas over the suite's bindings, per-block-
- * type and per-layout files, variants as members and the skin's
- * animations. The class proves the package the way a site meets it:
- * installed and activated, the guide builds clean under strict, every
- * property the suite or the package binds resolves to a scale the skin
- * mints (the bindings define the minimum skin, with no fallback), the
- * skin's own defaults validate under the site's law, the activation
- * lands every shipped member with nothing failed, and every shipped
- * variant conforms under the law it ships (the roster offers it). Nothing
- * on the site is withheld: the suite ships no literal-timed motion
- * globals (the starter and olivero skin packages own them, and neither
- * lands here), and daedalus_edit_text_block's literal `button` is not
- * enabled; the package's on-guide looks stand on their own.
+ * `daedalus_stylish_guide_example` packages the guide_example design system:
+ * the unit as install config (strict, its own skin, the module as package), a
+ * skin minting every scale the layered guide declares, a guide whose site
+ * section carries only deltas over the suite's bindings, per-block- type and
+ * per-layout files, variants as members and the skin's animations. The class
+ * proves the package the way a site meets it: installed and activated, the
+ * guide builds clean under strict, every property the suite or the package
+ * binds resolves to a scale the skin mints (the bindings define the minimum
+ * skin, with no fallback), the skin's own defaults validate under the site's
+ * law, the activation lands every shipped member with nothing failed, and every
+ * shipped variant conforms under the law it ships (the roster offers it).
+ * Nothing on the site is withheld: the suite ships no literal-timed motion
+ * globals (the starter and olivero skin packages own them, and neither lands
+ * here), and daedalus_edit_text_block's literal `button` is not enabled; the
+ * package's on-guide looks stand on their own.
  */
 #[Group('daedalus_stylish')]
 #[RunTestsInSeparateProcesses]
@@ -93,8 +92,14 @@ class GuideExampleSystemTest extends KernelTestBase {
     'daedalus_stylish_layouts',
   ];
 
+  /**
+   * The style guide.
+   */
   protected StyleGuide $styleGuide;
 
+  /**
+   * The style map validator.
+   */
   protected StyleMapValidator $validator;
 
   /**
@@ -165,7 +170,22 @@ class GuideExampleSystemTest extends KernelTestBase {
       $this->fail('the layered guide builds clean with the package active: ' . $e->getMessage());
     }
     $scales = array_keys($definitions['site']['token_scales']);
-    foreach (['color', 'font', 'text', 'weight', 'leading', 'tracking', 'space', 'radius', 'transition', 'layout', 'shadow', 'duration', 'easing', 'stroke'] as $scale) {
+    foreach ([
+      'color',
+      'font',
+      'text',
+      'weight',
+      'leading',
+      'tracking',
+      'space',
+      'radius',
+      'transition',
+      'layout',
+      'shadow',
+      'duration',
+      'easing',
+      'stroke',
+    ] as $scale) {
       $this->assertContains($scale, $scales, "the guide declares the $scale scale");
     }
 
@@ -232,7 +252,19 @@ class GuideExampleSystemTest extends KernelTestBase {
     foreach (['font-family', 'font-size', 'font-weight', 'line-height', 'padding', 'gap', 'border-radius'] as $property) {
       $this->assertContains($property, $bound, "the suite's $property binding is served under the package");
     }
-    foreach (['letter-spacing', 'color', 'border-color', 'margin', 'border-width', 'box-shadow', 'transition-duration', 'animation-duration', 'transition-timing-function', 'animation-timing-function', 'max-width'] as $property) {
+    foreach ([
+      'letter-spacing',
+      'color',
+      'border-color',
+      'margin',
+      'border-width',
+      'box-shadow',
+      'transition-duration',
+      'animation-duration',
+      'transition-timing-function',
+      'animation-timing-function',
+      'max-width',
+    ] as $property) {
       $this->assertContains($property, $bound, "the package's $property binding is served");
     }
 
@@ -334,7 +366,10 @@ class GuideExampleSystemTest extends KernelTestBase {
     // token says sit on the color and gradient scales as described,
     // offered tokens, and the roster offers each as scale/name.
     $skin_tokens = $this->shipped('skins')[self::SYSTEM]['tokens'];
-    $palette = ['color' => array_intersect_key($skin_tokens['color'], array_flip(['amber-wash'])), 'gradient' => $skin_tokens['gradient']];
+    $palette = [
+      'color' => array_intersect_key($skin_tokens['color'], array_flip(['amber-wash'])),
+      'gradient' => $skin_tokens['gradient'],
+    ];
     $this->assertSame(['amber-wash'], array_keys($palette['color']), 'the amber wash on the color scale');
     $this->assertSame(['amber-glow', 'ink-fade'], array_keys($palette['gradient']), 'the amber glow and the ink fade on the gradient scale');
     foreach ($palette as $scale => $tokens) {

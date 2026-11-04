@@ -83,7 +83,10 @@ final class BlueprintPermissions implements ContainerInjectionInterface {
    *   type's config.
    */
   public function permissions(): array {
-    return $this->generatePermissions($this->entityTypeManager->getStorage(BlueprintTypeInterface::ENTITY_TYPE_ID)->loadMultiple(), [$this, 'buildPermissions']);
+    return $this->generatePermissions(
+      $this->entityTypeManager->getStorage(BlueprintTypeInterface::ENTITY_TYPE_ID)->loadMultiple(),
+      [$this, 'buildPermissions'],
+    );
   }
 
   /**

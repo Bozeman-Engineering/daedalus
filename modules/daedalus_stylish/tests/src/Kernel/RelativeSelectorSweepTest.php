@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
+use Drupal\daedalus_layout\NestedSectionStorageInterface;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishVariant;
@@ -125,7 +126,10 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
     $uuid = $section->getThirdPartySetting('daedalus_layout', 'uuid');
     $entity = $this->createLegacyEntity([$section], [
       "container:$uuid" => [
-        'variants' => [['variant' => 'columns', 'fragment' => ''], ['variant' => 'pull', 'fragment' => 'container(1)::>']],
+        'variants' => [
+          ['variant' => 'columns', 'fragment' => ''],
+          ['variant' => 'pull', 'fragment' => 'container(1)::>'],
+        ],
         'default' => ['padding-top' => '5rem'],
       ],
       "container:$uuid::>" => ['default' => ['min-width' => '0']],
@@ -272,7 +276,6 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
     $this->assertSame([], $this->container->get('daedalus_stylish.relative_selector_convergence')->convergeSkins());
   }
 
-
   /**
    * A stale tempstore session's keys converge at LOAD time.
    */
@@ -283,7 +286,7 @@ class RelativeSelectorSweepTest extends NestedStorageKernelTestBase {
 
     $helper = $this->container->get('daedalus_tempstore.section_storage_helper');
     $storage = $helper->getEditableSectionStorage($entity);
-    if ($storage instanceof \Drupal\daedalus_layout\NestedSectionStorageInterface) {
+    if ($storage instanceof NestedSectionStorageInterface) {
       $storage = $storage->getRootStorage();
     }
     $staged_entity = $storage->getContextValue('entity');

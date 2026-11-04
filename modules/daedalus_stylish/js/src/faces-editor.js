@@ -10,11 +10,20 @@ import { duplicateFace, faceDraft, faceLabel } from './skin-model.js';
  * naming the family renders as (the delivered @font-face, the compiled
  * file's or the session's delivery, is what the browser draws with).
  */
-export const SPECIMEN = 'The quick brown fox jumps over the lazy dog 0123456789';
+export const SPECIMEN =
+  'The quick brown fox jumps over the lazy dog 0123456789';
 
 /**
  * The faces list: one row per face, its label and its specimen. The
  * font card's closed value slot.
+ *
+ * @param {object} props
+ *   The list's props.
+ * @param {Array<object>} props.faces
+ *   The faces (skin-model.js face shape: weight, style).
+ * @param {?string} props.spelling
+ *   The family spelling the specimens render in; null leaves the
+ *   inherited family.
  */
 export const FaceList = ({ faces, spelling }) => (
   <ul className="daedalus-stylish-faces">
@@ -56,6 +65,7 @@ export const FaceList = ({ faces, spelling }) => (
  * font card's slot or the mint card) owns the drafts and the save.
  *
  * @param {object} props
+ *   The editor's props.
  * @param {Array<object>} props.drafts
  *   The face drafts (skin-model.js faceDraft / storedFaceDraft shape).
  * @param {Function} props.onDrafts
@@ -63,9 +73,21 @@ export const FaceList = ({ faces, spelling }) => (
  * @param {Function} props.onUploading
  *   Hears the number of uploads in flight, so the caller withholds its
  *   save while bytes are still landing.
+ * @param {object} props.source
+ *   The state source the uploads ride (gesture-transport.js gesture).
+ * @param {boolean} [props.disabled]
+ *   Whether the editor is inert (a save in flight).
  */
-export const FacesEditor = ({ drafts, onDrafts, onUploading, source, disabled = false }) => {
-  const nextKey = useRef(1 + drafts.reduce((max, draft) => Math.max(max, draft.key), 0));
+export const FacesEditor = ({
+  drafts,
+  onDrafts,
+  onUploading,
+  source,
+  disabled = false,
+}) => {
+  const nextKey = useRef(
+    1 + drafts.reduce((max, draft) => Math.max(max, draft.key), 0),
+  );
   const [uploading, setUploading] = useState(0);
   const duplicate = duplicateFace(drafts);
 
@@ -85,7 +107,8 @@ export const FacesEditor = ({ drafts, onDrafts, onUploading, source, disabled = 
       count(1);
       gesture(source, () => uploadFontFile(file))
         .then((upload) => {
-          const key = nextKey.current++;
+          const key = nextKey.current;
+          nextKey.current += 1;
           onDrafts((current) => [...current, faceDraft(upload, key)]);
         })
         .catch(() => null)
@@ -95,7 +118,9 @@ export const FacesEditor = ({ drafts, onDrafts, onUploading, source, disabled = 
 
   const change = (key, patch) =>
     onDrafts((current) =>
-      current.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)),
+      current.map((draft) =>
+        draft.key === key ? { ...draft, ...patch } : draft,
+      ),
     );
   const remove = (key) =>
     onDrafts((current) => current.filter((draft) => draft.key !== key));
@@ -116,7 +141,11 @@ export const FacesEditor = ({ drafts, onDrafts, onUploading, source, disabled = 
       </label>
       {uploading > 0 && (
         <div className="daedalus-stylish-library-card__progress">
-          {Drupal.formatPlural(uploading, 'Uploading 1 file…', 'Uploading @count files…')}
+          {Drupal.formatPlural(
+            uploading,
+            'Uploading 1 file…',
+            'Uploading @count files…',
+          )}
         </div>
       )}
       {drafts.length > 0 && (
@@ -136,17 +165,23 @@ export const FacesEditor = ({ drafts, onDrafts, onUploading, source, disabled = 
                 type="text"
                 className="daedalus-ui-input daedalus-stylish-faces-editor__weight"
                 aria-label={Drupal.t('Face weight')}
-                title={Drupal.t('The weight: 100 to 900, a keyword, or a range like "100 900" for a variable font.')}
+                title={Drupal.t(
+                  'The weight: 100 to 900, a keyword, or a range like "100 900" for a variable font.',
+                )}
                 value={draft.weight}
                 disabled={disabled}
-                onInput={(event) => change(draft.key, { weight: event.target.value })}
+                onInput={(event) =>
+                  change(draft.key, { weight: event.target.value })
+                }
               />
               <select
                 className="daedalus-ui-input daedalus-stylish-faces-editor__style"
                 aria-label={Drupal.t('Face style')}
                 value={draft.style}
                 disabled={disabled}
-                onChange={(event) => change(draft.key, { style: event.target.value })}
+                onChange={(event) =>
+                  change(draft.key, { style: event.target.value })
+                }
               >
                 <option value="normal">{Drupal.t('normal')}</option>
                 <option value="italic">{Drupal.t('italic')}</option>
@@ -172,9 +207,12 @@ export const FacesEditor = ({ drafts, onDrafts, onUploading, source, disabled = 
  * Why the faces cannot save right now, or null when they can.
  *
  * @param {Array<object>} drafts
+ *   The face drafts.
  * @param {number} uploading
+ *   The uploads in flight.
  *
  * @return {?string}
+ *   The reason, or null.
  */
 export const facesBlocked = (drafts, uploading) => {
   if (uploading > 0) {
@@ -184,7 +222,9 @@ export const facesBlocked = (drafts, uploading) => {
     return Drupal.t('Add at least one font file.');
   }
   if (duplicateFace(drafts) !== -1) {
-    return Drupal.t('Two faces share a weight and style; give each face its own.');
+    return Drupal.t(
+      'Two faces share a weight and style; give each face its own.',
+    );
   }
   return null;
 };

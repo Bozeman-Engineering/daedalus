@@ -12,6 +12,7 @@ use Drupal\FunctionalJavascriptTests\WebDriverTestBase;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
@@ -74,9 +75,17 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 class LockedPageSlotBehaviorTest extends WebDriverTestBase {
 
   use EditModeTrait;
-  use DaedalusFixtureTrait {
-    setUp as daedalusSetUp;
-  }
+  use DaedalusFixtureTrait;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = '';
 
   /**
    * The locked bundle.
@@ -104,7 +113,8 @@ class LockedPageSlotBehaviorTest extends WebDriverTestBase {
    * {@inheritdoc}
    */
   protected function setUp(): void {
-    $this->daedalusSetUp();
+    parent::setUp();
+    $this->installFixture();
 
     // The locked bundle: the page builder on (a type needs the daedalus_ui
     // `enabled` setting before the edit-mode bundle attaches at all),
@@ -246,7 +256,9 @@ class LockedPageSlotBehaviorTest extends WebDriverTestBase {
     $storage = \Drupal::entityTypeManager()->getStorage('node');
     $storage->resetCache([$nid]);
     $slots = [];
-    foreach ($storage->load($nid)->get('layout_builder__layout')->getSections() as $section) {
+    $sections = $storage->load($nid)->get('layout_builder__layout');
+    assert($sections instanceof SectionListInterface);
+    foreach ($sections->getSections() as $section) {
       $slots[(string) LayoutSerializer::slotOf($section)] = count($section->getComponents());
     }
     return $slots;

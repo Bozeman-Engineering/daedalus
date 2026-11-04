@@ -101,8 +101,8 @@ class StyleGuideAxesTest extends KernelTestBase {
     // order variant classes are emitted in).
     $this->assertSame(['style', 'proportions', 'width'], StyleGuide::axes($media));
 
-    // A block type without its own variant_axes inherits the universal
-    // block kind's list (daedalus_stylish ships the animation axis there); a bare
+    // A block type without its own variant_axes inherits the universal block
+    // kind's list (daedalus_stylish ships the animation axis there); a bare
     // declaration speaks only the built-in axis.
     $this->assertSame(['style', 'animation', 'hover'], StyleGuide::axes($this->styleGuide->getBlockType('undeclared', self::THEME)));
     $this->assertSame(['style'], StyleGuide::axes([]));
@@ -359,7 +359,7 @@ class StyleGuideAxesTest extends KernelTestBase {
   /**
    * The shipped container kind's Layout axis owns the direction it flips.
    *
-   * daedalus_stylish_layouts declares every container a flex column and
+   * `daedalus_stylish_layouts` declares every container a flex column and
    * its row variant flips flex-direction, so the axis owns that one
    * property (the width axis's precedent: it owns the inset its stops
    * write). A direct write of flex-direction on a container root then

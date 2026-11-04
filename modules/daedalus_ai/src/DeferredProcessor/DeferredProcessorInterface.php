@@ -14,8 +14,8 @@ namespace Drupal\daedalus_ai\DeferredProcessor;
  * file on the media entity; cache tags propagate the change to every
  * reference.
  *
- * Implementations are tagged services (daedalus_ai.deferred_processor) collected
- * by DeferredProcessorManager and dispatched by the batch's type.
+ * Implementations are tagged services (daedalus_ai.deferred_processor)
+ * collected by DeferredProcessorManager and dispatched by the batch's type.
  */
 interface DeferredProcessorInterface {
 

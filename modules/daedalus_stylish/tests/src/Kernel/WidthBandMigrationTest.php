@@ -17,13 +17,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * Tests the base-at-top width-band style migration (the wide fold).
  *
  * The fold rule under test: a wide-carrying condition folds into the same
- * compound without its wide part, the wide values winning per property,
- * and the value that used to render at 768-1023px in that lane (the fold
- * target's own value, falling through to default) spills into the lane's
- * medium compound so that band keeps rendering as before. Covered stores:
- * host style maps via daedalus_layout's transform spine, daedalus_variant styles
- * across revisions, daedalus_skin tokens and defaults across revisions
- * (never covered by the container migration).
+ * compound without its wide part, the wide values winning per property, and the
+ * value that used to render at 768-1023px in that lane (the fold target's own
+ * value, falling through to default) spills into the lane's medium compound so
+ * that band keeps rendering as before. Covered stores: host style maps via
+ * daedalus_layout's transform spine, daedalus_variant styles across revisions,
+ * daedalus_skin tokens and defaults across revisions (never covered by the
+ * container migration).
  *
  * @group daedalus_stylish
  */
@@ -48,8 +48,8 @@ class WidthBandMigrationTest extends NestedStorageKernelTestBase {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
     $this->installEntitySchema('daedalus_skin');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
     $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
@@ -291,6 +291,5 @@ class WidthBandMigrationTest extends NestedStorageKernelTestBase {
       ],
     ], $current->packageTokens());
   }
-
 
 }

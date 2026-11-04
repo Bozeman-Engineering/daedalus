@@ -155,7 +155,10 @@ class BlueprintOperationsSectionUuidTest extends BlueprintKernelTestBase {
    * Tests data.section_uuid on a block add is refused.
    */
   public function testSectionUuidOnBlockAddRefused(): void {
-    $result = $this->operations->addElement($this->host($this->entity), ['anchor' => $this->rootSectionUuid, 'placement' => 'inside'], [
+    $result = $this->operations->addElement($this->host($this->entity), [
+      'anchor' => $this->rootSectionUuid,
+      'placement' => 'inside',
+    ], [
       'block_type' => 'basic',
       'section_uuid' => (new PhpUuid())->generate(),
     ]);

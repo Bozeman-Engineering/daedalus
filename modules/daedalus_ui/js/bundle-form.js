@@ -11,7 +11,7 @@
  * whatever the hidden controls say.
  */
 
-(function ($, Drupal) {
+(($, Drupal) => {
   Drupal.behaviors.daedalusUiBundleForm = {
     attach(context) {
       $(context)

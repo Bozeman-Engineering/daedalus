@@ -63,7 +63,11 @@ import './media-library.js';
   const markLiteralBands = () => {
     Drupal.Daedalus?.CanvasVector?.mark?.(
       literalStops(
-        literalClauses(source.getStyleMap(), source.getSelected(), guide.conditions ?? {}),
+        literalClauses(
+          source.getStyleMap(),
+          source.getSelected(),
+          guide.conditions ?? {},
+        ),
       ),
     );
   };

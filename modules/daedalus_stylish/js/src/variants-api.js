@@ -30,8 +30,12 @@ import { get, post, send } from './gesture-transport.js';
  * module. Per open, never a list fact: a roster record says where a
  * variant came from, not what a module's disk copy says today.
  *
+ * @param {string} reference
+ *   The variant's machine name or uuid.
+ *
  * @return {Promise<{machine_name: string, label: string, usages: number,
  *   provider: ?string, shipped_state: ?string}>}
+ *   The management facts.
  */
 export const fetchUsage = (reference) =>
   get(`daedalus_stylish/variants/${encodeURIComponent(reference)}/usage`);
@@ -46,9 +50,12 @@ export const fetchUsage = (reference) =>
  *   The copy's label; null derives "<source label> (copy)" server-side.
  *
  * @return {Promise<{materials: object}>}
+ *   The materials delta carrying the copy.
  */
 export const copyVariant = (reference, label = null) =>
-  post(`daedalus_stylish/variants/${encodeURIComponent(reference)}/copy`, { label });
+  post(`daedalus_stylish/variants/${encodeURIComponent(reference)}/copy`, {
+    label,
+  });
 
 /**
  * Reverts a shipped variant to its current disk defaults.
@@ -56,7 +63,11 @@ export const copyVariant = (reference, label = null) =>
  * No body: the provider's variants file is the payload. Revisioned like
  * a push, workspace-staged on workspace sites.
  *
+ * @param {string} reference
+ *   The variant's machine name or uuid.
+ *
  * @return {Promise<{usages: number, materials: object}>}
+ *   The live wearer count and the materials delta carrying the revert.
  */
 export const revertVariant = (reference) =>
   post(`daedalus_stylish/variants/${encodeURIComponent(reference)}/revert`, {});
@@ -75,16 +86,24 @@ export const revertVariant = (reference) =>
  *   The fields to change; at least one.
  *
  * @return {Promise<{materials: object}>}
+ *   The materials delta carrying the updated record.
  */
 export const updateVariantDetails = (reference, details) =>
-  post(`daedalus_stylish/variants/${encodeURIComponent(reference)}/details`, details);
+  post(
+    `daedalus_stylish/variants/${encodeURIComponent(reference)}/details`,
+    details,
+  );
 
 /**
  * Fetches a variant's revision history (the restore menu).
  *
+ * @param {string} reference
+ *   The variant's machine name or uuid.
+ *
  * @return {Promise<{machine_name: string, label: string, revisions:
  *   Array<{revision_id: number, label: string, created: number,
  *   user: ?string, log_message: string, current: boolean}>}>}
+ *   The revisions, newest first, the current one flagged.
  */
 export const fetchRevisions = (reference) =>
   get(`daedalus_stylish/variants/${encodeURIComponent(reference)}/revisions`);
@@ -93,7 +112,13 @@ export const fetchRevisions = (reference) =>
  * Restores an old revision: a NEW default revision carrying its content,
  * never a rollback, so a restore is itself one restore away from undo.
  *
+ * @param {string} reference
+ *   The variant's machine name or uuid.
+ * @param {number} revisionId
+ *   The revision to restore (fetchRevisions' revision_id).
+ *
  * @return {Promise<{usages: number, materials: object}>}
+ *   The live wearer count and the materials delta carrying the restore.
  */
 export const restoreRevision = (reference, revisionId) =>
   post(
@@ -111,8 +136,12 @@ export const restoreRevision = (reference, revisionId) =>
  * delivered look as its own styles, then the entity goes. A worn variant
  * without the in-use permission grade rejects 403 STYLE_VARIANT_IN_USE.
  *
+ * @param {string} reference
+ *   The variant's machine name or uuid.
+ *
  * @return {Promise<{deleted: boolean, wearers: number,
  *   batch_url?: string}>}
+ *   Whether it deleted now, else the wearer count and the batch to drive.
  */
 export const deleteVariant = (reference) =>
   send('DELETE', `daedalus_stylish/variants/${encodeURIComponent(reference)}`);
@@ -129,8 +158,12 @@ export const deleteVariant = (reference) =>
  * refuse server-side (the disk lane re-adopts at the next import); unowned
  * variants refuse (nothing to release).
  *
+ * @param {string} reference
+ *   The variant's machine name.
+ *
  * @return {Promise<{variant: {machine_name: string, uuid: string,
  *   blueprint: ?string}}>}
+ *   The variant's identity with its ownership cleared.
  */
 export const releaseVariant = (reference) =>
   post(
@@ -152,6 +185,7 @@ export const releaseVariant = (reference) =>
  *
  * @return {Promise<{variant: {machine_name: string, uuid: string,
  *   blueprint: ?string}}>}
+ *   The variant's identity with its new owner.
  */
 export const transferVariant = (reference, blueprint) =>
   post(

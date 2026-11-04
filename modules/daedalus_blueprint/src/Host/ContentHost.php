@@ -15,11 +15,12 @@ use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\Plugin\Context\EntityContext;
 use Drupal\daedalus_blueprint\LayoutBuilder\DaedalusLayoutAdapter;
 use Drupal\daedalus_blueprint\LayoutBuilder\LayoutSerializer;
+use Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage;
 use Drupal\layout_builder\LayoutTempstoreRepositoryInterface;
 use Drupal\layout_builder\Section;
+use Drupal\layout_builder\SectionListInterface;
 use Drupal\layout_builder\SectionStorage\SectionStorageManagerInterface;
 use Drupal\layout_builder\SectionStorageInterface;
-use Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage;
 
 /**
  * A fieldable content entity as the host of its own document.
@@ -78,7 +79,7 @@ class ContentHost implements HostInterface {
   /**
    * The field type carrying a host's style map.
    *
-   * daedalus_stylish's type id, referenced as a string so the spine stays
+   * The daedalus_stylish type id, referenced as a string so the spine stays
    * styling-module-agnostic (the entity_reference_revisions precedent):
    * with no styling module installed no field of this type exists and the
    * host simply has no style store.
@@ -280,7 +281,9 @@ class ContentHost implements HostInterface {
       return;
     }
     $owner = $this->resolver?->foreignOwner($this);
-    $fills_only = LayoutSerializer::allSlotSections($this->entity->get(self::LAYOUT_FIELD)->getSections());
+    $layout = $this->entity->get(self::LAYOUT_FIELD);
+    assert($layout instanceof SectionListInterface);
+    $fills_only = LayoutSerializer::allSlotSections($layout->getSections());
     if ($owner === NULL ? !$fills_only : $fills_only) {
       return;
     }

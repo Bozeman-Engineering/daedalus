@@ -50,15 +50,15 @@ final class SettingsForm extends ConfigFormBase {
 
     $form['enabled'] = [
       '#type' => 'checkbox',
-      '#title' => $this->t('Wrap the site\'s CSS in a cascade layer'),
-      '#description' => $this->t('Wrap every stylesheet the asset pipeline delivers (core, contrib, the theme) in one CSS cascade layer, so the unlayered styles Daedalus Stylish emits win the cascade structurally, whatever their specificity. Turn off to deliver the site\'s CSS unlayered; styling then competes on specificity alone. Installing the module is the switch; this is its runtime override.'),
+      '#title' => $this->t("Wrap the site's CSS in a cascade layer"),
+      '#description' => $this->t("Wrap every stylesheet the asset pipeline delivers (core, contrib, the theme) in one CSS cascade layer, so the unlayered styles Daedalus Stylish emits win the cascade structurally, whatever their specificity. Turn off to deliver the site's CSS unlayered; styling then competes on specificity alone. Installing the module is the switch; this is its runtime override."),
       '#default_value' => (bool) $config->get('enabled'),
     ];
 
     $form['wrapper_layer'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Wrapper layer name'),
-      '#description' => $this->t('The name of the cascade layer the site\'s CSS is wrapped in, a CSS identifier: letters, digits, hyphens and underscores, not starting with a digit, and no dots (it is a top-level layer, never a sub-layer). A stylesheet declaring its own layers nests inside it. Rename only if escaped CSS the pipeline never wraps declares a layer of the same name. The default is %default.', ['%default' => Layers::DEFAULT_WRAPPER_LAYER]),
+      '#description' => $this->t("The name of the cascade layer the site's CSS is wrapped in, a CSS identifier: letters, digits, hyphens and underscores, not starting with a digit, and no dots (it is a top-level layer, never a sub-layer). A stylesheet declaring its own layers nests inside it. Rename only if escaped CSS the pipeline never wraps declares a layer of the same name. The default is %default.", ['%default' => Layers::DEFAULT_WRAPPER_LAYER]),
       '#default_value' => (string) $config->get('wrapper_layer'),
       '#required' => TRUE,
       '#size' => 40,

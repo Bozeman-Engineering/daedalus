@@ -25,6 +25,12 @@
 
     /**
      * Format a request timestamp (seconds) as a relative time.
+     *
+     * @param {number} seconds
+     *   The timestamp, in seconds since the epoch.
+     *
+     * @return {string}
+     *   The translated relative time ("Just now", "5m ago", ...).
      */
     formatTimestamp(seconds) {
       const date = new Date(seconds * 1000);
@@ -175,7 +181,7 @@
    * queue callback above — whichever runs second finds the work done.
    */
   Drupal.behaviors.DaedalusUiHistoryInit = {
-    attach: (context, settings) => {
+    attach: (context) => {
       once('history-init', '#history', context).forEach(() => {
         historySidebar.connect();
         fillIfVisible();

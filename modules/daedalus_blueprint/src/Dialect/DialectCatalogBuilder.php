@@ -66,11 +66,11 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  * axes' descriptions and owned properties, the condition vocabulary, parts,
  * instance namespaces, closed stylable rosters, birth defaults, the skin's
  * dressed tags) are contributed by DialectCatalogBuildEvent subscribers
- * (daedalus_stylish's DialectVocabularySubscriber on a Daedalus site), keeping the
- * spine styling-agnostic. The site's group vocabulary (the filter
- * categories blueprints and block types are filed under) reaches the
- * catalog the same way, contributed by the layer that parses its
- * declaration (daedalus_layout's SiteGroups).
+ * (daedalus_stylish's DialectVocabularySubscriber on a Daedalus site), keeping
+ * the spine styling-agnostic. The site's group vocabulary (the filter
+ * categories blueprints and block types are filed under) reaches the catalog
+ * the same way, contributed by the layer that parses its declaration
+ * (daedalus_layout's SiteGroups).
  */
 class DialectCatalogBuilder {
 
@@ -207,8 +207,8 @@ class DialectCatalogBuilder {
       }
       $storage = $definition->getFieldStorageDefinition();
       if ($storage->getType() === 'daedalus_stylish_style_map') {
-        // The style map is infrastructure, never an authored field
-        // (matching on the type string keeps this module daedalus-stylish-agnostic).
+        // The style map is infrastructure, never an authored field (matching on
+        // the type string keeps this module daedalus-stylish-agnostic).
         continue;
       }
       if ($storage->getCardinality() !== 1) {

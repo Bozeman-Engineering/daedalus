@@ -17,13 +17,13 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the container-model migration over real captured data.
  *
- * The primary fixture is a site recipe footer layout block exactly as
- * it shipped under the old model (daedalus_stylish_twocol + daedalus_stylish_onecol
- * sections, section:/mobile style grammar) - real captured data, not a
- * synthetic shape. Around it: region-style relocation onto minted
- * children, variant reference re-pointing (shipped-unmodified only),
- * compound condition rewrites, variant entity migration (scopes, slot
- * paths, conditions).
+ * The primary fixture is a site recipe footer layout block exactly as it
+ * shipped under the old model (daedalus_stylish_twocol +
+ * daedalus_stylish_onecol sections, section:/mobile style grammar) - real
+ * captured data, not a synthetic shape. Around it: region-style relocation onto
+ * minted children, variant reference re-pointing (shipped-unmodified only),
+ * compound condition rewrites, variant entity migration (scopes, slot paths,
+ * conditions).
  *
  * @group daedalus_stylish
  */
@@ -40,11 +40,12 @@ class ContainerModelMigrationTest extends NestedStorageKernelTestBase {
     'file',
     'image',
     'media',
-    // Re-declares the retired daedalus_stylish_onecol..fourcol plugins: persisting
-    // the captured PRE-migration fixtures needs live plugins because core's
-    // Section::toArray() resolves layout_settings through the plugin. Real
-    // sites saved this data while the plugins still shipped; the transforms
-    // themselves run on ContainerMigration's frozen shapes either way.
+    // Re-declares the retired daedalus_stylish_onecol..fourcol plugins:
+    // persisting the captured PRE-migration fixtures needs live plugins because
+    // core's Section::toArray() resolves layout_settings through the plugin.
+    // Real sites saved this data while the plugins still shipped; the
+    // transforms themselves run on ContainerMigration's frozen shapes either
+    // way.
     'daedalus_stylish_layouts_retired_test',
   ];
 
@@ -64,8 +65,8 @@ class ContainerModelMigrationTest extends NestedStorageKernelTestBase {
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('daedalus_variant');
-    // The materials roster's daedalus_stylish provider reads all three storages on
-    // every build, and every compile and validation builds it.
+    // The materials roster's daedalus_stylish provider reads all three storages
+    // on every build, and every compile and validation builds it.
     $this->installEntitySchema('daedalus_skin');
     $this->installSchema('daedalus_stylish', ['daedalus_variant_usage']);
     $this->installConfig(['daedalus_stylish']);
@@ -542,7 +543,9 @@ class ContainerModelMigrationTest extends NestedStorageKernelTestBase {
       'status' => TRUE,
     ]);
     $modified->setStyles([
-      '::.daedalus-stylish-layout-container' => ['default' => ['display' => 'grid', 'grid-template-columns' => '3fr 2fr']],
+      '::.daedalus-stylish-layout-container' => [
+        'default' => ['display' => 'grid', 'grid-template-columns' => '3fr 2fr'],
+      ],
     ]);
     $modified->setShippedSource('daedalus_stylish_layouts', $styles);
     $modified->save();
@@ -566,6 +569,5 @@ class ContainerModelMigrationTest extends NestedStorageKernelTestBase {
     $this->assertNotNull($storage->loadUnchanged($modified->id()), 'The modified shipped variant survives.');
     $this->assertNotNull($storage->loadUnchanged($user->id()), 'A user variant reusing a retired name survives.');
   }
-
 
 }

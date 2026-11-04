@@ -33,14 +33,13 @@ already shows what the block says). A plane whose element paints no
 background of its own gets a translucent surface so it reads as a slab
 with the layers below showing through; a plane with its own background
 (a colored section, a hero photo, a button's fill) keeps it, since that
-is what makes the plane recognizable. The selection paints oversized: the primary in the
-selection color with a heavy stroke standing off the plane, a glow and a
-larger chip, members of a multi-selection lighter, hover dashed, every
-measure divided by the stage scale so the treatment reads at the same
-on-screen size at any zoom (the selection frame hides while exploded,
-so this paint is what marks the selection). Keyboard traversal (ArrowUp and
-ArrowDown walk the projection) reads as the selection climbing and
-descending the stack.
+is what makes the plane recognizable. The selection paints oversized: the
+primary in the selection color with a heavy stroke standing off the plane, a
+glow and a larger chip, members of a multi-selection lighter, hover dashed,
+every measure divided by the stage scale so the treatment reads at the same
+on-screen size at any zoom (the selection frame hides while exploded, so this
+paint is what marks the selection). Keyboard traversal (ArrowUp and ArrowDown
+walk the projection) reads as the selection climbing and descending the stack.
 
 ## Controls
 
@@ -62,8 +61,8 @@ flat while it is off, and a rich-text carrier row lifts in every view. Part
 planes print through the registered part behavior (daedalus_stylish's),
 so without one no part planes appear.
 
-The defaults (tilt 38, turn -22, zoom 62%, gap 90, all layers, labels on) are the
-constants that proved the form. The values are visual toggles, not editor
+The defaults (tilt 38, turn -22, zoom 62%, gap 90, all layers, labels on) are
+the constants that proved the form. The values are visual toggles, not editor
 preferences, so they persist client-side in one localStorage key,
 `daedalusExplode`, per browser; nothing is sent to the server.
 
@@ -77,10 +76,10 @@ its reach (`app.tree.reachable`: which of those the Page elements panel
 currently depicts), runs them through a pure plane model (depth from
 ancestry, the cap, isolate) and a pure stylesheet printer, and injects the
 result as `<style id="daedalus-explode">` in `<head>`. It re-prints on
-every blueprint, selection, hover, view-visibility and settings change. Element planes are
-addressed as `[data-selectable="key"]`; part planes go through the part
-behavior's `selectorFor`, the same scoped-rule grammar the Styles
-selector paint uses, so nothing is stamped onto the page.
+every blueprint, selection, hover, view-visibility and settings change. Element
+planes are addressed as `[data-selectable="key"]`; part planes go through the
+part behavior's `selectorFor`, the same scoped-rule grammar the Styles selector
+paint uses, so nothing is stamped onto the page.
 
 Because the planes are the real elements under a real 3D transform,
 everything that paints on the elements themselves (the Styles inspector's

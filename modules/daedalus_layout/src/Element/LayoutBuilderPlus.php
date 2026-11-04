@@ -156,11 +156,11 @@ class LayoutBuilderPlus extends RenderElementBase implements ContainerFactoryPlu
         ? $element['#host']
         : $this->hostResolver->fromSectionStorage($this->sectionStorage);
       if ($host === NULL) {
-        // Use Core's Layout Builder for any section storage with no host,
-        // like NavigationSectionStorage. Core's class is named explicitly:
-        // daedalus_layout_element_info_alter() points the layout_builder definition
-        // at this class, so createInstance('layout_builder') would land here
-        // again.
+        // Use Core's Layout Builder for any section storage with no host, like
+        // NavigationSectionStorage. Core's class is named explicitly:
+        // daedalus_layout_element_info_alter() points the layout_builder
+        // definition at this class, so createInstance('layout_builder') would
+        // land here again.
         $element_definition = $this->elementInfoManager->getDefinition('layout_builder');
         $original_layout_builder_element = LayoutBuilder::create(\Drupal::getContainer(), [], 'layout_builder', $element_definition);
         return $original_layout_builder_element->preRender($element);
@@ -230,10 +230,10 @@ class LayoutBuilderPlus extends RenderElementBase implements ContainerFactoryPlu
    * LayoutBuilderEntityViewDisplay::LAYOUT_ROOT_CLASS beside its own
    * `layout-builder` id and class (the AJAX rebuild target in
    * DaedalusLayoutRebuildTrait and daedalus_ui's edit-mode-plugin read those;
-   * daedalus_stylish's declared defaults, the page's gap and the inspector's part
-   * facts read the class). Live/edit parity: buildSections() gives the
-   * view render the same element, so a gap written on the page's Layout
-   * part paints identically in both modes.
+   * daedalus_stylish's declared defaults, the page's gap and the inspector's
+   * part facts read the class). Live/edit parity: buildSections() gives the
+   * view render the same element, so a gap written on the page's Layout part
+   * paints identically in both modes.
    *
    * Presence differs from the view render on purpose. The view render
    * wraps only while sections exist (core's empty-list semantics, see

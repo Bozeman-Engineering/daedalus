@@ -203,7 +203,7 @@ class ShippedMotionTest extends KernelTestBase {
   }
 
   /**
-   * Every shipped entrance variant validates against the skin and wears its motion.
+   * Every shipped entrance variant validates and wears the skin's motion.
    *
    * The import IS the validation: each definition rode the blueprint
    * deserializer through the variant styles field handler against the
@@ -349,11 +349,11 @@ class ShippedMotionTest extends KernelTestBase {
   /**
    * The animation and hover axes are effective on every block.
    *
-   * Declared once, on the universal block kind (daedalus_stylish.page_builder.yml)
-   * with the "Animation" and "Hover" labels, so the wear bar's rows, the
-   * AI's axis vocabulary and the variant entity's own axis check all
-   * resolve them on every block type; nothing defaults at birth (a block
-   * is born still).
+   * Declared once, on the universal block kind
+   * (daedalus_stylish.page_builder.yml) with the "Animation" and "Hover"
+   * labels, so the wear bar's rows, the AI's axis vocabulary and the variant
+   * entity's own axis check all resolve them on every block type; nothing
+   * defaults at birth (a block is born still).
    */
   public function testAxisEffectiveOnBlock(): void {
     $guide = \Drupal::service('daedalus_stylish.style_guide');
@@ -383,11 +383,11 @@ class ShippedMotionTest extends KernelTestBase {
    * The animation and hover axes are effective on every container.
    *
    * Declared once, on the universal container kind
-   * (daedalus_stylish_layouts.page_builder.yml) after width and Layout, offered at
-   * every depth (width stays the one root-only axis) and defaulting
-   * nothing at birth: the container layout's default_variants still name
-   * the width stop alone, so a section is born still and an entrance or
-   * a hover feel is the deliberate gesture.
+   * (daedalus_stylish_layouts.page_builder.yml) after width and Layout, offered
+   * at every depth (width stays the one root-only axis) and defaulting nothing
+   * at birth: the container layout's default_variants still name the width stop
+   * alone, so a section is born still and an entrance or a hover feel is the
+   * deliberate gesture.
    */
   public function testAxisEffectiveOnContainer(): void {
     $guide = \Drupal::service('daedalus_stylish.style_guide');

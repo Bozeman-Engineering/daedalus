@@ -27,7 +27,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * validatable object is validated whole (the Range constraints on both
  * keys refuse a zero) before anything is written.
  */
-class SettingsForm extends ConfigFormBase {
+final class SettingsForm extends ConfigFormBase {
 
   public function __construct(
     ConfigFactoryInterface $config_factory,

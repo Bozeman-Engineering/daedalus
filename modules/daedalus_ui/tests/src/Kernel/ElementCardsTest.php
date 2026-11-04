@@ -89,7 +89,9 @@ class ElementCardsTest extends BlueprintKernelTestBase {
     $this->createBlockField('field_text_tag', 'list_string', 'text', [
       'allowed_values' => ['h2' => 'H2', 'h3' => 'H3', 'p' => 'P'],
     ]);
-    FieldConfig::loadByName('block_content', 'text', 'field_text_tag')->setDefaultValue('p')->save();
+    $tag = FieldConfig::loadByName('block_content', 'text', 'field_text_tag');
+    assert($tag instanceof FieldConfig);
+    $tag->setDefaultValue('p')->save();
     $this->createBlockField('field_text_url', 'link', 'text');
 
     // The image block: a media reference and a link, no body.
@@ -124,7 +126,7 @@ class ElementCardsTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * One card per owner the dialect tags, in contribution order; none per plugin.
+   * One card per dialect-tagged owner, in contribution order; none per plugin.
    */
   public function testRoster(): void {
     $tagged = array_map(DialectCatalog::tagForBlockType(...), array_keys($this->catalog->blockTypes()));
@@ -139,7 +141,9 @@ class ElementCardsTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * The text block: the default paragraph, the link on it, the tag with the link inside.
+   * The text block's card.
+   *
+   * The default paragraph, the link on it, the tag with the link inside.
    */
   public function testTextCard(): void {
     $this->assertSame([

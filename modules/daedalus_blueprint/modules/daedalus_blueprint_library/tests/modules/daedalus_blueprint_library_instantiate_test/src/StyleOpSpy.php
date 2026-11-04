@@ -14,9 +14,9 @@ use Drupal\daedalus_blueprint\Result\BlueprintResult;
 /**
  * Records style operations instead of writing styles.
  *
- * Stands in for daedalus_stylish's operation handler so instantiate tests can assert
- * the exact operations (and translated selectable keys) the blueprint handler
- * emits, without pulling the styling stack into the kernel test. The
+ * Stands in for daedalus_stylish's operation handler so instantiate tests can
+ * assert the exact operations (and translated selectable keys) the blueprint
+ * handler emits, without pulling the styling stack into the kernel test. The
  * "explode" variant fails semantically on demand to prove nested-batch
  * rollback.
  */

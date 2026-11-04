@@ -251,13 +251,23 @@ class SkinLayerTest extends KernelTestBase {
    */
   public function testSiteLayerIsOutsideTheShippedPayload(): void {
     $skin = $this->createSkin();
-    $skin->setShippedSource('example_package', ['tokens' => self::PACKAGE_TOKENS, 'animations' => [], 'fonts' => [], 'defaults' => self::PACKAGE_DEFAULTS])->save();
+    $skin->setShippedSource('example_package', [
+      'tokens' => self::PACKAGE_TOKENS,
+      'animations' => [],
+      'fonts' => [],
+      'defaults' => self::PACKAGE_DEFAULTS,
+    ])->save();
     $this->assertTrue($skin->isShipped());
     $this->assertFalse($skin->isModified());
 
     $skin->setSiteTokens(['space' => ['4' => '9rem']])->setSiteDefaults(['base:h2' => ['' => ['default' => ['font-size' => '3rem']]]])->save();
     $this->assertFalse($skin->isModified(), 'A site layer over a shipped skin is not a modification of what the package shipped.');
-    $this->assertFalse($skin->hasNewDefaults(['tokens' => self::PACKAGE_TOKENS, 'animations' => [], 'fonts' => [], 'defaults' => self::PACKAGE_DEFAULTS]));
+    $this->assertFalse($skin->hasNewDefaults([
+      'tokens' => self::PACKAGE_TOKENS,
+      'animations' => [],
+      'fonts' => [],
+      'defaults' => self::PACKAGE_DEFAULTS,
+    ]));
 
     $skin->setPackageTokens(['space' => ['4' => '9rem']] + self::PACKAGE_TOKENS);
     $this->assertTrue($skin->isModified(), 'The package layer is the payload the hash covers.');

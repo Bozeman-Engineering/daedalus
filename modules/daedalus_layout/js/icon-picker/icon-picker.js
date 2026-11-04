@@ -19,9 +19,15 @@
         '[data-daedalus-layout-icon-picker]',
         context,
       ).forEach((wrapper) => {
-        const input = wrapper.querySelector('[data-daedalus-layout-icon-picker-value]');
-        const preview = wrapper.querySelector('.daedalus-layout-icon-picker__preview');
-        const remove = wrapper.querySelector('.daedalus-layout-icon-picker__remove');
+        const input = wrapper.querySelector(
+          '[data-daedalus-layout-icon-picker-value]',
+        );
+        const preview = wrapper.querySelector(
+          '.daedalus-layout-icon-picker__preview',
+        );
+        const remove = wrapper.querySelector(
+          '.daedalus-layout-icon-picker__remove',
+        );
         if (!input || !preview) {
           return;
         }

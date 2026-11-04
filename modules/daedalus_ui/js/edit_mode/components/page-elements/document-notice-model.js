@@ -20,30 +20,20 @@
 /**
  * The refusal codes the notice words, in display order.
  */
-const WORDED = ['FOREIGN_DOCUMENT', 'LAYOUT_NOT_TRANSLATABLE', 'WORKSPACE_REQUIRED'];
-
-/**
- * The notice's lines for a host-level verdict.
- *
- * @param {?{can: Object<string, boolean>, refused: Array<{code: string, context?: object}>}} verdict
- *   The envelope's verdict, or null before the mirror boots.
- *
- * @return {Array<{code: string, text: string, portal: ?{label: string, url: string}}>}
- *   One line per worded refusal: its words, and the portal (label, url)
- *   when the verdict carries one that leads somewhere.
- */
-export const noticeLines = (verdict) =>
-  (verdict?.refused ?? [])
-    .filter((refusal) => WORDED.includes(refusal.code))
-    .sort((a, b) => WORDED.indexOf(a.code) - WORDED.indexOf(b.code))
-    .map((refusal) => ({
-      code: refusal.code,
-      text: wordsFor(refusal),
-      portal: portalOf(refusal),
-    }));
+const WORDED = [
+  'FOREIGN_DOCUMENT',
+  'LAYOUT_NOT_TRANSLATABLE',
+  'WORKSPACE_REQUIRED',
+];
 
 /**
  * The words for one refusal.
+ *
+ * @param {{code: string, context?: object}} refusal
+ *   One entry of the verdict's `refused` list.
+ *
+ * @return {string}
+ *   The translated line, empty for a code the notice does not word.
  */
 const wordsFor = (refusal) => {
   switch (refusal.code) {
@@ -67,6 +57,12 @@ const wordsFor = (refusal) => {
  *
  * The spine names a portal only for an actor who may act there; the url
  * is NULL where the site has no such route, and then there is no door.
+ *
+ * @param {{code: string, context?: object}} refusal
+ *   One entry of the verdict's `refused` list.
+ *
+ * @return {?{label: string, url: string}}
+ *   The door's label and url, or null when the refusal leads nowhere.
  */
 const portalOf = (refusal) => {
   const url = refusal.context?.portal?.url;
@@ -75,3 +71,23 @@ const portalOf = (refusal) => {
   }
   return { label: Drupal.t('Edit the template'), url };
 };
+
+/**
+ * The notice's lines for a host-level verdict.
+ *
+ * @param {?{can: Object<string, boolean>, refused: Array<{code: string, context?: object}>}} verdict
+ *   The envelope's verdict, or null before the mirror boots.
+ *
+ * @return {Array<{code: string, text: string, portal: ?{label: string, url: string}}>}
+ *   One line per worded refusal: its words, and the portal (label, url)
+ *   when the verdict carries one that leads somewhere.
+ */
+export const noticeLines = (verdict) =>
+  (verdict?.refused ?? [])
+    .filter((refusal) => WORDED.includes(refusal.code))
+    .sort((a, b) => WORDED.indexOf(a.code) - WORDED.indexOf(b.code))
+    .map((refusal) => ({
+      code: refusal.code,
+      text: wordsFor(refusal),
+      portal: portalOf(refusal),
+    }));

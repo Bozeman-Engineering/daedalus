@@ -152,14 +152,14 @@ class Edit extends DaedalusBlueprintToolBase {
       return;
     }
 
-    // eb_edit never edits pages (PageHosts::isPage(): the one meaning across the AI
-    // doors): a page is page_edit's, whole. One grammar per gesture, so
-    // teaching a JSON side door here is how a model learns to route around
-    // the page language (a template's third-party settings through
-    // update_properties included); the refusal routes instead of
-    // accommodating. A host that owns a document goes to page_edit for
-    // everything; a plain host (its render is its template's document)
-    // edits its fields there and its layout on the template.
+    // eb_edit never edits pages (PageHosts::isPage(): the one meaning across
+    // the AI doors): a page is page_edit's, whole. One grammar per gesture, so
+    // teaching a JSON side door here is how a model learns to route around the
+    // page language (a template's third-party settings through
+    // update_properties included); the refusal routes instead of accommodating.
+    // A host that owns a document goes to page_edit for everything; a plain
+    // host (its render is its template's document) edits its fields there and
+    // its layout on the template.
     if ($this->hostResolver->hosts($entity)) {
       $host = $this->hostResolver->fromEntity($entity);
       if ($this->pageHosts->isPage($host)) {

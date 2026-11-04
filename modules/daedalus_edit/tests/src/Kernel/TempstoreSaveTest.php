@@ -182,7 +182,7 @@ class TempstoreSaveTest extends FormCommitTestBase {
    * blueprint instead of the page they left from (SiteFrameBehaviorTest's
    * portal leg, red on drupal.org and green at the web root).
    */
-  public function testSaveUnderASubPathHonorsTheDestination(): void {
+  public function testSaveUnderSubPathHonorsTheDestination(): void {
     $node = Node::create([
       'type' => 'plain',
       'title' => 'Framed',

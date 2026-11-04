@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel\Capability;
 
+// cspell:ignore anfitriona anfitrión
 use Drupal\Component\Uuid\Php as PhpUuid;
 use Drupal\daedalus_blueprint\Capability\CapabilityResolver;
 use Drupal\daedalus_blueprint\Dialect\DialectCatalog;
@@ -376,7 +377,9 @@ class CapabilityGateTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * A handler that provides an operation without declaring its requirements is refused.
+   * A handler that provides an operation must declare its requirements.
+   *
+   * One that does not is refused.
    */
   public function testHandlerWithoutDeclarationFailsRegistration(): void {
     $registry = new OperationHandlerRegistry();

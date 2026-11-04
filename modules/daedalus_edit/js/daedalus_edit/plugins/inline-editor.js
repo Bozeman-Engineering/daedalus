@@ -1,4 +1,6 @@
-import * as ckeditor5EditorInline from '../../../assets/vendor/ckeditor5/editor-inline.js'; // Do not remove!
+// A side-effect import: the inline editor build registers itself on the
+// CKEditor 5 global namespace that attachEditor() reads. Do not remove!
+import '../../../assets/vendor/ckeditor5/editor-inline.js';
 import * as core from '../copied_from_core/copied-from-core.js';
 import * as editableElement from '../editable-element.js';
 import { EditorPluginBase, equals } from './editor-plugin-base.js';
@@ -64,6 +66,12 @@ class InlineEditor extends EditorPluginBase {
    * Read live from the format selector (or the hidden single-format input)
    * rather than the form item's data-daedalus-edit-format attribute, which goes
    * stale when the user switches formats mid-session.
+   *
+   * @param {Element} formItem
+   *   The field's form item.
+   *
+   * @return {string|undefined}
+   *   The format id, or undefined when the form item carries no selector.
    */
   getFormat(formItem) {
     const textarea = formItem.querySelector('textarea');
@@ -75,6 +83,12 @@ class InlineEditor extends EditorPluginBase {
 
   /**
    * The field's textarea: the value store, and what the submit serializes.
+   *
+   * @param {object} item
+   *   The item being edited.
+   *
+   * @return {HTMLTextAreaElement}
+   *   The textarea.
    */
   textarea(item) {
     return item.getFormItem().querySelector('textarea');
@@ -82,6 +96,12 @@ class InlineEditor extends EditorPluginBase {
 
   /**
    * The live canvas editor riding the page element, or null.
+   *
+   * @param {object} item
+   *   The item being edited.
+   *
+   * @return {?object}
+   *   The CKEditor instance, or null.
    */
   liveEditor(item) {
     const id = item.getPageElementHandle()?.dataset.ckeditor5Id;
@@ -92,6 +112,12 @@ class InlineEditor extends EditorPluginBase {
    * The raw value: the live editor's data while one stands, else the
    * textarea's (the no-editor tier, the seed before the async create
    * resolves, or the draft the capture wrote back).
+   *
+   * @param {object} item
+   *   The item being edited.
+   *
+   * @return {Object<string, string>}
+   *   The raw value, keyed by the field name.
    */
   readProperties(item) {
     const editor = this.liveEditor(item);
@@ -104,6 +130,11 @@ class InlineEditor extends EditorPluginBase {
 
   /**
    * Writes the raw value into the textarea, where the mount seeds from.
+   *
+   * @param {object} item
+   *   The item being edited.
+   * @param {Object<string, *>} properties
+   *   The property values to write.
    */
   writeProperties(item, properties) {
     if (item.info.fieldName in properties) {
@@ -152,11 +183,15 @@ class InlineEditor extends EditorPluginBase {
 
   /**
    * Re-hides the panel's ancillary UI once the edit is over.
+   *
+   * @param {object} item
+   *   The item being edited.
    */
   hideAncillary(item) {
     this.hideFormItem(item);
     // Re-hide the textarea in case the no-editor tier revealed it.
-    item.getFormItem()
+    item
+      .getFormItem()
       .querySelector('textarea')
       .classList.add('daedalus-edit-hidden');
   }
@@ -256,6 +291,9 @@ class InlineEditor extends EditorPluginBase {
    * Delegates to the shared canvas-editor machinery; both the form-path
    * canvas editor and the blueprint formatted-text editor tear down canvas
    * CKEditors and need the same workaround.
+   *
+   * @param {object} editor
+   *   The CKEditor instance about to be destroyed.
    *
    * @see Drupal.behaviors.DaedalusEditInlineEditors.defocusEditor
    */
@@ -368,74 +406,74 @@ class InlineEditor extends EditorPluginBase {
    * plugins.
    */
   Drupal.behaviors.DaedalusEditInlineEditors = {
-    attach: (context, settings) => {
-      once('DaedalusEditInlineEdit', '[data-inline-editor-for]', context).forEach(
-        (formatSelector) => {
-          // Listen for Editor format changes.
-          formatSelector.addEventListener('change', (e) => {
-            // Ignore the filter module changes on page load.
-            if (!e.isTrusted) {
-              return;
-            }
-            const textarea = document.querySelector(
-              `#${e.currentTarget.dataset.inlineEditorFor}`,
-            );
-            const formItem = textarea.closest('.daedalus-edit-form-item');
-            const EditableElement =
-              editableElement.EditableElement.createFromFormItem(formItem);
-            const plugin = EditableElement.plugin;
-            const pageElement = EditableElement.getPageElementHandle();
-            const ckeditor5Id = pageElement.dataset.ckeditor5Id;
-            const editorConfig =
-              drupalSettings.editor?.formats?.[e.currentTarget.value];
+    attach: (context) => {
+      once(
+        'DaedalusEditInlineEdit',
+        '[data-inline-editor-for]',
+        context,
+      ).forEach((formatSelector) => {
+        // Listen for Editor format changes.
+        formatSelector.addEventListener('change', (e) => {
+          // Ignore the filter module changes on page load.
+          if (!e.isTrusted) {
+            return;
+          }
+          const textarea = document.querySelector(
+            `#${e.currentTarget.dataset.inlineEditorFor}`,
+          );
+          const formItem = textarea.closest('.daedalus-edit-form-item');
+          const EditableElement =
+            editableElement.EditableElement.createFromFormItem(formItem);
+          const plugin = EditableElement.plugin;
+          const pageElement = EditableElement.getPageElementHandle();
+          const ckeditor5Id = pageElement.dataset.ckeditor5Id;
+          const editorConfig =
+            drupalSettings.editor?.formats?.[e.currentTarget.value];
 
-            const reattach = () => {
-              if (editorConfig) {
-                // Move the edit (back) onto the canvas with the new format.
-                textarea.classList.add('daedalus-edit-hidden');
-                if (
-                  !plugin.originalMarkup.has(EditableElement.info.elementId)
-                ) {
-                  // The edit started on the no-editor tier, so the filtered
-                  // markup was never saved — the canvas is untouched until now.
-                  plugin.originalMarkup.set(
-                    EditableElement.info.elementId,
-                    pageElement.innerHTML,
-                  );
-                }
-                pageElement.innerHTML = textarea.value;
-                pageElement.classList.add('daedalus-edit-inline-editing');
-                Drupal.behaviors.DaedalusEditInlineEditors.attachEditor(
-                  pageElement,
-                  editorConfig,
+          const reattach = () => {
+            if (editorConfig) {
+              // Move the edit (back) onto the canvas with the new format.
+              textarea.classList.add('daedalus-edit-hidden');
+              if (!plugin.originalMarkup.has(EditableElement.info.elementId)) {
+                // The edit started on the no-editor tier, so the filtered
+                // markup was never saved — the canvas is untouched until now.
+                plugin.originalMarkup.set(
+                  EditableElement.info.elementId,
+                  pageElement.innerHTML,
                 );
-              } else {
-                // The new format has no editor: continue the edit in the panel
-                // textarea. The canvas keeps showing the raw value until blur
-                // commits and re-renders it.
-                pageElement.classList.remove('daedalus-edit-inline-editing');
-                textarea.classList.remove('daedalus-edit-hidden');
-                textarea.focus();
               }
-            };
-
-            if (ckeditor5Id) {
-              const editor =
-                Drupal.Daedalus.Edit.Ckeditor5Instances.get(ckeditor5Id);
-              if (editor) {
-                // Preserve the user's input across the format switch.
-                textarea.value = editor.getData();
-              }
-              Drupal.behaviors.DaedalusEditInlineEditors.detachEditor(
+              pageElement.innerHTML = textarea.value;
+              pageElement.classList.add('daedalus-edit-inline-editing');
+              Drupal.behaviors.DaedalusEditInlineEditors.attachEditor(
                 pageElement,
-                ckeditor5Id,
-              ).then(reattach);
+                editorConfig,
+              );
             } else {
-              reattach();
+              // The new format has no editor: continue the edit in the panel
+              // textarea. The canvas keeps showing the raw value until blur
+              // commits and re-renders it.
+              pageElement.classList.remove('daedalus-edit-inline-editing');
+              textarea.classList.remove('daedalus-edit-hidden');
+              textarea.focus();
             }
-          });
-        },
-      );
+          };
+
+          if (ckeditor5Id) {
+            const editor =
+              Drupal.Daedalus.Edit.Ckeditor5Instances.get(ckeditor5Id);
+            if (editor) {
+              // Preserve the user's input across the format switch.
+              textarea.value = editor.getData();
+            }
+            Drupal.behaviors.DaedalusEditInlineEditors.detachEditor(
+              pageElement,
+              ckeditor5Id,
+            ).then(reattach);
+          } else {
+            reattach();
+          }
+        });
+      });
     },
 
     /**
@@ -443,9 +481,9 @@ class InlineEditor extends EditorPluginBase {
      *
      * Attaches the CKEditor Inline Editor to the canvas page element.
      *
-     * @param element
+     * @param {Element} element
      *   The page element being edited (already seeded with the raw value).
-     * @param format
+     * @param {object} format
      *   The format definition from drupalSettings.editor.formats.
      *
      * @return {Promise}
@@ -493,7 +531,8 @@ class InlineEditor extends EditorPluginBase {
         ...core.processConfig(pluginConfig),
         ui: {
           viewportOffset: {
-            top: drupalSettings?.DaedalusEdit?.InlineEditor?.viewportOffset ?? 65,
+            top:
+              drupalSettings?.DaedalusEdit?.InlineEditor?.viewportOffset ?? 65,
           },
         },
       };
@@ -527,8 +566,8 @@ class InlineEditor extends EditorPluginBase {
           editor.ui.focusTracker.isFocused = true;
           editor.editing.view.document.fire('focus');
         })
-        .catch((err) => {
-          console.error(err.stack);
+        .catch((error) => {
+          Drupal.throwError(error);
         });
     },
 
@@ -550,7 +589,7 @@ class InlineEditor extends EditorPluginBase {
      * @see https://github.com/ckeditor/ckeditor5/issues/18978
      * @todo Remove when the upstream fix lands in Drupal core's CKEditor 5.
      *
-     * @param editor
+     * @param {object} editor
      *   The CKEditor instance about to be destroyed.
      */
     defocusEditor: (editor) => {
@@ -566,9 +605,9 @@ class InlineEditor extends EditorPluginBase {
     /**
      * Detach Editor.
      *
-     * @param element
+     * @param {Element} element
      *   The page element whose editor needs removing.
-     * @param ckeditor5Id
+     * @param {string} ckeditor5Id
      *   The CKEditor ID.
      *
      * @return {Promise}

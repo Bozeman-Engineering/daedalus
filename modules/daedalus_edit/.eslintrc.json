@@ -37,5 +37,20 @@
         "message": "`with` is disallowed in strict mode because it makes code impossible to predict and optimize."
       }
     ]
-  }
+  },
+  "overrides": [
+    {
+      // The editor plugin contract: each hook's default declares the
+      // parameters an override receives (mount(item), writeProperties(item,
+      // properties), ...) and its documented @param tags are the plugin
+      // API. A default that ignores an argument is the API, not a stray
+      // binding, the same reason class-methods-use-this is off above.
+      // Variables and imports stay checked; only arguments are exempt, and
+      // only in this one file (an override drops what it does not read).
+      "files": ["js/daedalus_edit/plugins/editor-plugin-base.js"],
+      "rules": {
+        "no-unused-vars": ["warn", { "vars": "all", "args": "none" }]
+      }
+    }
+  ]
 }

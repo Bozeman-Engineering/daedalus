@@ -37,8 +37,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * - Results are keyed and ksorted by selection 'number' so the numbered chips
  *   in the chat line up with the numbered prompt entries.
  * - With no element_resolver wired (the realistic CI configuration, since the
- *   optional daedalus_blueprint element_resolver may be absent), block and field
- *   keys fall back to key-vocabulary descriptions.
+ *   optional daedalus_blueprint element_resolver may be absent), block and
+ *   field keys fall back to key-vocabulary descriptions.
  * - THE ACCESS NET IS STRUCTURAL NOW: the resolver never loads entities from
  *   client-supplied identifiers — a key that names anything but the root
  *   entity's own elements resolves to a generic description carrying no
@@ -72,8 +72,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *
  * Both resolvers are constructed directly with the element_resolver argument
  * set to NULL, which deliberately exercises the fallback branch (no rich
- * resolver) and avoids enabling the full daedalus_ai module just to read two plain
- * services.
+ * resolver) and avoids enabling the full daedalus_ai module just to read two
+ * plain services.
  *
  * @group daedalus_ai
  */
@@ -680,7 +680,6 @@ class ContextResolverTest extends KernelTestBase {
     $this->assertNull($this->routeResolver()->resolve($path), 'A template the user cannot administer resolves to NULL.');
   }
 
-
   /**
    * RouteEntityResolver: a saved blueprint is described as a blueprint.
    *
@@ -690,7 +689,7 @@ class ContextResolverTest extends KernelTestBase {
    * document's kind the subject's; a page carries neither the template nor
    * the blueprint sentence.
    */
-  public function testBlueprintHostIsDescribedAsABlueprint(): void {
+  public function testBlueprintHostIsDescribedAsBlueprint(): void {
     $this->enableModules(['options', 'image', 'media', 'daedalus_blueprint_library']);
     $this->installEntitySchema('file');
     $this->installSchema('file', ['file_usage']);

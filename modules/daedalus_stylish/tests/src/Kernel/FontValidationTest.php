@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_stylish\Kernel;
 
+// cspell:ignore söhne
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
 use Drupal\daedalus_stylish\Exception\SkinMaterialValidationException;
@@ -239,8 +240,17 @@ class FontValidationTest extends KernelTestBase {
    */
   public function testFonts(): void {
     $codes = static fn (array $errors): array => array_combine(array_map(static fn ($e) => $e->getPath(), $errors), array_map(static fn ($e) => $e->getCode(), $errors));
-    $inter = SkinFontsItem::canonicalizeFont(['family' => 'Inter', 'faces' => [$this->face(['weight' => 'bold'])], 'description' => 'The body face.']);
-    $this->assertSame(['family' => 'Inter', 'faces' => [['weight' => '700', 'style' => 'normal', 'source' => ['file' => $this->file->uuid()]]], 'description' => 'The body face.', 'offered' => TRUE], $inter, 'A record canonicalizes: faces settle, the facts fill.');
+    $inter = SkinFontsItem::canonicalizeFont([
+      'family' => 'Inter',
+      'faces' => [$this->face(['weight' => 'bold'])],
+      'description' => 'The body face.',
+    ]);
+    $this->assertSame([
+      'family' => 'Inter',
+      'faces' => [['weight' => '700', 'style' => 'normal', 'source' => ['file' => $this->file->uuid()]]],
+      'description' => 'The body face.',
+      'offered' => TRUE,
+    ], $inter, 'A record canonicalizes: faces settle, the facts fill.');
     $this->assertSame([], $this->validateFonts(['inter' => $inter]));
 
     $this->assertSame(['Inter' => 'INVALID_FONT_NAME'], $codes($this->validateFonts(['Inter' => $inter])));
@@ -254,10 +264,23 @@ class FontValidationTest extends KernelTestBase {
     $this->assertSame([
       'inter.family' => 'INVALID_FONT_FAMILY',
       'inter.faces.0.weight' => 'INVALID_FONT_WEIGHT',
-    ], $codes($this->validateFonts(['inter' => ['family' => 'serif', 'faces' => [$this->face(['weight' => 'heavy'])], 'description' => '', 'offered' => TRUE]])), 'The two grammars re-root under the name.');
+    ], $codes($this->validateFonts([
+      'inter' => [
+        'family' => 'serif',
+        'faces' => [$this->face(['weight' => 'heavy'])],
+        'description' => '',
+        'offered' => TRUE,
+      ],
+    ])), 'The two grammars re-root under the name.');
     // One font per family on a skin.
-    $this->assertSame(['inter_2.family' => 'DUPLICATE_FONT_FAMILY'], $codes($this->validateFonts(['inter' => $inter, 'inter_2' => $inter])));
-    $this->assertSame([], $this->validateFonts(['inter' => $inter, 'inter_tight' => ['family' => 'Inter Tight'] + $inter]));
+    $this->assertSame(['inter_2.family' => 'DUPLICATE_FONT_FAMILY'], $codes($this->validateFonts([
+      'inter' => $inter,
+      'inter_2' => $inter,
+    ])));
+    $this->assertSame([], $this->validateFonts([
+      'inter' => $inter,
+      'inter_tight' => ['family' => 'Inter Tight'] + $inter,
+    ]));
   }
 
   /**

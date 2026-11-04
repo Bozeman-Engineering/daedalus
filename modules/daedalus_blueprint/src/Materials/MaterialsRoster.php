@@ -243,9 +243,9 @@ final class MaterialsRoster {
    * its owning blueprint's placements. A blueprint gates on one fact, derived,
    * never authored: it is a section when any variant its root captured
    * (MaterialRecord::APPLIES_WEARS) resolves to a root-only record in this
-   * roster, and a section places at top level only; every other blueprint places
-   * anywhere the placement grammar allows. Tokens, animations and fonts are
-   * values and apply everywhere.
+   * roster, and a section places at top level only; every other blueprint
+   * places anywhere the placement grammar allows. Tokens, animations and fonts
+   * are values and apply everywhere.
    *
    * @param \Drupal\daedalus_blueprint\Materials\MaterialRecord $record
    *   The material.

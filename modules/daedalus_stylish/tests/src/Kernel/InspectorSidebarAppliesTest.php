@@ -18,7 +18,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * The style inspector mounts by capability: where the actor may style something.
+ * The style inspector mounts by capability: wherever the actor may style.
  *
  * The inspector exists where the route host keeps a style map AND the
  * capability spine's verdict set allows style on the root or on some

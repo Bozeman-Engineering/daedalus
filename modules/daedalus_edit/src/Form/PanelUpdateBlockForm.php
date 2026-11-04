@@ -19,7 +19,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 /**
- * Extends core's UpdateBlockForm to add Daedalus Edit inline editing integration.
+ * Extends core's UpdateBlockForm with Daedalus Edit inline editing.
  *
  * The block form the panel hosts for a Layout Builder placement (the
  * block-form endpoint, BlockFormController): a widget host for the inline

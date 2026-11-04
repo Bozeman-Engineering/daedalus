@@ -240,7 +240,11 @@ class BlueprintDiscoveryTest extends BlueprintKernelTestBase {
     $check = new \ReflectionMethod(BlueprintDiscovery::class, 'checkDefinitionShape');
     $directory = \Drupal::service('extension.list.module')->getPath('daedalus_blueprint_library_test');
     $check->invoke($this->discovery(), 'daedalus_blueprint_library_test', 'valid', $valid, $directory);
-    $check->invoke($this->discovery(), 'daedalus_blueprint_library_test', 'valid', ['scope' => 'page', 'layout' => [$container, $container], 'styles' => ['entity:' => ['default' => ['color' => 'red']]]] + $valid, $directory);
+    $check->invoke($this->discovery(), 'daedalus_blueprint_library_test', 'valid', [
+      'scope' => 'page',
+      'layout' => [$container, $container],
+      'styles' => ['entity:' => ['default' => ['color' => 'red']]],
+    ] + $valid, $directory);
     $check->invoke($this->discovery(), 'daedalus_blueprint_library_test', 'valid', ['groups' => ['heroes', 'openers']] + $valid, $directory);
     $favorite = ['favorite' => TRUE] + $valid;
     $check->invoke($this->discovery(), 'daedalus_blueprint_library_test', 'valid', $favorite, $directory);
@@ -394,7 +398,13 @@ class BlueprintDiscoveryTest extends BlueprintKernelTestBase {
     \Drupal::service('cache_tags.invalidator')->invalidateTags([BlueprintDiscovery::CACHE_TAG]);
     $this->assertNull(DesignSystem::load('aurora'), 'The window: the package is installed, its system has not landed.');
     $blueprints = $this->discovery()->getBlueprints();
-    $this->assertEqualsCanonicalizing(['aurora_section', 'aurora_named_section', 'call_to_action', 'hero', 'plain_section'], array_keys($blueprints));
+    $this->assertEqualsCanonicalizing([
+      'aurora_section',
+      'aurora_named_section',
+      'call_to_action',
+      'hero',
+      'plain_section',
+    ], array_keys($blueprints));
     $this->assertSame('aurora', $blueprints['aurora_section']['design_system']);
     $this->assertSame('aurora', $blueprints['aurora_named_section']['design_system']);
     $this->assertNull($blueprints['plain_section']['design_system']);

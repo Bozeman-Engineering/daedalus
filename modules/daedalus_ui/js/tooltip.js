@@ -3,9 +3,10 @@
  * The chrome tooltip engine (Drupal.Daedalus.tooltip).
  *
  * Any chrome control grows an instant tooltip by declaring one attribute:
- * @code
- *   <button data-daedalus-ui-tooltip="Styles">
- * @endcode
+ *
+ * @example
+ * <button data-daedalus-ui-tooltip="Styles">
+ *
  * Optional data-daedalus-ui-tooltip-position="top" flips the preferred side
  * (default bottom). The attribute is the whole contract: the engine is a
  * delegated listener pair per document driving one singleton pill on
@@ -34,6 +35,9 @@
 
   /**
    * Attaches a tooltip engine to a document. Idempotent per document.
+   *
+   * @param {Document} doc
+   *   The document to serve.
    */
   const attach = (doc) => {
     if (doc.documentElement.hasAttribute('data-daedalus-ui-tooltip-engine')) {
@@ -72,7 +76,8 @@
       const view = doc.defaultView;
       const rect = trigger.getBoundingClientRect();
       const tip = element.getBoundingClientRect();
-      const below = trigger.getAttribute('data-daedalus-ui-tooltip-position') !== 'top';
+      const below =
+        trigger.getAttribute('data-daedalus-ui-tooltip-position') !== 'top';
       let top = below ? rect.bottom + OFFSET : rect.top - OFFSET - tip.height;
       // Flip to the other side when the preferred one leaves the viewport.
       if (below && top + tip.height > view.innerHeight - VIEWPORT_PADDING) {

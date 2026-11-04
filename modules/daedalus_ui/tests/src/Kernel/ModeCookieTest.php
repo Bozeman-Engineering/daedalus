@@ -38,9 +38,9 @@ class ModeCookieTest extends KernelTestBase {
   /**
    * {@inheritdoc}
    *
-   * The module's hard dependencies (daedalus_blueprint + daedalus_blueprint_api)
-   * are invisible to kernel environments and must be listed explicitly or
-   * the container fails to compile.
+   * The module's hard dependencies (daedalus_blueprint +
+   * daedalus_blueprint_api) are invisible to kernel environments and must be
+   * listed explicitly or the container fails to compile.
    */
   protected static $modules = [
     'system',

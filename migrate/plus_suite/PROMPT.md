@@ -9,8 +9,8 @@ replaced by one project, [Daedalus](https://www.drupal.org/project/daedalus)
 this site onto Daedalus.
 
 Daedalus ships the pathway for that inside its package, in
-`web/modules/contrib/daedalus/migrate/plus_suite/` (once the package is installed):
-`MIGRATING.md` is the guide, `migrate.sh` the script that runs the
+`web/modules/contrib/daedalus/migrate/plus_suite/` (once the package is
+installed): `MIGRATING.md` is the guide, `migrate.sh` the script that runs the
 migration, `translate.php` the translator it drives, `recipe.yml` the
 migration recipe and `mapping.tsv` the table of old names to new names.
 The guide is the authority on the mechanics; this prompt tells you how to
@@ -56,13 +56,14 @@ Run the swap from the project root exactly as the guide's step 1 gives it,
 naming only the old packages this site has:
 
 ```
-composer remove drupal/lb_plus drupal/navigation_plus drupal/edit_plus drupal/tempstore_plus
+composer remove drupal/lb_plus drupal/navigation_plus drupal/edit_plus \
+  drupal/tempstore_plus
 composer require drupal/daedalus:^1.0@alpha
 ```
 
 Leave `drupal/section_library` in place; the guide removes it at the end.
-Then read `web/modules/contrib/daedalus/migrate/plus_suite/MIGRATING.md` in full and
-follow it: step 2 is one command,
+Then read `web/modules/contrib/daedalus/migrate/plus_suite/MIGRATING.md` in
+full and follow it: step 2 is one command,
 `bash web/modules/contrib/daedalus/migrate/plus_suite/migrate.sh`, and the guide
 explains each step's output so you can read it.
 
@@ -80,8 +81,8 @@ explains each step's output so you can read it.
   failure it does not cover is a bug report for the Daedalus issue queue,
   and the person decides.
 - **Never edit Daedalus's files.** Nothing under `web/modules/contrib/daedalus`
-  is yours to change, including `migrate/plus_suite/`. If something there seems wrong,
-  say so and stop.
+  is yours to change, including `migrate/plus_suite/`. If something there
+  seems wrong, say so and stop.
 - **Port the site's own code with the table.** After the run, the closing
   audit lists the files under `modules/custom` and `themes/custom` naming
   the old suite. Port each real coupling (a `use` of an old class, an

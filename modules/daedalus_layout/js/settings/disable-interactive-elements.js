@@ -34,6 +34,9 @@
    * swaps, daedalus_edit's innerHTML rewrites) with no per-link binding, and
    * covers a composed block whose ROOT is the anchor (an image block with a
    * URL), which a descendant search never reached.
+   *
+   * @param {MouseEvent} event
+   *   The click, seen in the capture phase on the document.
    */
   const onClick = (event) => {
     const target = event.target instanceof Element ? event.target : null;
@@ -53,11 +56,6 @@
    * the block root (a context-scoped search matches descendants only), and
    * this is the one convergence sweep over canvas DOM that daedalus_edit rewrites
    * without attaching behaviors.
-   *
-   * @type {Drupal~behavior}
-   *
-   * @prop {Drupal~behaviorAttach} attach
-   *   Attach disabling interactive elements behavior to the Layout Builder UI.
    */
   behaviors.layoutBuilderDisableInteractiveElements = {
     attach() {

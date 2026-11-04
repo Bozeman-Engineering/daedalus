@@ -4,6 +4,8 @@ parameters:
     - .
   excludePaths:
     - '*/node_modules/*'
+    - modules/daedalus_explode/js/dist/*
+    - modules/daedalus_layout/js/dist/*
     - modules/daedalus_stylish/js/dist/*
     - modules/daedalus_ui/js/edit_mode/dist/*
     # Extends entity_workflow_content's WorkspaceSwitcherController, a module

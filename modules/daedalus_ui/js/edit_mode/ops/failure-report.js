@@ -36,7 +36,10 @@ export const reportMutationFailure = (error, target = null) => {
 
   if (element?.isConnected) {
     element.classList.add('daedalus-ui-mutation-failed');
-    setTimeout(() => element.classList.remove('daedalus-ui-mutation-failed'), 1600);
+    setTimeout(
+      () => element.classList.remove('daedalus-ui-mutation-failed'),
+      1600,
+    );
   }
 
   const details = error.payload?.errors?.[0];

@@ -68,6 +68,31 @@ const canvasCoordinates = () => {
 };
 
 /**
+ * A refused response as an Error carrying the server's own message and
+ * hint (the blueprint {path, code, message, hint} error shape every
+ * gesture route, the block type favorite's route and the peek door
+ * answer), so callers relay the refusal verbatim (failureMessage).
+ *
+ * @param {object} body
+ *   The decoded response body ({errors: [...]}), or {} when it was none.
+ * @param {number} status
+ *   The HTTP status, for the sentence when the body names nothing.
+ *
+ * @return {Error}
+ *   The error, its message the server's (or the status sentence) and its
+ *   `hint` property the server's hint or null.
+ */
+export const refusalError = (body, status) => {
+  const first = body?.errors?.[0];
+  const error = new Error(
+    first?.message ??
+      Drupal.t('The request failed (@status).', { '@status': status }),
+  );
+  error.hint = first?.hint ?? null;
+  return error;
+};
+
+/**
  * POSTs a JSON body to a URL with the session's CSRF token.
  *
  * Failures reject with an Error carrying the server's own message and
@@ -101,36 +126,30 @@ export const postJson = async (url, payload = {}) => {
 };
 
 /**
- * A refused response as an Error carrying the server's own message and
- * hint (the blueprint {path, code, message, hint} error shape every
- * gesture route, the block type favorite's route and the peek door
- * answer), so callers relay the refusal verbatim (failureMessage).
- *
- * @param {object} body
- *   The decoded response body ({errors: [...]}), or {} when it was none.
- * @param {number} status
- *   The HTTP status, for the sentence when the body names nothing.
- *
- * @return {Error}
- */
-export const refusalError = (body, status) => {
-  const first = body?.errors?.[0];
-  const error = new Error(
-    first?.message ??
-      Drupal.t('The request failed (@status).', { '@status': status }),
-  );
-  error.hint = first?.hint ?? null;
-  return error;
-};
-
-/**
  * POSTs to a blueprint gesture route, naming the canvas on the query.
+ *
+ * @param {string} path
+ *   The route's path, relative to the site root.
+ * @param {object} payload
+ *   The JSON body; {} when the route reads none.
+ *
+ * @return {Promise<object>}
+ *   The decoded response body; rejects with refusalError's Error.
  */
 const post = (path, payload = {}) =>
-  postJson(Drupal.Daedalus.ModePluginBase.url(path, canvasCoordinates()), payload);
+  postJson(
+    Drupal.Daedalus.ModePluginBase.url(path, canvasCoordinates()),
+    payload,
+  );
 
 /**
  * A refusal as one sentence for the editor: the message, then the hint.
+ *
+ * @param {Error} error
+ *   The refusal (refusalError), or any Error, whose `hint` may be unset.
+ *
+ * @return {string}
+ *   The sentence.
  */
 export const failureMessage = (error) =>
   [error.message, error.hint].filter(Boolean).join(' ');
@@ -138,6 +157,11 @@ export const failureMessage = (error) =>
 /**
  * Reports through the one edit-mode message display (toast +
  * notifications sidebar).
+ *
+ * @param {string} text
+ *   The sentence to show.
+ * @param {string} type
+ *   The message type, `status` or `error`.
  */
 export const report = (text, type) => {
   Drupal.Daedalus.ModeManager.getPlugin('edit').message(text, type);
@@ -200,6 +224,9 @@ const closeDialog = () => {
  * repaints the row through the store) on success, report the server's
  * refusal through the one message display on failure (the dialog stays
  * open for the correction).
+ *
+ * @param {HTMLButtonElement} button
+ *   The dialog's Save button, disabled while the request is in flight.
  */
 const commitDetails = (button) => {
   const id = pendingDetails?.id;
@@ -207,7 +234,9 @@ const commitDetails = (button) => {
     return;
   }
   const dialog = document.querySelector('.daedalus-layout-blueprint-details');
-  const label = document.getElementById('daedalus-layout-blueprint-label').value.trim();
+  const label = document
+    .getElementById('daedalus-layout-blueprint-label')
+    .value.trim();
   const description = document
     .getElementById('daedalus-layout-blueprint-description')
     .value.trim();
@@ -229,13 +258,17 @@ const commitDetails = (button) => {
   if (subject) {
     payload.subject = subject.value;
   }
-  const hosts = dialog ? [...dialog.querySelectorAll('[data-blueprint-bundle]')] : [];
+  const hosts = dialog
+    ? [...dialog.querySelectorAll('[data-blueprint-bundle]')]
+    : [];
   if (hosts.length) {
     payload.bundles = hosts
       .filter((input) => input.checked)
       .map((input) => input.getAttribute('data-blueprint-bundle'));
   }
-  const groups = dialog ? [...dialog.querySelectorAll('[data-blueprint-group]')] : [];
+  const groups = dialog
+    ? [...dialog.querySelectorAll('[data-blueprint-group]')]
+    : [];
   if (groups.length) {
     payload.groups = groups
       .filter((input) => input.checked)
@@ -309,6 +342,9 @@ export const setBlueprintSiteFavorite = (id, favorite) =>
  * Deletes a blueprint; the response's delta removes the row through the
  * store, and dead provenance degrades a placed copy's "Update blueprint
  * 'X'" verb back to plain Save as blueprint.
+ *
+ * @param {string} id
+ *   The blueprint's id.
  */
 const deleteBlueprint = (id) => {
   post(`/daedalus-blueprint/blueprint/${encodeURIComponent(id)}/delete`)
@@ -389,7 +425,9 @@ export const installBlueprintGestures = () => {
       return;
     }
     const label = document.getElementById('daedalus-layout-blueprint-label');
-    const description = document.getElementById('daedalus-layout-blueprint-description');
+    const description = document.getElementById(
+      'daedalus-layout-blueprint-description',
+    );
     if (label) {
       label.value = pendingDetails.label;
     }

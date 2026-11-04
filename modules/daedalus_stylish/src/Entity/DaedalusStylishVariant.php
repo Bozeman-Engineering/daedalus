@@ -141,10 +141,11 @@ class DaedalusStylishVariant extends EditorialContentEntityBase implements Daeda
       ->setSetting('max_length', 255);
 
     // Shipped-variant identity (the disk lane): which module's
-    // MODULE.daedalus_stylish.variants.yml this variant came from, and the hash of the
-    // styles as shipped. Non-revisionable like the other identity fields:
-    // the disk relationship belongs to the variant, not to any one revision,
-    // so reverting a revision never resurrects a stale shipped-source state.
+    // MODULE.daedalus_stylish.variants.yml this variant came from, and the hash
+    // of the styles as shipped. Non-revisionable like the other identity
+    // fields: the disk relationship belongs to the variant, not to any one
+    // revision, so reverting a revision never resurrects a stale shipped-source
+    // state.
     $fields['provider'] = BaseFieldDefinition::create('string')
       ->setLabel(new TranslatableMarkup('Provider'))
       ->setDescription(new TranslatableMarkup('The module whose variants file ships this variant. Empty for variants created in the UI or by AI, which have no disk source and therefore no revert-to-defaults.'))

@@ -12,7 +12,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * A blueprint placement is a total statement against daedalus_stylish's birth defaults.
+ * A placement is a total statement against daedalus_stylish's birth defaults.
  *
  * The placement expansion runs as a DRESSED nested batch, so the styling
  * layer's birth subscriber stamps nothing under it: the placed root wears

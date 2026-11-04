@@ -1,4 +1,3 @@
-import { h } from 'preact';
 import { useSelector } from 'react-redux';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { createSelectableTracker } from '../../selection/selectable-tracker';
@@ -72,6 +71,14 @@ const CARET_DOWN =
 /**
  * A verb's label on this chip: the single-selection menuLabel names the
  * target ("Update blueprint 'X'"); a real set keeps the static label.
+ *
+ * @param {object} verb
+ *   A registered verb.
+ * @param {string[]} selectedKeys
+ *   The ordered selection set.
+ *
+ * @return {string}
+ *   The label.
  */
 const chipVerbLabel = (verb, selectedKeys) =>
   verb.menuLabel && selectedKeys.length === 1
@@ -82,6 +89,17 @@ const chipVerbLabel = (verb, selectedKeys) =>
  * One verb as a chip button: icon, and the text label at full density
  * (or always, for a verb with no icon). `className` layers a split
  * control's half modifier on the verb skin.
+ *
+ * @param {object} props
+ *   The button's props.
+ * @param {object} props.verb
+ *   The run verb.
+ * @param {string[]} props.selectedKeys
+ *   The ordered selection set the verb runs over.
+ * @param {boolean} props.labels
+ *   Whether the text label renders beside the icon.
+ * @param {string} [props.className]
+ *   An extra class on the button (a split control's half modifier).
  */
 const VerbButton = ({ verb, selectedKeys, labels, className = '' }) => {
   const verbLabel = chipVerbLabel(verb, selectedKeys);
@@ -124,6 +142,15 @@ const VerbButton = ({ verb, selectedKeys, labels, className = '' }) => {
  * `__verb--caret`) carry only what its blue chip needs over it
  * (selection-frame.css). Group members are run verbs: a widget verb has
  * no run to put behind a caret and never carries a group.
+ *
+ * @param {object} props
+ *   The control's props.
+ * @param {{group: string, primary: object, rest: object[]}} props.entry
+ *   The group entry (verb-groups.js groupVerbs).
+ * @param {string[]} props.selectedKeys
+ *   The ordered selection set the verbs run over.
+ * @param {boolean} props.labels
+ *   Whether the main half renders its text label.
  */
 const GroupControl = ({ entry, selectedKeys, labels }) => {
   const { primary, rest } = entry;
@@ -174,6 +201,15 @@ const GroupControl = ({ entry, selectedKeys, labels }) => {
  * ladder as the plain verb buttons); its returned cleanup runs before
  * each re-run and on unmount, and the slot is cleared so a widget never
  * sees a predecessor's DOM.
+ *
+ * @param {object} props
+ *   The slot's props.
+ * @param {object} props.verb
+ *   The widget verb.
+ * @param {string} props.selectedKey
+ *   The primary selection's key, the widget's subject.
+ * @param {boolean} props.labels
+ *   The density ladder's labels flag, handed to the widget.
  */
 const WidgetSlot = ({ verb, selectedKey, labels }) => {
   const slotRef = useRef(null);
@@ -232,13 +268,15 @@ const SelectionFrame = () => {
   // frame read, and it mutates live (the settings select mirrors the
   // saved value onto html), so the frame re-renders on its mutation.
   const [density, setDensity] = useState(
-    document.documentElement.getAttribute('data-daedalus-ui-chrome-density') ?? 'full',
+    document.documentElement.getAttribute('data-daedalus-ui-chrome-density') ??
+      'full',
   );
   useEffect(() => {
     const observer = new MutationObserver(() => {
       setDensity(
-        document.documentElement.getAttribute('data-daedalus-ui-chrome-density') ??
-          'full',
+        document.documentElement.getAttribute(
+          'data-daedalus-ui-chrome-density',
+        ) ?? 'full',
       );
     });
     observer.observe(document.documentElement, {
@@ -324,7 +362,10 @@ const SelectionFrame = () => {
         return;
       }
       anchor.hidden = false;
-      anchor.classList.toggle('daedalus-ui-frame__anchor--viewport', viewportAnchored);
+      anchor.classList.toggle(
+        'daedalus-ui-frame__anchor--viewport',
+        viewportAnchored,
+      );
       const offsets = viewportAnchored
         ? { right: -Infinity, top: -Infinity }
         : (Drupal.displace?.offsets ?? {});
@@ -371,7 +412,9 @@ const SelectionFrame = () => {
   const chipRef = keyRef(chipRefs.current);
 
   return (
-    <div className={`daedalus-ui-frame${editing ? ' daedalus-ui-frame--editing' : ''}`}>
+    <div
+      className={`daedalus-ui-frame${editing ? ' daedalus-ui-frame--editing' : ''}`}
+    >
       <div
         ref={hoverRef}
         className="daedalus-ui-frame__stroke daedalus-ui-frame__stroke--hover"

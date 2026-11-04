@@ -1,6 +1,47 @@
 import { CAPABILITIES, isCapability } from '../selection/capable-model.js';
 
 /**
+ * The capability a verb requires for a kind: its one declared capability,
+ * or the kind's entry of its per-kind map.
+ *
+ * @param {object} verb
+ *   A registered verb.
+ * @param {string} kind
+ *   The key's semantic kind.
+ *
+ * @return {string}
+ *   The capability.
+ */
+export const verbCapability = (verb, kind) =>
+  typeof verb.capability === 'string' ? verb.capability : verb.capability[kind];
+
+/**
+ * Which key a verb's capability is asked of for a kind: 'element' (the
+ * key itself) or 'parent' (its projection parent).
+ *
+ * A verb whose subject depends on the key itself (daedalus_layout's
+ * Insert: after a block, so the block's parent; inside a slot door, a
+ * block whose published insert verdict is its own) declares `of` as a
+ * function of the key and its kind, answering one of the two subjects.
+ *
+ * @param {object} verb
+ *   A registered verb.
+ * @param {string} kind
+ *   The key's semantic kind.
+ * @param {?string} key
+ *   The selectable key, for a function-valued `of`.
+ *
+ * @return {string}
+ *   'element' or 'parent'.
+ */
+export const verbSubject = (verb, kind, key = null) => {
+  if (typeof verb.of === 'function') {
+    return verb.of(key, kind);
+  }
+  return typeof verb.of === 'string' ? verb.of : verb.of[kind];
+};
+
+/**
  * The verb registry's applies gate, pure.
  *
  * Whether a verb applies to one selectable key, in order: the verb's
@@ -19,13 +60,19 @@ import { CAPABILITIES, isCapability } from '../selection/capable-model.js';
  * @param {?string} key
  *   The selectable key.
  * @param {object} facts
- *   - kind: the key's semantic kind (selectable-key.js kindOf).
- *   - editingKey: the store's live edit key, or null.
- *   - capable: (key, capability) => boolean, the gate.
- *   - parent: the key's projection parent key, or null (asked when the
- *     verb's `of` is 'parent').
+ *   The key's facts.
+ * @param {?string} facts.kind
+ *   The key's semantic kind (selectable-key.js kindOf).
+ * @param {?string} facts.editingKey
+ *   The store's live edit key, or null.
+ * @param {function(string, string): boolean} facts.capable
+ *   The gate, asked (key, capability).
+ * @param {?string} facts.parent
+ *   The key's projection parent key, or null (asked when the verb's `of`
+ *   is 'parent').
  *
  * @return {boolean}
+ *   Whether the verb applies to the key.
  */
 export const verbApplies = (
   verb,
@@ -43,41 +90,6 @@ export const verbApplies = (
     return false;
   }
   return !verb.applies || verb.applies(key);
-};
-
-/**
- * The capability a verb requires for a kind: its one declared capability,
- * or the kind's entry of its per-kind map.
- *
- * @param {object} verb
- * @param {string} kind
- *
- * @return {string}
- */
-export const verbCapability = (verb, kind) =>
-  typeof verb.capability === 'string' ? verb.capability : verb.capability[kind];
-
-/**
- * Which key a verb's capability is asked of for a kind: 'element' (the
- * key itself) or 'parent' (its projection parent).
- *
- * A verb whose subject depends on the key itself (daedalus_layout's
- * Insert: after a block, so the block's parent; inside a slot door, a
- * block whose published insert verdict is its own) declares `of` as a
- * function of the key and its kind, answering one of the two subjects.
- *
- * @param {object} verb
- * @param {string} kind
- * @param {?string} key
- *   The selectable key, for a function-valued `of`.
- *
- * @return {string}
- */
-export const verbSubject = (verb, kind, key = null) => {
-  if (typeof verb.of === 'function') {
-    return verb.of(key, kind);
-  }
-  return typeof verb.of === 'string' ? verb.of : verb.of[kind];
 };
 
 /**

@@ -58,17 +58,16 @@ class PendingTargetCollector {
 
   public function __construct(
     protected PrivateTempStoreFactory $tempStoreFactory,
-    // A service closure, not the mapper itself: the mapper's construction
-    // graph (element locator -> field handler manager, whose collector pass
-    // eagerly builds every tagged field handler) leads back to services
-    // that depend on this collector, so resolving it during THIS service's
-    // construction closes a container cycle whenever the collector's side
-    // is built first (e.g. a consumer of daedalus_stylish's style-map field handler,
-    // whose style-value resolver reaches this collector through the
-    // generate handler, constructed before the field handler manager). The
-    // closure defers resolution to flush time, when the container is
-    // settled. Setter injection is NOT enough: `calls` also run inside
-    // construction.
+    // A service closure, not the mapper itself: the mapper's construction graph
+    // (element locator -> field handler manager, whose collector pass eagerly
+    // builds every tagged field handler) leads back to services that depend on
+    // this collector, so resolving it during THIS service's construction closes
+    // a container cycle whenever the collector's side is built first (e.g. a
+    // consumer of daedalus_stylish's style-map field handler, whose style-value
+    // resolver reaches this collector through the generate handler, constructed
+    // before the field handler manager). The closure defers resolution to flush
+    // time, when the container is settled. Setter injection is NOT enough:
+    // `calls` also run inside construction.
     protected \Closure $targetKeyMapper,
     protected DeferredProcessorManager $processorManager,
   ) {}
@@ -125,8 +124,8 @@ class PendingTargetCollector {
    * Flushes the turn's registrations into one trigger command.
    *
    * Stashes the batch (type + media uuids + targets) into the
-   * daedalus_ai_deferred private tempstore under a fresh batch id and builds the
-   * TriggerDeferredCommand the client processes it with. Clears the
+   * daedalus_ai_deferred private tempstore under a fresh batch id and builds
+   * the TriggerDeferredCommand the client processes it with. Clears the
    * collection either way.
    *
    * @param \Symfony\Component\HttpFoundation\Request $request

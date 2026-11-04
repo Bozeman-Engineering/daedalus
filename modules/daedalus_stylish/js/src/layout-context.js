@@ -60,17 +60,22 @@ export const CHROME_SELECTOR = [
  * text check would read a stylesheet's rules as page copy. hasText and
  * childCount skip them beside the chrome above.
  */
-export const NON_BOX_SELECTOR = ['style', 'script', 'template', 'link'].join(', ');
+export const NON_BOX_SELECTOR = ['style', 'script', 'template', 'link'].join(
+  ', ',
+);
 
 /**
  * Whether a child element is neither editor chrome nor a box-less
  * element: the one test both facts apply per element child.
  *
  * @param {Element} child
+ *   An element child of the box under test.
  *
- * @returns {boolean}
+ * @return {boolean}
+ *   True when the child is a page box the layout facts count.
  */
-const isPageBox = (child) => !child.matches(CHROME_SELECTOR) && !child.matches(NON_BOX_SELECTOR);
+const isPageBox = (child) =>
+  !child.matches(CHROME_SELECTOR) && !child.matches(NON_BOX_SELECTOR);
 
 /**
  * Whether a node's subtree carries any real (non-whitespace) text.
@@ -82,8 +87,10 @@ const isPageBox = (child) => !child.matches(CHROME_SELECTOR) && !child.matches(N
  * plain node tests with fake nodes.
  *
  * @param {Node} node
+ *   The subtree root.
  *
  * @return {boolean}
+ *   True on the first non-whitespace text node found.
  */
 export const hasTextNode = (node) => {
   for (const child of node.childNodes) {
@@ -104,8 +111,10 @@ export const hasTextNode = (node) => {
  * user cannot see.
  *
  * @param {Element} element
+ *   The box whose children are counted.
  *
  * @return {number}
+ *   The child box count.
  */
 export const childCount = (element) => {
   let count = 0;
@@ -149,7 +158,9 @@ export const childCount = (element) => {
  * offer rule, the code view's part gestures) keep reading booleans.
  *
  * @param {Element} element
+ *   The selected element.
  * @param {CSSStyleDeclaration} computed
+ *   Its computed style.
  * @param {Object<string, boolean>} parts
  *   Declared part selector → annotation presence.
  * @param {string[]} selectors
@@ -160,6 +171,7 @@ export const childCount = (element) => {
  *   childCount: number, hasText: boolean,
  *   parts: Object<string, boolean>,
  *   partChildCount: Object<string, number>}}
+ *   The facts object every consumer reads.
  */
 export const selfFacts = (element, computed, parts = {}, selectors = []) => {
   const partChildCount = {};
@@ -188,10 +200,13 @@ export const selfFacts = (element, computed, parts = {}, selectors = []) => {
  * ancestor's).
  *
  * @param {Element} parent
+ *   The selection's immediate parent box.
  * @param {CSSStyleDeclaration} computed
+ *   The parent's computed style.
  *
  * @return {{display: string, flexDirection: string, alignItems: string,
  *   key: ?string}}
+ *   The parent's layout facts and the attribution key.
  */
 export const parentFacts = (parent, computed) => ({
   display: computed.display,
@@ -240,7 +255,12 @@ export const readLayoutContext = (key, parts = {}, selectors = []) => {
   }
   const parent = element.parentElement;
   return {
-    self: selfFacts(element, window.getComputedStyle(element), parts, selectors),
+    self: selfFacts(
+      element,
+      window.getComputedStyle(element),
+      parts,
+      selectors,
+    ),
     parent: parent
       ? parentFacts(parent, window.getComputedStyle(parent))
       : null,

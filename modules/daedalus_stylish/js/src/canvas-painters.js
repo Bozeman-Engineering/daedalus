@@ -128,6 +128,7 @@ const PAINTERS = {
  * Resolves the painter a property belongs to.
  *
  * @param {string} property
+ *   A CSS property.
  *
  * @return {?{kind: string, parts: string[]}}
  *   The painter's band kind and the parts this property addresses, or
@@ -163,6 +164,7 @@ export const painterFor = (property) => {
  *
  * @return {Array<{kind: string, left: number, top: number,
  *   width: number, height: number}>}
+ *   The band rects, each painter's together.
  */
 export const highlightRects = (properties, context) => {
   const selected = new Map();

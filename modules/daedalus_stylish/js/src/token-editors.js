@@ -28,6 +28,22 @@ import { GradientBuilder } from './gradient-builder.js';
  * name and save), no unset (a token's value is never empty), and the
  * token's own spelling left out of the offer and the capture (`exclude`:
  * one var() cycle and the property is invalid everywhere it is used).
+ *
+ * @param {object} props
+ *   The editor contract.
+ * @param {?string} props.value
+ *   The working draft (a color spelling or a reference).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The roster the palette offer reads from.
+ * @param {?string} props.exclude
+ *   A style spelling the editor must not offer (the token's own), or
+ *   null.
+ * @param {Function} props.onPreview
+ *   Called with the draft per input event.
+ * @param {Function} props.onCommit
+ *   Called with the value per settled gesture.
  */
 export const ColorValueEditor = ({
   value,
@@ -54,6 +70,19 @@ export const ColorValueEditor = ({
  * constraints (a token's value is the gradient itself, not a
  * background-image layer stack) and no inner mint chrome: the card owns
  * the name and save gestures around it.
+ *
+ * @param {object} props
+ *   The editor contract.
+ * @param {?string} props.value
+ *   The working draft (a gradient spelling or a reference).
+ * @param {object} props.guide
+ *   The style guide payload.
+ * @param {object} props.materials
+ *   The roster the builder's offers read from.
+ * @param {Function} props.onPreview
+ *   Called with the draft per input event.
+ * @param {Function} props.onCommit
+ *   Called with the value per settled gesture.
  */
 export const GradientValueEditor = ({
   value,
@@ -79,6 +108,15 @@ export const GradientValueEditor = ({
  * shadow) edits as text, references included, under the same editor
  * contract: every keystroke previews, blur settles. The server validates
  * the shape on commit.
+ *
+ * @param {object} props
+ *   The editor contract.
+ * @param {?string} props.value
+ *   The working draft.
+ * @param {Function} props.onPreview
+ *   Called with the text per keystroke.
+ * @param {Function} props.onCommit
+ *   Called with the text on blur or Enter.
  */
 export const TextValueEditor = ({ value, onPreview, onCommit }) => (
   <input
@@ -107,13 +145,28 @@ export const TextValueEditor = ({ value, onPreview, onCommit }) => (
  * wearing its own family. The value stays the text (a generic, a theme
  * family and a minted family all live in one stack); a chip's add is a
  * settle, as typing then blurring is.
+ *
+ * @param {object} props
+ *   The editor contract.
+ * @param {?string} props.value
+ *   The working draft, a font-family stack.
+ * @param {object} props.materials
+ *   The roster whose fonts become chips.
+ * @param {Function} props.onPreview
+ *   Called with the text per keystroke.
+ * @param {Function} props.onCommit
+ *   Called with the stack on blur, Enter, or a chip's add.
  */
 export const FontStackEditor = ({ value, materials, onPreview, onCommit }) => {
   const stack = typeof value === 'string' ? value : '';
   const fonts = fontOptions(materials);
   return (
     <div className="daedalus-stylish-material-card__stack">
-      <TextValueEditor value={value} onPreview={onPreview} onCommit={onCommit} />
+      <TextValueEditor
+        value={value}
+        onPreview={onPreview}
+        onCommit={onCommit}
+      />
       {fonts.length > 0 && (
         <div
           className="daedalus-stylish-material-card__families"
@@ -146,6 +199,16 @@ export const FontStackEditor = ({ value, materials, onPreview, onCommit }) => {
  * color editor for color scales, the gradient editor for gradient scales,
  * the stack editor with the minted families for the scale font-family is
  * bound to, the text editor for the rest.
+ *
+ * @param {object} guide
+ *   The style guide payload (its constraintDefaults names the font scale).
+ * @param {?string} scale
+ *   The token's scale id.
+ * @param {?string} shape
+ *   The scale's declared shape.
+ *
+ * @return {Function}
+ *   The editor component.
  */
 export const tokenEditor = (guide, scale, shape) =>
   ({
@@ -168,18 +231,45 @@ export const tokenEditor = (guide, scale, shape) =>
  * the editor anatomy it always had. Pure drafts-in/drafts-out like the
  * shape editors themselves: the caller owns commit (mergedPair) and the
  * save gesture.
+ *
+ * @param {object} props
+ *   The pair control's props.
+ * @param {object} props.guide
+ *   The style guide payload (its conditions label the scheme).
+ * @param {object} props.materials
+ *   The roster the shape editor's offers read from.
+ * @param {Function} props.Editor
+ *   The shape editor component (tokenEditor), mounted per face.
+ * @param {?string} props.draft
+ *   The default face's working draft.
+ * @param {?string} props.darkDraft
+ *   The scheme face's working draft, or null while the pair is single.
+ * @param {?string} props.scheme
+ *   The scheme-axis condition name, or null when the guide declares none.
+ * @param {?string} props.exclude
+ *   A style spelling the editor must not offer (the token's own), or
+ *   null.
+ * @param {Function} props.onDraft
+ *   Called with the default face's draft on preview and commit alike.
+ * @param {Function} props.onDark
+ *   Called with the scheme face's draft (null drops the entry).
  */
-export const SchemePairEditor = ({
-  guide,
-  materials,
-  Editor,
-  draft,
-  darkDraft,
-  scheme,
-  exclude = null,
-  onDraft,
-  onDark,
-}) => {
+export const SchemePairEditor = (props) => {
+  // Destructured in the body, not the signature: `Editor` is read only as
+  // a JSX tag, which core's eslint-scope cannot see, and the module's
+  // no-unused-vars allowance for PascalCase components covers variables,
+  // never parameters.
+  const {
+    guide,
+    materials,
+    Editor,
+    draft,
+    darkDraft,
+    scheme,
+    exclude = null,
+    onDraft,
+    onDark,
+  } = props;
   const schemeLabel = guide?.conditions?.[scheme]?.label ?? scheme;
   return (
     <div className="daedalus-stylish-scheme-pair">
@@ -216,7 +306,9 @@ export const SchemePairEditor = ({
         ) : (
           <Fragment>
             <div className="daedalus-stylish-scheme-pair__head">
-              <span className="daedalus-stylish-scheme-pair__scheme">{schemeLabel}</span>
+              <span className="daedalus-stylish-scheme-pair__scheme">
+                {schemeLabel}
+              </span>
               <button
                 type="button"
                 className="daedalus-ui-chip daedalus-stylish-scheme-pair__remove"

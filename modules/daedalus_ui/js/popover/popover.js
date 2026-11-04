@@ -7,16 +7,17 @@
  * pop-up lands and how it leaves; what shows inside is the rider's. Any
  * chrome library declares daedalus_ui/popover as a dependency and
  * opens it imperatively:
- * @code
- *   const root = Drupal.Daedalus.popover.open({
- *     anchor: kebab,        // or x, y from a pointer
- *     side: 'above',        // 'below' (default) or 'above': the preferred side
- *     align: 'end',         // 'start' (default) or 'end': which edges align
- *     content: list,        // optional: a Node appended before placement
- *     onClose,
- *   });
- *   // ...or fill root later (a portal); the surface re-places on resize.
- * @endcode
+ *
+ * @example
+ * const root = Drupal.Daedalus.popover.open({
+ *   anchor: kebab,        // or x, y from a pointer
+ *   side: 'above',        // 'below' (default) or 'above': the preferred side
+ *   align: 'end',         // 'start' (default) or 'end': which edges align
+ *   content: list,        // optional: a Node appended before placement
+ *   onClose,
+ * });
+ * // ...or fill root later (a portal); the surface re-places on resize.
+ *
  * open() returns the root Element (`.daedalus-ui-popover`), appended to the
  * running document's body and positioned fixed: on the anchor's preferred
  * `side` (below by default; above for a rider that must never cover what
@@ -77,9 +78,11 @@ let mounted = null;
 /**
  * Closes the surface. Idempotent; fires onClose exactly once per open.
  *
- * @param {object} options
- *   {restoreFocus?}: whether the opener captured at open gets its focus
- *   back (a keyboard leave), default false (a pointer leave).
+ * @param {object} [options]
+ *   How the surface leaves.
+ * @param {boolean} [options.restoreFocus]
+ *   Whether the opener captured at open gets its focus back (a keyboard
+ *   leave); false by default (a pointer leave).
  */
 const close = ({ restoreFocus = false } = {}) => {
   if (!mounted) {
@@ -100,11 +103,23 @@ const isOpen = () => mounted !== null;
  * Opens the surface, replacing any open one.
  *
  * @param {object} spec
- *   {anchor?, x?, y?, side?, align?, content?, onClose?}: either an
- *   anchor Element or both viewport coordinates; side is 'below'
- *   (default) or 'above', the preferred side of the anchor; align is
- *   'start' (default) or 'end'; content is an optional Node appended
- *   before placement.
+ *   Where the surface lands and what it carries: either an anchor or
+ *   both viewport coordinates.
+ * @param {?Element} [spec.anchor]
+ *   The element the surface hangs against.
+ * @param {?number} [spec.x]
+ *   The pointer's viewport x, when there is no anchor.
+ * @param {?number} [spec.y]
+ *   The pointer's viewport y, when there is no anchor.
+ * @param {string} [spec.side]
+ *   The preferred side of the anchor, 'below' (the default) or 'above'.
+ * @param {string} [spec.align]
+ *   Which edges of anchor and surface align, 'start' (the default) or
+ *   'end'.
+ * @param {?Node} [spec.content]
+ *   A node appended to the root before placement.
+ * @param {?Function} [spec.onClose]
+ *   Called once when the surface closes.
  *
  * @return {Element}
  *   The surface root, for the rider to fill.

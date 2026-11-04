@@ -1,6 +1,10 @@
 import { h } from 'preact';
 import { useState } from 'preact/hooks';
-import { controlWidgets, litValues, withheldReasonFor } from '../../controls.js';
+import {
+  controlWidgets,
+  litValues,
+  withheldReasonFor,
+} from '../../controls.js';
 import { normalizeValue, propertyStops } from '../../widget-values.js';
 import { stackAt } from '../../style-stack.js';
 import { valueSpaceFor } from '../../value-space.js';
@@ -103,6 +107,41 @@ const BORDER_LONGHANDS = strokeSideLonghands(SIDES);
  * corners, a border and an outline, so sanction alone decides where the
  * control appears.
  */
+
+/**
+ * The widget.
+ *
+ * @param {object} props
+ *   The widget contract's props (basic-controls.js renderControl).
+ * @param {object} props.model
+ *   The control model (controls.js controlModels): the owned
+ *   properties' keys, stacks and reads at the editing compound, the
+ *   constraints, the grant and what the write address withholds.
+ * @param {object} props.guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide).
+ * @param {object} props.materials
+ *   The materials roster the stop vocabularies derive from.
+ * @param {object} props.styleMap
+ *   The root entity's style map, the write layer's seam
+ *   (lib/write-layer.js); read-only.
+ * @param {?object} [props.source]
+ *   The state source (leader or satellite); null in a host without one.
+ * @param {?object} [props.skinMaterials]
+ *   The skin material gates ({canCreate}): honest chrome for the
+ *   well's save-as-token gesture.
+ * @param {Function} props.onPreview
+ *   `(properties)`: previews the set on the canvas, routed per key.
+ * @param {Function} props.onRelease
+ *   `(properties)`: releases the preview.
+ * @param {Function} props.onCommit
+ *   `(properties)`: commits the set through the op queue.
+ * @param {?Function} [props.onPickCondition]
+ *   Poses the canvas at a condition (the rows' "Also set at" entries).
+ * @param {?Function} [props.onOpenDocument]
+ *   Opens a variant's document (the row menu's doorway).
+ * @param {object} [props.law]
+ *   The law gate ({canView}, drupalSettings.daedalusStylish.law).
+ */
 const CornersBorder = ({
   model,
   guide,
@@ -120,8 +159,14 @@ const CornersBorder = ({
   const [ringOpen, setRingOpen] = useState(false);
   const granted = model.granted ?? [];
   const cornersWithheld = model.withheld?.['border-radius'] ?? null;
-  const borderWithheld = withheldReasonFor(model, Object.values(STROKES.border));
-  const outlineWithheld = withheldReasonFor(model, Object.values(STROKES.outline));
+  const borderWithheld = withheldReasonFor(
+    model,
+    Object.values(STROKES.border),
+  );
+  const outlineWithheld = withheldReasonFor(
+    model,
+    Object.values(STROKES.outline),
+  );
   const offsetWithheld = model.withheld?.['outline-offset'] ?? null;
 
   const stopsOf = (parts) =>

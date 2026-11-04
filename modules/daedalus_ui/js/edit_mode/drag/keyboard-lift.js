@@ -74,6 +74,12 @@ export const isLifted = () => !!lifted;
 /**
  * The display label of a gap neighbor's selectable key, from the spine's
  * one label resolver (Blueprint.labelForKey, never null).
+ *
+ * @param {?Element} element
+ *   A gap neighbor (a flow item or the gap's container).
+ *
+ * @return {string}
+ *   The label, or "the container" for an element with no selectable key.
  */
 const labelForElement = (element) => {
   const key = element?.getAttribute?.('data-selectable');
@@ -85,6 +91,16 @@ const labelForElement = (element) => {
 
 /**
  * A spoken/announced description of a gap: where a drop would land.
+ *
+ * @param {Object} gap
+ *   A gap target (enumerateGapTargets' shape).
+ * @param {number} index
+ *   The gap's position among its group's slots, zero-based.
+ * @param {number} count
+ *   The group's slot count.
+ *
+ * @return {string}
+ *   The description, with the position appended.
  */
 const describeGap = (gap, index, count) => {
   let place;
@@ -117,6 +133,12 @@ const describeGap = (gap, index, count) => {
  * the main entity ground to the projection root. Groups nest via the
  * projection index's ancestry, so the walk needs no DOM-containment
  * bookkeeping of its own.
+ *
+ * @param {Object[]} gaps
+ *   The flat gap list.
+ *
+ * @return {{groupOf: string[], groups: Map<string, number[]>}}
+ *   The walk: each gap's group key, and each group's flat indices.
  */
 const buildWalk = (gaps) => {
   const root = projectionRoot();
@@ -137,6 +159,14 @@ const buildWalk = (gaps) => {
  * The gap whose caret point sits nearest an element (the lifted element
  * for moves, the pending insert anchor for palette lifts), so the walk
  * starts where the user's attention already is.
+ *
+ * @param {Object[]} gaps
+ *   The flat gap list.
+ * @param {?Element} near
+ *   The element to start beside; anything else yields the first gap.
+ *
+ * @return {number}
+ *   The flat index of the nearest gap.
  */
 const nearestGapIndex = (gaps, near) => {
   if (!(near instanceof Element)) {
@@ -206,11 +236,13 @@ const unwatchStore = () => {
  * @param {Object} data
  *   The drag data the source's operations() consumes.
  * @param {Object} options
- *   - near: an Element the caret should start beside (the moved element,
- *     the pending insert anchor).
- *   - location: a placement-grammar location {anchor, placement, region?};
- *     when a gap matches it exactly, the caret starts there (wins over
- *     near).
+ *   Where the caret starts.
+ * @param {?Element} options.near
+ *   An Element the caret should start beside (the moved element, the
+ *   pending insert anchor).
+ * @param {?Object} options.location
+ *   A placement-grammar location {anchor, placement, region?}; when a gap
+ *   matches it exactly, the caret starts there (wins over near).
  *
  * @return {boolean}
  *   Whether the lift armed (false: unknown source, a drag already active,
@@ -286,6 +318,9 @@ const describeCurrentGap = () => {
  * rule, Drupal.Daedalus.scrollReveal), announce. A move that crosses into
  * a different container names it first (an empty gap's description
  * already does).
+ *
+ * @param {number} flatIndex
+ *   The flat index of the gap to move to.
  */
 const moveTo = (flatIndex) => {
   const from = lifted.walk.groupOf[lifted.index];
@@ -320,6 +355,14 @@ const moveTo = (flatIndex) => {
  * hosts — a multi-region sibling section is entered at its first region
  * stepping down, its last stepping up. Null at the outermost sibling's
  * edge; the walk clamps there.
+ *
+ * @param {string} groupKey
+ *   The current group's projection key.
+ * @param {number} delta
+ *   The step direction: 1 down, -1 up.
+ *
+ * @return {?string}
+ *   The adjacent group's key, or null at the edge.
  */
 const adjacentSiblingGroup = (groupKey, delta) => {
   const index = projectionIndex();
@@ -361,6 +404,9 @@ const adjacentSiblingGroup = (groupKey, delta) => {
  * stops, so without the continuation the edge would seal each container —
  * a second column had no keyboard path in. Clamps at the outermost
  * sibling's edge, like traversal's sibling clamp.
+ *
+ * @param {number} delta
+ *   The step direction: 1 down, -1 up.
  */
 const stepWithin = (delta) => {
   if (!lifted) {

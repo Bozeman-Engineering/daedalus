@@ -98,7 +98,9 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
   }
 
   /**
-   * Ships a design system with a member skin (a space and a color token) and variant.
+   * Ships a design system with a member skin and variant.
+   *
+   * The skin carries a space and a color token.
    */
   protected function createSystem(string $id, string $token): void {
     DesignSystem::create(['id' => $id, 'label' => ucfirst($id), 'default_skin' => $id])->save();
@@ -212,15 +214,15 @@ class DesignSystemSwitchSubscriberTest extends KernelTestBase {
   /**
    * Activating a packaged system syncs its package before the compiles.
    *
-   * A package syncs only under its own law: the importers defer it whole
-   * while its system is inactive (the daedalus_stylish_design_system_test package
-   * ships a variant on an axis only its own declaration adds,
-   * aurora_rhythm, and a package's declarations layer only while its
-   * system is active), so nothing of it exists when the package lands
-   * with nothing active, and the activation lands all of it. The sync
-   * runs after the roster reset and before the ids are touched and the
-   * files compiled, so the three files and the delta carry every member
-   * at once; the switch to a site-built system takes them out again.
+   * A package syncs only under its own law: the importers defer it whole while
+   * its system is inactive (the daedalus_stylish_design_system_test package
+   * ships a variant on an axis only its own declaration adds, aurora_rhythm,
+   * and a package's declarations layer only while its system is active), so
+   * nothing of it exists when the package lands with nothing active, and the
+   * activation lands all of it. The sync runs after the roster reset and before
+   * the ids are touched and the files compiled, so the three files and the
+   * delta carry every member at once; the switch to a site-built system takes
+   * them out again.
    */
   public function testActivatingPackagedSystemSyncsItsPackage(): void {
     $this->enableModules(['daedalus_stylish_design_system_test']);

@@ -9,7 +9,7 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\daedalus_blueprint\Plugin\Field\FieldType\JsonBlobItemBase;
 
 /**
- * The style map: every Daedalus Stylish style on this entity, in one JSON document.
+ * The style map: the entity's every Daedalus Stylish style, one JSON document.
  *
  * Maps selectable keys (SelectableKey format, verbatim — including the
  * `{parent}::.css-class` sub-element extension) to layered style entries:

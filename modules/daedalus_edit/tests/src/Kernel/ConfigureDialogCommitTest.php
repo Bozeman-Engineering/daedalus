@@ -78,7 +78,9 @@ class ConfigureDialogCommitTest extends FormCommitTestBase {
   }
 
   /**
-   * The Page template's id: the display the kernel base enables Layout Builder on.
+   * The Page template's id.
+   *
+   * The display the kernel base enables Layout Builder on.
    */
   protected const TEMPLATE_ID = 'node.page.default';
 
@@ -120,7 +122,9 @@ class ConfigureDialogCommitTest extends FormCommitTestBase {
   }
 
   /**
-   * The template's dialog storage: the tempstore-tracked defaults, nested-aware.
+   * The template's dialog storage.
+   *
+   * The tempstore-tracked defaults, nested-aware.
    */
   protected function templateFormStorage(): NestedSectionStorageInterface {
     $storage = $this->container->get('plugin.manager.layout_builder.section_storage')->load('defaults', [

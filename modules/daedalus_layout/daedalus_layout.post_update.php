@@ -214,19 +214,19 @@ function daedalus_layout_post_update_0004_remove_daedalus_edit_layout_block() {
  * Moves Add panel block icons from entity view displays onto block types.
  *
  * Block icons were per-display config
- * (`third_party_settings.daedalus_layout.block_config.icon.<block_plugin_id>`); the
- * icon is a property of the block TYPE now
+ * (`third_party_settings.daedalus_layout.block_config.icon.<block_plugin_id>`);
+ * the icon is a property of the block TYPE now
  * (`block_content.type.*.third_party.daedalus_layout.icon`, in the icon value
  * grammar \Drupal\daedalus_blueprint\IconResolver documents; stored path
- * strings are valid grammar values and migrate verbatim). Every display's
- * icon map is walked: inline_block icons land on their block type unless
- * the type already carries one (a configured icon is never overwritten, and
- * across displays the first-written value wins, matching the old model
- * where any variance between displays was accidental). Entries for other
- * plugin ids or missing bundles have no block type to carry them and are
- * dropped: the Add panel renders its default icon for those. The retired
- * `block_config` setting is deleted from each display either way; this
- * update and its test are the only place the old shape survives.
+ * strings are valid grammar values and migrate verbatim). Every display's icon
+ * map is walked: inline_block icons land on their block type unless the type
+ * already carries one (a configured icon is never overwritten, and across
+ * displays the first-written value wins, matching the old model where any
+ * variance between displays was accidental). Entries for other plugin ids or
+ * missing bundles have no block type to carry them and are dropped: the Add
+ * panel renders its default icon for those. The retired `block_config` setting
+ * is deleted from each display either way; this update and its test are the
+ * only place the old shape survives.
  */
 function daedalus_layout_post_update_0005_block_icons_to_block_types() {
   $entity_type_manager = \Drupal::entityTypeManager();

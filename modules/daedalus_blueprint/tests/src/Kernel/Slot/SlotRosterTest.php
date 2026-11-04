@@ -123,7 +123,7 @@ class SlotRosterTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * The constraint violations of the installed settings config holding a roster.
+   * The constraint violations of the installed settings holding a roster.
    *
    * The roster is overlaid on the installed object's raw data (the shape
    * SlotRosterGuardTest::validate() uses), so every other key the settings

@@ -34,9 +34,9 @@ use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
  * root-only wear is a fact of depth, and a subscriber that strips or
  * redresses it needs both facts the operation knew while it moved.
  *
- * Runs the real daedalus_layout stack: sections are only addressable by UUID (an
- * daedalus_layout third-party setting) and nested section lists only resolve through
- * NestedAwareSectionStorage when daedalus_layout is installed.
+ * Runs the real daedalus_layout stack: sections are only addressable by UUID
+ * (an daedalus_layout third-party setting) and nested section lists only
+ * resolve through NestedAwareSectionStorage when daedalus_layout is installed.
  */
 #[RunTestsInSeparateProcesses]
 #[CoversClass(BlueprintOperations::class)]
@@ -119,8 +119,8 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
   /**
    * Creates the fixture: an entity holding a nested-section container.
    *
-   * Structure: root section (daedalus_layout UUID) > container component (uuid ==
-   * embedded section uuid) > embedded section (daedalus_layout UUID).
+   * Structure: root section (daedalus_layout UUID) > container component (uuid
+   * == embedded section uuid) > embedded section (daedalus_layout UUID).
    *
    * @return \Drupal\Core\Entity\FieldableEntityInterface
    *   The saved root entity.
@@ -301,9 +301,9 @@ class BlueprintOperationsSectionEventsTest extends BlueprintKernelTestBase {
   /**
    * Tests the event carries the REAL layout for an explicit-layout add.
    *
-   * Sections are born with their layout, so subscribers keying on the
-   * layout (daedalus_stylish's per-layout default variants) see the truth at the
-   * one and only seam.
+   * Sections are born with their layout, so subscribers keying on the layout
+   * (daedalus_stylish's per-layout default variants) see the truth at the one
+   * and only seam.
    */
   public function testCreatedEventCarriesExplicitLayout(): void {
     $entity = $this->createEntityWithNestedSection();

@@ -303,7 +303,7 @@ class SkinMaterialUsageTest extends KernelTestBase {
   }
 
   /**
-   * The value grammar's directions: the scan, the literal rewrite, the respelling.
+   * The value grammar's directions: scan, literal rewrite, respelling.
    */
   public function testValueGrammar(): void {
     // The scan: every custom property, verbatim,

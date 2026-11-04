@@ -72,27 +72,25 @@ class CssPrinter {
   /**
    * The @scope limit for container-rooted blocks: the donut.
    *
-   * The daedalus_layout nests containers (a nested container renders inside the outer
-   * container), and every layout template's own markup carries the same
-   * part classes — so without a lower bound, an outer container's PART
-   * styles would also match the identical markup of every nested
-   * container. The donut stops at nested container roots: what a
-   * container's part key styles is that container's own markup, never an
-   * inner container's (which has its own key, stamped at its own root at
-   * every depth). The donut stops at nested BLOCK roots too: a block's
-   * interior (a collapsed block's composed markup, an inline block's own
-   * layout classes) belongs to the block's own key family.
+   * The daedalus_layout nests containers (a nested container renders inside the
+   * outer container), and every layout template's own markup carries the same
+   * part classes — so without a lower bound, an outer container's PART styles
+   * would also match the identical markup of every nested container. The donut
+   * stops at nested container roots: what a container's part key styles is that
+   * container's own markup, never an inner container's (which has its own key,
+   * stamped at its own root at every depth). The donut stops at nested BLOCK
+   * roots too: a block's interior (a collapsed block's composed markup, an
+   * inline block's own layout classes) belongs to the block's own key family.
    *
    * Which entries take it is donutLimit(): the root entry (its co-target
-   * companion reaches claiming interiors) and PART-FIRST selectors, the
-   * owner's own anatomy, whose class names recur in nested anatomy. Every
-   * other selector (a tag, a type, `> *`) reaches its whole subtree on
-   * purpose: it addresses other elements by relation, a type compound
-   * names a nested root itself, and @scope proximity precedence is what
-   * bounds it (the nearest key's rule wins at equal weight).
-   * DaedalusStylishLiveAttribution demands the stamps that form this boundary on
-   * live renders (container roots, and block roots once the map styles any
-   * container).
+   * companion reaches claiming interiors) and PART-FIRST selectors, the owner's
+   * own anatomy, whose class names recur in nested anatomy. Every other
+   * selector (a tag, a type, `> *`) reaches its whole subtree on purpose: it
+   * addresses other elements by relation, a type compound names a nested root
+   * itself, and @scope proximity precedence is what bounds it (the nearest
+   * key's rule wins at equal weight). DaedalusStylishLiveAttribution demands
+   * the stamps that form this boundary on live renders (container roots, and
+   * block roots once the map styles any container).
    */
   public const CONTAINER_SCOPE_LIMIT = ':scope [data-selectable^="container:"], :scope [data-selectable^="block:"]';
 
@@ -442,13 +440,13 @@ class CssPrinter {
    *   never co-targets (part and children entries, and base:{tag}
    *   defaults, which ARE the interposer this mechanism exists to beat).
    *
-   *   A block binding an animation to a trigger additionally emits the
-   *   polyfill hold (TRIGGER_HOLD_SUPPORTS) as a sibling of the rule, after
-   *   the co-target companion and inside the same condition wrappers: the
-   *   block's own selector list, pseudo suffixes included, each member
-   *   extended with `:not([data-daedalus-stylish-triggered])`. Every lane rides this
-   *   seam (per-entity maps, compiled variants, skin defaults, the bare
-   *   lane), so a trigger holds the same way wherever it was declared.
+   *   A block binding an animation to a trigger additionally emits the polyfill
+   *   hold (TRIGGER_HOLD_SUPPORTS) as a sibling of the rule, after the
+   *   co-target companion and inside the same condition wrappers: the block's
+   *   own selector list, pseudo suffixes included, each member extended with
+   *   `:not([data-daedalus-stylish-triggered])`. Every lane rides this seam
+   *   (per-entity maps, compiled variants, skin defaults, the bare lane), so a
+   *   trigger holds the same way wherever it was declared.
    * @param string $pseudo
    *   The terminal pseudo-element the entry styles (pseudoTail(): '' for
    *   an element, `::before` or `::after` for its generated box), printed
@@ -668,9 +666,9 @@ class CssPrinter {
    * authored entry would.
    *
    * @param string $scope_root
-   *   The @scope prelude selector, e.g. '.daedalus-stylish-variant--{ref}' (possibly
-   *   a comma list of class roots — the targets ride the prelude, so they
-   *   distribute over every root).
+   *   The @scope prelude selector, e.g. '.daedalus-stylish-variant--{ref}'
+   *   (possibly a comma list of class roots — the targets ride the prelude, so
+   *   they distribute over every root).
    * @param string $scope
    *   The variant's scope string; picks the slot grammar's root kind and
    *   the fragment's addressed element kind.
@@ -730,16 +728,16 @@ class CssPrinter {
   /**
    * Prints one animation as a named @keyframes at-rule.
    *
-   * The named at-rule lane: the first thing daedalus_stylish delivers that is not a
-   * selector block. A keyframes body is offset-keyed (each step a
-   * declaration block), sits outside any @scope, and is referenced by its
-   * bare name from a value (`animation-name: motion-fade_in`), so it prints
-   * as its own top-level rule: nothing here composes with conditions,
-   * scope roots or co-targets. Delivered by the compiled skin file and its
-   * workspace inline preview (SkinStylesheet), and re-printed
-   * client-side per settle for the keyframes editor's live preview; the
-   * client mirror (printKeyframes in js/src/printer.js) is locked to this
-   * output byte for byte by the round-trip equivalence test.
+   * The named at-rule lane: the first thing daedalus_stylish delivers that is
+   * not a selector block. A keyframes body is offset-keyed (each step a
+   * declaration block), sits outside any @scope, and is referenced by its bare
+   * name from a value (`animation-name: motion-fade_in`), so it prints as its
+   * own top-level rule: nothing here composes with conditions, scope roots or
+   * co-targets. Delivered by the compiled skin file and its workspace inline
+   * preview (SkinStylesheet), and re-printed client-side per settle for the
+   * keyframes editor's live preview; the client mirror (printKeyframes in
+   * js/src/printer.js) is locked to this output byte for byte by the round-trip
+   * equivalence test.
    *
    * The emit gate reused: the name must be a custom-ident
    * (KEYFRAMES_NAME_PATTERN), each offset an offset
@@ -782,14 +780,14 @@ class CssPrinter {
   /**
    * Prints one @font-face at-rule for a face of a self-hosted font.
    *
-   * A font face is an at-rule like a keyframes block: it sits outside
-   * every scope and is referenced by its family from a value, so it prints as
-   * its own top-level rule with nothing composed in. Every face declares
-   * `font-display: swap` (text renders in the fallback until the file
-   * lands, never blocking), and the declaration order is fixed so the
-   * compiled file is content-addressed on the faces alone. Delivered by
-   * the compiled fonts file and its workspace inline preview
-   * (SkinStylesheet::fontFaces()); no client mirror, the client never prints a face.
+   * A font face is an at-rule like a keyframes block: it sits outside every
+   * scope and is referenced by its family from a value, so it prints as its own
+   * top-level rule with nothing composed in. Every face declares `font-display:
+   * swap` (text renders in the fallback until the file lands, never blocking),
+   * and the declaration order is fixed so the compiled file is
+   * content-addressed on the faces alone. Delivered by the compiled fonts file
+   * and its workspace inline preview (SkinStylesheet::fontFaces()); no client
+   * mirror, the client never prints a face.
    *
    * The emit gate: the family is the quoted spelling
    * (StyleGuide::fontFamily(), a double-quoted string with no raw quote
@@ -918,10 +916,11 @@ class CssPrinter {
   }
 
   /**
-   * The @scope targets of a selector's HOSTS: scopeTargets() without the
-   * pseudo-element, the selectors a condition suffix appends to.
+   * The @scope targets of a selector's HOSTS, without the pseudo-element.
    *
-   * The owner's anchor (`&::before`) hosts on the scoping root itself.
+   * The selectors a condition suffix appends to: scopeTargets() without the
+   * pseudo-element. The owner's anchor (`&::before`) hosts on the scoping root
+   * itself.
    *
    * @param \Drupal\daedalus_blueprint\Materials\RelativeSelector|null $selector
    *   The key's relative selector, or NULL for the scope root itself.
@@ -1019,8 +1018,9 @@ class CssPrinter {
   ];
 
   /**
-   * Prints the combinator reaching a compound: ` > `, ` + ` or ` ~ `, the
-   * one space for a descendant.
+   * Prints the combinator reaching a compound.
+   *
+   * ` > `, ` + ` or ` ~ `, the one space for a descendant.
    */
   protected static function renderCombinator(array $compound): string {
     return $compound['combinator'] === RelativeSelector::DESCENDANT
@@ -1029,8 +1029,9 @@ class CssPrinter {
   }
 
   /**
-   * Prints one compound: its subject, bare when it carries the weight,
-   * else in :where(), then its qualifiers.
+   * Prints one compound: its subject, then its qualifiers.
+   *
+   * The subject prints bare when it carries the weight, else in :where().
    *
    * `*` prints bare (it weighs nothing); an implied subject (inside
    * `:not()` or an `:is()` member) prints nothing; the qualified anchor

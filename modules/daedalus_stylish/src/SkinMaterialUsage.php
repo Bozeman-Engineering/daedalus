@@ -12,7 +12,7 @@ use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinAnimationsItem;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinTokensItem;
 
 /**
- * The daedalus_skin_material_usage table: which entities reference which skin materials.
+ * The daedalus_skin_material_usage table: what references which skin material.
  *
  * ValueUsageBase's twin for the materials that live on the skin, all three
  * sections in ONE table: a token delivers as a custom property
@@ -87,7 +87,11 @@ class SkinMaterialUsage extends ValueUsageBase {
    * font-family.
    */
   protected function scanValue(string $property, string $value): array {
-    return [...self::valueVariables($value), ...self::valueAnimations($property, $value), ...self::valueFamilies($property, $value)];
+    return [
+      ...self::valueVariables($value),
+      ...self::valueAnimations($property, $value),
+      ...self::valueFamilies($property, $value),
+    ];
   }
 
   /**

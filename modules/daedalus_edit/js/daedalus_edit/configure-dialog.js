@@ -73,8 +73,10 @@ const takeOver = (form) => {
 
 Drupal.behaviors.daedalusEditConfigureDialog = {
   attach(context) {
-    once('daedalusEditConfigureDialog', `form[${DIALOG_ATTRIBUTE}]`, context).forEach(
-      takeOver,
-    );
+    once(
+      'daedalusEditConfigureDialog',
+      `form[${DIALOG_ATTRIBUTE}]`,
+      context,
+    ).forEach(takeOver);
   },
 };

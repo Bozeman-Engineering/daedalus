@@ -81,13 +81,13 @@ class PropertySetsTest extends KernelTestBase {
    * The media-capable names track the guide's referenced sets.
    */
   public function testMediaProperties(): void {
-    // The media-capable names the guidance paragraph derives from:
-    // background is referenced (kinds, block types, and daedalus_stylish's shipped
-    // site base declaration), and background-image is its one
-    // media-flagged property; the pseudo-only generated_content group is
-    // never referenced by a declaration but granted at every generated
-    // box, so its content joins the list on every site. A site whose
-    // referenced sets grant no media slot would still serve content.
+    // The media-capable names the guidance paragraph derives from: background
+    // is referenced (kinds, block types, and daedalus_stylish's shipped site
+    // base declaration), and background-image is its one media-flagged
+    // property; the pseudo-only generated_content group is never referenced by
+    // a declaration but granted at every generated box, so its content joins
+    // the list on every site. A site whose referenced sets grant no media slot
+    // would still serve content.
     $this->assertSame(['background-image', 'content'], $this->styleGuide->mediaProperties(self::THEME));
 
     // Built once: the walk memoizes per theme.

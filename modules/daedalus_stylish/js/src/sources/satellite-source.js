@@ -4,7 +4,10 @@ import { runCollapseGesture } from '../code/collapse-seam.js';
 import { runDoor } from '../inspector-doors.js';
 import { generateUuid } from '../../../../daedalus_ui/js/edit_mode/utilities/uuid.js';
 import { createRoster } from '../../../../daedalus_ui/js/edit_mode/materials/roster.js';
-import { capableInTree, verdictInTree } from '../../../../daedalus_ui/js/edit_mode/selection/capable-model.js';
+import {
+  capableInTree,
+  verdictInTree,
+} from '../../../../daedalus_ui/js/edit_mode/selection/capable-model.js';
 import { layoutOf } from '../../../../daedalus_ui/js/edit_mode/blueprint/document-tree.js';
 import {
   applyDelta,
@@ -42,6 +45,19 @@ import { notify } from '../notify.js';
  * edit) applies its response's delta here and posts it on the same wire,
  * so the leader's store learns it; the wire never echoes to the poster, so
  * nothing rings.
+ */
+
+/**
+ * Creates the satellite source for one pop-out session.
+ *
+ * @param {string} scope
+ *   The session scope (the leader's `?scope`, delivered as
+ *   daedalusUi.popout.scope): the suffix every broadcast channel of the
+ *   pairing carries.
+ *
+ * @return {object}
+ *   The state source the inspector renders against, the leader source's
+ *   interface plus isConnected / onConnectionChange.
  */
 export const createSatelliteSource = (scope) => {
   let state = {
@@ -297,6 +313,8 @@ export const createSatelliteSource = (scope) => {
    *   reserves it for the frame name).
    *
    * @return {Promise<object>}
+   *   The op's settlement: the applied response payload, or a rejection
+   *   with the op queue's Error.
    */
   const settle = (intent, payload) => {
     const request = generateUuid();
@@ -334,6 +352,9 @@ export const createSatelliteSource = (scope) => {
      * drops any facet and address), and the change echoes back on the
      * next state broadcast. The leader stays the one authority on
      * selection.
+     *
+     * @param {string} key
+     *   The selectable key to select.
      */
     select: (key) => {
       channel.post('intent', { intent: 'select', key });
@@ -344,6 +365,11 @@ export const createSatelliteSource = (scope) => {
      * tree part row, the chip's box doorway: a SUBJECT facet on the
      * selected key); the leader's spine seats it (its canvas paints the
      * matches) and the change echoes back on the next state broadcast.
+     *
+     * @param {string} key
+     *   The selected element's selectable key.
+     * @param {?string} selector
+     *   The relative selector to seat, or null for the whole element.
      */
     target: (key, selector) => {
       channel.post('intent', { intent: 'target', key, selector });
@@ -355,6 +381,12 @@ export const createSatelliteSource = (scope) => {
      * drops it); the leader's spine seats it (its canvas paints the
      * rule's matches dotted) and the change echoes back on the next
      * state broadcast.
+     *
+     * @param {?string} key
+     *   The selectable key the rule hangs on (the selection or an
+     *   ancestor), or null to drop the address.
+     * @param {?string} selector
+     *   The rule's relative selector, or null for the key's own entry.
      */
     address: (key, selector = null) => {
       channel.post('intent', { intent: 'address', key, selector });
@@ -362,6 +394,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to selection KEY changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with (selectedKey, previousKey); either may be null.
      */
     onSelectionChange: (callback) => {
       selectionListeners.add(callback);
@@ -371,6 +406,10 @@ export const createSatelliteSource = (scope) => {
     /**
      * Subscribes to the selection and its styling target, the
      * target-aware counterpart of onSelectionChange; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with ({selected, target, address}, previous), the current
+     *   facts then the previous ones.
      */
     onTargetChange: (callback) => {
       targetListeners.add(callback);
@@ -390,6 +429,9 @@ export const createSatelliteSource = (scope) => {
      * Locally echoed (setCanvasHighlight's pattern) so this window's own
      * row highlight is instant and the rows' leave guard reads exactly;
      * the leader's hover broadcast then confirms as a no-op.
+     *
+     * @param {?string} key
+     *   The selectable key to hover, or null to clear.
      */
     hover: (key) => {
       const next = key ?? null;
@@ -402,6 +444,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to hover changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the hovered key, or null.
      */
     onHoverChange: (callback) => {
       hoverListeners.add(callback);
@@ -423,6 +468,11 @@ export const createSatelliteSource = (scope) => {
      * Locally echoed like hover(), so this window's own hot mark is
      * instant and the headers' leave guard reads exactly; the leader's
      * hover-selector broadcast then confirms as a no-op.
+     *
+     * @param {?string} key
+     *   The part's owner key, or null to clear.
+     * @param {?string} selector
+     *   The part's relative selector; null clears.
      */
     hoverSelector: (key, selector = null) => {
       const next = key && selector ? { key, selector } : null;
@@ -442,6 +492,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to selector-hover facet changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the hovered facet ({key, selector}), or null.
      */
     onHoverSelectorChange: (callback) => {
       hoverSelectorListeners.add(callback);
@@ -455,6 +508,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to style map changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the new style map.
      */
     onStyleMapChange: (callback) => {
       styleMapListeners.add(callback);
@@ -475,6 +531,11 @@ export const createSatelliteSource = (scope) => {
      * exactly as the leader's projection index lets such rows inherit
      * their element's. Null for everything until the leader has been
      * heard from.
+     *
+     * @param {string} key
+     *   The selectable key.
+     * @param {string} capability
+     *   The capability name ('style', 'move', ...).
      */
     capable: (key, capability) => {
       const uuid = key?.split('::')[0]?.split(':')[1] ?? null;
@@ -574,7 +635,15 @@ export const createSatelliteSource = (scope) => {
      * it exactly as it would its own. No function crosses the wire.
      *
      * @param {object} pick
-     *   {condition, property, label, changes}; same shape as the leader's.
+     *   The pick, the leader source's shape.
+     * @param {string} pick.condition
+     *   The condition name the changes land under; defaults to 'default'.
+     * @param {string} pick.property
+     *   The picked property, the one holding MEDIA_PICK_PLACEHOLDER.
+     * @param {?string} pick.label
+     *   The undo label for the settle, or null.
+     * @param {Array<{key: string, properties: object}>} pick.changes
+     *   The routed changes, exactly one carrying the placeholder.
      *
      * @return {boolean}
      *   Whether the intent was sent (mirrors the leader's opened boolean).
@@ -601,6 +670,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to roster changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the new roster.
      */
     onMaterialsChange: (callback) => {
       materialsListeners.add(callback);
@@ -617,6 +689,10 @@ export const createSatelliteSource = (scope) => {
      * then re-stamps the canvas custom properties from its store, so the
      * canvas over there follows too. An empty delta (a response that
      * changed no material) applies and posts nothing.
+     *
+     * @param {object} payload
+     *   The route's response: its `materials` delta beside the lane's own
+     *   payload.
      */
     applyResponse: (payload) => {
       const delta = payload?.materials;
@@ -640,6 +716,11 @@ export const createSatelliteSource = (scope) => {
      * the leader page (the canvas lives there); null releases it. The
      * record travels by kind and id: the leader resolves it against its
      * own store.
+     *
+     * @param {?object} record
+     *   The token record (delivery shape), or null.
+     * @param {?(string|object)} value
+     *   The draft value in the record's shape, or null to release.
      */
     previewMaterial: (record, value) => {
       if (record) {
@@ -656,6 +737,11 @@ export const createSatelliteSource = (scope) => {
      * Relays a keyframes session's draft steps to the leader page (the
      * canvas and its preview sheet live there); null releases them. The
      * record travels by id: the leader resolves it against its own store.
+     *
+     * @param {?object} record
+     *   The animation record (delivery shape), or null.
+     * @param {?object} steps
+     *   The draft steps map, or null to release.
      */
     previewAnimation: (record, steps) => {
       if (record) {
@@ -683,6 +769,13 @@ export const createSatelliteSource = (scope) => {
      * Sends an apply_variant intent; the leader runs it through its queue
      * and answers with the op's settlement (settle above): the promise
      * rejects on failure, and the failure toasts here.
+     *
+     * @param {string} key
+     *   The style key the reference lands on.
+     * @param {string} variant
+     *   The variant's machine name.
+     * @param {?string} label
+     *   The undo label, or null for the server's default.
      */
     applyVariant: (key, variant, label = null) =>
       settle('apply-variant', { key, variant, label }),
@@ -691,6 +784,13 @@ export const createSatelliteSource = (scope) => {
      * Sends a detach_variant intent; the leader runs it through its queue
      * and answers with the op's settlement (settle above), applyVariant's
      * contract.
+     *
+     * @param {string} key
+     *   The style key carrying the reference.
+     * @param {string} variant
+     *   The variant's machine name.
+     * @param {?string} label
+     *   The undo label, or null for the server's default.
      */
     detachVariant: (key, variant, label = null) =>
       settle('detach-variant', { key, variant, label }),
@@ -735,6 +835,9 @@ export const createSatelliteSource = (scope) => {
     /**
      * Sends a canvas-vector intent (drive the canvas there); the leader
      * poses its vector and the change echoes back on the next broadcast.
+     *
+     * @param {object} partial
+     *   The axes to pose ({width, scheme, motion}, any subset).
      */
     setCanvasVector: (partial) => {
       channel.post('intent', { intent: 'canvas-vector', partial });
@@ -742,6 +845,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to canvas vector changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the new vector, or null.
      */
     onCanvasVectorChange: (callback) => {
       canvasVectorListeners.add(callback);
@@ -775,6 +881,9 @@ export const createSatelliteSource = (scope) => {
     /**
      * Sends a force-state intent; the leader stamps its canvas (the
      * satellite has none) and the state echoes back on the next broadcast.
+     *
+     * @param {?string} forceState
+     *   A state-axis condition name ('hover'), or null to clear.
      */
     setForceState: (forceState) => {
       channel.post('intent', {
@@ -785,6 +894,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to force-state changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the new force state (a condition name or null).
      */
     onForceStateChange: (callback) => {
       forceStateListeners.add(callback);
@@ -805,6 +917,9 @@ export const createSatelliteSource = (scope) => {
      * Sends a place intent; the leader holds the one place state and
      * the new value echoes back on the next state broadcast, so both
      * panels always look at the same thing.
+     *
+     * @param {{place: string, editing: ?string}} next
+     *   The place to set and the edited document reference, or null.
      */
     setPlace: (next) => {
       channel.post('intent', {
@@ -815,6 +930,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to place changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the new {place, editing}, a fresh copy.
      */
     onPlaceChange: (callback) => {
       placeListeners.add(callback);
@@ -829,6 +947,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to skin defaults deliveries; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the delivered defaults map, or null.
      */
     onSkinDefaultsChange: (callback) => {
       skinDefaultsListeners.add(callback);
@@ -857,6 +978,10 @@ export const createSatelliteSource = (scope) => {
      * Sends a canvas-highlight intent; the leader's bands render it.
      *
      * Same spec as the leader source: null, or {key, selector, properties}.
+     *
+     * @param {?{key: string, selector: ?string, properties: string[]}} spec
+     *   The style target and the properties being edited, or null to
+     *   clear.
      */
     setCanvasHighlight: (spec) => {
       canvasHighlight = spec ?? null;
@@ -869,6 +994,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to this window's highlight requests; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the requested highlight spec, or null.
      */
     onCanvasHighlightChange: (callback) => {
       canvasHighlightListeners.add(callback);
@@ -887,6 +1015,10 @@ export const createSatelliteSource = (scope) => {
      * Sends a canvas-paint intent; the leader's canvas paints it.
      *
      * Same spec as the leader source: null, or {layers}.
+     *
+     * @param {?{layers: Array<{id: string, variant: ?string,
+     *   label: ?string, flash: ?boolean}>}} paint
+     *   The layers to paint, or null to clear.
      */
     setCanvasPaint: (paint) => {
       canvasPaint = paint ?? null;
@@ -896,6 +1028,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to this window's paint requests; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the requested paint spec, or null.
      */
     onCanvasPaintChange: (callback) => {
       canvasPaintListeners.add(callback);
@@ -904,6 +1039,15 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Sends a live-preview intent to the leader (its page shows the CSS).
+     *
+     * @param {string} key
+     *   The style key (an element, or a rule under `::`).
+     * @param {string} condition
+     *   The condition name ('default' for the unconditioned entry).
+     * @param {string} property
+     *   The CSS property.
+     * @param {?string} value
+     *   The value to show, or null to preview the property unset.
      */
     preview: (key, condition, property, value) => {
       channel.post('intent', {
@@ -917,6 +1061,13 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Asks the leader to release staged preview values (edit cancelled).
+     *
+     * @param {string} key
+     *   The style key the values were staged under.
+     * @param {string} condition
+     *   The condition name they were staged under.
+     * @param {object} properties
+     *   Property → last staged value; only still-matching stages release.
      */
     previewRelease: (key, condition, properties) => {
       channel.post('intent', { intent: 'release', key, condition, properties });
@@ -924,6 +1075,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Sends whole-entry preview intents (the code editor's overlay).
+     *
+     * @param {object} entriesByKey
+     *   Selectable key → style entry, or null to preview the key removed.
      */
     previewEntries: (entriesByKey) => {
       channel.post('intent', {
@@ -934,6 +1088,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Asks the leader to release staged entry replacements.
+     *
+     * @param {string[]} keys
+     *   The selectable keys whose staged entries release.
      */
     previewEntriesRelease: (keys) => {
       channel.post('intent', { intent: 'release-entries', keys });
@@ -943,6 +1100,9 @@ export const createSatelliteSource = (scope) => {
      * Runs a batch commit through the leader (the code editor's settle,
      * the material gesture ops); the leader releases the staged entry
      * previews and answers with the batch's settlement (settle above).
+     *
+     * @param {{operations: object[], label: ?string}} batch
+     *   The operations and their undo label, the leader source's shape.
      */
     commitBatch: (batch) => settle('commit-batch', { batch }),
 
@@ -951,6 +1111,11 @@ export const createSatelliteSource = (scope) => {
      * door (the code view's paste); the leader fetches the route on its
      * page and answers with the door's result (settle above), a
      * transport failure toasting here.
+     *
+     * @param {string} key
+     *   The style key the text was pasted into (an element or a rule).
+     * @param {string} css
+     *   The fragment.
      */
     parseCss: (key, css) => settle('parse-css', { key, css }),
 
@@ -960,6 +1125,9 @@ export const createSatelliteSource = (scope) => {
      * and answers with the text (settle above), a transport failure
      * toasting here. The clipboard write itself happens in this window,
      * inside its own gesture.
+     *
+     * @param {string} key
+     *   The style key (an element, or a rule).
      */
     readCss: (key) => settle('read-css', { key }),
 
@@ -968,6 +1136,9 @@ export const createSatelliteSource = (scope) => {
      * its queue, releases the staged preview, and answers with the op's
      * settlement (settle above): the promise rejects on failure so the
      * widget can mark its input, and the failure toasts here.
+     *
+     * @param {object} change
+     *   {key, condition, properties, label}, the leader source's shape.
      */
     commit: (change) => settle('commit', { change }),
 
@@ -978,6 +1149,9 @@ export const createSatelliteSource = (scope) => {
 
     /**
      * Subscribes to connection changes; returns unsubscribe.
+     *
+     * @param {Function} callback
+     *   Called with the connected boolean.
      */
     onConnectionChange: (callback) => {
       connectionListeners.add(callback);

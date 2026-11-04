@@ -43,7 +43,7 @@ class SkinAiSurfaceTest extends KernelTestBase {
   /**
    * The gutter token's description, carried whole by the JSON door's fragment.
    */
-  protected const GUTTER_DESCRIPTION = 'The section gutter. Reach for it between a section and its neighbours, never inside a card.';
+  protected const GUTTER_DESCRIPTION = 'The section gutter. Reach for it between a section and its neighbors, never inside a card.';
 
   /**
    * {@inheritdoc}

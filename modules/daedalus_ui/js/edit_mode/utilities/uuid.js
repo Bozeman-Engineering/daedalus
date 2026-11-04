@@ -8,9 +8,7 @@ export const generateUuid = () => {
   }
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   // The version and variant bits of RFC 4122 are bit fields by definition.
-  // eslint-disable-next-line no-bitwise
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  // eslint-disable-next-line no-bitwise
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = Array.from(bytes, (byte) =>
     byte.toString(16).padStart(2, '0'),

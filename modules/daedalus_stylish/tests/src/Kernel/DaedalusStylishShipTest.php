@@ -374,9 +374,9 @@ class DaedalusStylishShipTest extends KernelTestBase {
    * Keys the shipper does not emit are carried from the existing entry.
    *
    * The variants file's `blueprint:` key belongs to the blueprint shipper;
-   * daedalus_stylish never learns what it means, so a rebuild keeps it where its
-   * owner put it, and an entry whose only difference is a carried key
-   * reads UNCHANGED.
+   * daedalus_stylish never learns what it means, so a rebuild keeps it where
+   * its owner put it, and an entry whose only difference is a carried key reads
+   * UNCHANGED.
    */
   public function testCarriesKeysTheShipperDoesNotEmit(): void {
     $this->createVariant('card_left');
@@ -482,19 +482,22 @@ class DaedalusStylishShipTest extends KernelTestBase {
   }
 
   /**
-   * Named site materials are adopted into MODULE.daedalus_stylish.<kind>.NAME.yml.
+   * Named site materials are adopted into the module's per-id files.
    *
-   * A new name lands in its own per-id file and the sync right after
-   * reads UNCHANGED; a name already in one of the module's per-id files
-   * rebuilds that file (never a second one); a name another module ships,
-   * or that no entity carries, is refused with the shipper's own error
-   * while the other kind still ships. Every kind rides the one road: the
-   * skin adopts beside the variant, in the sync's kind order, carrying its
-   * animations inside its own definition.
+   * A new name lands in its own per-id file
+   * (MODULE.daedalus_stylish.<kind>.NAME.yml) and the sync right after reads
+   * UNCHANGED; a name already in one of the module's per-id files rebuilds that
+   * file (never a second one); a name another module ships, or that no entity
+   * carries, is refused with the shipper's own error while the other kind still
+   * ships. Every kind rides the one road: the skin adopts beside the variant,
+   * in the sync's kind order, carrying its animations inside its own
+   * definition.
    */
   public function testNamedAdoption(): void {
     $this->createVariant('card_blue');
-    $this->createSkin('dusk')->setPackageAnimations(['site_fade' => ['steps' => ['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']]]])->save();
+    $this->createSkin('dusk')->setPackageAnimations([
+      'site_fade' => ['steps' => ['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']]],
+    ])->save();
     $names = ['variant' => ['card_blue'], 'skin' => ['dusk']];
 
     $planned = $this->ship()->plan(self::TARGET, $names);
@@ -559,7 +562,7 @@ class DaedalusStylishShipTest extends KernelTestBase {
   }
 
   /**
-   * The package lane: the module rebuilt AND the system's unshipped members adopted.
+   * The package lane: the module rebuilt AND unshipped members adopted.
    *
    * The package ship over a design system is the module-wide rebuild (a
    * site edit of a shipped variant reaches disk, the hand-authored file
@@ -593,7 +596,9 @@ class DaedalusStylishShipTest extends KernelTestBase {
     $card_blue = $this->createVariant('card_blue');
     $card_blue->setDesignSystem('dusk_system')->save();
     $dusk = $this->createSkin('dusk');
-    $dusk->setDesignSystem('dusk_system')->setPackageAnimations(['site_fade' => ['steps' => ['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']]]])->setUnpublished()->save();
+    $dusk->setDesignSystem('dusk_system')->setPackageAnimations([
+      'site_fade' => ['steps' => ['0%' => ['opacity' => '0'], '100%' => ['opacity' => '1']]],
+    ])->setUnpublished()->save();
     $this->createVariant('free_look');
     $other = $this->createVariant('other_look');
     $other->setDesignSystem('other_system')->save();

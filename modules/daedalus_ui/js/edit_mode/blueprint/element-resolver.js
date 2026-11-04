@@ -84,6 +84,14 @@ const PART_PATTERN = /^\.[A-Za-z0-9_-]*\*$/;
 
 /**
  * Loose one-condition-map equality (the PHP side's `!=` on present maps).
+ *
+ * @param {?object} a
+ *   One present: condition map, or null.
+ * @param {?object} b
+ *   The other, or null.
+ *
+ * @return {boolean}
+ *   Whether the two maps hold the same conditions.
  */
 const samePresent = (a, b) => {
   const left = a ?? null;
@@ -105,6 +113,16 @@ const samePresent = (a, b) => {
  * may compose several as an AND; parts carry one, validated at build). No
  * data means every data condition is FALSE: nothing exists that the data
  * cannot vouch for.
+ *
+ * @param {?object} present
+ *   The condition map, or null when the part is unconditional.
+ * @param {?object} data
+ *   The data facade, or null.
+ * @param {string} depth
+ *   The nesting depth (DEPTH_ROOT / DEPTH_NESTED).
+ *
+ * @return {boolean}
+ *   Whether every condition holds.
  */
 const conditionHolds = (present, data, depth) => {
   if (present === null || present === undefined) {
@@ -152,6 +170,14 @@ const conditionHolds = (present, data, depth) => {
 
 /**
  * Resolves a declared tag: a literal name, or the named field's value.
+ *
+ * @param {?(string|object)} tag
+ *   The declared tag: a name, or {field: NAME}.
+ * @param {?object} data
+ *   The data facade, or null.
+ *
+ * @return {?string}
+ *   The tag name, or null when the data holds none.
  */
 const resolveTag = (tag, data) => {
   if (typeof tag === 'string') {
@@ -170,6 +196,14 @@ const resolveTag = (tag, data) => {
  * A {field: NAME} value whose field holds no printable string resolves to
  * no attribute at all: an empty href would be a claim the data cannot
  * back.
+ *
+ * @param {?object} attributes
+ *   The declared attributes map, or null.
+ * @param {?object} data
+ *   The data facade, or null.
+ *
+ * @return {object}
+ *   The resolved attributes, name to string.
  */
 const resolveAttributes = (attributes, data) => {
   const resolved = {};
@@ -200,6 +234,16 @@ const resolveAttributes = (attributes, data) => {
 /**
  * The first form whose condition holds — root or part alike; null when
  * none matches.
+ *
+ * @param {?Array<object>} forms
+ *   The ordered forms.
+ * @param {?object} data
+ *   The data facade, or null.
+ * @param {string} depth
+ *   The nesting depth.
+ *
+ * @return {?object}
+ *   The matched form, or null.
  */
 const matchForm = (forms, data, depth) => {
   if (!Array.isArray(forms)) {
@@ -223,6 +267,16 @@ const matchForm = (forms, data, depth) => {
  * resolved tag (the PHP coincides()). For a multi-form part, `shape` is
  * the part's MATCHED form, so coincidence is decided between matched
  * forms.
+ *
+ * @param {object} shape
+ *   The part, or its matched form.
+ * @param {object} form
+ *   The matched root form.
+ * @param {?object} data
+ *   The data facade, or null.
+ *
+ * @return {boolean}
+ *   Whether the part is the root form's own element.
  */
 const coincides = (shape, form, data) => {
   if (!samePresent(shape.present, form.present)) {
@@ -234,6 +288,11 @@ const coincides = (shape, form, data) => {
 
 /**
  * Hoists a part onto the root: class worn, key addressing the root.
+ *
+ * @param {string} key
+ *   The part's selector key.
+ * @param {object} root
+ *   The resolved tree being built.
  */
 const hoist = (key, root) => {
   root.classes.push(key.replace(/^\.+/, ''));
@@ -242,6 +301,14 @@ const hoist = (key, root) => {
 
 /**
  * Merges resolved parts under existing keys kept (the PHP `+=`).
+ *
+ * @param {object} parts
+ *   The parts map merged into.
+ * @param {object} extra
+ *   The parts merged in, losing to existing keys.
+ *
+ * @return {object}
+ *   The merged map (`parts` itself).
  */
 const mergeParts = (parts, extra) => {
   for (const [key, part] of Object.entries(extra)) {
@@ -254,6 +321,23 @@ const mergeParts = (parts, extra) => {
 
 /**
  * Resolves one elements: level into present part nodes.
+ *
+ * @param {?object} elements
+ *   The declared elements map, selector key to part.
+ * @param {?object} data
+ *   The data facade, or null.
+ * @param {string} depth
+ *   The nesting depth.
+ * @param {?object} form
+ *   The matched root form at the top level, or null.
+ * @param {object} root
+ *   The resolved tree being built (hoists and slots land on it).
+ * @param {boolean} top
+ *   Whether this is the declaration's top level, where a part may
+ *   coincide with the root form.
+ *
+ * @return {object}
+ *   The resolved parts, key to {tag, attributes, parts} node.
  */
 const resolveElements = (elements, data, depth, form, root, top) => {
   const parts = {};

@@ -81,8 +81,8 @@ class ReadElement extends DaedalusBlueprintToolBase {
       return;
     }
 
-    // A page's elements are page_read's (PageHosts::isPage(): the one meaning across
-    // the AI doors): the print carries every element by id.
+    // A page's elements are page_read's (PageHosts::isPage(): the one meaning
+    // across the AI doors): the print carries every element by id.
     if ($this->pageHosts->isPage($host)) {
       $this->output = $this->pageReadCorrective($host, $entity_type, $entity_id);
       return;

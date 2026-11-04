@@ -21,9 +21,9 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 /**
  * Contributes daedalus_stylish's DECLARATIONS to the dialect catalog.
  *
- * The styling half of the site's page language that no material record
- * carries, from the same live sources every other styling surface reads.
- * Daedalus Stylish's materials (tokens, variants, animations, fonts) reach the catalog
+ * The styling half of the site's page language that no material record carries,
+ * from the same live sources every other styling surface reads. Daedalus
+ * Stylish's materials (tokens, variants, animations, fonts) reach the catalog
  * through the materials roster (DaedalusStylishMaterialsProvider), never here:
  * one published set, one spelling derivation, one did-you-mean.
  * - Axes per variant scope: the container kind's, the block kind's,

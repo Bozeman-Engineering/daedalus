@@ -27,19 +27,17 @@ use Drupal\daedalus_blueprint\OperationHandler\OperationHandlerRegistry;
 /**
  * Renders the dialect catalog as the cached-prompt page-language section.
  *
- * Facts in the cached prefix: the page bundles (the PAGES line, from the
- * bundle list builder's page projection: the one always-on home of which
- * bundles a page is made of, so a cold conversation never guesses
- * node/page), the component reference (each element's
- * line ending with what it renders as, from the catalog's render cards:
- * rendersProse()), the materials roster with current values, and the op set live HERE, in
- * the stable system prompt the provider caches, so every turn's writes
- * are grounded without a read ritual. Behavioral doctrine (design taste,
- * styling recipes) stays on-demand in the skills. Everything below is
- * DERIVED from the generated catalog, the bundle list and the materials
- * roster, never
- * hand-listed, so the prompt is a projection of live config exactly like
- * the schema surfaces.
+ * Facts in the cached prefix: the page bundles (the PAGES line, from the bundle
+ * list builder's page projection: the one always-on home of which bundles a
+ * page is made of, so a cold conversation never guesses node/page), the
+ * component reference (each element's line ending with what it renders as, from
+ * the catalog's render cards: rendersProse()), the materials roster with
+ * current values, and the op set live HERE, in the stable system prompt the
+ * provider caches, so every turn's writes are grounded without a read ritual.
+ * Behavioral doctrine (design taste, styling recipes) stays on-demand in the
+ * skills. Everything below is DERIVED from the generated catalog, the bundle
+ * list and the materials roster, never hand-listed, so the prompt is a
+ * projection of live config exactly like the schema surfaces.
  *
  * The design system brief is the styling half of the section: the ONE
  * thing the model is introduced to. It opens with the active design
@@ -121,7 +119,9 @@ class DialectCatalogPrompt implements MaterialsWeightSourceInterface {
   protected const VALUE_CLIP = 32;
 
   /**
-   * The field element's kind, the one stylable kind Address names no constant for.
+   * The field element's kind.
+   *
+   * The one stylable kind Address names no constant for.
    *
    * The catalog's stylable rosters are keyed by element kind (container,
    * block, field); a deviation at kind:field narrows <d-field>.
@@ -321,7 +321,9 @@ class DialectCatalogPrompt implements MaterialsWeightSourceInterface {
   }
 
   /**
-   * An element's renders, from its card: the pairs, or the shells it renders through.
+   * An element's renders, from its card.
+   *
+   * The pairs, or the shells it renders through.
    *
    * The one print of a card for the prompt (the structure lives with the
    * catalog, the derivation with daedalus_ui), so a new block type gets
@@ -419,7 +421,9 @@ class DialectCatalogPrompt implements MaterialsWeightSourceInterface {
   }
 
   /**
-   * One block type's component reference line: axes, fields, body, classes, renders.
+   * One block type's component reference line.
+   *
+   * Axes, fields, body, classes, renders.
    *
    * The line ends with the type's renders (rendersProse() over its card:
    * each dialect write paired with what it renders as), after a semicolon
@@ -468,15 +472,14 @@ class DialectCatalogPrompt implements MaterialsWeightSourceInterface {
   /**
    * The vocabulary roster lines, in the words the styling layer teaches.
    *
-   * The catalog carries one roster per element kind and the prose
-   * generator of the layer that built them (VocabularyProseInterface,
-   * daedalus_stylish's VocabularyProse): the rosters are taught by PROPERTY NAME
-   * in every posture, the widest kind in full and the others as deltas,
-   * and only the sentence saying how a property outside a roster is
-   * judged varies with the site. Rendered there, never here, so the
-   * cached prompt, the schema's stylable entries and the skill's law are
-   * one text. One roster per kind at every placement depth, so no depth
-   * line exists.
+   * The catalog carries one roster per element kind and the prose generator of
+   * the layer that built them (VocabularyProseInterface, daedalus_stylish's
+   * VocabularyProse): the rosters are taught by PROPERTY NAME in every posture,
+   * the widest kind in full and the others as deltas, and only the sentence
+   * saying how a property outside a roster is judged varies with the site.
+   * Rendered there, never here, so the cached prompt, the schema's stylable
+   * entries and the skill's law are one text. One roster per kind at every
+   * placement depth, so no depth line exists.
    *
    * @return string[]
    *   The roster lines; empty when the catalog carries no roster.
@@ -748,7 +751,7 @@ class DialectCatalogPrompt implements MaterialsWeightSourceInterface {
    * AI context budget (MaterialsBudget) is the ceiling that refuses
    * sharing past it; a site favorite (MaterialRecord::$favorite) is the
    * Add panel's listing and means nothing here. Then the GROUPS index in
-   * the neighbours' shape: one line per declared group that holds a
+   * the neighbors' shape: one line per declared group that holds a
    * shared block blueprint, in declaration order (id, label, how many,
    * the description's first sentence), then the reserved bucket for the
    * shared ones in no declared group (DialectCatalog::UNGROUPED, a count
@@ -886,13 +889,13 @@ class DialectCatalogPrompt implements MaterialsWeightSourceInterface {
   /**
    * One element kind's group: heading, axes, looks, birth line, deviations.
    *
-   * An axis is a heading (the attribute, its qualifiers, its whole
-   * description) over one line per value (the value, the variant's label,
-   * its whole description): the nested list needs no separator, so a
-   * rule with a semicolon in it ("Full width is never the way to get a
-   * full-bleed background; a nested container inherits its section's width") reads
-   * as written. A class look is one line, top-level only when its
-   * variant is root-only.
+   * An axis is a heading (the attribute, its qualifiers, its whole description)
+   * over one line per value (the value, the variant's label, its whole
+   * description): the nested list needs no separator, so a rule with a
+   * semicolon in it ("Full width is never the way to get a full-bleed
+   * background; a nested container inherits its section's width") reads as
+   * written. A class look is one line, top-level only when its variant is
+   * root-only.
    *
    * Weighed: a value line is its variant's and a class look its own, an
    * axis heading is the variants' shared (an axis prints only over the

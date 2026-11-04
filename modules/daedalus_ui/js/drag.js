@@ -52,7 +52,7 @@
      *   The pointerdown event.
      * @param {object} callbacks
      *   Callbacks object.
-     * @param {function} [callbacks.onMove]
+     * @param {Function} [callbacks.onMove]
      *   Called with pointermoves from the captured pointer, coalesced by
      *   the spine to at most one call per animation frame: the first move
      *   of a burst is delivered immediately (the leading call), moves
@@ -66,7 +66,7 @@
      *   A release delivers a still-gated move before onEnd; an abort
      *   discards it. Apply state directly here: the spine paces, callers
      *   do not throttle.
-     * @param {function} [callbacks.onEnd]
+     * @param {Function} [callbacks.onEnd]
      *   Called once with ({reason}) when the drag ends, whichever terminator
      *   fired: 'up' for a release on the handle, 'cancel' for an abort
      *   (pointercancel, lost capture, window blur, Escape, context menu).

@@ -487,7 +487,7 @@ class BlueprintOperationHandler implements PageOnlyOperationsInterface, PageLang
     // slot section and every following root outside the slot, at the top
     // level of the host's own document. Refused with the placement's code
     // (a scope mismatch on a door is one fact), after the lookup and before
-    // the empty and fit judgements, the corrective naming where the default
+    // the empty and fit judgments, the corrective naming where the default
     // is set: the slot block's configuration on the holder's canvas.
     if ($definition['scope'] === BlueprintInterface::SCOPE_PAGE) {
       return BlueprintResult::semanticFailure([

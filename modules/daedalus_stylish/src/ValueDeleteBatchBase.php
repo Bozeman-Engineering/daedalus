@@ -104,7 +104,7 @@ abstract class ValueDeleteBatchBase {
   /**
    * Rewrites a skin's animation steps.
    *
-   * rewriteTokens()'s twin for the skin's motion section
+   * `rewriteTokens()`'s twin for the skin's motion section
    * (ValueUsageBase::scanAnimations()'s write twin); the skeleton leaves
    * animations untouched.
    */

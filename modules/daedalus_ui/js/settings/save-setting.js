@@ -35,19 +35,13 @@
    *
    * @return {Promise<void>}
    *   Resolves once the save is answered (rejects on a refused JSON save;
-   *   the Drupal.ajax form reports its failure through the console).
+   *   the Drupal.ajax form surfaces its failure as core's AjaxError).
    */
   Drupal.Daedalus.saveSetting = (namespace, key, value) => {
     if (/^[A-Za-z0-9_.-]*$/.test(value)) {
       const ajaxConfig = {
         url: Drupal.url(`daedalus-ui/setting/${namespace}/${key}/${value}`),
         event: 'daedalus-ui-save-setting',
-        error: (error) => {
-          console.error(
-            'Unable to save setting: ',
-            error.responseText || error,
-          );
-        },
       };
       Drupal.ajax(ajaxConfig).execute();
       return Promise.resolve();

@@ -39,6 +39,7 @@ import { listboxHome } from './palette-picker-model.js';
  *   The display label of the owning blueprint, '' when unowned.
  *
  * @return {boolean}
+ *   Whether every token of the needle lands in the variant's text.
  */
 export const matchesNeedle = (
   variant,
@@ -89,6 +90,7 @@ export const matchesNeedle = (
  * the view never renders an empty header.
  *
  * @param {object} context
+ *   The offer and the facts that group and filter it.
  * @param {Array<{variant: object, resolved: number, total: number}>} context.ranked
  *   The fit-ranked applicable roster (rankVariants' shape).
  * @param {string[]} context.vocabulary
@@ -190,6 +192,7 @@ export const pickerGroups = ({
  *   pickerGroups' result.
  *
  * @return {string[]}
+ *   The option ids, groups flattened in order.
  */
 export const pickerIds = (groups) =>
   groups.flatMap((group) => group.options.map((option) => option.id));
@@ -214,6 +217,7 @@ export const pickerIds = (groups) =>
  *   The worn option's id to prefer without a search, or null.
  *
  * @return {?string}
+ *   The option id to focus first, or null when nothing is offered.
  */
 export const pickerHome = (groups, search = '', worn = null) => {
   const options = groups.flatMap((group) => group.options);

@@ -91,7 +91,7 @@ test('preference parts read the preference the clause grammar derives from the w
   assert.deepEqual(conditionPose('calm', conditions).vector.motion, 'reduce');
   assert.equal(conditionPose('dim', conditions).complete, false);
   assert.deepEqual(poseableAxisConditions('scheme', conditions), ['light', 'dark']);
-  // A wrapper deriving no forceable preference contributes nothing.
+  // A wrapper deriving no forcible preference contributes nothing.
   assert.equal(vectorCondition({ scheme: 'dark' }, null, { dim: conditions.dim }), 'default');
 });
 

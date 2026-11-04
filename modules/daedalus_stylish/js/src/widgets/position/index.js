@@ -1,5 +1,9 @@
 import { h } from 'preact';
-import { controlWidgets, litValues, withheldReasonFor } from '../../controls.js';
+import {
+  controlWidgets,
+  litValues,
+  withheldReasonFor,
+} from '../../controls.js';
 import { createMatcher } from '../../selector-matcher.js';
 import {
   marginAxisValue,
@@ -22,6 +26,15 @@ import { widgetClasses } from '../lib/widget-classes.js';
  * `_element.type` through the matcher: "Section", "Container", a block
  * type's label) when the tree carries its node, a generic fallback
  * otherwise.
+ *
+ * @param {?object} matcher
+ *   The selector matcher (selector-matcher.js createMatcher) over the
+ *   tree, or null before the tree arrives.
+ * @param {?object} parent
+ *   The parent's layout facts ({key, ...}), or null when unknown.
+ *
+ * @return {string}
+ *   The parent's type word.
  */
 const parentName = (matcher, parent) =>
   matcher?.facts(parent?.key)?.type ?? Drupal.t('parent element');
@@ -66,6 +79,38 @@ const parentName = (matcher, parent) =>
  * representing it marked, unlit, titled with the value that applies),
  * a value from OUTSIDE the child's stack, the one placeholder a row
  * keeps; picking a position here overrides it for this element only.
+ */
+
+/**
+ * The widget.
+ *
+ * @param {object} props
+ *   The widget contract's props (basic-controls.js renderControl).
+ * @param {object} props.model
+ *   The control model (controls.js controlModels): the owned
+ *   properties' keys, stacks and reads at the editing compound, the
+ *   constraints, the grant and what the write address withholds.
+ * @param {object} props.guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide).
+ * @param {object} props.materials
+ *   The materials roster the stop vocabularies derive from.
+ * @param {?object} props.layout
+ *   The selection facts (source.getLayoutContext(): {self, parent}),
+ *   or null when unknown.
+ * @param {object} props.source
+ *   The state source (leader or satellite).
+ * @param {Function} props.onPreview
+ *   `(properties)`: previews the set on the canvas, routed per key.
+ * @param {Function} props.onRelease
+ *   `(properties)`: releases the preview.
+ * @param {Function} props.onCommit
+ *   `(properties)`: commits the set through the op queue.
+ * @param {?Function} [props.onPickCondition]
+ *   Poses the canvas at a condition (the rows' "Also set at" entries).
+ * @param {?Function} [props.onOpenDocument]
+ *   Opens a variant's document (the row menu's doorway).
+ * @param {object} [props.law]
+ *   The law gate ({canView}, drupalSettings.daedalusStylish.law).
  */
 const Position = ({
   model,
@@ -171,7 +216,9 @@ const Position = ({
         fallback={axis.stops}
         icons={
           ALIGNMENT_ICONS[
-            axis.orientation === 'horizontal' ? 'justify-content' : 'align-items'
+            axis.orientation === 'horizontal'
+              ? 'justify-content'
+              : 'align-items'
           ]
         }
         disabled={!enabled(axis) || withheld !== null}

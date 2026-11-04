@@ -282,7 +282,9 @@ class WidePropertyGroupTest extends KernelTestBase {
     $this->assertSame(['INVALID_STYLE_VALUE'], $codes["block:{$this->uuid}::&::before.default.content"]);
     $this->assertSame(['STYLE_PROPERTY_PSEUDO_ONLY'], $codes["block:{$this->uuid}.default.content"]);
     $this->assertSame([], $this->validator->validate([
-      "container:{$this->uuid}::&::before" => ['default' => ['content' => '""', 'backdrop-filter' => 'blur(4px)', 'scroll-margin' => '1rem']],
+      "container:{$this->uuid}::&::before" => [
+        'default' => ['content' => '""', 'backdrop-filter' => 'blur(4px)', 'scroll-margin' => '1rem'],
+      ],
     ]));
     $codes = $this->codes($this->validator->validate([
       "container:{$this->uuid}::&::before" => ['default' => ['scroll-margin' => '2rem']],

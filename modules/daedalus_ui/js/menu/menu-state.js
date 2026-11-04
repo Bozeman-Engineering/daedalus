@@ -106,6 +106,9 @@ const notify = () => listeners.forEach((listener) => listener());
 /**
  * Subscribes to state changes (the host re-renders on any).
  *
+ * @param {Function} listener
+ *   Called, with no arguments, after every change.
+ *
  * @return {Function}
  *   Unsubscribe.
  */
@@ -125,6 +128,12 @@ export const isOpen = () => state !== null;
 /**
  * Drops separators that would lead, trail, or double: an adapter builds
  * its groups conditionally and must not have to trim the rules itself.
+ *
+ * @param {object[]} items
+ *   Normalized items, separators among them.
+ *
+ * @return {object[]}
+ *   The same items without the leading, trailing and doubled separators.
  */
 const trimSeparators = (items) =>
   items
@@ -147,6 +156,16 @@ const trimSeparators = (items) =>
  * throw: a malformed adapter is a bug to surface, not to skip quietly.
  * `nested` is true inside a submenu's items, where a second level is
  * refused.
+ *
+ * @param {object} item
+ *   The adapter's item, in the grammar of the file docblock.
+ * @param {number} index
+ *   The item's position in its list, for the error messages.
+ * @param {boolean} [nested]
+ *   Whether the item sits inside a submenu's items; false by default.
+ *
+ * @return {object}
+ *   The normalized item, every grammar key present.
  */
 const normalizeItem = (item, index, nested = false) => {
   if (item && item.separator === true) {
@@ -187,9 +206,7 @@ const normalizeItem = (item, index, nested = false) => {
       );
     }
     if (!Array.isArray(item.items)) {
-      throw new Error(
-        `Menu item "${item.label}" requires items as an array.`,
-      );
+      throw new Error(`Menu item "${item.label}" requires items as an array.`);
     }
     if (item.run !== undefined) {
       throw new Error(
@@ -245,12 +262,24 @@ const normalizeItem = (item, index, nested = false) => {
 /**
  * Whether an item can be the active (focused) item: separators, captions
  * and meter rows are inert, stepped over by the keyboard and never run.
+ *
+ * @param {object} item
+ *   A normalized item.
+ *
+ * @return {boolean}
+ *   True for a menuitem row, checkable or not, disabled or not.
  */
 export const isFocusable = (item) =>
   !item.separator && item.caption === undefined && item.meter === null;
 
 /**
  * Whether an item is a submenu row: it opens a flyout instead of running.
+ *
+ * @param {object} item
+ *   A normalized item.
+ *
+ * @return {boolean}
+ *   True when the item carries a nested item list.
  */
 export const isSubmenu = (item) => isFocusable(item) && item.items !== null;
 
@@ -262,14 +291,20 @@ const lastFocusable = (items) => items.findLastIndex(isFocusable);
  * Tells one item it became (or stopped being) the active item. The
  * state is already settled and notified when this runs, so a preview
  * that reads getState() sees the item it is told about.
+ *
+ * @param {object[]} items
+ *   The list the item is in (the top list or a flyout).
+ * @param {number} index
+ *   The item's index in that list; -1 or out of range tells nobody.
+ * @param {boolean} active
+ *   Whether the item became active (true) or stopped being (false).
  */
 const previewAt = (items, index, active) => {
   items[index]?.preview?.(active);
 };
 
 /** The open flyout's items, or null. */
-const subItems = () =>
-  state?.sub ? state.items[state.sub.index].items : null;
+const subItems = () => (state?.sub ? state.items[state.sub.index].items : null);
 
 /**
  * Opens the menu with a fresh item list. An open menu is replaced (its
@@ -280,9 +315,22 @@ const subItems = () =>
  * none active, and the keyboard has nothing to move.
  *
  * @param {object} spec
- *   {items, x?, y?, anchor?, align?, header?, onClose?}: either an anchor
- *   Element or both viewport coordinates; align is 'start' (default) or
- *   'end'.
+ *   Where the menu lands and what it lists: either an anchor or both
+ *   viewport coordinates.
+ * @param {?number} [spec.x]
+ *   The pointer's viewport x, when there is no anchor.
+ * @param {?number} [spec.y]
+ *   The pointer's viewport y, when there is no anchor.
+ * @param {?Element} [spec.anchor]
+ *   The element the menu hangs under.
+ * @param {string} [spec.align]
+ *   Which edges of anchor and menu align, 'start' (the default) or 'end'.
+ * @param {?string} [spec.header]
+ *   A caption over the list; empty or absent captions nothing.
+ * @param {object[]} spec.items
+ *   The adapter's items, in the grammar of the file docblock.
+ * @param {?Function} [spec.onClose]
+ *   Called once when the menu closes.
  *
  * @return {boolean}
  *   Whether a menu opened.
@@ -372,10 +420,12 @@ export const closeSub = () => {
  *
  * @param {number} index
  *   The submenu row's top index.
- * @param {object} options
- *   {focusFirst?}: whether the flyout's first focusable item becomes
- *   active (the keyboard's open, default true) or nothing inside is
- *   active yet (a pointer's open: the pointer says what it points at).
+ * @param {object} [options]
+ *   How the flyout opens.
+ * @param {boolean} [options.focusFirst]
+ *   Whether the flyout's first focusable item becomes active (the
+ *   keyboard's open, true by default) or nothing inside is active yet (a
+ *   pointer's open: the pointer says what it points at).
  *
  * @return {boolean}
  *   Whether a flyout stands open at that row afterwards.
@@ -407,6 +457,9 @@ export const openSub = (index, { focusFirst = true } = {}) => {
  * Sets the active (focused) top item; pointer hover and roving focus
  * share this. Out-of-range indexes and inert rows are ignored. Moving
  * off the submenu row whose flyout stands closes the flyout.
+ *
+ * @param {number} index
+ *   The top item's index.
  */
 export const setActive = (index) => {
   if (
@@ -430,6 +483,9 @@ export const setActive = (index) => {
  * Sets the active item inside the open flyout (a pointer enter on a
  * flyout row). No flyout, an out-of-range index, or an inert row:
  * ignored.
+ *
+ * @param {number} index
+ *   The item's index in the flyout.
  */
 export const setSubActive = (index) => {
   const flyout = subItems();
@@ -453,6 +509,17 @@ export const setSubActive = (index) => {
  * Steps an index by delta through a list, wrapping and stepping over
  * inert rows; from -1 (nothing active) a step lands on the first or the
  * last focusable row by its direction.
+ *
+ * @param {object[]} items
+ *   The list to step through.
+ * @param {number} from
+ *   The index stepped from; -1 for nothing active.
+ * @param {number} delta
+ *   The signed step, usually 1 or -1.
+ *
+ * @return {number}
+ *   The focusable index landed on; `from` again when the list has no
+ *   other focusable row.
  */
 const stepped = (items, from, delta) => {
   if (from === -1) {
@@ -472,6 +539,9 @@ const stepped = (items, from, delta) => {
  * Disabled items are included (focusable, per the grammar). While a
  * flyout stands the move is inside it: the keyboard's one list is the
  * one it is in.
+ *
+ * @param {number} delta
+ *   The signed step, usually 1 or -1.
  */
 export const moveActive = (delta) => {
   if (!state) {
@@ -521,6 +591,9 @@ export const moveActiveToLast = () => {
  * - Otherwise: closes the menu, THEN runs (the menu is gone before any
  *   dialog or mutation the action raises), returns 'run'.
  *
+ * @param {number} index
+ *   The top item's index.
+ *
  * @return {string}
  *   'noop' | 'opened' | 'armed' | 'run'.
  */
@@ -556,6 +629,9 @@ export const activate = (index) => {
  * item, or a click on a flyout row. The same contract as activate()
  * (noop, arm, run), with the flyout's own armed row and a run that
  * closes the whole menu. No flyout: 'noop'.
+ *
+ * @param {number} index
+ *   The item's index in the flyout.
  *
  * @return {string}
  *   'noop' | 'armed' | 'run'.

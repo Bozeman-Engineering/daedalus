@@ -12,6 +12,8 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
+// cspell:ignore favoris
+
 const { CONTAINER_ID, KIND_BASIC, faceList } = await import('../../js/src/model/faces.js');
 const {
   ALL_ID,

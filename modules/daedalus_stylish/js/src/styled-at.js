@@ -26,7 +26,30 @@ import { deliveredEntry } from './style-stack.js';
  * code view. The chip row above is the pose surface (where the canvas
  * stands).
  */
-export const StyledAt = ({ stack, selector = null, conditions = {}, condition, onDrive }) => {
+
+/**
+ * Renders the line.
+ *
+ * @param {object} props
+ *   The line's props.
+ * @param {?object} props.stack
+ *   The target's floorless style stack (style-stack.js), or null.
+ * @param {?string} [props.selector]
+ *   The target's selector, for its qualifier states.
+ * @param {object} [props.conditions]
+ *   The condition table (guide.conditions).
+ * @param {string} props.condition
+ *   The condition the canvas stands at (the active chip).
+ * @param {Function} props.onDrive
+ *   Called with the condition name a chip drives to.
+ */
+export const StyledAt = ({
+  stack,
+  selector = null,
+  conditions = {},
+  condition,
+  onDrive,
+}) => {
   const styled = stack ? styledConditions(deliveredEntry(stack)) : [];
   qualifierStates(selector, conditions).forEach((name) => {
     if (!styled.includes(name)) {

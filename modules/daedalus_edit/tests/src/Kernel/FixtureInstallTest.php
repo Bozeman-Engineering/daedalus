@@ -16,12 +16,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Tests the tailor-made test fixture module's config installs coherently.
  *
- * The daedalus_edit_test_fixture module (tests/modules) is the one fixture for the
- * entity-form editing path: the 'plain' non-Layout-Builder node bundle,
- * the 'target' reference bundle, and the 'form_block' form-edited
- * block_content type. Config is imported with strict schema checking and
- * every declared dependency must already exist, so a broken shape fails
- * here instead of mid-way through an expensive FunctionalJavascript run.
+ * The daedalus_edit_test_fixture module (tests/modules) is the one fixture for
+ * the entity-form editing path: the 'plain' non-Layout-Builder node bundle, the
+ * 'target' reference bundle, and the 'form_block' form-edited block_content
+ * type. Config is imported with strict schema checking and every declared
+ * dependency must already exist, so a broken shape fails here instead of
+ * mid-way through an expensive FunctionalJavascript run.
  *
  * The load-bearing shape assertions:
  * - Both reference fields target ONLY the 'target' bundle, and 'target'

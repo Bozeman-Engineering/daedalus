@@ -889,14 +889,14 @@ class ImageBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
     $this->assertFrameHugsPicture($component_uuid, 'unlinked (img root)');
 
     // ——— Phase 2: the picture part holds through both media forms. ———
-    // The three picture controls are element-bound to .image-block-image,
-    // and an element-bound control is offered while its bound part exists
-    // in the canvas DOM (daedalus_stylish offered()'s presence gate over the layout
-    // facts). Vector media used to be the honest absent case; under the
-    // forms model the part MATCHES its svg form instead (img/Raster on
-    // raster, svg/Vector on vector), so presence — and the offer — holds
-    // through the swap in both directions. The root-bound Spacing control
-    // rides along in every panel read as the liveness anchor.
+    // The three picture controls are element-bound to .image-block-image, and
+    // an element-bound control is offered while its bound part exists in the
+    // canvas DOM (daedalus_stylish offered()'s presence gate over the layout
+    // facts). Vector media used to be the honest absent case; under the forms
+    // model the part MATCHES its svg form instead (img/Raster on raster,
+    // svg/Vector on vector), so presence — and the offer — holds through the
+    // swap in both directions. The root-bound Spacing control rides along in
+    // every panel read as the liveness anchor.
     $session->executeScript(<<<JS
       Drupal.Daedalus.Selection.select('block:$component_uuid');
       Drupal.Daedalus.SidebarManager.openSidebar('daedalus_stylish_inspector');

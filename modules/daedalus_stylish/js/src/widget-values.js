@@ -53,8 +53,10 @@ import { offeredToken, scaleRow } from './style-guide.js';
  * structurally ('0.5rem  0.5rem' === '0.5rem 0.5rem').
  *
  * @param {*} value
+ *   A committed value (a string, or anything unset reads as).
  *
  * @return {?string}
+ *   The lowercased, whitespace-collapsed value, or null for "not set".
  */
 export const normalizeValue = (value) => {
   if (value === null || value === undefined) {
@@ -257,6 +259,7 @@ export const marginAxisWrite = (id, values) => {
  *   The selection's parent facts (source.getLayoutContext()?.parent).
  *
  * @return {{horizontal: object, vertical: object}}
+ *   The two axes' row descriptors (property, stops, write mode).
  */
 export const positionAxes = (parent) => {
   const display = normalizeValue(parent?.display);
@@ -298,6 +301,7 @@ export const positionAxes = (parent) => {
  *   The selection's parent facts (layout.parent), or null when unknown.
  *
  * @return {boolean}
+ *   Whether the parent's display is known.
  */
 export const positionGate = (self, parent) =>
   normalizeValue(parent?.display) !== null;
@@ -369,6 +373,7 @@ export const parentAlignment = (parent, localValue, stops) => {
  *   The selection's own facts (layout.self), or null when unknown.
  *
  * @return {boolean}
+ *   Whether the element has text (unknown facts offer).
  */
 export const textGate = (self) => !self || self.hasText;
 
@@ -385,6 +390,21 @@ export const textGate = (self) => !self || self.hasText;
  * materials), same rule. `group` is the palette-side grouping label (the
  * scale's label) the token-well popover sections by; flat renderers
  * ignore it.
+ *
+ * @param {string} ref
+ *   The record's style spelling (its var() reference).
+ * @param {string} label
+ *   The record's display name.
+ * @param {string} paint
+ *   The record's display value.
+ * @param {?string} paintDark
+ *   The dark-scheme pair, or null for a single-valued material.
+ * @param {?string} group
+ *   The palette-side grouping label, or null.
+ *
+ * @return {{id: string, value: string, matches: string[], label: string,
+ *   paint: string, paintDark: ?string, group: ?string}}
+ *   The stop.
  */
 const referenceStop = (ref, label, paint, paintDark = null, group = null) => ({
   id: ref,
@@ -409,6 +429,19 @@ const referenceStop = (ref, label, paint, paintDark = null, group = null) => ({
  * honestly represents adopts that stop's id, label and aliases (an
  * allowed '.5rem' lights as S, and an AI's committed '0.5rem' still
  * lights it); anything else labels as itself.
+ *
+ * @param {object} guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide).
+ * @param {object} materials
+ *   The materials roster (materials.js).
+ * @param {*} raw
+ *   One entry of the `allowed:` list, verbatim.
+ * @param {Array<{id: string, matches: string[], label: string}>} fallback
+ *   The unconstrained row, whose stops may represent the entry.
+ *
+ * @return {{id: string, value: string, matches: string[], label: string,
+ *   paint: string, paintDark: ?string}}
+ *   The stop.
  */
 const literalStop = (guide, materials, raw, fallback = []) => {
   const value = raw === null || raw === undefined ? '' : String(raw).trim();
@@ -438,6 +471,12 @@ const literalStop = (guide, materials, raw, fallback = []) => {
  * Collapses equivalent spellings into the first occurrence, so a
  * redundant list never yields two stops for one value (an alias shared
  * with an earlier stop is the same value respelled).
+ *
+ * @param {Array<{id: ?string, matches: string[]}>} stops
+ *   The stops in offer order.
+ *
+ * @return {Array<object>}
+ *   The first stop per value; stops without an id are dropped.
  */
 const dedupe = (stops) => {
   const deduped = [];
@@ -513,6 +552,7 @@ const dedupe = (stops) => {
  *
  * @return {Array<{id: string, value: string, matches: string[],
  *   label: string, paint: string, paintDark: ?string}>}
+ *   The row's stops in offer order.
  */
 export const stopsFor = (guide, materials, constraints, fallback) => {
   const allowed = Array.isArray(constraints?.allowed)
@@ -577,6 +617,7 @@ export const stopsFor = (guide, materials, constraints, fallback) => {
  *
  * @return {Array<{id: string, value: string, matches: string[],
  *   label: string, paint: string, paintDark: ?string}>}
+ *   The offered color tokens as reference stops, roster order.
  */
 export const paletteFallback = (guide, materials) =>
   shapeFallback(guide, materials, 'color');
@@ -596,12 +637,24 @@ export const paletteFallback = (guide, materials) =>
  *
  * @return {Array<{id: string, value: string, matches: string[],
  *   label: string, paint: string, paintDark: ?string, group: string}>}
+ *   The offered gradient tokens as reference stops, roster order.
  */
 export const gradientFallback = (guide, materials) =>
   shapeFallback(guide, materials, 'gradient');
 
 /**
  * The offered tokens of every scale of one shape, as reference stops.
+ *
+ * @param {?object} guide
+ *   The style guide payload (drupalSettings.daedalusStylish.guide).
+ * @param {object} materials
+ *   The materials roster (materials.js).
+ * @param {string} shape
+ *   The scale shape ('color', 'gradient').
+ *
+ * @return {Array<{id: string, value: string, matches: string[],
+ *   label: string, paint: string, paintDark: ?string, group: string}>}
+ *   The reference stops, roster order, deduped.
  */
 const shapeFallback = (guide, materials, shape) =>
   dedupe(
@@ -638,6 +691,7 @@ const shapeFallback = (guide, materials, shape) =>
  *
  * @return {Array<{id: string, value: string, matches: string[],
  *   label: string, paint: string, paintDark: ?string}>}
+ *   The animation reference stops, then the keywords.
  */
 export const animationFallback = (materials, keywords = []) =>
   dedupe([
@@ -658,6 +712,7 @@ export const animationFallback = (materials, keywords = []) =>
  *   The selection's own facts (layout.self), or null when unknown.
  *
  * @return {boolean}
+ *   Whether the selection lays out sibling boxes (unknown facts offer).
  */
 export const gapGate = (self) =>
   !self || (self.isContainer && self.childCount > 1);
@@ -677,15 +732,17 @@ export const gapGate = (self) =>
  *   The control's home part selector (model.home.element), null for a root
  *   binding.
  *
- * @returns {?number}
+ * @return {?number}
+ *   The child box count, or null when unknown.
  */
 export const boundChildCount = (self, element) => {
   if (!self) {
     return null;
   }
-  const count = element === null || element === undefined
-    ? self.childCount
-    : self.partChildCount?.[element];
+  const count =
+    element === null || element === undefined
+      ? self.childCount
+      : self.partChildCount?.[element];
   return typeof count === 'number' ? count : null;
 };
 
@@ -705,7 +762,9 @@ export const boundChildCount = (self, element) => {
  *   The control's home part selector (model.home.element), null for a root
  *   binding.
  *
- * @returns {boolean}
+ * @return {boolean}
+ *   Whether the bound element lays out more than one child (unknown
+ *   offers).
  */
 export const boundGapGate = (self, element) => {
   const count = boundChildCount(self, element);
@@ -1029,6 +1088,12 @@ const TRIGGER_PAIR = {
 /**
  * Whether a trigger value is the OFF half of the pair: unset (nothing in
  * the layer stack) or an explicit `none`.
+ *
+ * @param {*} value
+ *   The trigger property's shown value.
+ *
+ * @return {boolean}
+ *   Whether the value reads as off.
  */
 const triggerOff = (value) => {
   const normalized = normalizeValue(value);
@@ -1091,6 +1156,13 @@ export const triggerPairWrite = (properties, values) => {
  * A keyword definition's own vocabulary as stops: each keyword commits
  * itself, labeled as itself (CSS grammar, not guide law — the row stays
  * open around them unless a constraint closes it).
+ *
+ * @param {string[]} keywords
+ *   The definition's keywords.
+ *
+ * @return {Array<{id: string, value: string, matches: string[],
+ *   label: string}>}
+ *   One stop per keyword, in order.
  */
 const keywordStops = (keywords) =>
   keywords.map((keyword) => ({
@@ -1117,6 +1189,7 @@ const keywordStops = (keywords) =>
  *   The property's guide definition ({type, keywords, media, ...}).
  *
  * @return {boolean}
+ *   Whether the definition is media-capable with a free value type.
  */
 export const imageSlot = (definition) =>
   definition?.media === true && definition?.type !== 'keyword';
@@ -1157,6 +1230,7 @@ export const imageSlot = (definition) =>
  *
  * @return {Array<{id: string, value: string, matches: string[],
  *   label: string}>}
+ *   The unconstrained stops, [] when nothing answers.
  */
 export const fallbackFor = (guide, materials, property, definition) => {
   const table = FALLBACKS[property];
@@ -1217,6 +1291,7 @@ export const fallbackFor = (guide, materials, property, definition) => {
  *
  * @return {Array<{id: string, value: string, matches: string[],
  *   label: string, paint: string, paintDark: ?string}>}
+ *   The row's stops (stopsFor over the resolved fallback).
  */
 export const propertyStops = (
   guide,
@@ -1246,8 +1321,10 @@ export const propertyStops = (
  *   The shown value at the pose (the stack winner's: style-stack.js
  *   stackAt, or a draft layered over it).
  * @param {Array<{id: string, value: string, matches: string[]}>} stops
+ *   The row's stops.
  *
  * @return {{selected: ?string, custom: boolean}}
+ *   The lit stop's id, or the custom flag when no stop represents it.
  */
 export const segmentState = (value, stops) => {
   const normalized = normalizeValue(value);

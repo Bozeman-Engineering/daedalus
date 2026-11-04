@@ -81,8 +81,8 @@ function daedalus_stylish_schema(): array {
 /**
  * Implements hook_install().
  *
- * Styling defaults ON: a site gaining Daedalus Stylish sweeps every bundle already
- * passing the Daedalus Layout Edit Mode gate, since their gate-carrier
+ * Styling defaults ON: a site gaining Daedalus Stylish sweeps every bundle
+ * already passing the Daedalus Layout Edit Mode gate, since their gate-carrier
  * saves happened before Daedalus Stylish was around to see them. Config sync is
  * exempt: it must not create config outside the sync set.
  */
@@ -93,13 +93,13 @@ function daedalus_stylish_install(bool $is_syncing): void {
 }
 
 /**
- * Converts DaedalusStylishVariant.styles from string_long to daedalus_variant_styles.
+ * Converts DaedalusStylishVariant.styles to the daedalus_variant_styles type.
  */
 function daedalus_stylish_update_10001(): void {
-  // Both types store one JSON text column with an identical schema, so this
-  // is a pure definition swap: no column changes, no data migration. The
-  // code-side definition already carries the new type; installing it just
-  // updates the tracked storage definition.
+  // The field was string_long. Both types store one JSON text column with
+  // an identical schema, so this is a pure definition swap: no column
+  // changes, no data migration. The code-side definition already carries
+  // the new type; installing it just updates the tracked storage definition.
   $definition = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions('daedalus_variant')['styles'];
   \Drupal::entityDefinitionUpdateManager()->updateFieldStorageDefinition($definition);
 }
@@ -118,14 +118,14 @@ function daedalus_stylish_update_10002(): void {
 /**
  * Opt-out enablement: seed the opt_outs record and default styling ON.
  *
- * Enablement is no longer transition-only: styling defaults ON for every
- * bundle passing the Daedalus Layout Edit Mode gate, and only an explicit
- * opt-out record (daedalus_stylish.settings opt_outs) keeps it off. No prior release
- * exposed a way to be deliberately opted out while gated-on (field absence
- * only ever meant "the transition never fired"), so the sweep enables every
+ * Enablement is no longer transition-only: styling defaults ON for every bundle
+ * passing the Daedalus Layout Edit Mode gate, and only an explicit opt-out
+ * record (daedalus_stylish.settings opt_outs) keeps it off. No prior release
+ * exposed a way to be deliberately opted out while gated-on (field absence only
+ * ever meant "the transition never fired"), so the sweep enables every
  * gate-passing bundle with no records to seed. Later data migrations (the
- * heading block's Daedalus Stylish style writes) rely on this field existing on their
- * host bundles, and hook_update_N runs before all hook_post_update_NAME.
+ * heading block's Daedalus Stylish style writes) rely on this field existing on
+ * their host bundles, and hook_update_N runs before all hook_post_update_NAME.
  */
 function daedalus_stylish_update_10003(): void {
   $config = \Drupal::configFactory()->getEditable('daedalus_stylish.settings');

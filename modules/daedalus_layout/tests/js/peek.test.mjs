@@ -25,7 +25,7 @@ globalThis.Drupal = {
 };
 
 // Every fetch the module makes: the CSRF token's and the peek's. The token
-// is fetched once per process (blueprint-gestures memoises it), so the
+// is fetched once per process (blueprint-gestures memoizes it), so the
 // peek's request is the last call recorded.
 const calls = [];
 globalThis.fetch = async (url, init) => {

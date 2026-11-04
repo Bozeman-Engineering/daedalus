@@ -69,6 +69,8 @@ const { Plugin } = window.CKEditor5.core;
  *
  * @return {{vocabulary: Set<string>, classPattern: RegExp,
  *   idLength: number, alphabet: string}}
+ *   The minting contract: the class vocabulary, the pattern an identity
+ *   class matches, the id length and the id alphabet.
  */
 const contract = () => {
   const identity = drupalSettings.daedalusEdit?.identity;
@@ -123,14 +125,14 @@ const mintId = (identity, taken) => {
  */
 export class Identity extends Plugin {
   /**
-   * {@inheritdoc}
+   * @inheritdoc
    */
   static get pluginName() {
     return 'DaedalusEditIdentity';
   }
 
   /**
-   * {@inheritdoc}
+   * @inheritdoc
    */
   init() {
     const editor = this.editor;

@@ -37,8 +37,12 @@ const MOTION_TERM =
  *
  * @param {string} original
  *   The authored condition text.
- * @param {Object} state
- *   The vector state ({scheme, motion}; 'auto' leaves an axis authored).
+ * @param {object} state
+ *   The vector state; 'auto' leaves an axis authored.
+ * @param {string} state.scheme
+ *   The forced color scheme ('dark', 'light') or 'auto'.
+ * @param {string} state.motion
+ *   The forced motion preference ('reduce', 'no-preference') or 'auto'.
  *
  * @return {string}
  *   The rewritten condition text (identical when both axes are 'auto' or
@@ -65,6 +69,12 @@ export const rewriteMediaText = (
 
 /**
  * True when a condition text carries a term either axis could force.
+ *
+ * @param {string} text
+ *   The media condition text.
+ *
+ * @return {boolean}
+ *   Whether a scheme or motion term is present.
  */
 export const hasEmulatableTerm = (text) => {
   SCHEME_TERM.lastIndex = 0;
@@ -105,6 +115,14 @@ export const applyToSheets = (sheets, state, originals) => {
 
 /**
  * Recursively applies the state to a CSSRuleList.
+ *
+ * @param {CSSRuleList} rules
+ *   The rules to rewrite, nested rule lists included.
+ * @param {object} state
+ *   The vector state, as for rewriteCondition.
+ * @param {Map<CSSRule, string>} originals
+ *   The authored condition text per rewritten rule, filled on first visit
+ *   so a later state rewrites from the original, never from a rewrite.
  */
 const applyToRules = (rules, state, originals) => {
   for (const rule of rules) {

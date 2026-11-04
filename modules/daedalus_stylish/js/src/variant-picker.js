@@ -32,6 +32,7 @@ import { pickerGroups, pickerHome, pickerIds } from './variant-picker-model.js';
  * empty field) widens the offer to every axis.
  *
  * @param {object} props
+ *   The offer and the pick handler.
  * @param {Array} props.ranked
  *   The fit-ranked applicable roster (rankVariants' shape).
  * @param {string[]} props.vocabulary

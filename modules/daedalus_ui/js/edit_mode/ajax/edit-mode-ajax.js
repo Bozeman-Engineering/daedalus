@@ -24,8 +24,10 @@
  * So even when the cookie isn't sent, the query parameter ensures the backend knows
  * we're in Edit Mode.
  */
-Drupal.Ajax.prototype.beforeSend = (function (originalBeforeSend) {
-  return function (xmlhttprequest, options) {
+Drupal.Ajax.prototype.beforeSend = (function wrapBeforeSend(
+  originalBeforeSend,
+) {
+  return function beforeSend(xmlhttprequest, options) {
     const mode = Drupal.Daedalus.getCookieValue('navigationMode');
     if (mode && mode !== 'none') {
       // Add navigationMode to URL if not already present.

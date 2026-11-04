@@ -284,7 +284,10 @@ class BlueprintEndpointTest extends BrowserTestBase {
     // A refusal the digester owns structurally (a functional pseudo-element
     // addresses nothing here); vocabulary (`&:sparkle`) parses at the door
     // and is the validator's to refuse at the write.
-    $response = $this->postOperations(['key' => "container:$uuid", 'css' => "color: blue;\n&::part(label) { color: green; }"], $token, $url);
+    $response = $this->postOperations([
+      'key' => "container:$uuid",
+      'css' => "color: blue;\n&::part(label) { color: green; }",
+    ], $token, $url);
     $this->assertSame(200, $response->getStatusCode());
     $payload = json_decode((string) $response->getBody(), TRUE);
     $this->assertSame('BAD_SELECTOR', $payload['errors'][0]['code']);

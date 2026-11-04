@@ -26,7 +26,11 @@ class BlueprintScopePolicyTest extends BlueprintKernelTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static array $permissions = ['create section blueprint', 'edit any section blueprint', 'configure any layout'];
+  protected static array $permissions = [
+    'create section blueprint',
+    'edit any section blueprint',
+    'configure any layout',
+  ];
 
   /**
    * The root insert on a block blueprint refuses once it has a root.

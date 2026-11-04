@@ -20,7 +20,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * Drives daedalus_ui's Edit Mode session on a real page.
  *
- * daedalus_ui is the UI framework the rest of the Daedalus plugs into: a
+ * `daedalus_ui` is the UI framework the rest of the Daedalus plugs into: a
  * mode system and the chrome (sidebars, top bar) that hosts it, over ONE
  * pointer and ONE keyboard grammar on the one selection. This test carries
  * the framework's wiring end to end: the two doors into Edit Mode (the
@@ -47,15 +47,15 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * daedalus_edit's editing engine). daedalus_ui is a page-builder module,
  * so it requires the base daedalus, not the AI superset.
  *
- * One fixture, one scenario. A full site install from the recipe is by far
- * the most expensive part of a run (the framework installs and tears down
- * per method), so all behavior lives in the single test method. The recipe
- * ships its footer as a site_chrome blueprint shown by daedalus_theme's
- * site frame (the footer slot's default): a foreign, attributed host rendered around
- * the node page, for the editing-universe step (the editor door and the Tab
- * walk ignore what the root blueprint's projection does not contain). The
- * portal step links a section blueprint of the test's own into a page-built
- * node, the one foreign host the editor role may open.
+ * One fixture, one scenario. A full site install from the recipe is by far the
+ * most expensive part of a run (the framework installs and tears down per
+ * method), so all behavior lives in the single test method. The recipe ships
+ * its footer as a site_chrome blueprint shown by daedalus_theme's site frame
+ * (the footer slot's default): a foreign, attributed host rendered around the
+ * node page, for the editing-universe step (the editor door and the Tab walk
+ * ignore what the root blueprint's projection does not contain). The portal
+ * step links a section blueprint of the test's own into a page-built node, the
+ * one foreign host the editor role may open.
  *
  * Step order is cookie-driven. The toggle cycle runs FIRST: its enable half
  * needs a page arriving outside Edit Mode, which an API-created node gives
@@ -79,17 +79,15 @@ class EditModeBehaviorTest extends WebDriverTestBase {
    *
    * The inline_block:text ("Pro tip: to edit things quickly, use tab to move
    * through elements.", inline block 42ed7027) that is the only component of
-   * the Pro tip section (01c25804), the second section nested under the footer's
-   * one root, in the daedalus recipe's site chrome content (the `footer`
-   * blueprint the frame places linked after the main slot; a block blueprint
-   * holds one root and its sections nest under it). The test installs from the
-   * recipe on disk, so a
-   * recipe content change that drops this component fails the
-   * editing-universe step below: re-pin it to the footer's LAST attributed
-   * block leaf, because the Tab step depends on that position. (The
-   * chip-face legs run on the page-built page's own block: the footer is
-   * outside the editing universe, so the one selection gate never lands
-   * it.)
+   * the Pro tip section (01c25804), the second section nested under the
+   * footer's one root, in the daedalus recipe's site chrome content (the
+   * `footer` blueprint the frame places linked after the main slot; a block
+   * blueprint holds one root and its sections nest under it). The test installs
+   * from the recipe on disk, so a recipe content change that drops this
+   * component fails the editing-universe step below: re-pin it to the footer's
+   * LAST attributed block leaf, because the Tab step depends on that position.
+   * (The chip-face legs run on the page-built page's own block: the footer is
+   * outside the editing universe, so the one selection gate never lands it.)
    */
   private const FOOTER_COMPONENT_UUID = '1832e9b4-502a-4711-a5df-4c62de02d13f';
 
@@ -253,9 +251,9 @@ class EditModeBehaviorTest extends WebDriverTestBase {
 
     // A foreign host on the same page: the recipe ships its footer as a
     // site_chrome blueprint (its own layout carries an attributed "Pro tip"
-    // text component) shown by daedalus_theme's site frame as its footer
-    // slot's default, after the main slot. It renders around the node page attributed but
-    // OUTSIDE the node's blueprint: the editing-universe step below drives
+    // text component) shown by daedalus_theme's site frame as its footer slot's
+    // default, after the main slot. It renders around the node page attributed
+    // but OUTSIDE the node's blueprint: the editing-universe step below drives
     // it.
     $this->drupalGet($node->toUrl());
     $this->enterEditMode();
@@ -348,13 +346,13 @@ class EditModeBehaviorTest extends WebDriverTestBase {
     );
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
 
-    // The Show kebab at the inline end of the panel header opens the
-    // shared menu as a rider of the floating surface (.daedalus-ui-popover), end
-    // aligned: the menu's right edge sits at the kebab's right edge and
-    // hangs inward over the panel, never outward over the canvas. The
-    // seam: the kebab's `align: 'end'` intent reaching real layout through
-    // the surface (node proves the placement math; only a browser proves
-    // the kebab passes the intent and the list rides the surface).
+    // The Show kebab at the inline end of the panel header opens the shared
+    // menu as a rider of the floating surface (.daedalus-ui-popover), end
+    // aligned: the menu's right edge sits at the kebab's right edge and hangs
+    // inward over the panel, never outward over the canvas. The seam: the
+    // kebab's `align: 'end'` intent reaching real layout through the surface
+    // (node proves the placement math; only a browser proves the kebab passes
+    // the intent and the list rides the surface).
     $this->getSession()->executeScript("document.querySelector('.daedalus-ui-show-menu__button').click();");
     $this->assertJsCondition(
       "document.querySelector('.daedalus-ui-popover > .daedalus-ui-menu') !== null",
@@ -754,12 +752,12 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'Escape clears the selection and the standing drill context in one press.',
     );
 
-    // The pointer twin of that Escape: a KEYLESS click inside the canvas.
-    // The canvas — the data-main-entity carrier — never resolves as a
-    // selection (the doc'd resolver invariant), so a click landing on it
-    // resolves no key, and the pointer grammar treats a keyless click inside the
-    // canvas as "select nothing" while leaving clicks outside the canvas
-    // (toolbar, sidebars) alone. Nothing else exercises this clear path.
+    // The pointer twin of that Escape: a KEYLESS click inside the canvas. The
+    // canvas — the data-main-entity carrier — never resolves as a selection
+    // (the doc'd resolver invariant), so a click landing on it resolves no key,
+    // and the pointer grammar treats a keyless click inside the canvas as
+    // "select nothing" while leaving clicks outside the canvas (toolbar,
+    // sidebars) alone. Nothing else exercises this clear path.
     $this->getSession()->executeScript(sprintf(
       "Drupal.Daedalus.Selection.select('field:%s:body');",
       $node->uuid(),
@@ -1167,11 +1165,11 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'The settings tray lists the Page elements panel binding from the registry, unbound.',
     );
 
-    // The tray follows the registry, not a one-time snapshot: verb hotkeys
-    // ride other modules' scripts, whose AJAX/big_pipe delivery order is not
-    // guaranteed, so a binding registered AFTER the tray first rendered
-    // (like daedalus_layout's Insert verb on the AJAX Edit Mode entry) must still
-    // get a row.
+    // The tray follows the registry, not a one-time snapshot: verb hotkeys ride
+    // other modules' scripts, whose AJAX/big_pipe delivery order is not
+    // guaranteed, so a binding registered AFTER the tray first rendered (like
+    // daedalus_layout's Insert verb on the AJAX Edit Mode entry) must still get
+    // a row.
     $this->getSession()->executeScript(
       "Drupal.Daedalus.Hotkeys.register({ id: 'test_late', key: 'mod+9', label: 'Late binding', remappable: true, action: () => {} });"
     );
@@ -1224,13 +1222,13 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'The remap persisted per-user and survives a fresh page render.',
     );
 
-    // --- History: timeline, sidebar, undo/redo. ---
-    // The same fixture drives the history spine end to end on the entity
-    // tempstore strategy (the layout strategy leg lives in daedalus_layout's suite).
-    // Two mutations through the public mutate facade produce a baseline plus
-    // two timeline entries — one entry per request, captured at the strategy
-    // write tee — with the client-sent label naming the first gesture and
-    // the second falling back to a target-derived label.
+    // --- History: timeline, sidebar, undo/redo. --- The same fixture drives
+    // the history spine end to end on the entity tempstore strategy (the layout
+    // strategy leg lives in daedalus_layout's suite). Two mutations through the
+    // public mutate facade produce a baseline plus two timeline entries — one
+    // entry per request, captured at the strategy write tee — with the
+    // client-sent label naming the first gesture and the second falling back to
+    // a target-derived label.
     $session = $this->getSession();
     $this->assertJsCondition("typeof Drupal.Daedalus.History === 'object'", 20000);
     $mutate_body = <<<JS
@@ -1406,11 +1404,11 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'The fake canvas carries the canonical wrapper id.',
     );
 
-    // --- The canvas state vector (headless since the chip row). ---
-    // The vector is addressable state, not buried UI state: the public
-    // facade below is the same surface the daedalus_stylish inspector's chip row
-    // and the AI's render tool drive. There is no top-bar UI of its own —
-    // the old chip cluster is gone, and the spine must work without it.
+    // --- The canvas state vector (headless since the chip row). --- The vector
+    // is addressable state, not buried UI state: the public facade below is the
+    // same surface the daedalus_stylish inspector's chip row and the AI's
+    // render tool drive. There is no top-bar UI of its own — the old chip
+    // cluster is gone, and the spine must work without it.
     $this->assertJsCondition(
       "Drupal.Daedalus.CanvasVector && typeof Drupal.Daedalus.CanvasVector.set === 'function'",
       20000,
@@ -1645,24 +1643,22 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'The band ruler leaves with edit mode.',
     );
 
-    // --- A multi-region section: the index's region slots against the
-    // mounted page's gaps. ---
-    // The selection index composes its rows from the mirror's one lean
-    // tree (the blueprint's `layout`, compose.js), where a multi-region layout's named
-    // slots are region nodes; the panel draws them as keyless region
-    // rows and the canvas renders core's region wrappers. The client's
-    // drag layer speaks {anchor, placement} alone (a block's region is the
-    // flow its anchor sits in), so a drop lands in a named region by
-    // anchoring beside a block that already sits there. The seam only a
-    // browser proves: after a row drop, the region row the dropped block
-    // sits under, the region node the mirror places it in and the region
-    // wrapper the page renders it in all agree, and agree again after the
-    // move to the section's other region. The page is built in PHP: the
-    // recipe's add road offers the stylish container layout alone
-    // (daedalus_stylish_layouts filters the picker and the placement
-    // restrictions alike), while a section already carrying core's
-    // layout_twocol_section still renders and still takes moves. One
-    // stylish container holding the block to move, then the twocol
+    // --- A multi-region section: the index's region slots against the mounted
+    // page's gaps. --- The selection index composes its rows from the mirror's
+    // one lean tree (the blueprint's `layout`, compose.js), where a
+    // multi-region layout's named slots are region nodes; the panel draws them
+    // as keyless region rows and the canvas renders core's region wrappers. The
+    // client's drag layer speaks {anchor, placement} alone (a block's region is
+    // the flow its anchor sits in), so a drop lands in a named region by
+    // anchoring beside a block that already sits there. The seam only a browser
+    // proves: after a row drop, the region row the dropped block sits under,
+    // the region node the mirror places it in and the region wrapper the page
+    // renders it in all agree, and agree again after the move to the section's
+    // other region. The page is built in PHP: the recipe's add road offers the
+    // stylish container layout alone (daedalus_stylish_layouts filters the
+    // picker and the placement restrictions alike), while a section already
+    // carrying core's layout_twocol_section still renders and still takes
+    // moves. One stylish container holding the block to move, then the twocol
     // section with one text block in each region, so both regions stay
     // addressable.
     $uuid_service = \Drupal::service('uuid');
@@ -1952,11 +1948,11 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       20000,
       'Minimal density lists every verb on the face, icons only, and unrenders the chevron.',
     );
-    // The chrome tooltip spine (data-daedalus-ui-tooltip + the delegated engine):
-    // below full density a top bar button's inline label is hidden, so
-    // hovering it shows the singleton pill carrying the label. The seam:
-    // the engine serving server-rendered chrome through nothing but the
-    // attribute the button declares.
+    // The chrome tooltip spine (data-daedalus-ui-tooltip + the delegated
+    // engine): below full density a top bar button's inline label is hidden, so
+    // hovering it shows the singleton pill carrying the label. The seam: the
+    // engine serving server-rendered chrome through nothing but the attribute
+    // the button declares.
     $this->getSession()->executeScript(
       "document.querySelector('#edit-mode-top-bar [data-daedalus-ui-tooltip]')"
       . ".dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));"
@@ -2227,15 +2223,15 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       'Dismissing the modal kept the staged changes: Save still reads unsaved.',
     );
 
-    // daedalus_layout's interaction guard surviving a mutation swap (the behavior
-    // under test is daedalus_layout's js/settings/disable-interactive-elements.js;
-    // the seam is cross-module: a block the canvas gains through a
-    // daedalus_ui mutation response). A linked text block is placed
-    // and duplicated TWICE, so the second clone's link arrived on the page
-    // through two swaps after boot: its click never navigates (one
-    // delegated capture-phase listener, registered once, covers links the
-    // canvas gains later), its tabindex is -1 (the page-wide sweep ran on
-    // the swapped subtree), and no per-link handler accrued on either
+    // daedalus_layout's interaction guard surviving a mutation swap (the
+    // behavior under test is daedalus_layout's
+    // js/settings/disable-interactive-elements.js; the seam is cross-module: a
+    // block the canvas gains through a daedalus_ui mutation response). A linked
+    // text block is placed and duplicated TWICE, so the second clone's link
+    // arrived on the page through two swaps after boot: its click never
+    // navigates (one delegated capture-phase listener, registered once, covers
+    // links the canvas gains later), its tabindex is -1 (the page-wide sweep
+    // ran on the swapped subtree), and no per-link handler accrued on either
     // clone's link across the two mutations.
     $link_uuid = $uuid_service->generate();
     $clone_uuid = $uuid_service->generate();

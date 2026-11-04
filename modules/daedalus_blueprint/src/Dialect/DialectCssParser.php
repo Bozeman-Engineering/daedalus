@@ -16,74 +16,66 @@ use Drupal\daedalus_blueprint\NodeTree\NodeTreeBuilder;
 /**
  * Parses and validates the dialect's CSS surface.
  *
- * Two inputs share this grammar: style="" attribute values (declaration
- * lists) and <style> blocks (rules under the published selector grammar
- * and condition wrappers, spec v0.2 section 7). Rules map back onto node
- * style entries: the selector is `#id` plus a RELATIVE SELECTOR under it
- * (RelativeSelector, the one suffix grammar every style key speaks: a
- * declared part or rich-text instance class `.x`, a declared base tag
- * `p`, the children `> *`, a block type among them `> d-text`, their
- * compounds `> d-text .link`, the relations `> p + p`,
- * `> d-text:has(a)`, `> *:not(d-image)`, any of several compounds at
- * one position `> *:is(p, div)`), so the local key is '' (the
- * element) or '::' plus the selector in its canonical spelling; the
- * at-rule nesting (a published wrapper read as its reference, any other
- * `@media` / `@container` / `@supports` query the condition grammar reads
- * as a literal clause: ConditionClause through the digester's WHEN half)
- * and the posable states on the LAST compound
- * (`#id:hover`, `#id > d-text:has(a):hover`, peeled by name whatever
- * their order among its qualifiers) pick the condition, every other
- * qualifier stays selector text (`#id li:hover > ul`, `#id.open > ul`,
- * `#id [aria-expanded="true"] > ul`, `#id a:visited`,
- * `#id > *:not(:last-child)`), a selector list is ONE rule folded into
- * `:is()` where its members differ (`#id h1, #id h2` lands at
- * `::*:is(h1, h2)`) or refused whole (members sharing no shape, a fold
- * that would put two states on the last compound), and the
- * declarations are the entry's property map. The reader is
- * SelectorDigest, the one digester every
- * door shares; grammar is CSS's and admission (an undeclared tag,
- * class, attribute or state) is the validator's verdict by enforcement
- * mode, never a refusal here. CSS nesting is accepted as
- * sugar and flattened (`#id { p { … } &:hover { … } @media … { … } }`
- * reads as the flat rules it means); the print is always flat.
- * A rule also WEARS: `class: button` and `{axis}: {value}` inside a
- * `::` rule's plain block (peelWear()) are the attribute's twin, the
- * variant references the rule's entry carries and delivers at every
- * match, parsed by the same catalog lookups the element's class="" and
- * axis attributes use and refused on the element itself, under a
- * condition, and for a top-level-only axis.
- * The property GRANT is not judged here: the parser judges grammar, and
- * a property outside an element's vocabulary roster is refused by the
- * semantic validator when the parsed styles land as update_style ops
- * (STYLE_PROPERTY_NOT_DECLARED, the roster's own corrective), the one
- * door that reads the roster the prompt teaches. The document path still
- * answers a grant miss and a grammar miss in ONE round: the document is
- * judged whole (DomOperationHandler::applyDocument()) and its best-effort
- * tree carries every grammatical declaration to the validator, so a
- * grammar error never hides a grant miss on the same bytes.
- * The value grammar is enforced here too, through the catalog's value
- * grammar over the materials roster: every var() must name a published
- * material (a skin token: the dialect's API word for a rostered var()
- * name is "token"), url() is only a media reference, a
- * generation request or a file reference, and math functions, !important and custom
- * property definitions are refused. The corrective names the rule and,
- * for a miss, the nearest published materials the writer could have
- * reached for (the roster's one did-you-mean), because these are the
- * measured model error classes.
+ * Two inputs share this grammar: style="" attribute values (declaration lists)
+ * and <style> blocks (rules under the published selector grammar and condition
+ * wrappers, spec v0.2 section 7). Rules map back onto node style entries: the
+ * selector is `#id` plus a RELATIVE SELECTOR under it (RelativeSelector, the
+ * one suffix grammar every style key speaks: a declared part or rich-text
+ * instance class `.x`, a declared base tag `p`, the children `> *`, a block
+ * type among them `> d-text`, their compounds `> d-text .link`, the relations
+ * `> p + p`, `> d-text:has(a)`, `> *:not(d-image)`, any of several compounds at
+ * one position `> *:is(p, div)`), so the local key is '' (the element) or '::'
+ * plus the selector in its canonical spelling; the at-rule nesting (a published
+ * wrapper read as its reference, any other `@media` / `@container` /
+ * `@supports` query the condition grammar reads as a literal clause:
+ * ConditionClause through the digester's WHEN half) and the posable states on
+ * the LAST compound (`#id:hover`, `#id > d-text:has(a):hover`, peeled by name
+ * whatever their order among its qualifiers) pick the condition, every other
+ * qualifier stays selector text (`#id li:hover > ul`, `#id.open > ul`, `#id
+ * [aria-expanded="true"] > ul`, `#id a:visited`, `#id > *:not(:last-child)`), a
+ * selector list is ONE rule folded into `:is()` where its members differ (`#id
+ * h1, #id h2` lands at `::*:is(h1, h2)`) or refused whole (members sharing no
+ * shape, a fold that would put two states on the last compound), and the
+ * declarations are the entry's property map. The reader is SelectorDigest, the
+ * one digester every door shares; grammar is CSS's and admission (an undeclared
+ * tag, class, attribute or state) is the validator's verdict by enforcement
+ * mode, never a refusal here. CSS nesting is accepted as sugar and flattened
+ * (`#id { p { … } &:hover { … } @media … { … } }` reads as the flat rules it
+ * means); the print is always flat. A rule also WEARS: `class: button` and
+ * `{axis}: {value}` inside a `::` rule's plain block (peelWear()) are the
+ * attribute's twin, the variant references the rule's entry carries and
+ * delivers at every match, parsed by the same catalog lookups the element's
+ * class="" and axis attributes use and refused on the element itself, under a
+ * condition, and for a top-level-only axis. The property GRANT is not judged
+ * here: the parser judges grammar, and a property outside an element's
+ * vocabulary roster is refused by the semantic validator when the parsed styles
+ * land as update_style ops (STYLE_PROPERTY_NOT_DECLARED, the roster's own
+ * corrective), the one door that reads the roster the prompt teaches. The
+ * document path still answers a grant miss and a grammar miss in ONE round: the
+ * document is judged whole (DomOperationHandler::applyDocument()) and its
+ * best-effort tree carries every grammatical declaration to the validator, so a
+ * grammar error never hides a grant miss on the same bytes. The value grammar
+ * is enforced here too, through the catalog's value grammar over the materials
+ * roster: every var() must name a published material (a skin token: the
+ * dialect's API word for a rostered var() name is "token"), url() is only a
+ * media reference, a generation request or a file reference, and math
+ * functions, !important and custom property definitions are refused. The
+ * corrective names the rule and, for a miss, the nearest published materials
+ * the writer could have reached for (the roster's one did-you-mean), because
+ * these are the measured model error classes.
  *
- * Images in CSS: url('media:<uuid>') is the spine's media token (daedalus_stylish
- * validates the property's media capability and the uuid); url('generate:
- * <prompt>') is the page language's spelling of the {_generate} handled
- * value and url('file:<name>') of the {_file} handled value (a file the
- * conversation holds, by its name), both translated here so every CSS
- * entry point (style="", the style op, <style> blocks) lands them as the
- * handled values the spine's value handlers resolve. A handled request
- * rides CSS's own comma-layer model: a value carrying one splits on
- * top-level commas into the layer list StyleValueResolver takes on
- * media-capable properties (literal CSS fragments plus {_generate} /
- * {_file} objects, joined back with commas once the media is minted), so
- * `linear-gradient(...), url('generate:<prompt>')` darkens a generated
- * image in ONE write.
+ * Images in CSS: url('media:<uuid>') is the spine's media token
+ * (daedalus_stylish validates the property's media capability and the uuid);
+ * url('generate: <prompt>') is the page language's spelling of the {_generate}
+ * handled value and url('file:<name>') of the {_file} handled value (a file the
+ * conversation holds, by its name), both translated here so every CSS entry
+ * point (style="", the style op, <style> blocks) lands them as the handled
+ * values the spine's value handlers resolve. A handled request rides CSS's own
+ * comma-layer model: a value carrying one splits on top-level commas into the
+ * layer list StyleValueResolver takes on media-capable properties (literal CSS
+ * fragments plus {_generate} / {_file} objects, joined back with commas once
+ * the media is minted), so `linear-gradient(...), url('generate:<prompt>')`
+ * darkens a generated image in ONE write.
  *
  * Quoting canon (dialect 0.4): the canonical url() spelling is
  * SINGLE-quoted, the one form valid inside style="" attributes (a raw
@@ -529,16 +521,34 @@ final class DialectCssParser {
         continue;
       }
       if ($target['local'] === '') {
-        $errors[] = new DialectError('WEAR_ON_ELEMENT', sprintf('"%s: %s" in the rule for #%s: an element wears variants on its own tag (class="", its axis attributes; the set op\'s attrs), never in a rule; a declaration wears at a rule\'s matches (#%s > d-text { %s: %s })', $name, $value, $target['id'], $target['id'], $name, $value), $line, ['attribute' => $name, 'value' => $value], 'Wear on the element rides its attributes: set {ref, attrs: {class: "..."}} or the axis attribute; a rule under #id wears on the elements it matches.');
+        $errors[] = new DialectError(
+          'WEAR_ON_ELEMENT',
+          sprintf('"%s: %s" in the rule for #%s: an element wears variants on its own tag (class="", its axis attributes; the set op\'s attrs), never in a rule; a declaration wears at a rule\'s matches (#%s > d-text { %s: %s })', $name, $value, $target['id'], $target['id'], $name, $value),
+          $line,
+          ['attribute' => $name, 'value' => $value],
+          'Wear on the element rides its attributes: set {ref, attrs: {class: "..."}} or the axis attribute; a rule under #id wears on the elements it matches.',
+        );
         continue;
       }
       if ($wrappers !== [] || $target['states'] !== []) {
-        $errors[] = new DialectError('WEAR_UNDER_CONDITION', sprintf('"%s: %s" under a condition: a rule wears a variant in its default block only, never under a state or a wrapper (a wear has no condition; the variant\'s own conditions ride it)', $name, $value), $line, ['attribute' => $name, 'value' => $value], sprintf('Write the wear in the rule\'s plain block: #%s %s { %s: %s }.', $target['id'], substr($target['local'], 2), $name, $value));
+        $errors[] = new DialectError(
+          'WEAR_UNDER_CONDITION',
+          sprintf('"%s: %s" under a condition: a rule wears a variant in its default block only, never under a state or a wrapper (a wear has no condition; the variant\'s own conditions ride it)', $name, $value),
+          $line,
+          ['attribute' => $name, 'value' => $value],
+          sprintf('Write the wear in the rule\'s plain block: #%s %s { %s: %s }.', $target['id'], substr($target['local'], 2), $name, $value),
+        );
         continue;
       }
       if ($reference !== NULL) {
         if ($reference->record->rootOnly()) {
-          $errors[] = new DialectError('AXIS_NOT_TOP_LEVEL', sprintf('%s applies to top-level containers only, and a rule\'s matches are never top-level', $name), $line, ['attribute' => $name, 'variant' => $reference->id], 'Set it on the outermost container itself, or wear a variant on an axis the element offers at every depth.');
+          $errors[] = new DialectError(
+            'AXIS_NOT_TOP_LEVEL',
+            sprintf('%s applies to top-level containers only, and a rule\'s matches are never top-level', $name),
+            $line,
+            ['attribute' => $name, 'variant' => $reference->id],
+            'Set it on the outermost container itself, or wear a variant on an axis the element offers at every depth.',
+          );
           continue;
         }
         $axis_refs[] = ['variant' => $reference->id, 'fragment' => ''];

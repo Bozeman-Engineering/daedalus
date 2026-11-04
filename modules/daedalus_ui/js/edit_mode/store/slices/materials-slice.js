@@ -48,6 +48,11 @@ const materialsSlice = createSlice({
   reducers: {
     /**
      * Replaces the whole record set from a page-load payload.
+     *
+     * @param {object} state
+     *   The slice state.
+     * @param {{payload: object}} action
+     *   The action, its payload the delivered record set.
      */
     materialsBooted: (state, action) => {
       state.booted = true;
@@ -56,6 +61,11 @@ const materialsSlice = createSlice({
     },
     /**
      * Applies a {upsert, remove} delta (materials/delta.js applyDelta).
+     *
+     * @param {object} state
+     *   The slice state.
+     * @param {{payload: object}} action
+     *   The action, its payload the delta.
      */
     materialsDelta: (state, action) => {
       applyDelta(state.records, action.payload);
@@ -72,13 +82,21 @@ export default materialsSlice.reducer;
 export { assertDelta, isEmptyDelta };
 
 /**
+ * The slice's record set by kind, the input the flat list derives from.
+ *
+ * @param {object} state
+ *   The store state.
+ *
+ * @return {object}
+ *   The records by kind.
+ */
+const materialsRecords = (state) => state.materials.records;
+
+/**
  * The store's record set as one flat list, roster order (kind order, then
  * the seat order within the kind).
  */
-export const selectRecords = createSelector(
-  [(state) => state.materials.records],
-  flattenRecords,
-);
+export const selectRecords = createSelector([materialsRecords], flattenRecords);
 
 /**
  * The roster index (materials/roster.js) over the store's records, rebuilt

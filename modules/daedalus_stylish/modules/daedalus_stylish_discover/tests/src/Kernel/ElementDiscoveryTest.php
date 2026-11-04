@@ -85,9 +85,10 @@ class ElementDiscoveryTest extends KernelTestBase {
       'entity_type' => 'block_content',
       'type' => 'string',
     ])->save();
-    // 'testimonial' is the authored-curation control: daedalus_stylish_guide_test
-    // ships a block-type YAML declaring its elements, so discovery must
-    // leave it alone even though it renders the same discoverable classes.
+    // 'testimonial' is the authored-curation control:
+    // daedalus_stylish_guide_test ships a block-type YAML declaring its
+    // elements, so discovery must leave it alone even though it renders the
+    // same discoverable classes.
     foreach (['discover_card', 'testimonial'] as $bundle) {
       BlockContentType::create(['id' => $bundle, 'label' => $bundle, 'revision' => TRUE])->save();
       FieldConfig::create([

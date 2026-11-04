@@ -19,12 +19,12 @@ class DaedalusStylishServiceProvider extends ServiceProviderBase {
    */
   public function alter(ContainerBuilder $container) {
     $modules = $container->getParameter('container.modules');
-    // The media library opener for media-valued styles. media_library is not
-    // a dependency of daedalus_stylish (the token spine works without it — values can
-    // arrive via the AI or the code editor), so the opener only registers
+    // The media library opener for media-valued styles. media_library is not a
+    // dependency of daedalus_stylish (the token spine works without it — values
+    // can arrive via the AI or the code editor), so the opener only registers
     // when the seam it plugs into exists. daedalus_tempstore is optional the
-    // same way it is everywhere else in daedalus_stylish: without it access checks
-    // run against the saved host.
+    // same way it is everywhere else in daedalus_stylish: without it access
+    // checks run against the saved host.
     if (isset($modules['media_library'])) {
       $container->register(DaedalusStylishMediaLibraryOpener::SERVICE_ID, DaedalusStylishMediaLibraryOpener::class)
         ->setArguments([

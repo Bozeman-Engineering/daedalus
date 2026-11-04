@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_ai_upstream\Unit;
 
+// cspell:ignore toolu
 use Anthropic\Messages\Message;
 use Anthropic\Messages\MessageCreateParams;
 use Anthropic\Models\ModelCapabilities;

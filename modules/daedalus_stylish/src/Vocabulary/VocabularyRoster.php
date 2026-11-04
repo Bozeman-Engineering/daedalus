@@ -186,14 +186,6 @@ final class VocabularyRoster implements VocabularyRosterInterface {
    *   Whether the address declares the '> *' children section.
    * @param bool $declared
    *   Whether the address names a declared place.
-   * @param array{combinator: ?string, kind: string, name: string, qualifiers: array, position: int}|null $undeclared
-   *   The first selector compound the roster walk found no declaration
-   *   for, anywhere in the selector (its RelativeSelector compound plus
-   *   its position in its own chain), NULL when the address is declared.
-   * @param array|null $landing
-   *   The declaration a class part resolves against at the end of the
-   *   walk: the owner's root, or the last type compound's declaration.
-   *   What a corrective enumerates the declared parts of.
    * @param string $enforcement
    *   The site's enforcement mode (StyleGuide::ENFORCEMENT_*).
    * @param \Closure|null $materials
@@ -207,6 +199,14 @@ final class VocabularyRoster implements VocabularyRosterInterface {
    *   the longhands it sets, PropertyGroupPluginManager::getShorthands());
    *   the corrective's vocabulary for naming a shorthand's missing
    *   longhands. The grants already carry the family rule's answer.
+   * @param array{combinator: ?string, kind: string, name: string, qualifiers: array, position: int}|null $undeclared
+   *   The first selector compound the roster walk found no declaration
+   *   for, anywhere in the selector (its RelativeSelector compound plus
+   *   its position in its own chain), NULL when the address is declared.
+   * @param array|null $landing
+   *   The declaration a class part resolves against at the end of the
+   *   walk: the owner's root, or the last type compound's declaration.
+   *   What a corrective enumerates the declared parts of.
    */
   public function __construct(
     private readonly Address $address,
@@ -396,7 +396,7 @@ final class VocabularyRoster implements VocabularyRosterInterface {
     $scale = (string) $constraints['scale'];
     $minted = [];
     foreach ($this->materialsRoster()->tokens() as $record) {
-      if ($record->group === $scale && ($spelling = $record->spelling(MaterialRecord::SLOT_STYLE)) !== NULL) {
+      if ($record->group === $scale && $record->spelling(MaterialRecord::SLOT_STYLE) !== NULL) {
         $minted[$record->label] = $record;
       }
     }
@@ -550,6 +550,7 @@ final class VocabularyRoster implements VocabularyRosterInterface {
    * undeclared part enumerates.
    *
    * @return array<string, string>
+   *   Selector => label, at every depth of the owner's elements tree.
    */
   public function landingParts(): array {
     $parts = [];

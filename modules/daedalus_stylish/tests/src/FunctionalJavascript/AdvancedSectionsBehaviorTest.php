@@ -257,22 +257,22 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
   }
 
   /**
-   * The Padding row's closed dimension select inside the advanced
-   * Spacing section.
+   * The Padding row's closed dimension select in the advanced Spacing section.
    *
    * The suite binds padding to the `space` scale site-wide
-   * (daedalus_stylish.page_builder.yml constraint_defaults), so under the strict
-   * reference system's law the row's value space is CLOSED and
-   * DimensionField renders its ClosedField: a native select of the stop
-   * values carrying the row's label as its aria-label (no free input,
-   * no stop picker chevron).
+   * (daedalus_stylish.page_builder.yml constraint_defaults), so under the
+   * strict reference system's law the row's value space is CLOSED and
+   * DimensionField renders its ClosedField: a native select of the stop values
+   * carrying the row's label as its aria-label (no free input, no stop picker
+   * chevron).
    */
   private const PADDING_SELECT = "#daedalus_stylish_inspector details.daedalus-stylish-inspector__section select[aria-label='Padding']";
 
   /**
-   * The closed Padding select's stop options, `[value, face]` pairs in
-   * order (a list, not a map: the literal 0 as a map key would cast to
-   * the integer and no longer equal the option's string value).
+   * The closed Padding select's stop options, `[value, face]` pairs in order.
+   *
+   * A list, not a map: the literal 0 as a map key would cast to the
+   * integer and no longer equal the option's string value.
    *
    * The skin's vocabulary, not the widget's built-in table: the
    * guide_example package curates the suite's padding binding to the
@@ -431,10 +431,10 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
   /**
    * Places a section holding one LINKED text block and waits for the render.
    *
-   * daedalus_edit_text_block's composed block: the anchor (`.text-block-link`,
-   * the declared conditional part the shipped button variant styles)
-   * renders only while field_text_url holds a value, so the block is
-   * born linked and the part exists to drill.
+   * `daedalus_edit_text_block`'s composed block: the anchor
+   * (`.text-block-link`, the declared conditional part the shipped button
+   * variant styles) renders only while field_text_url holds a value, so
+   * the block is born linked and the part exists to drill.
    *
    * @param string $section_uuid
    *   The new section's uuid.
@@ -576,8 +576,7 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
   }
 
   /**
-   * Picks an option in a panel's closed select by its face, scrolled
-   * into the viewport.
+   * Picks a closed select's option by its face, scrolled into the viewport.
    *
    * The driver's own selectOption: a real click on the option (the
    * browser selects it and fires 'change' on the select; a closed field
@@ -635,16 +634,15 @@ class AdvancedSectionsBehaviorTest extends WebDriverTestBase {
    *   under B's anchor), Spacing arrives open by the skin signal and
    *   Typography closed (B's own arrival state, nothing carried over).
    * - The origin at the delivering condition: a variant "Grip & Tim's origin"
-   *   (border-radius var(--radius-md) at Base: a minted radius token,
-   *   the only legal spelling on the bound property under strict law)
-   *   is minted from B and worn by B through the op spine; Border opens
-   *   by the values signal alone (the stack's delivered entry carries
-   *   the worn value); the width chip's real menu poses the canvas at Medium; the
-   *   Border radius row's `--daedalus-stylish-origin` is the variant layer's hue
-   *   and no layer dot exists; a right-click on the row opens the row
-   *   menu with a header naming the variant and Base; its "Go to Base"
-   *   doorway returns the chip row's width face to Base and clears the
-   *   document's width stamp.
+   *   (border-radius var(--radius-md) at Base: a minted radius token, the only
+   *   legal spelling on the bound property under strict law) is minted from B
+   *   and worn by B through the op spine; Border opens by the values signal
+   *   alone (the stack's delivered entry carries the worn value); the width
+   *   chip's real menu poses the canvas at Medium; the Border radius row's
+   *   `--daedalus-stylish-origin` is the variant layer's hue and no layer dot
+   *   exists; a right-click on the row opens the row menu with a header naming
+   *   the variant and Base; its "Go to Base" doorway returns the chip row's
+   *   width face to Base and clears the document's width stamp.
    * - The open flip: the site switches back to the recipe's olivero
    *   design system (open as shipped, the posture under which the
    *   shipped `button` variant is offered: under strict law its literal

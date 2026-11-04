@@ -146,7 +146,9 @@ class MediaValueDeliveryTest extends KernelTestBase {
   }
 
   /**
-   * The daedalus_stylish.settings media_image_style default picks the derivative.
+   * The media_image_style setting's default picks the derivative.
+   *
+   * The setting lives in daedalus_stylish.settings.
    */
   public function testSiteDefaultImageStyle(): void {
     $this->config('daedalus_stylish.settings')->set('media_image_style', 'thumbnail')->save();
@@ -174,9 +176,10 @@ class MediaValueDeliveryTest extends KernelTestBase {
   /**
    * A guide image_style constraint beats the site default.
    *
-   * The daedalus_stylish_media_guide_test constrains background-image to "large" on the
-   * universal block kind — the declaration a block:{uuid} key resolves when
-   * its placement cannot be located, exactly as validation resolves it.
+   * The daedalus_stylish_media_guide_test constrains background-image to
+   * "large" on the universal block kind — the declaration a block:{uuid} key
+   * resolves when its placement cannot be located, exactly as validation
+   * resolves it.
    */
   public function testGuideConstraintImageStyle(): void {
     $this->config('daedalus_stylish.settings')->set('media_image_style', 'thumbnail')->save();
@@ -318,10 +321,11 @@ class MediaValueDeliveryTest extends KernelTestBase {
   /**
    * The client mirror's uuid -> URL table resolves like server printing.
    *
-   * The preview payload (drupalSettings.daedalusStylish.mediaUrls): one entry per
-   * resolvable token uuid, lowercased, resolved through the same image-style
-   * logic as the map transform (guide constraint beats site default, per
-   * key), unresolvable uuids omitted so the client degrades them to "none".
+   * The preview payload (drupalSettings.daedalusStylish.mediaUrls): one entry
+   * per resolvable token uuid, lowercased, resolved through the same
+   * image-style logic as the map transform (guide constraint beats site
+   * default, per key), unresolvable uuids omitted so the client degrades them
+   * to "none".
    */
   public function testClientUrlTable(): void {
     $this->config('daedalus_stylish.settings')->set('media_image_style', 'thumbnail')->save();

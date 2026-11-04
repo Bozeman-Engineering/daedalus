@@ -42,7 +42,11 @@ export const registerRenameVerb = () => {
     kinds: ['container', 'block', 'entity'],
     // A container's and a block's label is its configuration; the root's
     // title is its content (the label field the row stands in for).
-    capability: { container: 'configure', block: 'configure', entity: 'content' },
+    capability: {
+      container: 'configure',
+      block: 'configure',
+      entity: 'content',
+    },
     applies: (key) => {
       if (!key.startsWith('entity:')) {
         return true;

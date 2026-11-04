@@ -169,6 +169,12 @@ const handled = (event) => {
 /**
  * The key a stop answers to across a re-render: a row's set and face, a
  * heading's set.
+ *
+ * @param {Element} stop
+ *   A row or heading element in the list.
+ *
+ * @return {string}
+ *   The key.
  */
 const stopKey = (stop) =>
   stop.hasAttribute(ATTR.set)
@@ -177,6 +183,12 @@ const stopKey = (stop) =>
 
 /**
  * Every node of an outline by id.
+ *
+ * @param {Array<object>} outline
+ *   The sets' outline (outlineOf), nodes with `id` and `children`.
+ *
+ * @return {Map<string, object>}
+ *   The nodes by id, at every depth.
  */
 const nodesById = (outline) => {
   const nodes = new Map();
@@ -191,6 +203,30 @@ const nodesById = (outline) => {
 
 /**
  * A row: the one face, in one set.
+ *
+ * @param {object} props
+ *   The component's props.
+ * @param {object} props.app
+ *   The app, whose drag registry the row joins as a source.
+ * @param {object} props.face
+ *   The face the row shows (faceList).
+ * @param {string} props.setId
+ *   The id of the set the row sits in.
+ * @param {number} props.depth
+ *   The outline depth the row is indented to.
+ * @param {string|null} props.home
+ *   Where the face lives, shown beside the label under Favorites and in
+ *   search hits; null to show nothing.
+ * @param {boolean} props.favorite
+ *   Whether the face is the editor's effective favorite.
+ * @param {string|undefined} props.defaultIcon
+ *   The icon URL for a face that names none.
+ * @param {Function} props.onStar
+ *   `onStar(face, row)`, the star's click.
+ * @param {Function} props.onPeek
+ *   `onPeek(face, row, setId)`, a rest on the row (enter or focus).
+ * @param {Function} props.onPeekEnd
+ *   The rest's end (leave, blur, a drag start).
  */
 const Row = ({
   app,
@@ -256,7 +292,10 @@ const Row = ({
       <div className="daedalus-ui-panel-item__label daedalus-layout-add-panel__label">
         {face.label}
         {home && (
-          <span className="daedalus-layout-add-panel__home" {...{ [ATTR.home]: '' }}>
+          <span
+            className="daedalus-layout-add-panel__home"
+            {...{ [ATTR.home]: '' }}
+          >
             {home}
           </span>
         )}
@@ -292,6 +331,17 @@ const Row = ({
  * Depth is the grammar's token set inline, so the row pads itself and its
  * wash spans the panel; data-depth stays beside it for the sticky rule
  * alone (add-panel.css), since CSS cannot select on a custom property.
+ *
+ * @param {object} props
+ *   The component's props.
+ * @param {object} props.set
+ *   The set (buildSets): `id`, `label`, `count` and `description`.
+ * @param {number} props.depth
+ *   The outline depth, 0 for a set and 1 for a kind under it.
+ * @param {boolean} props.collapsed
+ *   Whether the set's body is folded away.
+ * @param {Function} props.onToggle
+ *   The disclosure's click.
  */
 const Heading = ({ set, depth, collapsed, onToggle }) => (
   <button
@@ -319,10 +369,14 @@ const Heading = ({ set, depth, collapsed, onToggle }) => (
  * The panel.
  *
  * @param {object} props
- *   - app: the app the queue hands a bundle.
- *   - session: the insert session (createInsertSession).
- *   - settings: drupalSettings.daedalusLayout.addPanel (faces, groups,
- *     favorites, defaultIcon).
+ *   The component's props.
+ * @param {object} props.app
+ *   The app the queue hands a bundle.
+ * @param {object} props.session
+ *   The insert session (createInsertSession).
+ * @param {object} props.settings
+ *   drupalSettings.daedalusLayout.addPanel (faces, groups, favorites,
+ *   defaultIcon).
  */
 export const AddPanel = ({ app, session, settings }) => {
   const words = useMemo(
@@ -350,12 +404,24 @@ export const AddPanel = ({ app, session, settings }) => {
   const [armed, setArmed] = useState(() => session.pendingAnchor());
   const [peek, setPeek] = useState(null);
 
-  const faces = useMemo(() => faceList(blockFaces, records), [blockFaces, records]);
-  const sets = useMemo(() => buildSets(faces, groups, marks, words), [faces, groups, marks, words]);
+  const faces = useMemo(
+    () => faceList(blockFaces, records),
+    [blockFaces, records],
+  );
+  const sets = useMemo(
+    () => buildSets(faces, groups, marks, words),
+    [faces, groups, marks, words],
+  );
   const outline = useMemo(() => outlineOf(sets), [sets]);
   const nodes = useMemo(() => nodesById(outline), [outline]);
-  const hits = useMemo(() => search(faces, groups, query, words), [faces, groups, query, words]);
-  const facesById = useMemo(() => new Map(faces.map((face) => [face.id, face])), [faces]);
+  const hits = useMemo(
+    () => search(faces, groups, query, words),
+    [faces, groups, query, words],
+  );
+  const facesById = useMemo(
+    () => new Map(faces.map((face) => [face.id, face])),
+    [faces],
+  );
 
   // The latest state for the document-level listeners, which are
   // installed once.
@@ -386,6 +452,11 @@ export const AddPanel = ({ app, session, settings }) => {
    * The held answer carries the key of the element it shows: the frame
    * measures that element in the document, and the batch composed on
    * this rest names a uuid the held document never rendered.
+   *
+   * @param {object} face
+   *   The rested-on face.
+   * @param {Element} row
+   *   Its row element, where the batch is composed and the frame aligns.
    */
   const beginPeek = (face, row) => {
     const context = Drupal.Daedalus.Blueprint.rootContext();
@@ -440,6 +511,13 @@ export const AddPanel = ({ app, session, settings }) => {
 
   /**
    * Arms a row's peek: it fires once the row has been rested on.
+   *
+   * @param {object} face
+   *   The face under the pointer or focus.
+   * @param {Element} row
+   *   Its row element.
+   * @param {string} setId
+   *   The set the row sits in, part of the dwell's key.
    */
   const armPeek = (face, row, setId) => {
     dwell.arm(rowKey(setId, face.id), () => beginPeek(face, row));
@@ -448,10 +526,56 @@ export const AddPanel = ({ app, session, settings }) => {
   /**
    * Lifts a row into the caret walk; a lift is never followed by a peek
    * of the thing being lifted.
+   *
+   * @param {Element} row
+   *   The row element to lift.
    */
   const liftRow = (row) => {
     endPeek();
     session.liftRow(row);
+  };
+
+  /**
+   * Rolls the marks back to what they were before a save the server
+   * refused, and says so.
+   *
+   * @param {object} previous
+   *   The marks map as it was before the save.
+   * @param {Error} error
+   *   The refusal, whose message is reported.
+   */
+  const restoreMarks = (previous, error) => {
+    latest.current.marks = previous;
+    setMarks(previous);
+    report(error.message, 'error');
+  };
+
+  /**
+   * Marks the blueprints this editor just minted as the creator's own
+   * favorites: each new face not already a favorite is flipped through
+   * the star's own rule, the batch repaints at once and posts the map
+   * once, and a refusal rolls the whole batch back.
+   *
+   * @param {Array<string>} faceIds
+   *   The new records' face ids (newBlueprintIds).
+   * @param {Array<object>} blueprintRecords
+   *   The blueprint records the delivery carries, where the faces are read.
+   */
+  const markCreated = (faceIds, blueprintRecords) => {
+    const previous = latest.current.marks;
+    const faces = faceList([], blueprintRecords);
+    const next = faceIds.reduce((marks, id) => {
+      const face = faces.find((candidate) => candidate.id === id);
+      return face && !isFavorite(face, marks)
+        ? toggledMarks(face, marks)
+        : marks;
+    }, previous);
+    if (next === previous) {
+      return;
+    }
+    latest.current.marks = next;
+    setMarks(next);
+    saveFavorites(next).catch((error) => restoreMarks(previous, error));
   };
 
   const searchRef = useRef(null);
@@ -502,7 +626,9 @@ export const AddPanel = ({ app, session, settings }) => {
   // The armed state, for the sentence: the session stamps the document
   // while an anchor is pending.
   useEffect(() => {
-    const observer = new MutationObserver(() => setArmed(session.pendingAnchor()));
+    const observer = new MutationObserver(() =>
+      setArmed(session.pendingAnchor()),
+    );
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['class'],
@@ -512,6 +638,9 @@ export const AddPanel = ({ app, session, settings }) => {
 
   /**
    * Lands a posture: the state, and the store.
+   *
+   * @param {object} next
+   *   The folds posture to land (collapse, expand, toggle).
    */
   const applyFolds = (next) => {
     if (next === latest.current.folds) {
@@ -523,50 +652,23 @@ export const AddPanel = ({ app, session, settings }) => {
   };
 
   /**
-   * Rolls the marks back to what they were before a save the server
-   * refused, and says so.
-   */
-  const restoreMarks = (previous, error) => {
-    latest.current.marks = previous;
-    setMarks(previous);
-    report(error.message, 'error');
-  };
-
-  /**
    * Flips a face's effective favorite: repaint at once, post the map,
    * roll back on a refusal.
+   *
+   * @param {object} face
+   *   The face whose favorite flips.
+   * @param {Element|null} stop
+   *   The row element whose star was pressed, to refocus after the
+   *   repaint; null when the flip came from elsewhere.
    */
   const toggleFavorite = (face, stop = null) => {
     const previous = latest.current.marks;
     const next = toggledMarks(face, previous);
     if (stop) {
-      pendingFocus.current = { key: stopKey(stop), index: allStops().indexOf(stop) };
-    }
-    latest.current.marks = next;
-    setMarks(next);
-    saveFavorites(next).catch((error) => restoreMarks(previous, error));
-  };
-
-  /**
-   * Marks the blueprints this editor just minted as the creator's own
-   * favorites: each new face not already a favorite is flipped through
-   * the star's own rule, the batch repaints at once and posts the map
-   * once, and a refusal rolls the whole batch back.
-   *
-   * @param {Array<string>} faceIds
-   *   The new records' face ids (newBlueprintIds).
-   * @param {Array<object>} blueprintRecords
-   *   The blueprint records the delivery carries, where the faces are read.
-   */
-  const markCreated = (faceIds, blueprintRecords) => {
-    const previous = latest.current.marks;
-    const faces = faceList([], blueprintRecords);
-    const next = faceIds.reduce((marks, id) => {
-      const face = faces.find((candidate) => candidate.id === id);
-      return face && !isFavorite(face, marks) ? toggledMarks(face, marks) : marks;
-    }, previous);
-    if (next === previous) {
-      return;
+      pendingFocus.current = {
+        key: stopKey(stop),
+        index: allStops().indexOf(stop),
+      };
     }
     latest.current.marks = next;
     setMarks(next);
@@ -580,8 +682,13 @@ export const AddPanel = ({ app, session, settings }) => {
    * block's is restated in the block faces held here. The outcome is
    * reported either way: the row may not move (the editor's own mark
    * can hide a default), so the sentence is the one sure sign.
+   *
+   * @param {object} face
+   *   The face whose site default is written.
+   * @param {boolean} favorite
+   *   The default to write: a favorite for everyone, or not.
    */
-  const setEveryonesFavorite = (face, favorite) => {
+  const setSharedFavorite = (face, favorite) => {
     setSiteFavorite(face, favorite)
       .then((result) => {
         if (face.kind !== KIND_BLUEPRINT) {
@@ -611,6 +718,16 @@ export const AddPanel = ({ app, session, settings }) => {
 
   /**
    * Opens a row's menu at a point; false when it has no items.
+   *
+   * @param {Element} row
+   *   The row element the menu is for.
+   * @param {number} x
+   *   The point's viewport x.
+   * @param {number} y
+   *   The point's viewport y.
+   *
+   * @return {boolean}
+   *   Whether a menu opened.
    */
   const openRowMenu = (row, x, y) => {
     const face = latest.current.facesById.get(row.getAttribute(ATTR.row));
@@ -638,7 +755,7 @@ export const AddPanel = ({ app, session, settings }) => {
           ? Drupal.t('Remove favorite for everyone')
           : Drupal.t('Favorite for everyone'),
         icon: EVERYONE_ICON,
-        run: () => setEveryonesFavorite(face, !face.favorite),
+        run: () => setSharedFavorite(face, !face.favorite),
       });
     }
     if (face.kind === KIND_BLUEPRINT) {
@@ -676,7 +793,12 @@ export const AddPanel = ({ app, session, settings }) => {
     const slot = document.getElementById(TOOLS_ID);
     if (slot) {
       render(
-        <CollapseControls id={OUTLINE_ID} folds={folds} outline={outline} apply={applyFolds} />,
+        <CollapseControls
+          id={OUTLINE_ID}
+          folds={folds}
+          outline={outline}
+          apply={applyFolds}
+        />,
         slot,
       );
     }
@@ -754,7 +876,10 @@ export const AddPanel = ({ app, session, settings }) => {
       registerCollapseHotkeys({
         id: OUTLINE_ID,
         label: Drupal.t('Blocks'),
-        read: () => ({ folds: latest.current.folds, outline: latest.current.outline }),
+        read: () => ({
+          folds: latest.current.folds,
+          outline: latest.current.outline,
+        }),
         apply: applyFolds,
       }),
     [],
@@ -865,7 +990,10 @@ export const AddPanel = ({ app, session, settings }) => {
         handled(event);
         return;
       }
-      if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      if (
+        event.key === 'ContextMenu' ||
+        (event.shiftKey && event.key === 'F10')
+      ) {
         // The keyboard opener on a focused row, at the row's rect: the
         // tree-row parity gesture. The primitive restores the row's focus
         // on keyboard dismissal.
@@ -879,7 +1007,11 @@ export const AddPanel = ({ app, session, settings }) => {
     // mouse, script) re-seats the panel's one Tab stop on it.
     const onFocusIn = (event) => {
       const mount = mountElement();
-      if (!mount || !(event.target instanceof Element) || !mount.contains(event.target)) {
+      if (
+        !mount ||
+        !(event.target instanceof Element) ||
+        !mount.contains(event.target)
+      ) {
         return;
       }
       const stop = event.target.closest(STOP_SELECTOR);
@@ -995,12 +1127,69 @@ export const AddPanel = ({ app, session, settings }) => {
     }
     if (set.id === FAVORITES_ID) {
       return (
-        <p className="daedalus-layout-add-panel__empty" {...{ [ATTR.empty]: 'favorites' }}>
+        <p
+          className="daedalus-layout-add-panel__empty"
+          {...{ [ATTR.empty]: 'favorites' }}
+        >
           {Drupal.t('No favorites yet. Star any block to keep it here.')}
         </p>
       );
     }
     return null;
+  };
+
+  /**
+   * The list's body: the sets while no search is on, the hits with their
+   * count line, or the empty sentence when the search matched nothing.
+   */
+  const listBody = () => {
+    if (hits === null) {
+      return sets.map((set) => {
+        const node = nodes.get(set.id);
+        const collapsed = isCollapsed(folds, node);
+        return (
+          <Fragment key={set.id}>
+            <Heading
+              set={set}
+              depth={0}
+              collapsed={collapsed}
+              onToggle={() => applyFolds(toggle(folds, node))}
+            />
+            {!collapsed && setBody(set)}
+          </Fragment>
+        );
+      });
+    }
+    if (hits.length) {
+      return (
+        <Fragment>
+          <p
+            className="daedalus-layout-add-panel__count-line"
+            {...{ [ATTR.count]: hits.length }}
+          >
+            {Drupal.formatPlural(
+              hits.length,
+              '1 block matches',
+              '@count blocks match',
+            )}
+          </p>
+          {rows(
+            hits.map((hit) => hit.face),
+            SEARCH_ID,
+            0,
+            (face) => kindLabelOf(face),
+          )}
+        </Fragment>
+      );
+    }
+    return (
+      <p
+        className="daedalus-layout-add-panel__empty"
+        {...{ [ATTR.empty]: 'search' }}
+      >
+        {Drupal.t('Nothing matches "@query".', { '@query': query.trim() })}
+      </p>
+    );
   };
 
   return (
@@ -1022,8 +1211,12 @@ export const AddPanel = ({ app, session, settings }) => {
       {armed && (
         <p className="daedalus-layout-add-panel__armed">
           {armed.startsWith('entity:')
-            ? Drupal.t('Click a block to place it on the empty page. Esc cancels.')
-            : Drupal.t('Click a block to place it at the selection. Esc cancels.')}
+            ? Drupal.t(
+                'Click a block to place it on the empty page. Esc cancels.',
+              )
+            : Drupal.t(
+                'Click a block to place it at the selection. Esc cancels.',
+              )}
         </p>
       )}
       <div
@@ -1042,39 +1235,7 @@ export const AddPanel = ({ app, session, settings }) => {
           }
         }}
       >
-        {hits === null ? (
-          sets.map((set) => {
-            const node = nodes.get(set.id);
-            const collapsed = isCollapsed(folds, node);
-            return (
-              <Fragment key={set.id}>
-                <Heading
-                  set={set}
-                  depth={0}
-                  collapsed={collapsed}
-                  onToggle={() => applyFolds(toggle(folds, node))}
-                />
-                {!collapsed && setBody(set)}
-              </Fragment>
-            );
-          })
-        ) : hits.length ? (
-          <Fragment>
-            <p className="daedalus-layout-add-panel__count-line" {...{ [ATTR.count]: hits.length }}>
-              {Drupal.formatPlural(hits.length, '1 block matches', '@count blocks match')}
-            </p>
-            {rows(
-              hits.map((hit) => hit.face),
-              SEARCH_ID,
-              0,
-              (face) => kindLabelOf(face),
-            )}
-          </Fragment>
-        ) : (
-          <p className="daedalus-layout-add-panel__empty" {...{ [ATTR.empty]: 'search' }}>
-            {Drupal.t('Nothing matches "@query".', { '@query': query.trim() })}
-          </p>
-        )}
+        {listBody()}
       </div>
     </Fragment>
   );

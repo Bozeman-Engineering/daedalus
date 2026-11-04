@@ -150,34 +150,61 @@
         credentials: 'same-origin',
       });
       const token = await tokenResponse.text();
-      const names = [];
-      for (const file of files) {
-        const form = new FormData();
-        form.append('file', file, file.name);
-        form.append('thread_id', threadId);
-        // eslint-disable-next-line no-await-in-loop
-        const response = await fetch(Drupal.url('daedalus-ai/attach?_format=json'), {
+      // One request at a time, in order, so the names the route answers
+      // (renamed on collision) line up with the files.
+      return files.reduce(
+        (chain, file) =>
+          chain.then(async (names) => [
+            ...names,
+            await this.uploadOne(file, threadId, token),
+          ]),
+        Promise.resolve([]),
+      );
+    },
+
+    /**
+     * Uploads one file to the attach route.
+     *
+     * @param {File} file
+     *   The file to attach.
+     * @param {string} threadId
+     *   The conversation's thread id.
+     * @param {string} token
+     *   The session's CSRF token.
+     *
+     * @return {Promise<string>}
+     *   The name the file was saved under (renamed on collision).
+     *
+     * @throws {Error}
+     *   When the upload is refused; the message names the file and the
+     *   reason.
+     */
+    async uploadOne(file, threadId, token) {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      form.append('thread_id', threadId);
+      const response = await fetch(
+        Drupal.url('daedalus-ai/attach?_format=json'),
+        {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'X-CSRF-Token': token },
           body: form,
-        });
-        const isJson = (response.headers.get('content-type') || '').includes(
-          'application/json',
+        },
+      );
+      const isJson = (response.headers.get('content-type') || '').includes(
+        'application/json',
+      );
+      const answer = isJson ? await response.json() : {};
+      if (!response.ok) {
+        throw new Error(
+          Drupal.t('Attaching @name failed: @reason', {
+            '@name': file.name,
+            '@reason': answer.message || response.status,
+          }),
         );
-        // eslint-disable-next-line no-await-in-loop
-        const answer = isJson ? await response.json() : {};
-        if (!response.ok) {
-          throw new Error(
-            Drupal.t('Attaching @name failed: @reason', {
-              '@name': file.name,
-              '@reason': answer.message || response.status,
-            }),
-          );
-        }
-        names.push(answer.name);
       }
-      return names;
+      return answer.name;
     },
   };
 })(Drupal);

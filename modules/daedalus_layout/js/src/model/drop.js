@@ -192,10 +192,16 @@ export const composeDrop = (deps, source, target) => {
  * The peek's request for a row at a target: the drop's own batch and the
  * key of what it places, which the peek door shows.
  *
- * @param deps
- * @param source
- * @param target
+ * @param {{builders: object, generateUuid: Function}} deps
+ *   The standard builders (newBlock, newSection) and the uuid generator.
+ * @param {{source: string, data: object, placingSection: boolean}} source
+ *   The row's source.
+ * @param {object} target
+ *   The resolved target (resolveTarget).
+ *
  * @return {{operations: object[], show: string}}
+ *   The drop's batch (composeDrop) and the placed element's selectable
+ *   key, which the peek door renders and the frame shows.
  */
 export const peekRequest = (deps, source, target) => {
   const { operations, placedKey } = composeDrop(deps, source, target);

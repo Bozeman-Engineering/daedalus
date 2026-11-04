@@ -2,16 +2,15 @@
 
 The strict reference design system: a fully constrained site as data on
 daedalus_stylish, in one module, no CSS, no templates. It is the second of the
-two reference systems daedalus_stylish ships. `daedalus_stylish_olivero_skin` is the open
-one (the styling recipe's finished look; its guide shapes offers and
-never refuses), this is the strict one (every binding is law, the world
-of stylable properties is closed, every `var()` must name a minted
-token). Read it as three things: the contrib
-authoring reference for a designed site (each file models the
-recommended shape and says why), the fixture strict-posture scenarios
-activate (a test that needs law activates this system rather than
-forcing a mode onto a guide not written for it), and the live vehicle
-for feeling the strict editing UX on a development site.
+two reference systems daedalus_stylish ships. `daedalus_stylish_olivero_skin` is
+the open one (the styling recipe's finished look; its guide shapes offers and
+never refuses), this is the strict one (every binding is law, the world of
+stylable properties is closed, every `var()` must name a minted token). Read it
+as three things: the contrib authoring reference for a designed site (each file
+models the recommended shape and says why), the fixture strict-posture scenarios
+activate (a test that needs law activates this system rather than forcing a mode
+onto a guide not written for it), and the live vehicle for feeling the strict
+editing UX on a development site.
 
 The look itself is deliberately neutral: an ink-and-amber palette, a
 serif voice for prose, a sans-serif voice for headings, pill buttons,
@@ -203,7 +202,7 @@ switch to `guide_example`; the guide builds clean under strict; every
 bound property resolves to a scale the skin mints; the skin's own
 defaults validate under the site's law; the activation lands every
 shipped member with nothing failed; every shipped variant conforms and
-is offered. Standalone (daedalus_stylish, daedalus_stylish_layouts and this module, no
-daedalus_edit) the block type files are declarations over bundles that do
-not exist and parts that carry no markup, which is valid: they merge
+is offered. Standalone (daedalus_stylish, daedalus_stylish_layouts and this
+module, no daedalus_edit) the block type files are declarations over bundles
+that do not exist and parts that carry no markup, which is valid: they merge
 over the Daedalus anatomy on a full site and cost nothing without it.

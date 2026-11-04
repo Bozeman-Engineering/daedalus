@@ -25,10 +25,12 @@ function daedalus_ai_upstream_update_11101(): void {
 /**
  * Adds the thinking display setting, omitted (the API's default) on a site.
  *
- * A diagnostic: summarized asks the API for the reasoning summary in the
- * thinking blocks of a response (the transcript keeps them, the atelier's
- * record and the ai_logging rows show them); it changes visibility only.
- * Off so a production site's records stay as they are.
+ * The setting is a diagnostic. Its summarized value asks the API for the
+ * model's reasoning summary in the thinking blocks of each response; the
+ * transcript keeps those blocks and the ai_logging rows carry them, so a
+ * site that wants to read along can. The model thinks and is billed the
+ * same either way; only visibility changes. An existing site gets omitted,
+ * so its records keep the shape they had.
  */
 function daedalus_ai_upstream_update_11102(): void {
   $config = \Drupal::configFactory()->getEditable('daedalus_ai_upstream.settings');

@@ -12,8 +12,8 @@ use Drupal\layout_builder\SectionStorageInterface;
  *
  * Every surface that asks "may this block/layout go here?" — blueprint ops,
  * blueprint validation, the AI schema, and (through the same core mechanism)
- * the daedalus_layout palette and layout chooser — projects the answer produced by
- * core's filtered plugin definitions for the 'layout_builder' consumer.
+ * the daedalus_layout palette and layout chooser — projects the answer produced
+ * by core's filtered plugin definitions for the 'layout_builder' consumer.
  * Restriction providers (layout_builder_restrictions and anything else
  * implementing hook_plugin_filter_TYPE__layout_builder_alter) plug into that
  * mechanism, so enforcement is generic over providers rather than coupled to
