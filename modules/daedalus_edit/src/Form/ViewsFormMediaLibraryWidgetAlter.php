@@ -2,6 +2,7 @@
 
 namespace Drupal\daedalus_edit\Form;
 
+use Drupal\Component\Render\PlainTextOutput;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Form\FormStateInterface;
@@ -132,7 +133,7 @@ class ViewsFormMediaLibraryWidgetAlter {
     }
     elseif (!empty($commands[0]['message'])) {
       $message_response = new AjaxResponse();
-      $message_response->addCommand(new EditModeMessageCommand($commands[0]['message'], $commands[0]['messageOptions']['type']));
+      $message_response->addCommand(new EditModeMessageCommand(PlainTextOutput::renderFromHtml($commands[0]['message']), $commands[0]['messageOptions']['type']));
       return $message_response;
     }
     else {

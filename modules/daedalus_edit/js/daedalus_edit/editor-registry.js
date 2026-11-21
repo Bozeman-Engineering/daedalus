@@ -2,6 +2,7 @@ import { EditorPluginBase } from './plugins/editor-plugin-base.js';
 import * as verbWidgets from './composed/verb-widgets.js';
 import * as linkControl from './composed/link-control.js';
 import * as elementPreview from './composed/element-preview.js';
+import { filterXss } from './filter-xss.js';
 
 /**
  * The editor registry.
@@ -146,12 +147,14 @@ export default function initEditorRegistry() {
   // The API handed to registration callbacks. Besides the one base class
   // and the registry, it carries the shared machinery composed-element
   // editors build on: the widget-verb popover grammar, the link control,
-  // and the resolved-tree preview morph (see js/daedalus_edit/composed/).
+  // the resolved-tree preview morph (see js/daedalus_edit/composed/), and
+  // the filter round trip of a mid-edit text format switch (filter-xss.js).
   const daedalusEdit = {
     EditorPluginBase,
     verbWidgets,
     linkControl,
     elementPreview,
+    filterXss,
     editors: {
       register: (editor) => registry.register(editor),
       get: (id) => registry.get(id),

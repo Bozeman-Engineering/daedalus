@@ -34,3 +34,16 @@ To remove:
   same type change, and its service argument back to
   `'@Drupal\filter\FilterFormatRepositoryInterface'`, and drop the module's
   `daedalus:daedalus_blueprint` dependency, declared only for this service.
+
+## Text editor filter
+
+Core 11.4 moved `editor_filter_xss()` onto the `element.editor` service
+(`\Drupal\editor\Element::filterXss()`) and deprecated the function; on
+11.3 the service exists without the method. `Drupal\daedalus_edit\EditorSeed`
+calls the method when the service has it, else the function.
+
+To remove:
+
+- `EditorSeed::seed()` (daedalus_edit): call
+  `$this->editorElement->filterXss()` directly and drop the `method_exists`
+  branch with its `@phpstan-ignore function.deprecated` line.

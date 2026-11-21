@@ -49,7 +49,7 @@ final class EditModeAjaxMessages implements EventSubscriberInterface {
 
     foreach ($messages as $type => $type_messages) {
       foreach ($type_messages as $message) {
-        $response->addCommand(new EditModeMessageCommand((string) $message, $type, $element_id));
+        $response->addCommand(new EditModeMessageCommand($message['text'], $type, $element_id, NULL, $message['html']));
       }
     }
 

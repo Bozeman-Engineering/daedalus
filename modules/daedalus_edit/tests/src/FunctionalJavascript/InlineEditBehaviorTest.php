@@ -130,6 +130,11 @@ class InlineEditBehaviorTest extends WebDriverTestBase {
     // under test, and the alias is the one the scenario uses.
     $editor_role = Role::load('daedalus_editor');
     $editor_role->grantPermission('create url aliases');
+    // The block-form legs place the fixture's form_block type. Placing an
+    // inline block asks the block type's create access, and the recipe's
+    // editor role holds it only for the shipped types (the consumer
+    // contract again: whoever adds a block type grants its permission).
+    $editor_role->grantPermission('create form_block block content');
     $editor_role->save();
   }
 

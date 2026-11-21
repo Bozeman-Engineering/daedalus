@@ -17,8 +17,15 @@ use Drupal\daedalus_blueprint\Result\BlueprintError;
  * Handler for entity_reference_revisions field types (inline/owned entities).
  *
  * Serializes referenced entities inline with full field content. Deserializes
- * with lifecycle detection: target_id match = update, no target_id = create,
- * missing from array = delete (handled by Drupal's field item lifecycle).
+ * with lifecycle detection: a target_id the written field already holds =
+ * update, anything else = create, missing from array = delete (handled by
+ * Drupal's field item lifecycle).
+ *
+ * An inline entity is owned: it belongs to the one field of the one entity
+ * that holds it. So a target_id is read only against the items the written
+ * field holds on the entity being written (the `entity` option), never
+ * against storage: an id from anywhere else names nothing here, and its item
+ * creates a new entity of its declared type, as an item with no id does.
  *
  * This is the counterpart to EntityReferenceFieldHandler which handles shared
  * references (lookup by target_id or _label). Inline entities are owned by
@@ -59,7 +66,7 @@ class InlineEntityFieldHandler extends FieldHandlerBase {
    * {@inheritdoc}
    */
   public function getGuidance(): ?string {
-    return 'Create: {type: "bundle_name", fields: {...}}. Update: {target_id: N, fields: {...}}. Omitting an item from the array removes it.';
+    return 'Create: {type: "bundle_name", fields: {...}}. Update: {target_id: N, fields: {...}}, where N is an item this field already holds (an id from anywhere else creates a new item and needs type). Omitting an item from the array removes it.';
   }
 
   /**
@@ -118,13 +125,14 @@ class InlineEntityFieldHandler extends FieldHandlerBase {
     $cardinality = $definition->getFieldStorageDefinition()->getCardinality();
 
     [$items, $is_single_value] = static::normalizeItems($value, $definition->getName(), $cardinality);
+    $held = $this->heldEntities($definition, $options);
 
     $results = [];
     $errors = [];
     $warnings = [];
 
     foreach ($items as $path => $item) {
-      $processed = $this->processItem($item, $target_type, $target_bundles, $path, $options);
+      $processed = $this->processItem($item, $target_type, $target_bundles, $path, $options, $held);
 
       if (!empty($processed['errors'])) {
         $errors = array_merge($errors, $processed['errors']);
@@ -180,10 +188,41 @@ class InlineEntityFieldHandler extends FieldHandlerBase {
   }
 
   /**
+   * The inline entities the written field already holds, by id.
+   *
+   * The whole of what a target_id may name: the items of this field on the
+   * entity being written (the unsaved copy when one is staged, so a staged
+   * item is the one updated). A caller that hands no entity, a new entity
+   * and an entity without the field hold nothing.
+   *
+   * @param \Drupal\Core\Field\FieldDefinitionInterface $definition
+   *   The field being written.
+   * @param array $options
+   *   The deserialization options; `entity` is the entity written to.
+   *
+   * @return \Drupal\Core\Entity\FieldableEntityInterface[]
+   *   The held entities, keyed by entity id.
+   */
+  protected function heldEntities(FieldDefinitionInterface $definition, array $options): array {
+    $owner = $options['entity'] ?? NULL;
+    if (!$owner instanceof FieldableEntityInterface || !$owner->hasField($definition->getName())) {
+      return [];
+    }
+    $held = [];
+    foreach ($owner->get($definition->getName()) as $item) {
+      $entity = $item->entity;
+      if ($entity instanceof FieldableEntityInterface && !$entity->isNew()) {
+        $held[$entity->id()] = $entity;
+      }
+    }
+    return $held;
+  }
+
+  /**
    * Processes a single inline entity item for deserialization.
    *
-   * Determines whether to create or update based on target_id presence,
-   * then applies field values via the FieldHandler system.
+   * Updates the held entity a target_id names and creates otherwise, then
+   * applies field values via the FieldHandler system.
    *
    * @param mixed $item
    *   The input item data.
@@ -195,11 +234,13 @@ class InlineEntityFieldHandler extends FieldHandlerBase {
    *   The error path prefix.
    * @param array $options
    *   Options forwarded to child field handlers.
+   * @param \Drupal\Core\Entity\FieldableEntityInterface[] $held
+   *   The entities the written field already holds, keyed by entity id.
    *
    * @return array
    *   Array with keys 'value', 'errors', 'warnings'.
    */
-  protected function processItem(mixed $item, string $target_type, ?array $target_bundles, string $path, array $options = []): array {
+  protected function processItem(mixed $item, string $target_type, ?array $target_bundles, string $path, array $options = [], array $held = []): array {
     $errors = [];
     $warnings = [];
 
@@ -217,13 +258,26 @@ class InlineEntityFieldHandler extends FieldHandlerBase {
     $bundle = $item['type'] ?? NULL;
     $fields = $item['fields'] ?? [];
 
-    // Determine create vs update.
-    if ($target_id !== NULL) {
-      $entity = $this->loadExistingEntity($target_type, (int) $target_id, $path);
-      if ($entity instanceof BlueprintError) {
-        return ['value' => NULL, 'errors' => [$entity], 'warnings' => $warnings];
-      }
+    // Determine create vs update: an id the field holds updates that item,
+    // anything else creates. An id the field does not hold is never loaded.
+    $entity = is_scalar($target_id) ? ($held[$target_id] ?? NULL) : NULL;
+    if ($entity !== NULL) {
       $bundle = $entity->bundle();
+    }
+    elseif ($target_id !== NULL && ($bundle === NULL || $bundle === '')) {
+      return [
+        'value' => NULL,
+        'errors' => [
+          new BlueprintError(
+            path: $path,
+            code: 'REFERENCE_NOT_FOUND',
+            message: sprintf('This field holds no %s item with ID %s.', $target_type, is_scalar($target_id) ? $target_id : '(not an id)'),
+            context: ['held_ids' => array_keys($held)] + ($target_bundles ? ['available_bundles' => $target_bundles] : []),
+            hint: 'target_id names an item this field already holds. Use one of its ids to update, or provide {type: "bundle_name", fields: {...}} to create a new item.',
+          ),
+        ],
+        'warnings' => $warnings,
+      ];
     }
     else {
       $bundle_error = $this->validateBundle($bundle, $target_type, $target_bundles, $path);
@@ -303,34 +357,6 @@ class InlineEntityFieldHandler extends FieldHandlerBase {
     }
 
     return NULL;
-  }
-
-  /**
-   * Loads an existing entity by target_id for updates.
-   *
-   * @param string $target_type
-   *   The target entity type.
-   * @param int $target_id
-   *   The entity ID to load.
-   * @param string $path
-   *   The error path.
-   *
-   * @return \Drupal\Core\Entity\FieldableEntityInterface|\Drupal\daedalus_blueprint\Result\BlueprintError
-   *   The loaded entity or an error.
-   */
-  protected function loadExistingEntity(string $target_type, int $target_id, string $path): FieldableEntityInterface|BlueprintError {
-    $entity = $this->entityTypeManager->getStorage($target_type)->load($target_id);
-
-    if ($entity === NULL) {
-      return new BlueprintError(
-        path: $path,
-        code: 'REFERENCE_NOT_FOUND',
-        message: "No $target_type entity found with ID $target_id.",
-        hint: 'Verify the entity exists or omit target_id to create a new entity.',
-      );
-    }
-
-    return $entity;
   }
 
   /**

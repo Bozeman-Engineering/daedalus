@@ -20,6 +20,9 @@ use Drupal\daedalus_blueprint\Plugin\Field\FieldType\JsonBlobItemBase;
  * earlier ones. The map lives on the styled entity so styles version,
  * stage (tempstore), and undo with everything else by construction.
  *
+ * The type carries the stored styles constraint (StoredStylesConstraint),
+ * so validating the entity judges the map whatever door wrote it.
+ *
  * The field is auto-managed by DaedalusStylishFieldManager via the per-bundle
  * "Enable styling" setting (the Layout Builder overrides pattern) and never
  * appears in Field UI.
@@ -30,6 +33,7 @@ use Drupal\daedalus_blueprint\Plugin\Field\FieldType\JsonBlobItemBase;
   description: new TranslatableMarkup('Daedalus Stylish styles for elements rendered by this entity, keyed by selectable key.'),
   no_ui: TRUE,
   cardinality: 1,
+  constraints: ['DaedalusStylishStoredStyles' => []],
 )]
 class StyleMapItem extends JsonBlobItemBase {
 

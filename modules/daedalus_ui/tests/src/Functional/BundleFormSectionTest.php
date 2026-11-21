@@ -79,7 +79,7 @@ class BundleFormSectionTest extends BrowserTestBase {
       $item = $node->get(DaedalusStylishFieldManager::FIELD_NAME)->appendItem();
       assert($item instanceof StyleMapItem);
       $item->setStyleMap([
-        'block:a1b2c3' => ['default' => ['padding' => '2rem']],
+        'block:a1b2c3d4-0000-4000-8000-000000000001' => ['default' => ['padding' => '2rem']],
       ]);
       $node->save();
     }

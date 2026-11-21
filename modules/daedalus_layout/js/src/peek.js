@@ -28,7 +28,7 @@
  * held, and for how long, is the panel's.
  */
 
-import { csrfToken, refusalError } from './blueprint-gestures.js';
+import { refusalError } from './blueprint-gestures.js';
 
 /**
  * The peek door's URL for a canvas, carrying the mode.
@@ -59,19 +59,11 @@ export const peekUrl = (context, mode) =>
  *   The document, for a frame's srcdoc.
  */
 export const requestPeek = async (context, request) => {
-  const token = await csrfToken();
   const mode = Drupal.Daedalus.getCookieValue('navigationMode') ?? 'none';
-  const response = await fetch(peekUrl(context, mode), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRF-Token': token,
-    },
-    body: JSON.stringify({
-      operations: request.operations,
-      show: request.show,
-      view_mode: context.viewMode,
-    }),
+  const response = await Drupal.Daedalus.post(peekUrl(context, mode), {
+    operations: request.operations,
+    show: request.show,
+    view_mode: context.viewMode,
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));

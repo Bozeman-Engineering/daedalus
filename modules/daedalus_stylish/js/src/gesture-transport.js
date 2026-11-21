@@ -69,14 +69,6 @@ export const gesture = (source, work) =>
     throw error;
   });
 
-let tokenPromise = null;
-const csrfToken = () => {
-  tokenPromise ??= fetch(Drupal.url('session/token')).then((response) =>
-    response.text(),
-  );
-  return tokenPromise;
-};
-
 /**
  * Resolves a fetch response as JSON, rejecting on the error envelope.
  *
@@ -141,17 +133,8 @@ export const getText = (path) =>
  * @return {Promise<object>}
  *   The JSON body of the response.
  */
-export const send = async (method, path, payload = null) => {
-  const token = await csrfToken();
-  return fetch(Drupal.url(path), {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRF-Token': token,
-    },
-    ...(payload === null ? {} : { body: JSON.stringify(payload) }),
-  }).then(asJson);
-};
+export const send = (method, path, payload = null) =>
+  Drupal.Daedalus.post(Drupal.url(path), payload, { method }).then(asJson);
 
 /**
  * A POST write with a JSON body.
@@ -179,14 +162,8 @@ export const post = (path, payload) => send('POST', path, payload);
  * @return {Promise<object>}
  *   The JSON body of the response.
  */
-export const postForm = async (path, form) => {
-  const token = await csrfToken();
-  return fetch(Drupal.url(path), {
-    method: 'POST',
-    headers: { 'X-CSRF-Token': token },
-    body: form,
-  }).then(asJson);
-};
+export const postForm = (path, form) =>
+  Drupal.Daedalus.post(Drupal.url(path), form).then(asJson);
 
 /**
  * Drives a core Batch API job from JS (a delete gesture's 202 contract).

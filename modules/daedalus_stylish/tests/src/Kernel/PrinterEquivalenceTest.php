@@ -385,6 +385,71 @@ class PrinterEquivalenceTest extends KernelTestBase {
       ],
     ];
 
+    // The emit gate, beyond declaration values (those ride the cases
+    // above): `url()` in the module's two spellings and in every other,
+    // text that does not close as it opens, condition text that would end
+    // the rule, a published wrapper the gate refuses, attribute values
+    // with the gated marks escaped and raw. Appended to the cases on both
+    // sides, after them, so the indexes above stay put.
+    $gate_cases = [
+      [
+        "block:$uuid_a" => [
+          'default' => [
+            'color' => 'red',
+            'background-image' => "linear-gradient(red, blue), url('media:$uuid_b')",
+            'list-style-image' => 'url("/sites/default/files/a.png?itok=aB3_x-9")',
+            'mask-image' => "URL( \"MEDIA:$uuid_b\" )",
+            'content' => '"\201C (\' ]"',
+            'grid-template-columns' => '[full-start] 1fr [full-end]',
+            'background' => 'url(//example.com/x)',
+            'border-image-source' => 'url("//example.com/x")',
+            'cursor' => 'url(/sites/default/files/a.png), auto',
+            'filter' => 'url(#blur)',
+            'width' => 'calc(1px + url(//example.com/x))',
+            'height' => 'var(--h, url("https://example.com/x"))',
+            '--x' => "url('/sites/default/files/a.png')",
+            '--y' => 'url("/\\\\example.com/x")',
+            '--z' => 'url("data:image/svg+xml,x")',
+            'border-image' => 'image-set("//example.com/x" 1x)',
+            'shape-outside' => '-webkit-image-set("//example.com/x" 1x)',
+            'margin' => 'calc(1px',
+            'padding' => '1px)',
+            'inset' => 'calc([1px)]',
+            'font-family' => '"Inter',
+            'quotes' => "\"a\nb\"",
+            'min-width' => 'u\72l(//example.com/x)',
+            'min-height' => '1px /* ) */',
+            'max-width' => "calc(1px\n  + 2px)",
+          ],
+        ],
+      ],
+      [
+        "block:$uuid_a" => [
+          'default' => ['color' => 'red'],
+          '@supports (display: grid){}</style><script>alert(1)</script>' => ['color' => 'blue'],
+          '@supports (display: grid' => ['color' => 'green'],
+          '@supports (display: grid))' => ['color' => 'green'],
+          '@supports (background: url(//example.com/x))' => ['gap' => '2px'],
+          '@supports (content: "</style>")' => ['gap' => '3px'],
+          '@supports (display: grid) and (gap: 1px)' => ['gap' => '1px'],
+          '@media (hover: hover){}</style>' => ['color' => 'blue'],
+          '@container x</style> (min-width: 500px)' => ['color' => 'blue'],
+          '@supports selector(:has(a))+hover' => ['color' => 'teal'],
+        ],
+      ],
+      [
+        "block:$uuid_a::&[title=\"\\3c /style\\3e \\3c script\\3e \"]" => ['default' => ['color' => 'teal']],
+        "block:$uuid_a::&[title=\"</style><script>alert(1)</script>\"]" => ['default' => ['color' => 'red']],
+        "block:$uuid_a::a[href$=\";}{\"]" => ['default' => ['color' => 'red']],
+        "block:$uuid_a::a:hover[href$=\"a\\3b b\\7b c\\7d d\"]" => [
+          'default' => ['color' => 'blue'],
+          'narrow' => ['color' => 'green'],
+        ],
+        "container:$uuid_a::> d-text:has(a[title=\"\\3c b\\3e \"])" => ['default' => ['color' => 'teal']],
+        "block:$uuid_a::a[title=\"a)](\"]" => ['default' => ['color' => 'purple']],
+      ],
+    ];
+
     // Variant cases print through the fragment printer pair
     // (CssPrinter::printFragmentStyles / printFragmentStyles): the
     // fragment lookup (own entry + '::.class' part entries, deeper
@@ -736,7 +801,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
     $printer = $this->container->get('daedalus_stylish.css_printer');
     $php_output = array_map(
       static fn (array $case) => $printer->printMap($case),
-      $cases,
+      array_merge($cases, $gate_cases),
     );
     $php_variant_output = array_map(
       static fn (array $case) => $printer->printFragmentStyles($case['scopeRoot'], $case['scope'], $case['styles'], $case['fragment'], isset($case['under']) ? RelativeSelector::fromString($case['under']) : NULL),
@@ -755,7 +820,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
       'conditions' => $conditions,
       // JSON round-trip the cases exactly as the client would receive them
       // (a map with non-scalar noise still must not diverge).
-      'cases' => $cases,
+      'cases' => array_merge($cases, $gate_cases),
       'variantCases' => $variant_cases,
       'keyframesCases' => $keyframes_cases,
       'documentCases' => $document_cases,
@@ -1007,6 +1072,39 @@ class PrinterEquivalenceTest extends KernelTestBase {
     // named at-rule lane): the at-rule prelude, offsets as step selectors
     // outside any @scope, every admitted spelling kept, the gates dropping
     // the rest, and the three empty outcomes.
+    // The emit gate cases are in the battery (silently-empty guard): what
+    // the gate admits printed, and nothing it refuses did.
+    [$gate_values, $gate_conditions, $gate_selectors] = array_slice($php_output, count($cases));
+    foreach ([
+      'color: red;',
+      "background-image: linear-gradient(red, blue), url('media:$uuid_b');",
+      'list-style-image: url("/sites/default/files/a.png?itok=aB3_x-9");',
+      "mask-image: URL( \"MEDIA:$uuid_b\" );",
+      'content: "\201C (\' ]";',
+      'grid-template-columns: [full-start] 1fr [full-end];',
+      "max-width: calc(1px\n  + 2px);",
+    ] as $printed) {
+      $this->assertStringContainsString($printed, $gate_values);
+    }
+    $this->assertSame(7, substr_count($gate_values, ';') - 1, 'Seven declarations print, and the root colour once more for the text it claims.');
+    $this->assertStringNotContainsString('example.com', $gate_values);
+    $this->assertStringNotContainsString('image-set', $gate_values);
+    $this->assertStringNotContainsString('Inter', $gate_values);
+    $this->assertSame(1, substr_count($gate_conditions, '@supports (display: grid) and (gap: 1px) {'));
+    $this->assertStringContainsString("  @supports selector(:has(a)) {\n    :scope:is(:hover, [data-force-state~=\"hover\"]) {\n      color: teal;", $gate_conditions);
+    $this->assertSame(2, substr_count($gate_conditions, '@supports'));
+    $this->assertStringNotContainsString('<', $gate_conditions);
+    $this->assertStringNotContainsString('example.com', $gate_conditions);
+    $this->assertStringNotContainsString('color: blue', $gate_conditions);
+    $this->assertStringNotContainsString('color: green', $gate_conditions);
+    $this->assertStringContainsString(':scope:where([title="\3c /style\3e \3c script\3e "]) {', $gate_selectors);
+    $this->assertStringContainsString(':where([href$="a\3b b\7b c\7d d"])', $gate_selectors);
+    $this->assertStringContainsString('[title="\3c b\3e "]', $gate_selectors);
+    $this->assertStringContainsString('[title="a)]("]', $gate_selectors);
+    $this->assertStringNotContainsString('<', $gate_selectors);
+    $this->assertStringNotContainsString('color: red', $gate_selectors);
+    $this->assertSame(4, substr_count($gate_selectors, '@scope ('));
+    $this->assertStringContainsString('@container (max-width: 767px) {', $gate_selectors);
     $this->assertStringStartsWith('@keyframes motion-fade_in {', $php_keyframes_output[0]);
     $this->assertStringNotContainsString('@scope', $php_keyframes_output[0]);
     $this->assertStringContainsString("\n  from {", $php_keyframes_output[1]);

@@ -153,26 +153,17 @@
   /**
    * Releases the thread's attachments (daedalus_ai.attachments_release).
    *
-   * The token rides the X-CSRF-Token header the way every page-builder post
-   * does; a failed release is an error, since the reset that follows would
+   * Posted through Drupal.Daedalus.post the way every page-builder write
+   * is; a failed release is an error, since the reset that follows would
    * hand the held files to the next conversation.
    *
    * @param {string} threadId
    *   The conversation's thread id.
    */
   const releaseAttachments = async (threadId) => {
-    const tokenResponse = await fetch(Drupal.url('session/token'));
-    const token = await tokenResponse.text();
-    const response = await fetch(
+    const response = await Drupal.Daedalus.post(
       Drupal.url('daedalus-ai/attachments/release'),
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-Token': token,
-        },
-        body: JSON.stringify({ thread_id: threadId }),
-      },
+      { thread_id: threadId },
     );
     if (!response.ok) {
       throw new Error(

@@ -17,8 +17,9 @@ use Symfony\Component\Routing\RouteCollection;
  * overrides, a display's defaults) and left as core built them for a
  * storage no host owns (core's navigation layout). The two dialog routes
  * (update_block, configure_section) stay open: daedalus_edit's Configure
- * dialog is core's form on the spine's transport, fetched in Edit Mode,
- * which is disabled on admin routes.
+ * dialog is core's form on the spine's transport for every hosted storage,
+ * in any mode. The Configure verb fetches it in Edit Mode, which is
+ * disabled on admin routes.
  */
 class LayoutBuilderRouteSubscriber extends RouteSubscriberBase {
 

@@ -200,11 +200,15 @@ class AgentMemoryRunner extends AgentRunner {
 
   /**
    * {@inheritdoc}
+   *
+   * An agent on the context spine does not stream: its reply is absorbed
+   * whole into the transcript before the turn answers, so $streaming only
+   * reaches the inner runner, for an agent this module does not manage.
    */
-  public function runAsAgent(string $assistant_id, array $chat_history, array $defaults, string $job_id, bool $verbose_mode = FALSE, array $context = []): ChatOutput {
+  public function runAsAgent(string $assistant_id, array $chat_history, array $defaults, string $job_id, bool $verbose_mode = FALSE, array $context = [], bool $streaming = FALSE): ChatOutput {
     $enabled = $this->configFactory->get(self::SETTINGS)->get('enabled_agents') ?: [];
     if (!in_array($assistant_id, $enabled, TRUE)) {
-      return $this->inner->runAsAgent($assistant_id, $chat_history, $defaults, $job_id, $verbose_mode, $context);
+      return $this->inner->runAsAgent($assistant_id, $chat_history, $defaults, $job_id, $verbose_mode, $context, $streaming);
     }
 
     return $this->runPersistent($assistant_id, $chat_history, $defaults, $job_id, $verbose_mode, $context);

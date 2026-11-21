@@ -10,5 +10,6 @@ services:
       # Core 11.3 compatibility (CORE_11_3_COMPAT.md).
       - '@daedalus_blueprint.compat.filter_formats'
       - '@current_user'
+      - '@daedalus_edit.editor_seed'
     tags:
       - { name: daedalus_ui.composed_block_content }

@@ -7,8 +7,8 @@ namespace Drupal\daedalus_ui\EventSubscriber;
 use Drupal\Core\Routing\AdminContext;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Drupal\Core\Session\AccountProxyInterface;
-use Drupal\daedalus_blueprint\Capability\VerdictStamper;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Drupal\daedalus_ui\CanvasAccess;
 use Drupal\daedalus_ui\Chromeless;
 use Drupal\daedalus_ui\Event\ShouldNotEditModeEvent;
 use Drupal\daedalus_ui\ModeState;
@@ -18,13 +18,10 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 /**
  * Should not edit.
  *
- * Whether the actor may act on the host is the capability spine's answer
- * (daedalus_blueprint's resolver, the same verdicts every read carries):
- * with no capability on anything, the root and every element of the
- * document the host renders, Edit Mode does not apply. The host access
- * policy is what answers it for an actor without update access; a
- * workspace, a translation or a role refusing everything answers the
- * same way, with no second access grammar here.
+ * Whether the actor may act on the host is CanvasAccess's answer (the
+ * capability spine's verdicts): with no capability on anything, Edit Mode
+ * does not apply. The entity view alter asks the same function before it
+ * builds the canvas.
  */
 final class ShouldNotEditMode implements EventSubscriberInterface {
 
@@ -44,7 +41,7 @@ final class ShouldNotEditMode implements EventSubscriberInterface {
     private readonly AccountProxyInterface $currentUser,
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly ModeState $modeState,
-    private readonly VerdictStamper $verdictStamper,
+    private readonly CanvasAccess $canvasAccess,
     private readonly Chromeless $chromeless,
   ) {}
 
@@ -121,11 +118,7 @@ final class ShouldNotEditMode implements EventSubscriberInterface {
     // No host, no canvas; and with no capability on anything (the host
     // access policy's answer for an actor who may not update the host),
     // no Edit Mode.
-    if ($host === NULL) {
-      $event->setShouldNotEdit();
-      return;
-    }
-    if (!$this->verdictStamper->allowsAnywhere($host)) {
+    if (!$this->canvasAccess->allows($host)) {
       $event->setShouldNotEdit();
     }
   }

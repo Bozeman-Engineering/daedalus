@@ -15,9 +15,11 @@ dependencies:
   # chat_processor_plugin and its plugin_configuration in the body);
   # ai_chatbot's /api/deepchat refuses the pre-1.5 body since 1.5.0, and
   # the chat library loads the ai_chatbot/deepchat.bundle library that
-  # 1.5.1 split out of ai_chatbot/deepchat. The 1.5.1 floor is enforced
-  # by composer (this project's conflict entry on drupal/ai <1.5.1 and
-  # the recipe's drupal/ai ^1.5.1), never by an
+  # 1.5.1 split out of ai_chatbot/deepchat. The floor is 1.5.3, where
+  # AgentRunner::runAsAgent() gained the streaming argument the memory
+  # runner's override declares. It is enforced by composer (this
+  # project's conflict entry on drupal/ai <1.5.3 and the recipe's
+  # drupal/ai ^1.5.3), never by an
   # info.yml version constraint: core's check only sees the version key
   # drupal.org's packaging writes, so it fails on every git checkout and
   # dev release (Dependency::isCompatible() answers FALSE for an empty

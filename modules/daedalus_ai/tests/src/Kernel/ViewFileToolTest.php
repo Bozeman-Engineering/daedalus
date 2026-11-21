@@ -111,6 +111,7 @@ final class ViewFileToolTest extends KernelTestBase {
       $this->container->get('entity_type.manager'),
       $this->container->get('current_user'),
       $this->container->get('keyvalue.expirable'),
+      $this->container->get('keyvalue'),
       $this->container->get('database'),
       $this->container->get('datetime.time'),
     );
@@ -166,6 +167,32 @@ final class ViewFileToolTest extends KernelTestBase {
     $this->assertStringContainsString('bundle.zip (application/zip, ', $tool->getReadableOutput());
     $this->assertStringContainsString('not a kind you can read', $tool->getReadableOutput());
     $this->assertNull($tool->getResult());
+  }
+
+  /**
+   * A textual file over the ceiling comes back cut, and says so.
+   */
+  public function testLongTextIsCut(): void {
+    // Two-byte characters, the last one straddling the ceiling: the cut
+    // lands on a character boundary.
+    $long = 'a' . str_repeat('é', ViewFile::TEXT_CEILING);
+    $this->attachments->attach($this->saveFile('long.txt', 'text/plain', $long), self::THREAD);
+    $tool = $this->tool('long.txt');
+    $tool->execute();
+    $output = $tool->getReadableOutput();
+    $this->assertStringContainsString(', cut to its first ', strtok($output, "\n"));
+    $this->assertSame(1, preg_match('#<file name="long.txt">\n(.*)\n</file>$#s', $output, $match));
+    $this->assertSame(ViewFile::TEXT_CEILING - 1, strlen($match[1]));
+    $this->assertTrue(mb_check_encoding($match[1], 'UTF-8'));
+    $this->assertStringStartsWith($match[1], $long);
+
+    // A file at the ceiling is whole and unmarked.
+    $whole = str_repeat('b', ViewFile::TEXT_CEILING);
+    $this->attachments->attach($this->saveFile('whole.txt', 'text/plain', $whole), self::THREAD);
+    $tool = $this->tool('whole.txt');
+    $tool->execute();
+    $this->assertStringNotContainsString('cut to its first', $tool->getReadableOutput());
+    $this->assertStringContainsString("<file name=\"whole.txt\">\n$whole\n</file>", $tool->getReadableOutput());
   }
 
   /**

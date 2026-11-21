@@ -945,12 +945,15 @@ final class RelativeSelector implements \Stringable {
   /**
    * The canonical spelling of an attribute value: double-quoted.
    *
-   * A quote and a backslash escape as themselves, a control character
-   * as its hex escape with its terminating space.
+   * A quote and a backslash escape as themselves; a control character
+   * and each mark the emit gate admits in no text (`;`, `{`, `}`, `<`,
+   * `>`: EmitGate) as its hex escape with its terminating space, so the
+   * spelling means the same value to a browser and can stand in a style
+   * element whatever the value holds.
    */
   private static function printString(string $value): string {
     return '"' . preg_replace_callback(
-      '/["\\\\]|[\x00-\x1F\x7F]/',
+      '/["\\\\]|[;{}<>\x00-\x1F\x7F]/',
       static fn (array $m): string => match ($m[0]) {
         '"' => '\\"',
         '\\' => '\\\\',

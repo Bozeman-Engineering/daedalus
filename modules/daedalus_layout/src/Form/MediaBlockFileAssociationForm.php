@@ -10,6 +10,10 @@ use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\ReplaceCommand;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Form\FormBuilderInterface;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Url;
+use Drupal\daedalus_tempstore\EntityTempstoreRepository;
 use Drupal\Core\Ajax\CloseModalDialogCommand;
 use Drupal\daedalus_blueprint\LayoutBuilder\PlacementRestrictionsInterface;
 use Drupal\daedalus_ui\DaedalusUi;
@@ -25,6 +29,12 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * the association, and hands the resolution back to the client (via an
  * InvokeCommand), which places the block through the blueprint mutation
  * endpoint — the same path as every other placement.
+ *
+ * The form is first built inside the upload request (the response opens it
+ * in a dialog) and submits to its own route,
+ * daedalus_layout.media_file_association, where core's form token guards
+ * the submission. Both builds take the host as a build argument and read
+ * the uploaded file from the session.
  */
 final class MediaBlockFileAssociationForm extends FormBase {
 
@@ -34,6 +44,7 @@ final class MediaBlockFileAssociationForm extends FormBase {
     protected EntityFieldManagerInterface $entityFieldManager,
     protected DaedalusUi $ui,
     protected PlacementRestrictionsInterface $placementRestrictions,
+    protected EntityTempstoreRepository $tempstoreRepository,
   ) {}
 
   /**
@@ -46,6 +57,7 @@ final class MediaBlockFileAssociationForm extends FormBase {
       $container->get('entity_field.manager'),
       $container->get('daedalus_ui.ui'),
       $container->get('daedalus_blueprint.placement_restrictions'),
+      $container->get('daedalus_tempstore.entity_tempstore_repository'),
     );
   }
 
@@ -58,11 +70,23 @@ final class MediaBlockFileAssociationForm extends FormBase {
 
   /**
    * {@inheritdoc}
+   *
+   * @param array $form
+   *   The form.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   The form state.
+   * @param \Drupal\Core\Entity\EntityInterface|null $entity
+   *   The host the file was dropped on.
    */
-  public function buildForm(array $form, FormStateInterface $form_state) {
+  public function buildForm(array $form, FormStateInterface $form_state, ?EntityInterface $entity = NULL) {
+    if ($entity === NULL) {
+      throw new \LogicException('The media file association form is built for a host.');
+    }
     $form_state->set('workspace_safe', TRUE);
-    $file_extension = $form_state->get('file_extension');
-    $file_extension = strtolower($file_extension);
+    $file_extension = $this->newMedia->uploadedFileExtension();
+    $form_state->set('file_extension', $file_extension);
+    // The working copy, as the upload route hands its subscribers.
+    $form_state->set('entity', $this->tempstoreRepository->get($entity));
 
     $compatible_media_types = $this->newMedia->getCompatibleMediaTypes($file_extension);
     $relevant_block_content_types = $this->getCompatibleBlockContentTypes($compatible_media_types, $form_state);
@@ -95,9 +119,20 @@ final class MediaBlockFileAssociationForm extends FormBase {
         '#attributes' => [
           'id' => 'file-association-submit',
         ],
+        // The form's own route, named because the first build happens
+        // inside the upload request, whose URL takes no form submission.
+        // The query rides along as it does on core's default (the editing
+        // mode is read from it).
         '#ajax' => [
-          'callback' => [$this, 'ajaxSubmit'],
+          'callback' => '::ajaxSubmit',
           'selector' => '#file-association-submit',
+          'url' => Url::fromRoute('daedalus_layout.media_file_association', [
+            'entity_type' => $entity->getEntityTypeId(),
+            'entity' => $entity->id(),
+          ]),
+          'options' => [
+            'query' => [FormBuilderInterface::AJAX_FORM_REQUEST => TRUE] + $this->getRequest()->query->all(),
+          ],
         ],
       ],
     ];
@@ -133,7 +168,6 @@ final class MediaBlockFileAssociationForm extends FormBase {
     $remember = $form_state->getValue('remember');
     if ($remember) {
       $file_extension = $form_state->get('file_extension');
-      $file_extension = strtolower($file_extension);
       $this->saveUserFileAssociationPreference($association, $file_extension);
       $form_state->set('update_settings_sidebar', TRUE);
       $this->messenger()->addStatus($this->t('Associated @extension with the %block_type block type.', [

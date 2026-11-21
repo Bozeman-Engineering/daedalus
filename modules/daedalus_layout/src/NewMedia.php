@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\daedalus_layout;
 
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\file\FileInterface;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
@@ -52,7 +54,7 @@ final class NewMedia {
    * @throws \Drupal\Component\Plugin\Exception\PluginException
    */
   public function buildResolution(string $association, FormStateInterface $form_state): array {
-    $file = $this->requestStack->getCurrentRequest()->getSession()->get('uploaded_file');
+    $file = $this->uploadedFile();
     [$media_bundle, $field_name] = $this->getMediaReferenceInfo($association, $form_state);
 
     assert(!empty($field_name));
@@ -66,6 +68,31 @@ final class NewMedia {
       'field_name' => $field_name,
       'media_target_id' => (int) $media->id(),
     ];
+  }
+
+  /**
+   * The file the page drop's upload left in the session.
+   *
+   * The upload route saves the dropped file and keeps it in the session
+   * for the steps that follow (the stored association, or the chooser
+   * form on its own route); every one of them reads it here.
+   *
+   * @throws \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
+   *   When the session holds no uploaded file.
+   */
+  public function uploadedFile(): FileInterface {
+    $file = $this->requestStack->getCurrentRequest()->getSession()->get('uploaded_file');
+    if (!$file instanceof FileInterface) {
+      throw new BadRequestHttpException('No uploaded file is waiting for a block type.');
+    }
+    return $file;
+  }
+
+  /**
+   * The uploaded file's extension, lowercase.
+   */
+  public function uploadedFileExtension(): string {
+    return strtolower(pathinfo($this->uploadedFile()->getFileUri(), PATHINFO_EXTENSION));
   }
 
   /**

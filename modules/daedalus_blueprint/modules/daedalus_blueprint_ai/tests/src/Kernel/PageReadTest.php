@@ -169,6 +169,37 @@ class PageReadTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * The unsaved copy is read only for a user who may update the page.
+   *
+   * A name staged over the saved one: page_read run for a user who may
+   * view the page answers the saved name, and for a user who may update it
+   * the unsaved one.
+   */
+  public function testUnsavedCopyIsReadForEditorsOnly(): void {
+    $this->enableModules(['daedalus_tempstore']);
+    $page = $this->createFieldedPage();
+    $handler = $this->container->get('daedalus_blueprint.storage_handler');
+    $working = $handler->load('entity_test', $page->id());
+    $working->entity()->set('name', 'Unsaved name');
+    $this->assertSame('tempstore', $handler->persist($working));
+    // The working copy of an unstaged entity is the storage's own cached
+    // object; a later request loads the stored row afresh.
+    $this->container->get('entity_type.manager')->getStorage('entity_test')->resetCache();
+    $contexts = ['entity_type' => 'entity_test', 'entity_id' => (string) $page->id()];
+
+    $this->setUpCurrentUser([], ['view test entity']);
+    $output = $this->read($contexts);
+    $this->assertStringNotContainsString('Error', $output);
+    $this->assertStringContainsString("\n  name: 'Fielded page'\n", $output);
+    $this->assertStringNotContainsString('Unsaved name', $output);
+
+    $this->setUpCurrentUser([], ['view test entity', 'administer entity_test content']);
+    $output = $this->read($contexts);
+    $this->assertStringNotContainsString('Error', $output);
+    $this->assertStringContainsString("\n  name: 'Unsaved name'\n", $output);
+  }
+
+  /**
    * Form-only stubs are stripped: the model never reads an unwritable field.
    *
    * An empty field serializes as an identity-only stub in FULL mode (for

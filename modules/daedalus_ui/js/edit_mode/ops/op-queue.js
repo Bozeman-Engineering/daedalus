@@ -48,7 +48,6 @@ import { preserveScroll } from './preserve-scroll';
 
 let sequence = 0;
 let running = false;
-let csrfToken = null;
 const queue = [];
 
 /**
@@ -56,16 +55,7 @@ const queue = [];
  */
 const drainWaiters = [];
 
-const getCsrfToken = async () => {
-  if (csrfToken === null) {
-    const response = await fetch(Drupal.url('session/token'));
-    csrfToken = await response.text();
-  }
-  return csrfToken;
-};
-
 const send = async (op) => {
-  const token = await getCsrfToken();
   // The mutation response's markup is rendered in THIS request's context, and
   // edit-mode attribution is cookie-driven — but the navigationMode cookie is
   // path-scoped to the edited page, so it never rides a request to the
@@ -79,20 +69,16 @@ const send = async (op) => {
   const path = op.restore
     ? `daedalus-blueprint/${op.entityType}/${op.entityId}/history/restore`
     : `daedalus-blueprint/${op.entityType}/${op.entityId}`;
-  const response = await fetch(Drupal.url(`${path}?navigationMode=${mode}`), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRF-Token': token,
-    },
-    body: JSON.stringify({
+  const response = await Drupal.Daedalus.post(
+    Drupal.url(`${path}?navigationMode=${mode}`),
+    {
       ...(op.restore ? op.restore : { operations: op.operations }),
       ...(op.label ? { label: op.label } : {}),
       ...(op.langcode ? { langcode: op.langcode } : {}),
       view_mode: op.viewMode,
       ajax_page_state: drupalSettings.ajaxPageState,
-    }),
-  });
+    },
+  );
   // Validation failures (422) carry the same contract shape as success.
   return response.json();
 };

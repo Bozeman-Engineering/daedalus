@@ -9,6 +9,7 @@
 # needed.
 daedalus.admin_config:
   path: '/admin/config/daedalus'
+  methods: [GET]
   defaults:
     _controller: '\Drupal\system\Controller\SystemController::overview'
     _title: 'Daedalus'
@@ -21,6 +22,7 @@ daedalus.admin_config:
 # own gate.
 daedalus.admin_config_ai:
   path: '/admin/config/daedalus/ai'
+  methods: [GET]
   defaults:
     _controller: '\Drupal\system\Controller\SystemController::systemAdminMenuBlockPage'
     _title: 'AI'
@@ -29,6 +31,7 @@ daedalus.admin_config_ai:
 
 daedalus.admin_config_ui:
   path: '/admin/config/daedalus/ui'
+  methods: [GET]
   defaults:
     _controller: '\Drupal\system\Controller\SystemController::systemAdminMenuBlockPage'
     _title: 'UI'
@@ -37,6 +40,7 @@ daedalus.admin_config_ui:
 
 daedalus.admin_config_styling:
   path: '/admin/config/daedalus/styling'
+  methods: [GET]
   defaults:
     _controller: '\Drupal\system\Controller\SystemController::systemAdminMenuBlockPage'
     _title: 'Styling'

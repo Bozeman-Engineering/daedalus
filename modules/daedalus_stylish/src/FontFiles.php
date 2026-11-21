@@ -19,16 +19,18 @@ use Symfony\Component\Mime\MimeTypeGuesserInterface;
  *
  * The one door for font files, an adapter over daedalus_ui's file lane
  * narrowed to the font kinds (FileLane::FONT_EXTENSIONS, woff2 and woff),
- * saving PERMANENT files under the fonts directory: a face's file is site
- * vocabulary from the moment it exists, not a temporary attachment. Two
- * entries, the lane's own: a request's upload (the skin tab's upload route)
- * and bytes (the disk lane's assets, a test). The declared type is what
- * core derives from the name, so the lane's type check never disagrees
- * with its own guess.
+ * saving TEMPORARY files under the fonts directory: a file becomes site
+ * vocabulary when a font record names it, and until then it is an upload
+ * core's cleanup may take. Two entries, the lane's own: a request's upload
+ * (the skin tab's upload route) and bytes (the disk lane's assets, a
+ * test). The declared type is what core derives from the name, so the
+ * lane's type check never disagrees with its own guess.
  *
  * A SKIN holds its fonts' files through core's file usage: the skin's
  * entity hook adds a usage row for every file a face of either layer
- * names (hold()) and the skin's deletion drops them all (release()). A
+ * names (hold()) and the skin's deletion drops them all (release()). The
+ * first usage row is what makes the file permanent (core's file usage
+ * does that for any used file); nothing here sets permanence by hand. A
  * hold is never released by a save: a skin's revisions are its
  * lifecycle, a restore may bring back a face the current revision
  * dropped, so every file a revision ever referenced stays held while the
@@ -56,17 +58,17 @@ final class FontFiles {
   ) {}
 
   /**
-   * Saves a request's uploaded font file, permanent, in the font store.
+   * Saves a request's uploaded font file, temporary, in the font store.
    *
    * @throws \Drupal\daedalus_ui\File\FileLaneException
    *   When the lane refuses the file (not a font kind, too large).
    */
   public function fromRequest(UploadedFile $upload): FileInterface {
-    return $this->lane->fromRequest($upload, self::DIRECTORY, TRUE, FileLane::FONT_EXTENSIONS);
+    return $this->lane->fromRequest($upload, self::DIRECTORY, FALSE, FileLane::FONT_EXTENSIONS);
   }
 
   /**
-   * Saves font bytes as a permanent file in the font store.
+   * Saves font bytes as a temporary file in the font store.
    *
    * @param string $name
    *   The filename; its extension is what the lane judges.
@@ -77,7 +79,7 @@ final class FontFiles {
    *   When the lane refuses the file.
    */
   public function fromBytes(string $name, string $content): FileInterface {
-    return $this->lane->fromBytes($name, $this->mimeTypeGuesser->guessMimeType($name) ?? 'application/octet-stream', $content, self::DIRECTORY, TRUE, FileLane::FONT_EXTENSIONS);
+    return $this->lane->fromBytes($name, $this->mimeTypeGuesser->guessMimeType($name) ?? 'application/octet-stream', $content, self::DIRECTORY, FALSE, FileLane::FONT_EXTENSIONS);
   }
 
   /**
@@ -86,6 +88,13 @@ final class FontFiles {
   public function load(string $uuid): ?FileInterface {
     $file = $this->entityRepository->loadEntityByUuid('file', $uuid);
     return $file instanceof FileInterface ? $file : NULL;
+  }
+
+  /**
+   * Whether any skin holds the file as a face's file.
+   */
+  public function isHeld(FileInterface $file): bool {
+    return !empty($this->fileUsage->listUsage($file)[self::USAGE_MODULE][self::USAGE_TYPE]);
   }
 
   /**

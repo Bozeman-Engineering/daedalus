@@ -17,6 +17,7 @@ daedalus_ui.settings:
 # path). Under the same UI sub-category and gate as the chrome form.
 daedalus_ui.bundle_roster:
   path: '/admin/config/daedalus/ui/content-types'
+  methods: [GET]
   defaults:
     _title: 'Page builder on content types'
     _controller: '\Drupal\daedalus_ui\Controller\BundleRoster::build'
@@ -25,6 +26,7 @@ daedalus_ui.bundle_roster:
 
 daedalus_ui.load_editable_page:
   path: '/daedalus-ui/load-editable-page/{entity_type}/{entity}/{view_mode}'
+  methods: [GET]
   defaults:
     _title: 'Load Editable Page'
     _controller: '\Drupal\daedalus_ui\Controller\LoadEditablePage'
@@ -40,8 +42,10 @@ daedalus_ui.settings.save_user_hotkey:
   defaults:
     _title: 'Save User Hotkey'
     _controller: '\Drupal\daedalus_ui\Controller\Settings::saveHotkey'
+  methods: [POST]
   requirements:
     _permission: 'use daedalus ui edit mode'
+    _csrf_request_header_token: 'TRUE'
     binding_id: '[a-z0-9_.]+'
     hotkey: '[a-z0-9+]+'
 
@@ -50,32 +54,39 @@ daedalus_ui.settings.remove_media_file_association:
   defaults:
     _title: 'Remove media file association'
     _controller: '\Drupal\daedalus_ui\Controller\Settings::removeMediaFileAssociation'
+  methods: [POST]
   requirements:
     _permission: 'use daedalus ui edit mode'
+    _csrf_request_header_token: 'TRUE'
 
-# Scalar values ride the {value} path segment; structured values (lists,
-# maps) cannot fit a path segment, so they arrive as an application/json
-# POST body with {value} omitted. One route, one controller, one
-# EditorSettings write path for both shapes.
+# The value is the request's JSON body, a scalar or a structure alike:
+# one route, one controller, one EditorSettings write path.
 daedalus_ui.settings.save_setting:
-  path: '/daedalus-ui/setting/{namespace}/{key}/{value}'
+  path: '/daedalus-ui/setting/{namespace}/{key}'
   defaults:
     _title: 'Save editor setting'
     _controller: '\Drupal\daedalus_ui\Controller\Settings::saveSetting'
-    value: ''
+  methods: [POST]
   requirements:
     _permission: 'use daedalus ui edit mode'
+    _csrf_request_header_token: 'TRUE'
     namespace: '[a-z0-9_]+'
     key: '[a-z0-9_]+'
-    value: '[A-Za-z0-9_.-]*'
 
+# The upload lane's two doors (MediaUpload). Each saves a file and creates
+# media, so each is a POST carrying the session token, open to an actor who
+# is in Edit Mode's audience and may update the host; the controller asks
+# for create access on the media bundle.
 daedalus_ui.replace_media:
   path: '/daedalus-ui/replace-media/{entity_type}/{entity}/{view_mode}/{media_reference}/{media_bundle}'
   defaults:
     _title: 'Media upload'
     _controller: '\Drupal\daedalus_ui\Controller\MediaUpload::replaceMedia'
+  methods: [POST]
   requirements:
+    _permission: 'use daedalus ui edit mode'
     _entity_access: entity.update
+    _csrf_request_header_token: 'TRUE'
   options:
     parameters:
       entity:
@@ -86,8 +97,11 @@ daedalus_ui.new_media:
   defaults:
     _title: 'Media upload'
     _controller: '\Drupal\daedalus_ui\Controller\MediaUpload::newMedia'
+  methods: [POST]
   requirements:
+    _permission: 'use daedalus ui edit mode'
     _entity_access: entity.update
+    _csrf_request_header_token: 'TRUE'
   options:
     parameters:
       entity:
@@ -99,6 +113,7 @@ daedalus_ui.new_media:
 # is the only gate it needs.
 daedalus_ui.responsive_preview:
   path: '/daedalus-ui/responsive-preview'
+  methods: [GET]
   defaults:
     _title: 'Responsive preview'
     _controller: '\Drupal\daedalus_ui\Controller\ResponsivePreview::build'

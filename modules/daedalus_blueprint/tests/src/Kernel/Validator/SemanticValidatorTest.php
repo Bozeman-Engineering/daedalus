@@ -252,7 +252,9 @@ class SemanticValidatorTest extends BlueprintKernelTestBase {
    *
    * Host-level access is the capability resolver's host access policy,
    * asked at the root of the whole-document path for a create as for an
-   * update; the deserializer reports its refusal at entity_type.
+   * update; the deserializer reports its refusal at entity_type. The update
+   * refusal is told to an actor who can see the root; an actor who cannot
+   * is answered not found, which BlueprintWriteAccessTest pins.
    */
   public function testDeserializerReturnsAccessDeniedEntity(): void {
     // Switch to a user without entity_test permissions.
@@ -279,6 +281,8 @@ class SemanticValidatorTest extends BlueprintKernelTestBase {
     $this->assertStringContainsString('cannot create', $errors[0]->getMessage());
 
     $entity = $this->createTestEntity(['name' => 'Test']);
+    // Switch to a user who may view the root but not write it.
+    $this->setUpCurrentUser([], ['view test entity']);
     $result = $deserializer->deserialize([
       'entity_type' => 'entity_test',
       'bundle' => 'entity_test',

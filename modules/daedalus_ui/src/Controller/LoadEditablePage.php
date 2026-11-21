@@ -56,27 +56,39 @@ final class LoadEditablePage extends ControllerBase {
    *
    * When the user initially views a page there are no UI attributes in the
    * markup. When the user enables Edit Mode an AJAX call to this controller
-   * is made to reload the canvas with UI attributes in the markup. The host
-   * is loaded as its working copy (the staged state while a stage exists),
-   * the same door the spine's endpoints load through.
+   * is made to reload the canvas with UI attributes in the markup. For a
+   * user who may update it, the host is loaded as its working copy (the
+   * staged state while a stage exists), the same door the spine's
+   * endpoints load through; anyone else is answered a refusal that reads
+   * nothing of the host.
    */
   public function __invoke(string $entity_type, EntityInterface $entity, string $view_mode) {
     if (!$this->hostResolver->hosts($entity)) {
       throw new NotFoundHttpException(sprintf('Nothing hosts %s %s.', $entity_type, $entity->id()));
     }
     $mode = $this->daedalusUi->getMode();
-    $host = $mode === 'edit'
-      ? ($this->storageHandler->load($entity_type, $entity->id()) ?? $this->hostResolver->fromEntity($entity))
-      : $this->hostResolver->fromEntity($entity);
+    // Update access is asked first, of the stored entity: until it is
+    // granted nothing of the host is read (not its unsaved copy, not its
+    // label).
+    $stored = $this->entityTypeManager()->getStorage($entity_type)->load($entity->id()) ?? $entity;
+    $may_edit = $stored->access('update');
+    $host = $mode === 'edit' && $may_edit
+      ? ($this->storageHandler->load($entity_type, $entity->id()) ?? $this->hostResolver->fromEntity($stored))
+      : $this->hostResolver->fromEntity($stored);
     $entity = $host->entity();
     $build = $this->getEmptyContent($entity, $view_mode);
 
-    if (!$this->daedalusUi->isValidViewMode($host, $view_mode)) {
-      $build['#markup'] = $this->t('Daedalus Edit: Invalid view mode for @label', ['@label' => $host->label()]);
+    if (!$may_edit) {
+      // The refusal alone: no canvas, and no transition event, whose
+      // subscribers render parts of the host (its title) into the answer.
+      $build['#markup'] = $this->t("You don't have permission to edit this.");
+      $this->mainEntityWrapper($entity, $view_mode, $build);
+      $build['#cache']['max-age'] = 0;
+      return $this->getAjaxReplaceResponse($entity, $view_mode, $build);
     }
 
-    if (empty($build['#markup']) && !$entity->access('update')) {
-      $build['#markup'] = $this->t("You don't have permission to edit this.");
+    if (!$this->daedalusUi->isValidViewMode($host, $view_mode)) {
+      $build['#markup'] = $this->t('Daedalus Edit: Invalid view mode for @label', ['@label' => $host->label()]);
     }
 
     // Lock editing the entity down to one workspace at a time; a host that

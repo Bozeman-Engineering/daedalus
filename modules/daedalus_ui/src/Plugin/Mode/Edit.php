@@ -318,17 +318,17 @@ final class Edit extends ModePluginBase {
       // (staged changes outlive a reload, and only the server knows them
       // on arrival), and the client flips the attribute to unsaved on the
       // first blueprint change after the mirror boots
-      // (tool_manager/top-bar.js). The server's fact is the current user's
+      // (tool_manager/top-bar.js). The server's fact is the page's
       // history timeline, not the tempstore's has(): the canvas render
       // itself stages a layout document on first sight (core's
       // PrepareLayout seed, daedalus_layout's tree-index re-save), so a
       // tempstore copy exists for every layout document in mode, committed
       // or not. The history recorder suppresses exactly those bookkeeping
       // writes, records every user mutation through both strategies, and
-      // ends the timeline on save and discard: can_undo is true while this
-      // user has an applied, uncommitted change, and Save then agrees with
-      // the History panel by construction. The timeline is per user, so
-      // the bar's #cache below carries the user context.
+      // ends the timeline on save and discard: can_undo is true while the
+      // page has an applied, uncommitted change, whoever made it (the
+      // unsaved copy and its timeline are shared by the page's editors),
+      // and Save then agrees with the History panel by construction.
       $saved = !$this->historyManager->metadata($host)['can_undo'];
       $global['save'] = [
         '#type' => 'inline_template',
@@ -369,8 +369,8 @@ final class Edit extends ModePluginBase {
     // Add the top bar. Visibility is CSS-driven off the html element's
     // data-daedalus-ui-mode attribute, so the client-side mode toggle and
     // the cookie-rendered initial state share one mechanism. The user
-    // context: Save's staged state and the settings door are the current
-    // user's; the route: the document sentence is the route host's.
+    // context: the settings door is the current user's; the route: the
+    // document sentence and Save's staged state are the route host's.
     $page_top['daedalus_ui_top_bar'] = [
       '#type' => 'container',
       '#attributes' => [

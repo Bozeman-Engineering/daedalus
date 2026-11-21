@@ -28,6 +28,11 @@ use Drupal\daedalus_edit\Controller\BlockFormController;
  * the form may then write is the spine's capability verdict at the op
  * door (core's Layout Builder permissions through the role policy), the
  * one grammar; the route carries no second one.
+ *
+ * The route is a Drupal form served by a controller (the form is fetched
+ * and submitted here by POST, and core's form token guards the submission);
+ * the `_daedalus_edit.form_host` option names that kind, as on the entity
+ * form endpoint.
  */
 final class DaedalusLayoutRouteSubscriber extends RouteSubscriberBase {
 
@@ -46,6 +51,7 @@ final class DaedalusLayoutRouteSubscriber extends RouteSubscriberBase {
         '_custom_access' => BlockFormController::class . '::access',
       ],
       [
+        '_daedalus_edit.form_host' => TRUE,
         'parameters' => [
           'section_storage' => [
             'layout_builder_tempstore' => TRUE,

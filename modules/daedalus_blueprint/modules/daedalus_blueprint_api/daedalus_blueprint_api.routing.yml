@@ -66,6 +66,10 @@ daedalus_blueprint_api.parse_css:
     _entity_access: 'entity.update'
     _csrf_request_header_token: 'TRUE'
 
+# The edit history of a page is one timeline its editors share, and a
+# restore puts the whole unsaved copy back as an entry recorded it, the way
+# Discard does. Both routes ask what Save and Discard ask: the inline
+# editing permission beside the host's own update access.
 daedalus_blueprint_api.history:
   path: '/daedalus-blueprint/{entity_type}/{entity}/history'
   methods: [GET]
@@ -78,6 +82,7 @@ daedalus_blueprint_api.history:
       entity:
         type: entity:{entity_type}
   requirements:
+    _permission: 'access inline editing'
     _entity_access: 'entity.update'
 
 daedalus_blueprint_api.history_restore:
@@ -92,5 +97,6 @@ daedalus_blueprint_api.history_restore:
       entity:
         type: entity:{entity_type}
   requirements:
+    _permission: 'access inline editing'
     _entity_access: 'entity.update'
     _csrf_request_header_token: 'TRUE'

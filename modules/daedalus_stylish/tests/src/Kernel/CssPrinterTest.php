@@ -1631,6 +1631,93 @@ CSS;
   }
 
   /**
+   * The emit gate covers everything the printer writes.
+   *
+   * A value prints `url()` only in the module's two spellings (the media
+   * token and the resolved file on this site), wherever the call stands,
+   * and nothing that does not close as it opens; condition text passes the
+   * same gate, so a query that would end the rule drops its block; an
+   * attribute value prints its gated marks as hex escapes, and a key that
+   * spells them raw is not canonical and prints nothing.
+   */
+  public function testEmitGateCoversEverythingPrinted(): void {
+    $key = "block:{$this->uuid}";
+    $css = $this->printer->printMap([
+      $key => [
+        'default' => [
+          'color' => 'red',
+          'background-image' => "url('media:{$this->uuid}')",
+          'list-style-image' => 'url("/sites/default/files/a.png")',
+          'content' => '"\201C"',
+          'background' => 'url(//example.com/x)',
+          'mask-image' => 'var(--m, url(//example.com/x))',
+          'width' => 'calc(1px + url(//example.com/x))',
+          '--x' => 'url("https://example.com/x")',
+          'border-image' => 'image-set("//example.com/x" 1x)',
+          'margin' => 'calc(1px',
+          'padding' => '1px)',
+          'font-family' => '"Inter',
+          'height' => 'u\72l(//example.com/x)',
+          'min-height' => '1px /* ) */',
+        ],
+        '@supports (display: grid){}</style><script>alert(1)</script>' => ['color' => 'blue'],
+        '@supports (display: grid' => ['color' => 'green'],
+        '@supports (background: url(//example.com/x))' => ['gap' => '2px'],
+        '@supports (display: grid) and (gap: 1px)' => ['gap' => '1px'],
+      ],
+      $key . '::&[title="\3c /style\3e \3c script\3e "]' => ['default' => ['color' => 'teal']],
+      $key . '::&[title="</style><script>"]' => ['default' => ['color' => 'red']],
+      $key . '::a[href$=";}{"]' => ['default' => ['color' => 'red']],
+    ]);
+    $expected = <<<CSS
+@scope ([data-selectable="$key"]) {
+  :scope {
+    color: red;
+    background-image: url('media:{$this->uuid}');
+    list-style-image: url("/sites/default/files/a.png");
+    content: "\\201C";
+  }
+  :scope :where([data-claims-content]) {
+    color: red;
+  }
+  @supports (display: grid) and (gap: 1px) {
+    :scope {
+      gap: 1px;
+    }
+  }
+}
+@scope ([data-selectable="$key"]) {
+  :scope:where([title="\\3c /style\\3e \\3c script\\3e "]) {
+    color: teal;
+  }
+}
+CSS;
+    $this->assertSame($expected, $css);
+
+    // A scope root, a scope limit or a bare selector the gate refuses
+    // prints no block.
+    $entry = ['default' => ['color' => 'red']];
+    $this->assertSame('', $this->printer->printEntry('.a { } </style>', NULL, $entry));
+    $this->assertSame('', $this->printer->printEntry('.a', NULL, $entry, '.b) { } :is(.c'));
+    $this->assertNotSame('', $this->printer->printEntry('.a, .b', NULL, $entry, ':scope > *'));
+    $this->assertSame('', $this->printer->printBareEntry('p { } </style>', NULL, $entry));
+    $this->assertNotSame('', $this->printer->printBareEntry(':where(p)', NULL, $entry));
+  }
+
+  /**
+   * A font face prints only when its family and its file pass the gate.
+   */
+  public function testFontFaceGate(): void {
+    $face = fn (string $family, string $url): string => $this->printer->printFontFace($family, '400', 'normal', $url, 'woff2');
+    $this->assertStringContainsString('font-family: "Inter Tight";', $face('"Inter Tight"', '/sites/default/files/fonts/inter.woff2'));
+    $this->assertStringContainsString('src: url("https://cdn.example.com/inter.woff2") format("woff2");', $face('"Inter"', 'https://cdn.example.com/inter.woff2'));
+    $this->assertSame('', $face('"Inter</style><script>"', '/inter.woff2'));
+    $this->assertSame('', $face('"Inter;}"', '/inter.woff2'));
+    $this->assertSame('', $face('"Inter"', '/inter.woff2?</style>'));
+    $this->assertSame('', $face('"Inter"', '/inter.woff2;}'));
+  }
+
+  /**
    * Entries where everything drops produce no @scope block at all.
    */
   public function testEmptyEntryPrintsNothing(): void {

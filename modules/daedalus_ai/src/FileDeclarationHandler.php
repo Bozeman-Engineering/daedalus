@@ -15,9 +15,10 @@ use Drupal\daedalus_ui\File\FileLaneException;
  * The page language's file op and a document's <d-file> declaration reach
  * this seam from the DOM operation handler. The bytes go through the one
  * file lane (validators, the FileValidationEvent chain with the SVG
- * sanitizer, the size ceiling) as a temporary file into the attachment
- * directory, narrowed to the textual kinds a model authors (an SVG, a
- * stylesheet, CSV rows, text; never binary), and the attachment store then
+ * sanitizer, the size ceiling) as a temporary file into the conversation's
+ * directory (Attachments::directory()), narrowed to the textual kinds a
+ * model authors (an SVG, a stylesheet, CSV rows, text; never binary), and
+ * the attachment store then
  * holds the file for the conversation under the DECLARED name, whatever
  * filename the lane saved it as (it renames on collision): the name is the
  * handle the model wrote and will write again (file="name",
@@ -38,9 +39,9 @@ final class FileDeclarationHandler implements FileDeclarationHandlerInterface {
    *
    * Core's MIME guesses for these are the types a declaration states:
    * image/svg+xml, text/css, text/csv, text/plain, text/markdown,
-   * application/json, text/html.
+   * application/json.
    */
-  public const AUTHORED_EXTENSIONS = ['svg', 'css', 'csv', 'txt', 'md', 'json', 'html'];
+  public const AUTHORED_EXTENSIONS = ['svg', 'css', 'csv', 'txt', 'md', 'json'];
 
   public function __construct(
     private readonly FileLane $lane,
@@ -52,7 +53,7 @@ final class FileDeclarationHandler implements FileDeclarationHandlerInterface {
    */
   public function declare(string $conversation, string $name, string $type, string $content): void {
     try {
-      $file = $this->lane->fromBytes($name, $type, $content, Attachments::DIRECTORY, FALSE, self::AUTHORED_EXTENSIONS);
+      $file = $this->lane->fromBytes($name, $type, $content, $this->attachments->directory($conversation), FALSE, self::AUTHORED_EXTENSIONS);
     }
     catch (FileLaneException $e) {
       throw new FileDeclarationException($e->messages, $e);

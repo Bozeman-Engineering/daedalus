@@ -216,9 +216,10 @@ class InlineEntityFieldHandlerTest extends BlueprintKernelTestBase {
     ]);
     $rev_id = (int) $rev->id();
 
-    $definition = $this->entityTypeManager->getStorage('entity_test')
-      ->create(['name' => 'test'])
-      ->getFieldDefinition('field_paragraphs');
+    // The item is one the written field holds: the entity being written
+    // rides the options, and its field names the item.
+    $host = $this->createTestEntity(['field_paragraphs' => [['entity' => $rev]]]);
+    $definition = $host->getFieldDefinition('field_paragraphs');
 
     $value = [
       [
@@ -229,7 +230,7 @@ class InlineEntityFieldHandlerTest extends BlueprintKernelTestBase {
       ],
     ];
 
-    $result = $this->handler->deserialize($value, $definition);
+    $result = $this->handler->deserialize($value, $definition, ['entity' => $host]);
 
     $this->assertFalse($result->hasErrors());
     $result_value = $result->getValue();
@@ -411,9 +412,8 @@ class InlineEntityFieldHandlerTest extends BlueprintKernelTestBase {
     ]);
     $existing_id = (int) $existing->id();
 
-    $definition = $this->entityTypeManager->getStorage('entity_test')
-      ->create(['name' => 'test'])
-      ->getFieldDefinition('field_paragraphs');
+    $host = $this->createTestEntity(['field_paragraphs' => [['entity' => $existing]]]);
+    $definition = $host->getFieldDefinition('field_paragraphs');
 
     $value = [
       [
@@ -426,7 +426,7 @@ class InlineEntityFieldHandlerTest extends BlueprintKernelTestBase {
       ],
     ];
 
-    $result = $this->handler->deserialize($value, $definition);
+    $result = $this->handler->deserialize($value, $definition, ['entity' => $host]);
 
     $this->assertFalse($result->hasErrors());
     $result_value = $result->getValue();
@@ -466,14 +466,15 @@ class InlineEntityFieldHandlerTest extends BlueprintKernelTestBase {
     // Modify serialized data.
     $serialized[0]['fields']['field_heading'] = 'Modified Heading';
 
-    // Deserialize.
-    $result = $this->handler->deserialize($serialized, $definition);
+    // Deserialize onto the entity the read came from.
+    $result = $this->handler->deserialize($serialized, $definition, ['entity' => $entity]);
 
     $this->assertFalse($result->hasErrors());
     $result_value = $result->getValue();
     $this->assertCount(1, $result_value);
 
     $updated_entity = $result_value[0]['entity'];
+    $this->assertSame((int) $rev->id(), (int) $updated_entity->id());
     $this->assertEquals('Modified Heading', $updated_entity->get('field_heading')->value);
     $this->assertEquals('<p>Original Body</p>', $updated_entity->get('field_body')->value);
   }

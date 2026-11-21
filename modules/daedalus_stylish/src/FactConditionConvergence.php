@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\RevisionableStorageInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 
@@ -39,7 +38,7 @@ use Drupal\daedalus_blueprint\Materials\RelativeSelector;
  * "modified" and cut them off from future shipped updates.
  * RelativeSelectorConvergence is the model.
  */
-class FactConditionConvergence implements StyleStoreConvergenceInterface {
+class FactConditionConvergence extends StyleStoreConvergenceBase {
 
   /**
    * The ten retiring condition names and the qualifier each one means.
@@ -65,16 +64,10 @@ class FactConditionConvergence implements StyleStoreConvergenceInterface {
 
   public function __construct(
     protected ConditionTypePluginManager $conditionTypes,
-    protected EntityTypeManagerInterface $entityTypeManager,
-    protected LoggerChannelFactoryInterface $loggerFactory,
-  ) {}
-
-  /**
-   * Reports one convergence line: collected for the caller AND logged.
-   */
-  protected function report(array &$lines, string $line): void {
-    $lines[] = $line;
-    $this->loggerFactory->get('daedalus_stylish')->notice($line);
+    EntityTypeManagerInterface $entityTypeManager,
+    LoggerChannelFactoryInterface $loggerFactory,
+  ) {
+    parent::__construct($entityTypeManager, $loggerFactory);
   }
 
   /**
@@ -201,7 +194,12 @@ class FactConditionConvergence implements StyleStoreConvergenceInterface {
         $qualifier = implode('', array_map(static fn (string $fact): string => self::QUALIFIERS[$fact], $facts));
         $target = self::qualifiedKey($key, $qualifier);
         if ($target === NULL) {
-          $this->report($lines, sprintf('%s: left the "%s" block of "%s" in place; the key is outside the relative selector grammar, so it cannot take the "%s" qualifier (the validator refuses the key).', $context, $condition, $key, $qualifier));
+          // A key the grammar rejects is KeyGrammarConvergence's to speak
+          // for: it drops the entry and reports everything it held, this
+          // block included. Only a key the stores keep is reported here.
+          if (RelativeSelector::splitKey($key) !== NULL) {
+            $this->report($lines, sprintf('%s: left the "%s" block of "%s" in place; the key cannot take the "%s" qualifier.', $context, $condition, $key, $qualifier));
+          }
           continue;
         }
         unset($entry[$condition]);
@@ -250,78 +248,6 @@ class FactConditionConvergence implements StyleStoreConvergenceInterface {
     }
     $result[$key] = $entry;
     return $result;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function convergeVariants(): array {
-    $lines = [];
-    $storage = $this->entityTypeManager->getStorage('daedalus_variant');
-    assert($storage instanceof RevisionableStorageInterface);
-    $ids = $storage->getQuery()->accessCheck(FALSE)->execute();
-    foreach ($storage->loadMultiple($ids) as $variant) {
-      /** @var \Drupal\daedalus_stylish\DaedalusStylishVariantInterface $variant */
-      if ($variant->isShipped() && !$variant->isModified()) {
-        continue;
-      }
-      $revision_ids = array_keys($storage->getQuery()->allRevisions()->accessCheck(FALSE)->condition('id', $variant->id())->execute());
-      foreach ($revision_ids as $revision_id) {
-        /** @var \Drupal\daedalus_stylish\DaedalusStylishVariantInterface $revision */
-        $revision = $storage->loadRevision($revision_id);
-        $changed = FALSE;
-        $styles = $this->convergeEntries($revision->getStyles(), sprintf('Variant "%s" (revision %s)', $variant->getMachineName(), $revision_id), $lines, $changed);
-        if ($changed) {
-          $revision->setStyles($styles);
-          $revision->setNewRevision(FALSE);
-          $revision->save();
-        }
-      }
-    }
-    return $lines;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function convergeSkins(): array {
-    $lines = [];
-    $storage = $this->entityTypeManager->getStorage('daedalus_skin');
-    assert($storage instanceof RevisionableStorageInterface);
-    $ids = $storage->getQuery()->accessCheck(FALSE)->execute();
-    foreach ($storage->loadMultiple($ids) as $skin) {
-      /** @var \Drupal\daedalus_stylish\DaedalusStylishSkinInterface $skin */
-      // A shipped unmodified package layer is left to the sync lane; the
-      // site layer over it is the site's and is converged either way.
-      $package_swept = !($skin->isShipped() && !$skin->isModified());
-      $revision_ids = array_keys($storage->getQuery()->allRevisions()->accessCheck(FALSE)->condition('id', $skin->id())->execute());
-      foreach ($revision_ids as $revision_id) {
-        /** @var \Drupal\daedalus_stylish\DaedalusStylishSkinInterface $revision */
-        $revision = $storage->loadRevision($revision_id);
-        $changed = FALSE;
-        $layers = ['site' => [$revision->siteDefaults(), $revision->setSiteDefaults(...)]];
-        if ($package_swept) {
-          $layers['package'] = [$revision->packageDefaults(), $revision->setPackageDefaults(...)];
-        }
-        foreach ($layers as $layer => [$defaults, $write]) {
-          $layer_changed = FALSE;
-          foreach ($defaults as $scope => $relatives) {
-            if (is_array($relatives)) {
-              $defaults[$scope] = $this->convergeEntries($relatives, sprintf('Skin "%s" (revision %s) %s defaults %s', $skin->getMachineName(), $revision_id, $layer, $scope), $lines, $layer_changed);
-            }
-          }
-          if ($layer_changed) {
-            $write($defaults);
-            $changed = TRUE;
-          }
-        }
-        if ($changed) {
-          $revision->setNewRevision(FALSE);
-          $revision->save();
-        }
-      }
-    }
-    return $lines;
   }
 
 }

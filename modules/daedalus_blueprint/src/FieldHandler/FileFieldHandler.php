@@ -145,7 +145,7 @@ class FileFieldHandler extends FieldHandlerBase {
         continue;
       }
 
-      $resolved = $this->resolveFileItem($item, $path, $warnings);
+      $resolved = $this->resolveFileItem($item, $path, $warnings, $options);
       if ($resolved instanceof BlueprintError) {
         $errors[] = $resolved;
         continue;
@@ -195,20 +195,23 @@ class FileFieldHandler extends FieldHandlerBase {
    *   The error path.
    * @param \Drupal\daedalus_blueprint\Result\BlueprintWarning[] $warnings
    *   Collected warnings (passed by reference).
+   * @param array $options
+   *   The deserialization options (`system`, `actor`): who the reference is
+   *   resolved for.
    *
    * @return array|\Drupal\daedalus_blueprint\Result\BlueprintError
    *   The resolved ['target_id' => N] or an error.
    */
-  protected function resolveFileItem(array $item, string $path, array &$warnings = []): array|BlueprintError {
+  protected function resolveFileItem(array $item, string $path, array &$warnings = [], array $options = []): array|BlueprintError {
     if (isset($item['target_id'])) {
       $provided_label = isset($item['_label']) ? (string) $item['_label'] : NULL;
       return $this->resolveByTargetId(
-        (int) $item['target_id'], 'file', NULL, $path, $provided_label, $warnings,
+        (int) $item['target_id'], 'file', NULL, $path, $provided_label, $warnings, $options,
       );
     }
 
     if (isset($item['uuid'])) {
-      return $this->resolveByUuid((string) $item['uuid'], 'file', NULL, $path);
+      return $this->resolveByUuid((string) $item['uuid'], 'file', NULL, $path, $options);
     }
 
     if (isset($item['_label'])) {

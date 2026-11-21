@@ -96,6 +96,7 @@ class FileReferenceHandlerTest extends DaedalusAiKernelTestBase {
       $this->container->get('entity_type.manager'),
       $this->container->get('current_user'),
       $this->container->get('keyvalue.expirable'),
+      $this->container->get('keyvalue'),
       $this->container->get('database'),
       $this->container->get('datetime.time'),
     );

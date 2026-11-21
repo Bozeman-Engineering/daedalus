@@ -15,7 +15,8 @@ use Psr\Log\LoggerInterface;
  * Handler for entity_reference field types.
  *
  * Serializes with target_id + _label. Deserializes with resolution priority:
- * target_id (direct load), uuid (property load) then _label (label query).
+ * target_id (direct load), uuid (property load) then _label (label query),
+ * each resolving only to an entity the actor may view.
  */
 class EntityReferenceFieldHandler extends FieldHandlerBase {
 
@@ -104,7 +105,7 @@ class EntityReferenceFieldHandler extends FieldHandlerBase {
 
     foreach ($items as $path => $item) {
       $resolved = $this->resolveItem(
-        $item, $target_type, $target_bundles, $path, $warnings,
+        $item, $target_type, $target_bundles, $path, $warnings, $options,
       );
 
       if ($resolved instanceof BlueprintError) {
@@ -139,6 +140,9 @@ class EntityReferenceFieldHandler extends FieldHandlerBase {
    *   The error path.
    * @param \Drupal\daedalus_blueprint\Result\BlueprintWarning[] $warnings
    *   Collected warnings (passed by reference).
+   * @param array $options
+   *   The deserialization options (`system`, `actor`): who the reference is
+   *   resolved for.
    *
    * @return array|\Drupal\daedalus_blueprint\Result\BlueprintError
    *   The resolved ['target_id' => N] or an error.
@@ -149,6 +153,7 @@ class EntityReferenceFieldHandler extends FieldHandlerBase {
     ?array $target_bundles,
     string $path,
     array &$warnings = [],
+    array $options = [],
   ): array|BlueprintError {
     // Normalize scalar inputs.
     if (is_int($item)) {
@@ -174,12 +179,12 @@ class EntityReferenceFieldHandler extends FieldHandlerBase {
     if (isset($item['target_id'])) {
       $provided_label = isset($item['_label']) ? (string) $item['_label'] : NULL;
       return $this->resolveByTargetId(
-        (int) $item['target_id'], $target_type, $target_bundles, $path, $provided_label, $warnings,
+        (int) $item['target_id'], $target_type, $target_bundles, $path, $provided_label, $warnings, $options,
       );
     }
 
     if (isset($item['uuid'])) {
-      return $this->resolveByUuid((string) $item['uuid'], $target_type, $target_bundles, $path);
+      return $this->resolveByUuid((string) $item['uuid'], $target_type, $target_bundles, $path, $options);
     }
 
     if (isset($item['_label'])) {

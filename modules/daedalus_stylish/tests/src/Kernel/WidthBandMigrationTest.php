@@ -102,7 +102,7 @@ class WidthBandMigrationTest extends NestedStorageKernelTestBase {
       // spills into medium, narrow and the variants list stay untouched. A
       // wide-only property (margin) has nothing to spill and extends to
       // every width.
-      'block:aaa' => [
+      'block:aaaaaaaa-0000-4000-8000-000000000001' => [
         'variants' => [['variant' => 'hero', 'fragment' => '']],
         'default' => ['color' => 'black', 'padding' => '1rem'],
         'narrow' => ['color' => 'green'],
@@ -110,14 +110,14 @@ class WidthBandMigrationTest extends NestedStorageKernelTestBase {
       ],
       // The compound lane with its own scheme value: wide+dark folds into
       // dark, dark's old value spills into medium+dark.
-      'container:bbb' => [
+      'container:bbbbbbbb-0000-4000-8000-000000000002' => [
         'default' => ['gap' => '1rem'],
         'dark' => ['gap' => '2rem'],
         'wide+dark' => ['gap' => '3rem'],
       ],
       // The compound lane WITHOUT its own scheme value: what rendered at
       // 768-1023px in dark was the default, so default is the spill source.
-      'block:ccc' => [
+      'block:cccccccc-0000-4000-8000-000000000003' => [
         'default' => ['font-size' => '1rem'],
         'wide+dark' => ['font-size' => '2rem'],
       ],
@@ -125,18 +125,18 @@ class WidthBandMigrationTest extends NestedStorageKernelTestBase {
     $this->walkHosts();
 
     $this->assertSame([
-      'block:aaa' => [
+      'block:aaaaaaaa-0000-4000-8000-000000000001' => [
         'variants' => [['variant' => 'hero', 'fragment' => '']],
         'default' => ['color' => 'blue', 'padding' => '1rem', 'margin' => '2rem'],
         'narrow' => ['color' => 'green'],
         'medium' => ['color' => 'black'],
       ],
-      'container:bbb' => [
+      'container:bbbbbbbb-0000-4000-8000-000000000002' => [
         'default' => ['gap' => '1rem'],
         'dark' => ['gap' => '3rem'],
         'medium+dark' => ['gap' => '2rem'],
       ],
-      'block:ccc' => [
+      'block:cccccccc-0000-4000-8000-000000000003' => [
         'default' => ['font-size' => '1rem'],
         'dark' => ['font-size' => '2rem'],
         'medium+dark' => ['font-size' => '1rem'],

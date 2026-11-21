@@ -5,6 +5,7 @@ import {
   getState as historyState,
 } from '../history/history';
 import { topBarMenuItems } from './top-bar-menu-items';
+import { commitSave } from './save-commit';
 
 /**
  * The Edit Mode top bar's client half: Save and the Daedalus menu.
@@ -79,30 +80,52 @@ const mainEntityInfo = () =>
   Drupal.Daedalus.ModeManager.getPlugin('edit').getMainEntityInfo();
 
 /**
- * Commits the staged changes: navigates to the save route once every
- * write on the wire has landed.
+ * Whether a save is on the wire: a second press of Save waits for the
+ * first one's answer.
+ */
+let saving = false;
+
+/**
+ * Commits the staged changes: posts to the save route once every write on
+ * the wire has landed, then follows the answer (save-commit.js): on to the
+ * destination, or the server's messages and no navigation.
  */
 const save = async () => {
-  // Every write (a spine op, a form commit) rides the op queue; a commit
-  // still on the wire must land in tempstore before the page navigates
-  // to the save route.
-  await Drupal.Daedalus.Blueprint.drained();
-  const info = mainEntityInfo();
-  if (!info) {
+  if (saving) {
     return;
   }
-  if (Drupal.Daedalus.Edit?.hasInvalidFormItem?.() === true) {
-    // @todo warnAboutInvalidFormItem should detect that there is already
-    // a message on screen for this so you don't get double messages (the
-    // form submit validation and the "hey fix this before you continue").
-    Drupal.Daedalus.Edit.warnAboutInvalidFormItem();
-    return;
+  saving = true;
+  try {
+    // Every write (a spine op, a form commit) rides the op queue; a commit
+    // still on the wire must land in tempstore before the save is posted.
+    await Drupal.Daedalus.Blueprint.drained();
+    const info = mainEntityInfo();
+    if (!info) {
+      return;
+    }
+    if (Drupal.Daedalus.Edit?.hasInvalidFormItem?.() === true) {
+      // @todo warnAboutInvalidFormItem should detect that there is already
+      // a message on screen for this so you don't get double messages (the
+      // form submit validation and the "hey fix this before you continue").
+      Drupal.Daedalus.Edit.warnAboutInvalidFormItem();
+      return;
+    }
+    const editMode = Drupal.Daedalus.ModeManager.getPlugin('edit');
+    await commitSave(
+      Drupal.Daedalus.ModePluginBase.url(
+        `/daedalus-edit/tempstore/save/${info.entityType}/${
+          info.id
+        }?destination=${saveDestination()}`,
+      ),
+      {
+        post: (url) => Drupal.Daedalus.post(url),
+        navigate: (destination) => window.location.assign(destination),
+        report: (message) => editMode.message(message, 'error'),
+      },
+    );
+  } finally {
+    saving = false;
   }
-  window.location = Drupal.Daedalus.ModePluginBase.url(
-    `/daedalus-edit/tempstore/save/${info.entityType}/${
-      info.id
-    }?destination=${saveDestination()}`,
-  );
 };
 
 /**

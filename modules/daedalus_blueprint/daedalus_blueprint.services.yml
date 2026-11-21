@@ -649,6 +649,16 @@ services:
       - { name: service_collector, tag: daedalus_blueprint.file_declaration_handler, call: setFileDeclarationHandler }
   Drupal\daedalus_blueprint\Dialect\DomOperationHandler: '@daedalus_blueprint.dom_operation_handler'
 
+  # The question a door asks before it takes a conversation id from a
+  # request: is that conversation the current user's? Whoever hands
+  # conversations out (daedalus_ai, the chat's threads) tags its answer;
+  # without one nobody owns a conversation.
+  daedalus_blueprint.conversation_gate:
+    class: Drupal\daedalus_blueprint\Dialect\ConversationGate
+    tags:
+      - { name: service_collector, tag: daedalus_blueprint.conversation_ownership, call: setOwnership }
+  Drupal\daedalus_blueprint\Dialect\ConversationGate: '@daedalus_blueprint.conversation_gate'
+
   # The parse door: a CSS fragment read under one style key into the flat
   # entries it means (the panel's paste, the variant document's staging),
   # through the one parser the style op uses. A read that writes nothing;
@@ -721,6 +731,8 @@ services:
       - '@current_user'
       - '@datetime.time'
       - '@daedalus_blueprint.host_resolver'
+      - '@daedalus_blueprint.semantic_validator'
+      - '@logger.channel.daedalus_blueprint'
       - '@?daedalus_tempstore.entity_tempstore_repository'
       - '@?daedalus_blueprint.layout_tempstore_helper'
       - '@?workspaces.manager'

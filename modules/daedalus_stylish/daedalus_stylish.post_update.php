@@ -284,3 +284,78 @@ function daedalus_stylish_post_update_fact_condition_0004_skins() {
   $lines = \Drupal::service('daedalus_stylish.fact_condition_convergence')->convergeSkins();
   return t('Moved position-fact conditions onto qualified keys in skin defaults (@count report lines logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
 }
+
+/**
+ * Drops host style map keys the style map key grammar rejects.
+ *
+ * Every content entity revision and translation carrying a style map is
+ * walked through daedalus_layout's transform spine. A key outside the
+ * grammar (an element type in a spelling the grammar no longer knows,
+ * most often) prints nothing, and the stored styles validation refuses
+ * it, so its host cannot be saved while it is there. Each such key is
+ * deleted with its entry, and logged to the daedalus_stylish channel
+ * with what the entry held. Nothing is rewritten and no page changes.
+ */
+function daedalus_stylish_post_update_key_grammar_0001_hosts(&$sandbox) {
+  if (!\Drupal::hasService('daedalus_layout.host_entity_walker')) {
+    $sandbox['#finished'] = 1;
+    return t('daedalus_layout is not installed; no style map stores to converge.');
+  }
+  $saved = \Drupal::service('daedalus_layout.host_entity_walker')->walk($sandbox);
+  if (!empty($sandbox['#finished']) && $sandbox['#finished'] >= 1) {
+    return t('Dropped the keys outside the style map key grammar from host style maps (all revisions and translations); each dropped key is logged to the daedalus_stylish channel.');
+  }
+  return t('Converged @count host revisions in this batch.', ['@count' => $saved]);
+}
+
+/**
+ * Drops style variant keys the variant style key grammar rejects.
+ *
+ * Across ALL revisions. A key whose "::" suffix is no canonical selector
+ * prints nothing; it is deleted with its entry and logged. Shipped
+ * unmodified variants are skipped: the sync lane owns them.
+ */
+function daedalus_stylish_post_update_key_grammar_0002_variants() {
+  $lines = \Drupal::service('daedalus_stylish.key_grammar_convergence')->convergeVariants();
+  return t('Dropped @count keys outside the variant style key grammar from style variants (each logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
+}
+
+/**
+ * Drops skin default keys the skin default key grammar rejects.
+ *
+ * Across ALL revisions, both layers. A default's key is its scope itself
+ * or a selector under it; any other key prints nothing, and is deleted
+ * with its entry and logged. Shipped unmodified package layers are
+ * skipped: the sync lane owns them.
+ */
+function daedalus_stylish_post_update_key_grammar_0003_skins() {
+  $lines = \Drupal::service('daedalus_stylish.key_grammar_convergence')->convergeSkins();
+  return t('Dropped @count keys outside the skin default key grammar from skin defaults (each logged to the daedalus_stylish channel).', ['@count' => count($lines)]);
+}
+
+/**
+ * Reports what the stored styles validation still refuses on a host.
+ *
+ * The passes before this one drop only what provably prints nothing. Any
+ * other refusal (a malformed entry, a reference to a variant that is
+ * gone) may sit on a key that does print, so it is left as it is, and
+ * its host cannot be saved until someone repairs it. This pass reads the
+ * current revision of every host and logs each refusal with its host and
+ * the path inside the style map. It changes nothing.
+ */
+function daedalus_stylish_post_update_key_grammar_0004_report(&$sandbox) {
+  $report = \Drupal::service('daedalus_stylish.stored_styles_report');
+  $report->report($sandbox);
+  if (empty($sandbox['#finished']) || $sandbox['#finished'] < 1) {
+    return NULL;
+  }
+  $totals = $report->totals($sandbox);
+  if ($totals['refusals'] === 0) {
+    return t('The stored styles validation accepts the style map of every host (@hosts read); nothing was changed.', ['@hosts' => $totals['hosts']]);
+  }
+  return t('The stored styles validation refuses @count style map entries on @refused of @hosts hosts. Those hosts cannot be saved until the entries are repaired; each refusal is logged to the daedalus_stylish channel with its host and path. Nothing was changed.', [
+    '@count' => $totals['refusals'],
+    '@refused' => $totals['refused_hosts'],
+    '@hosts' => $totals['hosts'],
+  ]);
+}

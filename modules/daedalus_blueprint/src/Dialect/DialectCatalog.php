@@ -667,6 +667,26 @@ final class DialectCatalog {
   }
 
   /**
+   * The tags of the block types declared with a rich body.
+   *
+   * A rich body is opaque: the printer prints it verbatim under the block
+   * type's own tag and the parser reads it back as text up to that tag's
+   * end. Both ask here, so a block type declared rich is opaque to both.
+   *
+   * @return string[]
+   *   Dialect tags, in declaration order.
+   */
+  public function richTags(): array {
+    $tags = [];
+    foreach ($this->blockTypes as $type => $spec) {
+      if (($spec['body']['kind'] ?? NULL) === 'rich') {
+        $tags[] = self::tagForBlockType((string) $type);
+      }
+    }
+    return $tags;
+  }
+
+  /**
    * The dialect tag for a block type: the prefix + machine name, '_' as '-'.
    */
   public static function tagForBlockType(string $type): string {

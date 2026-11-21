@@ -10,8 +10,9 @@
  * @param {Drupal.Ajax} ajax
  *   The Drupal.Ajax object.
  * @param {object} response
- *   The server response: message, type, and optionally duration and
- *   elementId.
+ *   The server response: message (plain text), type, and optionally
+ *   duration, elementId and html (the message's display markup, filtered
+ *   by the server).
  */
 Drupal.AjaxCommands.prototype.editModeMessage = function editModeMessage(
   ajax,
@@ -27,6 +28,9 @@ Drupal.AjaxCommands.prototype.editModeMessage = function editModeMessage(
         if (response.duration !== undefined) {
           options.duration = response.duration;
         }
+        if (response.html !== undefined) {
+          options.html = response.html;
+        }
         editMode.message(
           response.message,
           response.type,
@@ -41,7 +45,8 @@ Drupal.AjaxCommands.prototype.editModeMessage = function editModeMessage(
       const messageWrapper = document.querySelector('[data-drupal-messages]');
       if (messageWrapper) {
         const drupalMessage = new Drupal.Message(messageWrapper);
-        drupalMessage.add(response.message, {
+        // The message is text; core's toast writes HTML.
+        drupalMessage.add(Drupal.checkPlain(response.message), {
           type: response.type,
         });
       }

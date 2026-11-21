@@ -62,6 +62,12 @@ services:
     class: Drupal\daedalus_ui\Message\EditModeHtmlMessages
   Drupal\daedalus_ui\Message\EditModeHtmlMessages: '@daedalus_ui.messages.html'
 
+  # Whether the current user has an editing canvas on a host: the one
+  # question the Edit mode's availability and the entity view alter ask.
+  daedalus_ui.canvas_access:
+    class: Drupal\daedalus_ui\CanvasAccess
+  Drupal\daedalus_ui\CanvasAccess: '@daedalus_ui.canvas_access'
+
   daedalus_ui.entity_view_alter:
     class: Drupal\daedalus_ui\Hooks\EntityViewAlter
 

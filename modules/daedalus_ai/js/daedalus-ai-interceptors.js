@@ -2,8 +2,9 @@
  * @file
  * The one road for wrapping a deep-chat interceptor ai_chatbot assigns.
  *
- * ai_chatbot's deepchat-init.js (ai 1.5.1, the floor) assigns the
- * <deep-chat> element's requestInterceptor and responseInterceptor inside
+ * ai_chatbot's deepchat-init.js (since ai 1.5.1; the floor is 1.5.3)
+ * assigns the <deep-chat> element's requestInterceptor and
+ * responseInterceptor inside
  * its own Drupal.aiDeepchat.whenNeeded(element).then(), which runs after
  * every behavior has returned. A wrapper installed at behavior attach
  * therefore wraps nothing and is then overwritten by that assignment: the

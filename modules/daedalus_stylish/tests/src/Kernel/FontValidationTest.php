@@ -221,9 +221,17 @@ class FontValidationTest extends KernelTestBase {
     $this->assertSingleError($this->validateFaces([['source' => ['file' => $this->file->uuid(), 'url' => 'x']]]), 'INVALID_FONT_SOURCE', 'faces.0.source');
     $this->assertSingleError($this->validateFaces([['source' => ['file' => '']]]), 'INVALID_FONT_SOURCE', 'faces.0.source.file');
     $this->assertSingleError($this->validateFaces([['source' => ['file' => 12]]]), 'INVALID_FONT_SOURCE', 'faces.0.source.file');
-    // The file must exist and be a font kind.
+    // The file must exist, be the writer's own upload or a file a skin
+    // holds, and be a font kind.
     $this->assertSingleError($this->validateFaces([['source' => ['file' => self::UUID]]]), 'FONT_FILE_NOT_FOUND', 'faces.0.source.file');
-    $notes = File::create(['uri' => 'public://notes.txt', 'filename' => 'notes.txt']);
+    $foreign = File::create(['uri' => 'public://foreign.woff2', 'filename' => 'foreign.woff2', 'uid' => 0]);
+    $foreign->save();
+    $this->assertSingleError($this->validateFaces([['source' => ['file' => $foreign->uuid()]]]), 'FONT_FILE_NOT_FOUND', 'faces.0.source.file');
+    $notes = File::create([
+      'uri' => 'public://notes.txt',
+      'filename' => 'notes.txt',
+      'uid' => $this->container->get('current_user')->id(),
+    ]);
     $notes->save();
     $error = $this->assertSingleError($this->validateFaces([['source' => ['file' => $notes->uuid()]]]), 'INVALID_FONT_FILE', 'faces.0.source.file');
     $this->assertSame(['woff2', 'woff'], $error->getContext()['extensions']);

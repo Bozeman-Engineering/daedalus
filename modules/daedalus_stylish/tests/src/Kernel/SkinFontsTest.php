@@ -25,6 +25,7 @@ use Drupal\daedalus_stylish\SkinMaterialManager;
 use Drupal\daedalus_stylish\SkinMaterialUsage;
 use Drupal\daedalus_stylish\SkinStylesheet;
 use Drupal\entity_test\Entity\EntityTest;
+use Drupal\file\Entity\File;
 use Drupal\file\FileInterface;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
 use Drupal\Tests\user\Traits\UserCreationTrait;
@@ -320,6 +321,42 @@ class SkinFontsTest extends KernelTestBase {
     // A corrupt layer fails loudly.
     $this->expectException(\UnexpectedValueException::class);
     SkinFontsItem::mergeLayers([], ['ghost' => ['description' => 'no faces']]);
+  }
+
+  /**
+   * A font file is temporary until a font names it, and a font names its own.
+   */
+  public function testFileLifeAndWhoMayNameIt(): void {
+    $files = $this->container->get('daedalus_stylish.font_files');
+    $this->assertTrue($this->regular->isTemporary(), 'An uploaded font file no font names is temporary.');
+    $this->assertFalse($files->isHeld($this->regular));
+
+    // A mint by the uploader holds the file, which makes it permanent.
+    $skin = DaedalusStylishSkin::create(['label' => 'Mine', 'machine_name' => 'mine', 'status' => 1]);
+    $skin->save();
+    $this->activateSkin($skin);
+    $manager = $this->manager();
+    $manager->mintFont($this->loadSkin('mine'), 'inter', 'Inter', [$this->face($this->regular)]);
+    $this->assertTrue(File::load($this->regular->id())->isPermanent(), 'The file a font names is permanent.');
+    $this->assertTrue($files->isHeld($this->regular));
+    $this->assertTrue(File::load($this->bold->id())->isTemporary(), 'The file no font names stays temporary.');
+
+    // Another writer may name a file the site's fonts hold, never an
+    // upload that is someone else's and held by no font.
+    $this->setUpCurrentUser([], [], TRUE);
+    $this->assertSame(
+      ['faces.0.source.file' => 'FONT_FILE_NOT_FOUND'],
+      $this->refusal(fn () => $manager->mintFont($this->loadSkin('mine'), 'heavy', 'Heavy', [$this->face($this->bold, ['weight' => 'bold'])])),
+    );
+    $this->assertFalse($manager->hasFont($this->loadSkin('mine'), 'heavy'));
+    $this->assertTrue(File::load($this->bold->id())->isTemporary(), 'A refused mint holds nothing.');
+    $manager->mintFont($this->loadSkin('mine'), 'copy', 'Copy', [$this->face($this->regular)]);
+    $this->assertTrue($manager->hasFont($this->loadSkin('mine'), 'copy'), 'A held font file is site vocabulary.');
+
+    // The same writer's own upload is theirs to name.
+    $own = $files->fromBytes('heavy.woff2', 'wOF2' . str_repeat("\0", 16) . 'heavy');
+    $manager->mintFont($this->loadSkin('mine'), 'heavy', 'Heavy', [$this->face($own, ['weight' => 'bold'])]);
+    $this->assertTrue(File::load($own->id())->isPermanent());
   }
 
   /**

@@ -684,6 +684,22 @@ class DomOperationsTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * A file op asks content on the host before it reaches the seam.
+   */
+  public function testFileOpAsksContentOnTheHost(): void {
+    $this->setUpCurrentUser([], ['view test entity']);
+    $result = $this->operations->batchOperations($this->host($this->entity), [
+      ['op' => 'file', 'name' => 'logo.svg', 'type' => 'image/svg+xml', 'content' => '<svg/>'],
+    ], $this->options);
+
+    $this->assertFalse($result->isSuccess());
+    $this->assertStringStartsWith('ACCESS_DENIED', $result->getErrors()[0]->getCode());
+    $this->assertSame('op', $result->getErrors()[0]->getPath());
+    $this->assertSame([], TestFileDeclarationHandler::$declared, 'A refused declaration never reaches the seam.');
+    $this->assertNull($this->container->get('daedalus_blueprint.dialect_alias_map')->resolveFile('conv-1', 'logo.svg'));
+  }
+
+  /**
    * A refused body is a structural error naming the declaration.
    */
   public function testFileOpRefusalNamesTheDeclaration(): void {

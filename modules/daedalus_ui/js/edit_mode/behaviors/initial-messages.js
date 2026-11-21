@@ -11,13 +11,18 @@
    *
    * @param {object} editMode
    *   The Edit mode plugin.
-   * @param {Object<string, Array>} initialMessages
-   *   The messages keyed by type.
+   * @param {Object<string, Array<{text: string, html: ?string}>>} initialMessages
+   *   The messages keyed by type: each its plain text and, when the server
+   *   kept any, its filtered display markup.
    */
   const showMessages = (editMode, initialMessages) => {
     Object.keys(initialMessages).forEach((type) => {
       initialMessages[type].forEach((message) => {
-        editMode.message(String(message), type);
+        editMode.message(
+          String(message.text),
+          type,
+          message.html ? { html: message.html } : {},
+        );
       });
     });
   };

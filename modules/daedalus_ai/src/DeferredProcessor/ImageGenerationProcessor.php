@@ -142,28 +142,42 @@ class ImageGenerationProcessor implements DeferredProcessorInterface, RetryableP
    * {@inheritdoc}
    */
   public function buildRetryJobs(array $failures): array {
-    $rewritten = $this->rewritePrompts($failures);
+    // What a retry rewrites and regenerates from is the stored job (the
+    // prompt, the alt text, the provider configuration), never the request:
+    // a failure with no job of this user's is not retried.
+    $jobs = [];
+    foreach ($failures as $failure) {
+      $media_uuid = $failure['media_uuid'] ?? NULL;
+      $job = is_string($media_uuid) ? $this->jobStore->get($media_uuid) : NULL;
+      if ($job !== NULL) {
+        $jobs[] = [$job, (string) ($failure['reason'] ?? '')];
+      }
+    }
+    if ($jobs === []) {
+      return [];
+    }
+
+    $rewritten = $this->rewritePrompts($jobs);
     if ($rewritten === NULL) {
       return [];
     }
 
     $media_uuids = [];
-    foreach ($failures as $i => $failure) {
+    foreach ($jobs as $i => [$job]) {
       $new_prompt = $rewritten[$i] ?? NULL;
-      $media_uuid = $failure['media_uuid'] ?? NULL;
-      if ($new_prompt === NULL || !is_string($media_uuid)) {
+      if (!is_string($new_prompt) || $new_prompt === '') {
         continue;
       }
       // Re-register under the same media uuid: the identity never changes,
-      // only the prompt. Overwriting the store entry IS the rewrite.
+      // only the prompt. Overwriting the store entry IS the rewrite; the
+      // alt text and the chosen image dimensions carry over.
       $this->jobStore->set(new GenerationJob(
-        mediaUuid: $media_uuid,
+        mediaUuid: $job->mediaUuid,
         prompt: $new_prompt,
-        altText: $failure['data']['alt_text'] ?? $new_prompt,
-        // Preserve the chosen image dimensions across the prompt rewrite.
-        configuration: $failure['data']['configuration'] ?? [],
+        altText: $job->altText,
+        configuration: $job->configuration,
       ));
-      $media_uuids[] = $media_uuid;
+      $media_uuids[] = $job->mediaUuid;
     }
 
     return $media_uuids;
@@ -172,13 +186,14 @@ class ImageGenerationProcessor implements DeferredProcessorInterface, RetryableP
   /**
    * Calls the LLM to rewrite rejected image prompts.
    *
-   * @param array $failures
-   *   Failure entries with 'reason' and 'data.prompt' keys.
+   * @param array $jobs
+   *   Per failure, a pair: the stored GenerationJob and the reason its
+   *   generation was rejected.
    *
    * @return array|null
    *   Array of rewritten prompts indexed by position, or NULL on failure.
    */
-  protected function rewritePrompts(array $failures): ?array {
+  protected function rewritePrompts(array $jobs): ?array {
     $defaults = $this->aiProvider->getDefaultProviderForOperationType('chat_with_tools');
     if (empty($defaults['provider_id']) || empty($defaults['model_id'])) {
       return NULL;
@@ -187,12 +202,12 @@ class ImageGenerationProcessor implements DeferredProcessorInterface, RetryableP
     $provider = $this->aiProvider->createInstance($defaults['provider_id']);
 
     $items = [];
-    foreach ($failures as $i => $failure) {
+    foreach ($jobs as $i => [$job, $reason]) {
       $items[] = [
         'index' => $i,
-        'original_prompt' => $failure['data']['prompt'] ?? '',
-        'rejection_reason' => $failure['reason'] ?? '',
-        'alt_text' => $failure['data']['alt_text'] ?? '',
+        'original_prompt' => $job->prompt,
+        'rejection_reason' => $reason,
+        'alt_text' => $job->altText,
       ];
     }
 
@@ -308,7 +323,10 @@ PROMPT;
   }
 
   /**
-   * Builds the failure data the retry path rewrites from.
+   * What a failure reports about its job.
+   *
+   * For whoever reads the failure (the chat, a run's record). The retry
+   * path does not read it back: it rewrites from the stored job.
    *
    * @param \Drupal\daedalus_ai\PendingMedia\GenerationJob $job
    *   The job that failed.

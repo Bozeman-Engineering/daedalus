@@ -10,6 +10,7 @@ use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\ai\Attribute\FunctionCall;
 use Drupal\ai\OperationType\Chat\Tools\ToolsFunctionInput;
+use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint\Tool\ParameterProse;
 use Drupal\daedalus_blueprint_ai\DaedalusBlueprintToolBase;
 
@@ -192,6 +193,12 @@ class Edit extends DaedalusBlueprintToolBase {
         return;
       }
 
+      // A save of a content entity is the editor's Save made by the model:
+      // it asks the same permission. Config always saves directly, with or
+      // without the parameter, so the parameter grants nothing there.
+      if ($save && $result instanceof BlueprintResult && !$this->requireSavePermission()) {
+        return;
+      }
       if (!$this->persistViaBackend($backend, $result, force_save: (bool) $save)) {
         return;
       }

@@ -5,6 +5,7 @@
  * Test module for daedalus_blueprint hooks.
  */
 
+use Drupal\Core\Entity\EntityInterface;
 use Drupal\daedalus_blueprint\Host\HostInterface;
 
 /**
@@ -60,4 +61,17 @@ function daedalus_blueprint_test_daedalus_blueprint_entity_persisted(HostInterfa
     'element_uuids' => $element_uuids,
   ];
   \Drupal::state()->set('daedalus_blueprint_test.persisted', $log);
+}
+
+/**
+ * Implements hook_entity_presave().
+ *
+ * Throws while the daedalus_blueprint_test.fail_save state flag is set, so
+ * EntityStorageHandlerCommitTest can make storage refuse a save that
+ * validation passed (core wraps the throw in an EntityStorageException).
+ */
+function daedalus_blueprint_test_entity_presave(EntityInterface $entity): void {
+  if (\Drupal::state()->get('daedalus_blueprint_test.fail_save', FALSE)) {
+    throw new \RuntimeException('The test made storage fail.');
+  }
 }

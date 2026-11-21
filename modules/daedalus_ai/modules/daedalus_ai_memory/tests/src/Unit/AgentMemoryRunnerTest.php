@@ -151,6 +151,36 @@ class AgentMemoryRunnerTest extends UnitTestCase {
   private const DEFAULTS = ['provider_id' => 'daedalus_ai_test_stub', 'model_id' => StubProvider::MODEL_ID];
 
   /**
+   * The override's parameter list is the parent's, exactly.
+   *
+   * PHP refuses to load a class whose override is incompatible with its
+   * parent, and that fatal error reaches no log a site owner reads: the
+   * chat simply stops answering. Upstream has added a parameter to
+   * runAsAgent() in a patch release, so this compares the two lists (names,
+   * types, defaults, order) and fails here, by name, the next time they
+   * part. A parameter the override lacks is also one it cannot pass on to
+   * the inner runner, which a merely compatible signature would hide.
+   */
+  public function testRunAsAgentSignatureMatchesTheParent(): void {
+    $describe = static fn (\ReflectionMethod $method): array => array_map(
+      static fn (\ReflectionParameter $parameter): array => [
+        'name' => $parameter->getName(),
+        'type' => (string) $parameter->getType(),
+        'default' => $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : '(required)',
+        'variadic' => $parameter->isVariadic(),
+        'by reference' => $parameter->isPassedByReference(),
+      ],
+      $method->getParameters(),
+    );
+    $parent = new \ReflectionMethod(AgentRunner::class, 'runAsAgent');
+    $override = new \ReflectionMethod(AgentMemoryRunner::class, 'runAsAgent');
+
+    $this->assertSame(AgentMemoryRunner::class, $override->getDeclaringClass()->getName());
+    $this->assertSame($describe($parent), $describe($override));
+    $this->assertSame((string) $parent->getReturnType(), (string) $override->getReturnType());
+  }
+
+  /**
    * Delegation: a non-enabled agent never touches persistence machinery.
    *
    * This is the module's surgical opt-in guarantee. If the enabled_agents check
@@ -158,8 +188,10 @@ class AgentMemoryRunnerTest extends UnitTestCase {
    * agent would silently acquire cross-turn state and the "only enabled agents
    * get persistence" design would be broken. The test proves the negative two
    * ways for an agent absent from the allow-list: (1) the inner runner is
-   * called exactly once with byte-identical arguments and its ChatOutput is
-   * returned unchanged (a verbatim pass-through), and (2) the persistence
+   * called exactly once with byte-identical arguments (the streaming flag
+   * among them, so an agent this module does not manage streams exactly as
+   * upstream intends) and its ChatOutput is returned unchanged (a verbatim
+   * pass-through), and (2) the persistence
    * collaborators are never even consulted - the tempstore factory's get() is
    * never called and the agent plugin manager's createInstance() is never
    * called. It runs the guard for both an empty allow-list and a non-empty list
@@ -176,7 +208,7 @@ class AgentMemoryRunnerTest extends UnitTestCase {
       // back the inner runner's output without inspecting or wrapping it.
       $inner->expects($this->once())
         ->method('runAsAgent')
-        ->with('some_agent', $chat_history, self::DEFAULTS, 'job-1', TRUE, $context)
+        ->with('some_agent', $chat_history, self::DEFAULTS, 'job-1', TRUE, $context, TRUE)
         ->willReturn($expected);
 
       // Persistence machinery must be untouched on the delegate path.
@@ -187,7 +219,7 @@ class AgentMemoryRunnerTest extends UnitTestCase {
 
       $runner = $this->createRunner($this->createMock(PrivateTempStore::class), $pluginManager, enabled: $enabled, inner: $inner, tempStoreFactory: $tempStoreFactory);
 
-      $result = $runner->runAsAgent('some_agent', $chat_history, self::DEFAULTS, 'job-1', TRUE, $context);
+      $result = $runner->runAsAgent('some_agent', $chat_history, self::DEFAULTS, 'job-1', TRUE, $context, TRUE);
 
       $this->assertSame(
         $expected,

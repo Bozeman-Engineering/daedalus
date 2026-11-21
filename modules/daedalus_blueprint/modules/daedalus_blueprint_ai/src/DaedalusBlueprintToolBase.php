@@ -8,6 +8,7 @@ use Drupal\Component\Plugin\Exception\ContextException;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
+use Drupal\Core\Session\AccountInterface;
 use Drupal\ai\Base\FunctionCallBase;
 use Drupal\ai\Service\FunctionCalling\ExecutableFunctionCallInterface;
 use Drupal\ai\Service\FunctionCalling\FunctionCallInterface;
@@ -21,6 +22,7 @@ use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendInterface;
 use Drupal\daedalus_blueprint\Dispatch\BlueprintBackendResolver;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
 use Drupal\daedalus_blueprint\Entity\FrameInterface;
+use Drupal\daedalus_blueprint\Exception\CommitRefusedException;
 use Drupal\daedalus_blueprint\Host\BlueprintHost;
 use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Host\HostResolver;
@@ -44,6 +46,22 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  * corrective tool result instead of an exception out of the agent loop).
  */
 abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements ExecutableFunctionCallInterface {
+
+  /**
+   * The permission a tool's save parameter asks for.
+   *
+   * The same one the editor's Save button asks for: a model committing a
+   * working copy is that gesture made for the user, so it needs what the
+   * user's own gesture needs.
+   */
+  public const SAVE_PERMISSION = 'access inline editing';
+
+  /**
+   * The current user.
+   *
+   * @var \Drupal\Core\Session\AccountInterface
+   */
+  protected AccountInterface $currentUser;
 
   /**
    * The output string for readable output.
@@ -168,6 +186,7 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
     $instance->hostResolver = $container->get('daedalus_blueprint.host_resolver');
     $instance->catalogBuilder = $container->get('daedalus_blueprint.dialect_catalog_builder');
     $instance->pageHosts = $container->get('daedalus_blueprint.page_hosts');
+    $instance->currentUser = $container->get('current_user');
     return $instance;
   }
 
@@ -310,6 +329,9 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
    * Loads any entity (content or config) with access checking.
    *
    * Uses the backend resolver to route loading to the correct backend.
+   * 'view' is a read: the backend answers the entity a reader is shown
+   * (the unsaved copy only to a user who may update it) and names the
+   * operation its read asks for, which for config is 'update'.
    *
    * @param string $entity_type
    *   The entity type ID.
@@ -332,7 +354,10 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
       return NULL;
     }
 
-    $entity = $backend->load($entity_type, $entity_id);
+    $reading = $access_op === 'view';
+    $entity = $reading
+      ? $backend->loadReadable($entity_type, $entity_id)
+      : $backend->load($entity_type, $entity_id);
     if (!$entity) {
       $this->output = "Entity $entity_type:$entity_id not found.";
       return NULL;
@@ -347,6 +372,9 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
       return NULL;
     }
 
+    if ($reading) {
+      $access_op = $backend->readOperation();
+    }
     if (!$entity->access($access_op)) {
       $this->output = "Access denied for '$access_op' on $entity_type:$entity_id.";
       return NULL;
@@ -366,16 +394,20 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
    *   The access operation ('view', 'update', 'delete').
    *
    * @return \Drupal\daedalus_blueprint\Host\HostInterface|null
-   *   The loaded host (its staged copy when one exists), or NULL if not
-   *   found or access denied. When NULL is returned, the output property
-   *   is set with an error message.
+   *   The loaded host, or NULL if not found or access denied: its unsaved
+   *   copy when one exists, except that a 'view' load answers the unsaved
+   *   copy only to a user who may update the host and the stored host to
+   *   anyone else. When NULL is returned, the output property is set with
+   *   an error message.
    */
   protected function loadHost(string $entity_type, int|string $entity_id, string $access_op): ?HostInterface {
     if (!$this->requireVisibleEntityType($entity_type)) {
       return NULL;
     }
 
-    $host = $this->storageHandler->load($entity_type, $entity_id);
+    $host = $access_op === 'view'
+      ? $this->storageHandler->loadReadable($entity_type, $entity_id)
+      : $this->storageHandler->load($entity_type, $entity_id);
 
     if ($host === NULL) {
       $entity = $this->entityTypeManager->hasDefinition($entity_type)
@@ -434,12 +466,41 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
   }
 
   /**
+   * Guards a tool's save parameter with the Save permission.
+   *
+   * Call before anything is written when the model asked for save. Without
+   * the permission the tool answers an Error and writes nothing: the model
+   * asked for a commit, so a quiet fall back to the stage would report a
+   * write it did not ask for.
+   *
+   * @return bool
+   *   TRUE if the current user may save. FALSE otherwise; the output
+   *   property is set with the refusal.
+   */
+  protected function requireSavePermission(): bool {
+    if ($this->currentUser->hasPermission(self::SAVE_PERMISSION)) {
+      return TRUE;
+    }
+    $this->output = sprintf(
+      "Error: save was refused and nothing was written: saving needs the '%s' permission, which the current user does not have. Send the same call without save: the edit then stays staged until someone who may save does.",
+      self::SAVE_PERMISSION,
+    );
+    return FALSE;
+  }
+
+  /**
    * Persists a result's host via the storage handler.
    *
    * Routes to the correct storage backend (database or tempstore) based on
    * module configuration. New entities always save to the database. Edit
    * operations auto-route to tempstore when available, unless force_save is
    * TRUE.
+   *
+   * A write that commits meets the commit door
+   * (EntityStorageHandler::commit()), the one the editor's Save meets. Its
+   * refusal (the page was saved elsewhere, the entity does not validate,
+   * storage failed) is this tool's Error, carrying the door's messages;
+   * nothing was saved and nothing was staged.
    *
    * @param \Drupal\daedalus_blueprint\Result\BlueprintResult $result
    *   The blueprint result containing the host and element UUIDs.
@@ -475,6 +536,13 @@ abstract class DaedalusBlueprintToolBase extends FunctionCallBase implements Exe
         ],
       ));
       return TRUE;
+    }
+    catch (CommitRefusedException $refusal) {
+      $this->output = 'Error: the save was refused and nothing was written. ' . implode(' ', $refusal->messages());
+      if ($force_save) {
+        $this->output .= ' The same call without save stages the edit for the user to review.';
+      }
+      return FALSE;
     }
     catch (\Exception $e) {
       $this->output = 'Persistence error: ' . $e->getMessage();

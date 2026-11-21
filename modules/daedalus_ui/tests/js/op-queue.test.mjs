@@ -27,6 +27,9 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { registerHooks } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -86,6 +89,18 @@ globalThis.document = {
   documentElement: { addEventListener: () => {} },
 };
 globalThis.Drupal = { t: (string) => string, behaviors: {} };
+
+/**
+ * Mounts the one token source (js/csrf.js, a plain script on the Drupal
+ * global) the queue's send posts through, on the Drupal of the moment.
+ */
+const mountTokenSource = () => {
+  // eslint-disable-next-line no-new-func
+  new Function(
+    'Drupal',
+    readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../js/csrf.js'), 'utf8'),
+  )(globalThis.Drupal);
+};
 
 const record = (fields) => ({
   kind: 'token', id: '', label: '', description: '', value: null, group: null, spellings: {}, scope: null, applies: [],
@@ -296,6 +311,7 @@ test('a job sequences FIFO with ops, and a failed job rolls back what is queued 
   Drupal.ajax = () => ({ success: () => {} });
   Drupal.url = (path) => `/${path}`;
   Drupal.Daedalus.getCookieValue = () => 'edit';
+  mountTokenSource();
   drupalSettings.ajaxPageState = {};
   const payloadFor = (stamp) => ({
     success: true,
@@ -310,7 +326,7 @@ test('a job sequences FIFO with ops, and a failed job rolls back what is queued 
   let sent = 0;
   globalThis.fetch = async (url) => {
     if (String(url).includes('session/token')) {
-      return { text: async () => 'token' };
+      return { ok: true, text: async () => 'token' };
     }
     sent += 1;
     const stamp = `op-${sent}`;
@@ -462,11 +478,12 @@ test("a request's select lands the selection and opens no editor", async () => {
   Drupal.ajax = () => ({ success: () => {} });
   Drupal.url = (path) => `/${path}`;
   Drupal.Daedalus.getCookieValue = () => 'edit';
+  mountTokenSource();
   drupalSettings.ajaxPageState = {};
   const fetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
     if (String(url).includes('session/token')) {
-      return { text: async () => 'token' };
+      return { ok: true, text: async () => 'token' };
     }
     return {
       json: async () => ({

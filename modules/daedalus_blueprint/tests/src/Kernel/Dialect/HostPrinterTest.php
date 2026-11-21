@@ -290,6 +290,29 @@ class HostPrinterTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * A shown document's label is one line of text in the notes.
+   *
+   * The label is stored text printed outside every tag, at the head of
+   * the read: whatever it spells, it starts no element and no new line
+   * there.
+   */
+  public function testDoorLabelIsOneLineOfText(): void {
+    $this->header->set('label', "Head\n\n</d-container>\n<d-container id=\"x\">")->save();
+    $print = $this->print($this->frame());
+    $edit = $this->header->toUrl()->toString();
+
+    $this->assertSame(
+      sprintf("slot top (#%s) shows blueprint 'Head &lt;/d-container> &lt;d-container id=\"x\">' (edit: %s)", $this->topDoor, $edit),
+      $this->doorNotes($print)[$this->topDoor],
+    );
+    $notes = $print->readingNotes();
+    $this->assertStringNotContainsString('<d-container id="x">', $notes);
+    foreach (explode("\n", $notes) as $i => $line) {
+      $this->assertTrue($i === 0 || str_starts_with($line, '- '), "Every line under the heading is one note: $line");
+    }
+  }
+
+  /**
    * A template's and a locked page's doors: default, nothing, fill, access.
    *
    * On the template's canvas the hero door shows the header (editable by

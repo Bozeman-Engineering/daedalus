@@ -96,6 +96,19 @@ class DialectParser {
   ];
 
   /**
+   * The largest markup one parse takes, in bytes.
+   *
+   * A whole page with its <style> block and its declared files' bytes is
+   * far below it; the ceiling bounds the work one call can ask for.
+   */
+  public const MAX_BYTES = 1048576;
+
+  /**
+   * The deepest an element may nest; a top-level element is at depth 1.
+   */
+  public const MAX_DEPTH = 64;
+
+  /**
    * The file declaration's tag and its two attributes.
    */
   public const FILE_TAG = RelativeSelector::TYPE_PREFIX . 'file';
@@ -116,7 +129,7 @@ class DialectParser {
    */
   public function parseDocument(string $html, DialectCatalog $catalog): DialectParseResult {
     $walk = new DialectWalk($catalog);
-    $root = $this->tokenize($html, $walk->errors);
+    $root = $this->tokenize($html, $catalog, $walk->errors);
 
     $tree = [];
     $style_elements = [];
@@ -213,7 +226,7 @@ class DialectParser {
       $valid = FALSE;
     }
     if ($type === '') {
-      $errors[] = new DialectError('FILE_DECLARATION', sprintf('<%s> needs type="<MIME type>" (image/svg+xml, text/css, text/csv, text/plain, text/markdown, application/json, text/html)', self::FILE_TAG), $el->line, ['name' => $name], 'The type must agree with the name\'s extension: name="logo.svg" is type="image/svg+xml".');
+      $errors[] = new DialectError('FILE_DECLARATION', sprintf('<%s> needs type="<MIME type>" (image/svg+xml, text/css, text/csv, text/plain, text/markdown, application/json)', self::FILE_TAG), $el->line, ['name' => $name], 'The type must agree with the name\'s extension: name="logo.svg" is type="image/svg+xml".');
       $valid = FALSE;
     }
     if ($content === '') {
@@ -240,7 +253,7 @@ class DialectParser {
    */
   public function parseFragment(string $html, DialectCatalog $catalog, bool $top_level = FALSE): DialectParseResult {
     $walk = new DialectWalk($catalog);
-    $root = $this->tokenize($html, $walk->errors);
+    $root = $this->tokenize($html, $catalog, $walk->errors);
 
     $tree = [];
     foreach ($root->children as $child) {
@@ -272,14 +285,42 @@ class DialectParser {
    *
    * @param string $html
    *   The dialect markup.
+   * @param \Drupal\daedalus_blueprint\Dialect\DialectCatalog $catalog
+   *   The dialect catalog; it names the tags whose bodies are read as
+   *   text, never as elements.
    * @param \Drupal\daedalus_blueprint\Dialect\DialectError[] $errors
    *   Collector for tree-level structural errors.
+   *
+   * @return \Drupal\daedalus_blueprint\Dialect\RawElement
+   *   The tree's root. Markup over the size ceiling is not tokenized and
+   *   markup nested past the depth ceiling is not kept: either answers an
+   *   empty root and its one error, never a part of the tree.
    */
-  private function tokenize(string $html, array &$errors): RawElement {
+  private function tokenize(string $html, DialectCatalog $catalog, array &$errors): RawElement {
+    if (strlen($html) > self::MAX_BYTES) {
+      $errors[] = new DialectError(
+        'MARKUP_TOO_LARGE',
+        sprintf('the markup is %d bytes; one write takes at most %d bytes and nothing of it was read', strlen($html), self::MAX_BYTES),
+        NULL,
+        ['bytes' => strlen($html), 'max_bytes' => self::MAX_BYTES],
+        'Send the content in smaller writes: create the page with its first sections, then insert the rest section by section.',
+      );
+      return new RawElement('#root', [], 0);
+    }
     $scanner = new Scanner($html);
-    $builder = new DialectTreeBuilder($scanner);
+    $builder = new DialectTreeBuilder($scanner, $catalog->richTags());
     $tokenizer = new Tokenizer($scanner, $builder);
     $tokenizer->parse();
+    if ($builder->tooDeepAt !== NULL) {
+      $errors[] = new DialectError(
+        'NESTING_TOO_DEEP',
+        sprintf('elements nest more than %d deep; nothing of the markup was read', self::MAX_DEPTH),
+        $builder->tooDeepAt,
+        ['max_depth' => self::MAX_DEPTH],
+        'Flatten the structure: a page is sections holding a few levels of containers and blocks. An element that was never closed nests everything after it, so check that each element is closed.',
+      );
+      return new RawElement('#root', [], 0);
+    }
     foreach ($builder->errors as $error) {
       $errors[] = $error;
     }

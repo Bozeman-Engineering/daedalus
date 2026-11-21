@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_tempstore\Kernel;
 
 use Drupal\Core\DependencyInjection\ContainerBuilder;
+use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_tempstore\ParamConverter\EntityConverter;
+use Drupal\Tests\daedalus_tempstore\Kernel\Fixture\AsksAgainItemList;
 use Drupal\Tests\daedalus_tempstore\Kernel\Fixture\StateActivationVoter;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
@@ -62,7 +64,8 @@ final class ActivationVotersWiringTest extends KernelTestBase {
     parent::setUp();
     $this->installEntitySchema('user');
     $this->installEntitySchema('entity_test');
-    $this->setUpCurrentUser();
+    // The converter swaps only for a user who may update the stored entity.
+    $this->setUpCurrentUser([], ['administer entity_test content']);
   }
 
   /**
@@ -109,6 +112,44 @@ final class ActivationVotersWiringTest extends KernelTestBase {
     // A deny vetoes the allow: back to the saved entity.
     $state->set('voter_b', 'deny');
     $this->assertSame('saved', $converter->loadEntityFromTempstore($entity)->label());
+  }
+
+  /**
+   * A field that asks for its entity while the swap is decided gets it back.
+   *
+   * Deciding the swap reads the saved entity and its unsaved copy whole,
+   * computed fields included. A computed field that converts the same route
+   * parameter again must not start the decision over: it would read the
+   * entities again and never return.
+   */
+  public function testAnAskDuringTheDecisionGetsTheEntityItBrought(): void {
+    $state = $this->container->get('state');
+    $state->set('entity_test.additional_base_field_definitions', [
+      'asks_again' => BaseFieldDefinition::create('string')
+        ->setName('asks_again')
+        ->setTargetEntityTypeId('entity_test')
+        ->setComputed(TRUE)
+        ->setClass(AsksAgainItemList::class),
+    ]);
+    $this->container->get('entity_field.manager')->clearCachedFieldDefinitions();
+
+    $entity = EntityTest::create(['name' => 'saved']);
+    $entity->save();
+    $staged = clone $entity;
+    $staged->set('name', 'staged');
+    $this->container->get('daedalus_tempstore.entity_tempstore_repository')->set($staged);
+
+    $converter = $this->container->get(EntityConverter::class);
+    $state->set('voter_a', 'allow');
+
+    $answer = $converter->loadEntityFromTempstore($entity);
+    $this->assertInstanceOf(EntityTest::class, $answer);
+    $this->assertSame('staged', $answer->label(), 'The decision completes and answers the unsaved copy.');
+    $this->assertSame('saved', $entity->get('asks_again')->value, 'The ask made while the saved entity was read got the saved entity.');
+    $this->assertSame('staged', $answer->get('asks_again')->value, 'The ask made while the copy was read got the copy.');
+
+    // The decision over, the next ask decides again.
+    $this->assertSame('staged', $converter->loadEntityFromTempstore(EntityTest::load($entity->id()))->label());
   }
 
 }

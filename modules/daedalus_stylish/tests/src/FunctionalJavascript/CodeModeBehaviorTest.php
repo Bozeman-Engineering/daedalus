@@ -1237,18 +1237,16 @@ class CodeModeBehaviorTest extends WebDriverTestBase {
       20000,
       'The leader reported the same refusal in its own window (it owns the queue): each window reports once.',
     );
-    // The history keeps the text each window handed the messenger, HTML by
-    // the messenger's contract, and the two reports arrive by two roads:
-    // the leader's through daedalus_ui's edit-mode plugin (the queue
-    // owner's report, the server's text as it came), the satellite's
-    // through stylish's notify(), which escapes once at its HTML boundary,
-    // so the quoted name reads " in the one entry and &quot; in the other
-    // (and " in both toasts' text).
-    $not_found_html = htmlspecialchars($not_found, ENT_QUOTES);
+    // The history keeps the text each window handed the messenger, and the
+    // messenger's contract is text: it escapes once, where it writes the
+    // toast, and no caller escapes. The two reports arrive by two roads
+    // (the leader's through daedalus_ui's edit-mode plugin, the queue
+    // owner's report; the satellite's through stylish's notify()), and
+    // both entries hold the server's sentence as it reads, quotes unescaped.
     $history_errors = "Drupal.Daedalus.messenger.history().filter((entry) => entry.type === 'error')";
     $this->assertJsCondition(
-      "$history_errors.filter((entry) => entry.message.includes(" . json_encode($not_found) . ")).length === 1"
-      . " && $history_errors.filter((entry) => entry.message.includes(" . json_encode($not_found_html) . ")).length === 1",
+      "$history_errors.filter((entry) => entry.message.includes(" . json_encode($not_found) . ")).length === 2"
+      . " && !$history_errors.some((entry) => entry.message.includes('&quot;'))",
       20000,
       'The shared history holds two entries for the one refusal: the leader\'s report and the satellite\'s, by design.',
     );

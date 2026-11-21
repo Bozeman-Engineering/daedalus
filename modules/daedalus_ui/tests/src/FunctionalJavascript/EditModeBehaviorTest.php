@@ -175,6 +175,9 @@ class EditModeBehaviorTest extends WebDriverTestBase {
    * - The Page form's toggle presents the root through the editor door:
    *   the panel opens on the top-level form with its first revealed widget
    *   as the open edit.
+   * - A refused Save: with the page saved elsewhere after the unsaved
+   *   changes were started, clicking Save shows the server's message and
+   *   the page stays in Edit Mode, the changes still unsaved.
    * - The cookie-arrival render: a page arriving with the navigationMode
    *   cookie (what daedalus_ui's InitialMode subscriber
    *   writes onto a new node's post-creation redirect) renders the Edit Mode
@@ -3098,6 +3101,38 @@ class EditModeBehaviorTest extends WebDriverTestBase {
       "Drupal.Daedalus.SidebarManager.closeSidebar('daedalus_edit_entity_form');"
     );
     $this->getSession()->executeScript('Drupal.Daedalus.Selection.clear();');
+
+    // --- A Save the server refuses stays in Edit Mode with its message. ---
+    // Save is a POST whose JSON answer the top bar's script reads
+    // (tool_manager/save-commit.js): a destination to go to, or the commit
+    // door's messages. The seam only a browser proves is the refusal's
+    // wiring: the button's click through the one token source to the
+    // route, and the answer becoming an error toast and NO navigation.
+    // The page-built page still holds the unsaved placements of the legs
+    // above; saving its stored row here moves it to a revision the unsaved
+    // copy was not taken from, which the commit door refuses (the kernel
+    // tier owns the rule: EntityStorageHandlerCommitTest, TempstoreSaveTest).
+    $saved_elsewhere = \Drupal::entityTypeManager()->getStorage('node')->loadUnchanged($lb_node->id());
+    $saved_elsewhere->setNewRevision();
+    $saved_elsewhere->save();
+    // A document that navigated would lose this marker.
+    $session->executeScript('window.__refusedSaveDocument = true;');
+    $session->executeScript("document.querySelector('#edit-mode-top-bar #daedalus-ui-save').click();");
+    $this->assertJsCondition(
+      "[...document.querySelectorAll('[data-drupal-messages] [data-drupal-message-id]')]"
+      . ".some((message) => message.getAttribute('data-drupal-message-type') === 'error'"
+      . " && message.textContent.includes('was saved elsewhere after these changes were started'))",
+      20000,
+      'The refused Save showed the server\'s message as an error toast.',
+    );
+    $this->assertJsCondition(
+      "window.__refusedSaveDocument === true"
+      . " && document.documentElement.getAttribute('data-daedalus-ui-mode') === 'edit'"
+      . " && document.querySelector('#daedalus-ui-save').getAttribute('data-daedalus-ui-saved') === 'false'"
+      . " && JSON.stringify(Drupal.Daedalus.Blueprint.getBlueprint()).includes('$component_uuid')",
+      20000,
+      'The refused Save navigated nowhere: the same document is still in Edit Mode, Save still reads unsaved and the unsaved placement is still on the page.',
+    );
 
     // --- The cookie-arrival render. ---
     // Last, because the cookies are domain-wide (see the class doc). A page

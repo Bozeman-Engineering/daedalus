@@ -221,8 +221,9 @@ they say what kind of thing a block is and stay as the kinds under All.
   editor's marks are `favorites` under `daedalus_layout` in daedalus_ui's
   `EditorSettings` (the user's `daedalus_ui_settings` field), a map of id
   to TRUE (added) or FALSE (a default removed), ids being block plugin
-  ids and `blueprint:ID`, written through the generic settings route
-  `daedalus_ui.settings.save_setting` as a JSON body; the effective
+  ids and `blueprint:ID`, written through the editor-preference lane
+  (`Drupal.Daedalus.saveSetting`, the route
+  `daedalus_ui.settings.save_setting`); the effective
   favorite is the default with the mark over it. The row's star and its
   menu's "Add to my favorites" / "Remove from my favorites" write the
   marks and repaint at once; `S` on a focused row stars it. An editor can

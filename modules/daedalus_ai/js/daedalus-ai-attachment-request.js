@@ -127,8 +127,8 @@
     /**
      * Uploads the files to the attach route, one request each.
      *
-     * The token rides the X-CSRF-Token header from session/token, the way
-     * every page-builder post does. `_format=json` makes a refusal (a 400
+     * Each upload goes through Drupal.Daedalus.post, the way every
+     * page-builder write does. `_format=json` makes a refusal (a 400
      * naming the lane's reasons) answer JSON, so the reason reaches the
      * user instead of an HTML error page.
      *
@@ -145,18 +145,14 @@
      *   When an upload is refused; the message names the file and the
      *   reason.
      */
-    async upload(files, threadId) {
-      const tokenResponse = await fetch(Drupal.url('session/token'), {
-        credentials: 'same-origin',
-      });
-      const token = await tokenResponse.text();
+    upload(files, threadId) {
       // One request at a time, in order, so the names the route answers
       // (renamed on collision) line up with the files.
       return files.reduce(
         (chain, file) =>
           chain.then(async (names) => [
             ...names,
-            await this.uploadOne(file, threadId, token),
+            await this.uploadOne(file, threadId),
           ]),
         Promise.resolve([]),
       );
@@ -169,8 +165,6 @@
      *   The file to attach.
      * @param {string} threadId
      *   The conversation's thread id.
-     * @param {string} token
-     *   The session's CSRF token.
      *
      * @return {Promise<string>}
      *   The name the file was saved under (renamed on collision).
@@ -179,18 +173,13 @@
      *   When the upload is refused; the message names the file and the
      *   reason.
      */
-    async uploadOne(file, threadId, token) {
+    async uploadOne(file, threadId) {
       const form = new FormData();
       form.append('file', file, file.name);
       form.append('thread_id', threadId);
-      const response = await fetch(
+      const response = await Drupal.Daedalus.post(
         Drupal.url('daedalus-ai/attach?_format=json'),
-        {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'X-CSRF-Token': token },
-          body: form,
-        },
+        form,
       );
       const isJson = (response.headers.get('content-type') || '').includes(
         'application/json',

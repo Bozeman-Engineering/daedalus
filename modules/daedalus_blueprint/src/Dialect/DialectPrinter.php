@@ -119,6 +119,17 @@ use Drupal\daedalus_blueprint\Plugin\Block\LinkedBlueprintBlock;
  * print as wear declarations in its plain block (`#id > d-text { tone:
  * loud; class: button; color: red; }`), the attribute's twin
  * (ruleWear()).
+ *
+ * A stored value never ends the element that carries it. An attribute
+ * value is escaped (escapeAttr()) and a plain body is escaped text. An
+ * opaque body (rich text, a generic <d-field>, the <style> block) is read
+ * back verbatim up to its own end tag, so that one spelling is the one a
+ * stored value may not print as it stands: rawBody() spells the end
+ * tag's opening as text inside a body, styleLine() spells it as a CSS
+ * escape inside the <style> block, and a comment's text cannot end its
+ * comment (comment()). Every other byte of an opaque body prints
+ * verbatim, so the round trip holds for every value that does not spell
+ * its carrier's end tag.
  */
 class DialectPrinter {
 
@@ -148,7 +159,7 @@ class DialectPrinter {
     if ($rules !== []) {
       $lines[] = '<style>';
       foreach ($rules as $rule) {
-        $lines[] = $rule;
+        $lines[] = self::styleLine($rule);
       }
       $lines[] = '</style>';
     }
@@ -230,6 +241,7 @@ class DialectPrinter {
     foreach ($nodes as $node) {
       $this->collectStyleLines($node, $catalog, $lines, $notes);
     }
+    $lines = array_map(self::styleLine(...), $lines);
     return new DialectPrint($lines === [] ? '' : implode("\n", $lines) . "\n", $notes);
   }
 
@@ -253,10 +265,10 @@ class DialectPrinter {
     if ($rules !== [] || $wear !== []) {
       $words = $this->words($node);
       if ($words !== NULL) {
-        $lines[] = '  /* ' . $words . ' */';
+        $lines[] = self::comment($words);
       }
       if ($wear !== []) {
-        $lines[] = '  /* wears' . $this->attrString($wear) . ' */';
+        $lines[] = self::comment('wears' . $this->attrString($wear));
       }
       array_push($lines, ...$rules);
     }
@@ -536,7 +548,7 @@ class DialectPrinter {
     }
     if ($body['kind'] === 'rich') {
       $raw = is_array($body_value) ? (string) ($body_value['value'] ?? '') : (string) ($body_value ?? '');
-      $lines[] = sprintf('%s<%s%s>%s</%s>', $indent, $tag, $this->attrString($ordered), $raw, $tag);
+      $lines[] = sprintf('%s<%s%s>%s</%s>', $indent, $tag, $this->attrString($ordered), self::rawBody($raw, $tag), $tag);
       return;
     }
     $text = (string) ($body_value ?? '');
@@ -576,7 +588,7 @@ class DialectPrinter {
     }
     $lines[] = sprintf('%s<%s%s>', $indent, DialectWalk::BLOCK_TAG, $this->attrString($attrs));
     foreach ($fields as $name => $value) {
-      $lines[] = sprintf('%s  <%s name="%s">%s</%s>', $indent, DialectWalk::FIELD_TAG, self::escapeAttr($name), $value, DialectWalk::FIELD_TAG);
+      $lines[] = sprintf('%s  <%s name="%s">%s</%s>', $indent, DialectWalk::FIELD_TAG, self::escapeAttr($name), self::rawBody($value, DialectWalk::FIELD_TAG), DialectWalk::FIELD_TAG);
     }
     $lines[] = $indent . '</' . DialectWalk::BLOCK_TAG . '>';
   }
@@ -850,13 +862,12 @@ class DialectPrinter {
    * Records a style-layer gap: a <style> comment line and its note.
    *
    * The comment is the read-only register of the <style> block (both
-   * parsers blank comments), one line per element and reason, at the
-   * block's rule indent; a `* /` sequence in the reason cannot close it
-   * early.
+   * parsers blank comments), one line per element and reason
+   * (comment()).
    */
   protected function styleGap(array $node, DialectCatalog $catalog, string $reason, array &$rules, array &$notes): void {
     $detail = $this->note(DialectPrintNoteKind::UnprintedStyle, $node, $catalog, $reason, $notes);
-    $rules[] = '  /* ' . str_replace('*/', '* /', $detail) . ' */';
+    $rules[] = self::comment($detail);
   }
 
   /**
@@ -1122,6 +1133,45 @@ class DialectPrinter {
    */
   protected static function escapeAttr(string $value): string {
     return strtr($value, ['&' => '&amp;', '"' => '&quot;']);
+  }
+
+  /**
+   * An opaque body as it prints inside its tag: verbatim but for its end.
+   *
+   * The parser reads an opaque body up to the element's own end tag and
+   * decodes nothing inside it, so the body prints as stored. The one
+   * exception is that end tag itself, in any letter case and whatever
+   * follows its name: its opening `<` prints as `&lt;`, so the body is
+   * one body to the parser and to a reader.
+   *
+   * @param string $text
+   *   The stored value.
+   * @param string $tag
+   *   The tag the body prints inside.
+   */
+  protected static function rawBody(string $text, string $tag): string {
+    return preg_replace('#</(?=' . preg_quote($tag, '#') . ')#i', '&lt;/', $text);
+  }
+
+  /**
+   * One line of <style> content, unable to end the <style> element.
+   *
+   * The end tag's slash prints escaped the way CSS escapes a character,
+   * which reads as the same text inside a CSS string and is not an end
+   * tag to the parser.
+   */
+  protected static function styleLine(string $line): string {
+    return preg_replace('#</(?=style)#i', '<\\\\/', $line);
+  }
+
+  /**
+   * A one-line CSS comment at the <style> block's rule indent.
+   *
+   * The text cannot end the comment: a comment close inside it prints
+   * spaced apart, and a line break as a space.
+   */
+  protected static function comment(string $text): string {
+    return '  /* ' . str_replace('*/', '* /', preg_replace('/\s+/', ' ', $text)) . ' */';
   }
 
   /**

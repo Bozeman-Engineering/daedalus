@@ -159,7 +159,10 @@ interface BlueprintBackendInterface {
   public function persist(EntityInterface $entity, bool $is_new = FALSE): void;
 
   /**
-   * Loads an entity by type and ID.
+   * Loads an entity's working copy by type and ID.
+   *
+   * The door of a writer: where the backend stages, the unsaved copy is
+   * answered while one exists. A reader loads through loadReadable().
    *
    * @param string $entity_type_id
    *   The entity type ID.
@@ -170,6 +173,34 @@ interface BlueprintBackendInterface {
    *   The loaded entity, or NULL if not found.
    */
   public function load(string $entity_type_id, int|string $entity_id): ?EntityInterface;
+
+  /**
+   * Loads the entity a reader is shown, by type and ID.
+   *
+   * Where the backend stages, the unsaved copy is answered only to a
+   * current user who may update the stored entity, the stored entity to
+   * anyone else. Whether the reader may read at all is readOperation()'s
+   * question, asked by the caller.
+   *
+   * @param string $entity_type_id
+   *   The entity type ID.
+   * @param int|string $entity_id
+   *   The entity ID.
+   *
+   * @return \Drupal\Core\Entity\EntityInterface|null
+   *   The entity to read, or NULL if not found.
+   */
+  public function loadReadable(string $entity_type_id, int|string $entity_id): ?EntityInterface;
+
+  /**
+   * The entity access operation a read through this backend asks for.
+   *
+   * @return string
+   *   'view' where serialization answers what the entity's own page would
+   *   show, field by field; 'update' where it answers the entity whole, as
+   *   only its edit form would.
+   */
+  public function readOperation(): string;
 
   /**
    * Returns whether this backend requires an active workspace for writes.

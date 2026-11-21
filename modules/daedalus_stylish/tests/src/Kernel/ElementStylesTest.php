@@ -443,7 +443,8 @@ class ElementStylesTest extends KernelTestBase {
       'block:0c000002-0000-4000-8000-000000000002' => [
         'variants' => [['variant' => 'testimonial_default', 'fragment' => '']],
       ],
-      'block:untouched' => ['default' => ['padding' => '9rem']],
+      // An unrelated key: no component of the fixture carries this uuid.
+      'block:0c0000ff-0000-4000-8000-0000000000ff' => ['default' => ['padding' => '9rem']],
     ];
     $entity = $this->createHostEntity($map, [$section]);
 
@@ -592,8 +593,8 @@ class ElementStylesTest extends KernelTestBase {
    * Nested identities inside a duplicated section carry their keys.
    *
    * Duplicating a nested section regenerates the whole subtree's identities
-   * (the section's daedalus_layout uuid and its components' uuids); container:/
-   * region:/block: entries addressing them follow onto the clone's keys.
+   * (the section's daedalus_layout uuid and its components' uuids); container:
+   * and block: entries addressing them follow onto the clone's keys.
    */
   public function testDuplicateCarriesNestedKeys(): void {
     $nested_section = new Section('layout_onecol', [], [], [
@@ -607,7 +608,6 @@ class ElementStylesTest extends KernelTestBase {
 
     $map = [
       'container:0d000002-0000-4000-8000-000000000002' => ['default' => ['padding' => '4rem']],
-      'region:0d000002-0000-4000-8000-000000000002:content' => ['default' => ['margin' => '2rem']],
       'block:0d000003-0000-4000-8000-000000000003' => ['default' => ['color' => 'teal']],
     ];
     $entity = $this->createHostEntity($map, [$section]);
@@ -637,7 +637,6 @@ class ElementStylesTest extends KernelTestBase {
 
     $carried = $this->styleMap($entity);
     $this->assertSame($map['container:0d000002-0000-4000-8000-000000000002'], $carried["container:$new_section_uuid"] ?? NULL);
-    $this->assertSame($map['region:0d000002-0000-4000-8000-000000000002:content'], $carried["region:$new_section_uuid:content"] ?? NULL);
     $this->assertSame($map['block:0d000003-0000-4000-8000-000000000003'], $carried["block:$new_component_uuid"] ?? NULL);
     // Originals intact.
     foreach ($map as $key => $entry) {

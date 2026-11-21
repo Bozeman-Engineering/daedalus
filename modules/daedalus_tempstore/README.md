@@ -155,14 +155,14 @@ Your strategy will now be automatically discovered and used when
 
 ## Workspace Awareness
 
-If your strategy needs workspace isolation, use the `WorkspaceKeyTrait`:
+If your strategy needs workspace isolation, use the `StageKeyTrait`:
 
 ```php
-use Drupal\daedalus_tempstore\WorkspaceKeyTrait;
+use Drupal\daedalus_tempstore\StageKeyTrait;
 
 class MyCustomTempstoreStrategy implements TempstoreStrategyInterface {
 
-  use WorkspaceKeyTrait;
+  use StageKeyTrait;
 
   public function __construct(
     protected SharedTempStoreFactory $tempStoreFactory,

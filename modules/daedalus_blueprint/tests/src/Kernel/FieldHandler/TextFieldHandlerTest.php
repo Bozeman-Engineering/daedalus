@@ -67,6 +67,29 @@ class TextFieldHandlerTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * Serializing hands the stored value byte for byte.
+   *
+   * The serialized pair is what an edit is compared against and committed
+   * from, so reading it never filters or rewrites the value: an editor's
+   * seed is produced elsewhere (daedalus_edit's EditorSeed), beside it.
+   */
+  public function testSerializeHandsTheStoredValueUnchanged(): void {
+    $stored = '<p onclick="window.marked = 1" style="color: red">Kept</p><script>window.marked = 2</script>';
+    $entity = $this->createTestEntity([
+      'field_description' => [
+        'value' => $stored,
+        'format' => 'plain_text',
+      ],
+    ]);
+
+    $items = $entity->get('field_description');
+    $result = $this->handler->serialize($items, $items->getFieldDefinition());
+
+    $this->assertSame($stored, $result['value']);
+    $this->assertSame($stored, $entity->get('field_description')->value, 'Reading left the item as it was.');
+  }
+
+  /**
    * Tests serializing a text_with_summary field.
    */
   public function testSerializeTextWithSummary(): void {

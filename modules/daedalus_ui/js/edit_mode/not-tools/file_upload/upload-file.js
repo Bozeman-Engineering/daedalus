@@ -12,6 +12,11 @@
  * first-class requirement for this feature (media uploads are often large
  * videos/images). The progress UI itself is a separate slice; this utility only
  * exposes the `onProgress` hook so that UI can be wired in later.
+ *
+ * The upload routes take the session's CSRF token in the X-CSRF-Token
+ * header. The token comes from the one client source,
+ * Drupal.Daedalus.csrfToken (daedalus_ui/csrf); Drupal.Daedalus.post is
+ * not the sender here only because it is fetch.
  */
 
 /**
@@ -47,14 +52,16 @@ export const DEFAULT_UPLOAD_TIMEOUT_MS = 300000;
  *
  * @return {Promise<object>}
  *   Resolves with the parsed JSON response (the Drupal AJAX command array).
- *   Rejects with an Error on HTTP error status, network error, timeout, or an
- *   unparseable response body.
+ *   Rejects with an Error on HTTP error status, network error, timeout, an
+ *   unparseable response body, or a failed token request.
  */
-export const uploadFile = (url, file, options = {}) => {
+export const uploadFile = async (url, file, options = {}) => {
   const timeout =
     typeof options.timeout === 'number' && !Number.isNaN(options.timeout)
       ? options.timeout
       : DEFAULT_UPLOAD_TIMEOUT_MS;
+
+  const token = await Drupal.Daedalus.csrfToken();
 
   return new Promise((resolve, reject) => {
     const formData = new FormData();
@@ -71,6 +78,7 @@ export const uploadFile = (url, file, options = {}) => {
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url, true);
+    xhr.setRequestHeader('X-CSRF-Token', token);
     xhr.timeout = timeout;
 
     if (typeof options.onProgress === 'function') {

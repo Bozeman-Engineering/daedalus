@@ -74,7 +74,7 @@ use Drupal\daedalus_ui\EditorSettings;
  * namespace in daedalus_ui's EditorSettings, a map of id to TRUE (added)
  * or FALSE (a default removed), written by the client through the
  * generic settings route (`daedalus_ui.settings.save_setting`, the whole
- * map as an application/json body, the route's structured shape) and
+ * map as the JSON body) and
  * normalized on read here, as every server-side read of a setting is:
  * anything but a map collapses to no marks, and each value to a boolean.
  * Purely visual state (which sets are folded) is not here; it lives in

@@ -67,7 +67,7 @@ class DaedalusTempstoreServiceProvider extends ServiceProviderBase {
         $definition->setClass('Drupal\daedalus_tempstore\LayoutTempstoreRepository');
         $definition->setArguments([new Reference('daedalus_tempstore.strategy_selector')]);
         // Clear any method calls (e.g., setWorkspacesManager from workspaces
-        // module). Workspace awareness is handled by WorkspaceKeyTrait in our
+        // module). Workspace awareness is handled by StageKeyTrait in our
         // strategies.
         $definition->setMethodCalls([]);
       }

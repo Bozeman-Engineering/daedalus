@@ -52,6 +52,12 @@ use Psr\Log\LoggerInterface;
  * one map (a key stated in both places is refused) before the style
  * store's one validation path, its field handler.
  *
+ * An existing entity is named by `_root_entity`, a field and its value. An
+ * actor names it by the entity's id or uuid alone, and an entity the actor
+ * may neither write nor view answers as one that was not found; a caller
+ * acting for the site (`system`) may name any field, as an importer names
+ * its entity by machine name.
+ *
  * validate_only runs everything the write would on a disposable object (a
  * new entity, or a clone of the loaded one), so a create's layout expands
  * as a batch on the unsaved host and the merged style map is judged
@@ -130,8 +136,10 @@ class BlueprintDeserializer implements BlueprintDeserializerInterface {
     $fields = array_filter($fields, fn($value) => !FormOnlyStub::isStub($value));
 
     // Load or create entity. A dry run over an existing entity works on a
-    // clone: the loaded object is the request's shared one.
-    $entity_or_error = $this->loadOrCreateEntity($entity_type, $bundle, $data, disposable: $validate_only);
+    // clone: the loaded object is the request's shared one. The actor is
+    // named first: what the root lookup may be asked depends on it.
+    $actor = $this->actor($options);
+    $entity_or_error = $this->loadOrCreateEntity($entity_type, $bundle, $data, disposable: $validate_only, actor: $actor);
     if ($entity_or_error instanceof BlueprintError) {
       return BlueprintResult::semanticFailure([$entity_or_error]);
     }
@@ -165,11 +173,15 @@ class BlueprintDeserializer implements BlueprintDeserializerInterface {
     // The capability gate at the root: a whole document is a content write
     // of the host (the host access and workspace policies answer here, as
     // they do for every op), judged for the batch's actor unless the
-    // caller acts for the site.
-    $actor = $this->actor($options);
+    // caller acts for the site. The gate is also where the root lookup's
+    // answer is first told: an existing entity the actor may neither write
+    // nor view answers as one the lookup did not find.
     if ($actor !== NULL) {
       $refused = $this->refusal($host, $actor, Capability::Content, $host->uuid(), 'entity_type');
       if ($refused !== NULL) {
+        if (!$is_full_create && !$entity->access('view', $actor)) {
+          $refused = $this->rootNotFound($entity_type, $data['_root_entity']);
+        }
         return BlueprintResult::semanticFailure([$refused]);
       }
     }
@@ -459,6 +471,26 @@ class BlueprintDeserializer implements BlueprintDeserializerInterface {
   }
 
   /**
+   * The answer for a root lookup that names no entity the actor may know of.
+   *
+   * @param string $entity_type
+   *   The entity type ID.
+   * @param array $root
+   *   The document's `_root_entity`: `field` and `value`.
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintError
+   *   The error.
+   */
+  protected function rootNotFound(string $entity_type, array $root): BlueprintError {
+    return new BlueprintError(
+      path: '_root_entity',
+      code: 'ENTITY_NOT_FOUND',
+      message: "No $entity_type entity found with {$root['field']} = {$root['value']}.",
+      hint: 'Verify the entity exists and the identifier is correct.',
+    );
+  }
+
+  /**
    * Loads an existing entity or creates a new one.
    *
    * @param string $entity_type
@@ -470,25 +502,39 @@ class BlueprintDeserializer implements BlueprintDeserializerInterface {
    * @param bool $disposable
    *   TRUE to answer a clone of a loaded entity (a dry run never touches
    *   the request's shared object); a created entity is disposable as is.
+   * @param \Drupal\Core\Session\AccountInterface|null $actor
+   *   The actor the document is judged for, or NULL under the system
+   *   posture. An actor names the root by its id or its uuid alone: no
+   *   other field is looked up for one, since the lookup runs before the
+   *   entity it finds can be judged and its answer would tell whether any
+   *   entity holds the value. A caller acting for the site may name any
+   *   field (an importer addresses its entity by machine name).
    *
    * @return \Drupal\Core\Entity\FieldableEntityInterface|\Drupal\daedalus_blueprint\Result\BlueprintError
    *   The entity, or an error if _root_entity references a nonexistent entity.
    */
-  protected function loadOrCreateEntity(string $entity_type, string $bundle, array $data, bool $disposable = FALSE): FieldableEntityInterface|BlueprintError {
+  protected function loadOrCreateEntity(string $entity_type, string $bundle, array $data, bool $disposable = FALSE, ?AccountInterface $actor = NULL): FieldableEntityInterface|BlueprintError {
     $storage = $this->entityTypeManager->getStorage($entity_type);
 
     if (isset($data['_root_entity'])) {
-      $field = $data['_root_entity']['field'];
-      $value = $data['_root_entity']['value'];
+      $root = is_array($data['_root_entity']) ? $data['_root_entity'] : [];
+      $field = $root['field'] ?? NULL;
+      $value = $root['value'] ?? NULL;
+      $definition = $this->entityTypeManager->getDefinition($entity_type);
+      $identity_keys = array_values(array_filter([$definition->getKey('id'), $definition->getKey('uuid')]));
+      if (!is_string($field) || !is_scalar($value) || ($actor !== NULL && !in_array($field, $identity_keys, TRUE))) {
+        return new BlueprintError(
+          path: '_root_entity',
+          code: 'INVALID_ROOT_ENTITY',
+          message: "An existing $entity_type entity is named by its id or its uuid.",
+          context: ['fields' => $identity_keys],
+          hint: 'Provide _root_entity as {field, value} with field one of the listed keys, as a read answers it.',
+        );
+      }
 
       $entities = $storage->loadByProperties([$field => $value]);
       if (empty($entities)) {
-        return new BlueprintError(
-          path: '_root_entity',
-          code: 'ENTITY_NOT_FOUND',
-          message: "No $entity_type entity found with $field = $value.",
-          hint: 'Verify the entity exists and the identifier is correct.',
-        );
+        return $this->rootNotFound($entity_type, $root);
       }
 
       $entity = reset($entities);

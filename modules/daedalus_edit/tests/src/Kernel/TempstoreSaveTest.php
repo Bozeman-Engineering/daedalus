@@ -5,14 +5,16 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_edit\Kernel;
 
 use Drupal\Core\Entity\Entity\EntityFormDisplay;
-use Drupal\Core\Routing\RedirectDestination;
+use Drupal\Core\Entity\EntityInterface;
 use Drupal\daedalus_edit\Controller\Tempstore;
 use Drupal\daedalus_edit\FormCommit;
 use Drupal\daedalus_edit\FormCommitOutcome;
+use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\node\Entity\Node;
 use Drupal\node\NodeInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
-use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -25,7 +27,11 @@ use Symfony\Component\HttpFoundation\Request;
  * advanced-pane fields the form path exists for. The controller now hands
  * the working copy to EntityStorageHandler::commit() as it is: the alias
  * and the published flag land in the database, the stage is gone, the
- * redirect is the canonical URL under the new alias.
+ * destination is the canonical URL under the new alias.
+ *
+ * The route is a POST carrying the session token and the controller answers
+ * JSON: the destination on a commit, the commit door's messages when it
+ * refuses, the stage and the stored row left as they were.
  *
  * @group daedalus_edit
  */
@@ -36,9 +42,10 @@ class TempstoreSaveTest extends FormCommitTestBase {
    * {@inheritdoc}
    *
    * The path widget needs both modules: path_alias owns the alias entity,
-   * path adds the computed `path` field and its widget to nodes.
+   * path adds the computed `path` field and its widget to nodes. field_ui
+   * builds the manage-layout route a template is edited on.
    */
-  protected static $modules = ['path_alias', 'path'];
+  protected static $modules = ['path_alias', 'path', 'field_ui'];
 
   /**
    * {@inheritdoc}
@@ -137,15 +144,7 @@ class TempstoreSaveTest extends FormCommitTestBase {
     // Save through the controller, with the request the top bar sends: the
     // one host on the route ({entity_type}/{entity}) and the edited page as
     // the destination.
-    $request = Request::create('/daedalus-edit/tempstore/save/node/' . $node->id(), 'GET', ['destination' => $source]);
-    $request_stack = $this->container->get('request_stack');
-    $request_stack->push($request);
-    try {
-      $response = Tempstore::create($this->container)->save($request, 'node', $node);
-    }
-    finally {
-      $request_stack->pop();
-    }
+    $response = $this->save($node, $source);
 
     // The stored row is the working copy: the alias (and its path_alias
     // row) and the published flag landed, no field filtered.
@@ -159,10 +158,10 @@ class TempstoreSaveTest extends FormCommitTestBase {
     $this->assertFalse($tempstore->has($stored), 'The stage died with the save.');
     $this->assertFalse($this->working($node)->isPublished(), 'The working copy is now the stored row.');
 
-    // The redirect is the canonical page, recomputed under the new alias,
-    // with the path-scoped cookie that drops Edit Mode.
-    $this->assertInstanceOf(RedirectResponse::class, $response);
-    $this->assertSame('/new-alias', $response->getTargetUrl(), 'The redirect recomputed the canonical URL under the new alias.');
+    // The answer names the canonical page, recomputed under the new alias,
+    // and carries the path-scoped cookie that drops Edit Mode.
+    $this->assertSame(200, $response->getStatusCode());
+    $this->assertSame(['destination' => '/new-alias'], $this->answer($response), 'The answer is the canonical URL recomputed under the new alias.');
     $cookies = $response->headers->getCookies();
     $this->assertCount(1, $cookies);
     $this->assertSame('navigationMode', $cookies[0]->getName());
@@ -175,8 +174,8 @@ class TempstoreSaveTest extends FormCommitTestBase {
    *
    * The top bar sends the browser's pathname as the destination, which
    * carries the base path when the site is served under one (drupal.org's
-   * runner serves it under /web/). The controller's "is this the canonical
-   * page?" question routes that path; read with the base path still on it,
+   * runner serves it under /web/). The controller resolves that path to a
+   * route and answers the route's URL; read with the base path still on it,
    * every destination looks unrouted and the save redirects to the saved
    * entity's own page, which strands a header's or footer's editor on the
    * blueprint instead of the page they left from (SiteFrameBehaviorTest's
@@ -195,9 +194,9 @@ class TempstoreSaveTest extends FormCommitTestBase {
     // controller must honor it as given.
     $destination = '/web/node/' . $node->id() . '/edit';
     $request = Request::create(
-      'http://localhost/web/daedalus-edit/tempstore/save/node/' . $node->id(),
-      'GET',
-      ['destination' => $destination],
+      'http://localhost/web/daedalus-edit/tempstore/save/node/' . $node->id() . '?destination=' . rawurlencode($destination),
+      'POST',
+      [],
       [],
       [],
       ['SCRIPT_NAME' => '/web/index.php', 'SCRIPT_FILENAME' => '/var/www/web/index.php'],
@@ -205,9 +204,9 @@ class TempstoreSaveTest extends FormCommitTestBase {
     $this->assertSame('/web', $request->getBasePath(), 'The request is served under the /web sub-path.');
     $request_stack = $this->container->get('request_stack');
     $request_stack->push($request);
-    // The destination service memoizes its first read; a real request gets
-    // a fresh instance, so the controller reads this request's query.
-    $this->container->set('redirect.destination', new RedirectDestination($request_stack, $this->container->get('url_generator')));
+    // The answer is a generated URL, and the generator writes the base path
+    // from the routing context, which a real request sets as it is routed.
+    $this->container->get('router.request_context')->fromRequest($request);
     try {
       $response = Tempstore::create($this->container)->save($request, 'node', $node);
     }
@@ -215,8 +214,197 @@ class TempstoreSaveTest extends FormCommitTestBase {
       $request_stack->pop();
     }
 
-    $this->assertInstanceOf(RedirectResponse::class, $response);
-    $this->assertSame($destination, $response->getTargetUrl(), 'The redirect honored the routed destination beneath the base path instead of recomputing the canonical page.');
+    $this->assertSame(['destination' => $destination], $this->answer($response), 'The answer honored the routed destination beneath the base path instead of recomputing the canonical page.');
+  }
+
+  /**
+   * A destination that names no local route answers the saved page.
+   *
+   * The answer is a URL the controller generated: the node's canonical
+   * page, whatever text the request carried.
+   */
+  #[DataProvider('unroutedDestinations')]
+  public function testSavedPageAnswersItsCanonicalUrl(string $destination): void {
+    $node = Node::create([
+      'type' => 'plain',
+      'title' => 'Kept',
+      'langcode' => 'en',
+      'status' => NodeInterface::PUBLISHED,
+    ]);
+    $node->save();
+
+    $response = $this->save($node, $destination);
+
+    $this->assertSame(200, $response->getStatusCode());
+    $this->assertSame(['destination' => '/node/' . $node->id()], $this->answer($response), 'The answer is the saved page\'s canonical URL.');
+    $this->assertStringNotContainsString('evil', $response->getContent());
+    $this->assertStringNotContainsString('alert', $response->getContent());
+  }
+
+  /**
+   * A destination that names no local route answers the saved template.
+   *
+   * A display has no canonical page; the answer is its editing surface,
+   * core's manage-layout route, whatever text the request carried.
+   */
+  #[DataProvider('unroutedDestinations')]
+  public function testSavedTemplateAnswersItsEditingUrl(string $destination): void {
+    $display = LayoutBuilderEntityViewDisplay::load('node.page.default');
+    $editing_url = $this->container->get('daedalus_ui.ui')->getEditingUrl($display)->toString();
+    $this->assertStringContainsString('/display/default/layout', $editing_url, 'The template is edited on the manage-layout route.');
+
+    $response = $this->save($display, $destination);
+
+    $this->assertSame(200, $response->getStatusCode());
+    $this->assertSame(['destination' => $editing_url], $this->answer($response), 'The answer is the saved template\'s editing URL.');
+    $this->assertStringNotContainsString('evil', $response->getContent());
+    $this->assertStringNotContainsString('alert', $response->getContent());
+  }
+
+  /**
+   * Destinations that are not a local path resolving to a route.
+   */
+  public static function unroutedDestinations(): array {
+    return [
+      'a scheme that is not a path' => ['javascript:alert(1)'],
+      'a control character after the slash' => ["/\t/evil.example"],
+      'a backslash after the slash' => ['/\\evil.example'],
+      'two leading slashes' => ['//evil.example'],
+      'an absolute URL' => ['https://evil.example/'],
+      'a local path no route answers' => ['/no/such/page/evil'],
+      'no destination' => [''],
+    ];
+  }
+
+  /**
+   * A routed destination is answered as generated, its query included.
+   *
+   * A template's Save honors the page the editor named, and the answer is
+   * the route's URL as the generator writes it, not the request's text.
+   */
+  public function testSavedTemplateHonorsRoutedDestination(): void {
+    $node = Node::create([
+      'type' => 'plain',
+      'title' => 'Left from',
+      'langcode' => 'en',
+      'status' => NodeInterface::PUBLISHED,
+    ]);
+    $node->save();
+    $display = LayoutBuilderEntityViewDisplay::load('node.page.default');
+
+    $response = $this->save($display, '/node/' . $node->id() . '?page=2&x=a b');
+
+    $this->assertSame(['destination' => '/node/' . $node->id() . '?page=2&x=a%20b'], $this->answer($response), 'The answer is the destination route\'s generated URL.');
+  }
+
+  /**
+   * A page saved elsewhere after staging is refused with the door's message.
+   */
+  public function testSaveAnswersTheRefusalMessages(): void {
+    $node = Node::create([
+      'type' => 'plain',
+      'title' => 'Contended',
+      'field_subtitle' => 'Staged from here',
+      'langcode' => 'en',
+      'status' => NodeInterface::PUBLISHED,
+    ]);
+    $node->save();
+    $source = '/node/' . $node->id();
+
+    // Stage a change: the working copy is taken from the stored revision.
+    $host = $this->workingHost($node);
+    $host->entity()->set('title', 'Staged title');
+    $this->container->get('daedalus_blueprint.storage_handler')->persist($host);
+    $tempstore = $this->container->get('daedalus_tempstore.entity_tempstore_repository');
+    $this->assertTrue($tempstore->has($node), 'The change is staged.');
+
+    // The page is saved elsewhere: the stored entity moves to a new
+    // revision the stage was not taken from.
+    $elsewhere = $this->stored($node);
+    $elsewhere->setTitle('Saved elsewhere');
+    $elsewhere->setNewRevision();
+    $elsewhere->save();
+
+    $response = $this->save($node, $source);
+
+    $this->assertSame(409, $response->getStatusCode(), 'A page saved elsewhere answers a conflict.');
+    $answer = $this->answer($response);
+    $this->assertSame(['reason', 'messages'], array_keys($answer), 'A refusal names its reason and its messages, and no destination.');
+    $this->assertSame('moved', $answer['reason']);
+    $this->assertCount(1, $answer['messages']);
+    $this->assertStringContainsString('was saved elsewhere', $answer['messages'][0]);
+    $this->assertSame([], $response->headers->getCookies(), 'A refusal sets no cookie: the editor stays in Edit Mode.');
+
+    // Nothing was saved and the unsaved changes are still staged.
+    $this->assertSame('Saved elsewhere', $this->stored($node)->getTitle(), 'The stored row is the save made elsewhere.');
+    $this->assertTrue($tempstore->has($node), 'The stage survived the refusal.');
+    $this->assertSame('Staged title', $this->working($node)->getTitle(), 'The working copy still holds the unsaved change.');
+  }
+
+  /**
+   * A working copy that does not validate is refused, one message each.
+   */
+  public function testSaveAnswersValidationMessages(): void {
+    $node = Node::create([
+      'type' => 'plain',
+      'title' => 'Valid',
+      'langcode' => 'en',
+      'status' => NodeInterface::PUBLISHED,
+    ]);
+    $node->save();
+
+    // Stage a title past the field's length, around the spine's own check.
+    $host = $this->workingHost($node);
+    $host->entity()->set('title', str_repeat('x', 300));
+    $this->container->get('daedalus_tempstore.entity_tempstore_repository')->set($host->entity());
+
+    $response = $this->save($node, '/node/' . $node->id());
+
+    $this->assertSame(422, $response->getStatusCode(), 'A working copy that does not validate answers unprocessable.');
+    $answer = $this->answer($response);
+    $this->assertSame('invalid', $answer['reason']);
+    $this->assertNotEmpty($answer['messages']);
+    $this->assertArrayNotHasKey('destination', $answer);
+    $this->assertSame('Valid', $this->stored($node)->getTitle(), 'Nothing was saved.');
+  }
+
+  /**
+   * The route takes a POST with the session token, and only that.
+   */
+  public function testSaveRouteIsTokenedPost(): void {
+    $route = $this->container->get('router.route_provider')->getRouteByName('daedalus_edit.tempstore.save');
+    $this->assertSame(['POST'], $route->getMethods(), 'Save answers POST only.');
+    $this->assertSame('TRUE', $route->getRequirement('_csrf_request_header_token'), 'Save requires the session token in the request header.');
+    $this->assertSame('access inline editing', $route->getRequirement('_permission'));
+    $this->assertSame('entity.update', $route->getRequirement('_entity_access'));
+  }
+
+  /**
+   * Posts Save for a host the way the top bar does.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $host
+   *   The host on the route.
+   * @param string $destination
+   *   The edited page's path, sent as the destination.
+   */
+  private function save(EntityInterface $host, string $destination): JsonResponse {
+    $type = $host->getEntityTypeId();
+    $request = Request::create("/daedalus-edit/tempstore/save/$type/" . $host->id() . '?destination=' . rawurlencode($destination), 'POST');
+    $request_stack = $this->container->get('request_stack');
+    $request_stack->push($request);
+    try {
+      return Tempstore::create($this->container)->save($request, $type, $host);
+    }
+    finally {
+      $request_stack->pop();
+    }
+  }
+
+  /**
+   * The decoded JSON answer.
+   */
+  private function answer(JsonResponse $response): array {
+    return json_decode($response->getContent(), TRUE, 512, JSON_THROW_ON_ERROR);
   }
 
   /**

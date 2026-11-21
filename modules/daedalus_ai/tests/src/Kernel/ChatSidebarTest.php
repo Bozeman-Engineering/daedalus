@@ -8,6 +8,8 @@ use Drupal\ai_assistant_api\AiAssistantApiRunner;
 use Drupal\ai_assistant_api\Entity\AiAssistant;
 use Drupal\daedalus_ai\ModelChoice;
 use Drupal\daedalus_ai\Plugin\Sidebar\ChatSidebar;
+use Drupal\daedalus_ai\ReplyDisplay;
+use Drupal\daedalus_ai\ThreadOwnership;
 use Drupal\daedalus_ai_ledger\CostResolver;
 use Drupal\daedalus_ai_ledger\UsageGate;
 use Drupal\daedalus_ai_ledger\Window;
@@ -45,7 +47,8 @@ use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
  *   FALSE so the server never answers SSE, and no deep-chat `stream` key so
  *   the client never simulates), and pass the current route as context so
  *   the AI knows the page. The panel is #cache max-age 0 (per-session token +
- *   history), and only history newer than one day is replayed into the widget.
+ *   history), and only history newer than one day is replayed into the widget,
+ *   each message through the conversion and filters a live reply passes.
  *   The body's chat-turn contract (chat_processor_plugin and
  *   plugin_configuration, drupal/ai 1.5's shape) is asserted against the LIVE
  *   chat processor manager and plugin, never against a shape this test
@@ -191,6 +194,8 @@ class ChatSidebarTest extends KernelTestBase {
     // provider, the stub here.
     $this->config('ai.settings')
       ->set('default_providers.chat', ['provider_id' => 'daedalus_ai_test_stub', 'model_id' => 'stub'])
+      // The hosts a chat message may link to, for the history replay.
+      ->set('allowed_hosts', ['allowed.example'])
       ->save();
   }
 
@@ -218,6 +223,15 @@ class ChatSidebarTest extends KernelTestBase {
     $runner->method('getMessageHistory')->willReturn([
       ['role' => 'user', 'message' => 'stale', 'timestamp' => $old],
       ['role' => 'assistant', 'message' => '**hi**', 'timestamp' => $recent],
+      // A stored reply carrying raw markup, a script-scheme link, a link
+      // to a host the site does not allow and one it does: replayed, it
+      // must read as the live reply did.
+      [
+        'role' => 'assistant',
+        'message' => "kept <img src=\"x\" onerror=\"window.replayed = 1\"> <script>window.replayed = 2</script>\n\n[run](javascript:window.replayed=3) [away](https://evil.example/phish) [docs](https://allowed.example/docs) [page](/node/9)",
+        'timestamp' => $recent,
+      ],
+      ['role' => 'user', 'message' => 'mine <iframe src="https://evil.example/frame"></iframe>', 'timestamp' => $recent],
     ]);
     // The pair the assistant resolves to (the site default): what the
     // model group marks when the user stored no choice.
@@ -271,6 +285,19 @@ class ChatSidebarTest extends KernelTestBase {
         $this->container->get('language_manager'),
       ),
       $model_choice,
+      $thread_ownership = new ThreadOwnership(
+        $this->container->get('keyvalue.expirable'),
+        $this->container->get('tempstore.private'),
+        $this->container->get('config.factory'),
+        $this->container->get('current_user'),
+      ),
+      // The REAL display filter over the ai module's own converter and
+      // hostname filter: what the replayed history passes is asserted
+      // against the services a live reply passes.
+      new ReplyDisplay(
+        $this->container->get('ai.commonmark_converter'),
+        $this->container->get('ai.hostname_filter_service'),
+      ),
       $this->container->get('daedalus_ai_ledger.usage_gate'),
     );
 
@@ -339,6 +366,14 @@ class ChatSidebarTest extends KernelTestBase {
     $settings = $build['#attached']['drupalSettings']['ai_deepchat'];
     $this->assertSame('chatbot', $settings['assistant_id']);
     $this->assertSame('thread-xyz', $settings['thread_id']);
+    // The thread the panel hands out is this user's from then on, and
+    // nobody else's: the doors that take a thread id from a request ask.
+    $this->assertTrue($thread_ownership->owns('thread-xyz'), 'The handed-out thread is recorded as the user\'s.');
+    $this->assertFalse($thread_ownership->owns('thread-other'), 'A thread nobody handed the user is not theirs.');
+    $handed_to = $this->container->get('current_user')->getAccount();
+    $this->setUpCurrentUser([], [], TRUE);
+    $this->assertFalse($thread_ownership->owns('thread-xyz'), 'Another user does not own the thread.');
+    $this->container->get('current_user')->setAccount($handed_to);
     $this->assertTrue($settings['session_exists'], 'A started session is reported to the client.');
 
     // Attachments: the widget's attach button and drop zone take the lane's
@@ -368,9 +403,26 @@ class ChatSidebarTest extends KernelTestBase {
     // History filter: the >1-day message is dropped; the fresh one survives and
     // its markdown is rendered to HTML.
     $messages = $settings['messages'];
-    $this->assertCount(1, $messages, 'Only history newer than one day is replayed.');
+    $this->assertCount(3, $messages, 'Only history newer than one day is replayed.');
     $this->assertSame('assistant', $messages[0]['role']);
-    $this->assertStringContainsString('hi', $messages[0]['html']);
+    $this->assertStringContainsString('<strong>hi</strong>', $messages[0]['html']);
+
+    // The replay passes what a live reply passes: the ai module's
+    // converter (raw markup in the text is dropped, a script-scheme link
+    // loses its target), the chat endpoint's allowed tag list, and the
+    // hostname filter at the display boundary.
+    $replayed = $messages[1]['html'];
+    $this->assertStringContainsString('kept', $replayed);
+    foreach (['<img', '<script', 'onerror', 'javascript:', 'evil.example'] as $dropped) {
+      $this->assertStringNotContainsString($dropped, $replayed, "The replayed reply carries no '$dropped'.");
+    }
+    $this->assertStringContainsString('away', $replayed, 'A link to a host the site does not allow keeps its text.');
+    $this->assertStringContainsString('https://allowed.example/docs', $replayed, 'A link to an allowed host survives the replay.');
+    $this->assertStringContainsString('/node/9', $replayed, 'An internal link survives the replay.');
+    $this->assertSame('user', $messages[2]['role']);
+    $this->assertStringContainsString('mine', $messages[2]['html']);
+    $this->assertStringNotContainsString('<iframe', $messages[2]['html'], "The user's own stored message is replayed through the same filter.");
+    $this->assertStringNotContainsString('evil.example', $messages[2]['html']);
 
     // The kebab's configured groups are off until configured: with no
     // model curated and no cap set, the module's settings carry the

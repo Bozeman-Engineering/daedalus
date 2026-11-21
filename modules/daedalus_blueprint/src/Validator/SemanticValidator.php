@@ -131,6 +131,33 @@ class SemanticValidator {
   }
 
   /**
+   * The whole entity's violations, as the commit door reports them.
+   *
+   * Every field, not only the ones a write submitted: the door is the last
+   * look before the database, so an old invalid value refuses the save the
+   * way a stock entity form would. One kind is left out, in every posture:
+   * a violation that only judges the current user (see judgesActor()). The
+   * spine judged the actor when each value was written; the committer may
+   * be a different editor, or the site itself, saving a value someone
+   * entitled to it put there.
+   *
+   * @param \Drupal\Core\Entity\FieldableEntityInterface $entity
+   *   The working copy about to be saved.
+   *
+   * @return \Symfony\Component\Validator\ConstraintViolationInterface[]
+   *   The violations that refuse the save.
+   */
+  public function wholeEntityViolations(FieldableEntityInterface $entity): array {
+    $violations = [];
+    foreach ($entity->validate() as $violation) {
+      if (!$this->judgesActor($entity, $violation)) {
+        $violations[] = $violation;
+      }
+    }
+    return $violations;
+  }
+
+  /**
    * Whether a violation only says the current user may not set the value.
    *
    * Core's allowed-values constraint judges an options provider (a text

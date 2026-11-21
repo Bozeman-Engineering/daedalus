@@ -317,11 +317,20 @@ abstract class FormCommitTestBase extends KernelTestBase {
   }
 
   /**
-   * An edit-mode AJAX form submit request with no route yet.
+   * The mode the form requests name on their query, or NULL for none.
+   *
+   * The client's fetch names Edit Mode; a leg that proves a form takes the
+   * spine whatever the request says sets another mode, or none.
+   */
+  protected ?string $requestMode = 'edit';
+
+  /**
+   * An AJAX form submit request with no route yet, naming the request mode.
    */
   protected function editModeRequest(string $path, array $post = []): Request {
     $separator = str_contains($path, '?') ? '&' : '?';
-    return Request::create($path . $separator . 'navigationMode=edit&ajax_form=1&_wrapper_format=drupal_ajax', 'POST', $post);
+    $mode = $this->requestMode === NULL ? '' : 'navigationMode=' . $this->requestMode . '&';
+    return Request::create($path . $separator . $mode . 'ajax_form=1&_wrapper_format=drupal_ajax', 'POST', $post);
   }
 
   /**

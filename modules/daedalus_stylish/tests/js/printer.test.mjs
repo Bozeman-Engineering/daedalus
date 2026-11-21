@@ -457,3 +457,76 @@ test('a fragment\'s anchor continues onto the rule\'s landing; a box rule admits
 }`,
   );
 });
+
+test('the emit gate covers values, condition text and attribute strings alike', () => {
+  const uuid = 'aaaaaaaa-1111-2222-3333-444444444444';
+  const conditions = {
+    ...CONDITIONS,
+    wide: { label: 'Wide', wrapper: '@media (width >= 900px)', axis: 'width' },
+  };
+  assert.equal(
+    printMap(
+      {
+        [BLOCK]: {
+          default: {
+            color: 'red',
+            // url() in the module's two spellings prints.
+            'background-image': `url('media:${uuid}')`,
+            'list-style-image': 'url("/sites/default/files/a.png")',
+            content: '"\\201C"',
+            // Any other url(), wherever it stands, and the other fetching
+            // functions drop their declaration.
+            background: 'url(//example.com/x)',
+            'mask-image': 'var(--m, url(//example.com/x))',
+            width: 'calc(1px + url(//example.com/x))',
+            '--x': 'url("https://example.com/x")',
+            'border-image': 'image-set("//example.com/x" 1x)',
+            // So does text that would not close as it opens.
+            margin: 'calc(1px',
+            padding: '1px)',
+            'font-family': '"Inter',
+            height: 'u\\72l(//example.com/x)',
+            'min-height': '1px /* ) */',
+          },
+          // Condition text passes the same gate: the block prints nothing.
+          '@supports (display: grid){}</style><script>alert(1)</script>': { color: 'blue' },
+          '@supports (display: grid': { color: 'green' },
+          '@supports (background: url(//example.com/x))': { gap: '2px' },
+          wide: { gap: '3px' },
+          '@supports (display: grid) and (gap: 1px)': { gap: '1px' },
+        },
+        // An attribute value's gated marks print as hex escapes; a key that
+        // spells them raw is not the canonical spelling and prints nothing.
+        [`${BLOCK}::&[title="\\3c /style\\3e \\3c script\\3e "]`]: { default: { color: 'teal' } },
+        [`${BLOCK}::&[title="</style><script>"]`]: { default: { color: 'red' } },
+        [`${BLOCK}::a[href$=";}{"]`]: { default: { color: 'red' } },
+      },
+      conditions,
+    ),
+    `@scope ([data-selectable="${BLOCK}"]) {
+  :scope {
+    color: red;
+    background-image: url('media:${uuid}');
+    list-style-image: url("/sites/default/files/a.png");
+    content: "\\201C";
+  }
+  :scope :where([data-claims-content]) {
+    color: red;
+  }
+  @supports (display: grid) and (gap: 1px) {
+    :scope {
+      gap: 1px;
+    }
+  }
+}
+@scope ([data-selectable="${BLOCK}"]) {
+  :scope:where([title="\\3c /style\\3e \\3c script\\3e "]) {
+    color: teal;
+  }
+}`,
+  );
+  // A scope root or limit the gate refuses prints no block.
+  assert.equal(printEntry('.a { } </style>', null, { default: { color: 'red' } }, CONDITIONS), '');
+  assert.equal(printEntry('.a', null, { default: { color: 'red' } }, CONDITIONS, '.b) { } :is(.c'), '');
+  assert.notEqual(printEntry('.a, .b', null, { default: { color: 'red' } }, CONDITIONS, ':scope > *'), '');
+});

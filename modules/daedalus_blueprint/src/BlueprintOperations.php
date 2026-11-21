@@ -21,6 +21,7 @@ use Drupal\Core\TypedData\TranslatableInterface;
 use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
 use Drupal\daedalus_blueprint\Capability\Capability;
 use Drupal\daedalus_blueprint\Capability\CapabilityResolver;
+use Drupal\daedalus_blueprint\Capability\Refusal;
 use Drupal\daedalus_blueprint\Capability\Requirement;
 use Drupal\daedalus_blueprint\Event\ElementCreatedEvent;
 use Drupal\daedalus_blueprint\Event\FieldAppliedEvent;
@@ -2356,6 +2357,69 @@ class BlueprintOperations implements BlueprintOperationsInterface {
   }
 
   /**
+   * Asks the actor for create access to each inline block type an op makes.
+   *
+   * The spine check for every gesture that brings a new inline block into
+   * being: a placement, and a copy of a block or of a container holding
+   * blocks. The entity type's own create access answers (the block type's
+   * create permission, or administering blocks, and whatever a site's
+   * access hooks add). A system batch acts for the site, not for an actor,
+   * and is not asked.
+   *
+   * @param string[] $block_types
+   *   The block type ids the op creates blocks of.
+   * @param string $path
+   *   The error path for a refusal.
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintResult|null
+   *   A structural failure naming the first type refused, NULL otherwise.
+   */
+  protected function checkBlockCreation(array $block_types, string $path): ?BlueprintResult {
+    if ($this->systemDepth > 0) {
+      return NULL;
+    }
+    $actor = $this->actor ?? $this->currentUser;
+    foreach (array_unique($block_types) as $block_type) {
+      if (!$this->accessChecker->createAccess('block_content', $block_type, $actor)) {
+        return BlueprintResult::structuralFailure([
+          Refusal::permission(
+            ["create $block_type block content", 'administer block content'],
+            "Creating a '$block_type' block",
+          )->toError($path),
+        ]);
+      }
+    }
+    return NULL;
+  }
+
+  /**
+   * The types of the inline blocks a component or a section carries.
+   *
+   * @param \Drupal\layout_builder\SectionComponent|\Drupal\layout_builder\Section $element
+   *   A component (a block, or a container with its whole subtree) or a
+   *   section.
+   *
+   * @return string[]
+   *   The block type ids, one per inline block, in document order.
+   */
+  protected function inlineBlockTypesIn(SectionComponent|Section $element): array {
+    if ($element instanceof SectionComponent) {
+      $embedded = $this->daedalusLayoutAdapter->embeddedSection($element);
+      if ($embedded === NULL) {
+        return $this->daedalusLayoutAdapter->isInlineBlock($element)
+          ? [$this->daedalusLayoutAdapter->getInlineBlockType($element)]
+          : [];
+      }
+      $element = $embedded;
+    }
+    $types = [];
+    foreach ($element->getComponents() as $component) {
+      array_push($types, ...$this->inlineBlockTypesIn($component));
+    }
+    return $types;
+  }
+
+  /**
    * The fit gate of a linked placement: the blueprint must fit the host.
    *
    * A linked node (daedalus_blueprint_linked:{machine_name}) renders the
@@ -2551,6 +2615,11 @@ class BlueprintOperations implements BlueprintOperationsInterface {
 
     /** @var \Drupal\layout_builder\SectionComponent $component */
     $component = $context->target;
+    // A copy of an inline block is a new block (a container's copy, one
+    // per inline block inside it): the same create access a placement asks.
+    if ($failure = $this->checkBlockCreation($this->inlineBlockTypesIn($component), 'element')) {
+      return $failure;
+    }
     $uuid_map = [];
     $clone = $this->cloneComponent($component, $new_uuid, $uuid_map);
     $context->section->insertAfterComponent($uuid, $clone);
@@ -2607,6 +2676,9 @@ class BlueprintOperations implements BlueprintOperationsInterface {
           hint: 'A slot fills once: duplicate the elements inside the slot section instead.',
         ),
       ]);
+    }
+    if ($failure = $this->checkBlockCreation($this->inlineBlockTypesIn($section), 'element')) {
+      return $failure;
     }
     $clone = $this->cloneSection($section, $uuid_map, $new_uuid);
 
@@ -3616,6 +3688,11 @@ class BlueprintOperations implements BlueprintOperationsInterface {
     $region = $location['region'] ?? 'content';
     $op_storage = $section_info['storage'] ?? $host->sectionStorage();
     if ($failure = $this->checkBlockPlacement('inline_block:' . $block_type, $op_storage, $section, $region, 'data.block_type')) {
+      return $failure;
+    }
+    // Placing an inline block creates a block: the actor is asked for the
+    // block type's create access beside the insert the gate judged.
+    if ($failure = $this->checkBlockCreation([$block_type], 'data.block_type')) {
       return $failure;
     }
     $view_mode = $data['view_mode'] ?? 'full';

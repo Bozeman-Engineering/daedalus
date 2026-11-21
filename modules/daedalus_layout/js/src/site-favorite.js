@@ -106,3 +106,24 @@ export const setSiteFavorite = (face, favorite) => {
     new Error(Drupal.t('This block has no face to mark for everyone.')),
   );
 };
+
+/**
+ * The sentence that reports a face's new site default.
+ *
+ * @param {object} face
+ *   The face whose default was written.
+ * @param {boolean} favorite
+ *   The new site default.
+ *
+ * @return {string}
+ *   Plain text for the message display, which escapes once: the label is
+ *   the pass-through `!label`, shown character for character.
+ */
+export const favoriteNotice = (face, favorite) =>
+  favorite
+    ? Drupal.t('"!label" is now a favorite for everyone.', {
+        '!label': face.label,
+      })
+    : Drupal.t('"!label" is no longer a favorite for everyone.', {
+        '!label': face.label,
+      });

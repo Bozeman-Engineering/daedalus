@@ -13,6 +13,7 @@ delete variants in use:
 administer variants:
   title: 'Administer style variants'
   description: 'Edit, delete, and manage all style variants, including unpublished ones.'
+  restrict access: true
 create skin materials:
   title: 'Create skin materials'
   description: 'Mint new tokens, animations and fonts on the active skin: a token extends one of its scales, an animation its motion, a font (from uploaded files) its type. On a consuming site the material lands in the skin''s site layer over what the package ships. On strict style-guide sites this extends the curated vocabulary, so it is part of style-guide enforcement, not convenience.'
@@ -28,6 +29,7 @@ delete skin materials in use:
 edit skin defaults:
   title: 'Edit skin defaults'
   description: 'Set the active skin''s site element defaults through the update_default operation (how every h2, container or menu block looks before any element is styled). On a consuming site the change is the site''s layer over what the package ships; unsetting it reveals the shipped value again.'
+  restrict access: true
 administer skins:
   title: 'Administer skins'
   description: 'Create, edit, delete, and activate skins — the site''s tokens, animations, fonts and defaults as data. Editing the active skin restyles the whole site. Grants every skin material gesture and the defaults gesture too.'

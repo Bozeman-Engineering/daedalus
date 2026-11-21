@@ -14,7 +14,10 @@ the route: a page, or a template (a Layout Builder enabled entity view
 display on core's manage-display layout route). The routes address one
 host as `{entity_type}/{entity}`: the entity form at
 `/daedalus-edit/entity-form/{entity_type}/{entity}`, Save at
-`/daedalus-edit/tempstore/save/{entity_type}/{entity}` and Discard at
+`/daedalus-edit/tempstore/save/{entity_type}/{entity}` (a POST with the
+session token in the `X-CSRF-Token` header, answering JSON: the
+`destination` on success, the commit door's `messages` when it refuses)
+and Discard at
 `/daedalus-edit/tempstore/delete-confirm/{entity_type}/{entity}`, each
 requiring the entity's update access beside the permission; the block
 form endpoint (`/daedalus-edit/block-form/...`) asks update access on the

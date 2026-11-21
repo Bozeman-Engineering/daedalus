@@ -15,6 +15,10 @@
  *   tokens as var() references plus any allowed entries beside it
  *   (StyleMapValidator::validateScaleValue()); needs the tokens context —
  *   without it the check defers to the server.
+ * - A value the shape checks accept must be one the stylesheet printer
+ *   prints (emit-gate.js's admits(), the printer's own question;
+ *   StyleMapValidator::unprintableValue() is the server half). The editor
+ *   is a write door, so the client always asks.
  * - var()/calc() values and CSS-wide keywords pass structurally and skip
  *   range checks (pass-through), but a var() reference that resolves
  *   to a declared scale's namespace is checked against the minted tokens:
@@ -43,6 +47,7 @@ import { animationReference, tokenReference } from '../style-guide.js';
 import { animationOptions, scaleTokens } from '../materials.js';
 import { keyframesNamesInValue } from '../keyframes-names.js';
 import { hasControlChar } from '../control-chars.js';
+import { admits } from '../../../../daedalus_ui/js/edit_mode/materials/emit-gate.js';
 import {
   resolveValue,
   KIND,
@@ -430,6 +435,75 @@ const validateText = (property, value) => {
   return [];
 };
 
+// A closed string, as the emit gate reads one: an escape continues it, a
+// line break does not.
+const CLOSED_STRING = /"(?:[^"\\\n\r]|\\.)*"|'(?:[^'\\\n\r]|\\.)*'/g;
+
+/**
+ * Names the part of a value the emit gate refuses, for the hint.
+ *
+ * A reading of a value the gate has already refused, most specific first;
+ * the last sentence stands for whatever the earlier ones did not
+ * recognize. Mirrors StyleMapValidator::unprintablePart(), sentence for
+ * sentence.
+ *
+ * @param {string} value
+ *   The (trimmed) value the gate refused.
+ *
+ * @return {string}
+ *   The sentence naming what does not print.
+ */
+const unprintablePart = (value) => {
+  const call = [...value.matchAll(/(^|[^A-Za-z0-9_-])(url\([^)]*\)?)/gi)]
+    .map((match) => match[2])
+    .find((candidate) => !admits(candidate));
+  if (call !== undefined) {
+    return `${call} names a file by its address, and the stylesheet prints only a media reference, url('media:<uuid>'), a file from the media library. A file on another host and a reference into the document (url(#id)) do not print.`;
+  }
+  // What stands outside every closed string.
+  const bare = value.replace(CLOSED_STRING, '""');
+  const loader = bare.match(
+    /(?:^|[^A-Za-z0-9_-])((?:-webkit-image-set|image-set|image|src)\()/i,
+  );
+  if (loader) {
+    return `${loader[1]}) fetches the file its argument names, and the stylesheet prints only a media reference, url('media:<uuid>'), a file from the media library.`;
+  }
+  if (bare.includes('/*')) {
+    return 'A comment (/* */) does not print inside a value; remove it.';
+  }
+  if (bare.includes('\\')) {
+    return 'A backslash escape outside a quoted string does not print; write the name in quotes ("Name With Spaces") instead of escaping it.';
+  }
+  return 'A quote, a parenthesis or a bracket is left open, or closed without its partner; close each one where it opens.';
+};
+
+/**
+ * The violation for a value the stylesheet printer would not print.
+ *
+ * The printer drops a declaration whose value the emit gate refuses, with
+ * no message, so the value is refused where it is written. The verdict is
+ * the gate's alone (emit-gate.js); unprintablePart() only words the hint.
+ * Mirrors StyleMapValidator::unprintableValue() at a write door.
+ *
+ * @param {string} property
+ *   The CSS property name (for the message).
+ * @param {string} value
+ *   The (trimmed) value.
+ *
+ * @return {Array<{code: string, message: string, hint: string}>}
+ *   The one violation, or none when the value prints.
+ */
+const unprintableValue = (property, value) =>
+  admits(value)
+    ? []
+    : [
+        {
+          code: 'INVALID_STYLE_VALUE',
+          message: `"${value}" is not a value the stylesheet can print for ${property}.`,
+          hint: `${unprintablePart(value)} A value that would not print is refused here instead of being dropped from the stylesheet.`,
+        },
+      ];
+
 /**
  * Checks a value's var() references against the palette vocabulary.
  *
@@ -618,11 +692,16 @@ export const validateValue = (
     ];
   }
   // The reference checks run after the shape checks whatever they found
-  // (StyleMapValidator::validateProperty's order: the group's validation,
-  // then token references, then animation references), so a value that
-  // is both malformed and unresolved reports both.
+  // (StyleMapValidator::validateValue's order: the group's validation,
+  // whether an accepted value prints, then token references, then
+  // animation references), so a value that is both malformed and
+  // unresolved reports both.
+  const shape = validateShape(property, value, definition, constraints, tokens);
   return [
-    ...validateShape(property, value, definition, constraints, tokens),
+    ...shape,
+    ...(shape.every((violation) => violation.code === 'STYLE_TOKEN_NOT_MINTED')
+      ? unprintableValue(property, value)
+      : []),
     ...checkAnimationReferences(property, value, tokens),
   ];
 };

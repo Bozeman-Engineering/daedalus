@@ -10,6 +10,7 @@ use Drupal\daedalus_ai\Ajax\TriggerDeferredCommand;
 use Drupal\daedalus_ai\EventSubscriber\DeepChatResponseListener;
 use Drupal\daedalus_ai\MutatedTurn;
 use Drupal\daedalus_ai\PendingMedia\PendingTargetCollector;
+use Drupal\daedalus_ai\ReplyDisplay;
 use Drupal\daedalus_ai\UiCommandQueue;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\user\Traits\UserCreationTrait;
@@ -120,7 +121,10 @@ class DeepChatResponseListenerTest extends KernelTestBase {
       $pending,
       $this->container->get('tempstore.private'),
       $this->container->get('datetime.time'),
-      $this->container->get('ai.hostname_filter_service'),
+      new ReplyDisplay(
+        $this->container->get('ai.commonmark_converter'),
+        $this->container->get('ai.hostname_filter_service'),
+      ),
     );
   }
 

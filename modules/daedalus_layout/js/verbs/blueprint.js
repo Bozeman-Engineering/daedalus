@@ -295,7 +295,8 @@ const submitGesture = async (operation, label) => {
  * sidebar), keyed to the element so the sidebar entry can scroll back.
  *
  * @param {string} text
- *   The message.
+ *   The message, as plain text: a Drupal.t placeholder in it is the
+ *   pass-through `!name` (the display escapes, once).
  * @param {string} type
  *   The message type (status, warning or error).
  * @param {?string} key
@@ -495,12 +496,12 @@ const commitSave = (button) => {
       // dialog took.
       report(
         isRootKey(key)
-          ? Drupal.t('Saved the page as the blueprint "@label".', {
-              '@label': label,
+          ? Drupal.t('Saved the page as the blueprint "!label".', {
+              '!label': label,
             })
           : Drupal.t(
-              'Saved as the blueprint "@label". It is now available in the Add panel.',
-              { '@label': result.blueprint?.label ?? label },
+              'Saved as the blueprint "!label". It is now available in the Add panel.',
+              { '!label': result.blueprint?.label ?? label },
             ),
         'status',
         key,
@@ -544,8 +545,8 @@ const commitUpdate = (button) => {
       pendingGesture = null;
       closeDialog();
       report(
-        Drupal.t('Updated the blueprint "@label".', {
-          '@label': result.blueprint?.label ?? target.label,
+        Drupal.t('Updated the blueprint "!label".', {
+          '!label': result.blueprint?.label ?? target.label,
         }),
         'status',
         key,

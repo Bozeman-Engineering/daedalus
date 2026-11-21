@@ -43,19 +43,6 @@ const blueprintRecord = (id) => Drupal.Daedalus.Materials.get('blueprint', id);
 
 // ——— The gesture HTTP client (the variants-api pattern). ———
 
-let tokenPromise = null;
-
-/**
- * The session's CSRF token, fetched once (the blueprint gestures' routes
- * and the block type favorite's route all take it in the header).
- */
-export const csrfToken = () => {
-  tokenPromise =
-    tokenPromise ??
-    fetch(Drupal.url('session/token')).then((response) => response.text());
-  return tokenPromise;
-};
-
 /**
  * The canvas coordinates a gesture names: the page's root entity, as the
  * dialog routes carry it, or nothing off an editable page.
@@ -109,15 +96,7 @@ export const refusalError = (body, status) => {
  *   The decoded response body.
  */
 export const postJson = async (url, payload = {}) => {
-  const token = await csrfToken();
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRF-Token': token,
-    },
-    body: JSON.stringify(payload),
-  });
+  const response = await Drupal.Daedalus.post(url, payload);
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw refusalError(body, response.status);
@@ -159,7 +138,8 @@ export const failureMessage = (error) =>
  * notifications sidebar).
  *
  * @param {string} text
- *   The sentence to show.
+ *   The sentence to show, as plain text: a Drupal.t placeholder in it is
+ *   the pass-through `!name` (the display escapes, once).
  * @param {string} type
  *   The message type, `status` or `error`.
  */
@@ -297,8 +277,8 @@ const commitDetails = (button) => {
       closeDialog();
       Drupal.Daedalus.Blueprint.applyResponse(body);
       report(
-        Drupal.t('Updated the blueprint "@label".', {
-          '@label': body.blueprint.label,
+        Drupal.t('Updated the blueprint "!label".', {
+          '!label': body.blueprint.label,
         }),
         'status',
       );
@@ -351,8 +331,8 @@ const deleteBlueprint = (id) => {
     .then((body) => {
       Drupal.Daedalus.Blueprint.applyResponse(body);
       report(
-        Drupal.t('Deleted the blueprint "@label".', {
-          '@label': body.deleted.label,
+        Drupal.t('Deleted the blueprint "!label".', {
+          '!label': body.deleted.label,
         }),
         'status',
       );

@@ -11,6 +11,7 @@ use Drupal\Core\Extension\ThemeHandlerInterface;
 use Drupal\daedalus_blueprint\DesignSystem\DesignSystemInterface;
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\EmitGate;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint\Materials\MaterialsRoster;
@@ -121,7 +122,7 @@ use Drupal\daedalus_stylish\Vocabulary\WideSelectors;
  * roster it would otherwise read is built FROM its verdict. A global material
  * validates in the roster, the active system's universe.
  *
- * Two posture lanes stand beside the site's enforcement mode, each a flag
+ * Three posture lanes stand beside the site's enforcement mode, each a flag
  * set for the duration of one door and read through propertiesClosed()
  * and constraintsAreLaw(), so no check consults the guide's mode
  * directly:
@@ -139,6 +140,17 @@ use Drupal\daedalus_stylish\Vocabulary\WideSelectors;
  *   verdict (VariantConformance) withholds it, the same verdict that
  *   offers it again the day the law changes. Site authors never enter
  *   it: VariantManager::validateStyles() keeps the full law.
+ * - The VERDICT lane (withVerdictLane()): variant conformance judging
+ *   the variants already stored, under the whole law of the day.
+ *
+ * One value law is a write door's alone: a value the stylesheet printer
+ * would not print (EmitGate::admits(), the printer's own question) is
+ * refused where it is written (unprintableValue()), so the author is told
+ * instead of the declaration being dropped at print. The landing and
+ * verdict lanes judge values at rest and do not ask it
+ * (printabilityIsLaw()): a stored value the printer drops prints
+ * nothing, and neither blocks a Save nor withholds the variant around
+ * it.
  *
  * Degradation is explicit, never silent bypass:
  * - block:{uuid} keys resolve to their per-block-type address when the
@@ -343,6 +355,15 @@ class StyleMapValidator {
    * the save gate would accept it today.
    */
   protected bool $landingLane = FALSE;
+
+  /**
+   * Whether the verdict lane is validating.
+   *
+   * Set for the duration of withVerdictLane(): variant conformance judges
+   * stored variants under the site's whole law, and a value at rest is
+   * not asked whether it prints (printabilityIsLaw()).
+   */
+  protected bool $verdictLane = FALSE;
 
   /**
    * Constructs the style map validator.
@@ -812,7 +833,13 @@ class StyleMapValidator {
   }
 
   /**
-   * Judges a literal clause: strict refuses it, else the browser must know it.
+   * Judges a literal clause: printable, then strict refuses it, else known.
+   *
+   * A literal is the writer's own text bound for the style element, so it
+   * meets the emit gate first (EmitGate::admits(), the printer's own
+   * question): the printer drops a block whose condition the gate
+   * refuses, and the writer hears so here, in every mode, instead of
+   * finding nothing printed.
    *
    * @param string $at
    *   The error path.
@@ -828,6 +855,9 @@ class StyleMapValidator {
    */
   protected function judgeLiteralClause(string $at, array $clause, array $table, bool $closed): ?BlueprintError {
     $text = $clause['text'];
+    if (!EmitGate::admits((string) $clause['css'])) {
+      return new BlueprintError($at, 'INVALID_STYLE_CONDITION', sprintf('"%s" is not text a condition can print.', $text), ['literal' => $text], 'A condition is a feature query, a supports test or a pseudo-class and nothing after it: no ";", "{", "}", "<", ">", backslash or comment, every parenthesis, bracket and string closed, and no url() or other function that loads a file. A width comparison is spelled with min- and max- features ("@media (min-width: 900px)").');
+    }
     if ($closed) {
       $references = $this->referencesOnAxis($table, $clause['axis']);
       $valid = $references !== [] ? $references : array_keys($table);
@@ -1130,7 +1160,7 @@ class StyleMapValidator {
     $shape = $declaration['shape'];
     $keywords = $declaration['keywords'] ?? [];
     if (is_scalar($value)) {
-      $errors = $this->propertyGroups->validateShape($at, (string) $value, $shape, $keywords);
+      $errors = $this->validateTokenShape($at, (string) $value, $shape, $keywords);
       array_push($errors, ...$this->checkTokenValueReferences($at, (string) $value, $scales, $minted));
       return $errors;
     }
@@ -1168,8 +1198,26 @@ class StyleMapValidator {
         $errors[] = new BlueprintError($condition_at, 'INVALID_TOKEN_VALUE', sprintf('The "%s" value of %s is not a CSS value.', $condition, $at), [], 'Each condition maps to a plain string value; conditions do not nest.');
         continue;
       }
-      array_push($errors, ...$this->propertyGroups->validateShape($condition_at, (string) $conditioned, $shape, $keywords));
+      array_push($errors, ...$this->validateTokenShape($condition_at, (string) $conditioned, $shape, $keywords));
       array_push($errors, ...$this->checkTokenValueReferences($condition_at, (string) $conditioned, $scales, $minted));
+    }
+    return $errors;
+  }
+
+  /**
+   * Validates one token value string: its shape, then whether it prints.
+   *
+   * The shape is the property machinery's (validateShape()); a value that
+   * fits it is then asked the write doors' own question
+   * (unprintableValue()), exactly as a property value is (validateValue()).
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintError[]
+   *   Errors at the given path.
+   */
+  protected function validateTokenShape(string $at, string $value, string $shape, array $keywords): array {
+    $errors = $this->propertyGroups->validateShape($at, $value, $shape, $keywords);
+    if ($errors === [] && ($unprintable = $this->unprintableValue($at, $at, $value)) !== NULL) {
+      $errors[] = $unprintable;
     }
     return $errors;
   }
@@ -1731,7 +1779,10 @@ class StyleMapValidator {
    * nestedReferent(), so a module's shipped variant lands when it is
    * structurally sound and the roster's verdict withholds it while the
    * site's law refuses its values. Site authors never come through here:
-   * VariantManager::validateStyles() keeps the full law. Save/restore
+   * VariantManager::validateStyles() keeps the full law. The style
+   * fields' constraint (StoredStylesConstraintValidator) is the lane's
+   * other caller: a value at rest is held to structure, whatever door
+   * wrote it and whatever the law has become since. Save/restore
    * like validateDeclaredDefaults(), so a nested or failing validation
    * never leaks the posture into the next caller's.
    *
@@ -1750,6 +1801,44 @@ class StyleMapValidator {
     finally {
       $this->landingLane = $saved;
     }
+  }
+
+  /**
+   * Runs a validation of stored values under the site's whole law.
+   *
+   * The posture of variant conformance (VariantConformance::judge()): the
+   * law of the day in full, as a save would meet it, except the one law
+   * that belongs to a write door (printabilityIsLaw()). A stored variant
+   * carrying a value the printer drops keeps its verdict, so the rest of
+   * it stays offered and the pages wearing it stay writable. Save/restore
+   * like withLandingLane().
+   *
+   * @param \Closure $validation
+   *   The validation to run with the lane set.
+   *
+   * @return mixed
+   *   Whatever the callable returns.
+   */
+  public function withVerdictLane(\Closure $validation): mixed {
+    $saved = $this->verdictLane;
+    $this->verdictLane = TRUE;
+    try {
+      return $validation();
+    }
+    finally {
+      $this->verdictLane = $saved;
+    }
+  }
+
+  /**
+   * Whether a value the printer would not print is an error.
+   *
+   * At every write door, in every enforcement mode; never on the two
+   * lanes that judge values at rest (the landing lane, which the style
+   * fields' constraint runs at every Save, and the verdict lane).
+   */
+  protected function printabilityIsLaw(): bool {
+    return !$this->landingLane && !$this->verdictLane;
   }
 
   /**
@@ -2371,7 +2460,11 @@ class StyleMapValidator {
    * and is published but is not on the roster is refused by NAME of the
    * reason it left, an inactive design system (inactiveMember()) or the
    * style guide's verdict on its values (withheldMember()), before the
-   * plain not-found case. At a rule key two more refusals stand before
+   * plain not-found case. On the landing lane (a stored map judged at
+   * rest) the referent resolves as a nested reference does
+   * (nestedReferent()): an existing published variant is admitted whatever
+   * the roster says of it today, and only a dangling reference is
+   * refused. At a rule key two more refusals stand before
    * scope: a composition variant (any slot path among its style keys:
    * STYLE_VARIANT_COMPOSITION_AT_RULE, a rule has no one subtree to bind)
    * and a landing that is no element scope (captureScope() NULL:
@@ -2391,7 +2484,7 @@ class StyleMapValidator {
    *   Errors at that path.
    */
   protected function validateVariantReference(string $key, string $at, string $reference, array $context): array {
-    $variant = $this->loadVariant($reference);
+    $variant = $this->nestedReferent($reference);
     if ($variant === NULL) {
       $available = $this->availableVariants($key, $context);
       if ($inactive = $this->inactiveMember($reference)) {
@@ -3175,6 +3268,8 @@ class StyleMapValidator {
    *   allowed entries declared beside it (validateScaleValue()); the group
    *   validation is skipped exactly as an allowed match skips it — the
    *   closed list IS the value space.
+   * - A value the group accepts must be one the stylesheet printer prints
+   *   (unprintableValue()): at a write door only, never at rest.
    * - On strict sites, every var() reference that resolves to a declared
    *   scale's namespace must name a MINTED token on the active skin
    *   (checkTokenReferences()); permissive sites pass it through — an
@@ -3208,9 +3303,74 @@ class StyleMapValidator {
       static fn (BlueprintError $error) => $error->withPath($path),
       $group->validate($property, $value, $constraints),
     );
+    // A value the group accepts is asked whether it prints; one the group
+    // refused already has its error.
+    if ($errors === [] && ($unprintable = $this->unprintableValue($path, $property, $value)) !== NULL) {
+      $errors[] = $unprintable;
+    }
     array_push($errors, ...$this->checkTokenReferences($path, $value, $theme, $closed));
     array_push($errors, ...$this->checkAnimationReferences($path, $property, $value, $closed));
     return $errors;
+  }
+
+  /**
+   * The error for a written value the stylesheet printer would not print.
+   *
+   * The printer drops a declaration whose value the emit gate refuses
+   * (CssPrinter::admittedDeclarations()), with no message. The validator
+   * asks the gate the same question where the value is written, so the
+   * author is told there. The verdict is the gate's alone
+   * (EmitGate::admits()); unprintablePart() only words the hint. Not
+   * asked of a value at rest (printabilityIsLaw()).
+   *
+   * @param string $path
+   *   The error path of the value.
+   * @param string $subject
+   *   What the value is for, as the message names it: the property, or
+   *   the token's path.
+   * @param string $value
+   *   The value.
+   *
+   * @return \Drupal\daedalus_blueprint\Result\BlueprintError|null
+   *   The INVALID_STYLE_VALUE error at $path, or NULL when the value
+   *   prints or printability is not law on the running lane.
+   */
+  protected function unprintableValue(string $path, string $subject, string $value): ?BlueprintError {
+    $value = trim($value);
+    if (!$this->printabilityIsLaw() || EmitGate::admits($value)) {
+      return NULL;
+    }
+    return new BlueprintError($path, 'INVALID_STYLE_VALUE', sprintf('"%s" is not a value the stylesheet can print for %s.', $value, $subject), [], static::unprintablePart($value) . ' A value that would not print is refused here instead of being dropped from the stylesheet.');
+  }
+
+  /**
+   * Names the part of a value the emit gate refuses, for the hint.
+   *
+   * A reading of a value the gate has already refused, most specific
+   * first; the last sentence stands for whatever the earlier ones did not
+   * recognize, so a gate that learns a new refusal still gets a true
+   * hint. Mirrored by validate-value.js's unprintablePart(), sentence for
+   * sentence.
+   */
+  protected static function unprintablePart(string $value): string {
+    preg_match_all('/(?<![A-Za-z0-9_-])url\([^)]*\)?/i', $value, $calls);
+    foreach ($calls[0] as $call) {
+      if (!EmitGate::admits($call)) {
+        return sprintf('%s names a file by its address, and the stylesheet prints only a media reference, url(\'media:<uuid>\'), a file from the media library. A file on another host and a reference into the document (url(#id)) do not print.', $call);
+      }
+    }
+    // What stands outside every closed string.
+    $bare = preg_replace('/"(?:[^"\\\\\n\r]|\\\\.)*"|\'(?:[^\'\\\\\n\r]|\\\\.)*\'/', '""', $value);
+    if (preg_match('/(?<![A-Za-z0-9_-])(?:-webkit-image-set|image-set|image|src)\(/i', $bare, $loader)) {
+      return sprintf('%s) fetches the file its argument names, and the stylesheet prints only a media reference, url(\'media:<uuid>\'), a file from the media library.', $loader[0]);
+    }
+    if (str_contains($bare, '/*')) {
+      return 'A comment (/* */) does not print inside a value; remove it.';
+    }
+    if (str_contains($bare, '\\')) {
+      return 'A backslash escape outside a quoted string does not print; write the name in quotes ("Name With Spaces") instead of escaping it.';
+    }
+    return 'A quote, a parenthesis or a bracket is left open, or closed without its partner; close each one where it opens.';
   }
 
   /**

@@ -183,6 +183,19 @@ final class FileLaneTest extends KernelTestBase {
     $this->assertSame([], File::loadMultiple());
     $this->assertSame($spooled, glob($this->container->get('file_system')->realpath('temporary://') . '/file*'));
 
+    // A web page is no kind the lane keeps, under either extension.
+    foreach (['page.html', 'page.htm'] as $name) {
+      try {
+        $this->lane->fromBytes($name, 'text/html', '<p>Hello</p>', self::DIRECTORY);
+        $this->fail("$name must be refused.");
+      }
+      catch (FileLaneException $e) {
+        $this->assertStringContainsString('extension', $e->getMessage());
+      }
+    }
+    $this->assertNotContains('html', $this->lane->acceptedExtensions());
+    $this->assertSame([], File::loadMultiple());
+
     // The "any extension" media type does not open the lane: a docx is
     // neither a source extension nor a textual kind.
     $this->expectException(FileLaneException::class);

@@ -800,7 +800,7 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
     $held = $file_storage->loadByProperties(['filename' => 'hero.svg']);
     $this->assertCount(1, $held, 'The attach route saved exactly one hero.svg.');
     $held = reset($held);
-    $this->assertStringStartsWith('public://daedalus-ai/attachments/', (string) $held->getFileUri());
+    $this->assertMatchesRegularExpression('@^public://daedalus-ai/attachments/[A-Za-z0-9_-]{43}/hero\.svg$@', (string) $held->getFileUri(), "The file sits in the conversation's randomly named directory.");
     $this->assertStringNotContainsString('<script', (string) file_get_contents($held->getFileUri()), 'The lane sanitized the SVG on the way in.');
     $this->assertSame(['daedalus_ai' => ['thread' => [$body['thread_id'] => '1']]], $this->container->get('file.usage')->listUsage($held), 'The thread holds the file.');
 
@@ -952,19 +952,14 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
         // not the target of a body edit.
         var field = block.querySelector('[data-daedalus-edit-field-value-wrapper*="::body::"]');
         (field || block).setAttribute('data-test-pre-swap', 'turn');
-        fetch(Drupal.url('daedalus-ai-test/simulate-chat-turn/node/$nid'), {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            targets: [{uuid: '$uuid', field_name: 'body'}],
-            // What the chat's edit-mode chrome registers as request context
-            // providers on every live turn (daedalus-ai-chat-chips.js).
-            contexts: {
-              view_mode: 'full',
-              ajax_page_state: drupalSettings.ajaxPageState,
-            },
-          }),
+        Drupal.Daedalus.post(Drupal.url('daedalus-ai-test/simulate-chat-turn/node/$nid'), {
+          targets: [{uuid: '$uuid', field_name: 'body'}],
+          // What the chat's edit-mode chrome registers as request context
+          // providers on every live turn (daedalus-ai-chat-chips.js).
+          contexts: {
+            view_mode: 'full',
+            ajax_page_state: drupalSettings.ajaxPageState,
+          },
         })
           .then(function (response) {
             if (!response.ok) { throw new Error('simulated turn failed: ' + response.status); }
@@ -1035,26 +1030,16 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
         // Same body-wrapper targeting as the simulated-turn leg above.
         var field = block.querySelector('[data-daedalus-edit-field-value-wrapper*="::body::"]');
         (field || block).setAttribute('data-test-pre-swap', 'deferred');
-        fetch(Drupal.url('daedalus-ai-test/stash-deferred-batch'), {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            batch_id: '$batch_id',
-            type: 'daedalus_ai_test',
-            jobs: [{media_uuid: 'ab2c58f0-6b6f-4c7a-9d3e-2f4a5b6c7d8e', target: {uuid: '$uuid', field_name: 'body'}}],
-          }),
+        Drupal.Daedalus.post(Drupal.url('daedalus-ai-test/stash-deferred-batch'), {
+          batch_id: '$batch_id',
+          type: 'daedalus_ai_test',
+          jobs: [{media_uuid: 'ab2c58f0-6b6f-4c7a-9d3e-2f4a5b6c7d8e', target: {uuid: '$uuid', field_name: 'body'}}],
         })
           .then(function (response) {
             if (!response.ok) { throw new Error('stash failed: ' + response.status); }
-            return fetch(Drupal.url('daedalus-ai/deferred/node/$nid/full'), {
-              method: 'POST',
-              credentials: 'same-origin',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({
-                batch_id: '$batch_id',
-                ajax_page_state: drupalSettings.ajaxPageState,
-              }),
+            return Drupal.Daedalus.post(Drupal.url('daedalus-ai/deferred/node/$nid/full'), {
+              batch_id: '$batch_id',
+              ajax_page_state: drupalSettings.ajaxPageState,
             });
           })
           .then(function (response) {
@@ -1198,26 +1183,16 @@ class DaedalusAiBehaviorTest extends WebDriverTestBase {
     $session->executeScript(<<<JS
       (function () {
         window.__daedalusAiFillProbe = {done: false};
-        fetch(Drupal.url('daedalus-ai-test/stash-deferred-batch'), {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            batch_id: '$style_batch_id',
-            type: 'daedalus_ai_test',
-            jobs: [{media_uuid: '$media_uuid', target: {uuid: '$node_uuid', field_name: 'daedalus_stylish_styles', pending_key: 'block:$uuid'}}],
-          }),
+        Drupal.Daedalus.post(Drupal.url('daedalus-ai-test/stash-deferred-batch'), {
+          batch_id: '$style_batch_id',
+          type: 'daedalus_ai_test',
+          jobs: [{media_uuid: '$media_uuid', target: {uuid: '$node_uuid', field_name: 'daedalus_stylish_styles', pending_key: 'block:$uuid'}}],
         })
           .then(function (response) {
             if (!response.ok) { throw new Error('stash failed: ' + response.status); }
-            return fetch(Drupal.url('daedalus-ai/deferred/node/$nid/full'), {
-              method: 'POST',
-              credentials: 'same-origin',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({
-                batch_id: '$style_batch_id',
-                ajax_page_state: drupalSettings.ajaxPageState,
-              }),
+            return Drupal.Daedalus.post(Drupal.url('daedalus-ai/deferred/node/$nid/full'), {
+              batch_id: '$style_batch_id',
+              ajax_page_state: drupalSettings.ajaxPageState,
             });
           })
           .then(function (response) {

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_tempstore\History;
 
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\Core\Session\AccountProxyInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\TempStore\SharedTempStoreFactory;
 use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Host\HostResolver;
@@ -24,7 +24,12 @@ use Drupal\daedalus_tempstore\StrategySelector;
  * A timeline belongs to a host: the manager keys it by the host's entity
  * through the tempstore strategies (the same key every mutation and
  * save/discard already uses), and a restore answers the hosts whose staged
- * state moved, resolved from the restored envelopes' storages.
+ * state moved, resolved from the restored envelopes' storages. The staged
+ * state is one per host, shared by its editors, and so is the timeline:
+ * undo is "undo the last change to this page", whoever made it, and each
+ * entry names who did. A restore puts the whole staged state back as the
+ * entry recorded it. Who may restore is the caller's question (the HTTP
+ * route asks what Save and Discard ask).
  *
  * Restore writes through the tempstore strategies (the same machinery every
  * mutation and save/discard already trusts), with recording suppressed so
@@ -44,7 +49,7 @@ class HistoryManager {
     protected HistoryRecorder $recorder,
     protected StrategySelector $strategySelector,
     protected SharedTempStoreFactory $tempStoreFactory,
-    protected AccountProxyInterface $currentUser,
+    protected EntityTypeManagerInterface $entityTypeManager,
     protected HostResolver $hostResolver,
   ) {}
 
@@ -80,17 +85,19 @@ class HistoryManager {
   }
 
   /**
-   * The current user's timeline metadata for a host, UI-shaped.
+   * The timeline metadata for a host, UI-shaped.
    *
    * @return array
    *   ['pointer' => int, 'can_undo' => bool, 'can_redo' => bool,
    *   'entries' => list sorted by seq ascending]. Entries are metadata only
-   *   (seq, label, uid, timestamp, targets, bytes, baseline) — snapshot
-   *   payloads never leave the store for display.
+   *   (seq, label, uid, author, timestamp, targets, bytes, baseline) —
+   *   snapshot payloads never leave the store for display. 'author' is the
+   *   display name of the account that made the change, NULL on the
+   *   baseline and for an account that no longer exists.
    */
   public function metadata(HostInterface $host): array {
     $timeline = $this->timelineFor($host);
-    $index = $this->store->loadIndex($this->currentUser->id(), $timeline);
+    $index = $this->store->loadIndex($timeline);
     if ($index === NULL) {
       return [
         'pointer' => NULL,
@@ -101,6 +108,7 @@ class HistoryManager {
     }
     $entries = array_values($index['entries']);
     usort($entries, fn(array $a, array $b) => $a['seq'] <=> $b['seq']);
+    $entries = $this->withAuthors($entries);
     $sequence_numbers = array_column($entries, 'seq');
     return [
       'pointer' => $index['pointer'],
@@ -108,6 +116,27 @@ class HistoryManager {
       'can_redo' => $index['pointer'] < max($sequence_numbers),
       'entries' => $entries,
     ];
+  }
+
+  /**
+   * Names the author of each entry's change.
+   *
+   * @param array $entries
+   *   Entry metadata, each with the 'uid' the recorder kept.
+   *
+   * @return array
+   *   The same entries, each with 'author': the display name of the account
+   *   that made the change, NULL on the baseline and for an account that no
+   *   longer exists.
+   */
+  protected function withAuthors(array $entries): array {
+    $uids = array_unique(array_filter(array_column($entries, 'uid'), 'is_int'));
+    $accounts = $uids === [] ? [] : $this->entityTypeManager->getStorage('user')->loadMultiple($uids);
+    foreach ($entries as &$entry) {
+      $account = is_int($entry['uid'] ?? NULL) ? ($accounts[$entry['uid']] ?? NULL) : NULL;
+      $entry['author'] = $account === NULL ? NULL : (string) $account->getDisplayName();
+    }
+    return $entries;
   }
 
   /**
@@ -121,8 +150,7 @@ class HistoryManager {
    *   to undo.
    */
   public function undo(HostInterface $host): ?array {
-    $target = $this->adjacentSeq($host, -1);
-    return $target === NULL ? NULL : $this->restoreTo($host, $target);
+    return $this->restore($host, fn(array $index): ?int => $this->adjacentSeq($index, -1));
   }
 
   /**
@@ -132,8 +160,7 @@ class HistoryManager {
    *   The restore result, or NULL if there is nothing to redo.
    */
   public function redo(HostInterface $host): ?array {
-    $target = $this->adjacentSeq($host, 1);
-    return $target === NULL ? NULL : $this->restoreTo($host, $target);
+    return $this->restore($host, fn(array $index): ?int => $this->adjacentSeq($index, 1));
   }
 
   /**
@@ -147,7 +174,13 @@ class HistoryManager {
    * @return array|null
    *   On success: [
    *     'pointer' => the new pointer (= $seq),
-   *     'label' => the restored entry's label,
+   *     'direction' => 'undo' when the pointer moved back, 'redo' when it
+   *       moved forward,
+   *     'changes' => the entries whose changes the move undid or redid,
+   *       in the order it took them (an undo's newest first), each
+   *       ['seq', 'label', 'uid', 'author'] as metadata() names them. An
+   *       undo's changes are the entries it left, not the one it landed
+   *       on,
    *     'hosts' => the hosts whose staged state changed (for the
    *       caller's persist-hook firing),
    *     'targets' => the union of the traversed entries' targets (the
@@ -156,13 +189,55 @@ class HistoryManager {
    *   current.
    */
   public function restoreTo(HostInterface $host, int $seq): ?array {
-    $uid = $this->currentUser->id();
+    return $this->restore($host, fn(array $index): int => $seq);
+  }
+
+  /**
+   * Moves a host's timeline to the entry a chooser names.
+   *
+   * The index is read, the entry chosen, the staged state written and the
+   * pointer saved inside the store's lock: the timeline is shared, so the
+   * step "before the pointer" must be chosen from the index the move then
+   * updates, not from one another editor's request has since changed.
+   *
+   * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
+   *   The host whose timeline to move.
+   * @param callable $choose
+   *   Handed the index, answers the target entry's sequence number or NULL.
+   *
+   * @return array|null
+   *   The restore result (see restoreTo()), or NULL.
+   */
+  protected function restore(HostInterface $host, callable $choose): ?array {
     $timeline = $this->timelineFor($host);
-    $index = $this->store->loadIndex($uid, $timeline);
-    if ($index === NULL || !isset($index['entries'][$seq]) || $index['pointer'] === $seq) {
+    $restored = $this->store->locked($timeline, function () use ($timeline, $choose): ?array {
+      $index = $this->store->loadIndex($timeline);
+      if ($index === NULL) {
+        return NULL;
+      }
+      $seq = $choose($index);
+      return $seq === NULL ? NULL : $this->restoreEntry($timeline, $index, $seq);
+    });
+    if ($restored !== NULL) {
+      // Outside the lock: naming loads accounts, and moves nothing.
+      $restored['changes'] = $this->withAuthors($restored['changes']);
+    }
+    return $restored;
+  }
+
+  /**
+   * Writes one entry's snapshot back and moves the pointer to it.
+   *
+   * @return array|null
+   *   The restore result (see restoreTo()) with its changes not yet named,
+   *   or NULL when the entry does not exist, has expired, or is already
+   *   current.
+   */
+  protected function restoreEntry(string $timeline, array $index, int $seq): ?array {
+    if (!isset($index['entries'][$seq]) || $index['pointer'] === $seq) {
       return NULL;
     }
-    $entry = $this->store->loadEntry($uid, $timeline, $seq);
+    $entry = $this->store->loadEntry($timeline, $seq);
     if ($entry === NULL) {
       return NULL;
     }
@@ -178,35 +253,41 @@ class HistoryManager {
     }
 
     // Everything between the two states changed, in whichever direction.
+    // The entries between them are the changes the move takes back or puts
+    // back.
     $targets = [];
+    $changes = [];
+    $direction = $seq < $index['pointer'] ? 'undo' : 'redo';
     $from = min($index['pointer'], $seq);
     $to = max($index['pointer'], $seq);
     foreach ($index['entries'] as $entry_seq => $metadata) {
       if ($entry_seq > $from && $entry_seq <= $to) {
         $targets = array_merge($targets, $metadata['targets'] ?? []);
+        $changes[] = [
+          'seq' => $metadata['seq'],
+          'label' => $metadata['label'],
+          'uid' => $metadata['uid'] ?? NULL,
+        ];
       }
     }
+    usort($changes, fn(array $a, array $b) => $direction === 'undo' ? $b['seq'] <=> $a['seq'] : $a['seq'] <=> $b['seq']);
 
     $index['pointer'] = $seq;
-    $this->store->saveIndex($uid, $timeline, $index);
+    $this->store->saveIndex($timeline, $index);
 
     return [
       'pointer' => $seq,
-      'label' => $index['entries'][$seq]['label'],
+      'direction' => $direction,
+      'changes' => $changes,
       'hosts' => $hosts,
       'targets' => $targets,
     ];
   }
 
   /**
-   * Finds the entry adjacent to the pointer in the given direction.
+   * Finds the entry adjacent to an index's pointer in the given direction.
    */
-  protected function adjacentSeq(HostInterface $host, int $direction): ?int {
-    $timeline = $this->timelineFor($host);
-    $index = $this->store->loadIndex($this->currentUser->id(), $timeline);
-    if ($index === NULL) {
-      return NULL;
-    }
+  protected function adjacentSeq(array $index, int $direction): ?int {
     $candidates = array_filter(
       array_keys($index['entries']),
       fn(int|string $seq) => $direction < 0 ? $seq < $index['pointer'] : $seq > $index['pointer'],

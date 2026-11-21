@@ -2,6 +2,7 @@
 
 namespace Drupal\daedalus_edit\Form;
 
+use Drupal\Component\Render\PlainTextOutput;
 use Drupal\daedalus_blueprint\ExtractedValue;
 use Drupal\daedalus_edit\DaedalusEditFormTrait;
 use Drupal\daedalus_blueprint\Host\HostResolver;
@@ -50,11 +51,15 @@ class InlineEntityFormAlter implements EntityFormInterface {
     $form['actions']['submit']['#ajax'] = [
       'callback' => [$this, 'ajaxSubmit'],
     ];
-    // Commit one field to the spine instead of saving the entity.
-    $save_key = array_search('::save', $form['actions']['submit']['#submit']);
-    unset($form['actions']['submit']['#submit'][$save_key]);
-
-    $form['actions']['submit']['#submit'][] = [$this, 'update'];
+    // Commit one field to the spine instead of saving the entity. The
+    // entity form's own save leaves the chain wherever it stands in it, and
+    // a chain that never held it loses nothing.
+    $handlers = array_values(array_filter(
+      $form['actions']['submit']['#submit'] ?? [],
+      static fn ($handler) => $handler !== '::save',
+    ));
+    $handlers[] = [$this, 'update'];
+    $form['actions']['submit']['#submit'] = $handlers;
     $form['actions']['submit']['#value'] = $this->t('Update');
     $form['actions']['submit']['#attributes']['class'][] = 'daedalus-edit-update-button';
 
@@ -104,7 +109,7 @@ class InlineEntityFormAlter implements EntityFormInterface {
       $host->uuid(),
       [$field_name => new ExtractedValue($items)],
       $langcode,
-      $this->t('Edited @label', ['@label' => $items->getFieldDefinition()->getLabel()]),
+      PlainTextOutput::renderFromHtml($this->t('Edited @label', ['@label' => $items->getFieldDefinition()->getLabel()])),
       $changed,
     );
     $form_state->setTemporaryValue(FormCommit::OUTCOME, $outcome);

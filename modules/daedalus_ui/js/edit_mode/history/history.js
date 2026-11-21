@@ -1,5 +1,6 @@
 import { enqueueHistoryRestore } from '../ops/op-queue';
 import { register as registerHotkey } from '../hotkeys/hotkeys';
+import { announceRestore } from './history-cue';
 
 /**
  * Multi-step undo/redo — the client face of the edit-history timeline.
@@ -10,7 +11,8 @@ import { register as registerHotkey } from '../hotkeys/hotkeys';
  * A restore rides the same FIFO op queue as every mutation, so "undo waits
  * for pending mutations to drain" holds by construction, and the restore
  * response (the standard mutation contract) is applied by the same
- * pipeline: blueprint mirror replaced, subtree markup swapped.
+ * pipeline: blueprint mirror replaced, subtree markup swapped. A restore
+ * that moved another editor's change is reported once (history-cue.js).
  *
  * The mirror updates from the `history` key every mutation and restore
  * response carries; the sidebar calls refresh() for its initial fill. The
@@ -67,12 +69,16 @@ const restore = async (body) => {
     return null;
   }
   try {
-    return await enqueueHistoryRestore({
+    const payload = await enqueueHistoryRestore({
       entityType: context.entityType,
       entityId: context.entityId,
       viewMode: context.viewMode,
       restore: body,
     });
+    // The timeline is shared: a move over another editor's change says
+    // whose it was (history-cue.js); one's own stays silent.
+    announceRestore(payload);
+    return payload;
   } catch (error) {
     // Racing past the timeline's edge (a spare mod+z) is not an error the
     // user needs to hear about.

@@ -130,11 +130,15 @@ final class HostPrinter {
    * nothing". The edit url rides only when the showing carries a portal
    * (the actor may update the shown blueprint): the spine names the host,
    * this surface derives the url, and a shown blueprint's editing surface
-   * is its canonical route (its canvas).
+   * is its canonical route (its canvas). A shown document's label prints
+   * as one line of text (its `<` as `&lt;`, its white space as single
+   * spaces), so a label reads as a label wherever the notes are read.
    */
   protected function doorDetail(string $slot, string $uuid, Showing $showing): string {
     $subject = sprintf('slot %s (#%s)', $slot, $uuid);
-    $label = $showing->document === NULL ? NULL : sprintf("'%s'", $showing->document['label']);
+    // A label is one line of text in the notes: it starts no tag and
+    // breaks no line.
+    $label = $showing->document === NULL ? NULL : sprintf("'%s'", str_replace('<', '&lt;', trim(preg_replace('/\s+/', ' ', (string) $showing->document['label']))));
     switch ($showing->shows) {
       case Showing::DEFAULT:
         $detail = sprintf('%s shows blueprint %s', $subject, $label);

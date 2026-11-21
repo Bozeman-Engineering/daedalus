@@ -18,6 +18,8 @@ use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Core\Url;
 use Drupal\daedalus_ai\ModelChoice;
+use Drupal\daedalus_ai\ReplyDisplay;
+use Drupal\daedalus_ai\ThreadOwnership;
 use Drupal\daedalus_ai\ModelChoiceOption;
 use Drupal\daedalus_ai_ledger\UsageGate;
 use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
@@ -103,6 +105,8 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
     protected ModePluginManager $modeManager,
     protected FileLane $fileLane,
     protected ModelChoice $modelChoice,
+    protected ThreadOwnership $threadOwnership,
+    protected ReplyDisplay $replyDisplay,
     ?UsageGate $usage_gate = NULL,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
@@ -128,6 +132,8 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
       $container->get('plugin.manager.modes'),
       $container->get('daedalus_ui.file_lane'),
       $container->get('daedalus_ai.model_choice'),
+      $container->get('daedalus_ai.thread_ownership'),
+      $container->get('daedalus_ai.reply_display'),
       $container->get('module_handler')->moduleExists('daedalus_ai_ledger')
         ? $container->get('daedalus_ai_ledger.usage_gate')
         : NULL,
@@ -156,6 +162,9 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
 
     $this->aiAssistantRunner->setAssistant($assistant);
     $thread_id = $this->aiAssistantRunner->getThreadsKey();
+    // The id goes to this user's browser and comes back on the attach
+    // route and the op endpoint, which take it only from this user.
+    $this->threadOwnership->record($thread_id);
 
     // Url::fromRoute() yields a stale token for this endpoint, so mint it
     // directly from the CSRF generator.
@@ -166,8 +175,10 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
       'method' => 'POST',
       // No streaming on either side. The server must answer JSON, never
       // SSE: the continuation loop and the DeepChatResponseListener
-      // injections both ride the JSON body, and an agent-fronted assistant
-      // cannot stream anyway (ai_agents buffers its LLM calls). deep-chat's
+      // injections both ride the JSON body, and the memory runner absorbs
+      // each leg's whole reply into the transcript before it answers.
+      // (ai_assistant_api can stream an agent-fronted assistant since
+      // drupal/ai 1.5.3; this sidebar does not ask it to.) deep-chat's
       // simulation mode (progressive rendering of a JSON reply) is not an
       // option either: its HTML splitter emits every element and then each
       // of its descendants as separate chunks, so lists, links, and the
@@ -479,6 +490,10 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
   /**
    * Gets historical chat messages for the current session.
    *
+   * The chat widget renders each message's `html` as markup, so a stored
+   * message is replayed through the conversion and filters a live reply
+   * passes (ReplyDisplay::html()), never as it was stored.
+   *
    * @return array
    *   The message history formatted for DeepChat.
    */
@@ -489,18 +504,11 @@ final class ChatSidebar extends SidebarPluginBase implements ContainerFactoryPlu
       return $messages;
     }
 
-    $session_messages = $this->aiAssistantRunner->getMessageHistory();
-    $converter = NULL;
-    if (class_exists('League\CommonMark\CommonMarkConverter')) {
-      // @codingStandardsIgnoreLine
-      $converter = new \League\CommonMark\CommonMarkConverter();
-    }
-
-    foreach ($session_messages as $message) {
+    foreach ($this->aiAssistantRunner->getMessageHistory() as $message) {
       if (isset($message['timestamp']) && $message['timestamp'] > strtotime('-1 day')) {
         $messages[] = [
           'role' => $message['role'],
-          'html' => $converter ? $converter->convert($message['message'])->__toString() : $message['message'],
+          'html' => $this->replyDisplay->html((string) $message['message']),
         ];
       }
     }

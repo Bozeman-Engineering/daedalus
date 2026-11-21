@@ -321,10 +321,16 @@ export const canonicalNth = (argument) => {
   return `${head}${tail}`;
 };
 
+// The marks the emit gate admits in no text (emit-gate.js): an attribute
+// value spells each as its hex escape.
+const GATED_MARKS = ';{}<>';
+
 /**
  * The canonical spelling of one character of an attribute value: a quote
- * and a backslash escaped as themselves, a control character (C0 and
- * DEL) as its hex escape with its terminating space, any other as is.
+ * and a backslash escaped as themselves; a control character (C0 and
+ * DEL) and each mark the emit gate admits in no text (GATED_MARKS) as
+ * its hex escape with its terminating space; any other as is
+ * (RelativeSelector::printString mirror).
  *
  * @param {string} char
  *   One UTF-16 code unit.
@@ -340,7 +346,9 @@ const printChar = (char) => {
     return '\\\\';
   }
   const code = char.charCodeAt(0);
-  return code < 0x20 || code === 0x7f ? `\\${code.toString(16)} ` : char;
+  return code < 0x20 || code === 0x7f || GATED_MARKS.includes(char)
+    ? `\\${code.toString(16)} `
+    : char;
 };
 
 /**

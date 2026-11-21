@@ -5,6 +5,8 @@ import * as core from '../copied_from_core/copied-from-core.js';
 import * as editableElement from '../editable-element.js';
 import { EditorPluginBase, equals } from './editor-plugin-base.js';
 import { Identity } from '../ckeditor/identity.js';
+import { filterXss } from '../filter-xss.js';
+import { switchFormat } from '../format-switch.js';
 
 /**
  * InlineEditor field editor.
@@ -27,6 +29,12 @@ import { Identity } from '../ckeditor/identity.js';
  * form submit serializes) and the text format selector, which is revealed
  * as the edit's ancillary UI. Text formats with no CKEditor configured
  * fall back to editing the revealed textarea in the panel.
+ *
+ * What reaches the page element is always an editor seed, never the stored
+ * value as it is: the textarea of a format with an editor carries the seed
+ * the server produced (InlineEditorElement, EditorSeed), and a switch of
+ * the format selector to a format with an editor passes the textarea's
+ * value through the filter round trip first (format-switch.js).
  *
  * The open edit is a DRAFT (the one base's three-way landing). A foreign
  * mutation's response swaps the page element out from under the canvas
@@ -412,66 +420,80 @@ class InlineEditor extends EditorPluginBase {
         '[data-inline-editor-for]',
         context,
       ).forEach((formatSelector) => {
+        // The format the open value is in: the selector's value before
+        // the switch being handled. A switch lands in turn (a second pick
+        // waits for the first to rebuild the editor).
+        let activeFormat = formatSelector.value;
+        let switching = Promise.resolve();
+
         // Listen for Editor format changes.
         formatSelector.addEventListener('change', (e) => {
           // Ignore the filter module changes on page load.
           if (!e.isTrusted) {
             return;
           }
+          const selector = e.currentTarget;
+          const format = selector.value;
           const textarea = document.querySelector(
-            `#${e.currentTarget.dataset.inlineEditorFor}`,
+            `#${selector.dataset.inlineEditorFor}`,
           );
           const formItem = textarea.closest('.daedalus-edit-form-item');
           const EditableElement =
             editableElement.EditableElement.createFromFormItem(formItem);
           const plugin = EditableElement.plugin;
           const pageElement = EditableElement.getPageElementHandle();
-          const ckeditor5Id = pageElement.dataset.ckeditor5Id;
-          const editorConfig =
-            drupalSettings.editor?.formats?.[e.currentTarget.value];
+          const editing = Drupal.Daedalus.Edit.CurrentlyEditingElement;
+          const editors = Drupal.Daedalus.Edit.Ckeditor5Instances;
+          const inlineEditors = Drupal.behaviors.DaedalusEditInlineEditors;
 
-          const reattach = () => {
-            if (editorConfig) {
-              // Move the edit (back) onto the canvas with the new format.
-              textarea.classList.add('daedalus-edit-hidden');
-              if (!plugin.originalMarkup.has(EditableElement.info.elementId)) {
-                // The edit started on the no-editor tier, so the filtered
-                // markup was never saved — the canvas is untouched until now.
-                plugin.originalMarkup.set(
-                  EditableElement.info.elementId,
-                  pageElement.innerHTML,
-                );
-              }
-              pageElement.innerHTML = textarea.value;
-              pageElement.classList.add('daedalus-edit-inline-editing');
-              Drupal.behaviors.DaedalusEditInlineEditors.attachEditor(
+          switching = switching
+            .then(() =>
+              switchFormat({
+                textarea,
                 pageElement,
-                editorConfig,
+                format,
+                previousFormat: activeFormat,
+                editorConfig: drupalSettings.editor?.formats?.[format],
+                liveData: () =>
+                  editors.get(pageElement.dataset.ckeditor5Id)?.getData() ??
+                  null,
+                filter: filterXss,
+                detach: () =>
+                  pageElement.dataset.ckeditor5Id
+                    ? inlineEditors.detachEditor(
+                        pageElement,
+                        pageElement.dataset.ckeditor5Id,
+                      )
+                    : Promise.resolve(),
+                attach: (editorConfig) =>
+                  inlineEditors.attachEditor(pageElement, editorConfig),
+                saveMarkup: () => {
+                  const { elementId } = EditableElement.info;
+                  if (!plugin.originalMarkup.has(elementId)) {
+                    plugin.originalMarkup.set(elementId, pageElement.innerHTML);
+                  }
+                },
+                active: () =>
+                  Drupal.Daedalus.Edit.CurrentlyEditingElement === editing,
+              }),
+            )
+            .then(() => {
+              activeFormat = format;
+            })
+            .catch((error) => {
+              // The filter request failed before any teardown, so the
+              // previous format's editor (or textarea) still stands; put
+              // the selector back in line with it.
+              selector.value = activeFormat;
+              Drupal.Daedalus?.ModeManager?.getPlugin('edit')?.message(
+                Drupal.t(
+                  'Switching the text format failed; the previous format is still active.',
+                ),
+                'error',
+                { duration: 5000, scroll: false },
               );
-            } else {
-              // The new format has no editor: continue the edit in the panel
-              // textarea. The canvas keeps showing the raw value until blur
-              // commits and re-renders it.
-              pageElement.classList.remove('daedalus-edit-inline-editing');
-              textarea.classList.remove('daedalus-edit-hidden');
-              textarea.focus();
-            }
-          };
-
-          if (ckeditor5Id) {
-            const editor =
-              Drupal.Daedalus.Edit.Ckeditor5Instances.get(ckeditor5Id);
-            if (editor) {
-              // Preserve the user's input across the format switch.
-              textarea.value = editor.getData();
-            }
-            Drupal.behaviors.DaedalusEditInlineEditors.detachEditor(
-              pageElement,
-              ckeditor5Id,
-            ).then(reattach);
-          } else {
-            reattach();
-          }
+              Drupal.throwError(error);
+            });
         });
       });
     },

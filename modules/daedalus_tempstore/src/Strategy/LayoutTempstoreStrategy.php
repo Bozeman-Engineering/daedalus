@@ -7,13 +7,14 @@ use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_tempstore\History\HistoryRecorder;
 use Drupal\daedalus_tempstore\SectionStorageHelper;
-use Drupal\daedalus_tempstore\WorkspaceKeyTrait;
+use Drupal\daedalus_tempstore\StageKeyTrait;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\daedalus_layout\NestedSectionStorageInterface;
 use Drupal\daedalus_layout\ComponentTransform\PresaveSafetyNet;
 use Drupal\Core\TempStore\SharedTempStoreFactory;
 use Drupal\layout_builder\DefaultsSectionStorageInterface;
 use Drupal\layout_builder\LayoutEntityHelperTrait;
+use Drupal\layout_builder\OverridesSectionStorageInterface;
 use Drupal\layout_builder\SectionStorageInterface;
 use Drupal\layout_builder\TempStoreIdentifierInterface;
 use Drupal\daedalus_layout\SectionStorage\NestedAwareSectionStorage;
@@ -55,7 +56,7 @@ use Drupal\layout_builder\SectionStorage\SectionStorageManagerInterface;
 class LayoutTempstoreStrategy implements TempstoreStrategyInterface {
 
   use LayoutEntityHelperTrait;
-  use WorkspaceKeyTrait;
+  use StageKeyTrait;
 
   /**
    * The static cache of loaded values.
@@ -154,7 +155,7 @@ class LayoutTempstoreStrategy implements TempstoreStrategyInterface {
       $cached = $this->cache[$key];
       // If subject was an entity, extract and return the entity.
       if ($this->isEntity($unwrapped)) {
-        return $this->hostOf($cached)?->entity();
+        return $this->stagedEntity($cached, $unwrapped);
       }
       return $this->wrapStorage($cached);
     }
@@ -185,7 +186,7 @@ class LayoutTempstoreStrategy implements TempstoreStrategyInterface {
 
       // If subject was an entity, extract and return the entity.
       if ($this->isEntity($unwrapped)) {
-        return $this->hostOf($stored_section_storage)?->entity();
+        return $this->stagedEntity($stored_section_storage, $unwrapped);
       }
 
       return $this->wrapStorage($stored_section_storage);
@@ -279,7 +280,7 @@ class LayoutTempstoreStrategy implements TempstoreStrategyInterface {
   public function getKey($subject): string {
     $section_storage = $this->ensureSectionStorage($this->unwrapStorage($subject));
     $key = ($section_storage instanceof TempStoreIdentifierInterface)
-      ? $section_storage->getTempstoreKey()
+      ? $this->addressedToHost($section_storage)->getTempstoreKey()
       : $section_storage->getStorageId();
 
     // A host that does not live in workspaces (a display: config) keys
@@ -290,6 +291,52 @@ class LayoutTempstoreStrategy implements TempstoreStrategyInterface {
       return $key;
     }
     return $this->appendWorkspaceToKey($key);
+  }
+
+  /**
+   * The storage its key is read from: addressed to the host's own object.
+   *
+   * An overrides storage spells the language of the entity in its context
+   * into its tempstore key. A storage core derived from a translated URL
+   * holds that translation, and would key a stage of its own beside the
+   * one the page's writers share; the key is read from the same storage
+   * around the entity's default translation instead.
+   *
+   * @param \Drupal\layout_builder\SectionStorageInterface $section_storage
+   *   The section storage, unwrapped.
+   *
+   * @return \Drupal\layout_builder\SectionStorageInterface
+   *   The storage itself, or a copy holding the default translation when
+   *   the storage holds another one.
+   */
+  protected function addressedToHost(SectionStorageInterface $section_storage): SectionStorageInterface {
+    if (!$section_storage instanceof OverridesSectionStorageInterface) {
+      return $section_storage;
+    }
+    $entity = $section_storage->getContextValue('entity');
+    $host = $this->stageHost($entity);
+    if ($host === $entity) {
+      return $section_storage;
+    }
+    $addressed = clone $section_storage;
+    $addressed->setContextValue('entity', $host);
+    return $addressed;
+  }
+
+  /**
+   * The entity a staged storage answers a get() by entity with.
+   *
+   * @param \Drupal\layout_builder\SectionStorageInterface $staged
+   *   The staged section storage.
+   * @param \Drupal\Core\Entity\EntityInterface $subject
+   *   The entity the caller asked with.
+   *
+   * @return \Drupal\Core\Entity\EntityInterface|null
+   *   The staged host's entity, in the language the caller holds it in.
+   */
+  protected function stagedEntity(SectionStorageInterface $staged, EntityInterface $subject): ?EntityInterface {
+    $entity = $this->hostOf($staged)?->entity();
+    return $entity === NULL ? NULL : $this->inLanguageOf($entity, $subject);
   }
 
   /**

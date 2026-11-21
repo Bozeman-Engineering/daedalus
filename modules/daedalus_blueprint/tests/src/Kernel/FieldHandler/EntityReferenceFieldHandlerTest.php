@@ -469,26 +469,74 @@ class EntityReferenceFieldHandlerTest extends BlueprintKernelTestBase {
   }
 
   /**
-   * A target_id whose target is unviewable resolves without echoing its label.
+   * An id or uuid resolves only to an entity the actor may view.
    *
-   * RF1: the LABEL_MISMATCH warning discloses the entity's real label.
-   * Resolving an explicit, AI-supplied target_id stays valid, but must not
-   * surface the actual label of an entity the current user cannot view.
+   * An entity outside the actor's access answers exactly as one that does
+   * not exist, by id and by uuid, and nothing of it (its label, its bundle)
+   * is told.
    */
-  public function testTargetIdMismatchSuppressesUnviewableLabel(): void {
+  public function testIdAndUuidResolveOnlyToViewableTargets(): void {
     $target = $this->createTestEntity(['name' => 'Real Name']);
+    $id = (int) $target->id();
 
     $this->setUpCurrentUser([], []);
 
-    $result = $this->handler->deserialize(
-      ['target_id' => (int) $target->id(), '_label' => 'Wrong Name'],
+    $by_id = $this->handler->deserialize(
+      ['target_id' => $id, '_label' => 'Wrong Name'],
       $this->refDefinition(),
     );
+    $this->assertTrue($by_id->hasErrors());
+    $this->assertSame('REFERENCE_NOT_FOUND', $by_id->getErrors()[0]->getCode());
+    $this->assertEmpty($by_id->getWarnings());
+    $this->assertStringNotContainsString('Real Name', json_encode($by_id->getErrors()[0]->toArray()));
 
-    // Resolves by the explicit id, but the real label is not disclosed.
-    $this->assertFalse($result->hasErrors());
-    $this->assertSame((int) $target->id(), $result->getValue()['target_id']);
-    $this->assertEmpty($result->getWarnings());
+    // The same words as an id no entity has.
+    $missing = $this->handler->deserialize(['target_id' => 99999], $this->refDefinition());
+    $this->assertSame(
+      str_replace((string) $id, 'N', $by_id->getErrors()[0]->getMessage()),
+      str_replace('99999', 'N', $missing->getErrors()[0]->getMessage()),
+    );
+    $this->assertSame($missing->getErrors()[0]->getContext(), $by_id->getErrors()[0]->getContext());
+
+    $by_uuid = $this->handler->deserialize(['uuid' => $target->uuid()], $this->refDefinition());
+    $this->assertTrue($by_uuid->hasErrors());
+    $this->assertSame('REFERENCE_NOT_FOUND', $by_uuid->getErrors()[0]->getCode());
+    $missing = $this->handler->deserialize(['uuid' => '00000000-0000-4000-8000-000000000000'], $this->refDefinition());
+    $this->assertSame(
+      str_replace($target->uuid(), 'U', $by_uuid->getErrors()[0]->getMessage()),
+      str_replace('00000000-0000-4000-8000-000000000000', 'U', $missing->getErrors()[0]->getMessage()),
+    );
+
+    // A bare integer is an id and meets the same answer.
+    $this->assertTrue($this->handler->deserialize($id, $this->refDefinition())->hasErrors());
+
+    // A viewer resolves both spellings.
+    $this->setUpCurrentUser([], ['view test entity']);
+    $this->assertSame($id, $this->handler->deserialize(['target_id' => $id], $this->refDefinition())->getValue()['target_id']);
+    $this->assertSame($id, $this->handler->deserialize(['uuid' => $target->uuid()], $this->refDefinition())->getValue()['target_id']);
+  }
+
+  /**
+   * A caller acting for the site, or for a named actor, is judged as such.
+   */
+  public function testReferenceIsResolvedForTheNamedActor(): void {
+    $target = $this->createTestEntity(['name' => 'Real Name']);
+    $id = (int) $target->id();
+    $viewer = $this->createUser(['view test entity']);
+
+    // The current user may view nothing.
+    $this->setUpCurrentUser([], []);
+
+    // The system posture names no actor: a stored reference loads.
+    $system = $this->handler->deserialize(['uuid' => $target->uuid()], $this->refDefinition(), ['system' => TRUE]);
+    $this->assertFalse($system->hasErrors());
+    $this->assertSame($id, $system->getValue()['target_id']);
+    $this->assertSame($id, $this->handler->deserialize(['target_id' => $id], $this->refDefinition(), ['system' => TRUE])->getValue()['target_id']);
+
+    // A named actor is the one asked, not the current user.
+    $named = $this->handler->deserialize(['target_id' => $id], $this->refDefinition(), ['actor' => $viewer]);
+    $this->assertFalse($named->hasErrors());
+    $this->assertSame($id, $named->getValue()['target_id']);
   }
 
   /**

@@ -122,6 +122,11 @@ class PageEdit extends PageToolBase {
     }
 
     $save = $this->getContextValue('save');
+    // A save is the editor's Save made by the model: it asks the same
+    // permission, before the batch runs, so a refusal writes nothing.
+    if ($save && !$this->requireSavePermission()) {
+      return;
+    }
     // The try covers the batch and the persist: a failure before the write
     // lands is this tool's Error. The echo follows outside it, so a write
     // that landed is never answered as an error (an Error: invites the

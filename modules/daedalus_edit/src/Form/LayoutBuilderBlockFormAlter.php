@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_edit\Form;
 
+use Drupal\Component\Render\PlainTextOutput;
 use Drupal\Core\Block\BlockPluginInterface;
 use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
@@ -29,9 +30,9 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
  * The block Configure dialog: core's UpdateBlockForm on the form transport.
  *
  * Every block plugin's dialog commits through the spine as ONE
- * update_element on the component; core's tempstore submit never runs in
- * edit mode. The dialog hosts the placement's settings (the display label
- * and its Display title toggle on every block) beside what the plugin
+ * update_element on the component; core's tempstore submit never runs on
+ * a hosted storage. The dialog hosts the placement's settings (the display
+ * label and its Display title toggle on every block) beside what the plugin
  * builds: an inline block's own field widgets, its view mode and whatever
  * a site adds through BlockPropertiesEvent; a plugin block's configuration
  * form (a field block's formatter type and settings, a menu's depth, a
@@ -185,7 +186,7 @@ final class LayoutBuilderBlockFormAlter extends ConfigureDialogFormAlterBase {
       $component->getUuid(),
       $properties,
       $root->entity()->language()->getId(),
-      $this->t('Configured @label', ['@label' => $title]),
+      PlainTextOutput::renderFromHtml($this->t('Configured @label', ['@label' => $title])),
       $properties !== [],
     );
     $form_state->setTemporaryValue(FormCommit::OUTCOME, $outcome);

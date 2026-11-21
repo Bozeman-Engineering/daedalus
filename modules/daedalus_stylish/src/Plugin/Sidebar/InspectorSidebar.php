@@ -138,7 +138,7 @@ final class InspectorSidebar extends SidebarPluginBase implements ContainerFacto
     $media_urls = [];
     $media_tags = [];
     if ($route_host !== NULL) {
-      $host = $this->storageHandler->load($route_host->entityTypeId(), $route_host->id()) ?? $route_host;
+      $host = $this->storageHandler->loadReadable($route_host->entityTypeId(), $route_host->id()) ?? $route_host;
       if ($host->hasStyleStore()) {
         $media_urls = $this->mediaValueResolver->clientUrlTable($host->styleMap(), $media_tags, $host);
       }

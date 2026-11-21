@@ -6,6 +6,8 @@
    *
    * The edit-history timeline: one row per staged change, newest first,
    * with the current state marked and undone (redoable) entries dimmed.
+   * The timeline is the page's, shared by its editors, so each row names
+   * who made the change beside when.
    * Clicking a row jumps the staged state to that entry; the header's
    * Undo/Redo buttons step. All data comes from the History facade — the
    * client mirror of the server-side timeline — which this panel refreshes
@@ -46,6 +48,27 @@
         return Drupal.formatPlural(diffHours, '1 hour ago', '@count hours ago');
       }
       return date.toLocaleDateString();
+    }
+
+    /**
+     * The line under an entry's label: who made the change, and when.
+     *
+     * @param {object} entry
+     *   A timeline entry; `author` is null on the initial state and for an
+     *   account that no longer exists.
+     *
+     * @return {string}
+     *   Markup-safe text.
+     */
+    formatSubtitle(entry) {
+      const when = this.formatTimestamp(entry.timestamp);
+      if (!entry.author) {
+        return when;
+      }
+      return Drupal.t('@author, @when', {
+        '@author': entry.author,
+        '@when': when,
+      });
     }
 
     /**
@@ -90,7 +113,7 @@
           }
           return `<div class="${classes.join(' ')}" data-history-seq="${entry.seq}" role="button" tabindex="0">
           <div class="daedalus-ui-panel-item__label">${Drupal.checkPlain(entry.label)}</div>
-          <div class="daedalus-ui-panel-item__subtitle">${this.formatTimestamp(entry.timestamp)}</div>
+          <div class="daedalus-ui-panel-item__subtitle">${this.formatSubtitle(entry)}</div>
         </div>`;
         })
         .join('');

@@ -142,6 +142,20 @@ class ContentBlueprintBackend implements BlueprintBackendInterface {
   /**
    * {@inheritdoc}
    */
+  public function loadReadable(string $entity_type_id, int|string $entity_id): ?EntityInterface {
+    return $this->storageHandler->loadReadable($entity_type_id, $entity_id)?->entity();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function readOperation(): string {
+    return 'view';
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function requiresWorkspace(): bool {
     return $this->storageHandler->isWorkspaceRequired();
   }

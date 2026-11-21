@@ -25,21 +25,24 @@
       drupalSettings.daedalusUi.hotKeys[id].key = bindingString;
     }
 
-    const ajaxConfig = {
-      url: `/daedalus-ui/save-user-hotkey/${id}/${encodeURIComponent(bindingString)}`,
-      event: 'click',
-      progress: {
-        type: 'fullscreen',
-        message: Drupal.t('Updating hotkey...'),
-      },
-      error: (error) => {
-        Drupal.Daedalus.ModeManager.getPlugin('edit').handleError(
-          error,
-          'Unable to update hotkey.',
-        );
-      },
-    };
-    Drupal.Daedalus.ModePluginBase.ajax(ajaxConfig).execute();
+    const editMode = Drupal.Daedalus.ModeManager.getPlugin('edit');
+    Drupal.Daedalus.post(
+      Drupal.url(
+        `daedalus-ui/save-user-hotkey/${id}/${encodeURIComponent(bindingString)}`,
+      ),
+    )
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(
+            Drupal.t('Unable to update hotkey (HTTP @status).', {
+              '@status': response.status,
+            }),
+          );
+        }
+        return response.json();
+      })
+      .then(({ message }) => editMode.message(message, 'status'))
+      .catch((error) => editMode.message(error.message, 'error'));
   };
 
   const buildRow = (binding) => {

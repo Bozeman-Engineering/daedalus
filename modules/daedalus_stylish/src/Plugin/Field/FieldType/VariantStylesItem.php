@@ -25,6 +25,7 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
   description: new TranslatableMarkup('Element-relative Daedalus Stylish styles carried by a style variant, keyed by relative element key.'),
   no_ui: TRUE,
   cardinality: 1,
+  constraints: ['DaedalusStylishStoredStyles' => []],
 )]
 class VariantStylesItem extends StyleMapItem {
 

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Drupal\daedalus_blueprint\Dialect;
 
 use Drupal\Component\Uuid\UuidInterface;
+use Drupal\daedalus_blueprint\Capability\Capability;
+use Drupal\daedalus_blueprint\Capability\Requirement;
 use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Materials\MaterialRecord;
 use Drupal\daedalus_blueprint\Materials\ValueKind;
@@ -127,13 +129,16 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
   /**
    * {@inheritdoc}
    *
-   * The dialect's ops are not judged: each expands into the spine ops it
-   * means (add_section, update_element, update_style and the rest) and
-   * runs them as a nested batch, where every real write passes the gate
-   * once. A file op declares bytes and touches no element.
+   * The ops that write the page are not judged here: each expands into
+   * the spine ops it means (add_section, update_element, update_style and
+   * the rest) and runs them as a nested batch, where every real write
+   * passes the gate once. A file op expands into nothing, so it is judged
+   * here: it declares bytes ahead of the ops that place them, and asks
+   * content on the host, what placing a file anywhere on the page takes
+   * at the least.
    */
   public function getRequirements(): array {
-    return array_fill_keys(self::OPS, []);
+    return ['file' => [Requirement::root(Capability::Content)]] + array_fill_keys(self::OPS, []);
   }
 
   /**
@@ -195,7 +200,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
       if (!is_string($value) || trim($value) === '') {
         $errors[] = new BlueprintError($key, 'MISSING_PARAMETER', sprintf('file needs "%s": %s.', $key, match ($key) {
           'name' => 'the filename (with its extension) the file is held under',
-          'type' => 'the MIME type (image/svg+xml, text/css, text/csv, text/plain, text/markdown, application/json, text/html)',
+          'type' => 'the MIME type (image/svg+xml, text/css, text/csv, text/plain, text/markdown, application/json)',
           'content' => 'the file\'s bytes',
         }), [], 'A file op is {op: "file", name: "logo.svg", type: "image/svg+xml", content: "<svg ...>...</svg>"}, placed ahead of the ops that use file="logo.svg" or url(\'file:logo.svg\').');
       }
@@ -257,7 +262,7 @@ class DomOperationHandler implements PageLanguageOperationsInterface {
         'FILE_REJECTED',
         sprintf('The file "%s" was refused: %s%s', $name, $e->getMessage(), $where),
         ['name' => $name, 'reasons' => $e->messages],
-        'Fix the declaration and resend the whole batch: the name\'s extension must be one the site accepts (svg, css, csv, txt, md, json, html), the type must agree with it, and the bytes must pass the site\'s file validation.',
+        'Fix the declaration and resend the whole batch: the name\'s extension must be one the site accepts (svg, css, csv, txt, md, json), the type must agree with it, and the bytes must pass the site\'s file validation.',
       );
     }
     return NULL;

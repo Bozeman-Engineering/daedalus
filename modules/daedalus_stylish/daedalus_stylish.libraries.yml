@@ -9,6 +9,8 @@ inspector:
   dependencies:
     - core/drupal
     - core/drupalSettings
+    # The gesture transport's writes post through the one token source.
+    - daedalus_ui/csrf
     # The media pickers open core's media library through daedalus_ui's
     # modal helper (js/src/media-library.js hands it the server URL); the
     # helper's library carries the dialog stack.
@@ -81,6 +83,8 @@ satellite:
   dependencies:
     - core/drupal
     - core/drupalSettings
+    # The gesture transport's writes post through the one token source.
+    - daedalus_ui/csrf
     # The satellite window renders outside the rail, without the
     # daedalus_ui chrome libraries — the tokens inspector.css consumes
     # must ride along explicitly.

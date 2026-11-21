@@ -221,8 +221,9 @@ class FactConditionMigrationTest extends NestedStorageKernelTestBase {
     $this->assertSame([], $lines);
 
     // Two blocks of one entry landing on one key: each keeps its own
-    // remainder. A block whose key is outside the grammar stays put, said
-    // loudly on every pass (the validator refuses such a key).
+    // remainder. A block whose key is outside the grammar stays put and
+    // is not reported: the key grammar convergence drops that entry and
+    // reports what it held.
     $lines = [];
     $map = $convergence->convergeStyleMap([
       'container:x::> *' => [
@@ -238,10 +239,10 @@ class FactConditionMigrationTest extends NestedStorageKernelTestBase {
       ],
       'container:x::not a selector!' => ['first-child' => ['color' => 'red']],
     ], $map);
-    $this->assertNotEmpty(array_filter($lines, static fn (string $line) => str_contains($line, 'left the "first-child" block')));
+    $this->assertSame([], array_filter($lines, static fn (string $line) => str_contains($line, 'not a selector!')));
     $lines = [];
     $this->assertNull($convergence->convergeStyleMap($map, 'test', $lines));
-    $this->assertCount(1, $lines);
+    $this->assertSame([], $lines);
   }
 
   /**

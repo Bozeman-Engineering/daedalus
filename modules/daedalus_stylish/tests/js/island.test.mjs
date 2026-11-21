@@ -686,6 +686,40 @@ test('validate-value mirrors PropertyGroupBase semantics', () => {
   assert.equal(validateValue('padding', 'red; } <script>', dimension, null)[0].code, 'INVALID_STYLE_VALUE');
 });
 
+test('validate-value refuses a value the stylesheet printer would not print', () => {
+  // StyleMapValidator::unprintableValue() at a write door, sentence for
+  // sentence (StyleMapValidatorTest pins the same values and hints).
+  const any = { type: 'any' };
+  for (const [property, value, definition, names] of [
+    ['background-image', 'url(https://example.com/a.png)', any, 'url(https://example.com/a.png) names a file by its address'],
+    ['filter', 'url(#blur)', any, 'url(#blur) names a file by its address'],
+    ['width', 'calc(100% - 2rem', { type: 'dimension' }, 'is left open'],
+    ['color', 'var(--c) /* note */', { type: 'color' }, 'A comment (/* */) does not print'],
+    ['background-image', 'image-set("a.png" 1x)', any, 'image-set() fetches the file its argument names'],
+    ['font-family', 'Font\\ Name, serif', { type: 'family' }, 'A backslash escape outside a quoted string does not print'],
+  ]) {
+    const violations = validateValue(property, value, definition, null);
+    assert.equal(violations.length, 1, value);
+    assert.equal(violations[0].code, 'INVALID_STYLE_VALUE');
+    assert.equal(violations[0].message, `"${value}" is not a value the stylesheet can print for ${property}.`);
+    assert.ok(violations[0].hint.includes(names), `${value}: ${violations[0].hint}`);
+    assert.equal(violations[0].severity, undefined);
+  }
+  // What the gate admits stays accepted.
+  for (const [property, value, definition] of [
+    ['background-image', "url('media:11111111-1111-1111-1111-111111111111')", any],
+    ['background-image', 'linear-gradient(135deg, #1a1a2e, #e94560)', any],
+    ['grid-template-columns', 'repeat(auto-fit, minmax(clamp(10rem, 30vw, 20rem), 1fr))', any],
+    ['width', 'calc(100% - 2rem)', { type: 'dimension' }],
+    ['padding', 'var(--x, 1rem)', { type: 'dimension', repeat: 4 }],
+    ['font-family', '"Font \\"Name\\"", serif', { type: 'family' }],
+  ]) {
+    assert.deepEqual(validateValue(property, value, definition, null), [], value);
+  }
+  // A value the shape checks already refused keeps its one error.
+  assert.equal(validateValue('text-align', 'middle /* x */', { type: 'keyword', keywords: ['left'] }).length, 1);
+});
+
 test('validate-value mirrors the list, ident, and dimension|number shapes', () => {
   // A list dimension: comma and space separated repetition, per-component
   // validation and range checks; malformed comma segments are the list's

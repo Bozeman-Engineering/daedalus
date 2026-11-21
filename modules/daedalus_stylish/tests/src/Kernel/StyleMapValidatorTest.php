@@ -7,6 +7,9 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 // cspell:ignore buton dispaly divv
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\ConditionClause;
+use Drupal\daedalus_blueprint\Materials\EmitGate;
+use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
@@ -552,6 +555,92 @@ class StyleMapValidatorTest extends KernelTestBase {
     $this->assertContains('narrow', $errors[0]->getContext()['valid_conditions'], 'an axis nothing is published on names every reference');
     foreach (array_keys($typos) as $condition) {
       $this->assertSame(['INVALID_STYLE_CONDITION'], $conditionCodes([$condition])["entity:$uuid.$condition"], "strict refuses the typo \"$condition\"");
+    }
+  }
+
+  /**
+   * A literal condition the emit gate refuses is an error in every mode.
+   *
+   * The printer drops a block whose condition text the emit gate refuses
+   * (EmitGate::admits()), so the validator asks the same question of a
+   * literal at write time: text after the query, a mark no condition
+   * carries, an unclosed parenthesis or string, a function that loads a
+   * file. The grammar still reads each as a literal (the verdict is the
+   * validator's), and every literal the validator admits is one the gate
+   * admits.
+   */
+  public function testLiteralConditionTheEmitGateRefuses(): void {
+    $uuid = self::UUID;
+    $table = $this->container->get('plugin.manager.daedalus_stylish_condition_type')->getConditions();
+    $refused = [
+      '@supports (display: grid){}</style><b>',
+      '@supports (display: grid) { }',
+      '@supports (display: grid); a',
+      '@supports (display: grid) /* x */',
+      '@supports (display: grid) \\7b',
+      '@supports (background: url(//example.com/a.png))',
+      '@supports (content: "a)',
+      '@media (hover: hover) {}</style>',
+      '@media (hover: hover) x<y',
+      '@container (min-width: 500px) a;b',
+      '@container (min-width: 500px){}',
+    ];
+    foreach (['guarded', 'open', 'strict'] as $mode) {
+      $this->enforce($mode);
+      foreach ($refused as $condition) {
+        $clause = ConditionClause::clause($condition, $table);
+        $this->assertSame(ConditionClause::LITERAL, $clause['kind'], "the grammar reads \"$condition\" as a literal");
+        $this->assertFalse(EmitGate::admits($clause['css']), "the emit gate refuses \"$condition\"");
+        $errors = $this->validator->validate(["entity:$uuid" => [$condition => ['padding' => '1rem']]]);
+        $this->assertCount(1, $errors, "$mode refuses \"$condition\" once");
+        $this->assertSame('INVALID_STYLE_CONDITION', $errors[0]->getCode());
+        $this->assertSame("entity:$uuid.$condition", $errors[0]->getPath());
+        $this->assertStringContainsString('not text a condition can print', $errors[0]->getMessage(), "$mode says why \"$condition\" is refused");
+        // In a compound, and as a token value's condition, alike.
+        $errors = $this->validator->validate(["entity:$uuid" => ["hover+$condition" => ['padding' => '1rem']]]);
+        $this->assertSame(['INVALID_STYLE_CONDITION'], array_map(static fn ($error) => $error->getCode(), $errors), "$mode refuses \"$condition\" in a compound");
+        $this->assertFalse($this->validator->fitsTokenShape(['default' => '#111', $condition => '#222'], ['shape' => 'color']), "$mode refuses \"$condition\" on a token value");
+      }
+    }
+    // What the validator admits, the gate admits: no admitted literal is
+    // dropped at print time.
+    $this->enforce('guarded');
+    $admitted = [
+      '@media (hover: hover)',
+      '@container (min-width: 500px)',
+      '@supports not (display: grid) and selector(:has(a))',
+      '@supports (--x: 1)',
+      ':checked',
+    ];
+    foreach ($admitted as $condition) {
+      $this->assertSame([], $this->validator->validate(["entity:$uuid" => [$condition => ['padding' => '1rem']]]));
+      $this->assertTrue(EmitGate::admits(ConditionClause::clause($condition, $table)['css']), "the emit gate admits \"$condition\"");
+    }
+  }
+
+  /**
+   * An attribute value escapes the gated marks, or the key is refused.
+   *
+   * The selector grammar prints ";", "{", "}", "<" and ">" inside an
+   * attribute value as hex escapes, so the canonical key carries none raw
+   * and its selector passes the emit gate; a key spelling one raw is not
+   * canonical and is refused as a key at write time.
+   */
+  public function testAttributeValueMarksAreEscapedOrRefused(): void {
+    $this->layerBaseAndLinks();
+    $uuid = self::UUID;
+    $this->enforce('guarded');
+    foreach (['</style>', 'a;b', 'a{b}', 'a>b'] as $value) {
+      $raw = "container:$uuid::p[title=\"$value\"]";
+      $errors = $this->validator->validate([$raw => ['default' => ['font-size' => '1rem']]]);
+      $this->assertSame(['INVALID_STYLE_KEY'], array_map(static fn ($error) => $error->getCode(), $errors), "a raw \"$value\" in an attribute value is refused");
+      $this->assertSame($raw, $errors[0]->getPath());
+      $selector = RelativeSelector::parse("p[title=\"$value\"]");
+      $this->assertNotNull($selector, 'the grammar reads the raw spelling');
+      $canonical = "container:$uuid::" . $selector->print();
+      $this->assertNotSame($raw, $canonical);
+      $this->assertTrue(EmitGate::admitsSelector($selector->print()), 'the canonical spelling passes the emit gate');
+      $this->assertSame([], $this->validator->validate([$canonical => ['default' => ['font-size' => '1rem']]]), "the canonical spelling of \"$value\" is admitted");
     }
   }
 
@@ -1815,6 +1904,126 @@ class StyleMapValidatorTest extends KernelTestBase {
     // Media stays with the style value composing the gradient, never
     // inside the named gradient.
     $this->assertSame(['gradient.veil.value' => ['INVALID_STYLE_VALUE']], $this->codes($validate("url('media:" . self::UUID . "')")));
+  }
+
+  /**
+   * A value the printer would not print is refused where it is written.
+   *
+   * The printer drops a declaration whose value the emit gate refuses
+   * (EmitGate::admits()), with no message, so every write door asks the
+   * gate of a value the grammar accepts and answers INVALID_STYLE_VALUE
+   * with a hint naming the part that does not print: a page map, a
+   * variant's styles, a skin's defaults, a keyframe, a token value. A
+   * value at rest is not asked: the landing lane (the style fields'
+   * constraint at every Save) reports no violation, and the conformance
+   * verdict keeps offering a stored variant that carries one. What the
+   * gate admits stays accepted.
+   */
+  public function testValueThePrinterDropsIsRefusedWhereWritten(): void {
+    $uuid = self::UUID;
+    $container = Address::fromString('kind:container');
+    $unprintable = [
+      [
+        'background-image',
+        'url(https://example.com/a.png)',
+        'url(https://example.com/a.png) names a file by its address',
+      ],
+      ['filter', 'url(#blur)', 'url(#blur) names a file by its address'],
+      ['width', 'calc(100% - 2rem', 'is left open'],
+      ['color', 'var(--c) /* note */', 'A comment (/* */) does not print'],
+      ['background-image', 'image-set("a.png" 1x)', 'image-set() fetches the file its argument names'],
+      ['font-family', 'Font\ Name, serif', 'A backslash escape outside a quoted string does not print'],
+    ];
+    foreach ($unprintable as [$property, $value, $names]) {
+      $this->assertFalse(EmitGate::admits($value), "the emit gate refuses \"$value\"");
+      $map = ["entity:$uuid" => ['default' => [$property => $value]]];
+      $styles = ['' => ['default' => [$property => $value]]];
+
+      // The page map's door.
+      $errors = $this->validator->validate($map);
+      $this->assertCount(1, $errors, "$property: $value is refused once");
+      $this->assertSame('INVALID_STYLE_VALUE', $errors[0]->getCode());
+      $this->assertSame("entity:$uuid.default.$property", $errors[0]->getPath());
+      $this->assertSame(sprintf('"%s" is not a value the stylesheet can print for %s.', $value, $property), $errors[0]->getMessage());
+      $this->assertStringContainsString($names, $errors[0]->getHint(), "the hint names what does not print in \"$value\"");
+      // A variant's styles and a skin's defaults.
+      $this->assertSame(["default.$property" => ['INVALID_STYLE_VALUE']], $this->codes($this->validator->validateAt($styles, $container)), "$property: $value in a variant's styles");
+      $this->assertSame(["kind:container.default.$property" => ['INVALID_STYLE_VALUE']], $this->codes($this->validator->validateDefaults(['kind:container' => $styles])), "$property: $value in a skin's defaults");
+
+      // At rest the same value is no violation, on either stored shape.
+      $this->assertSame([], $this->validator->withLandingLane(fn (): array => $this->validator->validate($map)), "$property: $value at rest in a page map");
+      $this->assertSame([], $this->validator->withLandingLane(fn (): array => $this->validator->validateAt($styles, $container)), "$property: $value at rest in a variant");
+    }
+    // The lane ends with its closure: the next write is asked again.
+    $this->assertCount(1, $this->validator->validate(["entity:$uuid" => ['default' => ['filter' => 'url(#blur)']]]));
+
+    // A keyframe's value and a token's value pass the same question.
+    $this->assertSame(
+      ['steps.0%.width' => ['INVALID_STYLE_VALUE']],
+      $this->codes($this->validator->validateAnimationSteps([
+        '0%' => ['width' => 'calc(100% - 2rem'],
+        '100%' => ['width' => '100%'],
+      ])),
+    );
+    $this->layer('site', ['token_scales' => ['color' => ['label' => 'Color', 'shape' => 'color']]]);
+    $tokens = fn (mixed $value): array => $this->validator->validateTokens(
+      SkinTokensItem::canonicalizeTokens(['color' => ['ink' => $value]]),
+      ['theme' => self::THEME],
+    );
+    $errors = $tokens('var(--c) /* note */');
+    $this->assertSame(['color.ink.value' => ['INVALID_STYLE_VALUE']], $this->codes($errors));
+    $this->assertStringContainsString('A comment (/* */) does not print', $errors[0]->getHint());
+    $this->assertSame(
+      ['color.ink.value.dark' => ['INVALID_STYLE_VALUE']],
+      $this->codes($tokens(['default' => '#111', 'dark' => 'var(--c'])),
+    );
+    $this->assertSame([], $tokens('var(--c, #111)'));
+
+    // The verdict judges what is stored: a variant carrying such a value
+    // stays offered, and the page wearing it stays writable.
+    $stored = DaedalusStylishVariant::create([
+      'label' => 'Blurred',
+      'machine_name' => 'blurred',
+      'scope' => 'kind:container',
+    ]);
+    $stored->setStyles(['' => ['default' => ['padding' => '1rem', 'filter' => 'url(#blur)']]])->save();
+    $this->assertSame([], $this->validator->validate([
+      "container:$uuid" => ['variants' => [['variant' => 'blurred', 'fragment' => '']]],
+    ]));
+
+    // What the gate admits stays accepted: a media reference, a gradient,
+    // a function with its own parentheses, a reference with a fallback.
+    $this->installEntitySchema('file');
+    $this->installSchema('file', ['file_usage']);
+    $this->installEntitySchema('media');
+    $this->installConfig(['field', 'image', 'file', 'media']);
+    $image_type = $this->createMediaType('image');
+    $source_field = $image_type->getSource()->getSourceFieldDefinition($image_type)->getName();
+    $this->container->get('file_system')->copy($this->root . '/core/misc/druplicon.png', 'public://hero.png');
+    $file = File::create(['uri' => 'public://hero.png', 'filename' => 'hero.png']);
+    $file->save();
+    $media = Media::create([
+      'bundle' => $image_type->id(),
+      'name' => 'Hero',
+      $source_field => ['target_id' => $file->id()],
+    ]);
+    $media->save();
+    $token = MediaToken::build($media->uuid());
+    foreach ([
+      ['background-image', $token],
+      ['background-image', "linear-gradient(rgb(0 0 0 / 0.6), rgb(0 0 0 / 0.6)), $token"],
+      ['background-image', 'linear-gradient(135deg, #1a1a2e, #e94560)'],
+      // On a property whose grammar takes it: a dimension property
+      // (width) refuses clamp() by its own rule, before any gate.
+      ['grid-template-columns', 'repeat(auto-fit, minmax(clamp(10rem, 30vw, 20rem), 1fr))'],
+      ['width', 'calc(100% - 2rem)'],
+      ['padding', 'var(--x, 1rem)'],
+      ['font-family', '"Font \"Name\"", serif'],
+    ] as [$property, $value]) {
+      $this->assertTrue(EmitGate::admits($value), "the emit gate admits \"$value\"");
+      $this->assertSame([], $this->validator->validate(["entity:$uuid" => ['default' => [$property => $value]]]), "$property: $value is accepted");
+      $this->assertSame([], $this->validator->validateAt(['' => ['default' => [$property => $value]]], $container), "$property: $value is accepted in a variant");
+    }
   }
 
 }

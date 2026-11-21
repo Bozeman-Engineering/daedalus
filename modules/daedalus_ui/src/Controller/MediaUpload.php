@@ -16,12 +16,14 @@ use Drupal\daedalus_tempstore\EntityTempstoreRepository;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Drupal\daedalus_ui\Event\LayoutBuilderNewMedia;
+use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
 use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_ui\DaedalusUi;
 use Drupal\daedalus_ui\Event\LayoutBuilderReplaceMedia;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -30,8 +32,13 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  *
  * The human upload lane's HTTP adapter: the dropped file is saved through
  * the daedalus_ui file lane (validators, the SVG sanitizer, renaming on
- * collision) as a permanent file under public://media, and a refusal is
- * answered as a 400 whose body names the reasons.
+ * collision) under public://media, and a refusal is answered as a 400
+ * whose body names the reasons. A dropped file can only become media, so
+ * the lane is narrowed to the media kinds (never the textual kinds the AI
+ * reads), and the media is created only for an actor who may create media
+ * of that bundle. The file is saved temporary: the media entity that takes
+ * it records a file usage, which makes it permanent; a file no media ever
+ * holds falls to core's temporary-file garbage collection.
  */
 final class MediaUpload extends ControllerBase {
 
@@ -47,6 +54,7 @@ final class MediaUpload extends ControllerBase {
     private EventDispatcherInterface $eventDispatcher,
     private HostResolver $hostResolver,
     private DaedalusUi $daedalusUi,
+    private BlueprintAccessChecker $accessChecker,
   ) {}
 
   /**
@@ -60,6 +68,7 @@ final class MediaUpload extends ControllerBase {
       $container->get('event_dispatcher'),
       $container->get('daedalus_blueprint.host_resolver'),
       $container->get('daedalus_ui.ui'),
+      $container->get('daedalus_blueprint.access_checker'),
     );
   }
 
@@ -84,7 +93,8 @@ final class MediaUpload extends ControllerBase {
    *   A JSON envelope {resolution: {block_type, field_name,
    *   media_target_id}} when a stored file association resolved the block
    *   type, or the block-type chooser dialog as a Drupal AJAX command
-   *   response (the client plays it and awaits the form's choice).
+   *   response (the client plays it and awaits the form's choice; the
+   *   form submits to its own route, never back here).
    *
    * @throws \Drupal\Core\Entity\EntityStorageException
    */
@@ -92,14 +102,14 @@ final class MediaUpload extends ControllerBase {
     $this->hostOf($entity, $view_mode);
 
     // The target media bundle is not known yet (the user picks it on the
-    // later file-association form), so the lane's full accepted set applies:
-    // "could this file become some media here?".
+    // later file-association form), so the lane is narrowed to the media
+    // kinds: "could this file become some media here?".
     $upload = $request->files->get('file');
-    if ($upload instanceof UploadedFile) {
-      $file = $this->saveUpload($upload);
-      $session = $request->getSession();
-      $session->set('uploaded_file', $file);
+    if (!$upload instanceof UploadedFile) {
+      throw new BadRequestHttpException('Invalid file');
     }
+    $file = $this->saveUpload($upload, $this->fileLane->mediaExtensions());
+    $request->getSession()->set('uploaded_file', $file);
 
     $entity = $this->tempstoreRepository->get($entity);
     $event = $this->eventDispatcher->dispatch(new LayoutBuilderNewMedia($request, $entity, $view_mode), LayoutBuilderNewMedia::class);
@@ -137,10 +147,15 @@ final class MediaUpload extends ControllerBase {
    * @throws \Drupal\Core\Entity\EntityStorageException
    */
   public function replaceMedia(Request $request, EntityInterface $entity, string $view_mode, string $media_reference, string $media_bundle) {
-
     $bundle_info = $this->entityTypeBundleInfo->getBundleInfo('media');
     if (empty($bundle_info[$media_bundle])) {
-      throw new \InvalidArgumentException(sprintf('Invalid media bundle %s', $entity->label()));
+      throw new NotFoundHttpException(sprintf('There is no %s media type.', $media_bundle));
+    }
+    // Judged before the file is saved, so a refusal leaves nothing behind.
+    $this->assertMayCreate($media_bundle);
+    $media_type = $this->entityTypeManager()->getStorage('media_type')->load($media_bundle);
+    if (!$this->fileLane->hasFileSource($media_type)) {
+      throw new BadRequestHttpException(sprintf('The %s media type does not keep its source in a file.', $media_bundle));
     }
 
     $upload = $request->files->get('file');
@@ -151,9 +166,9 @@ final class MediaUpload extends ControllerBase {
 
     $entity = $this->tempstoreRepository->get($entity);
     // The target bundle is known, so the lane is narrowed to its source
-    // field's extensions.
-    $media_type = $this->entityTypeManager()->getStorage('media_type')->load($media_bundle);
-    $file = $this->saveUpload($upload, $this->fileLane->mediaTypeExtensions($media_type));
+    // field's extensions; a field that takes any extension is narrowed to
+    // the media kinds, the lane never inheriting that site choice.
+    $file = $this->saveUpload($upload, $this->fileLane->mediaTypeExtensions($media_type) ?? $this->fileLane->mediaExtensions());
     $media = $this->createMedia($file, $media_bundle);
 
     return $this->replacePageElementWithNewMedia($request, $media, $entity, $view_mode, $media_reference);
@@ -164,12 +179,12 @@ final class MediaUpload extends ControllerBase {
    *
    * @param \Symfony\Component\HttpFoundation\File\UploadedFile $upload
    *   The dropped file.
-   * @param list<string>|null $extensions
-   *   A narrowing of the lane's accepted extensions, or NULL for the full set.
+   * @param list<string> $extensions
+   *   The narrowing of the lane's accepted extensions.
    */
-  private function saveUpload(UploadedFile $upload, ?array $extensions = NULL): FileInterface {
+  private function saveUpload(UploadedFile $upload, array $extensions): FileInterface {
     try {
-      return $this->fileLane->fromRequest($upload, self::DIRECTORY, TRUE, $extensions);
+      return $this->fileLane->fromRequest($upload, self::DIRECTORY, FALSE, $extensions);
     }
     catch (FileLaneException $e) {
       throw new BadRequestHttpException($e->getMessage(), $e);
@@ -235,7 +250,23 @@ final class MediaUpload extends ControllerBase {
   }
 
   /**
+   * Refuses an actor who may not create media of a bundle.
+   *
+   * @throws \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException
+   */
+  private function assertMayCreate(string $media_bundle): void {
+    if (!$this->accessChecker->createAccess('media', $media_bundle)) {
+      throw new AccessDeniedHttpException(sprintf('You may not create %s media.', $media_bundle));
+    }
+  }
+
+  /**
    * Create Media.
+   *
+   * The one place the upload lane creates media, for the replace drop and
+   * for the page drop's resolution alike, so the create access check sits
+   * here. Saving the media records its file usage, which is what makes
+   * the uploaded file permanent.
    *
    * @param \Drupal\file\FileInterface $file
    *   The uploaded file entity.
@@ -246,8 +277,11 @@ final class MediaUpload extends ControllerBase {
    *   The created media entity.
    *
    * @throws \Drupal\Core\Entity\EntityStorageException
+   * @throws \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException
+   *   When the current user may not create media of the bundle.
    */
   public function createMedia(FileInterface $file, string $media_bundle) {
+    $this->assertMayCreate($media_bundle);
 
     $media_type = $this->entityTypeManager()->getStorage('media_type')->load($media_bundle);
     $file_reference_field = $media_type->get('source_configuration')['source_field'];

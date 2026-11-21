@@ -116,6 +116,19 @@ class StylePermissionTest extends KernelTestBase {
   }
 
   /**
+   * The site-wide style permissions warn on the role form; a bundle's not.
+   */
+  public function testSiteWidePermissionsAreRestricted(): void {
+    $this->container->get('daedalus_stylish.field_manager')->enable('entity_test', 'entity_test');
+    $permissions = $this->permissions();
+    foreach (['administer variants', 'edit skin defaults'] as $permission) {
+      $this->assertTrue($permissions[$permission]['restrict access'] ?? FALSE, "$permission is restricted.");
+    }
+    $bundle = StylePolicy::permission('entity_test', 'entity_test');
+    $this->assertEmpty($permissions[$bundle]['restrict access'] ?? FALSE, 'A bundle style permission carries no warning.');
+  }
+
+  /**
    * A style write refuses without the permission, lands with it or umbrella.
    */
   public function testStyleWriteAsksThePermission(): void {

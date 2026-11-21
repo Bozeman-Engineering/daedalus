@@ -9,6 +9,7 @@ use Drupal\Core\Entity\EntityStorageException;
 use Drupal\Core\Test\TestDatabase;
 use Drupal\daedalus_blueprint\DesignSystem\ActiveDesignSystem;
 use Drupal\daedalus_blueprint\Entity\DesignSystem;
+use Drupal\daedalus_blueprint\Exception\CommitRefusedException;
 use Drupal\daedalus_blueprint\Materials\MaterialKind;
 use Drupal\daedalus_blueprint_library\BlueprintDiscovery;
 use Drupal\daedalus_blueprint_library\BlueprintDiscoveryInterface;
@@ -544,8 +545,13 @@ class BlueprintShipperTest extends BlueprintKernelTestBase {
       $this->createWearing('Card again', 'card');
       $this->fail('A content blueprint under a shipped id must refuse.');
     }
-    catch (EntityStorageException $e) {
-      $this->assertStringContainsString('already taken', $e->getPrevious()->getMessage());
+    catch (CommitRefusedException $e) {
+      // The commit door answers a storage failure as its own refusal; the
+      // storage exception it stands for carries the entity's reason.
+      $this->assertSame(CommitRefusedException::STORAGE, $e->reason());
+      $storage_failure = $e->getPrevious();
+      $this->assertInstanceOf(EntityStorageException::class, $storage_failure);
+      $this->assertStringContainsString('already taken', $storage_failure->getPrevious()->getMessage());
     }
   }
 

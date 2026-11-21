@@ -21,6 +21,7 @@ daedalus_layout.settings.configure_default_section:
 # only, never the entity type's.
 daedalus_layout.start_preview:
   path: '/daedalus-layout/start-preview/{entity_type}/{bundle}/{start}'
+  methods: [GET]
   defaults:
     _controller: '\Drupal\daedalus_layout\Controller\StartPreview::build'
     _title_callback: '\Drupal\daedalus_layout\Controller\StartPreview::title'
@@ -39,6 +40,7 @@ daedalus_layout.start_preview:
 # the library the requirement has no check and the dialog is closed.
 daedalus_layout.blueprint_save_dialog:
   path: '/daedalus-layout/blueprint-save-dialog'
+  methods: [GET]
   defaults:
     _title: 'Save as blueprint'
     _controller: '\Drupal\daedalus_layout\Controller\BlueprintSaveDialog::build'
@@ -52,6 +54,7 @@ daedalus_layout.blueprint_save_dialog:
 # adopt_variants).
 daedalus_layout.blueprint_update_dialog:
   path: '/daedalus-layout/blueprint-update-dialog'
+  methods: [GET]
   defaults:
     _title: 'Update blueprint'
     _controller: '\Drupal\daedalus_layout\Controller\BlueprintSaveDialog::update'
@@ -67,6 +70,7 @@ daedalus_layout.blueprint_update_dialog:
 # with the stored values.
 daedalus_layout.blueprint_details_dialog:
   path: '/daedalus-layout/blueprint-details-dialog'
+  methods: [GET]
   defaults:
     _title: 'Edit blueprint details'
     _controller: '\Drupal\daedalus_layout\Controller\BlueprintSaveDialog::details'
@@ -109,6 +113,7 @@ daedalus_layout.block_type_favorite:
 # `update`: the one frame permission, `configure the site frame`.
 entity.daedalus_frame.canonical:
   path: '/site-frame/{daedalus_frame}'
+  methods: [GET]
   defaults:
     _controller: '\Drupal\daedalus_layout\Controller\FrameCanvas::build'
     _title_callback: '\Drupal\daedalus_layout\Controller\FrameCanvas::title'
@@ -118,3 +123,21 @@ entity.daedalus_frame.canonical:
         type: entity:daedalus_frame
   requirements:
     _entity_access: 'daedalus_frame.update'
+
+# The block-type chooser for a file dropped on the page
+# (MediaBlockFileAssociationForm). daedalus_ui's upload route answers the
+# form in a dialog; the form submits here, a Drupal form route, so core's
+# form token guards the submission. The gate is the upload route's: Edit
+# Mode's audience, and update on the host.
+daedalus_layout.media_file_association:
+  path: '/daedalus-layout/media-file-association/{entity_type}/{entity}'
+  defaults:
+    _title: 'Block type'
+    _form: 'Drupal\daedalus_layout\Form\MediaBlockFileAssociationForm'
+  requirements:
+    _permission: 'use daedalus ui edit mode'
+    _entity_access: entity.update
+  options:
+    parameters:
+      entity:
+        type: entity:{entity_type}

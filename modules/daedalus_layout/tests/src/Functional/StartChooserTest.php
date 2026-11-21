@@ -107,7 +107,7 @@ class StartChooserTest extends BrowserTestBase {
       ],
     ]);
     // A block blueprint, which no chooser ever offers.
-    $this->createBlueprint('card', 'Card', 'block', [], [
+    $this->createBlueprint('card', 'Card', 'block', 'One card of text.', [], [
       ['kind' => 'block', 'block_type' => 'text', 'block_fields' => ['field_text_text' => ['value' => 'Card text']]],
     ]);
   }
@@ -589,16 +589,18 @@ class StartChooserTest extends BrowserTestBase {
    *   The block nodes of the one root container.
    */
   protected function createPageBlueprint(string $machine_name, string $label, string $description, array $groups, array $children): Blueprint {
-    return $this->createBlueprint($machine_name, $label, 'page', $groups, $children, $description);
+    return $this->createBlueprint($machine_name, $label, 'page', $description, $groups, $children);
   }
 
   /**
    * Writes a blueprint whose document is one root container.
    *
    * Written the way a capture writes one (the whole-document copy on the
-   * blueprint's own host as a system batch), then committed.
+   * blueprint's own host as a system batch), then committed. The description
+   * is not optional: a blueprint without one does not validate, so the commit
+   * refuses it.
    */
-  protected function createBlueprint(string $machine_name, string $label, string $scope, array $groups, array $children, string $description = ''): Blueprint {
+  protected function createBlueprint(string $machine_name, string $label, string $scope, string $description, array $groups, array $children): Blueprint {
     $blueprint = Blueprint::create([
       'type' => 'section',
       'label' => $label,

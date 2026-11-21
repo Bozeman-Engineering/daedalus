@@ -18,7 +18,7 @@ services:
 
   daedalus_tempstore.history_store:
     class: Drupal\daedalus_tempstore\History\HistoryStore
-    arguments: ['@keyvalue.expirable', '@datetime.time']
+    arguments: ['@keyvalue.expirable', '@datetime.time', '@lock']
 
   daedalus_tempstore.history_recorder:
     class: Drupal\daedalus_tempstore\History\HistoryRecorder
@@ -39,7 +39,7 @@ services:
         '@daedalus_tempstore.history_recorder',
         '@daedalus_tempstore.strategy_selector',
         '@tempstore.shared',
-        '@current_user',
+        '@entity_type.manager',
         '@daedalus_blueprint.host_resolver',
       ]
 
@@ -80,3 +80,12 @@ services:
       - '@?daedalus_tempstore.entity_tempstore_repository'
       - '@daedalus_tempstore.activation_voters'
   Drupal\daedalus_tempstore\ParamConverter\EntityConverter: '@daedalus_tempstore.param_converter.entity'
+
+  # A route's _entity_access is judged on the stored entity, never on the
+  # unsaved copy the converter above answered the parameter with.
+  daedalus_tempstore.access_check.entity:
+    class: Drupal\daedalus_tempstore\Access\StoredEntityAccessCheck
+    decorates: access_check.entity
+    arguments:
+      - '@daedalus_tempstore.access_check.entity.inner'
+      - '@daedalus_tempstore.param_converter.entity'

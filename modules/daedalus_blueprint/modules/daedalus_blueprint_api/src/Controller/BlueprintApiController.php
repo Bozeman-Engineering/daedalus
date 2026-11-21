@@ -10,6 +10,7 @@ use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Render\Markup;
 use Drupal\daedalus_blueprint\BlueprintOperationsInterface;
+use Drupal\daedalus_blueprint\Dialect\ConversationGate;
 use Drupal\daedalus_blueprint\Dialect\CssFragmentDoor;
 use Drupal\daedalus_blueprint\Dialect\DialectCatalogBuilder;
 use Drupal\daedalus_blueprint\Dialect\DialectPrinter;
@@ -27,6 +28,7 @@ use Drupal\daedalus_blueprint_api\Render\SelectableKey;
 use Drupal\daedalus_blueprint_api\Render\SubtreeRenderer;
 use Drupal\daedalus_blueprint\Result\BlueprintResult;
 use Drupal\daedalus_blueprint\Result\BlueprintResultInterface;
+use Drupal\daedalus_tempstore\History\HistoryEntryRefusedException;
 use Drupal\daedalus_tempstore\History\HistoryManager;
 use Drupal\daedalus_tempstore\History\HistoryRecorder;
 use Psr\Log\LoggerInterface;
@@ -34,6 +36,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 /**
@@ -82,6 +85,7 @@ final class BlueprintApiController extends ControllerBase {
     protected readonly CssFragmentDoor $fragmentDoor,
     protected readonly HostResolver $hostResolver,
     protected readonly SubtreeRenderer $subtreeRenderer,
+    protected readonly ConversationGate $conversationGate,
     protected readonly ?HistoryRecorder $historyRecorder = NULL,
     protected readonly ?HistoryManager $historyManager = NULL,
   ) {}
@@ -103,6 +107,7 @@ final class BlueprintApiController extends ControllerBase {
       $container->get('daedalus_blueprint.css_fragment_door'),
       $container->get('daedalus_blueprint.host_resolver'),
       $container->get('daedalus_blueprint_api.subtree_renderer'),
+      $container->get('daedalus_blueprint.conversation_gate'),
       $container->has('daedalus_tempstore.history_recorder')
         ? $container->get('daedalus_tempstore.history_recorder')
         : NULL,
@@ -122,7 +127,8 @@ final class BlueprintApiController extends ControllerBase {
    * the chat conversation whose aliases the ops resolve against (the op
    * spine's 'conversation' option: the element ids an author chose and the
    * files the conversation holds, so {_file: name} places an attachment),
-   * absent when the client has no conversation.
+   * absent when the client has no conversation; a conversation that was
+   * not handed to the current user is a 403 (CONVERSATION_NOT_OWNED).
    * Operations use the batch grammar from BlueprintOperations and are applied
    * atomically — all succeed or all roll back, and a request is one unit of
    * change. Successful mutations persist through the storage handler
@@ -166,6 +172,16 @@ final class BlueprintApiController extends ControllerBase {
     $langcode = is_string($body['langcode'] ?? NULL) ? $body['langcode'] : NULL;
     $view_mode = is_string($body['view_mode'] ?? NULL) && $body['view_mode'] !== '' ? $body['view_mode'] : 'full';
     $conversation = is_string($body['thread_id'] ?? NULL) ? $body['thread_id'] : '';
+    // A conversation's aliases and held files are shared by its id, so the
+    // id is taken only from the user the conversation was handed to.
+    if ($conversation !== '' && !$this->conversationGate->owns($conversation)) {
+      return $this->responseBuilder->error(
+        'CONVERSATION_NOT_OWNED',
+        'The thread_id names no conversation of yours.',
+        403,
+        canvas: $canvas,
+      );
+    }
     $this->applyAjaxPageState($request, $body);
 
     $backend = $this->backendResolver->resolveFor($entity);
@@ -221,6 +237,11 @@ final class BlueprintApiController extends ControllerBase {
     }
     catch (WorkspaceRequiredException $e) {
       return $this->responseBuilder->error('WORKSPACE_REQUIRED', $e->getMessage(), 409, canvas: $canvas);
+    }
+    catch (HistoryEntryRefusedException $e) {
+      // The batch made the unsaved copy larger than may be staged; nothing
+      // was written, and the sender is told why.
+      return $this->responseBuilder->error('STAGED_COPY_TOO_LARGE', $e->getMessage(), 413, canvas: $canvas);
     }
     catch (\Throwable $e) {
       // Every failure answers the contract's shape: a block whose build or
@@ -407,7 +428,12 @@ final class BlueprintApiController extends ControllerBase {
   }
 
   /**
-   * Returns the blueprint for an entity, reflecting staged edits.
+   * Returns the blueprint for an entity.
+   *
+   * A reader who may update the entity is answered its unsaved copy while
+   * one exists; anyone else the stored entity. The route asks view access;
+   * a backend whose read answers more than a view shows (config) names a
+   * stronger operation, asked here.
    *
    * Query parameters:
    * - mode: 'full' (default), 'summary', 'element', or 'css'.
@@ -442,7 +468,11 @@ final class BlueprintApiController extends ControllerBase {
       );
     }
 
-    $working = $backend->load($entity_type, $entity->id());
+    if (!$entity->access($backend->readOperation())) {
+      throw new AccessDeniedHttpException();
+    }
+
+    $working = $backend->loadReadable($entity_type, $entity->id());
     if ($working === NULL) {
       return $this->responseBuilder->error(
         'ENTITY_NOT_FOUND',

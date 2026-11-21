@@ -10,6 +10,7 @@ use Drupal\Component\Serialization\Json;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\daedalus_blueprint\Compat\FilterFormats;
+use Drupal\daedalus_edit\EditorSeed;
 use Drupal\daedalus_ui\Render\ComposedBlockContentInterface;
 
 /**
@@ -21,9 +22,12 @@ use Drupal\daedalus_ui\Render\ComposedBlockContentInterface;
  * FILTERED (processed) output — the raw {value, format} pair never reaches
  * visitor markup — and the CKEditor binding.
  *
- * The editor attribution is identity and settings only, never values (the
- * editor reads the raw pair from the blueprint mirror), and only prints on
- * edit-capable renders: live visitor markup stays clean. The renderer
+ * The editor attribution is identity, settings and the editor's seed: the
+ * value as an inline editor may put it on the page (EditorSeed), which is
+ * what the editor opens on. The stored value itself is never printed (the
+ * blueprint mirror holds the raw pair, for comparing and committing, never
+ * for the page). The attribution only prints on edit-capable renders: live
+ * visitor markup stays clean. The renderer
  * emits the root; the editor binding here is what makes that root the
  * surface the inline CKEditor attaches to in edit mode.
  */
@@ -34,6 +38,7 @@ final class FormattedTextComposedContent implements ComposedBlockContentInterfac
     protected PluginManagerInterface $editorManager,
     protected FilterFormats $filterFormatRepository,
     protected AccountProxyInterface $currentUser,
+    protected EditorSeed $editorSeed,
   ) {}
 
   /**
@@ -84,12 +89,23 @@ final class FormattedTextComposedContent implements ComposedBlockContentInterfac
     }
     $editors = $this->entityTypeManager->getStorage('editor')->loadMultiple(array_keys($formats));
     $formats = array_intersect_key($formats, $editors);
+    $settings = [
+      'format' => $format,
+      'formats' => $formats,
+    ];
+    // The seed is stamped only for a format this widget can open on (one
+    // of the listed formats); it is filtered for exactly that format, and
+    // every render stamps it again, so a root swapped in mid-edit carries
+    // the seed of the value it shows.
+    if (isset($formats[$format])) {
+      $settings['seed'] = $this->editorSeed->seed(
+        (string) $item?->value,
+        $this->entityTypeManager->getStorage('filter_format')->load($format),
+      );
+    }
     $content['attributes'][''] = [
       'data-daedalus-edit-editor' => 'formatted_text',
-      'data-daedalus-edit-editor-settings' => Json::encode([
-        'format' => $format,
-        'formats' => $formats,
-      ]),
+      'data-daedalus-edit-editor-settings' => Json::encode($settings),
     ];
     // The CKEditor libraries and per-format settings, attached form-free for
     // ALL the listed formats so a format switch needs no fetch. On the form

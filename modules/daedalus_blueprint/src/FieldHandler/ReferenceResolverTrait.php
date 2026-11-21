@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_blueprint\FieldHandler;
 
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Session\AccountInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_blueprint\Result\BlueprintWarning;
 
@@ -13,10 +15,12 @@ use Drupal\daedalus_blueprint\Result\BlueprintWarning;
  * Provides target_id and label-based resolution with bundle validation,
  * label mismatch warnings, and similar-label suggestions.
  *
- * Label resolution is access-aware by construction: a label is only ever
- * looked up against, or reported for, entities the current user can view.
- * There is deliberately no access-blind query path, so no caller can resolve
- * or disclose an entity outside the user's access.
+ * Resolution is access-aware by construction: an id, a uuid or a label
+ * resolves only to an entity the actor may view, and one the actor may not
+ * view answers exactly as one that does not exist. There is deliberately no
+ * access-blind path for an actor, so no caller can resolve to, or learn of,
+ * an entity outside the actor's access. A caller acting for the site (the
+ * `system` option) names no actor, and an id or uuid resolves unjudged.
  *
  * Using classes must have $this->entityTypeManager, $this->logger, and
  * $this->accessChecker properties.
@@ -41,6 +45,9 @@ trait ReferenceResolverTrait {
    *   The _label from the input (for mismatch warning), or NULL.
    * @param \Drupal\daedalus_blueprint\Result\BlueprintWarning[] $warnings
    *   Collected warnings (passed by reference).
+   * @param array $options
+   *   The deserialization options (`system`, `actor`): who the reference is
+   *   resolved for.
    *
    * @return array|\Drupal\daedalus_blueprint\Result\BlueprintError
    *   The resolved ['target_id' => N] or an error.
@@ -52,10 +59,11 @@ trait ReferenceResolverTrait {
     string $path,
     ?string $provided_label = NULL,
     array &$warnings = [],
+    array $options = [],
   ): array|BlueprintError {
     $entity = $this->entityTypeManager->getStorage($target_type)->load($target_id);
 
-    if ($entity === NULL) {
+    if ($entity === NULL || !$this->referenceViewable($entity, $options)) {
       $this->logger->notice('Reference not found: @type @id at @path', [
         '@type' => $target_type,
         '@id' => $target_id,
@@ -80,10 +88,9 @@ trait ReferenceResolverTrait {
     }
 
     // Check for label mismatch warning. The warning echoes the entity's actual
-    // label, so it is only surfaced when the current user can view the target —
-    // resolving an explicit target_id must not disclose the label of an entity
-    // outside the user's access.
-    if ($provided_label !== NULL && $this->accessChecker->entityAccess($entity, 'view')) {
+    // label; the actor may view the target (asked above), and a caller acting
+    // for the site names no reader to keep it from.
+    if ($provided_label !== NULL) {
       $actual_label = (string) $entity->label();
       if ($provided_label !== $actual_label) {
         $this->logger->info('Label mismatch at @path: provided "@provided", actual "@actual" for @type @id', [
@@ -120,6 +127,9 @@ trait ReferenceResolverTrait {
    *   Allowed bundles, or NULL for any.
    * @param string $path
    *   The error path.
+   * @param array $options
+   *   The deserialization options (`system`, `actor`): who the reference is
+   *   resolved for.
    *
    * @return array|\Drupal\daedalus_blueprint\Result\BlueprintError
    *   The resolved ['target_id' => N] or an error.
@@ -129,10 +139,11 @@ trait ReferenceResolverTrait {
     string $target_type,
     ?array $target_bundles,
     string $path,
+    array $options = [],
   ): array|BlueprintError {
     $entities = $this->entityTypeManager->getStorage($target_type)->loadByProperties(['uuid' => $uuid]);
     $entity = reset($entities);
-    if ($entity === FALSE) {
+    if ($entity === FALSE || !$this->referenceViewable($entity, $options)) {
       $this->logger->notice('Reference not found: @type uuid @uuid at @path', [
         '@type' => $target_type,
         '@uuid' => $uuid,
@@ -158,6 +169,30 @@ trait ReferenceResolverTrait {
 
     $id = $entity->id();
     return ['target_id' => is_numeric($id) ? (int) $id : $id];
+  }
+
+  /**
+   * Whether a reference may resolve to an entity: the actor may view it.
+   *
+   * The one question both the id and the uuid road ask before they answer
+   * anything about the entity (its id, its bundle, its label), so an entity
+   * outside the actor's access reads as absent.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity the reference names.
+   * @param array $options
+   *   The deserialization options: `system` (TRUE names no actor, nothing
+   *   is judged) and `actor` (an account; the current user when absent).
+   *
+   * @return bool
+   *   TRUE when the reference may resolve to the entity.
+   */
+  protected function referenceViewable(EntityInterface $entity, array $options): bool {
+    if (!empty($options['system'])) {
+      return TRUE;
+    }
+    $actor = $options['actor'] ?? NULL;
+    return $this->accessChecker->entityAccess($entity, 'view', $actor instanceof AccountInterface ? $actor : NULL);
   }
 
   /**

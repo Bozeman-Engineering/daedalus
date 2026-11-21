@@ -74,9 +74,10 @@ final class PrintBlockProducer implements EventSubscriberInterface {
       return;
     }
 
-    // The canvas shows the staged state; print that host, not the
-    // last-saved one. The resolver already gated view access on the host.
-    $staged = $this->storageHandler->load($host->entityTypeId(), (string) $host->id()) ?? $host;
+    // The canvas of a user who may edit the host shows its unsaved copy;
+    // print that for them, the stored host for anyone else. The resolver
+    // already gated view access on the host.
+    $staged = $this->storageHandler->loadReadable($host->entityTypeId(), (string) $host->id()) ?? $host;
     // A template prints as a page does, headed as a template: its field
     // blocks are placements whose content is sample, and editing it
     // reaches every entity of its kind without a layout of its own.

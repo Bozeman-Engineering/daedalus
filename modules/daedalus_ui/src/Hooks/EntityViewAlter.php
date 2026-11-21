@@ -6,6 +6,7 @@ use Drupal\Core\Render\Element;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\daedalus_blueprint\Host\HostResolver;
 use Drupal\daedalus_ui\BlueprintMirror;
+use Drupal\daedalus_ui\CanvasAccess;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\daedalus_tempstore\ParamConverter\EntityConverter;
 use Drupal\daedalus_ui\DaedalusUi;
@@ -32,12 +33,17 @@ class EntityViewAlter {
     private readonly AccountProxyInterface $currentUser,
     private readonly EntityConverter $entityConverter,
     private readonly HostResolver $hostResolver,
+    private readonly CanvasAccess $canvasAccess,
   ) {}
 
   /**
    * Entity view alter.
    *
-   * Replaces the entity build with an editable UI.
+   * Replaces the entity build with an editable UI, for an actor who may
+   * edit something on the host (CanvasAccess, the question the Edit mode's
+   * own availability asks). Anyone else gets the ordinary render in every
+   * mode: no canvas element, nothing staged, each block behind its own
+   * access check.
    *
    * LoadEditablePage is the AJAX version.
    *
@@ -78,6 +84,14 @@ class EntityViewAlter {
       return;
     }
 
+    if (!$this->canvasAccess->allows($this->daedalusUi->deriveHostFromRoute())) {
+      // The ordinary render, but never a shared cache entry: the answer is
+      // this actor's access to this host, which no cache context of the
+      // build names, and the next reader of the entry may be an editor.
+      $build['#cache']['max-age'] = 0;
+      return;
+    }
+
     $violation = $this->ensureWorkspace($entity);
     if ($violation) {
       // #theme_wrappers included: a wrapper carrying the entity UI attribute
@@ -96,6 +110,12 @@ class EntityViewAlter {
     }
     else {
       $this->buildEditModeUi($mode, $entity, $build, $display);
+      // The Edit Mode render is the unsaved copy, built for an actor who may
+      // edit this host: never a shared cache entry. The copy changes with no
+      // cache tag to invalidate, and no cache context of the build names
+      // this actor's access to this host, so the next reader of an entry
+      // may be someone who is only shown what is saved.
+      $build['#cache']['max-age'] = 0;
     }
 
   }

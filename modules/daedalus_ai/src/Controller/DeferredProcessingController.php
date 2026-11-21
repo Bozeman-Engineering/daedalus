@@ -6,7 +6,9 @@ namespace Drupal\daedalus_ai\Controller;
 
 use Drupal\daedalus_ai\DeferredProcessor\DeferredProcessorManager;
 use Drupal\daedalus_ai\DeferredProcessor\RetryableProcessorInterface;
+use Drupal\daedalus_ai\ImageGenerationGate;
 use Drupal\daedalus_ai\MutatedTurn;
+use Drupal\daedalus_ai_ledger\UsageGate;
 use Drupal\Component\Serialization\Json;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Entity\EntityInterface;
@@ -33,11 +35,39 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
  * `failures` key for jobs that did not complete. The client applies the
  * payload through the app's applyResponse pipeline and reports the failures
  * in the chat.
+ *
+ * Both routes take the session's header token and ask for the AI
+ * permission beside the edit-mode one. The retry road spends (a prompt
+ * rewrite by the model, then another generation), so it passes what a chat
+ * turn passes before it spends: the usage gate and the image generation
+ * switch. What a retry generates from is the job the server stored under
+ * the media uuid; the request names which failures to retry and why they
+ * failed, nothing else.
  */
 class DeferredProcessingController extends ControllerBase {
 
   use AjaxPageStateRequestTrait;
 
+  /**
+   * The most failures one retry request may name.
+   *
+   * A retry answers a batch's failures, and a batch is one turn's images;
+   * a list longer than any turn mints is refused before anything runs.
+   */
+  public const MAX_RETRY_FAILURES = 50;
+
+  /**
+   * The most characters of a failure's reason the rewrite is handed.
+   */
+  public const MAX_REASON_LENGTH = 1000;
+
+  /**
+   * Constructs the controller.
+   *
+   * The ledger (daedalus_ai_ledger) depends on this module, so its usage
+   * gate is absent when the ledger is not installed, and nothing is capped
+   * then.
+   */
   public function __construct(
     protected DeferredProcessorManager $processorManager,
     protected PrivateTempStoreFactory $tempStoreFactory,
@@ -45,6 +75,8 @@ class DeferredProcessingController extends ControllerBase {
     protected EntityStorageHandler $entityStorageHandler,
     protected DaedalusUi $daedalusUi,
     protected HostResolver $hostResolver,
+    protected ImageGenerationGate $imageGenerationGate,
+    protected ?UsageGate $usageGate = NULL,
   ) {}
 
   /**
@@ -58,6 +90,10 @@ class DeferredProcessingController extends ControllerBase {
       $container->get('daedalus_blueprint.storage_handler'),
       $container->get('daedalus_ui.ui'),
       $container->get('daedalus_blueprint.host_resolver'),
+      $container->get('daedalus_ai.image_generation_gate'),
+      $container->get('module_handler')->moduleExists('daedalus_ai_ledger')
+        ? $container->get('daedalus_ai_ledger.usage_gate')
+        : NULL,
     );
   }
 
@@ -82,7 +118,7 @@ class DeferredProcessingController extends ControllerBase {
     $host = $this->hostOf($entity);
     $this->assertValidViewMode($host, $view_mode);
 
-    $body = Json::decode($request->getContent()) ?? [];
+    $body = $this->body($request);
     $this->applyAjaxPageState($request, $body);
     $batch_id = $body['batch_id'] ?? NULL;
     if (!$batch_id || !is_string($batch_id)) {
@@ -127,7 +163,10 @@ class DeferredProcessingController extends ControllerBase {
    * Retries failed jobs by delegating to processor retry logic.
    *
    * @param \Symfony\Component\HttpFoundation\Request $request
-   *   The request. Body JSON: {"failures": [...], "ajax_page_state": {...}}.
+   *   The request. Body JSON: {"failures": [...], "ajax_page_state": {...}},
+   *   each failure {type, media_uuid, reason, target} as a batch reported
+   *   it. Anything else a failure carries is not read: what to generate
+   *   from is the server's stored job.
    * @param string $entity_type
    *   The entity type ID.
    * @param \Drupal\Core\Entity\EntityInterface $entity
@@ -136,17 +175,25 @@ class DeferredProcessingController extends ControllerBase {
    *   The view mode to render on success.
    *
    * @return \Symfony\Component\HttpFoundation\Response
-   *   JSON: the mutation-response payload plus {failures: [...]}.
+   *   JSON: the mutation-response payload plus {failures: [...]}. A failure
+   *   that was not retried (a gate refused, its processor does not retry,
+   *   no job is stored for it) comes back not retryable.
    */
   public function retry(Request $request, string $entity_type, EntityInterface $entity, string $view_mode): Response {
     $host = $this->hostOf($entity);
     $this->assertValidViewMode($host, $view_mode);
 
-    $body = Json::decode($request->getContent()) ?? [];
+    $body = $this->body($request);
     $this->applyAjaxPageState($request, $body);
-    $failures = $body['failures'] ?? [];
-    if (empty($failures) || !is_array($failures)) {
-      throw new BadRequestHttpException('Missing failures array.');
+    $failures = $this->retryFailures($body['failures'] ?? NULL);
+
+    // The gates a chat turn passes before it spends, asked before the
+    // rewrite's model call and the generation behind it.
+    $refusal = $this->retryRefusal();
+    if ($refusal !== NULL) {
+      return new JsonResponse([
+        'failures' => self::notRetried($failures, $refusal),
+      ]);
     }
 
     // Group failures by type and delegate to processors. The retry path
@@ -154,27 +201,25 @@ class DeferredProcessingController extends ControllerBase {
     // reports back which uuids to re-process.
     $grouped = [];
     foreach ($failures as $failure) {
-      $type = $failure['type'] ?? NULL;
-      if ($type) {
-        $grouped[$type][] = $failure;
-      }
+      $grouped[$failure['type']][] = $failure;
     }
 
     $success_targets = [];
     $new_failures = [];
-    $retried = FALSE;
     foreach ($grouped as $type => $type_failures) {
       $processor = $this->processorManager->getProcessor($type);
-      if (!$processor instanceof RetryableProcessorInterface) {
-        array_push($new_failures, ...$type_failures);
-        continue;
-      }
-      $media_uuids = $processor->buildRetryJobs($type_failures);
+      $media_uuids = $processor instanceof RetryableProcessorInterface
+        ? $processor->buildRetryJobs($type_failures)
+        : [];
+      // A failure the processor re-registered nothing for keeps its reason
+      // and is not offered again.
+      array_push($new_failures, ...self::notRetried(array_filter(
+        $type_failures,
+        static fn (array $failure): bool => !in_array($failure['media_uuid'], $media_uuids, TRUE),
+      )));
       if ($media_uuids === []) {
-        array_push($new_failures, ...$type_failures);
         continue;
       }
-      $retried = TRUE;
       // Rebuild the job entries so each retried media uuid keeps the target
       // its reference was originally written into.
       $targets_by_uuid = array_column($type_failures, 'target', 'media_uuid');
@@ -190,16 +235,119 @@ class DeferredProcessingController extends ControllerBase {
       array_push($new_failures, ...$type_failures);
     }
 
-    if (!$retried) {
-      return new JsonResponse([
-        'failures' => $failures,
-      ]);
-    }
-
     return $this->buildResponseFromResult([
       'success_targets' => $success_targets,
       'failures' => $new_failures,
     ], $request, $host, $view_mode);
+  }
+
+  /**
+   * The request's JSON body as a map.
+   *
+   * @param \Symfony\Component\HttpFoundation\Request $request
+   *   The request.
+   *
+   * @return array
+   *   The decoded body.
+   *
+   * @throws \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
+   *   When the body is not a JSON object.
+   */
+  protected function body(Request $request): array {
+    $body = Json::decode($request->getContent());
+    if (!is_array($body)) {
+      throw new BadRequestHttpException('The body must be a JSON object.');
+    }
+    return $body;
+  }
+
+  /**
+   * Reads a retry request's failures, keeping only what a retry may name.
+   *
+   * A failure names its processor type, the media uuid, the reason the
+   * generation was rejected (the rewrite's one input from the client, cut
+   * to MAX_REASON_LENGTH) and the target to re-render. The prompt, the alt
+   * text and the provider configuration a reported failure also carries
+   * are dropped here, so no processor can generate from the request. One
+   * entry per media uuid: a repeated uuid would generate twice.
+   *
+   * @param mixed $failures
+   *   The body's `failures` value.
+   *
+   * @return array<int, array{type: string, media_uuid: string, reason: string, target: array|string|null}>
+   *   The failures to retry.
+   *
+   * @throws \Symfony\Component\HttpKernel\Exception\BadRequestHttpException
+   *   When the list is missing, empty, longer than MAX_RETRY_FAILURES, or
+   *   holds an entry without a type and a media uuid.
+   */
+  protected function retryFailures(mixed $failures): array {
+    if (!is_array($failures) || $failures === []) {
+      throw new BadRequestHttpException('Missing failures array.');
+    }
+    if (count($failures) > self::MAX_RETRY_FAILURES) {
+      throw new BadRequestHttpException(sprintf('A retry names at most %d failures.', self::MAX_RETRY_FAILURES));
+    }
+    $read = [];
+    foreach ($failures as $failure) {
+      $type = is_array($failure) ? ($failure['type'] ?? NULL) : NULL;
+      $media_uuid = is_array($failure) ? ($failure['media_uuid'] ?? NULL) : NULL;
+      if (!is_string($type) || $type === '' || !is_string($media_uuid) || $media_uuid === '') {
+        throw new BadRequestHttpException('Every failure names a type and a media_uuid.');
+      }
+      $reason = $failure['reason'] ?? '';
+      $target = $failure['target'] ?? NULL;
+      $read[$media_uuid] ??= [
+        'type' => $type,
+        'media_uuid' => $media_uuid,
+        'reason' => is_string($reason) ? mb_substr($reason, 0, self::MAX_REASON_LENGTH) : '',
+        'target' => is_array($target) || is_string($target) ? $target : NULL,
+      ];
+    }
+    return array_values($read);
+  }
+
+  /**
+   * Why a retry may not spend now, or NULL when it may.
+   *
+   * The image generation switch (site-wide and the user's own) and the
+   * usage gate, the two a chat turn passes: the switch at the mint, the
+   * usage gate in the runner before any model call.
+   *
+   * @return string|null
+   *   The sentence the chat shows, or NULL when both gates allow.
+   */
+  protected function retryRefusal(): ?string {
+    if (!$this->imageGenerationGate->isEnabled()) {
+      return (string) $this->t('Image generation is turned off.');
+    }
+    $verdict = $this->usageGate?->check($this->currentUser());
+    if ($verdict !== NULL && !$verdict->allowed) {
+      return $verdict->message;
+    }
+    return NULL;
+  }
+
+  /**
+   * Failures answered without another attempt.
+   *
+   * @param array $failures
+   *   Failures as retryFailures() read them.
+   * @param string|null $reason
+   *   The reason to answer with, or NULL to keep each failure's own.
+   *
+   * @return array
+   *   The failures in the shape a batch reports them, not retryable.
+   */
+  protected static function notRetried(array $failures, ?string $reason = NULL): array {
+    return array_values(array_map(static fn (array $failure): array => [
+      'type' => $failure['type'],
+      'media_uuid' => $failure['media_uuid'],
+      'reason' => $reason ?? $failure['reason'],
+      'retryable' => FALSE,
+      'data' => [],
+      'target' => $failure['target'],
+    ], $failures));
   }
 
   /**

@@ -53,8 +53,10 @@ export const fillWithSample = (key) => {
         properties: { [fieldName]: { [SAMPLE_KEY]: true } },
       },
     ],
-    label: Drupal.t('Filled @label with a sample', {
-      '@label': Blueprint.labelForKey(key),
+    // A history label is plain text: the History panel escapes it once
+    // where it shows it.
+    label: Drupal.t('Filled !label with a sample', {
+      '!label': Blueprint.labelForKey(key),
     }),
   });
   request.catch((error) => {

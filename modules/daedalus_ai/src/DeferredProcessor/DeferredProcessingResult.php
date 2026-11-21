@@ -45,8 +45,9 @@ class DeferredProcessingResult {
    * @param bool $retryable
    *   Whether the job can be retried with a modified prompt.
    * @param array $data
-   *   Additional context for the retry path (e.g. the job's prompt, alt
-   *   text, and provider configuration).
+   *   What the failure reports about its job (e.g. the prompt, alt text,
+   *   and provider configuration). Informational: a retry reads the stored
+   *   job, never this.
    *
    * @return static
    */

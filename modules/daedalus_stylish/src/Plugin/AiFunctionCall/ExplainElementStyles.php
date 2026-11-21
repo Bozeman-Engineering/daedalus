@@ -155,7 +155,8 @@ final class ExplainElementStyles extends FunctionCallBase implements ExecutableF
       $this->setOutput('An active workspace is required. Switch to one with tool__workspace_switch, or create one with tool__workspace_create_and_switch; ask the user which.');
       return;
     }
-    $host = $this->storageHandler->load($entity_type, $entity_id);
+    // A read: the unsaved copy only for a user who may update the host.
+    $host = $this->storageHandler->loadReadable($entity_type, $entity_id);
     if ($host === NULL) {
       $this->setOutput("Entity $entity_type:$entity_id not found.");
       return;

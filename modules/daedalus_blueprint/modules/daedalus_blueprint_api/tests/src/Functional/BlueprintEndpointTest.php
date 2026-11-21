@@ -433,6 +433,21 @@ class BlueprintEndpointTest extends BrowserTestBase {
     $this->assertSame(400, $response->getStatusCode());
     $payload = json_decode((string) $response->getBody(), TRUE);
     $this->assertSame('MISSING_OPERATIONS', $payload['errors'][0]['code']);
+
+    // A conversation id is taken only from the user it was handed to; on
+    // a site where nothing hands conversations out, none is taken.
+    $response = $this->postOperations([
+      'operations' => [[
+        'op' => 'update_element',
+        'element' => $this->entity->uuid(),
+        'properties' => ['name' => 'Renamed'],
+      ],
+      ],
+      'thread_id' => 'thread-1',
+    ], $token);
+    $this->assertSame(403, $response->getStatusCode());
+    $payload = json_decode((string) $response->getBody(), TRUE);
+    $this->assertSame('CONVERSATION_NOT_OWNED', $payload['errors'][0]['code']);
   }
 
   /**
@@ -468,6 +483,44 @@ class BlueprintEndpointTest extends BrowserTestBase {
     $storage = \Drupal::entityTypeManager()->getStorage('entity_test');
     $storage->resetCache([$this->entity->id()]);
     $this->assertSame('Original subtitle', $storage->load($this->entity->id())->get('field_subtitle')->value);
+  }
+
+  /**
+   * The read route answers the unsaved copy only to a user who may update.
+   *
+   * With daedalus_tempstore on the site a mutation stages. The editor
+   * reads the staged subtitle back; a user who may only view the entity
+   * reads the saved one, in the full read and the summary alike.
+   */
+  public function testReadAnswersTheUnsavedCopyToEditorsOnly(): void {
+    \Drupal::service('module_installer')->install(['layout_builder', 'daedalus_tempstore']);
+    $this->rebuildContainer();
+    $base = '/daedalus-blueprint/entity_test/' . $this->entity->id();
+
+    $this->drupalLogin($this->editor);
+    $response = $this->postOperations([
+      'operations' => [
+        ['op' => 'update_element', 'properties' => ['field_subtitle' => 'Unsaved subtitle']],
+      ],
+    ], $this->getCsrfToken());
+    $this->assertSame(200, $response->getStatusCode());
+    $storage = \Drupal::entityTypeManager()->getStorage('entity_test');
+    $storage->resetCache([$this->entity->id()]);
+    $this->assertSame('Original subtitle', $storage->load($this->entity->id())->get('field_subtitle')->value, 'The mutation staged.');
+
+    $this->drupalGet($base);
+    $this->assertSession()->statusCodeEquals(200);
+    $payload = json_decode($this->getSession()->getPage()->getContent(), TRUE);
+    $this->assertSame('Unsaved subtitle', $payload['blueprint']['fields']['field_subtitle']);
+
+    $this->drupalLogin($this->viewer);
+    $this->drupalGet($base);
+    $this->assertSession()->statusCodeEquals(200);
+    $payload = json_decode($this->getSession()->getPage()->getContent(), TRUE);
+    $this->assertSame('Original subtitle', $payload['blueprint']['fields']['field_subtitle']);
+    $this->drupalGet($base, ['query' => ['mode' => 'summary']]);
+    $this->assertSession()->statusCodeEquals(200);
+    $this->assertSession()->responseNotContains('Unsaved subtitle');
   }
 
   /**

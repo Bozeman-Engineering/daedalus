@@ -10,7 +10,11 @@ use Drupal\entity_test\Entity\EntityTest;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Section;
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\Core\Lock\DatabaseLockBackend;
+use Drupal\daedalus_tempstore\History\HistoryEntryRefusedException;
+use Drupal\daedalus_tempstore\History\HistoryManager;
 use Drupal\daedalus_tempstore\History\HistoryRecorder;
+use Drupal\daedalus_tempstore\History\HistoryStore;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -265,6 +269,25 @@ class HistoryTest extends KernelTestBase {
   }
 
   /**
+   * A derived label is plain text: it holds the field's name as written.
+   *
+   * The History panel and the undo notice each escape the label once where
+   * they show it, so the label itself carries no entity.
+   */
+  public function testDerivedLabelIsPlainText(): void {
+    $field = 'Tim\'s "Q&A"';
+    $entity = clone $this->entity;
+    $entity->set('name', 'renamed');
+    $this->recorder->annotate(NULL, [['uuid' => $this->entity->uuid(), 'field_name' => $field]]);
+    $this->repository->set($entity);
+    $this->recorder->flush();
+
+    $label = $this->manager->metadata($this->host)['entries'][1]['label'];
+    $this->assertSame('Edited ' . $field, $label);
+    $this->assertDoesNotMatchRegularExpression('/&[#a-z0-9]+;/i', $label);
+  }
+
+  /**
    * Deleting staged state (save/discard) clears the timeline with it.
    */
   public function testDeleteClearsTimeline(): void {
@@ -349,14 +372,233 @@ class HistoryTest extends KernelTestBase {
   }
 
   /**
-   * Timelines are per user: another user's history is invisible.
+   * A page has one timeline: every editor sees it, and entries name who.
    */
-  public function testPerUserIsolation(): void {
+  public function testTimelineIsSharedAndEntriesNameTheirAuthor(): void {
+    $first = $this->setUpCurrentUser(['name' => 'first_editor']);
     $this->stage('one');
-    $this->assertNotEmpty($this->manager->metadata($this->host)['entries']);
+
+    $second = $this->setUpCurrentUser(['name' => 'second_editor']);
+    $metadata = $this->manager->metadata($this->host);
+    $this->assertCount(2, $metadata['entries'], 'The second editor sees the first editor\'s change.');
+    $this->stage('two');
+
+    $entries = $this->manager->metadata($this->host)['entries'];
+    $this->assertSame([NULL, (int) $first->id(), (int) $second->id()], array_column($entries, 'uid'), 'The baseline is nobody\'s; each change records who made it.');
+    $this->assertSame([NULL, 'first_editor', 'second_editor'], array_column($entries, 'author'));
+
+    // Undo is "undo the last change to this page", whoever made it: the
+    // first editor steps back over the second editor's change.
+    $this->setCurrentUser($first);
+    $result = $this->manager->undo($this->host);
+    $this->assertSame(1, $result['pointer']);
+    $this->assertSame('one', $this->stagedName());
+    // The result names the change taken back (the entry the undo left),
+    // not the entry it landed on.
+    $this->assertSame('undo', $result['direction']);
+    $this->assertSame(
+      [['seq' => 2, 'label' => $entries[2]['label'], 'uid' => (int) $second->id(), 'author' => 'second_editor']],
+      $result['changes'],
+    );
+
+    // A redo names the change it put back; a jump names every change it
+    // crossed, in the order it took them.
+    $result = $this->manager->redo($this->host);
+    $this->assertSame('redo', $result['direction']);
+    $this->assertSame([2], array_column($result['changes'], 'seq'));
+    $this->assertSame(['second_editor'], array_column($result['changes'], 'author'));
+    $result = $this->manager->restoreTo($this->host, 0);
+    $this->assertSame('undo', $result['direction']);
+    $this->assertSame([2, 1], array_column($result['changes'], 'seq'));
+    $this->assertSame(['second_editor', 'first_editor'], array_column($result['changes'], 'author'));
+    $result = $this->manager->restoreTo($this->host, 2);
+    $this->assertSame('redo', $result['direction']);
+    $this->assertSame([1, 2], array_column($result['changes'], 'seq'));
+    $this->manager->undo($this->host);
+
+    // The pointer moved for everyone.
+    $this->setCurrentUser($second);
+    $metadata = $this->manager->metadata($this->host);
+    $this->assertSame(1, $metadata['pointer']);
+    $this->assertTrue($metadata['can_redo']);
+  }
+
+  /**
+   * One editor ending the stage (save or discard) ends everyone's history.
+   */
+  public function testDeleteClearsTheTimelineForEveryEditor(): void {
+    $first = $this->setUpCurrentUser();
+    $this->stage('one');
+    $this->stage('two');
 
     $this->setUpCurrentUser();
+    $this->repository->delete($this->entity);
+
+    $this->setCurrentUser($first);
+    $metadata = $this->manager->metadata($this->host);
+    $this->assertSame([], $metadata['entries'], 'No entry of the ended stage is left to restore.');
+    $this->assertNull($this->manager->undo($this->host));
+    $this->assertNull($this->manager->restoreTo($this->host, 0));
+    $this->assertNull($this->stagedName());
+    $this->assertSame([], $this->container->get('keyvalue.expirable')->get(HistoryStore::COLLECTION)->getAll(), 'The index and every snapshot are gone.');
+  }
+
+  /**
+   * An entry's author who no longer exists is answered as no name.
+   */
+  public function testDeletedAuthorHasNoName(): void {
+    $author = $this->setUpCurrentUser();
+    $this->stage('one');
+    $this->setUpCurrentUser();
+    $this->installSchema('user', ['users_data']);
+    $author->delete();
+
+    $entry = $this->manager->metadata($this->host)['entries'][1];
+    $this->assertSame((int) $author->id(), $entry['uid']);
+    $this->assertNull($entry['author']);
+
+    // A restore over that change names it the same way.
+    $change = $this->manager->undo($this->host)['changes'][0];
+    $this->assertSame((int) $author->id(), $change['uid']);
+    $this->assertNull($change['author']);
+  }
+
+  /**
+   * A label is kept to the recorder's length ceiling.
+   */
+  public function testLabelIsCapped(): void {
+    $this->stage('one', str_repeat('é', HistoryRecorder::MAX_LABEL_LENGTH * 4));
+
+    $label = $this->manager->metadata($this->host)['entries'][1]['label'];
+    $this->assertSame(HistoryRecorder::MAX_LABEL_LENGTH, mb_strlen($label));
+    $this->assertStringStartsWith('ééé', $label);
+
+    // A label within the ceiling is kept whole.
+    $this->stage('two', 'Moved Heading');
+    $this->assertSame('Moved Heading', $this->manager->metadata($this->host)['entries'][2]['label']);
+  }
+
+  /**
+   * A write whose snapshot is over the byte ceiling is refused whole.
+   */
+  public function testOversizeEntryIsRefused(): void {
+    $this->stage('one');
+
+    // Random bytes as base64 do not compress below three quarters of their
+    // length, so this snapshot is over the ceiling.
+    $entity = clone $this->entity;
+    $entity->set('name', base64_encode(random_bytes((int) (HistoryRecorder::MAX_ENTRY_BYTES * 1.2))));
+    try {
+      $this->repository->set($entity);
+      $this->fail('The oversize write was staged.');
+    }
+    catch (HistoryEntryRefusedException $e) {
+      $this->assertStringContainsString('too large', $e->getMessage());
+    }
+    $this->recorder->flush();
+
+    $this->assertSame('one', $this->stagedName(), 'The staged state is what it was.');
+    $metadata = $this->manager->metadata($this->host);
+    $this->assertCount(2, $metadata['entries'], 'No entry was added.');
+    $this->assertSame(1, $metadata['pointer']);
+  }
+
+  /**
+   * Suppression nests: capture stays off until the outermost call returns.
+   */
+  public function testSuppressNests(): void {
+    $entity = clone $this->entity;
+    $entity->set('name', 'bookkeeping');
+    $this->recorder->suppress(function () use ($entity): void {
+      $this->recorder->suppress(fn() => NULL);
+      // Still inside the outer call: this write must not be captured.
+      $this->repository->set($entity);
+    });
+    $this->recorder->flush();
     $this->assertSame([], $this->manager->metadata($this->host)['entries']);
+
+    // A callable that throws still gives its level back.
+    try {
+      $this->recorder->suppress(fn() => throw new \RuntimeException('thrown inside'));
+    }
+    catch (\RuntimeException) {
+    }
+    $this->stage('one');
+    $this->assertCount(2, $this->manager->metadata($this->host)['entries'], 'Capture is on again.');
+  }
+
+  /**
+   * Every index update holds the timeline's lock, and waits its turn.
+   */
+  public function testIndexUpdatesTakeTheTimelineLock(): void {
+    $timeline = $this->manager->timelineFor($this->host);
+    $name = HistoryStore::COLLECTION . ':' . sha1($timeline);
+    // A kernel test's own lock service grants everything, so the store is
+    // built on the database backend a site runs.
+    $database = $this->container->get('database');
+    $lock = new DatabaseLockBackend($database);
+    $store = new HistoryStore($this->container->get('keyvalue.expirable'), $this->container->get('datetime.time'), $lock);
+    $held = [];
+    $probe = function () use ($lock, $name, &$held): void {
+      // The backend answers "not available" for a name that is held, by
+      // itself included.
+      $held[] = !$lock->lockMayBeAvailable($name);
+    };
+
+    // The store's door holds the lock while the update runs and gives it
+    // back after, also when the update throws.
+    $store->locked($timeline, $probe);
+    $this->assertSame([TRUE], $held);
+    $this->assertTrue($lock->lockMayBeAvailable($name));
+    try {
+      $store->locked($timeline, fn() => throw new \RuntimeException('thrown inside'));
+    }
+    catch (\RuntimeException) {
+    }
+    $this->assertTrue($lock->lockMayBeAvailable($name));
+
+    // Another request holding the lock: an append, a restore and a clear
+    // each refuse and leave the timeline as it was.
+    $this->stage('one');
+    $this->stage('two');
+    $before = $store->loadIndex($timeline);
+    $other = new DatabaseLockBackend($database);
+    $this->assertTrue($other->acquire($name));
+    $busy = new HistoryStore($this->container->get('keyvalue.expirable'), $this->container->get('datetime.time'), new class($database) extends DatabaseLockBackend {
+
+      /**
+       * {@inheritdoc}
+       */
+      public function wait($name, $delay = 30) {
+        // Do not sit out the delay in a test: the other holder stays.
+        return TRUE;
+      }
+
+    });
+    $recorder = new HistoryRecorder($busy, $this->container->get('tempstore.shared'), $this->container->get('current_user'), $this->container->get('datetime.time'), $this->container->get('string_translation'));
+    $manager = new HistoryManager($busy, $recorder, $this->container->get('daedalus_tempstore.strategy_selector'), $this->container->get('tempstore.shared'), $this->container->get('entity_type.manager'), $this->container->get('daedalus_blueprint.host_resolver'));
+
+    [$collection, $key] = explode(':', $timeline, 2);
+    $recorder->recordWrite($collection, $key, ['entity' => $this->entity]);
+    foreach ([
+      'append' => fn() => $recorder->flush(),
+      'restore' => fn() => $manager->undo($this->host),
+      'clear' => fn() => $busy->clearTimeline($timeline),
+    ] as $what => $update) {
+      try {
+        $update();
+        $this->fail("The $what ran while another request held the timeline.");
+      }
+      catch (\RuntimeException $e) {
+        $this->assertStringContainsString('another request', $e->getMessage());
+      }
+    }
+    $this->assertSame($before, $store->loadIndex($timeline));
+    $this->assertSame('two', $this->stagedName());
+
+    // Released, the same updates go through.
+    $other->release($name);
+    $this->assertSame(1, $manager->undo($this->host)['pointer']);
   }
 
 }

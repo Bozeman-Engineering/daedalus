@@ -33,7 +33,11 @@ import { createPeekCache } from '../model/peek-cache.js';
 import { saveFavorites } from '../favorites.js';
 import { requestPeek } from '../peek.js';
 import { PeekFrame } from './peek-frame.js';
-import { canEditFace, setSiteFavorite } from '../site-favorite.js';
+import {
+  canEditFace,
+  favoriteNotice,
+  setSiteFavorite,
+} from '../site-favorite.js';
 import {
   blueprintMenuItems,
   failureMessage,
@@ -700,16 +704,7 @@ export const AddPanel = ({ app, session, settings }) => {
             ),
           );
         }
-        report(
-          favorite
-            ? Drupal.t('"@label" is now a favorite for everyone.', {
-                '@label': face.label,
-              })
-            : Drupal.t('"@label" is no longer a favorite for everyone.', {
-                '@label': face.label,
-              }),
-          'status',
-        );
+        report(favoriteNotice(face, favorite), 'status');
       })
       .catch((error) => {
         report(failureMessage(error), 'error');

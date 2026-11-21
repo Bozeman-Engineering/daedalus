@@ -18,7 +18,9 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * The formatted text block is the rich-text leaf on the blueprint mutation
  * spine: one text_long field whose FILTERED output renders collapsed as a
  * single attributed div, edited in place by an inline CKEditor seeded with
- * the RAW {value, format} pair from the blueprint mirror, and committed as
+ * the editor seed stamped on the root (the value filtered for the editor;
+ * the blueprint mirror's RAW {value, format} pair is only what the edit is
+ * compared against), and committed as
  * ONE update_element op. No entity form is involved. This test covers the
  * behaviors that define the widget on a real page:
  * - The collapsed render contract: the block IS a single div directly inside
@@ -35,8 +37,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  *   the filtered output; the change stays staged in tempstore.
  * - The no-change restore: a blur with nothing changed sends nothing, and
  *   the saved filtered markup is restored byte-for-byte by hand, because no
- *   re-render happens (the edit showed the raw value, so a snapshot restore
- *   alone would leave raw markup on the canvas).
+ *   re-render happens (the edit showed the editor's seed, so a snapshot
+ *   restore alone would leave editor markup on the canvas).
  * - Escape: the editor is destroyed, the filtered markup is restored, and
  *   nothing is sent.
  * - The format switch: the Text format widget's picker lists the accessible
@@ -208,10 +210,12 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
           return settings.format === 'daedalus_edit_formatted_text'
             && 'daedalus_edit_formatted_text' in settings.formats
             && 'full_html' in settings.formats
-            && !('restricted_html' in settings.formats);
+            && !('restricted_html' in settings.formats)
+            && settings.seed.includes('Hello <em>rich</em> world')
+            && !settings.seed.includes('onclick');
         })()
         JS),
-      'The settings stamp carries the stored format and only the accessible editor-backed formats.',
+      'The settings stamp carries the stored format, only the accessible editor-backed formats, and the editor seed: the value without the attribute the format strips.',
     );
 
     // Count blueprint POSTs: the "exactly one op per gesture" half of the
@@ -246,12 +250,13 @@ class FormattedTextBlockBlueprintEditBehaviorTest extends WebDriverTestBase {
         return !!editor && !!root && root.isContentEditable
           && !!document.querySelector("[data-daedalus-edit-toggle='formats']")
           && !!current.snapshot
-          && current.snapshot.field_formatted_text_text.value === editor.getData();
+          && current.snapshot.field_formatted_text_text.value === editor.getData()
+          && window.__evil === undefined;
       })()
       JS;
 
     // No-change restore: open the edit (the canvas now shows CKEditor's
-    // rendering of the RAW value) and blur without touching anything.
+    // rendering of the stamped seed) and blur without touching anything.
     // Nothing is sent, and because no re-render is coming, the editor must
     // put the saved filtered markup back by hand, byte for byte.
     $session->executeScript(<<<JS

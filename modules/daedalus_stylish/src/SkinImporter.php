@@ -80,7 +80,7 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  * no managed files), on the site it names the managed file's uuid
  * (FontFiles). The importer crosses that gap (landFonts()): it lands each
  * face's bytes through FontFiles::fromBytes() (the daedalus_ui file lane
- * narrowed to woff2 and woff, permanent, held by the skin for its life)
+ * narrowed to woff2 and woff, held by the skin for its life)
  * and rewrites the source's `file` from the basename to the uuid; the
  * shipper (SkinShipper) does the reverse. A face's file the module does
  * not hold is a developer error (SHIPPED_FONT_FILE_MISSING), never
@@ -154,7 +154,8 @@ class SkinImporter extends ShippedDefinitionsImporter {
    * @param \Drupal\daedalus_stylish\FontValidator $fontValidator
    *   The font seam, run on the landed faces.
    * @param \Drupal\daedalus_stylish\FontFiles $fontFiles
-   *   The font store: a face's bytes land here, permanent.
+   *   The font store: a face's bytes land here, permanent once the
+   *   skin holds them.
    * @param \Drupal\Core\Extension\ThemeHandlerInterface $themeHandler
    *   The theme handler: the default theme the defaults validate against
    *   (themeAwaited(): the kind waits while it is named but not installed).

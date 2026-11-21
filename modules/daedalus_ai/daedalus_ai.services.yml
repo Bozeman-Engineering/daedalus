@@ -160,10 +160,17 @@ services:
   daedalus_ai.ai_tool_action_subscriber:
     class: Drupal\daedalus_ai\EventSubscriber\AiToolActionSubscriber
 
+  # What a chat message passes before the browser renders it as HTML: the
+  # live reply's boundary and the replayed history's whole conversion.
+  daedalus_ai.reply_display:
+    class: Drupal\daedalus_ai\ReplyDisplay
+    arguments:
+      $converter: '@ai.commonmark_converter'
+      $hostnameFilter: '@ai.hostname_filter_service'
+  Drupal\daedalus_ai\ReplyDisplay: '@daedalus_ai.reply_display'
+
   daedalus_ai.deepchat_response_listener:
     class: Drupal\daedalus_ai\EventSubscriber\DeepChatResponseListener
-    arguments:
-      $hostnameFilter: '@ai.hostname_filter_service'
 
   daedalus_ai.generate_images_settings:
     class: Drupal\daedalus_ai\EventSubscriber\GenerateImagesSettings
@@ -174,15 +181,31 @@ services:
   # (file.usage type thread against temporary-file GC, the filename as the
   # conversation-scoped alias), resolved only for their owner, released on
   # Clear History and by the cron sweep of threads whose session is gone.
+  # It also answers the directory a conversation's files are saved in, named
+  # by a random token kept in the key-value store.
   daedalus_ai.attachments:
     class: Drupal\daedalus_ai\Attachments
     arguments:
       $fileUsage: '@file.usage'
       $aliasMap: '@daedalus_blueprint.dialect_alias_map'
       $keyValueExpirable: '@keyvalue.expirable'
+      $keyValue: '@keyvalue'
       $database: '@database'
       $time: '@datetime.time'
   Drupal\daedalus_ai\Attachments: '@daedalus_ai.attachments'
+
+  # Which chat threads were handed to which user: the sidebar records the
+  # id it hands out, and the doors that take a thread id from a request
+  # (the attach route, the HTTP op endpoint through the conversation gate)
+  # accept it only from that user.
+  daedalus_ai.thread_ownership:
+    class: Drupal\daedalus_ai\ThreadOwnership
+    arguments:
+      $keyValueExpirable: '@keyvalue.expirable'
+      $tempStoreFactory: '@tempstore.private'
+    tags:
+      - { name: daedalus_blueprint.conversation_ownership }
+  Drupal\daedalus_ai\ThreadOwnership: '@daedalus_ai.thread_ownership'
 
   # Bytes the model authors in a batch (the page language's file op and a
   # document's <d-file> declaration): saved through daedalus_ui's file lane

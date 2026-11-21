@@ -143,11 +143,16 @@ function daedalus_edit_entity_presave(EntityInterface $entity): void {
 
 /**
  * Implements hook_form_alter().
+ *
+ * Which alter a form takes is decided by what the form is, never by the
+ * mode the request names (a query parameter or a cookie, the client's to
+ * set): the panel's entity form is marked by the controller of its own
+ * route, the stock edit page's alter asks whether the form was built on the
+ * unsaved copy, and the Configure dialogs ask whether the form's section
+ * storage has a host. So a form over a host's working copy writes through
+ * the spine in every mode.
  */
 function daedalus_edit_form_alter(&$form, FormStateInterface $form_state, $form_id) {
-  if (\Drupal::service('daedalus_ui.ui')->getMode() !== 'edit') {
-    return;
-  }
   if ($form_state->get('daedalus_edit_form')) {
     \Drupal::service('daedalus_edit.form_alter.inline_entity_form')->formAlter($form, $form_state);
   }

@@ -152,17 +152,11 @@ final class AttachmentsTest extends KernelTestBase {
    * spelling; a lenient lookup would be a second grammar).
    */
   public function testScreenshotRoundTripsOnTheCleanName(): void {
-    $lane = new FileLane(
-      $this->container->get('file.upload_handler'),
-      $this->container->get('file_system'),
-      $this->container->get('entity_type.manager'),
-      $this->container->get('transliteration'),
-      $this->container->get('language_manager'),
-    );
+    $lane = $this->lane();
     $original = "Screenshot 2026-10-27 at 4.17.44\u{202F}PM.png";
     $clean = 'Screenshot-2026-10-27-at-4.17.44-PM.png';
     $png = file_get_contents($this->root . '/core/misc/druplicon.png');
-    $file = $lane->fromBytes($original, 'image/png', $png, Attachments::DIRECTORY);
+    $file = $lane->fromBytes($original, 'image/png', $png, $this->attachments->directory('thread-a'));
     $this->assertSame($clean, $file->getFilename());
     $this->assertSame((int) $this->owner->id(), (int) $file->getOwnerId(), 'The lane saves for the current user.');
 
@@ -172,6 +166,41 @@ final class AttachmentsTest extends KernelTestBase {
     $this->assertNull($this->attachments->resolve('thread-a', $original), 'The original spelling is not a name the thread holds.');
     $this->assertNull($this->attachments->resolve('thread-a', str_replace("\u{202F}", ' ', $original)), 'Nor is the plain-space spelling the model echoed.');
     $this->assertSame($png, $this->attachments->bytes($file));
+  }
+
+  /**
+   * A conversation's directory is a random name kept until its files go.
+   */
+  public function testDirectoryIsRandomAndKeptWithTheThread(): void {
+    $directory = $this->attachments->directory('thread-a');
+    $this->assertMatchesRegularExpression('@^public://daedalus-ai/attachments/[A-Za-z0-9_-]{43}$@', $directory);
+    $this->assertStringNotContainsString('thread-a', $directory);
+    // Kept: every writer of the conversation is handed the same directory,
+    // in this request and the next (a fresh store over the same key-value).
+    $this->assertSame($directory, $this->attachments->directory('thread-a'));
+    $this->assertSame($directory, $this->buildStore($this->aliasMap)->directory('thread-a'));
+    // Another conversation, and another user naming the same thread id,
+    // write elsewhere.
+    $this->assertNotSame($directory, $this->attachments->directory('thread-b'));
+    $other = $this->createUser([], 'other');
+    $this->container->get('current_user')->setAccount($other);
+    $theirs = $this->attachments->directory('thread-a');
+    $this->assertNotSame($directory, $theirs);
+    $this->container->get('current_user')->setAccount($this->owner);
+
+    // The lane saves there, and the directory outlives a release by
+    // someone else but not the owner's: the conversation that reuses the
+    // thread id is handed a new one.
+    $file = $this->lane()->fromBytes('hero.png', 'image/png', file_get_contents($this->root . '/core/misc/druplicon.png'), $directory);
+    $this->assertSame($directory . '/hero.png', $file->getFileUri());
+    $this->attachments->attach($file, 'thread-a');
+    $this->assertSame(0, $this->attachments->release('thread-a', $other));
+    $this->assertSame($directory, $this->attachments->directory('thread-a'));
+    $this->container->get('current_user')->setAccount($other);
+    $this->assertNotSame($theirs, $this->attachments->directory('thread-a'), "The other user's release forgot their own directory.");
+    $this->container->get('current_user')->setAccount($this->owner);
+    $this->assertSame(1, $this->attachments->release('thread-a', $this->owner));
+    $this->assertNotSame($directory, $this->attachments->directory('thread-a'));
   }
 
   /**
@@ -185,6 +214,10 @@ final class AttachmentsTest extends KernelTestBase {
     $this->attachments->attach($abandoned, 'thread-gone');
     $this->attachments->attach($live, 'thread-live');
     $this->attachments->attach($young, 'thread-new');
+    $gone = $this->attachments->directory('thread-gone');
+    $kept = $this->attachments->directory('thread-live');
+    $new = $this->attachments->directory('thread-new');
+    $never = $this->attachments->directory('thread-never');
 
     // The live thread's session, as ai_assistant_api's private tempstore
     // writes it for this owner.
@@ -202,8 +235,28 @@ final class AttachmentsTest extends KernelTestBase {
     $this->assertSame(['daedalus_ai' => ['thread' => ['thread-new' => '1']]], $this->usage($young));
     $this->assertSame($young->id(), $this->attachments->resolve('thread-new', 'young.png')?->id());
 
+    // The sweep forgot the directory of the thread it emptied and of one
+    // that never held a file, and kept those of the threads still holding.
+    $this->assertNotSame($gone, $this->attachments->directory('thread-gone'));
+    $this->assertNotSame($never, $this->attachments->directory('thread-never'));
+    $this->assertSame($kept, $this->attachments->directory('thread-live'));
+    $this->assertSame($new, $this->attachments->directory('thread-new'));
+
     // A second sweep finds nothing further.
     $this->assertSame(0, $this->attachments->sweep());
+  }
+
+  /**
+   * The real file lane, hand-built (daedalus_ui is not enabled).
+   */
+  private function lane(): FileLane {
+    return new FileLane(
+      $this->container->get('file.upload_handler'),
+      $this->container->get('file_system'),
+      $this->container->get('entity_type.manager'),
+      $this->container->get('transliteration'),
+      $this->container->get('language_manager'),
+    );
   }
 
   /**
@@ -216,6 +269,7 @@ final class AttachmentsTest extends KernelTestBase {
       $this->container->get('entity_type.manager'),
       $this->container->get('current_user'),
       $this->container->get('keyvalue.expirable'),
+      $this->container->get('keyvalue'),
       $this->container->get('database'),
       $this->container->get('datetime.time'),
     );

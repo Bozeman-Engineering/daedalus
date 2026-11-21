@@ -310,6 +310,55 @@ class ConfigureDialogCommitTest extends FormCommitTestBase {
   }
 
   /**
+   * The dialogs commit to the spine whatever mode the request names.
+   *
+   * A hosted storage is what puts core's forms on the transport; the mode
+   * is the client's to set and decides nothing. With no mode, and with
+   * another, core's whole-storage submit never runs: the change is one op
+   * on the working copy, answered as the transport answers.
+   */
+  public function testDialogsCommitInAnyMode(): void {
+    foreach ([NULL, 'none', 'preview'] as $mode) {
+      $this->requestMode = $mode;
+      $label = var_export($mode, TRUE);
+      $node = $this->createPageNode();
+      $storage = $this->blockFormStorage($node);
+      $form_state = $this->blockDialogState($storage, [
+        'label' => 'Configured',
+        'label_display' => 'visible',
+        'block_form' => [
+          'field_fb_text' => [['value' => 'Original']],
+          'field_fb_other' => [['value' => 'Keep']],
+        ],
+      ]);
+      $response = $this->submitAndAnswer(UpdateBlockForm::class, $form_state, $this->blockDialogRequest($node, $storage));
+
+      $outcome = $form_state->getTemporaryValue(FormCommit::OUTCOME);
+      $this->assertInstanceOf(FormCommitOutcome::class, $outcome, "The block dialog's submit is the transport's (mode $label).");
+      $this->assertSame([['uuid' => self::BLOCK_UUID, 'field_name' => 'label']], $outcome->result->getTargets());
+      $this->assertSame('tempstore', $outcome->persisted);
+      $this->assertSame('Configured', $this->workingComponent($node)->get('configuration')['label']);
+      $this->assertTrue($this->dialogPayload($response)['success']);
+
+      // The section dialog, on the same page.
+      $storage = $this->blockFormStorage($node);
+      $form_state = new FormState();
+      $form_state->addBuildInfo('args', [$storage, 0, NULL]);
+      $form_state->setValues([
+        'layout_settings' => ['label' => 'Hero'],
+        'op' => 'Update',
+      ]);
+      $this->submitAndAnswer(ConfigureSectionForm::class, $form_state, $this->sectionDialogRequest($node, $storage));
+      $outcome = $form_state->getTemporaryValue(FormCommit::OUTCOME);
+      $this->assertInstanceOf(FormCommitOutcome::class, $outcome, "The section dialog's submit is the transport's (mode $label).");
+      $this->assertSame('Hero', $this->workingSection($node)->getLayoutSettings()['label']);
+
+      $stored = $this->stored($node)->get(OverridesSectionStorage::FIELD_NAME)->get(0)->section;
+      $this->assertSame('My Block', $stored->getComponent(self::BLOCK_UUID)->get('configuration')['label'], 'Staging never saves.');
+    }
+  }
+
+  /**
    * An untouched dialog writes nothing, records nothing, and still closes.
    */
   public function testBlockDialogUntouchedWritesNothing(): void {

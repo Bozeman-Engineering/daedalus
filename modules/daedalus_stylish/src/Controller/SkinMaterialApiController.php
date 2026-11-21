@@ -43,11 +43,12 @@ use Symfony\Component\HttpFoundation\Request;
  *
  * The fonts section adds what the ops cannot carry: BYTES. A face's file
  * uploads here first (upload(): the font store over the daedalus_ui file
- * lane, woff2 and woff, permanent) and the mint names the uuid the
- * response answered; and the delivered @font-face text is read here
- * (fontStylesheet()) for the canvas to stamp after a font write (the
- * compiled skin file the page loaded predates it, and a face's url() is
- * the server's to print, so no client twin prints a face).
+ * lane, woff2 and woff, temporary until a font names it) and the mint
+ * names the uuid the response answered; and the delivered @font-face
+ * text is read here (fontStylesheet()) for the canvas to stamp after a
+ * font write (the compiled skin file the page loaded predates it, and a
+ * face's url() is the server's to print, so no client twin prints a
+ * face).
  *
  * Every route addresses the ACTIVE skin's material (a skin material is
  * never skin-qualified). Delete is an adapter over

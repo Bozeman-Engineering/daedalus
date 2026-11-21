@@ -5,19 +5,25 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_blueprint_library\Kernel;
 
 use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\daedalus_blueprint_library\Access\BlueprintTypeAccess;
 use Drupal\daedalus_blueprint_library\BlueprintAccessControlHandler;
 use Drupal\daedalus_blueprint_library\BlueprintListBuilder;
+use Drupal\daedalus_blueprint_library\BlueprintManager;
 use Drupal\daedalus_blueprint_library\BlueprintPermissions;
+use Drupal\daedalus_blueprint_library\Controller\BlueprintApiController;
 use Drupal\daedalus_blueprint_library\Entity\Blueprint;
 use Drupal\daedalus_blueprint_library\Entity\BlueprintType;
+use Drupal\daedalus_blueprint_library\Exception\BlueprintGestureException;
+use Drupal\entity_test\Entity\EntityTest;
 use Drupal\entity_test\Entity\EntityTestBundle;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\user\Traits\UserCreationTrait;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Symfony\Component\HttpFoundation\Request;
 
 /**
  * Tests blueprint access along the type axis.
@@ -32,6 +38,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * a site builder holding `site_chrome`.
  */
 #[CoversClass(BlueprintAccessControlHandler::class)]
+#[CoversClass(BlueprintApiController::class)]
+#[CoversClass(BlueprintManager::class)]
 #[CoversClass(BlueprintPermissions::class)]
 #[CoversClass(BlueprintTypeAccess::class)]
 #[CoversClass(BlueprintType::class)]
@@ -273,6 +281,193 @@ class BlueprintAccessTest extends KernelTestBase {
     $this->assertArrayHasKey('delete', $builder->getOperations($section));
     $this->assertArrayNotHasKey('edit', $builder->getOperations($chrome), 'The editor has no operation on site chrome.');
     $this->assertArrayNotHasKey('delete', $builder->getOperations($chrome));
+  }
+
+  /**
+   * Installs daedalus_stylish, which owns the variant entity type.
+   *
+   * The ownership fields this module provides exist only on
+   * daedalus_variant, so the gestures over them need the module; kernel
+   * tests do not resolve dependencies, so its chain is listed.
+   */
+  protected function installVariants(): void {
+    $this->enableModules([
+      'text',
+      'block',
+      'block_content',
+      'daedalus_tempstore',
+      'daedalus_blueprint_api',
+      'daedalus_ui',
+      'daedalus_stylish',
+    ]);
+    $this->installEntitySchema('daedalus_variant');
+    $this->installEntitySchema('daedalus_skin');
+    $this->installSchema('daedalus_stylish', [
+      'daedalus_variant_usage',
+      'daedalus_skin_material_usage',
+    ]);
+    // With block_content installed, Layout Builder tracks inline block
+    // usage on every content entity delete.
+    $this->installSchema('layout_builder', ['inline_block_usage']);
+    $this->installConfig(['daedalus_blueprint', 'daedalus_stylish']);
+  }
+
+  /**
+   * Creates a saved, unowned, site-made variant.
+   */
+  protected function createVariant(string $machine_name): ContentEntityInterface {
+    $variant = $this->container->get('entity_type.manager')->getStorage('daedalus_variant')->create([
+      'label' => $machine_name,
+      'machine_name' => $machine_name,
+      'scope' => 'kind:container',
+      'styles' => ['' => ['default' => ['background-color' => 'aliceblue']]],
+    ]);
+    $variant->save();
+    assert($variant instanceof ContentEntityInterface);
+    return $variant;
+  }
+
+  /**
+   * The id of the blueprint that owns a variant in storage, or NULL.
+   */
+  protected function storedOwner(ContentEntityInterface $variant): ?int {
+    $storage = $this->container->get('entity_type.manager')->getStorage('daedalus_variant');
+    $storage->resetCache();
+    $owner = $storage->load($variant->id())->get('blueprint')->target_id;
+    return $owner === NULL ? NULL : (int) $owner;
+  }
+
+  /**
+   * Runs a gesture as an account and answers the refusal's code and path.
+   *
+   * @return array{0: string, 1: string}|null
+   *   The first error's code and path, or NULL when the gesture ran.
+   */
+  protected function refusal(AccountInterface $account, callable $gesture): ?array {
+    $this->container->get('current_user')->setAccount($account);
+    try {
+      $gesture($this->container->get('daedalus_blueprint_library.manager'));
+    }
+    catch (BlueprintGestureException $exception) {
+      $error = $exception->getErrors()[0];
+      return [$error->getCode(), $error->getPath()];
+    }
+    return NULL;
+  }
+
+  /**
+   * Adopt, release and transfer ask update on everything they touch.
+   *
+   * An ownership gesture rewrites a field of the variant and changes what
+   * one or two blueprints offer, so it asks the variant's access handler
+   * and each of those blueprints' own, whichever road reached it (the
+   * capture ops for adopt, the routes for release and transfer). The
+   * route's gate stays the any-type question; these are the answers about
+   * the things themselves.
+   */
+  public function testVariantGesturesAskWhatTheyTouch(): void {
+    $this->installVariants();
+    $section_grants = ['create section blueprint', 'edit any section blueprint'];
+    $curator = $this->createUser([...$section_grants, 'update variants']);
+    $no_variant = $this->createUser($section_grants);
+    $chrome_curator = $this->createUser(['edit any site_chrome blueprint', 'update variants']);
+
+    $card = $this->createBlueprint('section', ['machine_name' => 'card']);
+    $teaser = $this->createBlueprint('section', ['machine_name' => 'teaser']);
+    $header = $this->createBlueprint('site_chrome', ['machine_name' => 'header']);
+    $look = $this->createVariant('look');
+
+    // Adopt: the variant, and the blueprint taking it.
+    $adopt = static fn (BlueprintManager $manager) => $manager->adoptVariants($card, ['look']);
+    $this->assertSame(['BLUEPRINT_VARIANT_FORBIDDEN', 'adopt_variants'], $this->refusal($no_variant, $adopt), 'Adopting asks update on the variant.');
+    $this->assertSame(['BLUEPRINT_FORBIDDEN', 'id'], $this->refusal($chrome_curator, $adopt), 'Adopting asks update on the blueprint.');
+    $this->assertNull($this->storedOwner($look), 'A refused adoption writes nothing.');
+    $this->assertNull($this->refusal($curator, $adopt));
+    $this->assertSame((int) $card->id(), $this->storedOwner($look));
+
+    // Release: the variant, and the blueprint that owns it.
+    $release = static fn (BlueprintManager $manager) => $manager->releaseVariant('look');
+    $this->assertSame(['BLUEPRINT_VARIANT_FORBIDDEN', 'variant'], $this->refusal($no_variant, $release), 'Releasing asks update on the variant.');
+    $this->assertSame(['BLUEPRINT_FORBIDDEN', 'variant'], $this->refusal($chrome_curator, $release), 'Releasing asks update on the owner.');
+    $this->assertSame((int) $card->id(), $this->storedOwner($look), 'A refused release writes nothing.');
+
+    // Transfer: the variant, the blueprint that owns it and the one
+    // taking it.
+    $to_header = static fn (BlueprintManager $manager) => $manager->transferVariant('look', $header);
+    $to_teaser = static fn (BlueprintManager $manager) => $manager->transferVariant('look', $teaser);
+    $this->assertSame(['BLUEPRINT_VARIANT_FORBIDDEN', 'variant'], $this->refusal($no_variant, $to_teaser), 'Transferring asks update on the variant.');
+    $this->assertSame(['BLUEPRINT_FORBIDDEN', 'variant'], $this->refusal($chrome_curator, $to_header), 'Transferring asks update on the owner it takes from.');
+    $this->assertSame(['BLUEPRINT_FORBIDDEN', 'blueprint'], $this->refusal($curator, $to_header), 'Transferring asks update on the blueprint taking it.');
+    $this->assertSame((int) $card->id(), $this->storedOwner($look), 'A refused transfer writes nothing.');
+    $this->assertNull($this->refusal($curator, $to_teaser));
+    $this->assertSame((int) $teaser->id(), $this->storedOwner($look));
+
+    // The routes answer both refusals as a 403, and write nothing.
+    $controller = BlueprintApiController::create($this->container);
+    $this->container->get('current_user')->setAccount($no_variant);
+    $response = $controller->releaseVariant('look', Request::create('/daedalus-blueprint/blueprint-variant/look/release', 'POST'));
+    $this->assertSame(403, $response->getStatusCode());
+    $this->assertSame('BLUEPRINT_VARIANT_FORBIDDEN', json_decode((string) $response->getContent(), TRUE)['errors'][0]['code']);
+    $this->container->get('current_user')->setAccount($chrome_curator);
+    $response = $controller->transferVariant('look', Request::create('/daedalus-blueprint/blueprint-variant/look/transfer', 'POST', [], [], [], [], json_encode(['blueprint' => 'header'])));
+    $this->assertSame(403, $response->getStatusCode());
+    $this->assertSame('BLUEPRINT_FORBIDDEN', json_decode((string) $response->getContent(), TRUE)['errors'][0]['code']);
+    $this->assertSame((int) $teaser->id(), $this->storedOwner($look));
+
+    // An orphan has no owner left to ask: whoever may update the variant
+    // releases it, which is the gesture that makes it usable again.
+    $teaser->delete();
+    $this->container->get('entity_type.manager')->getStorage('daedalus_variant')->resetCache();
+    $this->assertNull($this->refusal($chrome_curator, $release));
+    $this->assertNull($this->storedOwner($look));
+  }
+
+  /**
+   * A gesture route's canvas is an entity the actor may update.
+   *
+   * The query names the page the Add panel is open on, which is a page
+   * its user is editing. An entity the actor may not update is answered
+   * in the words of one that does not exist, before the write.
+   */
+  public function testTheNamedCanvasAsksUpdate(): void {
+    $this->installEntitySchema('entity_test');
+    $this->installConfig(['daedalus_blueprint']);
+    $grants = ['edit any section blueprint', 'view test entity'];
+    $composer = $this->createUser([...$grants, 'administer entity_test content']);
+    $visitor = $this->createUser($grants);
+    $this->createBlueprint('section', ['machine_name' => 'card']);
+    $page = EntityTest::create(['name' => 'A page']);
+    $page->save();
+
+    $details = static fn (string $label, string $id): Request => Request::create(
+      '/daedalus-blueprint/blueprint/card/details?entity_type=entity_test&entity_id=' . $id,
+      'POST',
+      [],
+      [],
+      [],
+      [],
+      json_encode(['label' => $label, 'description' => 'A card.']),
+    );
+    $stored_label = fn (): string => (string) $this->container->get('entity_type.manager')->getStorage('blueprint')->loadUnchanged(1)->label();
+
+    $this->container->get('current_user')->setAccount($visitor);
+    $controller = BlueprintApiController::create($this->container);
+    $refused = $controller->updateDetails('card', $details('Renamed', (string) $page->id()));
+    $missing = $controller->updateDetails('card', $details('Renamed', '999'));
+    $this->assertSame(422, $refused->getStatusCode(), (string) $refused->getContent());
+    $error = json_decode((string) $refused->getContent(), TRUE)['errors'][0];
+    $this->assertSame(['INVALID_PARAMETER', 'entity_id'], [$error['code'], $error['path']]);
+    $this->assertSame(
+      str_replace('999', (string) $page->id(), json_decode((string) $missing->getContent(), TRUE)['errors'][0]['message']),
+      $error['message'],
+      'A canvas the actor may not update reads as one that does not exist.',
+    );
+    $this->assertSame('Section', $stored_label(), 'Nothing was written.');
+
+    $this->container->get('current_user')->setAccount($composer);
+    $response = BlueprintApiController::create($this->container)->updateDetails('card', $details('Renamed', (string) $page->id()));
+    $this->assertSame(200, $response->getStatusCode(), (string) $response->getContent());
+    $this->assertSame('Renamed', $stored_label());
   }
 
 }

@@ -2,6 +2,7 @@
 
 namespace Drupal\daedalus_edit\Form;
 
+use Drupal\Component\Render\PlainTextOutput;
 use Drupal\Core\Entity\Entity\EntityFormDisplay;
 use Drupal\Core\Render\Element;
 use Drupal\Core\Form\SubformState;
@@ -187,7 +188,7 @@ class PanelUpdateBlockForm extends UpdateBlockForm implements EntityFormInterfac
     if ($property === 'label') {
       $value = (string) $form_state->getValue(['settings', 'label']);
       $title = $form['settings']['label_wrapper']['label']['#title'] ?? $form['settings']['label']['#title'] ?? $this->t('Title');
-      $label = $this->t('Edited @label', ['@label' => $title]);
+      $label = PlainTextOutput::renderFromHtml($this->t('Edited @label', ['@label' => $title]));
       $changed = $value !== (string) ($this->getCurrentComponent()->get('configuration')['label'] ?? '');
     }
     else {
@@ -200,7 +201,7 @@ class PanelUpdateBlockForm extends UpdateBlockForm implements EntityFormInterfac
       EntityFormDisplay::collectRenderDisplay($block, 'edit')->extractFormValues($block, $block_form, $form_state);
       $items = $block->get($property);
       $value = new ExtractedValue($items);
-      $label = $this->t('Edited @label', ['@label' => $items->getFieldDefinition()->getLabel()]);
+      $label = PlainTextOutput::renderFromHtml($this->t('Edited @label', ['@label' => $items->getFieldDefinition()->getLabel()]));
       // The storage's block is the staged one (the form built on a clone):
       // a widget round that changed nothing extracts an equal value.
       $changed = FormCommit::fieldChanged($items, $this->getFormEntity($form, $form_state)->get($property));

@@ -144,6 +144,15 @@
  * Refusal::permission(), so `context.permissions` always names the grants
  * that would open the gesture.
  *
+ * One question sits beside the capabilities, because it is asked of an
+ * entity type and not of a place in the document: a gesture that brings a
+ * new inline block into being (add_element with a block type, and
+ * duplicate_element on a block or on a container holding blocks) also
+ * asks the block type's create access, core's own (`create {type} block
+ * content` or `administer block content`). Its refusal is the same
+ * ACCESS_DENIED_PERMISSION with the grants named. A system batch is not
+ * asked.
+ *
  * @code
  * # mymodule.services.yml
  * mymodule.capability_policy.locks:
@@ -641,8 +650,10 @@ function hook_daedalus_blueprint_processable_fields_alter(
  *
  * Called after EntityStorageHandler successfully stages an entity (persist()
  * wrote it to tempstore) or commits it (commit() saved it to the database and
- * cleared its stage). Allows modules to perform lightweight side effects (e.g.,
- * change-detection timestamps) without coupling to specific consumers.
+ * cleared its stage), and after discard() dropped a stage (the host is then
+ * the stored one, with saved FALSE: the working copy changed back). Allows
+ * modules to perform lightweight side effects (e.g., change-detection
+ * timestamps) without coupling to specific consumers.
  *
  * @param \Drupal\daedalus_blueprint\Host\HostInterface $host
  *   The host that was persisted: a content host (its entity is the page's

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_blueprint\Unit\Materials;
 
 use Drupal\daedalus_blueprint\Materials\ConditionClause;
+use Drupal\daedalus_blueprint\Materials\EmitGate;
 use Drupal\Tests\daedalus\Traits\NodeSuitesTrait;
 use Drupal\Tests\UnitTestCase;
 use PHPUnit\Framework\Attributes\Group;
@@ -69,6 +70,39 @@ class ConditionClauseTest extends UnitTestCase {
     $this->assertNull(ConditionClause::band('@media (max-width: 767px)'), 'A viewport band is not posable.');
     $this->assertSame(ConditionClause::PSEUDO, ConditionClause::form(':hover'));
     $this->assertNull(ConditionClause::form('::before'));
+  }
+
+  /**
+   * A literal keeps text the emit gate refuses: the verdict is not its own.
+   *
+   * The grammar never drops what a key spells, so text after a query
+   * still reads as that literal, its CSS carrying the text whole. The
+   * emit gate judges that CSS (the printer drops the block, the style
+   * map validator reports the clause), and a pseudo-class literal is a
+   * bare name the gate always admits.
+   */
+  public function testLiteralCarriesItsTextToTheEmitGate(): void {
+    $refused = [
+      '@supports (display: grid){}</style>' => ConditionClause::SUPPORTS,
+      '@supports (display: grid); a' => ConditionClause::SUPPORTS,
+      '@supports (content: "a)' => ConditionClause::SUPPORTS,
+      '@media (hover: hover) {}</style>' => ConditionClause::MEDIA,
+      '@container (min-width: 500px) a;b' => ConditionClause::CONTAINER,
+    ];
+    foreach ($refused as $text => $form) {
+      $clause = ConditionClause::clause($text, []);
+      $this->assertSame(ConditionClause::LITERAL, $clause['kind'], $text);
+      $this->assertSame($form, $clause['form'], $text);
+      $this->assertSame($clause['text'], $clause['css'], $text);
+      $this->assertFalse(EmitGate::admits($clause['css']), "The emit gate refuses \"$text\".");
+    }
+    foreach (['@supports (display: grid)', '@media (hover: hover)', '@container (min-width: 500px)', ':checked'] as $text) {
+      $clause = ConditionClause::clause($text, []);
+      $this->assertSame(ConditionClause::LITERAL, $clause['kind'], $text);
+      $this->assertTrue(EmitGate::admits($clause['css']), "The emit gate admits \"$text\".");
+    }
+    // Text a pseudo-class cannot spell reads as no condition at all.
+    $this->assertSame(ConditionClause::UNKNOWN, ConditionClause::clause(':checked{}', [])['kind']);
   }
 
   /**

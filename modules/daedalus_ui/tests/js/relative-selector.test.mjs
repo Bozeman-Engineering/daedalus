@@ -206,6 +206,10 @@ test('every selector shape parses and prints canonical', () => {
     '*[x="a\\\\b"]': [c('descendant', 'universal', '*', [attr('x', '=', 'a\\b')])],
     '*[x="tab\\9 "]': [c('descendant', 'universal', '*', [attr('x', '=', 'tab\t')])],
     '*[data-x="a::b"]': [c('descendant', 'universal', '*', [attr('data-x', '=', 'a::b')])],
+    // The marks the emit gate admits in no text print as hex escapes and
+    // read back as themselves.
+    '*[x="\\3c /style\\3e "]': [c('descendant', 'universal', '*', [attr('x', '=', '</style>')])],
+    '*[x="a\\3b b\\7b c\\7d d"]': [c('descendant', 'universal', '*', [attr('x', '=', 'a;b{c}d')])],
     '> d-text:has(a[data-x=")"])': [c('child', 'type', 'd-text', [has([c('descendant', 'tag', 'a', [attr('data-x', '=', ')')])])])],
     'li.active:hover[aria-current="page"]': [c('descendant', 'tag', 'li', [cls('active'), at('hover'), attr('aria-current', '=', 'page')])],
     // The implied subject is the universal in a chain.

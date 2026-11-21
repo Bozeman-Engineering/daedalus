@@ -263,7 +263,10 @@ final class VariantConformance {
     $theme = $this->declarations->siteTheme();
     $validator = ($this->validator)();
     assert($validator instanceof StyleMapValidator);
-    $withheld = $validator->withUniverse($universe, function () use ($universe, $variants, $theme, $validator): array {
+    // The verdict lane: the whole law of the day, minus the one law that
+    // is a write door's (a stored value the printer drops withholds
+    // nothing).
+    $withheld = $validator->withUniverse($universe, fn (): array => $validator->withVerdictLane(function () use ($universe, $variants, $theme, $validator): array {
       $withheld = [];
       foreach (array_keys($universe->variants()) as $name) {
         $variant = $variants[$name];
@@ -279,7 +282,7 @@ final class VariantConformance {
         }
       }
       return $withheld;
-    });
+    }));
     return [$withheld, $metadata->getCacheTags()];
   }
 

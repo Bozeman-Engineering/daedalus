@@ -23,7 +23,7 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * file declaration seam: the declared bytes go through daedalus_ui's file
  * lane (so the SVG sanitizer and the validators run, the type is checked
  * against the name, the kinds are the textual ones a model authors) as a
- * temporary file in the attachment directory, and the attachment store
+ * temporary file in the conversation's directory, and the attachment store
  * holds the file for the conversation under the DECLARED name on the
  * alias overlay only: a fresh map over tempstore does not see it until
  * the batch settles (persist()), and the same name declared again names
@@ -105,6 +105,7 @@ final class FileDeclarationHandlerTest extends KernelTestBase {
       $this->container->get('entity_type.manager'),
       $this->container->get('current_user'),
       $this->container->get('keyvalue.expirable'),
+      $this->container->get('keyvalue'),
       $this->container->get('database'),
       $this->container->get('datetime.time'),
     );
@@ -122,7 +123,7 @@ final class FileDeclarationHandlerTest extends KernelTestBase {
     $this->assertNotNull($file, 'The overlay answers the declared name at once (later ops in the batch resolve it).');
     $this->assertSame('logo.svg', $file->getFilename());
     $this->assertSame('image/svg+xml', $file->getMimeType());
-    $this->assertStringStartsWith(Attachments::DIRECTORY . '/', $file->getFileUri());
+    $this->assertSame($this->attachments->directory(self::THREAD) . '/logo.svg', $file->getFileUri(), "The file is saved in the conversation's own directory.");
     $bytes = $this->attachments->bytes($file);
     $this->assertStringNotContainsString('<script', $bytes, 'The lane ran the sanitizer.');
     $this->assertStringNotContainsString('onload', $bytes);
@@ -159,9 +160,10 @@ final class FileDeclarationHandlerTest extends KernelTestBase {
         'shot.png',
         'image/png',
         base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='),
-        'html css csv md txt json svg',
+        'css csv md txt json svg',
       ],
-      'a pdf is not authorable' => ['doc.pdf', 'application/pdf', '%PDF-1.4', 'html css csv md txt json svg'],
+      'a pdf is not authorable' => ['doc.pdf', 'application/pdf', '%PDF-1.4', 'css csv md txt json svg'],
+      'a web page is not authorable' => ['page.html', 'text/html', '<p>Hello</p>', 'css csv md txt json svg'],
       'a type disagreeing with the name' => [
         'logo.svg',
         'text/plain',

@@ -539,6 +539,13 @@ class FrameHostTest extends KernelTestBase {
     // With it: open, and the structure and style policies name it.
     $builder = $this->createUser([FrameInterface::PERMISSION]);
     $this->assertTrue($checker->hostAccess($host, 'update', $builder));
+    // The frame permission opens the frame's document; a block placed on
+    // it is still a block to create, which the block type's own create
+    // access answers.
+    $result = $this->operations->batchOperations($host, $this->batch($host), ['actor' => $builder]);
+    $this->assertSame('ACCESS_DENIED_PERMISSION', $result->getErrors()[0]->getCode());
+    $this->assertSame(['create basic block content', 'administer block content'], $result->getErrors()[0]->getContext()['permissions']);
+    $builder = $this->createUser([FrameInterface::PERMISSION, 'create basic block content']);
     $this->assertTrue($root->access('view', $builder));
     $verdicts = $stamper->verdicts($host, $host->uuid(), $builder);
     $this->assertSame(['content', 'configure', 'style', 'arrange', 'insert'], array_keys(array_filter($verdicts['can'])));

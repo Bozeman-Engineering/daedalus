@@ -2059,12 +2059,6 @@ parameters:
 			path: modules/daedalus_stylish/src/PropertyGroupPluginManager.php
 
 		-
-			message: '#^Call to an undefined method Drupal\\Core\\Entity\\EntityStorageInterface\:\:loadRevision\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: modules/daedalus_stylish/src/RelativeSelectorConvergence.php
-
-		-
 			message: '#^Call to an undefined method Drupal\\Core\\Field\\FieldItemListInterface\<Drupal\\Core\\Field\\FieldItemInterface\>\:\:getSections\(\)\.$#'
 			identifier: method.notFound
 			count: 1

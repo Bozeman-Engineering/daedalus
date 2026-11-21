@@ -294,7 +294,10 @@ and `BlueprintVariantOwnershipChecker` (registered only when
 daedalus_stylish is installed) refuses an owned variant outside its
 owner's placements with `VARIANT_OWNED_BY_BLUEPRINT`. daedalus_stylish never
 learns what ownership means; it carries the `blueprint:` key of a variants
-file onto the two fields and back.
+file onto the two fields and back. Each ownership gesture asks update
+access on the variant and on every content blueprint it touches (the one
+adopting, the one a release or transfer takes from, the one a transfer
+gives to); the routes' any-type gate only opens the door.
 
 ## No update path
 

@@ -8,6 +8,9 @@ import { elementForKey } from '../selection/resolver';
  * rollback snap-back IS most of the display; the flash says why the block
  * jumped), plus a notification carrying the server's structured error
  * (message and hint) as both transient toast and persistent sidebar entry.
+ * The server's words are text and are handed on as text: the notification
+ * display shows them character for character, so a label or a value the
+ * server quotes in an error is never read as markup.
  * The element's selectable key rides the notification so the sidebar entry
  * can scroll back to the element later.
  *

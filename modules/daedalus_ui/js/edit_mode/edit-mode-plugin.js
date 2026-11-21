@@ -105,7 +105,9 @@ export const initEditModePlugin = () => {
           url: `/daedalus-ui/load-editable-page/${info.entityType}/${
             info.id
           }/${info.viewMode}`,
-          type: 'POST',
+          // A read: the route takes GET only, and Drupal.ajax posts unless
+          // told otherwise.
+          httpMethod: 'GET',
           dataType: 'text',
           progress: {
             type: 'fullscreen',
@@ -212,7 +214,8 @@ export const initEditModePlugin = () => {
      * toast, its history and the repeat handling live there.
      *
      * @param {string} message
-     *   The message text to display.
+     *   The message to display, as plain text (shown, never rendered as
+     *   markup).
      * @param {string} type
      *   The message type: 'error', 'warning' or 'status'.
      * @param {object} options
@@ -221,6 +224,9 @@ export const initEditModePlugin = () => {
      *   How long to show the message in milliseconds or -1 for forever.
      * @param {boolean} [options.scroll]
      *   Whether to bring the toast into view (default: true).
+     * @param {?string} [options.html]
+     *   The message's display markup as the server filtered it (the
+     *   messenger's contract); only the server message relays pass it.
      * @param {?string} elementId
      *   Optional element id or selectable key the message concerns; the
      *   notifications sidebar scrolls back to it.
@@ -229,11 +235,12 @@ export const initEditModePlugin = () => {
      *   The toast id.
      */
     message = (message, type = 'error', options = {}, elementId = null) => {
-      const { duration, scroll = true } = options;
+      const { duration, scroll = true, html = null } = options;
       return Drupal.Daedalus.messenger.message(message, type, {
         duration,
         scroll,
         target: elementId,
+        html,
       });
     };
 

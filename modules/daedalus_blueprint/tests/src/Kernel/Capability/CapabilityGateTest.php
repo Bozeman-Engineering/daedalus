@@ -371,7 +371,11 @@ class CapabilityGateTest extends BlueprintKernelTestBase {
       '_root_entity' => ['field' => 'id', 'value' => (int) $entity->id()],
       'fields' => ['name' => 'Document'],
     ];
-    $this->assertSame('ACCESS_DENIED_ENTITY', $this->firstError($deserializer->deserialize($blueprint))['code']);
+    // The refusal is told to an actor who may at least view the entity; to
+    // one who may not, the entity reads as absent.
+    $viewer = $this->createUser(['view test entity']);
+    $this->assertSame('ACCESS_DENIED_ENTITY', $this->firstError($deserializer->deserialize($blueprint, ['actor' => $viewer]))['code']);
+    $this->assertSame('ENTITY_NOT_FOUND', $this->firstError($deserializer->deserialize($blueprint))['code']);
     $this->assertTrue($deserializer->deserialize($blueprint, ['actor' => $admin])->isSuccess());
     $this->assertTrue($deserializer->deserialize($blueprint, ['system' => TRUE])->isSuccess());
   }

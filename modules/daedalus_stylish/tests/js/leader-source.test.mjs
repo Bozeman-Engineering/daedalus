@@ -587,10 +587,9 @@ test('notify rides this window\'s messenger and is never load-bearing', () => {
   globalThis.Drupal = { Daedalus: {} };
   source.notify('status', 'Added the Rain gradient to the color palette.');
   // The messenger present: text and type land in ITS argument order,
-  // message(text, type), through Drupal.checkPlain (the escape itself is
-  // pinned in notify.test.mjs; this text carries nothing to escape).
+  // message(text, type), as text (notify.test.mjs pins that nothing is
+  // escaped on the way).
   const heard = [];
-  globalThis.Drupal.checkPlain = (text) => text.toString();
   globalThis.Drupal.Daedalus.messenger = { message: (text, type) => heard.push({ text, type }) };
   source.notify('error', 'That label is taken.');
   assert.deepEqual(heard, [{ text: 'That label is taken.', type: 'error' }]);

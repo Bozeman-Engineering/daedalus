@@ -203,13 +203,16 @@ class ElementSelectionResolver {
   }
 
   /**
-   * The host's staged copy (the canvas state), or the host itself.
+   * The host's unsaved copy (the canvas state), or the host itself.
+   *
+   * The unsaved copy only for a user who may update the host; anyone else
+   * is answered the stored host.
    */
   protected function stagedCopy(?HostInterface $host): ?HostInterface {
     if ($host === NULL || $this->storageHandler === NULL) {
       return $host;
     }
-    return $this->storageHandler->load($host->entityTypeId(), (string) $host->id()) ?? $host;
+    return $this->storageHandler->loadReadable($host->entityTypeId(), (string) $host->id()) ?? $host;
   }
 
   /**

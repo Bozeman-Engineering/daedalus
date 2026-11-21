@@ -4,6 +4,7 @@
 # door that declares it lives in daedalus_blueprint_api.
 daedalus_ui_bare_test.node:
   path: '/daedalus-ui-bare-test/{node}'
+  methods: [GET]
   defaults:
     _controller: '\Drupal\daedalus_ui_bare_test\Controller\BareNode::view'
   options:

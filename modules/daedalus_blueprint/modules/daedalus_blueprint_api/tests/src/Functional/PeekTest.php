@@ -98,7 +98,7 @@ class PeekTest extends BrowserTestBase {
     $host = \Drupal::service('daedalus_blueprint.host_resolver')->fromEntity($node);
     $timeline = \Drupal::service('daedalus_tempstore.history_manager')->timelineFor($host);
     $history = \Drupal::service('daedalus_tempstore.history_store');
-    $entries = $history->loadIndex($editor->id(), $timeline)['entries'];
+    $entries = $history->loadIndex($timeline)['entries'];
     $this->assertNotEmpty($entries, 'The mutation left history to compare against.');
     $counts = $this->counts();
 
@@ -159,7 +159,7 @@ class PeekTest extends BrowserTestBase {
     $this->assertStringContainsString($section, $read, 'The read is the staged copy: the mutated section is there.');
     $this->assertStringNotContainsString($block, $read, 'The peeked block was never placed.');
     $this->assertStringNotContainsString('Peeked text', $read);
-    $this->assertSame($entries, $history->loadIndex($editor->id(), $timeline)['entries'], 'The history has no new entry.');
+    $this->assertSame($entries, $history->loadIndex($timeline)['entries'], 'The history has no new entry.');
 
     // A second peek of the same batch answers the same: nothing of the
     // first one stuck.

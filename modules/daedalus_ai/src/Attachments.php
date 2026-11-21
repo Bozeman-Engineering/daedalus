@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Drupal\daedalus_ai;
 
 use Drupal\Component\Datetime\TimeInterface;
+use Drupal\Component\Utility\Crypt;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\KeyValueStore\KeyValueExpirableFactoryInterface;
+use Drupal\Core\KeyValueStore\KeyValueFactoryInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\daedalus_blueprint\Dialect\DialectAliasMap;
 use Drupal\file\FileInterface;
@@ -31,6 +33,16 @@ use Drupal\file\FileUsage\FileUsageInterface;
  * uuid. attach() settles the name at once (nothing else will); hold()
  * leaves it to the batch that declared the file.
  *
+ * The store also answers WHERE a conversation's files are saved:
+ * directory() is one directory per conversation and user, named by a long
+ * random token minted here and kept under the thread, never derived from
+ * the thread id or anything else a reader of a page could know. Every
+ * writer (the attach route, a declaration, a render shot) asks for it and
+ * hands it to the file lane; the files stay public, and a file's address is
+ * known only to whoever was handed it. The token is forgotten with the
+ * thread's last file, so the conversation that reuses a thread id after
+ * Clear History writes somewhere new.
+ *
  * Release mirrors the hold. The chat's Clear History releases eagerly (the
  * ai_chatbot reset hands the same thread id straight back to the next
  * conversation, so anything left behind would bleed into it), and the cron
@@ -53,9 +65,17 @@ final class Attachments {
   public const USAGE_TYPE = 'thread';
 
   /**
-   * Where a conversation's files are saved (attachments and render shots).
+   * The directory the per-conversation directories sit in.
    */
-  public const DIRECTORY = 'public://daedalus-ai/attachments';
+  private const ROOT = 'public://daedalus-ai/attachments';
+
+  /**
+   * The key-value collection keeping each conversation's directory token.
+   *
+   * Keyed "<uid>:<thread id>", the shape of the thread's session key, so two
+   * users naming one thread id never share a directory.
+   */
+  private const DIRECTORY_COLLECTION = 'daedalus_ai.attachment_directory';
 
   /**
    * The ai_assistant_api private tempstore collection holding thread sessions.
@@ -77,9 +97,31 @@ final class Attachments {
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly AccountInterface $currentUser,
     private readonly KeyValueExpirableFactoryInterface $keyValueExpirable,
+    private readonly KeyValueFactoryInterface $keyValue,
     private readonly Connection $database,
     private readonly TimeInterface $time,
   ) {}
+
+  /**
+   * The directory the current user's files of a thread are saved in.
+   *
+   * The one answer every writer hands the file lane. The name is 32 random
+   * bytes, minted on the thread's first ask and kept until the thread's
+   * files are released; the lane creates the directory when it saves.
+   *
+   * @param string $thread
+   *   The conversation's thread id.
+   *
+   * @return string
+   *   The directory's URI, without a trailing slash.
+   */
+  public function directory(string $thread): string {
+    $tokens = $this->keyValue->get(self::DIRECTORY_COLLECTION);
+    $key = $this->currentUser->id() . ':' . $thread;
+    // Two first writes may race: whichever token lands is the one both use.
+    $tokens->setIfNotExists($key, Crypt::randomBytesBase64(32));
+    return self::ROOT . '/' . $tokens->get($key);
+  }
 
   /**
    * Holds a saved file for a thread under its filename, settled at once.
@@ -172,12 +214,21 @@ final class Attachments {
    */
   public function release(string $thread, ?AccountInterface $owner = NULL): int {
     $released = 0;
+    $owners = $owner === NULL ? [] : [(int) $owner->id()];
     foreach ($this->heldFiles($thread) as $file) {
       if ($owner !== NULL && (int) $file->getOwnerId() !== (int) $owner->id()) {
         continue;
       }
       $this->letGo($file, $thread);
+      $owners[] = (int) $file->getOwnerId();
       $released++;
+    }
+    // Every file of these owners in the thread is let go, so their
+    // directory is too: the next conversation on this thread id mints its
+    // own.
+    $tokens = $this->keyValue->get(self::DIRECTORY_COLLECTION);
+    foreach (array_unique($owners) as $uid) {
+      $tokens->delete($uid . ':' . $thread);
     }
     if ($released > 0) {
       $this->aliasMap->persist();
@@ -192,7 +243,8 @@ final class Attachments {
    * ai_assistant_api's private tempstore: the chat reset deleted it or it
    * expired with the store. A file younger than SWEEP_GRACE is kept
    * regardless, since a session exists only after the thread's first
-   * message and an attachment may precede it.
+   * message and an attachment may precede it. A directory token whose
+   * thread holds no file of its user afterwards is forgotten with them.
    *
    * @return int
    *   How many files were released.
@@ -216,6 +268,7 @@ final class Attachments {
     if ($released > 0) {
       $this->aliasMap->persist();
     }
+    $this->forgetEmptyDirectories();
     return $released;
   }
 
@@ -226,11 +279,16 @@ final class Attachments {
    * ATTACHMENTS block, view_file); a file whose bytes are gone is an error,
    * never an empty delivery.
    *
+   * @param \Drupal\file\FileInterface $file
+   *   The file.
+   * @param int|null $limit
+   *   The most bytes to read from the file's start, NULL for all of it.
+   *
    * @throws \RuntimeException
    *   When the file cannot be read.
    */
-  public function bytes(FileInterface $file): string {
-    $bytes = file_get_contents($file->getFileUri());
+  public function bytes(FileInterface $file, ?int $limit = NULL): string {
+    $bytes = file_get_contents($file->getFileUri(), FALSE, NULL, 0, $limit);
     if ($bytes === FALSE) {
       throw new \RuntimeException(sprintf('File %s could not be read from %s.', $file->getFilename(), $file->getFileUri()));
     }
@@ -247,6 +305,28 @@ final class Attachments {
       $file->setTemporary();
       $file->save();
     }
+  }
+
+  /**
+   * Forgets the directory token of every thread that holds no file.
+   *
+   * Covers the threads the sweep just emptied and a token minted for a
+   * write the lane then refused. A thread that writes again mints a new
+   * token, so forgetting early costs nothing but a second directory.
+   */
+  private function forgetEmptyDirectories(): void {
+    $tokens = $this->keyValue->get(self::DIRECTORY_COLLECTION);
+    $keys = array_keys($tokens->getAll());
+    if ($keys === []) {
+      return;
+    }
+    $holding = [];
+    foreach ($this->heldFilesByThread() as $thread => $files) {
+      foreach ($files as $file) {
+        $holding[$file->getOwnerId() . ':' . $thread] = TRUE;
+      }
+    }
+    $tokens->deleteMultiple(array_values(array_filter($keys, fn ($key): bool => !isset($holding[$key]))));
   }
 
   /**

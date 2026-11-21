@@ -63,8 +63,11 @@ final class FileLane {
 
   /**
    * The textual kinds accepted beside the media types' source extensions.
+   *
+   * No kind a browser opens as a page of its own: every destination is a
+   * public directory, so a saved file is served from the site's origin.
    */
-  public const TEXTUAL_EXTENSIONS = ['html', 'css', 'csv', 'md', 'txt', 'json', 'svg', 'pdf'];
+  public const TEXTUAL_EXTENSIONS = ['css', 'csv', 'md', 'txt', 'json', 'svg', 'pdf'];
 
   /**
    * The self-hosted font kinds accepted beside them (the font material).
@@ -229,7 +232,26 @@ final class FileLane {
    *   extensions plus the textual and font kinds.
    */
   public function acceptedExtensions(): array {
-    $extensions = array_fill_keys([...self::TEXTUAL_EXTENSIONS, ...self::FONT_EXTENSIONS], TRUE);
+    return array_values(array_unique([
+      ...self::TEXTUAL_EXTENSIONS,
+      ...self::FONT_EXTENSIONS,
+      ...$this->mediaExtensions(),
+    ]));
+  }
+
+  /**
+   * The media kinds: what some media type on the site can hold.
+   *
+   * The narrowing of a door whose file can only become media (a file
+   * dropped on the page): the textual and font kinds are the AI's and the
+   * font store's, never a page drop's.
+   *
+   * @return list<string>
+   *   Lowercase extensions: the union of every media type's source-field
+   *   extensions, empty on a site with no file-backed media type.
+   */
+  public function mediaExtensions(): array {
+    $extensions = [];
     if ($this->entityTypeManager->hasDefinition('media_type')) {
       foreach ($this->entityTypeManager->getStorage('media_type')->loadMultiple() as $media_type) {
         foreach ($this->mediaTypeExtensions($media_type) ?? [] as $extension) {
@@ -237,7 +259,19 @@ final class FileLane {
         }
       }
     }
-    return array_keys($extensions);
+    return array_map('strval', array_keys($extensions));
+  }
+
+  /**
+   * Whether a media type keeps its source in a file.
+   *
+   * Judged by capability, the `file_extensions` setting every
+   * FileItem-derived field type defines, never by a list of field type
+   * ids. A remote video's URL field has none.
+   */
+  public function hasFileSource(MediaTypeInterface $media_type): bool {
+    $source_field = $media_type->getSource()->getSourceFieldDefinition($media_type);
+    return $source_field !== NULL && array_key_exists('file_extensions', $source_field->getSettings());
   }
 
   /**

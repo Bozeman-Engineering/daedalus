@@ -277,19 +277,25 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
    * NULL: the dialog is chrome (the intro just doesn't name the blueprint,
    * the owned roster and the details' subject section don't render), and a
    * stale reference fails loudly through the op or the route on commit
-   * (same posture as the adoption section's capture read).
+   * (same posture as the adoption section's capture read). A blueprint
+   * the actor may not update degrades the same way: the route's gate is
+   * the any-type question, and the dialog prints the blueprint's stored
+   * values, so the blueprint itself is asked here.
    *
    * @return \Drupal\daedalus_blueprint_library\BlueprintInterface|null
-   *   The target content blueprint, or NULL when it cannot resolve.
+   *   The target content blueprint, or NULL when it cannot resolve or the
+   *   actor may not update it.
    */
   protected function updateTarget(Request $request): ?BlueprintInterface {
     $reference = $request->query->get('blueprint');
     if ($this->blueprintManager !== NULL && is_string($reference) && $reference !== '') {
       try {
-        return $this->blueprintManager->resolveUpdatable($reference);
+        $blueprint = $this->blueprintManager->resolveUpdatable($reference);
       }
       catch (BlueprintGestureException) {
+        return NULL;
       }
+      return $blueprint->access('update') ? $blueprint : NULL;
     }
     return NULL;
   }
@@ -844,9 +850,14 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
    * (the entity being laid out): the opener offers the media library to
    * whoever may update it, the same person composing the layout. Without
    * coordinates (or an unknown type) the save dialog renders no picker.
+   * The dialog is chrome for a capture of this entity's document, which
+   * only someone who may update it can run, so an entity the actor may
+   * not update is answered as one that does not resolve: nothing of it
+   * (its uuid, the looks its document wears) reaches the dialog.
    *
    * @return \Drupal\Core\Entity\EntityInterface|null
-   *   The host entity, or NULL when it cannot resolve.
+   *   The stored host entity, or NULL when it cannot resolve or the actor
+   *   may not update it.
    */
   protected function hostEntity(Request $request): ?EntityInterface {
     $entity_type = $request->query->get('entity_type');
@@ -854,7 +865,8 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
     if (!is_string($entity_type) || !is_string($entity_id) || $entity_id === '' || !$this->entityTypeManager->hasDefinition($entity_type)) {
       return NULL;
     }
-    return $this->entityTypeManager->getStorage($entity_type)->load($entity_id);
+    $entity = $this->entityTypeManager->getStorage($entity_type)->load($entity_id);
+    return $entity !== NULL && $entity->access('update') ? $entity : NULL;
   }
 
   /**
@@ -988,12 +1000,13 @@ class BlueprintSaveDialog implements ContainerInjectionInterface {
     if (!is_string($element) || $element === '') {
       return [];
     }
-    $entity_type = $request->query->get('entity_type');
-    $entity_id = $request->query->get('entity_id');
-    $host = $this->variantManager->resolveHost(
-      is_string($entity_type) ? $entity_type : NULL,
-      is_string($entity_id) ? $entity_id : NULL,
-    );
+    $entity = $this->hostEntity($request);
+    if ($entity === NULL) {
+      return [];
+    }
+    // The capture reads the working copy; hostEntity() has established
+    // the actor may update the stored entity it stands for.
+    $host = $this->variantManager->resolveHost($entity->getEntityTypeId(), (string) $entity->id());
     if ($host === NULL) {
       return [];
     }

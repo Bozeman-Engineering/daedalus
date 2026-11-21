@@ -7,9 +7,15 @@
  * the generative composed render (FormattedTextComposedContent), showing the field's FILTERED
  * output. Editing is canvas-native rich text on the blueprint mutation
  * spine: clicking the leaf saves the filtered markup, seeds the root with
- * the RAW value from the blueprint mirror's {value, format} pair, and
- * attaches an inline CKEditor to the root itself through the shared
- * Drupal.behaviors.DaedalusEditInlineEditors machinery. Blur diffs the editor's
+ * the editor SEED the server stamped in the root's editor settings (the
+ * value as an inline editor may put it on the page, produced by
+ * daedalus_edit's EditorSeed for the stored format; the same seed the
+ * hosted form's textarea carries), and attaches an inline CKEditor to the
+ * root itself through the shared Drupal.behaviors.DaedalusEditInlineEditors
+ * machinery. The blueprint mirror's raw {value, format} pair is what the
+ * edit is compared against and never what is written to the page: the
+ * root's markup is only ever the filtered output, a stamped seed, a
+ * format switch's filtered answer, or the user's own editor data. Blur diffs the editor's
  * data against the mirror snapshot and commits ONE `update_element` op; the
  * mutation response's markup swap repaints the filtered output. When
  * nothing changed (or the edit is canceled) no re-render happens, so the
@@ -30,7 +36,8 @@
  * pair, base = the snapshot, remote = the mirror after the response; a
  * changed draft survives when the remote left the field alone and is
  * seeded into a fresh CKEditor over the swapped-in root, otherwise the
- * remote's value is. Because the snapshot re-baselines to CKEditor's
+ * swapped-in root's own stamped seed is (the remote's value as the server
+ * seeds it). Because the snapshot re-baselines to CKEditor's
  * normalization (below), the remote is compared against the mirror's OWN
  * bytes at edit open (mirrorBaseline), never against the normalized
  * snapshot: a response echoing the stored markup is not a remote change.
@@ -42,7 +49,9 @@
  * widget-popover grammar — offers a format selector listing every format
  * the user may use that has a CKEditor configured (preprocess stamps the
  * list). Picking a
- * format ports core editor.js's filterXssWhenSwitching: the current data is
+ * format takes core editor.js's filterXssWhenSwitching round trip
+ * (daedalus_edit's filterXss, handed in on the DaedalusEditQueue API): the
+ * current data is
  * re-filtered through core's editor/filter_xss/{format} endpoint (unless
  * the target editor is XSS-safe), the CKEditor is detached, and a new one
  * attaches with the picked format's configuration. The format rides the
@@ -56,7 +65,7 @@
  * @see ../daedalus_edit_formatted_text_block.page_builder.block_type.formatted_text.yml
  */
 (window.DaedalusEditQueue ||= []).push(
-  ({ EditorPluginBase, editors, verbWidgets }) => {
+  ({ EditorPluginBase, editors, verbWidgets, filterXss }) => {
     const FIELD = 'field_formatted_text_text';
 
     // Phosphor's text-aa glyph, the site's icon language (daedalus_ui
@@ -124,8 +133,8 @@
         }
         Drupal.Daedalus?.ModeManager?.getPlugin('edit')?.message(
           Drupal.t(
-            'The "@format" text format has no text editor configured, so this block cannot be edited on the canvas.',
-            { '@format': format },
+            'The "!format" text format has no text editor configured, so this block cannot be edited on the canvas.',
+            { '!format': format },
           ),
           'warning',
           { duration: 5000, scroll: false },
@@ -187,41 +196,80 @@
       /**
        * Focus element.
        *
-       * The fresh entry's surface: the root seeded with the snapshot's raw
-       * value (see openSurface).
+       * The fresh entry's surface: the root seeded with its stamped seed
+       * (see openSurface).
        *
        * @param {EditableElement} EditableElement
        *   The element being edited.
        */
       focusElement(EditableElement) {
-        this.openSurface(
-          EditableElement,
-          EditableElement.snapshot[FIELD].value ?? '',
+        this.openSurface(EditableElement);
+      }
+
+      /**
+       * The seed the server stamped on the root, for the gesture's format.
+       *
+       * Read from the root as it stands now, never from the settings parsed
+       * at the gesture's start: every render stamps the seed of the value
+       * it shows, so a root swapped in mid-edit carries the remote's. The
+       * seed is filtered for the stamped format; a root that carries none,
+       * or one for another format than the editor is about to open on, has
+       * nothing this editor may put on the page, and failing here keeps
+       * that loud.
+       *
+       * @param {EditableElement} EditableElement
+       *   The element being edited.
+       *
+       * @return {string}
+       *   The HTML to seed the editor with.
+       */
+      stampedSeed(EditableElement) {
+        const settings = JSON.parse(
+          EditableElement.getPageElement().dataset.daedalusEditEditorSettings ??
+            '{}',
         );
+        if (
+          typeof settings.seed !== 'string' ||
+          settings.format !== EditableElement.format
+        ) {
+          throw new Error(
+            `The formatted text block carries no editor seed for text format "${EditableElement.format}".`,
+          );
+        }
+        return settings.seed;
       }
 
       /**
        * Opens the editing surface on the root, seeded with a value.
        *
-       * The raw-vs-filtered swap, shared by the fresh entry (seeded with the
-       * snapshot's value) and a resume (seeded with the surviving draft or
-       * the remote): save the root's filtered markup, record the mirror's
-       * bytes as the baseline the remote is compared against, seed the root,
-       * attach the inline CKEditor. The editor focuses itself when its async
-       * create resolves (see attachEditor). When the seed IS the snapshot's
-       * value, that resolution re-baselines the snapshot from
-       * editor.getData(): CKEditor normalizes markup, and a byte-exact diff
-       * against the mirror's raw value would commit a junk history entry on
-       * first blur. A surviving draft leaves the snapshot alone (it is the
-       * remote, the value blur diffs against and Escape restores).
+       * The seed-vs-filtered swap, shared by the fresh entry and a resume:
+       * save the root's filtered markup, record the mirror's bytes as the
+       * baseline the remote is compared against, seed the root, attach the
+       * inline CKEditor. The editor focuses itself when its async create
+       * resolves (see attachEditor).
+       *
+       * Without a draft the root is seeded with its stamped seed (the fresh
+       * entry, and a resume the remote won), and the create's resolution
+       * re-baselines the snapshot from editor.getData(): the seed is the
+       * stored value filtered for the editor and CKEditor normalizes markup
+       * on top, so a byte-exact diff against the mirror's raw value would
+       * commit a junk history entry on first blur, and merely opening a
+       * block would rewrite what is stored. A surviving draft (the user's
+       * own editor data) is seeded as it is and leaves the snapshot alone
+       * (it is the remote, the value blur diffs against and Escape
+       * restores).
        *
        * @param {EditableElement} EditableElement
        *   The element being edited.
-       * @param {string} value
-       *   The raw value to seed the editor with.
+       * @param {?string} draft
+       *   The surviving draft's value, or null to open on the stamped seed.
        */
-      openSurface(EditableElement, value) {
+      openSurface(EditableElement, draft = null) {
         const pageElement = EditableElement.getPageElement();
+        const seededSnapshot = draft === null;
+        const value = seededSnapshot
+          ? this.stampedSeed(EditableElement)
+          : draft;
         EditableElement.filteredMarkup = pageElement.innerHTML;
         EditableElement.mirrorBaseline = structuredClone(
           EditableElement.snapshot[FIELD],
@@ -239,7 +287,6 @@
         // it because a markup swap destroys the stamped element.
         const id = pageElement.dataset.ckeditor5Id;
         EditableElement.ckeditorId = id;
-        const seededSnapshot = value === EditableElement.snapshot[FIELD].value;
         // The gesture's OPENING format, captured now: the re-baseline below
         // must record the pre-edit truth even when a picker format switch
         // has already moved EditableElement.format by the time create
@@ -294,10 +341,10 @@
         // Only the snapshot is ever written back without a live editor (the
         // commit rollback); its on-canvas truth is the filtered markup saved
         // at edit start, not the raw value.
+        // Without one saved the root already shows server markup (a swap
+        // put it there), and a mirror value is never written to the page.
         if (EditableElement.filteredMarkup !== undefined) {
           pageElement.innerHTML = EditableElement.filteredMarkup;
-        } else {
-          pageElement.innerHTML = properties[FIELD]?.value ?? '';
         }
       }
 
@@ -397,7 +444,9 @@
        * The remote is compared against the mirror's bytes at the last seed
        * (mirrorBaseline), the draft against the normalized snapshot. A
        * surviving draft is seeded with its own format (a picker switch is
-       * part of the draft); a winning remote brings its stored format, and a
+       * part of the draft); a winning remote brings its stored format and
+       * is seeded from the swapped-in root's stamped seed, never from the
+       * mirror's value, and a
        * remote whose format has no CKEditor cannot be edited here, so the
        * edit is dropped without committing (the swapped-in filtered markup
        * already stands).
@@ -425,15 +474,19 @@
           remote,
           mirrorBase,
         );
-        const seed = survivors[FIELD] ?? remote[FIELD];
-        const format = seed.format ?? EditableElement.format;
+        const survivor = survivors[FIELD];
+        const format =
+          (survivor ?? remote[FIELD]).format ?? EditableElement.format;
         if (!this.editorBacked(format)) {
           return this.cancelEdit(EditableElement);
         }
         EditableElement.format = format;
         this.syncFormatPicker(EditableElement);
         EditableElement.getPageElement().classList.add('daedalus-edit-editing');
-        this.openSurface(EditableElement, seed.value ?? '');
+        this.openSurface(
+          EditableElement,
+          survivor ? (survivor.value ?? '') : null,
+        );
         return Promise.resolve();
       }
 
@@ -616,7 +669,8 @@
        *
        * The core form flow's mid-edit format switch, on the canvas: the
        * current editor data is re-filtered for the target format through
-       * core's editor/filter_xss endpoint (see filterXss), the CKEditor is
+       * core's editor/filter_xss endpoint (daedalus_edit's filterXss, the
+       * one round trip every canvas editor uses), the CKEditor is
        * detached, and a new one attaches with the target format's
        * configuration. The switch is a preview like every other edit in the
        * gesture — blur commits the {value, format} bag and the spine enforces
@@ -663,8 +717,8 @@
               // rebuild.
               return;
             }
-            return this.filterXss(editor.getData(), format, previous).then(
-              (value) => this.reattachEditor(EditableElement, value, format),
+            return filterXss(editor.getData(), format, previous).then((value) =>
+              this.reattachEditor(EditableElement, value, format),
             );
           })
           .catch((error) => {
@@ -682,52 +736,6 @@
             );
             Drupal.throwError(error);
           });
-      }
-
-      /**
-       * Port of core editor.js filterXssWhenSwitching.
-       *
-       * Switching to a format whose editor is not XSS-safe must not seed that
-       * editor with markup the target format would never allow, so the server
-       * re-filters the value through core's editor/filter_xss/{format} route
-       * (access: the target format's 'use' permission). The route answers
-       * with the filtered value, or false when the target format needs no
-       * filtering (it has no XSS protection to enforce), in which case the
-       * value passes through untouched. XSS-safe editors skip the round trip
-       * entirely — exactly core's behavior.
-       *
-       * @param {string} value
-       *   The editor data to filter.
-       * @param {string} format
-       *   The target format id.
-       * @param {?string} originalFormat
-       *   The format the value currently has, for the server's relaxed
-       *   filtering rules when switching between formats.
-       *
-       * @return {Promise<string>}
-       *   The value to seed the target format's editor with.
-       */
-      filterXss(value, format, originalFormat) {
-        if (drupalSettings.editor.formats[format].isXssSafe) {
-          return Promise.resolve(value);
-        }
-        const body = new URLSearchParams({ value });
-        if (originalFormat) {
-          body.set('original_format_id', originalFormat);
-        }
-        return fetch(Drupal.url(`editor/filter_xss/${format}`), {
-          method: 'POST',
-          body,
-        })
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error(
-                `editor/filter_xss/${format} failed with status ${response.status}.`,
-              );
-            }
-            return response.json();
-          })
-          .then((filtered) => (filtered === false ? value : filtered));
       }
 
       /**

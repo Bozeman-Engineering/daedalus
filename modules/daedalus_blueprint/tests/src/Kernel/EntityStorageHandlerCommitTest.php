@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel;
 
+use Drupal\Core\Entity\EntityStorageException;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
+use Drupal\daedalus_blueprint\Exception\CommitRefusedException;
 use Drupal\daedalus_tempstore\EntityTempstoreRepository;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
@@ -25,6 +27,11 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * the create route (persist with is_new) go through the same door, so they
  * clear the stage and honor the revision policy without knowing about
  * either.
+ *
+ * The door refuses, with a CommitRefusedException carrying messages and the
+ * stage left as it was, a working copy whose stored entity was saved
+ * elsewhere after the copy was taken, one that does not validate as a whole
+ * entity, and one storage throws on.
  *
  * Fixture: a node bundle whose type says new_revision (the default) and one
  * that does not, daedalus_tempstore installed so persist() stages, and the
@@ -201,6 +208,226 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
   }
 
   /**
+   * Tests that a page saved elsewhere after staging refuses the commit.
+   *
+   * The staged copy carries the revision it was taken from through the
+   * tempstore and back. A save made elsewhere in between (a new revision on
+   * a bundle that revisions; the same revision with a later changed time on
+   * one that does not) makes the door refuse: the other save stands, the
+   * stage is still there, nothing was announced as saved. A copy taken from
+   * the current row afterwards commits.
+   */
+  public function testCommitRefusesPageSavedElsewhere(): void {
+    foreach (['page', 'note'] as $type) {
+      $node = $this->createNode($type);
+      $first_vid = $node->getRevisionId();
+
+      $working = $this->handler->load('node', $node->id());
+      $working->entity()->setTitle('Staged');
+      $this->handler->persist($working);
+
+      // The working copy a later request commits is the staged one, read
+      // back out of the tempstore; it still says where it was taken from.
+      $staged = $this->handler->load('node', $node->id());
+      $this->assertNotSame($working->entity(), $staged->entity());
+      $this->assertSame('Staged', $staged->entity()->getTitle());
+      $this->assertEquals($first_vid, $staged->entity()->getLoadedRevisionId());
+
+      // Someone saves the page elsewhere (the stock edit form, another
+      // tool): a later second, and a new revision where the bundle says so.
+      $elsewhere = $this->loadStored($node);
+      $elsewhere->setTitle('Saved elsewhere');
+      $elsewhere->setChangedTime($elsewhere->getChangedTime() + 60);
+      if ($type === 'page') {
+        $elsewhere->setNewRevision();
+      }
+      $elsewhere->save();
+      \Drupal::state()->set('daedalus_blueprint_test.persisted', []);
+
+      try {
+        $this->handler->commit($staged);
+        $this->fail("The $type commit of a stale stage was not refused.");
+      }
+      catch (CommitRefusedException $refusal) {
+        $this->assertSame(CommitRefusedException::MOVED, $refusal->reason());
+        $this->assertCount(1, $refusal->messages());
+        $this->assertStringContainsString('was saved elsewhere', $refusal->messages()[0]);
+        $this->assertSame($refusal->messages()[0], $refusal->getMessage());
+      }
+
+      // The other save stands, the unsaved changes are still staged, and
+      // nothing was announced.
+      $this->assertSame('Saved elsewhere', $this->loadStored($node)->getTitle(), $type);
+      $this->assertTrue($this->tempstore->has($node), $type);
+      $this->assertSame([], \Drupal::state()->get('daedalus_blueprint_test.persisted', []), $type);
+
+      // The force_save road meets the same door.
+      try {
+        $this->handler->persist($this->handler->load('node', $node->id()), force_save: TRUE);
+        $this->fail("The $type force_save of a stale stage was not refused.");
+      }
+      catch (CommitRefusedException $refusal) {
+        $this->assertSame(CommitRefusedException::MOVED, $refusal->reason());
+      }
+
+      // Discard, take a fresh copy from the current row, and it commits.
+      $this->tempstore->delete($node);
+      $fresh = $this->handler->load('node', $node->id());
+      $this->assertSame('Saved elsewhere', $fresh->entity()->getTitle());
+      $fresh->entity()->setTitle('Staged again');
+      $this->handler->persist($fresh);
+      $this->handler->commit($this->handler->load('node', $node->id()));
+      $this->assertSame('Staged again', $this->loadStored($node)->getTitle(), $type);
+      $this->assertFalse($this->tempstore->has($node), $type);
+    }
+
+    // A page deleted elsewhere has nothing to save to.
+    $node = $this->createNode('page');
+    $working = $this->handler->load('node', $node->id());
+    $working->entity()->setTitle('Staged');
+    $this->handler->persist($working);
+    $this->loadStored($node)->delete();
+    try {
+      $this->handler->commit($working);
+      $this->fail('The commit of a deleted page was not refused.');
+    }
+    catch (CommitRefusedException $refusal) {
+      $this->assertSame(CommitRefusedException::MOVED, $refusal->reason());
+      $this->assertStringContainsString('was deleted', $refusal->messages()[0]);
+    }
+    $this->assertNull($this->loadStored($node));
+  }
+
+  /**
+   * Tests that a refusal names the page by its label as plain text.
+   *
+   * The sentence is text for whoever shows it, a notification or the form's
+   * message area, each of which escapes once: the label's quotes and
+   * ampersand stand in it as themselves.
+   */
+  public function testMovedRefusalNamesThePageInPlainText(): void {
+    $title = 'Tim\'s "Q&A"';
+
+    $node = $this->createNode('page');
+    $node->setTitle($title);
+    $node->save();
+    $working = $this->handler->load('node', $node->id());
+    $this->handler->persist($working);
+    $staged = $this->handler->load('node', $node->id());
+    $elsewhere = $this->loadStored($node);
+    $elsewhere->setChangedTime($elsewhere->getChangedTime() + 60);
+    $elsewhere->setNewRevision();
+    $elsewhere->save();
+    try {
+      $this->handler->commit($staged);
+      $this->fail('The commit of a stale stage was not refused.');
+    }
+    catch (CommitRefusedException $refusal) {
+      $this->assertStringStartsWith('"' . $title . '" was saved elsewhere', $refusal->messages()[0]);
+      $this->assertDoesNotMatchRegularExpression('/&[#\w]+;/', $refusal->messages()[0]);
+    }
+
+    $this->loadStored($node)->delete();
+    try {
+      $this->handler->commit($staged);
+      $this->fail('The commit of a deleted page was not refused.');
+    }
+    catch (CommitRefusedException $refusal) {
+      $this->assertStringStartsWith('"' . $title . '" was deleted', $refusal->messages()[0]);
+      $this->assertDoesNotMatchRegularExpression('/&[#\w]+;/', $refusal->messages()[0]);
+    }
+  }
+
+  /**
+   * Tests that whole-entity violations refuse the commit, with messages.
+   *
+   * The stage holds a value the entity's constraints refuse (an empty
+   * required title): the door answers one plain-text message per violation
+   * naming the field, saves nothing and keeps the stage. Fixing the value
+   * lets it through. A new entity meets the same check.
+   */
+  public function testCommitRefusesInvalidEntity(): void {
+    $node = $this->createNode('page');
+    $working = $this->handler->load('node', $node->id());
+    $working->entity()->setTitle('');
+    $this->handler->persist($working);
+    \Drupal::state()->set('daedalus_blueprint_test.persisted', []);
+
+    $staged = $this->handler->load('node', $node->id());
+    try {
+      $this->handler->commit($staged);
+      $this->fail('The commit of an invalid entity was not refused.');
+    }
+    catch (CommitRefusedException $refusal) {
+      $this->assertSame(CommitRefusedException::INVALID, $refusal->reason());
+      $this->assertCount(1, $refusal->messages());
+      $this->assertStringStartsWith('Title: ', $refusal->messages()[0]);
+      $this->assertSame(strip_tags($refusal->messages()[0]), $refusal->messages()[0]);
+    }
+    $this->assertSame('Before', $this->loadStored($node)->getTitle());
+    $this->assertCount(1, $this->revisionIds($node));
+    $this->assertTrue($this->tempstore->has($node));
+    $this->assertSame([], \Drupal::state()->get('daedalus_blueprint_test.persisted', []));
+
+    // Fixed in the stage, the same page commits.
+    $staged->entity()->setTitle('Fixed');
+    $this->handler->persist($staged);
+    $this->handler->commit($this->handler->load('node', $node->id()));
+    $this->assertSame('Fixed', $this->loadStored($node)->getTitle());
+    $this->assertFalse($this->tempstore->has($node));
+
+    // A new entity is validated too: nothing is created.
+    $new = Node::create(['type' => 'page', 'title' => '', 'uid' => $this->authorId]);
+    try {
+      $this->handler->persist($this->host($new), is_new: TRUE);
+      $this->fail('The commit of an invalid new entity was not refused.');
+    }
+    catch (CommitRefusedException $refusal) {
+      $this->assertSame(CommitRefusedException::INVALID, $refusal->reason());
+    }
+    $this->assertTrue($new->isNew());
+  }
+
+  /**
+   * Tests that a storage exception is the same refusal.
+   *
+   * Storage throws during the save of a valid, current working copy: the
+   * door answers the typed refusal with a plain message (the exception's
+   * own text stays out of it, and rides along as the previous exception),
+   * nothing was saved and the stage is still there.
+   */
+  public function testStorageExceptionRefuses(): void {
+    $node = $this->createNode('page');
+    $working = $this->handler->load('node', $node->id());
+    $working->entity()->setTitle('Staged');
+    $this->handler->persist($working);
+    \Drupal::state()->set('daedalus_blueprint_test.persisted', []);
+
+    \Drupal::state()->set('daedalus_blueprint_test.fail_save', TRUE);
+    try {
+      $this->handler->commit($this->handler->load('node', $node->id()));
+      $this->fail('A storage exception at commit was not a refusal.');
+    }
+    catch (CommitRefusedException $refusal) {
+      $this->assertSame(CommitRefusedException::STORAGE, $refusal->reason());
+      $this->assertCount(1, $refusal->messages());
+      $this->assertStringContainsString('The save failed', $refusal->messages()[0]);
+      $this->assertStringNotContainsString('The test made storage fail.', $refusal->getMessage());
+      $this->assertInstanceOf(EntityStorageException::class, $refusal->getPrevious());
+    }
+    \Drupal::state()->delete('daedalus_blueprint_test.fail_save');
+
+    $this->assertSame('Before', $this->loadStored($node)->getTitle());
+    $this->assertCount(1, $this->revisionIds($node));
+    $this->assertTrue($this->tempstore->has($node));
+    $this->assertSame([], \Drupal::state()->get('daedalus_blueprint_test.persisted', []));
+
+    // The stage is intact: the same working copy commits once storage does.
+    $this->handler->commit($this->handler->load('node', $node->id()));
+    $this->assertSame('Staged', $this->loadStored($node)->getTitle());
+  }
+
+  /**
    * Creates and saves a node titled "Before", authored by the fixture user.
    *
    * The first revision is attributed to the author with a log message, so
@@ -221,7 +448,7 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
   /**
    * Loads the stored row of a node, bypassing every cache and the stage.
    */
-  protected function loadStored(NodeInterface $node): NodeInterface {
+  protected function loadStored(NodeInterface $node): ?NodeInterface {
     return $this->entityTypeManager->getStorage('node')->loadUnchanged($node->id());
   }
 

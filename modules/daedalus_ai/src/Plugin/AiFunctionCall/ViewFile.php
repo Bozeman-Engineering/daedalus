@@ -9,6 +9,7 @@ use Drupal\ai\Base\FunctionCallBase;
 use Drupal\ai\OperationType\GenericType\ImageFile;
 use Drupal\ai\Service\FunctionCalling\ExecutableFunctionCallInterface;
 use Drupal\ai\Service\FunctionCalling\FunctionCallInterface;
+use Drupal\Component\Utility\Unicode;
 use Drupal\Core\Entity\EntityRepositoryInterface;
 use Drupal\Core\Plugin\Context\ContextDefinition;
 use Drupal\Core\StringTranslation\ByteSizeMarkup;
@@ -30,7 +31,8 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * name to the bytes, by the one kind split every file surface shares
  * (FileKind): a raster image comes back through the ai_agents image
  * contract (`_images`, delivered on the next turn), a textual file (SVG,
- * CSS, CSV, HTML, JSON, text) comes back as its text, a PDF is refused
+ * CSS, CSV, JSON, text) comes back as its text (its first TEXT_CEILING
+ * bytes, said so, when it is longer), a PDF is refused
  * (tool results carry images and text only; the model saw it in the turn it
  * was attached), anything else is named and not delivered.
  *
@@ -44,7 +46,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
   id: 'daedalus_ai:view_file',
   function_name: 'view_file',
   name: 'View File',
-  description: 'Re-opens a file by name: one the user attached (named in the ATTACHMENTS block) or one a tool kept (named in its result). A raster image arrives as an image on your next turn; a textual file (SVG, CSS, CSV, HTML, JSON, text) is returned as text. PDFs cannot be re-opened; ask the user to attach one again. Pass media:<uuid> to open the source file of a media item (e.g. a generated image) instead.',
+  description: 'Re-opens a file by name: one the user attached (named in the ATTACHMENTS block) or one a tool kept (named in its result). A raster image arrives as an image on your next turn; a textual file (SVG, CSS, CSV, JSON, text) is returned as text. PDFs cannot be re-opened; ask the user to attach one again. Pass media:<uuid> to open the source file of a media item (e.g. a generated image) instead.',
   group: 'information_tools',
   context_definitions: [
     'name' => new ContextDefinition(
@@ -61,6 +63,11 @@ final class ViewFile extends FunctionCallBase implements ExecutableFunctionCallI
    * The spelling that addresses a media item's source file.
    */
   public const MEDIA_PREFIX = 'media:';
+
+  /**
+   * The most text a file is returned as, in bytes; a longer file is cut.
+   */
+  public const TEXT_CEILING = 256 * 1024;
 
   /**
    * The attachment store the names resolve through.
@@ -145,7 +152,16 @@ final class ViewFile extends FunctionCallBase implements ExecutableFunctionCallI
     $head = sprintf('%s (%s, %s)', $name, $mime, ByteSizeMarkup::create((int) $file->getSize()));
     switch (FileKind::fromMime($mime)) {
       case FileKind::Text:
-        $this->setOutput($head . ":\n<file name=\"" . $file->getFilename() . "\">\n" . rtrim($this->attachments->bytes($file), "\n") . "\n</file>");
+        $cut = (int) $file->getSize() > self::TEXT_CEILING;
+        // One byte past the ceiling is read so the cut can step back to a
+        // character boundary instead of splitting a character.
+        $text = $cut
+          ? Unicode::truncateBytes($this->attachments->bytes($file, self::TEXT_CEILING + 1), self::TEXT_CEILING)
+          : $this->attachments->bytes($file);
+        if ($cut) {
+          $head .= sprintf(', cut to its first %s', ByteSizeMarkup::create(self::TEXT_CEILING));
+        }
+        $this->setOutput($head . ":\n<file name=\"" . $file->getFilename() . "\">\n" . rtrim($text, "\n") . "\n</file>");
         return;
 
       case FileKind::Image:

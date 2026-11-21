@@ -6,6 +6,7 @@ namespace Drupal\Tests\daedalus_blueprint\Kernel\Access;
 
 use Drupal\daedalus_blueprint\BlueprintSerializerInterface;
 use Drupal\daedalus_blueprint\Utility\FormOnlyStub;
+use Drupal\daedalus_blueprint_config\ConfigBlueprintBackend;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
@@ -20,6 +21,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * the browsing user cannot read past that user's access. The base test class
  * runs as an admin (access-transparent); each test here switches to a
  * restricted user to exercise the denial.
+ *
+ * The unsaved copy is for editors: a reader's load answers it only to a
+ * user who may update the host, the stored entity to anyone else; and a
+ * config entity, serialized whole, is read on update access.
  */
 #[RunTestsInSeparateProcesses]
 #[Group('daedalus_blueprint')]
@@ -156,6 +161,66 @@ class BlueprintReadAccessTest extends BlueprintKernelTestBase {
 
     $this->assertArrayHasKey('field_ref', $result['fields']);
     $this->assertSame((int) $target->id(), $result['fields']['field_ref']['target_id']);
+  }
+
+  /**
+   * A reader's load answers the unsaved copy only to a user who may update.
+   *
+   * Fixture: daedalus_tempstore installed, a subtitle staged over a saved
+   * one. A user who may only view the entity is answered the stored
+   * entity by the storage handler and by the content backend, and what is
+   * serialized for them is the saved value; a user who may update it is
+   * answered the unsaved copy. The writer's load() answers the unsaved
+   * copy whoever asks: its callers have established update access.
+   */
+  public function testUnsavedCopyIsLoadedForEditorsOnly(): void {
+    // daedalus_tempstore's container needs layout_builder.
+    $this->enableLayoutBuilder();
+    $this->enableModules(['daedalus_tempstore']);
+    $handler = $this->container->get('daedalus_blueprint.storage_handler');
+    $backend = $this->container->get('daedalus_blueprint.backend_resolver')->resolve('entity_test');
+    $this->serializer = $this->container->get('daedalus_blueprint.serializer');
+
+    $entity = $this->createTestEntity(['field_subtitle' => 'Saved']);
+    $id = $entity->id();
+    $working = $handler->load('entity_test', $id);
+    $working->entity()->set('field_subtitle', 'Unsaved');
+    $this->assertSame('tempstore', $handler->persist($working));
+    // The working copy of an unstaged entity is the storage's own cached
+    // object; a later request loads the stored row afresh.
+    $this->container->get('entity_type.manager')->getStorage('entity_test')->resetCache();
+
+    // May view, may not update: the stored entity.
+    $this->setUpCurrentUser([], ['view test entity']);
+    $this->assertSame('Saved', $handler->loadReadable('entity_test', $id)->entity()->get('field_subtitle')->value);
+    $read = $backend->loadReadable('entity_test', $id);
+    $this->assertSame('Saved', $read->get('field_subtitle')->value);
+    $this->assertSame('Saved', $this->serializer->serialize($this->host($read))['fields']['field_subtitle']);
+    $this->assertSame('Unsaved', $handler->load('entity_test', $id)->entity()->get('field_subtitle')->value);
+
+    // May update: the unsaved copy.
+    $this->setUpCurrentUser([], ['view test entity', 'administer entity_test content']);
+    $this->assertSame('Unsaved', $handler->loadReadable('entity_test', $id)->entity()->get('field_subtitle')->value);
+    $this->assertSame('Unsaved', $backend->loadReadable('entity_test', $id)->get('field_subtitle')->value);
+
+    // Nothing to read is still nothing.
+    $this->assertNull($handler->loadReadable('entity_test', 999));
+  }
+
+  /**
+   * A content read asks view; a config read asks update.
+   *
+   * The config serializer answers the entity's whole export, so its
+   * backend names the operation the entity's edit form asks for.
+   */
+  public function testConfigReadAsksUpdate(): void {
+    $this->enableModules(['daedalus_blueprint_config']);
+    $resolver = $this->container->get('daedalus_blueprint.backend_resolver');
+
+    $this->assertSame('view', $resolver->resolve('entity_test')->readOperation());
+    $config = $resolver->resolve('user_role');
+    $this->assertInstanceOf(ConfigBlueprintBackend::class, $config);
+    $this->assertSame('update', $config->readOperation());
   }
 
 }

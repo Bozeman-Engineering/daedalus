@@ -845,10 +845,12 @@ class LinkedPlacementTest extends BlueprintKernelTestBase {
     $this->assertSame(1, $xpath->query('//*[@data-layout-builder-block-uuid="' . $hero_door . '"]//*[@data-selectable="container:' . $this->blueprintSection . '"]')->length, "The default in the frame's slot: $html");
     // An editor who may not update the blueprint nor configure the frame
     // may still fill the slot: insert, no portal. (The claim copies the
-    // testimonial's styles too, so the editor styles the page's elements.)
+    // testimonial's styles too, so the editor styles the page's elements,
+    // and its blocks, so the editor may create blocks of their type.)
     $editor = $this->createUser([
       'administer entity_test content',
       'configure any layout',
+      'create basic block content',
       'style entity_test entity_test elements',
       'use daedalus ui edit mode',
     ]);

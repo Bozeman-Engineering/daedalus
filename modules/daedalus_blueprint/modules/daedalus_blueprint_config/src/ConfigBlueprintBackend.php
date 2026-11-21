@@ -153,6 +153,27 @@ class ConfigBlueprintBackend implements BlueprintBackendInterface {
   /**
    * {@inheritdoc}
    */
+  public function loadReadable(string $entity_type_id, int|string $entity_id): ?EntityInterface {
+    // Config is not staged: the stored entity is the only copy.
+    return $this->load($entity_type_id, $entity_id);
+  }
+
+  /**
+   * {@inheritdoc}
+   *
+   * The serializer answers the whole export (toArray()), every property
+   * the entity's edit form holds and some it does not show, with no
+   * per-property access to filter by. Viewing a config entity (reading its
+   * label, seeing it listed) is a much smaller grant, so a read asks what
+   * the edit form asks.
+   */
+  public function readOperation(): string {
+    return 'update';
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function requiresWorkspace(): bool {
     return FALSE;
   }

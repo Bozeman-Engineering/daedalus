@@ -187,6 +187,9 @@
    *
    * @param {Object} notification
    *   The history entry: message, type, timestamp and an optional target.
+   *   The message is text (the messenger's contract) and the whole entry
+   *   comes out of browser storage, so every part of it printed here is
+   *   escaped.
    * @param {string} formattedTime
    *   The formatted timestamp string.
    *
@@ -202,10 +205,10 @@
     const target = notification.target
       ? ` data-notification-target="${Drupal.checkPlain(notification.target)}" role="button" tabindex="0"`
       : '';
-    return `<div class="notification-item notification-item--${notification.type}${notification.target ? ' notification-item--linked' : ''}"${target}>
+    return `<div class="notification-item notification-item--${Drupal.checkPlain(notification.type)}${notification.target ? ' notification-item--linked' : ''}"${target}>
       <div class="notification-item__content">
-        <div class="notification-item__message">${notification.message}</div>
-        <div class="notification-item__time">${formattedTime}</div>
+        <div class="notification-item__message">${Drupal.checkPlain(notification.message)}</div>
+        <div class="notification-item__time">${Drupal.checkPlain(formattedTime)}</div>
       </div>
     </div>`;
   };

@@ -29,6 +29,8 @@ function daedalus_ai_library_info_alter(array &$libraries, string $extension): v
     // AiFollowup and AiDeferred to the root daedalus_ui defines.
     $libraries['deepchat']['dependencies'][] = 'daedalus_ui/daedalus';
     $libraries['deepchat']['dependencies'][] = 'daedalus_ui/highlight';
+    // The attachment upload posts through the one token source.
+    $libraries['deepchat']['dependencies'][] = 'daedalus_ui/csrf';
     // The scripts above log through Drupal.Daedalus.logger('daedalus_ai');
     // the dependency both loads the spine's logger and guarantees it is
     // there before they run (see the module's README for the toggle).

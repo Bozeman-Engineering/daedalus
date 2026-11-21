@@ -42,32 +42,20 @@ import { createDeviceList } from './device-list.js';
         label.htmlFor = 'responsive-preview-device';
         label.textContent = Drupal.t('Device');
 
-        // The user's own devices persist through the generic editor-settings
-        // endpoint (namespace daedalus_ui): the whole list is POSTed as
-        // JSON on every add/remove, last write wins. State changes apply
-        // optimistically; a failed save is surfaced in the message line.
+        // The user's own devices persist through the one editor-preference
+        // lane (Drupal.Daedalus.saveSetting, namespace daedalus_ui): the
+        // whole list rides every add/remove, last write wins. State changes
+        // apply optimistically; a failed save is surfaced in the message
+        // line.
         const list = createDeviceList({
           defaults: devices,
           custom: [...(userDevices ?? [])],
           persist: (all) =>
-            fetch(
-              Drupal.url(
-                'daedalus-ui/setting/daedalus_ui/responsive_preview_devices',
-              ),
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(all),
-              },
-            ).then((response) => {
-              if (!response.ok) {
-                throw new Error(
-                  Drupal.t('Saving devices failed (HTTP @status).', {
-                    '@status': response.status,
-                  }),
-                );
-              }
-            }),
+            Drupal.Daedalus.saveSetting(
+              'daedalus_ui',
+              'responsive_preview_devices',
+              all,
+            ),
         });
 
         const select = document.createElement('select');

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_ai\EventSubscriber;
 
-use Drupal\ai\Service\HostnameFilter;
 use Drupal\daedalus_ai\MutatedTurn;
 use Drupal\daedalus_ai\PendingMedia\PendingTargetCollector;
+use Drupal\daedalus_ai\ReplyDisplay;
 use Drupal\daedalus_ai\UiCommandQueue;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Serialization\Json;
@@ -25,9 +25,9 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * (hostname_filter_disabled on the daedalus agent, so tool arguments
  * reach the op spine byte-intact), and the chat link protection that
  * filtering provided re-lands here instead, where output actually becomes
- * output. Every leg's `html` body value goes through the ai module's
- * hostname filter with settings-derived defaults before it reaches the
- * browser — the per-call full-trust DTO the agent path sets is scoped to
+ * output. Every leg's `html` body value goes through ReplyDisplay's
+ * boundary (the ai module's hostname filter with settings-derived
+ * defaults) before it reaches the browser — the per-call full-trust DTO the agent path sets is scoped to
  * the one provider invocation and long restored by response time — so a
  * prompt-injected model cannot show an editor a disallowed-hostname link.
  * DeepChatApi's Xss::filter already ran on the html; it strips tags, not
@@ -84,10 +84,10 @@ class DeepChatResponseListener implements EventSubscriberInterface {
    *   poll requests (per user, keyed by chat thread).
    * @param \Drupal\Component\Datetime\TimeInterface $time
    *   The time service, stamping held commands for the staleness guard.
-   * @param \Drupal\ai\Service\HostnameFilter $hostnameFilter
-   *   The ai module's hostname filter, applied to the assistant's html at
-   *   this display boundary (the transport is inert for the page-builder
-   *   agent).
+   * @param \Drupal\daedalus_ai\ReplyDisplay $replyDisplay
+   *   The display boundary the assistant's html passes (the transport's
+   *   hostname filtering is inert for the page-builder agent); the history
+   *   replay passes the same one.
    */
   public function __construct(
     protected UiCommandQueue $commandQueue,
@@ -95,7 +95,7 @@ class DeepChatResponseListener implements EventSubscriberInterface {
     protected PendingTargetCollector $pendingTargets,
     protected PrivateTempStoreFactory $tempStoreFactory,
     protected TimeInterface $time,
-    protected HostnameFilter $hostnameFilter,
+    protected ReplyDisplay $replyDisplay,
   ) {}
 
   /**
@@ -162,7 +162,7 @@ class DeepChatResponseListener implements EventSubscriberInterface {
     // restored. Only the html (display) value is filtered: the command and
     // mutation payloads below are structured app data, not model output.
     if (is_string($data['html'] ?? NULL)) {
-      $data['html'] = $this->hostnameFilter->filterText($data['html']);
+      $data['html'] = $this->replyDisplay->boundary($data['html']);
     }
 
     // The turn's pending generations flush as ONE trigger command riding the

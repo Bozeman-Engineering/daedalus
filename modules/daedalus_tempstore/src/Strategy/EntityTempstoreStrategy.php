@@ -5,7 +5,7 @@ namespace Drupal\daedalus_tempstore\Strategy;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\daedalus_tempstore\History\HistoryRecorder;
 use Drupal\daedalus_tempstore\SectionStorageHelper;
-use Drupal\daedalus_tempstore\WorkspaceKeyTrait;
+use Drupal\daedalus_tempstore\StageKeyTrait;
 use Drupal\Core\Entity\TranslatableInterface;
 use Drupal\Core\TempStore\SharedTempStoreFactory;
 use Drupal\workspaces\WorkspaceManagerInterface;
@@ -20,7 +20,7 @@ use Drupal\workspaces\WorkspaceManagerInterface;
  */
 class EntityTempstoreStrategy implements TempstoreStrategyInterface {
 
-  use WorkspaceKeyTrait;
+  use StageKeyTrait;
 
   /**
    * Constructs an EntityTempstoreStrategy.
@@ -66,7 +66,7 @@ class EntityTempstoreStrategy implements TempstoreStrategyInterface {
         throw new \UnexpectedValueException(sprintf('The "%s" entry is invalid', $key));
       }
 
-      return $entity;
+      return $this->inLanguageOf($entity, $subject);
     }
 
     return $subject;
@@ -105,12 +105,15 @@ class EntityTempstoreStrategy implements TempstoreStrategyInterface {
 
   /**
    * {@inheritdoc}
+   *
+   * The language in the key is the host's own (its default translation),
+   * so every translation of an entity addresses one stage.
    */
   public function getKey($subject): string {
     $key = $subject->getEntityTypeId() . '.' . $subject->id();
 
     if ($subject instanceof TranslatableInterface) {
-      $key .= '.' . $subject->language()->getId();
+      $key .= '.' . $this->stageHost($subject)->language()->getId();
     }
     else {
       // Use 'und' (undefined) for non-translatable entities.

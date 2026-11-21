@@ -186,7 +186,7 @@ class VariantDistroLockTest extends KernelTestBase {
     $result = $deserializer->deserialize([
       'entity_type' => 'daedalus_variant',
       'bundle' => 'daedalus_variant',
-      '_root_entity' => ['field' => 'machine_name', 'value' => 'testimonial_bold'],
+      '_root_entity' => ['field' => 'id', 'value' => (int) $this->loadVariant('testimonial_bold')->id()],
       'fields' => [
         'styles' => ['' => ['default' => ['font-size' => '1.75rem']]],
       ],
@@ -200,7 +200,7 @@ class VariantDistroLockTest extends KernelTestBase {
     $result = $deserializer->deserialize([
       'entity_type' => 'daedalus_variant',
       'bundle' => 'daedalus_variant',
-      '_root_entity' => ['field' => 'machine_name', 'value' => $copy->getMachineName()],
+      '_root_entity' => ['field' => 'id', 'value' => (int) $copy->id()],
       'fields' => [
         'styles' => ['' => ['default' => ['font-size' => '1.75rem']]],
       ],
@@ -236,7 +236,7 @@ class VariantDistroLockTest extends KernelTestBase {
     $result = \Drupal::service('daedalus_blueprint.deserializer')->deserialize([
       'entity_type' => 'daedalus_variant',
       'bundle' => 'daedalus_variant',
-      '_root_entity' => ['field' => 'machine_name', 'value' => 'testimonial_bold'],
+      '_root_entity' => ['field' => 'id', 'value' => (int) $this->loadVariant('testimonial_bold')->id()],
       'fields' => [
         'styles' => ['' => ['default' => ['font-size' => '2rem']]],
       ],

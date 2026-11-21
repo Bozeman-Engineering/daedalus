@@ -38,10 +38,11 @@ use Symfony\Component\HttpFoundation\RequestStack;
  * DIALOG_ATTRIBUTE and runs its submit as a job on the op queue, FIFO with
  * the ops around it.
  *
- * Only in Edit Mode (daedalus_edit_form_alter() gates on the mode) and only
- * over a storage with a host (an entity's overrides, a display's defaults:
- * the template's Configure dialog is this dialog too); a storage with no
- * host keeps core's path.
+ * Over every storage with a host (an entity's overrides, a display's
+ * defaults: the template's Configure dialog is this dialog too), whatever
+ * mode the request names: the mode is the client's to set, and core's
+ * submit on a hosted storage would write beside the spine. A storage with
+ * no host keeps core's path.
  */
 abstract class ConfigureDialogFormAlterBase {
 

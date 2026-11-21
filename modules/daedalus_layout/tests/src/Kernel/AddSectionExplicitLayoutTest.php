@@ -39,7 +39,7 @@ class AddSectionExplicitLayoutTest extends NestedStorageKernelTestBase {
     $this->operations = $this->container->get('daedalus_blueprint.operations');
     // The batch door judges update access on the entity_test host before
     // the op runs (a direct addSection() call passes no door).
-    $this->setUpCurrentUser([], ['configure any layout', 'administer entity_test content']);
+    $this->setUpCurrentUser([], ['configure any layout', 'administer entity_test content', 'create basic block content']);
   }
 
   /**

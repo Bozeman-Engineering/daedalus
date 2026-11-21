@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_ai\Functional;
 
 use Drupal\Component\Serialization\Json;
-use Drupal\daedalus_ai\Attachments;
+use Drupal\Core\Session\AccountInterface;
 use Drupal\file\FileInterface;
 use Drupal\Tests\BrowserTestBase;
 use Drupal\Tests\daedalus\Traits\DaedalusFixtureTrait;
@@ -34,6 +34,11 @@ final class AttachRouteTest extends BrowserTestBase {
   private const THREAD = 'assistant_thread_2_0';
 
   /**
+   * A held file's uri: the root, a 43 character random name, the filename.
+   */
+  private const HELD_URI = '@^public://daedalus-ai/attachments/[A-Za-z0-9_-]{43}/[^/]+$@';
+
+  /**
    * {@inheritdoc}
    */
   protected function installRecipePath(): string {
@@ -42,14 +47,27 @@ final class AttachRouteTest extends BrowserTestBase {
 
   /**
    * Attach saves through the lane and holds; release lets go; gates hold.
+   *
+   * A thread id is taken only from the user it was handed to, on the attach
+   * route and on the op endpoint.
    */
   public function testAttachAndRelease(): void {
-    $this->loginAsEditor();
+    $editor = $this->loginAsEditor();
     $token = $this->csrfToken();
     $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>';
 
-    // A file attaches: saved temporary under the attachment directory, held
-    // for the thread, named by its saved filename.
+    // A thread nobody handed the user takes nothing.
+    $response = $this->post('daedalus-ai/attach', $token, [
+      ['name' => 'file', 'contents' => $svg, 'filename' => 'hero.svg'],
+      ['name' => 'thread_id', 'contents' => self::THREAD],
+    ]);
+    $this->assertSame(403, $response['status'], $response['body']);
+    $this->assertNull($this->container->get('daedalus_blueprint.dialect_alias_map')->resolveFile(self::THREAD, 'hero.svg'));
+    // The chat panel hands the thread out; from then on it is the editor's.
+    $this->handThread($editor);
+
+    // A file attaches: saved temporary in the conversation's directory,
+    // held for the thread, named by its saved filename.
     $response = $this->post('daedalus-ai/attach', $token, [
       ['name' => 'file', 'contents' => $svg, 'filename' => 'hero.svg'],
       ['name' => 'thread_id', 'contents' => self::THREAD],
@@ -62,7 +80,12 @@ final class AttachRouteTest extends BrowserTestBase {
     $this->assertSame((int) $hero->getSize(), $answer['size']);
     // Held: core makes a used file permanent, which is what keeps GC off it.
     $this->assertTrue($hero->isPermanent());
-    $this->assertStringStartsWith(Attachments::DIRECTORY . '/', $hero->getFileUri());
+    // The directory is named by a random token, not by the thread or the
+    // user, and the answer does not carry it.
+    $this->assertMatchesRegularExpression(self::HELD_URI, $hero->getFileUri());
+    $directory = dirname($hero->getFileUri());
+    $this->assertStringNotContainsString(self::THREAD, $directory);
+    $this->assertSame(['name', 'mime', 'size'], array_keys($answer));
     $this->assertSame(['daedalus_ai' => ['thread' => [self::THREAD => '1']]], $this->usage($hero));
 
     // A second file of the same name is renamed by the lane and the answer
@@ -75,6 +98,7 @@ final class AttachRouteTest extends BrowserTestBase {
     $second = Json::decode($response['body'])['name'];
     $this->assertNotSame('hero.svg', $second);
     $this->assertNotSame($hero->uuid(), $this->heldFile($second)->uuid());
+    $this->assertSame($directory, dirname($this->heldFile($second)->getFileUri()), 'One conversation, one directory.');
 
     // The lane's refusals and the request contract are 400s naming the
     // reason; the gates are 403s.
@@ -100,6 +124,45 @@ final class AttachRouteTest extends BrowserTestBase {
     ]);
     $this->assertSame(403, $response['status']);
 
+    // The op endpoint takes the thread id on the same terms: the editor's
+    // own thread rides a write, a thread that is not theirs is a 403 and
+    // the write does not happen.
+    $node = $this->drupalCreateNode(['type' => 'page', 'title' => 'Before', 'uid' => $editor->id()]);
+    $rename = [['op' => 'update_element', 'element' => $node->uuid(), 'properties' => ['title' => 'After']]];
+    $response = $this->post('daedalus-blueprint/node/' . $node->id(), $token, NULL, [
+      'operations' => $rename,
+      'thread_id' => 'assistant_thread_3_0',
+    ]);
+    $this->assertSame(403, $response['status'], $response['body']);
+    $this->assertSame('CONVERSATION_NOT_OWNED', Json::decode($response['body'])['errors'][0]['code']);
+    $response = $this->post('daedalus-blueprint/node/' . $node->id(), $token, NULL, [
+      'operations' => $rename,
+      'thread_id' => self::THREAD,
+    ]);
+    $this->assertSame(200, $response['status'], $response['body']);
+    $this->assertTrue(Json::decode($response['body'])['success'], $response['body']);
+
+    // Another user naming the editor's thread reaches neither door with it.
+    $this->drupalLogout();
+    $other = $this->loginAsEditor();
+    $other_token = $this->csrfToken();
+    $response = $this->post('daedalus-ai/attach', $other_token, [
+      ['name' => 'file', 'contents' => $svg, 'filename' => 'theirs.svg'],
+      ['name' => 'thread_id', 'contents' => self::THREAD],
+    ]);
+    $this->assertSame(403, $response['status'], $response['body']);
+    $this->assertNull($this->container->get('daedalus_blueprint.dialect_alias_map')->resolveFile(self::THREAD, 'theirs.svg'));
+    $theirs = $this->drupalCreateNode(['type' => 'page', 'title' => 'Theirs', 'uid' => $other->id()]);
+    $response = $this->post('daedalus-blueprint/node/' . $theirs->id(), $other_token, NULL, [
+      'operations' => [['op' => 'update_element', 'element' => $theirs->uuid(), 'properties' => ['title' => 'Renamed']]],
+      'thread_id' => self::THREAD,
+    ]);
+    $this->assertSame(403, $response['status'], $response['body']);
+    $this->assertSame('CONVERSATION_NOT_OWNED', Json::decode($response['body'])['errors'][0]['code']);
+    $this->drupalLogout();
+    $this->drupalLogin($editor);
+    $token = $this->csrfToken();
+
     // Release, as the chat menu posts it: both files let go.
     $response = $this->post('daedalus-ai/attachments/release', $token, NULL, ['thread_id' => self::THREAD]);
     $this->assertSame(200, $response['status'], $response['body']);
@@ -109,6 +172,16 @@ final class AttachRouteTest extends BrowserTestBase {
     $storage->resetCache([$hero->id()]);
     $this->assertTrue($storage->load($hero->id())->isTemporary());
     $this->assertNull($this->container->get('daedalus_blueprint.dialect_alias_map')->resolveFile(self::THREAD, 'hero.svg'));
+
+    // The conversation that takes the thread id next writes somewhere new.
+    $response = $this->post('daedalus-ai/attach', $token, [
+      ['name' => 'file', 'contents' => $svg, 'filename' => 'hero.svg'],
+      ['name' => 'thread_id', 'contents' => self::THREAD],
+    ]);
+    $this->assertSame(200, $response['status'], $response['body']);
+    $next = $this->heldFile('hero.svg');
+    $this->assertMatchesRegularExpression(self::HELD_URI, $next->getFileUri());
+    $this->assertNotSame($directory, dirname($next->getFileUri()));
 
     // Anonymous never reaches either route.
     $this->drupalLogout();
@@ -139,6 +212,17 @@ final class AttachRouteTest extends BrowserTestBase {
     }
     $response = $this->getHttpClient()->request('POST', $this->buildUrl($path), $options);
     return ['status' => $response->getStatusCode(), 'body' => (string) $response->getBody()];
+  }
+
+  /**
+   * Records the thread as handed to a user, as the chat panel's build does.
+   */
+  private function handThread(AccountInterface $user): void {
+    $current = $this->container->get('current_user');
+    $before = $current->getAccount();
+    $current->setAccount($user);
+    $this->container->get('daedalus_ai.thread_ownership')->record(self::THREAD);
+    $current->setAccount($before);
   }
 
   /**

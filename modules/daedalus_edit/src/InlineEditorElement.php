@@ -14,6 +14,7 @@ class InlineEditorElement implements TrustedCallbackInterface {
 
   public function __construct(
     protected PluginManagerInterface $pluginManager,
+    protected EditorSeed $editorSeed,
   ) {}
 
   /**
@@ -80,17 +81,12 @@ class InlineEditorElement implements TrustedCallbackInterface {
       $element['format']['guidelines'][$format_id]['#access'] = FALSE;
     }
 
-    // Apply XSS filters when editing content if necessary. Some types of text
-    // editors cannot guarantee that the end user won't become a victim of XSS.
+    // The textarea carries the editor's seed, not the stored value: a
+    // canvas editor puts the textarea's value on the page.
     if (!empty($element['value']['#value'])) {
       $original = $element['value']['#value'];
       $format = FilterFormat::load($element['format']['format']['#value']);
-
-      // Ensure XSS-safety for the current text format/editor.
-      $filtered = editor_filter_xss($original, $format);
-      if ($filtered !== FALSE) {
-        $element['value']['#value'] = $filtered;
-      }
+      $element['value']['#value'] = $this->editorSeed->seed($original, $format);
 
       // Only when the user has access to multiple text formats, we must add
       // data- attributes for the original value and change tracking, because

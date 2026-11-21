@@ -7,25 +7,39 @@
  * the way the mutation client does, 'none' when no cookie is set.
  *
  * The module reads Drupal.url and Drupal.Daedalus.getCookieValue at call
- * time and posts through fetch; the spec mounts stubs for all three and
- * records what the door is asked.
+ * time and posts through the one token source (daedalus_ui's js/csrf.js,
+ * Drupal.Daedalus.post), which the spec loads for real over a stub fetch
+ * that records what the door is asked.
  *
  * Run with `node --test "modules/daedalus_layout/tests/js/*.test.mjs"`
  * from the daedalus root.
  */
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 const cookies = {};
 globalThis.Drupal = {
   url: (path) => `/${path}`,
+  t: (text) => text,
   Daedalus: {
     getCookieValue: (name) => cookies[name],
   },
 };
+// The token source is a plain script on the Drupal global.
+// eslint-disable-next-line no-new-func
+new Function(
+  'Drupal',
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../../../daedalus_ui/js/csrf.js'),
+    'utf8',
+  ),
+)(globalThis.Drupal);
 
 // Every fetch the module makes: the CSRF token's and the peek's. The token
-// is fetched once per process (blueprint-gestures memoizes it), so the
+// is fetched once per document (the token source memoizes it), so the
 // peek's request is the last call recorded.
 const calls = [];
 globalThis.fetch = async (url, init) => {

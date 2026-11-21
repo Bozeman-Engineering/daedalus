@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\Core\Entity\EntityRepositoryInterface;
+use Drupal\Core\Session\AccountInterface;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 use Drupal\daedalus_stylish\Plugin\Field\FieldType\SkinFontsItem;
 use Drupal\daedalus_ui\File\FileLane;
@@ -21,8 +22,9 @@ use Drupal\file\FileInterface;
  * name something else in every stack), and faces that print (a non-empty
  * list; each a map of weight, style and a typed source; the weight and
  * style through SkinFontsItem's one grammar; the source `{file: uuid}`
- * resolving to a managed file the file lane admits, woff2 or woff; one
- * face per weight and style).
+ * resolving to a managed file the file lane admits, woff2 or woff, that
+ * the writer uploaded or a skin already holds; one face per weight and
+ * style).
  *
  * validateFonts() is the seam over a skin's fonts section as worn
  * (StyleMapValidator::validateAnimations()'s twin): the name grammar, the
@@ -45,6 +47,8 @@ class FontValidator {
 
   public function __construct(
     protected EntityRepositoryInterface $entityRepository,
+    protected AccountInterface $currentUser,
+    protected FontFiles $fontFiles,
   ) {}
 
   /**
@@ -209,6 +213,14 @@ class FontValidator {
     if (!$file instanceof FileInterface) {
       return [
         new BlueprintError($path, 'FONT_FILE_NOT_FOUND', sprintf('No file on this site has the uuid "%s".', $uuid), [], 'Upload the font file first; the response names its uuid.'),
+      ];
+    }
+    // A face names a file its writer uploaded, or one a skin already
+    // holds as a face's file (the site's font vocabulary). Any other
+    // managed file answers as if it were absent.
+    if ((int) $file->getOwnerId() !== (int) $this->currentUser->id() && !$this->fontFiles->isHeld($file)) {
+      return [
+        new BlueprintError($path, 'FONT_FILE_NOT_FOUND', sprintf('No font file you uploaded, and none the site\'s fonts hold, has the uuid "%s".', $uuid), [], 'Upload the font file first; the response names its uuid.'),
       ];
     }
     $extension = strtolower(pathinfo($file->getFilename() ?? '', PATHINFO_EXTENSION));

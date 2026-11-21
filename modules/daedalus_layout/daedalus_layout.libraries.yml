@@ -39,6 +39,11 @@ add_panel:
     - core/drupal
     - core/drupalSettings
     - daedalus_layout/editing_ui
+    # The blueprint gestures, the block type favorite and the peek post
+    # through the one token source.
+    - daedalus_ui/csrf
+    # The editor's favorite marks save through the editor-preference lane.
+    - daedalus_ui/save_setting
     # The rows wear the shared panel item recipe, the headings the
     # outline row grammar (the page elements tree's and code mode's), the
     # search box the recessed input, the collapse pair the icon button.

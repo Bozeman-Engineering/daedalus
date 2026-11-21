@@ -29,39 +29,34 @@
         (button) => {
           button.addEventListener('click', (e) => {
             const fileExtension = e.target.dataset.fileExtension;
-            const path = `/daedalus-ui/remove-media-file-association/${fileExtension.toLowerCase()}`;
-            const url = Drupal.Daedalus.ModePluginBase.url(path);
-
-            const ajaxConfig = {
-              url,
-              event: 'click',
-              progress: {
-                type: 'fullscreen',
-                message: Drupal.t('Removing media file association...'),
-              },
-              success: (response, status) => {
-                if (status === 'success') {
-                  const settingsList = button.closest('.setting-list');
-                  button.closest('li').remove();
-                  document.querySelector('.ajax-progress').remove();
-                  if (settingsList.children.length === 0) {
-                    document
-                      .querySelector('.setting-description')
-                      .classList.remove('daedalus-ui-hidden');
-                  }
-                  Drupal.Ajax.prototype.success.call(ajax, response, status);
+            const editMode = Drupal.Daedalus.ModeManager.getPlugin('edit');
+            Drupal.Daedalus.post(
+              Drupal.url(
+                `daedalus-ui/remove-media-file-association/${encodeURIComponent(fileExtension.toLowerCase())}`,
+              ),
+            )
+              .then((response) => {
+                if (!response.ok) {
+                  throw new Error(
+                    Drupal.t(
+                      'Unable to remove media file association (HTTP @status).',
+                      { '@status': response.status },
+                    ),
+                  );
                 }
-              },
-              error: (error) => {
-                Drupal.Daedalus.ModeManager.getPlugin('edit').handleError(
-                  error,
-                  'Unable to remove media file association.',
-                );
-              },
-            };
-
-            let ajax = Drupal.Daedalus.ModePluginBase.ajax(ajaxConfig);
-            ajax.execute();
+                return response.json();
+              })
+              .then(({ message }) => {
+                const settingsList = button.closest('.setting-list');
+                button.closest('li').remove();
+                if (settingsList.children.length === 0) {
+                  document
+                    .querySelector('.setting-description')
+                    .classList.remove('daedalus-ui-hidden');
+                }
+                editMode.message(message, 'status');
+              })
+              .catch((error) => editMode.message(error.message, 'error'));
           });
         },
       );

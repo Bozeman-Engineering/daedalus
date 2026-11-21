@@ -238,17 +238,12 @@
         `/daedalus-ai/deferred/${payload.entityType}/${payload.entityId}/${payload.viewMode}`,
       );
 
-      fetch(url, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          batch_id: payload.batchId,
-          // The payload's asset attachments are diffed against this; without
-          // it every library re-ships and re-executing drupal.js would reset
-          // window.Drupal.
-          ajax_page_state: drupalSettings.ajaxPageState,
-        }),
+      Drupal.Daedalus.post(url, {
+        batch_id: payload.batchId,
+        // The payload's asset attachments are diffed against this; without
+        // it every library re-ships and re-executing drupal.js would reset
+        // window.Drupal.
+        ajax_page_state: drupalSettings.ajaxPageState,
       })
         .then((r) => {
           if (!r.ok) {
@@ -370,14 +365,16 @@
         `/daedalus-ai/deferred-retry/${payload.entityType}/${payload.entityId}/${payload.viewMode}`,
       );
 
-      fetch(url, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          failures,
-          ajax_page_state: drupalSettings.ajaxPageState,
-        }),
+      // The server retries from the job it stored under each media uuid;
+      // a failure names only which job, why it failed and what to repaint.
+      Drupal.Daedalus.post(url, {
+        failures: failures.map((failure) => ({
+          type: failure.type,
+          media_uuid: failure.media_uuid,
+          reason: failure.reason,
+          target: failure.target,
+        })),
+        ajax_page_state: drupalSettings.ajaxPageState,
       })
         .then((r) => {
           if (!r.ok) {
@@ -415,13 +412,16 @@
       const url = Drupal.url(
         `daedalus-ai/deferred/${payload.entityType}/${payload.entityId}/${payload.viewMode}`,
       );
-      fetch(url, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batch_id: payload.batchId }),
-        keepalive: true,
-      }).catch(() => {});
+      // keepalive: the POST outlives the navigation that follows it. A
+      // refused or lost request costs nothing: the batch stays stashed and
+      // the page that owns it posts again.
+      Drupal.Daedalus.post(
+        url,
+        { batch_id: payload.batchId },
+        { keepalive: true },
+      ).catch((error) => {
+        log('deferred', 'Headless POST failed', error);
+      });
     },
 
     /**

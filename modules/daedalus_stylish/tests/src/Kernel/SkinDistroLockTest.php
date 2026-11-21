@@ -129,7 +129,7 @@ class SkinDistroLockTest extends KernelTestBase {
     return $deserializer->deserialize([
       'entity_type' => 'daedalus_skin',
       'bundle' => 'daedalus_skin',
-      '_root_entity' => ['field' => 'machine_name', 'value' => $machine_name],
+      '_root_entity' => ['field' => 'id', 'value' => (int) $this->loadSkin($machine_name)->id()],
       'fields' => [$field => $value],
     ]);
   }

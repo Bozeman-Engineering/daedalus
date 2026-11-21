@@ -392,7 +392,7 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
    */
   public function update(MaterialKind $kind, string $id, array $operation, ?HostInterface $host, array $options): MaterialGestureResult {
     $blueprint = $this->manager()->resolveUpdatable($id);
-    $this->requireEntityAccess($blueprint, 'update');
+    $this->manager()->requireAccess($blueprint, 'update');
     $changes = array_intersect_key($operation, array_flip(self::UPDATE_KEYS));
     if ($changes === []) {
       throw new MaterialGestureException([
@@ -469,7 +469,7 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
    */
   public function remove(MaterialKind $kind, string $id, array $options): MaterialGestureResult {
     $blueprint = $this->manager()->resolveUpdatable($id);
-    $this->requireEntityAccess($blueprint, 'delete');
+    $this->manager()->requireAccess($blueprint, 'delete');
     $machine_name = $blueprint->getMachineName();
     $blueprint->delete();
     return new MaterialGestureResult(MaterialKind::Blueprint, $machine_name);
@@ -500,8 +500,8 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
    * No entity exists yet to ask, so the handler's create access for the
    * capture's type answers (the type's `create {type} blueprint`
    * permission); update and remove ask the saved entity
-   * (requireEntityAccess()). One authority on blueprint mutation, and the
-   * same door the admin listing's add page uses.
+   * (BlueprintManager::requireAccess()). One authority on blueprint
+   * mutation, and the same door the admin listing's add page uses.
    *
    * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
    */
@@ -526,19 +526,6 @@ final class BlueprintMaterialsProvider implements MaterialsProviderInterface {
       ]);
     }
     return $strip;
-  }
-
-  /**
-   * The blueprint entity's own access handler, the single mutation authority.
-   *
-   * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
-   */
-  protected function requireEntityAccess(BlueprintInterface $blueprint, string $operation): void {
-    if (!$blueprint->access($operation)) {
-      throw new MaterialGestureException([
-        new BlueprintError('id', 'BLUEPRINT_FORBIDDEN', sprintf('You do not have permission to %s this %s blueprint.', $operation, $blueprint->getType()), ['type' => $blueprint->getType()], sprintf('This needs the "%s" permission.', BlueprintPermissions::permission($blueprint->getType(), $operation))),
-      ]);
-    }
   }
 
   /**

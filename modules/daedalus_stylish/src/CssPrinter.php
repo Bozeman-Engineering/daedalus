@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\daedalus_stylish;
 
 use Drupal\daedalus_blueprint\Materials\Address;
+use Drupal\daedalus_blueprint\Materials\EmitGate;
 use Drupal\daedalus_blueprint\Materials\RelativeSelector;
 use Drupal\daedalus_blueprint\Materials\ConditionClause;
 use Drupal\daedalus_ui\ElementModel\ElementResolver;
@@ -350,6 +351,11 @@ class CssPrinter {
     if ($pieces === []) {
       return '';
     }
+    // The prelude passes the emit gate like every selector the block
+    // prints: a root or a limit it refuses prints no block.
+    if (!EmitGate::admitsSelector($scope_root) || ($scope_limit !== NULL && !EmitGate::admitsSelector($scope_limit))) {
+      return '';
+    }
     $prelude = $scope_limit === NULL
       ? sprintf('@scope (%s)', $scope_root)
       : sprintf('@scope (%s) to (%s)', $scope_root, $scope_limit);
@@ -399,6 +405,9 @@ class CssPrinter {
    *   The rules, or empty string when nothing printed.
    */
   public function printBareEntry(string $selector, ?RelativeSelector $relative, array $entry, bool $co_target = FALSE): string {
+    if (!EmitGate::admitsSelector($selector)) {
+      return '';
+    }
     $target = $selector;
     $conditions = $this->conditionTypes->getConditions();
     foreach ($relative?->compounds ?? [] as $compound) {
@@ -516,6 +525,11 @@ class CssPrinter {
           continue;
         }
       }
+      // Condition text passes the emit gate as a value does: a wrapper or
+      // a literal query it refuses prints nothing, the block with it.
+      if (array_filter($at_rules, static fn (string $at_rule): bool => !EmitGate::admits($at_rule)) !== []) {
+        continue;
+      }
       $target_indent = str_repeat('  ', count($at_rules) + $nesting);
       $declarations = $this->printDeclarations($value, $target_indent . '  ');
       if ($declarations === '') {
@@ -527,6 +541,11 @@ class CssPrinter {
         static fn (string $target): string => $target . $suffixes . $pseudo,
         $targets,
       ));
+      // So does the selector, attribute strings and state suffixes
+      // included.
+      if (!EmitGate::admitsSelector($selector)) {
+        continue;
+      }
       $piece = sprintf("%s%s {\n%s\n%s}", $target_indent, $selector, $declarations, $target_indent);
       if ($co_target_root !== NULL) {
         // The companion declarations are the block's INHERITED_TEXT_PROPERTIES
@@ -822,6 +841,11 @@ class CssPrinter {
       return '';
     }
     if ($url === '' || preg_match('/["\'()\s\x00-\x1F\x7F]/', $url)) {
+      return '';
+    }
+    // The family and the file's URL print as strings, and a string
+    // passes the emit gate like any other text.
+    if (!EmitGate::admits($family) || !EmitGate::admits('"' . $url . '"')) {
       return '';
     }
     if (!in_array($format, ['woff2', 'woff'], TRUE)) {
@@ -1265,7 +1289,9 @@ class CssPrinter {
    *
    * Property names and values were validated on write; re-checking here
    * keeps the emit path safe against maps written around daedalus_blueprint
-   * (direct entity saves, imported content).
+   * (direct entity saves, imported content). A value passes the emit gate
+   * (EmitGate::admits(): the one judgment of text bound for a style
+   * element, shared with condition text, selectors and font names).
    *
    * @return array<string, string>
    *   Property names mapped to trimmed values, stored order kept.
@@ -1286,7 +1312,7 @@ class CssPrinter {
       if ($value === '' || !preg_match('/^-{0,2}[A-Za-z][A-Za-z0-9_-]*$/', $property)) {
         continue;
       }
-      if (preg_match('/[;{}<>\x00-\x08\x0B\x0C\x0E-\x1F]/', $value)) {
+      if (!EmitGate::admits($value)) {
         continue;
       }
       $admitted[$property] = $value;

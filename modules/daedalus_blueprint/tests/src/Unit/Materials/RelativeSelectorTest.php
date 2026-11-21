@@ -931,6 +931,14 @@ class RelativeSelectorTest extends UnitTestCase {
     $this->assertSame('*[lang|="en"]', (string) RelativeSelector::parse('[lang|=en]'));
     $this->assertSame('a[title="say \"hi\""]', (string) RelativeSelector::parse("a[title='say \"hi\"']"));
     $this->assertSame('*[x="a\'b"]', (string) RelativeSelector::parse("[x='a\\'b']"));
+    // The marks the emit gate admits in no text print as hex escapes,
+    // read back as themselves, and the escaped spelling is the canonical
+    // one.
+    $this->assertSame('*[x="\3c /style\3e \3c script\3e "]', (string) RelativeSelector::parse('[x="</style><script>"]'));
+    $this->assertSame('*[x="a\3b b\7b c\7d d"]', (string) RelativeSelector::parse('[x="a;b{c}d"]'));
+    $this->assertSame('</style>', RelativeSelector::parse('[x="\3c /style\3e "]')->compounds[0]['qualifiers'][0]['argument']['value']);
+    $this->assertTrue(RelativeSelector::isCanonical('*[x="\3c /style\3e "]'));
+    $this->assertFalse(RelativeSelector::isCanonical('*[x="</style>"]'));
     $this->assertSame('*[x="Abc"]', (string) RelativeSelector::parse('[x="\41 bc"]'));
     $this->assertSame('*[x="ab"]', (string) RelativeSelector::parse("[x=\"a\\\nb\"]"));
     $this->assertSame('*[x="a" i]', (string) RelativeSelector::parse('[x=a i]'));
@@ -1590,6 +1598,7 @@ class RelativeSelectorTest extends UnitTestCase {
       '*[x="tab\9 "]', '*[data-x="a::b"]', '[data-x=")"]:has(a)', '> d-text:has(a[data-x=")"])', '[x=a i]', '[x=ai]',
       '[x="a"i]', '[x="a" S]', '[ x ]', '[x="\\0 "]', "[x=\"a\0b\"]", '[x="\\110000 "]', '[x="\\d800 "]', '[x="\\e9"]',
       '[x="caf\\e9 "]', '[x="\\"]',
+      '[x="</style><script>alert(1)</script>"]', '*[x="\3c /style\3e "]', '[x="a;b{c}d"]', "a[title='<>']",
       'h1, h2, h3', 'a:hover, a:focus', ':is(h1, h2)', ':where(a)', ':lang(en)', ':dir(rtl)', 'p:hover()',
       '[x=1]', '[x=]', '[=x]', '[x="unterminated', '[x y]', '[x="a" x]', '[x="a"i i]', '[x="a" i s]', '[x i]', '[]', '[x',
       "[x=\"a\nb\"]", '[x=="a"]', '[x="a"]]', '[.x]', '[x=a.b]', ':class', ':attribute', ':has', ':not', 'p:has',

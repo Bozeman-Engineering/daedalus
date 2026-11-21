@@ -44,9 +44,10 @@ use Symfony\Component\HttpFoundation\Request;
  * not one of the family's three verbs (adopt rides the capture ops;
  * releasing or transferring curation is human judgment on these routes).
  *
- * Access is the route's permission; the provider asks the blueprint
- * entity's own access handler as well, so the handler stays the single
- * authority on blueprint mutation, and file-shipped blueprints refuse
+ * Access is the route's permission; the provider and the manager ask the
+ * access handler of each blueprint and variant a gesture touches as well,
+ * so the handlers stay the authority on what may change, and file-shipped
+ * blueprints refuse
  * loudly (read-only everywhere by design). Errors come back in the
  * blueprint error shape ({path, code, message, hint}) so the client
  * reports them like any other blueprint failure.
@@ -112,12 +113,16 @@ final class BlueprintApiController extends ControllerBase {
    * client's Add panel is open on, the one its delta must be judged for.
    * A fit is judged on the subject's type and bundle, which no staged
    * edit changes, so the saved entity is the canvas. Resolved before the
-   * write so a malformed canvas refuses with nothing stuck.
+   * write so a malformed canvas refuses with nothing stuck. The Add panel
+   * is open only for someone editing the page, so the canvas is an entity
+   * the actor may update; any other is answered as one that does not
+   * exist.
    *
    * @throws \Drupal\daedalus_blueprint\Materials\MaterialGestureException
    *   When the coordinates name an unknown type, an entity that does not
-   *   exist, or one that hosts no document: a client bug, refused loudly
-   *   rather than answered with a delta for the wrong canvas.
+   *   exist or that the actor may not update, or one that hosts no
+   *   document: a client bug, refused loudly rather than answered with a
+   *   delta for the wrong canvas.
    */
   private function canvas(Request $request): ?HostInterface {
     $entity_type = $request->query->get('entity_type');
@@ -137,7 +142,7 @@ final class BlueprintApiController extends ControllerBase {
       ]);
     }
     $entity = is_string($entity_id) && $entity_id !== '' ? $this->entityTypeManager->getStorage($entity_type)->load($entity_id) : NULL;
-    if ($entity === NULL || !$this->hostResolver->hosts($entity)) {
+    if ($entity === NULL || !$entity->access('update') || !$this->hostResolver->hosts($entity)) {
       throw new MaterialGestureException([
         new BlueprintError(
           'entity_id',
@@ -283,7 +288,8 @@ final class BlueprintApiController extends ControllerBase {
    *
    * The provider and the resolvers speak in the same errors the ops do: an
    * unknown blueprint or variant reference is a 404, a refusal by the
-   * permission gate or the blueprint's own access handler a 403,
+   * permission gate or by a blueprint's or a variant's own access handler
+   * a 403,
    * everything else (read-only file blueprints, shipped variants, missing
    * parameters, a canvas that does not exist) a 422 the client should
    * relay verbatim.
@@ -292,7 +298,7 @@ final class BlueprintApiController extends ControllerBase {
     $codes = array_map(static fn ($error) => $error->getCode(), $exception->getErrors());
     $status = match (TRUE) {
       $codes === ['BLUEPRINT_NOT_FOUND'], $codes === ['BLUEPRINT_VARIANT_NOT_FOUND'] => 404,
-      $codes === ['BLUEPRINT_FORBIDDEN'], $codes === ['PERMISSION_DENIED'] => 403,
+      $codes === ['BLUEPRINT_FORBIDDEN'], $codes === ['BLUEPRINT_VARIANT_FORBIDDEN'], $codes === ['PERMISSION_DENIED'] => 403,
       default => 422,
     };
     return new JsonResponse(['errors' => $exception->getErrorsAsArrays()], $status);

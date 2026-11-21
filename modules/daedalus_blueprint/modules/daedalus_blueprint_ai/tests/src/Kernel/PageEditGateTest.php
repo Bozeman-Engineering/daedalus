@@ -31,6 +31,10 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  * A set names its fields, so a write beside a value the page language
  * cannot spell leaves that value where it is: the page tools write every
  * page, which is what keeps the JSON doors closed on one.
+ *
+ * The save parameter is the editor's Save made by the model: it asks the
+ * Save permission and meets the commit door, and a refusal from either is
+ * the tool's Error with nothing written.
  */
 #[CoversClass(PageEdit::class)]
 #[Group('daedalus_blueprint')]
@@ -164,6 +168,103 @@ class PageEditGateTest extends BlueprintKernelTestBase {
     $this->assertSame([['thread-gate', 'logo.svg', 'image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg"/>']], TestFileDeclarationHandler::$declared);
     $this->entityTypeManager->getStorage('entity_test')->resetCache();
     $this->assertSame('Renamed', $this->entityTypeManager->getStorage('entity_test')->load($this->entity->id())->label());
+  }
+
+  /**
+   * The stored name of the host page, read fresh from the database.
+   */
+  protected function storedName(): string {
+    $storage = $this->entityTypeManager->getStorage('entity_test');
+    $storage->resetCache();
+    return (string) $storage->load($this->entity->id())->get('name')->value;
+  }
+
+  /**
+   * Switches to a user who may edit the host page, with extra permissions.
+   *
+   * The Save permission is the edit module's, so that module is enabled
+   * for the permission to exist.
+   *
+   * @param string[] $permissions
+   *   Permissions beside update access to the host.
+   */
+  protected function actAsEditor(array $permissions): void {
+    $this->enableModules(['editor', 'field_sample_value', 'daedalus', 'daedalus_edit']);
+    $this->setUpCurrentUser([], [
+      'administer entity_test content',
+      'view test entity',
+      ...$permissions,
+    ]);
+  }
+
+  /**
+   * Save without the Save permission is an Error and writes nothing.
+   *
+   * The same batch without save stages; with the permission it commits.
+   */
+  public function testSaveAsksTheSavePermission(): void {
+    $contexts = [
+      'entity_type' => 'entity_test',
+      'entity_id' => $this->entity->id(),
+      'ops' => [
+        ['op' => 'set', 'ref' => 'root', 'attrs' => ['name' => 'Renamed']],
+      ],
+    ];
+    $this->actAsEditor([]);
+
+    $output = $this->runTool('page_edit', $contexts + ['save' => TRUE]);
+
+    $this->assertStringStartsWith('Error: save was refused and nothing was written', $output);
+    $this->assertStringContainsString("'access inline editing'", $output);
+    $this->assertStringNotContainsString('persisted', $output);
+    $this->assertSame('Host', $this->storedName(), 'Nothing was saved.');
+    $tempstore = $this->container->get('daedalus_tempstore.entity_tempstore_repository');
+    $this->assertFalse($tempstore->has($this->entity), 'Nothing was staged.');
+
+    // Without save the same user's edit stages.
+    $output = $this->runTool('page_edit', $contexts);
+    $this->assertStringNotContainsString('Error', $output);
+    $this->assertStringContainsString('persisted: tempstore', $output);
+    $this->assertSame('Host', $this->storedName());
+
+    // With the permission the save commits.
+    $this->setUpCurrentUser([], [
+      'administer entity_test content',
+      'view test entity',
+      'access inline editing',
+    ]);
+    $output = $this->runTool('page_edit', $contexts + ['save' => TRUE]);
+    $this->assertStringNotContainsString('Error', $output);
+    $this->assertStringContainsString('persisted: database', $output);
+    $this->assertSame('Renamed', $this->storedName());
+  }
+
+  /**
+   * A save the commit door refuses is an Error carrying the door's messages.
+   *
+   * Storage fails under the save; the tool answers the refusal, reports no
+   * write, and neither the stored row nor the stage holds the edit.
+   */
+  public function testRefusedSaveIsAnError(): void {
+    \Drupal::state()->set('daedalus_blueprint_test.fail_save', TRUE);
+
+    $output = $this->runTool('page_edit', [
+      'entity_type' => 'entity_test',
+      'entity_id' => $this->entity->id(),
+      'ops' => [
+        ['op' => 'set', 'ref' => 'root', 'attrs' => ['name' => 'Renamed']],
+      ],
+      'save' => TRUE,
+    ]);
+
+    \Drupal::state()->delete('daedalus_blueprint_test.fail_save');
+    $this->assertStringStartsWith('Error: the save was refused and nothing was written. ', $output);
+    $this->assertStringContainsString('The save failed', $output);
+    $this->assertStringContainsString('The same call without save stages the edit', $output);
+    $this->assertStringNotContainsString('persisted', $output);
+    $this->assertStringNotContainsString('Updated page:', $output);
+    $this->assertSame('Host', $this->storedName(), 'Nothing was saved.');
+    $this->assertFalse($this->container->get('daedalus_tempstore.entity_tempstore_repository')->has($this->entity), 'Nothing was staged.');
   }
 
   /**

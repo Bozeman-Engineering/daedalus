@@ -2,26 +2,28 @@
 
 namespace Drupal\daedalus_edit\Form;
 
-use Drupal\Core\Cache\Cache;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Form\ConfirmFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
-use Drupal\daedalus_tempstore\EntityTempstoreRepository;
+use Drupal\daedalus_blueprint\EntityStorageHandler;
+use Drupal\daedalus_blueprint\Host\HostResolver;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Confirms discarding the tempstore changes of the route's host.
  *
  * The host is a content entity or a Layout Builder display (its staged
- * template); the tempstore repository routes either to the strategy that
- * stages it, so one delete drops the stage the top bar's Save would have
- * committed.
+ * template). The stage ends through the storage handler's discard door,
+ * the one door out of a stage beside the commit: it drops the stage the
+ * top bar's Save would have committed and tells the persisted hook's
+ * listeners the working copy changed back.
  */
 class ConfirmDiscardChangesForm extends ConfirmFormBase {
 
   public function __construct(
-    protected EntityTempstoreRepository $tempstoreRepository,
+    protected EntityStorageHandler $storageHandler,
+    protected HostResolver $hostResolver,
   ) {}
 
   /**
@@ -29,7 +31,8 @@ class ConfirmDiscardChangesForm extends ConfirmFormBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('daedalus_tempstore.entity_tempstore_repository'),
+      $container->get('daedalus_blueprint.storage_handler'),
+      $container->get('daedalus_blueprint.host_resolver'),
     );
   }
 
@@ -81,8 +84,7 @@ class ConfirmDiscardChangesForm extends ConfirmFormBase {
     if (!$entity instanceof EntityInterface) {
       throw new \InvalidArgumentException('No host to discard the changes of.');
     }
-    Cache::invalidateTags([daedalus_edit_cache_tag($entity)]);
-    $this->tempstoreRepository->delete($entity);
+    $this->storageHandler->discard($this->hostResolver->fromEntity($entity));
   }
 
 }

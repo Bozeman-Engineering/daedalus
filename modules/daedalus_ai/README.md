@@ -50,6 +50,10 @@ ATTACHMENTS block on the turn's message names each file and delivers its
 bytes once; on every later turn the model carries only the name and reaches
 the bytes again through `view_file` by that name.
 
+A conversation's files are saved in a directory of their own under
+`public://daedalus-ai/attachments/`, named by a long random token the server
+mints and keeps with the thread until the thread's files are released.
+
 ## Configuration
 
 Settings live on the AI chat form at `/admin/config/daedalus/ai/chat`

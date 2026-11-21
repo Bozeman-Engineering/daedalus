@@ -4,6 +4,7 @@ daedalus_ai_test.stash_deferred_batch:
     _controller: '\Drupal\daedalus_ai_test\Controller\StashDeferredBatch::stash'
   requirements:
     _permission: 'use daedalus ui edit mode'
+    _csrf_request_header_token: 'TRUE'
   methods: [POST]
   options:
     no_cache: TRUE
@@ -15,6 +16,7 @@ daedalus_ai_test.simulate_chat_turn:
   requirements:
     _permission: 'use daedalus ui edit mode'
     _entity_access: 'entity.update'
+    _csrf_request_header_token: 'TRUE'
   methods: [POST]
   options:
     no_cache: TRUE

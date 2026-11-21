@@ -25,7 +25,7 @@ services:
 
   daedalus_edit.form_alter.entity_edit:
     class: Drupal\daedalus_edit\Form\EntityEditFormAlter
-    arguments: ['@?daedalus_tempstore.entity_tempstore_repository', '@current_route_match']
+    arguments: ['@daedalus_blueprint.storage_handler', '@daedalus_blueprint.host_resolver', '@current_route_match']
 
   daedalus_edit.form_alter.views_form_media_library_widget:
     class: Drupal\daedalus_edit\Form\ViewsFormMediaLibraryWidgetAlter
@@ -116,7 +116,13 @@ services:
 
   element.daedalus_edit:
     class: Drupal\daedalus_edit\InlineEditorElement
-    arguments: [ '@plugin.manager.editor' ]
+    arguments: [ '@plugin.manager.editor', '@daedalus_edit.editor_seed' ]
+
+  # The HTML an inline editor is seeded with, for every road to one.
+  daedalus_edit.editor_seed:
+    class: Drupal\daedalus_edit\EditorSeed
+    arguments: [ '@element.editor' ]
+  Drupal\daedalus_edit\EditorSeed: '@daedalus_edit.editor_seed'
 
   daedalus_edit.event_subscriber.daedalus_ui_editable_field_attributes:
     class: Drupal\daedalus_edit\EventSubscriber\RenderEditableFieldAttributes

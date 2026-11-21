@@ -83,10 +83,13 @@ class BlueprintApiTest extends KernelTestBase {
     $this->installConfig(['image', 'file', 'media', 'daedalus_blueprint', 'daedalus_blueprint_library']);
     // setUpCurrentUser() seeds a throwaway uid 1 first, so this user's
     // section permissions are what entity access actually evaluates.
+    // The entity_test grant is what makes a saved entity_test a canvas
+    // this user is editing (createCanvas()).
     $this->setUpCurrentUser([], [
       'create section blueprint',
       'edit any section blueprint',
       'delete any section blueprint',
+      'administer entity_test content',
     ]);
   }
 

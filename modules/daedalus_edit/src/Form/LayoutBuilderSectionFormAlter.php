@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_edit\Form;
 
+use Drupal\Component\Render\PlainTextOutput;
 use Drupal\Component\Plugin\ContextAwarePluginInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Form\SubformState;
@@ -144,7 +145,7 @@ final class LayoutBuilderSectionFormAlter extends ConfigureDialogFormAlterBase {
       $section_uuid,
       $properties,
       $root->entity()->language()->getId(),
-      $this->t('Configured @label', ['@label' => $title]),
+      PlainTextOutput::renderFromHtml($this->t('Configured @label', ['@label' => $title])),
       $properties !== [],
     );
     $form_state->setTemporaryValue(FormCommit::OUTCOME, $outcome);

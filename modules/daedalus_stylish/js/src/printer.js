@@ -1,5 +1,4 @@
 import { conditionForPseudoClass, parseKey } from './style-guide.js';
-import { hasControlChar } from './control-chars.js';
 import { parseSlotKey, rootKindForScope, fragmentStyles } from './slot-key.js';
 import { cascadeOrder } from './condition-cascade.js';
 import {
@@ -10,6 +9,10 @@ import {
   clauseStamp,
   parseCompound,
 } from '../../../daedalus_ui/js/edit_mode/materials/condition-clause.js';
+import {
+  admits,
+  admitsSelector,
+} from '../../../daedalus_ui/js/edit_mode/materials/emit-gate.js';
 import { CLAIMS_CONTENT_ATTRIBUTE } from '../../../daedalus_ui/js/edit_mode/blueprint/element-resolver.js';
 import {
   ANCHOR_KIND,
@@ -58,10 +61,6 @@ import {
 // hygiene gate, not a vocabulary check. Mirrors CssPrinter.php's
 // printDeclarations() gate, byte for byte.
 const PROPERTY_PATTERN = /^-{0,2}[A-Za-z][A-Za-z0-9_-]*$/;
-const VALUE_FORBIDDEN = /[;{}<>]/;
-// The control characters a value may carry: tab, line feed, carriage
-// return (the gate's \x09, \x0A and \x0D gaps).
-const VALUE_WHITESPACE = '\t\n\r';
 
 const isEntryObject = (value) => value !== null && typeof value === 'object';
 
@@ -604,12 +603,7 @@ const admittedDeclarations = (properties) => {
       return;
     }
     value = String(value).trim();
-    if (
-      value === '' ||
-      !PROPERTY_PATTERN.test(property) ||
-      VALUE_FORBIDDEN.test(value) ||
-      hasControlChar(value, VALUE_WHITESPACE)
-    ) {
+    if (value === '' || !PROPERTY_PATTERN.test(property) || !admits(value)) {
       return;
     }
     admitted[property] = value;
@@ -748,6 +742,11 @@ export const printEntry = (
         return;
       }
     }
+    // Condition text passes the emit gate as a value does: a wrapper or a
+    // literal query it refuses prints nothing, the block with it.
+    if (atRules.some((atRule) => !admits(atRule))) {
+      return;
+    }
     const targetIndent = '  '.repeat(atRules.length + 1);
     const declarations = printDeclarations(value, `${targetIndent}  `);
     if (declarations === '') {
@@ -758,6 +757,10 @@ export const printEntry = (
     const selector = targets
       .map((target) => `${target}${suffixes}${pseudo}`)
       .join(', ');
+    // So does the selector, attribute strings and state suffixes included.
+    if (!admitsSelector(selector)) {
+      return;
+    }
     let piece = `${targetIndent}${selector} {\n${declarations}\n${targetIndent}}`;
     if (coTarget) {
       // The companion declarations are the block's INHERITED_TEXT_PROPERTIES
@@ -801,6 +804,15 @@ export const printEntry = (
   });
 
   if (!pieces.length) {
+    return '';
+  }
+  // The prelude passes the emit gate like every selector the block
+  // prints: a root or a limit it refuses prints no block
+  // (CssPrinter::printEntry() mirror).
+  if (
+    !admitsSelector(scopeRoot) ||
+    (scopeLimit !== null && !admitsSelector(scopeLimit))
+  ) {
     return '';
   }
   const prelude =

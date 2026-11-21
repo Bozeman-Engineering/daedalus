@@ -7,8 +7,10 @@ namespace Drupal\Tests\daedalus_layout\Kernel;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\daedalus_blueprint\Materials\MaterialsBudget;
+use Drupal\daedalus_blueprint_library\Entity\Blueprint;
 use Drupal\daedalus_layout\Controller\BlueprintSaveDialog;
 use Drupal\Tests\media\Traits\MediaTypeCreationTrait;
+use Drupal\Tests\user\Traits\UserCreationTrait;
 use Drupal\user\Entity\User;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -36,6 +38,7 @@ use Symfony\Component\HttpFoundation\Request;
 class BlueprintSaveDialogTest extends KernelTestBase {
 
   use MediaTypeCreationTrait;
+  use UserCreationTrait;
 
   /**
    * {@inheritdoc}
@@ -183,6 +186,8 @@ class BlueprintSaveDialogTest extends KernelTestBase {
     User::create(['name' => 'first'])->save();
     $host = User::create(['name' => 'composer']);
     $host->save();
+    // The dialog reads the host for someone who may update it.
+    $this->setCurrentUser($this->createUser(['administer users']));
     $query = [
       'entity_type' => 'user',
       'entity_id' => (string) $host->id(),
@@ -352,6 +357,8 @@ class BlueprintSaveDialogTest extends KernelTestBase {
     $this->createMediaType('image', ['id' => 'image']);
     $host = User::create(['name' => 'composer']);
     $host->save();
+    // The picker's access subject is a host the actor may update.
+    $this->setCurrentUser($this->createUser(['administer users']));
     $query = [
       'entity_type' => 'user',
       'entity_id' => (string) $host->id(),
@@ -372,6 +379,66 @@ class BlueprintSaveDialogTest extends KernelTestBase {
 
     $update = BlueprintSaveDialog::create($this->container)->update(new Request($query + ['blueprint' => 'anything']));
     $this->assertArrayNotHasKey('icon_field', $update);
+  }
+
+  /**
+   * Tests the dialogs read the query's entities for an actor who may update.
+   *
+   * The routes' gate is the any-type question, so the query can name any
+   * host and any blueprint. The dialogs print what they resolve (the
+   * page-scope wording that confirms a host's uuid, a blueprint's label
+   * and stored flags), so each is read only for someone who may update
+   * it; for anyone else the dialog degrades as it does for a reference
+   * that does not resolve.
+   */
+  public function testDialogsReadWhatTheActorMayUpdate(): void {
+    $this->installEntitySchema('user');
+    // The first saved user is uid 1; nobody here is it.
+    User::create(['name' => 'first'])->save();
+    $host = User::create(['name' => 'composer']);
+    $host->save();
+    $blueprint = Blueprint::create([
+      'type' => 'section',
+      'label' => 'Promo card',
+      'machine_name' => 'promo_card',
+      'description' => 'A card.',
+      'scope' => 'block',
+      'subject_type' => 'user',
+      'subject_bundle' => 'user',
+      'status' => 1,
+    ]);
+    $blueprint->save();
+    $curator = $this->createUser(['administer users', 'edit any section blueprint']);
+    $visitor = $this->createUser(['create section blueprint', 'edit any site_chrome blueprint']);
+    $host_query = [
+      'entity_type' => 'user',
+      'entity_id' => (string) $host->id(),
+      'element' => $host->uuid(),
+    ];
+    $dialog = fn (): BlueprintSaveDialog => BlueprintSaveDialog::create($this->container);
+
+    // The visitor passes both routes' gates and may update neither thing.
+    $this->setCurrentUser($visitor);
+    $save = $dialog()->build(new Request($host_query));
+    $this->assertSame('block', $save['scope_field']['value']['#attributes']['data-blueprint-scope'], 'The host is not read, so nothing confirms its uuid.');
+    $this->assertStringContainsString('Save this container', (string) $save['intro']['#value']);
+    $update = $dialog()->update(new Request(['blueprint' => 'promo_card']));
+    $this->assertStringContainsString('Update this blueprint', (string) $update['intro']['#value']);
+    $this->assertStringNotContainsString('Promo card', (string) $update['intro']['#value']);
+    $this->assertArrayNotHasKey('offered_field', $update);
+    $details = $dialog()->details(new Request(['blueprint' => 'promo_card']));
+    $this->assertArrayNotHasKey('scope_field', $details);
+    $this->assertArrayNotHasKey('offered_field', $details);
+
+    // The curator may update both, and the dialogs name them.
+    $this->setCurrentUser($curator);
+    $save = $dialog()->build(new Request($host_query));
+    $this->assertSame('page', $save['scope_field']['value']['#attributes']['data-blueprint-scope']);
+    $update = $dialog()->update(new Request(['blueprint' => 'promo_card']));
+    $this->assertStringContainsString('Promo card', (string) $update['intro']['#value']);
+    $this->assertArrayHasKey('offered_field', $update);
+    $details = $dialog()->details(new Request(['blueprint' => 'promo_card']));
+    $this->assertArrayHasKey('scope_field', $details);
   }
 
 }

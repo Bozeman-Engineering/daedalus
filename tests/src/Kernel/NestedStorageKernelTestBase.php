@@ -94,7 +94,10 @@ abstract class NestedStorageKernelTestBase extends KernelTestBase {
     $this->installSchema('layout_builder', ['inline_block_usage']);
     $this->installConfig(['filter', 'block_content']);
 
-    $this->setUpCurrentUser([], ['configure any layout']);
+    // The suite's actor arranges any layout and may create the blocks a
+    // placement or a copy makes (the spine asks the block type's create
+    // access beside insert).
+    $this->setUpCurrentUser([], ['configure any layout', 'administer block content']);
 
     // Create block content types.
     $this->createBlockContentType('basic', 'Basic Block');

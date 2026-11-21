@@ -13,6 +13,7 @@ daedalus_stylish.settings:
 
 daedalus_stylish.inspector_popout:
   path: '/daedalus_stylish/inspector-popout'
+  methods: [GET]
   defaults:
     _controller: 'Drupal\daedalus_stylish\Controller\InspectorPopout::build'
     _title: 'Styles'
@@ -171,8 +172,9 @@ daedalus_stylish.skin_animation_usage:
     _permission: 'update skin materials+delete skin materials+delete skin materials in use+administer skins'
 
 # The font file door: the skin tab uploads each face's file here (the
-# font store over the daedalus_ui file lane, woff2 and woff, permanent)
-# and mints with the uuids the responses name (save_material, kind font).
+# font store over the daedalus_ui file lane, woff2 and woff, temporary
+# until a font record names the file) and mints with the uuids the
+# responses name (save_material, kind font).
 # Static paths before the {name} routes: the router matches a literal
 # segment first, so "files" and "stylesheet" never read as a font name.
 daedalus_stylish.skin_font_upload:

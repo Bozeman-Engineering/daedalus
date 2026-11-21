@@ -101,8 +101,9 @@ final class FormCommit {
    *   plain value. A panel form passes exactly one entry.
    * @param string|null $langcode
    *   The translation the form is for; NULL for the entity as loaded.
-   * @param string|\Stringable $label
-   *   The history entry's label ("Edited Title", "Configured Hero").
+   * @param string $label
+   *   The history entry's label ("Edited Title", "Configured Hero"), as
+   *   plain text: whoever shows it escapes it.
    * @param bool $changed
    *   Whether the bag differs from the staged state. FALSE for a widget
    *   round that changed nothing (an AJAX-touched widget re-extracting the
@@ -113,7 +114,7 @@ final class FormCommit {
    * @return \Drupal\daedalus_edit\FormCommitOutcome
    *   The outcome, persisted on success.
    */
-  public function commit(HostInterface $root, string $element_uuid, array $properties, ?string $langcode, string|\Stringable $label, bool $changed = TRUE): FormCommitOutcome {
+  public function commit(HostInterface $root, string $element_uuid, array $properties, ?string $langcode, string $label, bool $changed = TRUE): FormCommitOutcome {
     $working = $this->stagedRoot($root);
     if ($working === NULL) {
       throw new \RuntimeException(sprintf('Daedalus Edit: no working copy for %s:%s to commit to.', $root->entityTypeId(), $root->id()));
@@ -132,7 +133,7 @@ final class FormCommit {
       // Annotate the history entry this persist produces: the server names
       // the gesture (the client transport knows only the property), the
       // result supplies the targets that drive undo's re-render subtree.
-      $this->historyRecorder->annotate((string) $label, $result->getTargets());
+      $this->historyRecorder->annotate($label, $result->getTargets());
       $persisted = $this->storageHandler->persist(
         $result->getHost(),
         element_uuids: $result->getElementUuids(),

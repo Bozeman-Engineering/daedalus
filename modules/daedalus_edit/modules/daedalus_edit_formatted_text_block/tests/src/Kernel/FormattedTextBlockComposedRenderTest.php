@@ -213,6 +213,66 @@ class FormattedTextBlockComposedRenderTest extends KernelTestBase {
   }
 
   /**
+   * Edit-capable: the root carries the editor's seed, the one seed function's.
+   *
+   * The seed is what the canvas editor opens on. It is stamped only for a
+   * format the widget can open on, and reading it leaves the stored value
+   * as it was.
+   */
+  public function testEditorSeedStamp(): void {
+    $block = $this->createBlock([
+      'field_formatted_text_text' => [
+        'value' => '<p onclick="window.marked = 1">Seeded <strong>text</strong></p>',
+        'format' => 'restricted',
+      ],
+    ]);
+    // The value as stored (the save-time identity minter has had its say).
+    $stored = $block->get('field_formatted_text_text')->value;
+    $this->assertStringContainsString('onclick', $stored, 'The stored value keeps what was written.');
+
+    $settings = $this->editorSettings($this->renderComposed($block, $this->editBag()));
+    $this->assertSame(
+      $this->container->get('daedalus_edit.editor_seed')->seed($stored, FilterFormat::load('restricted')),
+      $settings['seed'],
+      'The stamped seed is what the one seed function answers for the stored value and format.',
+    );
+    $this->assertStringNotContainsString('onclick', $settings['seed'], 'The seed is filtered for the editor.');
+    $this->assertStringContainsString('<strong>text</strong>', $settings['seed']);
+
+    $this->container->get('entity_type.manager')->getStorage('block_content')->resetCache();
+    $this->assertSame(
+      $stored,
+      BlockContent::load($block->id())->get('field_formatted_text_text')->value,
+      'Producing the seed changed nothing that is stored.',
+    );
+
+    // A stored format the widget cannot open on (no text editor) stamps no
+    // seed: the client has nothing to put on the page and refuses the edit.
+    $plain = $this->createBlock([
+      'field_formatted_text_text' => [
+        'value' => '<p onclick="window.marked = 1">Plain</p>',
+        'format' => 'plain_text',
+      ],
+    ]);
+    $settings = $this->editorSettings($this->renderComposed($plain, $this->editBag()));
+    $this->assertSame('plain_text', $settings['format']);
+    $this->assertArrayNotHasKey('seed', $settings, 'No seed is stamped for a format with no editor.');
+
+    // An empty field seeds empty, for the default format.
+    $empty = $this->createBlock();
+    $settings = $this->editorSettings($this->renderComposed($empty, $this->editBag()));
+    $this->assertSame('', $settings['seed']);
+  }
+
+  /**
+   * The editor settings stamped on a rendered root.
+   */
+  protected function editorSettings(string $html): array {
+    $this->assertSame(1, preg_match('/data-daedalus-edit-editor-settings="([^"]+)"/', $html, $matches));
+    return Json::decode(html_entity_decode($matches[1], ENT_QUOTES));
+  }
+
+  /**
    * The status report flags the shipped format once it is disabled.
    *
    * Invoked through the hook system, not the class: a #[Hook] the container

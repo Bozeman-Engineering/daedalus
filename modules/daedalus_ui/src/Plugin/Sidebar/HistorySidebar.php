@@ -12,6 +12,9 @@ use Drupal\daedalus_ui\SidebarPluginBase;
 /**
  * The edit-history panel: the timeline of staged changes, undo/redo.
  *
+ * The timeline is the page's, shared by everyone editing it; each row names
+ * who made the change.
+ *
  * A right-rail panel bound to Edit Mode. The markup here is the empty
  * shell; history-sidebar.js fills the list from the History facade (the
  * client mirror of the server-side timeline) and keeps it current as
@@ -83,7 +86,7 @@ final class HistorySidebar extends SidebarPluginBase {
     return $this->buildTopBarButton(
       'daedalus-ui-history',
       $this->t('History'),
-      $this->t('Undo and redo your changes'),
+      $this->t('Undo and redo changes to this page'),
       'daedalus_ui',
       'history',
       ['data-sidebar-button-for' => '#history'],

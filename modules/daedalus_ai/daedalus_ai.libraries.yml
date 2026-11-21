@@ -32,14 +32,16 @@ chat:
     # The Drupal.Daedalus root the kebab reads the usage facade
     # (Drupal.Daedalus.Ai.usage, assigned by the usage library) off.
     - daedalus_ui/daedalus
+    # The kebab's attachment release posts through the one token source.
+    - daedalus_ui/csrf
     - ai_chatbot/deepchat
     # ai 1.5.1 split the deep-chat bundle out of ai_chatbot/deepchat (which
     # now carries deepchat-init.js alone) into this library, which only
     # ai_chatbot's own block attaches, under its eager load strategy. The
     # sidebar renders its own <deep-chat>, so it loads the bundle itself;
     # without it the element never upgrades and deepchat-init.js waits on
-    # customElements.whenDefined('deep-chat') forever. Unconditional: 1.5.1
-    # is the floor (composer.json's conflict entry).
+    # customElements.whenDefined('deep-chat') forever. Unconditional: the
+    # floor is 1.5.3 (composer.json's conflict entry).
     - ai_chatbot/deepchat.bundle
     - core/drupal
     - core/once

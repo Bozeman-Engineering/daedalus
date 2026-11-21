@@ -749,6 +749,14 @@ class BlueprintOwnedVariantTest extends BlueprintKernelTestBase {
     // an owned roster.
     $this->assertArrayNotHasKey('owned', $build);
 
+    // The section reads the host's working copy, so it renders only for
+    // someone who may update the host: an actor the route's gate admits
+    // who may not learns nothing of what the document wears.
+    $composer = $this->container->get('current_user')->getAccount();
+    $this->setCurrentUser($this->createUser(['create section blueprint', 'view test entity']));
+    $this->assertArrayNotHasKey('adopt', BlueprintSaveDialog::create($this->container)->build($request));
+    $this->setCurrentUser($composer);
+
     // Shipped and file-lane-owned looks the capture wears never list: the
     // spine refuses both adoptions (irreversible / already owned), and the
     // dialog lists only what the gesture would accept. Each look wears on

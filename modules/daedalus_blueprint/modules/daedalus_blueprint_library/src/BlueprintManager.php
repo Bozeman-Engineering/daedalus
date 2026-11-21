@@ -465,6 +465,10 @@ class BlueprintManager {
    * offered only on its owner's placements, so it belongs to the design
    * system its owner belongs to (global under a global blueprint).
    *
+   * The actor must be allowed to update the blueprint (adoption changes
+   * what it offers) and each variant it adopts (requireAccess(),
+   * requireVariantUpdate()).
+   *
    * @param \Drupal\daedalus_blueprint_library\BlueprintInterface $blueprint
    *   The freshly saved (or existing) content blueprint.
    * @param string[] $references
@@ -478,6 +482,7 @@ class BlueprintManager {
         new BlueprintError('adopt_variants', 'BLUEPRINT_ADOPTION_UNAVAILABLE', 'Adopting variants requires the daedalus_stylish module.', [], 'Enable daedalus_stylish, or save the blueprint without adopt_variants.'),
       ]);
     }
+    $this->requireAccess($blueprint, 'update');
     foreach ($references as $reference) {
       $variant = $this->loadVariantByReference($reference);
       if ($variant === NULL) {
@@ -485,6 +490,7 @@ class BlueprintManager {
           new BlueprintError('adopt_variants', 'BLUEPRINT_ADOPT_UNKNOWN_VARIANT', sprintf('"%s" is not a saved style variant.', $reference), [], 'Reference variants by machine name or uuid.'),
         ]);
       }
+      $this->requireVariantUpdate($variant, 'adopt_variants');
       $this->refuseShipped($variant, 'adopt_variants');
       $machine_name = (string) $variant->get('machine_name')->value;
       $owner_id = $variant->get(BlueprintInterface::OWNER_FIELD)->target_id;
@@ -513,6 +519,9 @@ class BlueprintManager {
    * the next import, so a database-side release would silently un-do
    * itself. The disk stays authoritative for shipped content.
    *
+   * The actor must be allowed to update the variant and the content
+   * blueprint that owns it (resolveOwnableVariant(), requireOwnerUpdate()).
+   *
    * @param string $reference
    *   A variant machine name or uuid.
    *
@@ -523,6 +532,7 @@ class BlueprintManager {
    */
   public function releaseVariant(string $reference): ContentEntityInterface {
     $variant = $this->resolveOwnableVariant($reference);
+    $this->requireOwnerUpdate($variant);
     if ($variant->get(BlueprintInterface::OWNER_FIELD)->isEmpty() && (string) ($variant->get(BlueprintInterface::FILE_OWNER_FIELD)->value ?? '') === '') {
       throw new BlueprintGestureException([
         new BlueprintError('variant', 'BLUEPRINT_RELEASE_NOT_OWNED', sprintf('The "%s" variant is not owned by any blueprint.', $variant->get('machine_name')->value), [], 'Only owned variants release; this one already offers by its scope everywhere.'),
@@ -549,6 +559,10 @@ class BlueprintManager {
    * ownership). Shipped variants refuse for the same reason release does:
    * the disk lane re-asserts its owner key at the next import.
    *
+   * The actor must be allowed to update all three things the gesture
+   * touches: the variant, the content blueprint that owns it now (when one
+   * does) and the blueprint taking it.
+   *
    * @param string $reference
    *   A variant machine name or uuid.
    * @param \Drupal\daedalus_blueprint_library\BlueprintInterface $blueprint
@@ -561,6 +575,8 @@ class BlueprintManager {
    */
   public function transferVariant(string $reference, BlueprintInterface $blueprint): ContentEntityInterface {
     $variant = $this->resolveOwnableVariant($reference);
+    $this->requireOwnerUpdate($variant);
+    $this->requireAccess($blueprint, 'update', 'blueprint');
     $variant->set(BlueprintInterface::OWNER_FIELD, $blueprint->id());
     $variant->set(BlueprintInterface::FILE_OWNER_FIELD, NULL);
     $this->stampMembership($variant, $blueprint);
@@ -671,8 +687,75 @@ class BlueprintManager {
         new BlueprintError('variant', 'BLUEPRINT_VARIANT_NOT_FOUND', sprintf('"%s" is not a saved style variant.', $reference), [], 'Reference variants by machine name or uuid.'),
       ]);
     }
+    $this->requireVariantUpdate($variant, 'variant');
     $this->refuseShipped($variant, 'variant');
     return $variant;
+  }
+
+  /**
+   * Asks a blueprint's own access handler, the one mutation authority.
+   *
+   * Every gesture that changes a saved blueprint asks here, for the
+   * current user: an update, a removal, and each ownership gesture for
+   * every blueprint whose set of owned looks it changes.
+   *
+   * @param \Drupal\daedalus_blueprint_library\BlueprintInterface $blueprint
+   *   The saved blueprint the gesture touches.
+   * @param string $operation
+   *   The operation: 'update' or 'delete'.
+   * @param string $path
+   *   The gesture parameter the refusal points at.
+   *
+   * @throws \Drupal\daedalus_blueprint_library\Exception\BlueprintGestureException
+   */
+  public function requireAccess(BlueprintInterface $blueprint, string $operation, string $path = 'id'): void {
+    if (!$blueprint->access($operation)) {
+      throw new BlueprintGestureException([
+        new BlueprintError($path, 'BLUEPRINT_FORBIDDEN', sprintf('You do not have permission to %s this %s blueprint.', $operation, $blueprint->getType()), ['type' => $blueprint->getType()], sprintf('This needs the "%s" permission.', BlueprintPermissions::permission($blueprint->getType(), $operation))),
+      ]);
+    }
+  }
+
+  /**
+   * Asks update access on a variant an ownership gesture rewrites.
+   *
+   * Ownership is one of the variant's own fields, so changing it is an
+   * update of the variant: the variant's access handler answers for the
+   * current user.
+   *
+   * @param \Drupal\Core\Entity\ContentEntityInterface $variant
+   *   A daedalus_variant entity.
+   * @param string $path
+   *   The gesture parameter the refusal points at.
+   *
+   * @throws \Drupal\daedalus_blueprint_library\Exception\BlueprintGestureException
+   */
+  protected function requireVariantUpdate(ContentEntityInterface $variant, string $path): void {
+    if (!$variant->access('update')) {
+      throw new BlueprintGestureException([
+        new BlueprintError($path, 'BLUEPRINT_VARIANT_FORBIDDEN', sprintf('You do not have permission to change who owns the "%s" variant.', $variant->get('machine_name')->value), [], 'Changing a variant\'s owner is an update of the variant; ask an administrator for the permission to update variants.'),
+      ]);
+    }
+  }
+
+  /**
+   * Asks update access on the content blueprint that owns a variant now.
+   *
+   * Release and transfer take a look away from its owner, which changes
+   * what that blueprint offers. An unowned variant, a file-lane owner (no
+   * entity to ask; shipped ownership is refused elsewhere) and an orphan
+   * whose owner no longer loads have no blueprint to ask.
+   *
+   * @param \Drupal\Core\Entity\ContentEntityInterface $variant
+   *   A daedalus_variant entity.
+   *
+   * @throws \Drupal\daedalus_blueprint_library\Exception\BlueprintGestureException
+   */
+  protected function requireOwnerUpdate(ContentEntityInterface $variant): void {
+    $owner = $variant->get(BlueprintInterface::OWNER_FIELD)->entity;
+    if ($owner instanceof BlueprintInterface) {
+      $this->requireAccess($owner, 'update', 'variant');
+    }
   }
 
   /**

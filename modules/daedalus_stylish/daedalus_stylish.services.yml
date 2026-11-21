@@ -736,15 +736,18 @@ services:
   daedalus_stylish.font_validator:
     # The family and faces grammar every font write path converges on (the
     # skin material gestures, the skins disk lane); a face's file resolves
-    # through the entity repository (by uuid).
+    # through the entity repository (by uuid) and must be the writer's own
+    # upload or a file the font store says a skin holds.
     class: Drupal\daedalus_stylish\FontValidator
     arguments:
       - '@entity.repository'
+      - '@current_user'
+      - '@daedalus_stylish.font_files'
   daedalus_stylish.font_files:
     # The font store: daedalus_ui's file lane narrowed to woff2 and woff,
-    # permanent files under public://daedalus_stylish/fonts, and the file
-    # usage rows a skin holds its fonts' files through (every revision's
-    # files stay held while the skin lives).
+    # files under public://daedalus_stylish/fonts (temporary until a skin
+    # holds them), and the file usage rows a skin holds its fonts' files
+    # through (every revision's files stay held while the skin lives).
     class: Drupal\daedalus_stylish\FontFiles
     arguments:
       - '@daedalus_ui.file_lane'
@@ -879,6 +882,36 @@ services:
       - '@daedalus_stylish.fact_condition_convergence'
     tags:
       - { name: daedalus_layout.host_transform, priority: -30 }
+
+  daedalus_stylish.key_grammar_convergence:
+    class: Drupal\daedalus_stylish\KeyGrammarConvergence
+    arguments:
+      - '@daedalus_stylish.style_map_validator'
+      - '@entity_type.manager'
+      - '@logger.factory'
+  Drupal\daedalus_stylish\KeyGrammarConvergence: '@daedalus_stylish.key_grammar_convergence'
+
+  # The key grammar convergence: a key its store's grammar rejects prints
+  # nothing and is dropped, each one reported. Registered permanently and
+  # LAST among the sweeps, so every sweep that rewrites a retired spelling
+  # into the grammar has had its turn before what is still outside it
+  # goes.
+  daedalus_stylish.key_grammar_sweep:
+    class: Drupal\daedalus_stylish\KeyGrammarSweep
+    arguments:
+      - '@daedalus_stylish.key_grammar_convergence'
+    tags:
+      - { name: daedalus_layout.host_transform, priority: -35 }
+
+  # What the stored styles validation still refuses on the hosts at rest:
+  # a read, for the last key grammar post_update and its drush command.
+  daedalus_stylish.stored_styles_report:
+    class: Drupal\daedalus_stylish\StoredStylesReport
+    arguments:
+      - '@entity_type.manager'
+      - '@entity_field.manager'
+      - '@logger.factory'
+  Drupal\daedalus_stylish\StoredStylesReport: '@daedalus_stylish.stored_styles_report'
 
   daedalus_stylish.form_alter.bundle_edit:
     class: Drupal\daedalus_stylish\Form\BundleEditFormAlter

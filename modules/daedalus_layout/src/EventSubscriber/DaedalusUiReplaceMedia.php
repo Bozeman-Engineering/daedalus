@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_layout\EventSubscriber;
 
+use Drupal\Component\Render\PlainTextOutput;
 use Drupal\Component\Serialization\Json;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Entity\FieldableEntityInterface;
@@ -103,7 +104,7 @@ class DaedalusUiReplaceMedia implements EventSubscriberInterface {
 
     $extra = [];
     if ($result->isSuccess()) {
-      $this->historyRecorder->annotate((string) $this->t('Replaced @label', ['@label' => $this->fieldLabel($root, $element, $field_name)]), $result->getTargets());
+      $this->historyRecorder->annotate(PlainTextOutput::renderFromHtml($this->t('Replaced @label', ['@label' => $this->fieldLabel($root, $element, $field_name)])), $result->getTargets());
       $extra['persisted'] = $this->storageHandler->persist(
         $result->getHost(),
         element_uuids: $result->getElementUuids(),

@@ -700,7 +700,7 @@ class ContextBlocksTest extends KernelTestBase {
     $attachments = $this->attachmentsStore();
     $pdf = '%PDF-1.4 fake';
     $original = "Screenshot 2026-10-27 at 4.17.44\u{202F}PM.pdf";
-    $file = $this->container->get('daedalus_ui.file_lane')->fromBytes($original, 'application/pdf', $pdf, Attachments::DIRECTORY);
+    $file = $this->container->get('daedalus_ui.file_lane')->fromBytes($original, 'application/pdf', $pdf, $attachments->directory('thread-a'));
     $name = $attachments->attach($file, 'thread-a');
     $this->assertSame('Screenshot-2026-10-27-at-4.17.44-PM.pdf', $name);
 
@@ -884,6 +884,7 @@ class ContextBlocksTest extends KernelTestBase {
       $this->container->get('entity_type.manager'),
       $this->container->get('current_user'),
       $this->container->get('keyvalue.expirable'),
+      $this->container->get('keyvalue'),
       $this->container->get('database'),
       $this->container->get('datetime.time'),
     );

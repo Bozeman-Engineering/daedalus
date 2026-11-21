@@ -4,21 +4,24 @@ declare(strict_types=1);
 
 namespace Drupal\daedalus_ui\Controller;
 
-use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Component\Render\PlainTextOutput;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\daedalus_ui\EditorSettings;
-use Drupal\daedalus_ui\Ajax\EditModeMessageCommand;
-use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 /**
  * Settings sidebar end points.
+ *
+ * Each route is a POST carrying the session token in the X-CSRF-Token
+ * header (the client sends through Drupal.Daedalus.post) and changes only
+ * the caller's own preferences. Each answers JSON: `message` is the
+ * sentence for the editor, shown by the caller where Edit Mode's
+ * notifications are loaded.
  */
 final class Settings extends ControllerBase {
-
-  use StringTranslationTrait;
 
   public function __construct(
     protected EditorSettings $editorSettings,
@@ -36,40 +39,35 @@ final class Settings extends ControllerBase {
   /**
    * Saves a namespaced editor preference for the current user.
    *
-   * Generic endpoint for server-readable editor preferences. Scalar values
-   * ride the {value} path segment (callers reach that form through the
-   * Drupal.Daedalus.saveSetting() JS helper); structured values
-   * (lists, maps) are POSTed as an application/json body with {value}
-   * omitted. Requiring the JSON content type is deliberate: an HTML form
-   * cannot send it cross-origin without a CORS preflight, so it doubles as
-   * the CSRF guard for the body-carried variant.
+   * Generic endpoint for server-readable editor preferences; callers reach
+   * it through the Drupal.Daedalus.saveSetting() JS helper. The value is
+   * the request's JSON body, a scalar (a density, a model id) or a
+   * structure (a device list, a map of marks) alike. A scalar is a
+   * setting the editor chose in a control, so the answer names it; a
+   * structure is a whole list its caller repaints from, so the answer
+   * carries no message.
    */
-  public function saveSetting(Request $request, string $namespace, string $key, string $value = ''): AjaxResponse {
-    if ($value === '' && $request->isMethod('POST')) {
-      if (!str_contains((string) $request->headers->get('Content-Type'), 'application/json')) {
-        throw new BadRequestHttpException('Structured setting values must be posted as application/json.');
-      }
-      $body = $request->getContent();
-      if (strlen($body) > 65536) {
-        throw new BadRequestHttpException('Setting value too large.');
-      }
-      try {
-        $decoded = json_decode($body, TRUE, 32, JSON_THROW_ON_ERROR);
-      }
-      catch (\JsonException $e) {
-        throw new BadRequestHttpException('Invalid JSON setting value: ' . $e->getMessage(), $e);
-      }
-      $this->editorSettings->set($namespace, $key, $decoded);
-      $message = (string) $this->t('Saved @key.', ['@key' => $key]);
+  public function saveSetting(Request $request, string $namespace, string $key): JsonResponse {
+    $body = $request->getContent();
+    if (strlen($body) > 65536) {
+      throw new BadRequestHttpException('Setting value too large.');
     }
-    else {
-      $this->editorSettings->set($namespace, $key, $value);
-      $message = (string) $this->t('Set @key to @value.', ['@key' => $key, '@value' => $value]);
+    try {
+      $value = json_decode($body, TRUE, 32, JSON_THROW_ON_ERROR);
     }
+    catch (\JsonException $e) {
+      throw new BadRequestHttpException('Invalid JSON setting value: ' . $e->getMessage(), $e);
+    }
+    $this->editorSettings->set($namespace, $key, $value);
 
-    $response = new AjaxResponse();
-    $response->addCommand(new EditModeMessageCommand($message, 'status', NULL, 1250));
-    return $response;
+    $message = NULL;
+    if (is_scalar($value)) {
+      $message = PlainTextOutput::renderFromHtml($this->t('Set @key to @value.', [
+        '@key' => $key,
+        '@value' => is_bool($value) ? json_encode($value) : $value,
+      ]));
+    }
+    return new JsonResponse(['message' => $message]);
   }
 
   /**
@@ -82,7 +80,7 @@ final class Settings extends ControllerBase {
    * is the authority on which bindings exist. The message names the
    * binding by its id: the registry owns the labels.
    */
-  public function saveHotkey(string $binding_id, string $hotkey) {
+  public function saveHotkey(string $binding_id, string $hotkey): JsonResponse {
     if (strlen($hotkey) > 48 || !preg_match('/^(?:(?:mod|meta|ctrl|alt|shift)\+)*[a-z0-9]+$/', $hotkey)) {
       throw new BadRequestHttpException('Invalid hotkey.');
     }
@@ -97,18 +95,18 @@ final class Settings extends ControllerBase {
       daedalus_ui_save_outside_workspace($user);
     }
 
-    $response = new AjaxResponse();
-    $this->messenger()->addStatus($this->t('Set the %binding hotkey to %hotkey.', [
-      '%binding' => $binding_id,
-      '%hotkey' => strtoupper($hotkey),
-    ]));
-    return $response;
+    return new JsonResponse([
+      'message' => PlainTextOutput::renderFromHtml($this->t('Set the @binding hotkey to @hotkey.', [
+        '@binding' => $binding_id,
+        '@hotkey' => strtoupper($hotkey),
+      ])),
+    ]);
   }
 
   /**
    * Remove media file association.
    */
-  public function removeMediaFileAssociation(string $file_extension) {
+  public function removeMediaFileAssociation(string $file_extension): JsonResponse {
     $account = $this->currentUser();
     if ($account->isAuthenticated()) {
       $user = $this->entityTypeManager()->getStorage('user')->load($account->id());
@@ -130,9 +128,9 @@ final class Settings extends ControllerBase {
       }
     }
 
-    $response = new AjaxResponse();
-    $this->messenger()->addStatus($this->t('Removed @extension media file association.', ['@extension' => $file_extension]));
-    return $response;
+    return new JsonResponse([
+      'message' => PlainTextOutput::renderFromHtml($this->t('Removed @extension media file association.', ['@extension' => $file_extension])),
+    ]);
   }
 
 }

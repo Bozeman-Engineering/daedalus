@@ -25,10 +25,16 @@ use Symfony\Component\HttpFoundation\Request;
  * exactly like any other mutation: blueprint replaces the mirror, markup
  * swaps by target subtree, drupal_commands play after.
  *
+ * The timeline is the page's: one history its editors share, each entry
+ * naming who made it. A restore writes the whole unsaved copy back as the
+ * entry recorded it, for everyone, as Discard does.
+ *
  * History requires daedalus_tempstore; without it the routes answer 501. Access
- * is entity update access (history is editing state) plus CSRF on POST, and
- * requests must carry navigationMode as a query parameter like every other
- * edit-mode path (the cookie is path-scoped to the edited page).
+ * is what Save and Discard ask: the inline editing permission and entity
+ * update access, plus CSRF on POST. The permission is daedalus_edit's; on a
+ * site without that module only an administrator passes. Requests must
+ * carry navigationMode as a query parameter like every other edit-mode path
+ * (the cookie is path-scoped to the edited page).
  */
 final class HistoryApiController extends ControllerBase {
 
@@ -54,7 +60,7 @@ final class HistoryApiController extends ControllerBase {
   }
 
   /**
-   * Returns the current user's history timeline for an entity.
+   * Returns the history timeline of an entity's unsaved copy.
    *
    * @param string $entity_type
    *   The entity type ID.
@@ -63,7 +69,7 @@ final class HistoryApiController extends ControllerBase {
    *
    * @return \Symfony\Component\HttpFoundation\JsonResponse
    *   ['entity_type', 'entity_id', 'pointer', 'can_undo', 'can_redo',
-   *   'entries'].
+   *   'entries'], each entry naming its 'author'.
    */
   public function timeline(string $entity_type, EntityInterface $entity): JsonResponse {
     $working = $this->workingHost($entity_type, $entity);
@@ -93,7 +99,11 @@ final class HistoryApiController extends ControllerBase {
    *
    * @return \Symfony\Component\HttpFoundation\JsonResponse
    *   The mutation-response contract, extended with 'history' (the moved
-   *   timeline) and 'restored_label'.
+   *   timeline), 'restored_direction' ('undo' or 'redo') and
+   *   'restored_changes': the entries whose changes the move undid or
+   *   redid, in the order it took them, each naming its 'label', 'uid' and
+   *   'author' (the display name, NULL for an account that no longer
+   *   exists).
    */
   public function restore(Request $request, string $entity_type, EntityInterface $entity): JsonResponse {
     $working = $this->workingHost($entity_type, $entity);
@@ -167,7 +177,8 @@ final class HistoryApiController extends ControllerBase {
 
       return $this->responseBuilder->build($request, $entity, $result, $langcode, [
         'persisted' => 'tempstore',
-        'restored_label' => $restored['label'],
+        'restored_direction' => $restored['direction'],
+        'restored_changes' => $restored['changes'],
         'history' => $this->historyManager->metadata($reloaded),
       ], $view_mode, $reloaded);
     });

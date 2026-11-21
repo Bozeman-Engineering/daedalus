@@ -18,6 +18,23 @@
  * toasts. A message identical to one already showing is restarted and
  * pulsed rather than added again or dropped: a retried failure is seen.
  *
+ * A message is TEXT. Whatever a caller hands over (a constant, a server's
+ * answer, a stored label inside either) is shown character for character
+ * and never read as markup: the toast and the live-region announcement
+ * take it escaped (core's Drupal.Message and Drupal.announce both write
+ * HTML), and the history keeps the text itself, which its consumers
+ * escape when they print it. A caller therefore never escapes: a Drupal.t
+ * placeholder bound for a message is the pass-through `!name`, since an
+ * `@name` would be escaped twice.
+ *
+ * One exception, for the server's own messages: a message may come with
+ * display markup (options.html), which the toast shows in place of the
+ * escaped text so a link or an emphasis in a core or contrib message
+ * survives. That markup is only ever what the server's message relay
+ * filtered (EditModeMessenger::html(): links and emphasis, nothing
+ * else); no script composes it. The announcement and the history still
+ * take the text.
+ *
  * Standalone on purpose: no edit mode, no mode manager. The edit-mode
  * plugin's message() is a facade over this; the notifications sidebar is a
  * consumer of history(). A native ES module (it imports its pure model
@@ -203,7 +220,7 @@ const history = () => parseHistory(localStorage.getItem(STORAGE_KEY));
  * Shows a message and records it in the history.
  *
  * @param {string} text
- *   The message text (HTML is rendered, as core's Drupal.Message does).
+ *   The message, as plain text; markup in it is shown, not rendered.
  * @param {string} type
  *   'status', 'warning' or 'error' (core's toast types).
  * @param {object} [options]
@@ -216,6 +233,10 @@ const history = () => parseHistory(localStorage.getItem(STORAGE_KEY));
  * @param {?string} [options.target]
  *   An element id or selectable key the outcome concerns; the history's
  *   entry links back to it.
+ * @param {?string} [options.html]
+ *   The message's display markup, exactly as the server's message relay
+ *   filtered it; the toast shows it in place of the text. Never a string
+ *   a script built.
  *
  * @return {string}
  *   The toast id: the same text and type is the same id.
@@ -223,25 +244,25 @@ const history = () => parseHistory(localStorage.getItem(STORAGE_KEY));
 const message = (
   text,
   type = 'error',
-  { duration, scroll = true, target = null } = {},
+  { duration, scroll = true, target = null, html = null } = {},
 ) => {
   const list = claim();
   const showing = [...list.querySelectorAll('[data-drupal-message-id]')].map(
     (element) => element.getAttribute('data-drupal-message-id'),
   );
   const plan = planMessage({ text, type, duration, scroll, target }, showing);
+  // Core's toast and its announcement both write HTML; the text reaches
+  // them escaped, here and nowhere else.
+  const escaped = Drupal.checkPlain(text);
 
   let element;
   if (plan.replace) {
     element = select(list, plan.id);
     restart(element);
-    Drupal.Message.announce(text, { type });
+    Drupal.Message.announce(escaped, { type });
   } else {
-    new Drupal.Message(list).add(text, { type, id: plan.id });
+    new Drupal.Message(list).add(html ?? escaped, { type, id: plan.id });
     element = select(list, plan.id);
-    // Any interactive content in the message (a use-ajax link, say) gets
-    // its behaviors.
-    Drupal.attachBehaviors(element);
   }
 
   write(pushHistory(history(), historyEntry(plan, Date.now())));

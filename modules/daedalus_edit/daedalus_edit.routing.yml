@@ -1,9 +1,16 @@
+# The entity form endpoint is a Drupal form served by a controller: the
+# entity type is a path parameter, which core's _entity_form cannot name.
+# The form is fetched and submitted here by POST, and core's form token
+# guards the submission as on any form route. The option says so: it is how
+# a form route with no _form default names its kind (the block form endpoint
+# carries it too, see DaedalusLayoutRouteSubscriber).
 daedalus_edit.entity_form:
   path: '/daedalus-edit/entity-form/{entity_type}/{entity}'
   defaults:
     _title: 'Entity Form'
     _controller: '\Drupal\daedalus_edit\Controller\MultipleEntityFormController::entityForm'
   options:
+    _daedalus_edit.form_host: true
     parameters:
       entity:
         type: entity:{entity_type}
@@ -18,12 +25,14 @@ daedalus_edit.entity_form:
 # entity or a Layout Builder display (whose dotted id a `type.id` pair could
 # not carry). The generic converter upcasts either, and the host's own
 # update access gates the commit and the discard beside the surface
-# permission.
+# permission. Save is a POST carrying the session token and answers JSON
+# (the destination, or the commit door's messages); Discard is a form.
 daedalus_edit.tempstore.save:
   path: '/daedalus-edit/tempstore/save/{entity_type}/{entity}'
   defaults:
     _title: 'Tempstore Save'
     _controller: '\Drupal\daedalus_edit\Controller\Tempstore::save'
+  methods: [POST]
   options:
     parameters:
       entity:
@@ -31,6 +40,7 @@ daedalus_edit.tempstore.save:
   requirements:
     _permission: 'access inline editing'
     _entity_access: 'entity.update'
+    _csrf_request_header_token: 'TRUE'
 
 daedalus_edit.delete_confirmation_form:
   path: '/daedalus-edit/tempstore/delete-confirm/{entity_type}/{entity}'

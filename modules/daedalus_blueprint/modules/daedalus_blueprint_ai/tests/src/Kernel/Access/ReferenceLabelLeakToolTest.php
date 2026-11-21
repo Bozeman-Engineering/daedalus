@@ -195,11 +195,11 @@ class ReferenceLabelLeakToolTest extends BlueprintKernelTestBase {
   /**
    * A target_id's real label is not echoed when the target is unviewable.
    *
-   * RF1: resolving an explicit (AI-supplied) target_id stays valid, but the
-   * LABEL_MISMATCH warning echoes the entity's actual label — so it must be
-   * suppressed when the user cannot view the target. The AI supplied only the
-   * id and a bogus guess; the real label "Real Confidential Label" must not
-   * appear.
+   * RF1: an explicit (AI-supplied) target_id resolves only to an entity the
+   * user may view, so a target outside the user's access reads as absent and
+   * the LABEL_MISMATCH warning, which echoes the entity's actual label, is
+   * never built. The AI supplied only the id and a bogus guess; the real
+   * label "Real Confidential Label" must not appear.
    */
   public function testTargetIdMismatchLabelSuppressedForUnviewableTarget(): void {
     $target = $this->createTestEntity(['name' => 'Real Confidential Label']);

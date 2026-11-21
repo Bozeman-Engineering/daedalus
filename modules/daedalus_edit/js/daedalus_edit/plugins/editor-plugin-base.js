@@ -825,8 +825,10 @@ export class EditorPluginBase {
    */
   commitLabel(item, properties) {
     const component = this.mirrorComponent(item);
-    return Drupal.t('Edited @label', {
-      '@label': component?._element?.name ?? Drupal.t('block'),
+    // A history label is plain text: the History panel escapes it once
+    // where it shows it.
+    return Drupal.t('Edited !label', {
+      '!label': component?._element?.name ?? Drupal.t('block'),
     });
   }
 

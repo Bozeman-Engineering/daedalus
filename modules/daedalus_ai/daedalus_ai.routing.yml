@@ -1,10 +1,15 @@
+# The deferred generation pair: a batch's jobs run in the POST that names
+# the batch, and a retry reruns the failures a batch reported. Both spend
+# on the AI provider, so both ask for the AI permission beside the
+# edit-mode one and take the token in the X-CSRF-Token header.
 daedalus_ai.deferred_processing:
   path: '/daedalus-ai/deferred/{entity_type}/{entity}/{view_mode}'
   defaults:
     _controller: '\Drupal\daedalus_ai\Controller\DeferredProcessingController::process'
   requirements:
-    _permission: 'use daedalus ui edit mode'
+    _permission: 'use daedalus ui edit mode,use ai assistant'
     _entity_access: 'entity.update'
+    _csrf_request_header_token: 'TRUE'
   methods: [POST]
   options:
     no_cache: TRUE
@@ -17,8 +22,9 @@ daedalus_ai.deferred_retry:
   defaults:
     _controller: '\Drupal\daedalus_ai\Controller\DeferredProcessingController::retry'
   requirements:
-    _permission: 'use daedalus ui edit mode'
+    _permission: 'use daedalus ui edit mode,use ai assistant'
     _entity_access: 'entity.update'
+    _csrf_request_header_token: 'TRUE'
   methods: [POST]
   options:
     no_cache: TRUE

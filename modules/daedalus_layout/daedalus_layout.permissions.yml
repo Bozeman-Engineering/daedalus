@@ -1,5 +1,6 @@
 administer daedalus layout configuration:
   title: 'Administer Daedalus Layout configuration'
+  restrict access: true
 
 permission_callbacks:
   - Drupal\daedalus_layout\LockedBundlePermissions::permissions

@@ -9,6 +9,17 @@ daedalus:
   dependencies:
     - core/drupal
 
+# The one client token source (Drupal.Daedalus.csrfToken, fetched once
+# per document, and Drupal.Daedalus.post, the write that carries it in
+# the X-CSRF-Token header). Standalone so every library that writes to a
+# route, bundled or plain, in this module or another, shares the one
+# token by declaring this dependency.
+csrf:
+  js:
+    js/csrf.js: {}
+  dependencies:
+    - core/drupal
+
 # The editor-preference helper (Drupal.Daedalus.saveSetting): one call,
 # the daedalus_ui.settings.save_setting route, EditorSettings::set. A
 # library of its own so chrome outside Edit Mode (the chat's model
@@ -19,8 +30,7 @@ save_setting:
     js/settings/save-setting.js: {}
   dependencies:
     - core/drupal
-    - core/drupal.ajax
-    - core/jquery
+    - daedalus_ui/csrf
 
 # The Daedalus chrome palette and shared tokens. A standalone library so
 # chrome that renders without the full modes stack (always-on sidebars, the
@@ -374,6 +384,9 @@ edit_mode:
   dependencies:
     # The editor-preference helper the settings scripts save through.
     - daedalus_ui/save_setting
+    # The op queue, the top bar's Save, the upload script and the
+    # settings scripts post through the one token source.
+    - daedalus_ui/csrf
     - core/drupal.dialog.ajax
     - core/drupal.ajax
     # The top bar's discard confirm opens in the daedalus popup through
@@ -451,6 +464,8 @@ responsive_preview:
     component:
       js/responsive_preview/preview.css: {}
   dependencies:
+    # The device list saves through the editor-preference lane.
+    - daedalus_ui/save_setting
     - core/drupal
     - core/drupalSettings
     - core/once
