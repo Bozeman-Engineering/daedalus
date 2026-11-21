@@ -32,6 +32,16 @@ final class SettingsRoutesTest extends BrowserTestBase {
   use DaedalusFixtureTrait;
 
   /**
+   * {@inheritdoc}
+   */
+  protected $defaultTheme = 'daedalus_theme';
+
+  /**
+   * {@inheritdoc}
+   */
+  protected $profile = '';
+
+  /**
    * GET is refused, a token-less POST is refused, a tokened POST saves.
    */
   public function testSettingsRoutesNeedPostAndToken(): void {

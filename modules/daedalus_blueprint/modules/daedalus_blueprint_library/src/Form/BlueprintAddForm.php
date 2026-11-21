@@ -45,7 +45,7 @@ class BlueprintAddForm extends ContentEntityForm {
    *
    * @var \Drupal\daedalus_ui\ModeState|null
    */
-  protected readonly ?object $modeState;
+  protected ?object $modeState;
 
   public function __construct(
     EntityRepositoryInterface $entity_repository,

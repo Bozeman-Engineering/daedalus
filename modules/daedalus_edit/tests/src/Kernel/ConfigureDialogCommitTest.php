@@ -22,6 +22,7 @@ use Drupal\daedalus_layout\NestedSectionStorageInterface;
 use Drupal\layout_builder\Entity\LayoutBuilderEntityViewDisplay;
 use Drupal\layout_builder\Form\ConfigureSectionForm;
 use Drupal\layout_builder\Form\UpdateBlockForm;
+use Drupal\layout_builder\Plugin\Field\FieldType\LayoutSectionItem;
 use Drupal\layout_builder\Plugin\SectionStorage\OverridesSectionStorage;
 use Drupal\layout_builder\Section;
 use Drupal\layout_builder\SectionComponent;
@@ -172,6 +173,15 @@ class ConfigureDialogCommitTest extends FormCommitTestBase {
   }
 
   /**
+   * The section as the node's stored row carries it.
+   */
+  protected function storedSection(NodeInterface $node): Section {
+    $item = $this->stored($node)->get(OverridesSectionStorage::FIELD_NAME)->get(0);
+    assert($item instanceof LayoutSectionItem);
+    return $item->section;
+  }
+
+  /**
    * Places the page's title as a field block beside the inline block.
    *
    * The representative plugin block: label, label_display, formatter type
@@ -286,7 +296,7 @@ class ConfigureDialogCommitTest extends FormCommitTestBase {
     $block = $this->workingBlock($node);
     $this->assertSame('Dialog text', $block->get('field_fb_text')->value);
     $this->assertSame('Keep', $block->get('field_fb_other')->value);
-    $stored = $this->stored($node)->get('layout_builder__layout')->get(0)->section->getComponent(self::BLOCK_UUID)->get('configuration');
+    $stored = $this->storedSection($node)->getComponent(self::BLOCK_UUID)->get('configuration');
     $this->assertSame('My Block', $stored['label'], 'Staging never saves.');
 
     // The answer: the payload (the block re-rendered by key, no
@@ -353,7 +363,7 @@ class ConfigureDialogCommitTest extends FormCommitTestBase {
       $this->assertInstanceOf(FormCommitOutcome::class, $outcome, "The section dialog's submit is the transport's (mode $label).");
       $this->assertSame('Hero', $this->workingSection($node)->getLayoutSettings()['label']);
 
-      $stored = $this->stored($node)->get(OverridesSectionStorage::FIELD_NAME)->get(0)->section;
+      $stored = $this->storedSection($node);
       $this->assertSame('My Block', $stored->getComponent(self::BLOCK_UUID)->get('configuration')['label'], 'Staging never saves.');
     }
   }
@@ -517,7 +527,7 @@ class ConfigureDialogCommitTest extends FormCommitTestBase {
     $this->assertSame(1, $configuration['formatter']['settings']['link_to_entity']);
     $this->assertSame([], $configuration['formatter']['third_party_settings']);
     $this->assertSame(['entity' => 'layout_builder.entity'], $configuration['context_mapping']);
-    $stored = $this->stored($node)->get('layout_builder__layout')->get(0)->section->getComponent(self::FIELD_BLOCK_UUID)->get('configuration');
+    $stored = $this->storedSection($node)->getComponent(self::FIELD_BLOCK_UUID)->get('configuration');
     $this->assertSame('above', $stored['formatter']['label'], 'Staging never saves.');
     $this->assertSame('visible', $stored['label_display']);
 
@@ -580,7 +590,7 @@ class ConfigureDialogCommitTest extends FormCommitTestBase {
     $settings = $this->workingSection($node)->getLayoutSettings();
     $this->assertSame('Hero', $settings['label']);
     $this->assertSame('33-67', $settings['column_widths']);
-    $this->assertSame('50-50', $this->stored($node)->get('layout_builder__layout')->get(0)->section->getLayoutSettings()['column_widths'], 'Staging never saves.');
+    $this->assertSame('50-50', $this->storedSection($node)->getLayoutSettings()['column_widths'], 'Staging never saves.');
 
     $payload = $this->dialogPayload($response);
     $this->assertTrue($payload['success']);

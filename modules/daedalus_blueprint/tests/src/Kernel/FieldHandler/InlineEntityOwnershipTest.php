@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel\FieldHandler;
 
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\daedalus_blueprint\FieldHandler\InlineEntityFieldHandler;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
@@ -115,7 +116,9 @@ class InlineEntityOwnershipTest extends BlueprintKernelTestBase {
     $this->assertSame('Foreign Heading', $foreign->get('field_heading')->value);
     $storage = $this->entityTypeManager->getStorage('entity_test_rev');
     $storage->resetCache();
-    $this->assertSame('Foreign Heading', $storage->load($foreign_id)->get('field_heading')->value);
+    $stored = $storage->load($foreign_id);
+    assert($stored instanceof FieldableEntityInterface);
+    $this->assertSame('Foreign Heading', $stored->get('field_heading')->value);
 
     // Without a type: refused, in the words of an id the field lacks, and
     // the answer names only the ids this field holds.
@@ -129,7 +132,9 @@ class InlineEntityOwnershipTest extends BlueprintKernelTestBase {
     $this->assertSame('fields.field_items[0]', $error->getPath());
     $this->assertEquals([(int) $own->id()], array_map('intval', $error->getContext()['held_ids']));
     $storage->resetCache();
-    $this->assertSame('Foreign Heading', $storage->load($foreign_id)->get('field_heading')->value);
+    $stored = $storage->load($foreign_id);
+    assert($stored instanceof FieldableEntityInterface);
+    $this->assertSame('Foreign Heading', $stored->get('field_heading')->value);
 
     // The same id answers the same way as one no entity has.
     $missing = $this->handler->deserialize([

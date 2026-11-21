@@ -180,7 +180,9 @@ class PageReadTest extends BlueprintKernelTestBase {
     $page = $this->createFieldedPage();
     $handler = $this->container->get('daedalus_blueprint.storage_handler');
     $working = $handler->load('entity_test', $page->id());
-    $working->entity()->set('name', 'Unsaved name');
+    $unsaved = $working->entity();
+    assert($unsaved instanceof FieldableEntityInterface);
+    $unsaved->set('name', 'Unsaved name');
     $this->assertSame('tempstore', $handler->persist($working));
     // The working copy of an unstaged entity is the storage's own cached
     // object; a later request loads the stored row afresh.

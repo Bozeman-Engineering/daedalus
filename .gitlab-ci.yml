@@ -77,3 +77,15 @@ variables:
       rm -rf "$NODE_TMP"
       echo "node $(node --version), npm $(npm --version)"
     - cd $CI_PROJECT_DIR && npm ci --no-audit --no-fund
+
+# The eslint job lints the sources webpack bundles, and core's config holds
+# them to import/no-unresolved. Nothing in the template installs the
+# package.json dependencies (node_modules is gitignored), so without this
+# every bare import ('preact', '@codemirror/state', 'webpack') is reported
+# unresolved. The install goes in $CI_PROJECT_DIR for the reason given
+# above: the job lints $DRUPAL_PROJECT_FOLDER, which sits inside the
+# checkout, so the resolver's walk up the tree ends at this node_modules.
+# Nothing is built here, so no package script runs.
+eslint:
+  before_script:
+    - cd $CI_PROJECT_DIR && npm ci --no-audit --no-fund --ignore-scripts

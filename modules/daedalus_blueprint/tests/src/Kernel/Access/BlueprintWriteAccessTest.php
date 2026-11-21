@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel\Access;
 
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\daedalus_blueprint\FieldHandler\InlineEntityFieldHandler;
 use Drupal\daedalus_blueprint\BlueprintDeserializerInterface;
 use Drupal\Tests\daedalus\Kernel\BlueprintKernelTestBase;
@@ -386,8 +387,10 @@ class BlueprintWriteAccessTest extends BlueprintKernelTestBase {
     $this->setUpCurrentUser([], []);
     $result = $this->deserializer->deserialize($document(['field' => 'name', 'value' => 'Secret name']), ['system' => TRUE]);
     $this->assertTrue($result->isSuccess(), print_r(array_map(fn ($e) => $e->toArray(), $result->getErrors()), TRUE));
-    $this->assertSame($id, (int) $result->getEntity()->id());
-    $this->assertSame('Written', $result->getEntity()->get('field_subtitle')->value);
+    $written = $result->getEntity();
+    assert($written instanceof FieldableEntityInterface);
+    $this->assertSame($id, (int) $written->id());
+    $this->assertSame('Written', $written->get('field_subtitle')->value);
   }
 
   /**

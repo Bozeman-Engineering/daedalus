@@ -313,7 +313,9 @@ class TempstoreSaveTest extends FormCommitTestBase {
 
     // Stage a change: the working copy is taken from the stored revision.
     $host = $this->workingHost($node);
-    $host->entity()->set('title', 'Staged title');
+    $working = $host->entity();
+    assert($working instanceof NodeInterface);
+    $working->set('title', 'Staged title');
     $this->container->get('daedalus_blueprint.storage_handler')->persist($host);
     $tempstore = $this->container->get('daedalus_tempstore.entity_tempstore_repository');
     $this->assertTrue($tempstore->has($node), 'The change is staged.');
@@ -355,8 +357,10 @@ class TempstoreSaveTest extends FormCommitTestBase {
 
     // Stage a title past the field's length, around the spine's own check.
     $host = $this->workingHost($node);
-    $host->entity()->set('title', str_repeat('x', 300));
-    $this->container->get('daedalus_tempstore.entity_tempstore_repository')->set($host->entity());
+    $working = $host->entity();
+    assert($working instanceof NodeInterface);
+    $working->set('title', str_repeat('x', 300));
+    $this->container->get('daedalus_tempstore.entity_tempstore_repository')->set($working);
 
     $response = $this->save($node, '/node/' . $node->id());
 

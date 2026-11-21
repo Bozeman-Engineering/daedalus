@@ -1,5 +1,6 @@
 Bozeman
 Imagen
+LILYS
 MOCKSESSID
 NOERROR
 NOWARNING
@@ -7,13 +8,16 @@ Threadless
 advertisable
 aeiou
 affordances
+alloverrides
 anchorless
+anylayout
 arrowdown
 arrowleft
 arrowright
 arrowup
 atrule
 atrules
+attente
 authorable
 autofocused
 autofocuses
@@ -53,11 +57,13 @@ closedness
 collapser
 colocating
 colorish
+commonmark
 contentless
 correctively
 crispedges
 csstree
 csswg
+csvg
 cutover
 darkmode
 declaredness
@@ -91,6 +97,7 @@ ellipsized
 emptinesses
 emulatable
 enablements
+enregistré
 errormessages
 extensionless
 extralight
@@ -103,6 +110,7 @@ fffd
 fieldless
 floorless
 flyouts
+fnode
 focusables
 formatless
 frameless
@@ -202,6 +210,7 @@ preprocessable
 preprompt
 preselection
 pressable
+printability
 provenanced
 quickedit
 rawtext
@@ -264,6 +273,7 @@ revertable
 rostered
 rowless
 rrggbb
+sams
 scopeless
 scrollers
 scrollport
@@ -329,6 +339,7 @@ undercount
 undercounted
 unders
 undescribed
+undos
 undrawn
 undraws
 undrew
@@ -387,6 +398,7 @@ unregistration
 unrenamed
 unrenders
 unrepresentable
+unretried
 unrewritten
 unrostered
 unrowed
@@ -430,6 +442,7 @@ uppercases
 upserting
 upserts
 upstreaming
+viewgo
 visiblefill
 visiblepainted
 visiblestroke

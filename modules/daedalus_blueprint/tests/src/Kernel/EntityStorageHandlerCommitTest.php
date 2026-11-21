@@ -7,6 +7,7 @@ namespace Drupal\Tests\daedalus_blueprint\Kernel;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\daedalus_blueprint\EntityStorageHandler;
 use Drupal\daedalus_blueprint\Exception\CommitRefusedException;
+use Drupal\daedalus_blueprint\Host\HostInterface;
 use Drupal\daedalus_tempstore\EntityTempstoreRepository;
 use Drupal\node\Entity\Node;
 use Drupal\node\Entity\NodeType;
@@ -103,14 +104,14 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
     $first_vid = $node->getRevisionId();
 
     $working = $this->handler->load('node', $node->id());
-    $working->entity()->setTitle('Staged');
+    $this->workingNode($working)->setTitle('Staged');
     $this->assertSame('tempstore', $this->handler->persist($working, element_uuids: ['uuid-stage']));
 
     // The stage holds the title, the row does not, and a load answers the
     // stage.
     $this->assertTrue($this->tempstore->has($node));
     $this->assertSame('Before', $this->loadStored($node)->getTitle());
-    $this->assertSame('Staged', $this->handler->load('node', $node->id())->entity()->getTitle());
+    $this->assertSame('Staged', $this->workingNode($this->handler->load('node', $node->id()))->getTitle());
     $log = \Drupal::state()->get('daedalus_blueprint_test.persisted', []);
     $this->assertCount(1, $log);
     $this->assertFalse($log[0]['saved']);
@@ -124,8 +125,8 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
     $this->assertSame('Staged', $stored->getTitle());
     $this->assertFalse($this->tempstore->has($node), 'commit() cleared the stage.');
     $loaded = $this->handler->load('node', $node->id());
-    $this->assertSame('Staged', $loaded->entity()->getTitle());
-    $this->assertSame($stored->getRevisionId(), $loaded->entity()->getRevisionId());
+    $this->assertSame('Staged', $this->workingNode($loaded)->getTitle());
+    $this->assertSame($stored->getRevisionId(), $this->workingNode($loaded)->getRevisionId());
 
     // The persisted hook saw the commit as a save with the element UUIDs.
     $log = \Drupal::state()->get('daedalus_blueprint_test.persisted', []);
@@ -160,7 +161,7 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
     $note = $this->createNode('note');
     $note_vid = $note->getRevisionId();
     $working = $this->handler->load('node', $note->id());
-    $working->entity()->setTitle('Staged');
+    $this->workingNode($working)->setTitle('Staged');
     $this->handler->persist($working);
     $this->handler->commit($working);
     $stored = $this->loadStored($note);
@@ -174,7 +175,7 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
     $page = $this->createNode('page');
     $page_vid = $page->getRevisionId();
     $working = $this->handler->load('node', $page->id());
-    $working->entity()->setTitle('Staged');
+    $this->workingNode($working)->setTitle('Staged');
     $this->handler->persist($working);
     $this->assertTrue($this->tempstore->has($page));
     \Drupal::state()->set('daedalus_blueprint_test.persisted', []);
@@ -223,15 +224,15 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
       $first_vid = $node->getRevisionId();
 
       $working = $this->handler->load('node', $node->id());
-      $working->entity()->setTitle('Staged');
+      $this->workingNode($working)->setTitle('Staged');
       $this->handler->persist($working);
 
       // The working copy a later request commits is the staged one, read
       // back out of the tempstore; it still says where it was taken from.
       $staged = $this->handler->load('node', $node->id());
       $this->assertNotSame($working->entity(), $staged->entity());
-      $this->assertSame('Staged', $staged->entity()->getTitle());
-      $this->assertEquals($first_vid, $staged->entity()->getLoadedRevisionId());
+      $this->assertSame('Staged', $this->workingNode($staged)->getTitle());
+      $this->assertEquals($first_vid, $this->workingNode($staged)->getLoadedRevisionId());
 
       // Someone saves the page elsewhere (the stock edit form, another
       // tool): a later second, and a new revision where the bundle says so.
@@ -273,8 +274,8 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
       // Discard, take a fresh copy from the current row, and it commits.
       $this->tempstore->delete($node);
       $fresh = $this->handler->load('node', $node->id());
-      $this->assertSame('Saved elsewhere', $fresh->entity()->getTitle());
-      $fresh->entity()->setTitle('Staged again');
+      $this->assertSame('Saved elsewhere', $this->workingNode($fresh)->getTitle());
+      $this->workingNode($fresh)->setTitle('Staged again');
       $this->handler->persist($fresh);
       $this->handler->commit($this->handler->load('node', $node->id()));
       $this->assertSame('Staged again', $this->loadStored($node)->getTitle(), $type);
@@ -284,7 +285,7 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
     // A page deleted elsewhere has nothing to save to.
     $node = $this->createNode('page');
     $working = $this->handler->load('node', $node->id());
-    $working->entity()->setTitle('Staged');
+    $this->workingNode($working)->setTitle('Staged');
     $this->handler->persist($working);
     $this->loadStored($node)->delete();
     try {
@@ -349,7 +350,7 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
   public function testCommitRefusesInvalidEntity(): void {
     $node = $this->createNode('page');
     $working = $this->handler->load('node', $node->id());
-    $working->entity()->setTitle('');
+    $this->workingNode($working)->setTitle('');
     $this->handler->persist($working);
     \Drupal::state()->set('daedalus_blueprint_test.persisted', []);
 
@@ -370,7 +371,7 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
     $this->assertSame([], \Drupal::state()->get('daedalus_blueprint_test.persisted', []));
 
     // Fixed in the stage, the same page commits.
-    $staged->entity()->setTitle('Fixed');
+    $this->workingNode($staged)->setTitle('Fixed');
     $this->handler->persist($staged);
     $this->handler->commit($this->handler->load('node', $node->id()));
     $this->assertSame('Fixed', $this->loadStored($node)->getTitle());
@@ -399,7 +400,7 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
   public function testStorageExceptionRefuses(): void {
     $node = $this->createNode('page');
     $working = $this->handler->load('node', $node->id());
-    $working->entity()->setTitle('Staged');
+    $this->workingNode($working)->setTitle('Staged');
     $this->handler->persist($working);
     \Drupal::state()->set('daedalus_blueprint_test.persisted', []);
 
@@ -442,6 +443,15 @@ class EntityStorageHandlerCommitTest extends BlueprintKernelTestBase {
       'revision_log' => 'The first revision',
     ]);
     $node->save();
+    return $node;
+  }
+
+  /**
+   * The node a working copy holds.
+   */
+  protected function workingNode(HostInterface $host): NodeInterface {
+    $node = $host->entity();
+    assert($node instanceof NodeInterface);
     return $node;
   }
 

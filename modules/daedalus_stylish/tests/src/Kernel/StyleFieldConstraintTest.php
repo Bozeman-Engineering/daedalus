@@ -8,6 +8,7 @@ namespace Drupal\Tests\daedalus_stylish\Kernel;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\daedalus_stylish\DaedalusStylishVariantInterface;
 use Drupal\daedalus_stylish\Entity\DaedalusStylishSkin;
+use Drupal\daedalus_stylish\Plugin\Field\FieldType\StyleMapItem;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\Tests\daedalus\Traits\DesignSystemActivationTrait;
@@ -163,6 +164,7 @@ class StyleFieldConstraintTest extends KernelTestBase {
     ]);
     $this->assertTrue($result->isSuccess(), json_encode(array_map(static fn ($error) => $error->toArray(), $result->getErrors())));
     $item = $entity->get(DaedalusStylishFieldManager::FIELD_NAME)->first();
+    assert($item instanceof StyleMapItem);
     $this->assertSame([$key => ['default' => ['padding' => 'var(--space-4)'], 'hover' => ['margin' => '1rem']]], $item->getStyleMap());
     $this->assertSame([], $this->violations($entity, DaedalusStylishFieldManager::FIELD_NAME));
     // No field at all is nothing to judge.

@@ -176,7 +176,9 @@ class PageEditGateTest extends BlueprintKernelTestBase {
   protected function storedName(): string {
     $storage = $this->entityTypeManager->getStorage('entity_test');
     $storage->resetCache();
-    return (string) $storage->load($this->entity->id())->get('name')->value;
+    $page = $storage->load($this->entity->id());
+    assert($page instanceof FieldableEntityInterface);
+    return (string) $page->get('name')->value;
   }
 
   /**

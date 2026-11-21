@@ -130,6 +130,7 @@ class PlainHostStagingTest extends KernelTestBase {
 
       $this->assertTrue($repository->has($french), "$kind: the translation finds the host's stage.");
       $staged = $repository->get($french);
+      assert($staged instanceof EntityTestMul);
       $this->assertSame('fr', $staged->language()->getId(), "$kind: the unsaved copy is answered in the language asked with.");
       $this->assertSame('en attente', $staged->label());
       $this->assertSame('staged', $repository->get($stored)->label());
@@ -138,7 +139,9 @@ class PlainHostStagingTest extends KernelTestBase {
       // the same stage.
       $staged->set('name', 'encore');
       $repository->set($staged);
-      $this->assertSame('encore', $repository->get($stored)->getTranslation('fr')->label(), "$kind: a stage by the translation replaces the host's stage.");
+      $restaged = $repository->get($stored);
+      assert($restaged instanceof EntityTestMul);
+      $this->assertSame('encore', $restaged->getTranslation('fr')->label(), "$kind: a stage by the translation replaces the host's stage.");
       $this->assertSame('staged', $repository->get($stored)->label());
 
       $repository->delete($french);

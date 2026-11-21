@@ -279,8 +279,9 @@ class LayoutTempstoreStrategy implements TempstoreStrategyInterface {
    */
   public function getKey($subject): string {
     $section_storage = $this->ensureSectionStorage($this->unwrapStorage($subject));
-    $key = ($section_storage instanceof TempStoreIdentifierInterface)
-      ? $this->addressedToHost($section_storage)->getTempstoreKey()
+    $addressed = $this->addressedToHost($section_storage);
+    $key = ($addressed instanceof TempStoreIdentifierInterface)
+      ? $addressed->getTempstoreKey()
       : $section_storage->getStorageId();
 
     // A host that does not live in workspaces (a display: config) keys

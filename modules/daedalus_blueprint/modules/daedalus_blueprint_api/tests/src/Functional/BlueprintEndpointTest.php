@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint_api\Functional;
 
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\daedalus_stylish\DaedalusStylishFieldManager;
 use Drupal\entity_test\Entity\EntityTest;
 use Drupal\field\Entity\FieldConfig;
@@ -506,7 +507,9 @@ class BlueprintEndpointTest extends BrowserTestBase {
     $this->assertSame(200, $response->getStatusCode());
     $storage = \Drupal::entityTypeManager()->getStorage('entity_test');
     $storage->resetCache([$this->entity->id()]);
-    $this->assertSame('Original subtitle', $storage->load($this->entity->id())->get('field_subtitle')->value, 'The mutation staged.');
+    $stored = $storage->load($this->entity->id());
+    assert($stored instanceof FieldableEntityInterface);
+    $this->assertSame('Original subtitle', $stored->get('field_subtitle')->value, 'The mutation staged.');
 
     $this->drupalGet($base);
     $this->assertSession()->statusCodeEquals(200);

@@ -333,7 +333,9 @@ class BlueprintAccessTest extends KernelTestBase {
   protected function storedOwner(ContentEntityInterface $variant): ?int {
     $storage = $this->container->get('entity_type.manager')->getStorage('daedalus_variant');
     $storage->resetCache();
-    $owner = $storage->load($variant->id())->get('blueprint')->target_id;
+    $stored = $storage->load($variant->id());
+    assert($stored instanceof ContentEntityInterface);
+    $owner = $stored->get('blueprint')->target_id;
     return $owner === NULL ? NULL : (int) $owner;
   }
 

@@ -62,7 +62,7 @@ class PeekTest extends BrowserTestBase {
    * The document, the dry run and the gates.
    */
   public function testPeek(): void {
-    $editor = $this->loginAsEditor();
+    $this->loginAsEditor();
     $node = Node::create(['type' => 'page', 'title' => 'Peek page']);
     // The page's own style map: the one style tag the document must carry
     // beside the element (an element's CSS never travels inside it).

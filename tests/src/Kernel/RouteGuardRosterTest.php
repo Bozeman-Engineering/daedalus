@@ -162,9 +162,13 @@ class RouteGuardRosterTest extends KernelTestBase {
   private function roster(): array {
     $project = dirname(__DIR__, 3);
     $roster = [];
+    // A test runner may check the project out as the root of the site it
+    // composes, so the site's web root can sit inside the project and hold
+    // core, other projects and links back to these very files. None of that
+    // is the project's own.
     $files = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(
       new \RecursiveDirectoryIterator($project, \FilesystemIterator::SKIP_DOTS),
-      static fn (\SplFileInfo $file): bool => !in_array($file->getFilename(), ['node_modules', 'dist', 'vendor'], TRUE),
+      static fn (\SplFileInfo $file): bool => !in_array($file->getFilename(), ['node_modules', 'dist', 'vendor', 'web'], TRUE),
     ));
     foreach ($files as $file) {
       $path = $file->getPathname();

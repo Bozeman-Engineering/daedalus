@@ -1086,7 +1086,7 @@ class PrinterEquivalenceTest extends KernelTestBase {
     ] as $printed) {
       $this->assertStringContainsString($printed, $gate_values);
     }
-    $this->assertSame(7, substr_count($gate_values, ';') - 1, 'Seven declarations print, and the root colour once more for the text it claims.');
+    $this->assertSame(7, substr_count($gate_values, ';') - 1, 'Seven declarations print, and the root color once more for the text it claims.');
     $this->assertStringNotContainsString('example.com', $gate_values);
     $this->assertStringNotContainsString('image-set', $gate_values);
     $this->assertStringNotContainsString('Inter', $gate_values);

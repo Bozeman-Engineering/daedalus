@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\daedalus_blueprint\Kernel\Access;
 
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\daedalus_blueprint\BlueprintSerializerInterface;
 use Drupal\daedalus_blueprint\Utility\FormOnlyStub;
 use Drupal\daedalus_blueprint_config\ConfigBlueprintBackend;
@@ -184,7 +186,9 @@ class BlueprintReadAccessTest extends BlueprintKernelTestBase {
     $entity = $this->createTestEntity(['field_subtitle' => 'Saved']);
     $id = $entity->id();
     $working = $handler->load('entity_test', $id);
-    $working->entity()->set('field_subtitle', 'Unsaved');
+    $unsaved = $working->entity();
+    assert($unsaved instanceof FieldableEntityInterface);
+    $unsaved->set('field_subtitle', 'Unsaved');
     $this->assertSame('tempstore', $handler->persist($working));
     // The working copy of an unstaged entity is the storage's own cached
     // object; a later request loads the stored row afresh.
@@ -192,16 +196,16 @@ class BlueprintReadAccessTest extends BlueprintKernelTestBase {
 
     // May view, may not update: the stored entity.
     $this->setUpCurrentUser([], ['view test entity']);
-    $this->assertSame('Saved', $handler->loadReadable('entity_test', $id)->entity()->get('field_subtitle')->value);
+    $this->assertSame('Saved', $this->subtitle($handler->loadReadable('entity_test', $id)->entity()));
     $read = $backend->loadReadable('entity_test', $id);
-    $this->assertSame('Saved', $read->get('field_subtitle')->value);
+    $this->assertSame('Saved', $this->subtitle($read));
     $this->assertSame('Saved', $this->serializer->serialize($this->host($read))['fields']['field_subtitle']);
-    $this->assertSame('Unsaved', $handler->load('entity_test', $id)->entity()->get('field_subtitle')->value);
+    $this->assertSame('Unsaved', $this->subtitle($handler->load('entity_test', $id)->entity()));
 
     // May update: the unsaved copy.
     $this->setUpCurrentUser([], ['view test entity', 'administer entity_test content']);
-    $this->assertSame('Unsaved', $handler->loadReadable('entity_test', $id)->entity()->get('field_subtitle')->value);
-    $this->assertSame('Unsaved', $backend->loadReadable('entity_test', $id)->get('field_subtitle')->value);
+    $this->assertSame('Unsaved', $this->subtitle($handler->loadReadable('entity_test', $id)->entity()));
+    $this->assertSame('Unsaved', $this->subtitle($backend->loadReadable('entity_test', $id)));
 
     // Nothing to read is still nothing.
     $this->assertNull($handler->loadReadable('entity_test', 999));
@@ -221,6 +225,14 @@ class BlueprintReadAccessTest extends BlueprintKernelTestBase {
     $config = $resolver->resolve('user_role');
     $this->assertInstanceOf(ConfigBlueprintBackend::class, $config);
     $this->assertSame('update', $config->readOperation());
+  }
+
+  /**
+   * The subtitle of an entity a load answered.
+   */
+  protected function subtitle(?EntityInterface $entity): ?string {
+    assert($entity instanceof FieldableEntityInterface);
+    return $entity->get('field_subtitle')->value;
   }
 
 }

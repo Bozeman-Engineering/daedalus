@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Drupal\Tests\daedalus_ai\Kernel;
 
 use Drupal\Component\Serialization\Json;
+use Drupal\Component\Serialization\Yaml;
 use Drupal\Core\Access\CsrfRequestHeaderAccessCheck;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
-use Drupal\Core\Serialization\Yaml;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\daedalus_ai\Controller\DeferredProcessingController;
 use Drupal\daedalus_ai\DeferredProcessor\DeferredProcessorManager;

@@ -10,6 +10,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\FieldableEntityInterface;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldItemListInterface;
+use Drupal\Core\Field\Plugin\Field\FieldType\EntityReferenceItem;
 use Drupal\daedalus_blueprint\Access\BlueprintAccessChecker;
 use Drupal\daedalus_blueprint\Result\BlueprintError;
 
@@ -210,6 +211,7 @@ class InlineEntityFieldHandler extends FieldHandlerBase {
     }
     $held = [];
     foreach ($owner->get($definition->getName()) as $item) {
+      assert($item instanceof EntityReferenceItem);
       $entity = $item->entity;
       if ($entity instanceof FieldableEntityInterface && !$entity->isNew()) {
         $held[$entity->id()] = $entity;

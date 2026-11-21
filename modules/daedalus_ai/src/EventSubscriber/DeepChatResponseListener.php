@@ -27,9 +27,10 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * filtering provided re-lands here instead, where output actually becomes
  * output. Every leg's `html` body value goes through ReplyDisplay's
  * boundary (the ai module's hostname filter with settings-derived
- * defaults) before it reaches the browser — the per-call full-trust DTO the agent path sets is scoped to
- * the one provider invocation and long restored by response time — so a
- * prompt-injected model cannot show an editor a disallowed-hostname link.
+ * defaults) before it reaches the browser (the per-call full-trust DTO the
+ * agent path sets is scoped to the one provider invocation and long restored
+ * by response time), so a prompt-injected model cannot show an editor a
+ * disallowed-hostname link.
  * DeepChatApi's Xss::filter already ran on the html; it strips tags, not
  * hostnames, so this is not redundant.
  *
